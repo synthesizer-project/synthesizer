@@ -12,6 +12,9 @@ from unyt import Hz, erg, s
 
 from synthesizer import exceptions
 from synthesizer.grid import Template
+from synthesizer.imaging.image_collection import (
+    _generate_image_collection_generic,
+)
 from synthesizer.line import Line
 from synthesizer.sed import Sed
 
@@ -247,6 +250,76 @@ class Extraction:
                 setattr(emitter, prop, prev_properties[prop])
 
         return lines, particle_lines
+
+    def _extract_images(
+        self,
+        resolution,
+        fov,
+        img_type,
+        do_flux,
+        emitters,
+        images,
+        kernel,
+        kernel_threshold,
+        nthreads,
+        limit_to,
+    ):
+        """
+        Create images for all the extraction keys.
+
+        Args:
+            resolution (float):
+                The resolution of the images.
+            fov (float):
+                The field of view of the images.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitters (dict):
+                The emitters to generate the images for.
+            images (dict):
+                The dictionary to store the images in.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+            limit_to (str):
+                Limit the images to a specific model.
+
+        Returns:
+            dict:
+                The dictionary of image collections.
+        """
+        # Loop over the extraction keys
+        for label in self._extract_keys.keys():
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label != limit_to:
+                continue
+
+            # Get the model
+            this_model = self._models[label]
+
+            # Get the emitter
+            emitter = emitters[this_model.emitter]
+
+            # Store the resulting image collection
+            images[label] = _generate_image_collection_generic(
+                resolution,
+                fov,
+                img_type,
+                do_flux,
+                this_model.per_particle,
+                kernel,
+                kernel_threshold,
+                nthreads,
+                label,
+                emitter,
+            )
+
+        return images
 
     def _extract_summary(self):
         """Return a summary of an extraction model."""
@@ -506,6 +579,65 @@ class Generation:
 
         return lines, particle_lines
 
+    def _generate_images(
+        self,
+        resolution,
+        fov,
+        this_model,
+        img_type,
+        do_flux,
+        emitter,
+        images,
+        kernel,
+        kernel_threshold,
+        nthreads,
+    ):
+        """
+        Create an image for a generation key.
+
+        Args:
+            resolution (float):
+                The resolution of the images.
+            fov (float):
+                The field of view of the images.
+            this_model (EmissionModel):
+                The model to generate the images for.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitter (dict):
+                The emitter to generate the images for.
+            images (dict):
+                The dictionary to store the images in.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+
+        Returns:
+            dict:
+                The dictionary of image collections now containing the
+                generated images.
+        """
+        # Store the resulting image collection
+        images[this_model.label] = _generate_image_collection_generic(
+            resolution,
+            fov,
+            img_type,
+            do_flux,
+            this_model.per_particle,
+            kernel,
+            kernel_threshold,
+            nthreads,
+            this_model.label,
+            emitter,
+        )
+
+        return images
+
     def _generate_summary(self):
         """Return a summary of a generation model."""
         # Create a list to hold the summary
@@ -693,6 +825,65 @@ class DustAttenuation:
 
         return lines, particle_lines
 
+    def _attenuate_images(
+        self,
+        resolution,
+        fov,
+        this_model,
+        img_type,
+        do_flux,
+        emitter,
+        images,
+        kernel,
+        kernel_threshold,
+        nthreads,
+    ):
+        """
+        Create an image for an attenuation key.
+
+        Args:
+            resolution (float):
+                The resolution of the images.
+            fov (float):
+                The field of view of the images.
+            this_model (EmissionModel):
+                The model to generate the images for.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitter (dict):
+                The emitter to generate the images for.
+            images (dict):
+                The dictionary to store the images in.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+
+        Returns:
+            dict:
+                The dictionary of image collections now containing the
+                generated images.
+        """
+        # Store the resulting image collection
+        images[this_model.label] = _generate_image_collection_generic(
+            resolution,
+            fov,
+            img_type,
+            do_flux,
+            this_model.per_particle,
+            kernel,
+            kernel_threshold,
+            nthreads,
+            this_model.label,
+            emitter,
+        )
+
+        return images
+
     def _attenuate_summary(self):
         """Return a summary of a dust attenuation model."""
         # Create a list to hold the summary
@@ -863,6 +1054,66 @@ class Combination:
             lines[this_model.label] = out_lines
 
         return lines, particle_lines
+
+    def _combine_images(
+        self,
+        images,
+        this_model,
+        resolution,
+        fov,
+        img_type,
+        do_flux,
+        emitters,
+        kernel,
+        kernel_threshold,
+        nthreads,
+    ):
+        """
+        Combine the images by addition.
+
+        Args:
+            emission_model (EmissionModel):
+                The root emission model.
+            images (dict):
+                The dictionary of images.
+            this_model (EmissionModel):
+                The model defining the combination.
+        """
+        # Get the image for each model we are combining
+        combine_labels = []
+        combine_images = []
+        for model in this_model.combine:
+            # If the image hasn't been made try to generate it
+            if model.label not in images:
+                img = _generate_image_collection_generic(
+                    resolution,
+                    fov,
+                    img_type,
+                    do_flux,
+                    model.per_particle,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                    model.label,
+                    emitters[model.emitter],
+                )
+            else:
+                img = images[model.label]
+            combine_labels.append(model.label)
+            combine_images.append(img)
+
+        # Get the first image to add to
+        out_image = combine_images[0]
+
+        # Combine the images
+        # Again, we have a problem if any don't exist
+        for img in combine_images[1:]:
+            out_image += img
+
+        # Store the image
+        images[this_model.label] = out_image
+
+        return images
 
     def _combine_summary(self):
         """Return a summary of a combination model."""

@@ -45,7 +45,7 @@ import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import unyt_quantity
+from unyt import kpc, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.operations import (
@@ -55,7 +55,7 @@ from synthesizer.emission_models.operations import (
     Generation,
 )
 from synthesizer.line import LineCollection
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import warn
 
 
@@ -2670,6 +2670,188 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         del particle_lines[model.label]
 
         return lines, particle_lines
+
+    @accepts(resolution=kpc, fov=kpc)
+    def _get_images(
+        self,
+        resolution,
+        fov,
+        emitters,
+        img_type="smoothed",
+        images=None,
+        _is_related=False,
+        limit_to=None,
+        do_flux=False,
+        kernel=None,
+        kernel_threshold=1.0,
+        nthreads=1,
+        **kwargs,
+    ):
+        """
+        Generate images as described by the emission model.
+
+        This will create images for all models in the emission model which
+        have been saved in the passed dictionary of photometry, unless
+        limit_to is set to a specific model, in which case only that model
+        will have images generated (including any models required for that
+        passed model, e.g. a combination of AGN and Stellar spectra).
+
+        Note that unlike spectra or line creation, images are always either
+        generated from existing photometry or combined from existing images
+        further down in the tree.
+
+        Args:
+            resolution (float):
+                The pixel resolution of the image in spatial units (e.g. pc,
+                kpc, Mpc).
+            fov (float):
+                The field of view of the image in angular units (e.g. arcsec,
+                arcmin, deg).
+            emitters (Stars/BlackHoles):
+                The emitters to generate the lines for in the form of a
+                dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
+            verbose (bool)
+                Are we talking?
+            images (dict)
+                A dictionary of images to add to. This is used for recursive
+                calls to this function.
+            _is_related (bool)
+                Are we generating related model lines? If so we don't want
+                to apply any post processing functions or delete any lines,
+                this will be done outside the recursive call.
+            limit_to (str)
+                If not None, defines a specifical model to limit the image
+                generation to. Otherwise, all models with saved spectra will
+                have images generated.
+            do_flux (bool)
+                If True, the images will be generated from fluxes, if False
+                they will be generated from luminosities.
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                A dictionary of ImageCollections which can be attached to the
+                appropriate images attribute of the component.
+        """
+        # We don't want to modify the original emission model with any
+        # modifications made here so we'll make a copy of it (this is a
+        # shallow copy so very cheap and doesn't copy any pointed to objects
+        # only their reference)
+        emission_model = copy.copy(self)
+
+        # If we haven't got an images dictionary yet we'll make one
+        if images is None:
+            images = {}
+
+        # Get all the images at the extraction leaves of the tree
+        images.update(
+            self._extract_images(
+                resolution,
+                fov,
+                img_type,
+                do_flux,
+                emitters,
+                images,
+                kernel,
+                kernel_threshold,
+                nthreads,
+                limit_to,
+            )
+        )
+
+        # Loop through the models from bottom to top order creating the
+        # images as we go
+        for label in emission_model._bottom_to_top:
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label != limit_to:
+                continue
+
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # Get the images for the related models that don't appear in the
+            # main tree
+            for related_model in this_model.related_models:
+                if related_model.label not in images:
+                    images.update(
+                        related_model._get_images(
+                            resolution,
+                            fov,
+                            emitters,
+                            img_type,
+                            images,
+                            _is_related=True,
+                            limit_to=limit_to,
+                            do_flux=do_flux,
+                            kernel=kernel,
+                            kernel_threshold=kernel_threshold,
+                            nthreads=nthreads,
+                            **kwargs,
+                        )
+                    )
+
+            # Skip models for a different emitters
+            if (
+                this_model.emitter not in emitters
+                and this_model.emitter != "galaxy"
+            ):
+                continue
+
+            # Check we haven't already made this image
+            if label in images:
+                continue
+
+            # Get the emitter
+            emitter = (
+                emitters[this_model.emitter]
+                if this_model.emitter != "galaxy"
+                else None
+            )
+
+            # Call the appropriate method to generate the image for this model
+            if this_model._is_combining:
+                images = self._combine_images(
+                    images,
+                    this_model,
+                    resolution,
+                    fov,
+                    img_type,
+                    do_flux,
+                    emitters,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                )
+            elif this_model._is_dust_attenuating:
+                images = self._attenuate_images(
+                    resolution,
+                    fov,
+                    this_model,
+                    img_type,
+                    do_flux,
+                    emitter,
+                    images,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                )
+            elif this_model._is_dust_emitting or this_model._is_generating:
+                images = self._generate_images(
+                    resolution,
+                    fov,
+                    this_model,
+                    img_type,
+                    do_flux,
+                    emitter,
+                    images,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                )
+
+        return images
 
 
 class StellarEmissionModel(EmissionModel):
