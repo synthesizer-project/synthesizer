@@ -20,7 +20,7 @@ Example usage:
 import dense_basis as db
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.integrate import cumtrapz
+from scipy.integrate import cumalative_trapezoid as cumtrapz
 from unyt import yr
 
 from synthesizer import exceptions
