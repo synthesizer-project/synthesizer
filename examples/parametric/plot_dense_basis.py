@@ -10,6 +10,7 @@ It includes the following steps:
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import Msun
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
@@ -26,7 +27,7 @@ if __name__ == "__main__":
     # histories
     sfh_p = (9.0, -3, 2, 0.3, 0.8)
     redshift = 0.1
-    stellar_mass = 1e8
+    stellar_mass = 1e8 * Msun
 
     # define the functional form of the star formation and metal enrichment
     # histories
