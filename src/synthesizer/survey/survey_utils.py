@@ -184,7 +184,7 @@ def unpack_data(obj, output_path):
 
     # Recurse until we reach the desired attribute
     for key in keys:
-        if hasattr(obj, key):
+        if getattr(obj, key, None) is not None:
             obj = getattr(obj, key)
         else:
             obj = obj[key]
