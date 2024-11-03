@@ -11,6 +11,7 @@ It includes the following steps:
 import matplotlib.pyplot as plt
 import numpy as np
 
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -57,7 +58,8 @@ if __name__ == "__main__":
     galaxy = Galaxy(stars)
 
     # generate pure stellar spectra alone
-    galaxy.stars.get_spectra_incident(grid)
+    model = IncidentEmission(grid)
+    galaxy.stars.get_spectra(model)
     print("Pure stellar spectra")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
