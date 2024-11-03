@@ -1358,6 +1358,10 @@ class Survey:
             data = [unpack_data(g, attr_path) for g in self.galaxies]
             pack_data(output, data, out_path)
 
+        # Add the analysis results to the output
+        for key, data in self._analysis_results.items():
+            pack_data(output, data, f"Galaxies/{key}")
+
         # Done!
         self._took(start, "Collecting data")
 
