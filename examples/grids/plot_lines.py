@@ -34,7 +34,10 @@ if __name__ == "__main__":
     metallicity = 0.01  # metallicity
 
     # get the grid point for this log10age and metallicity
-    grid_point = grid.get_grid_point((log10age, metallicity))
+    grid_point = grid.get_grid_point(
+        log10ages=log10age,
+        metallicity=metallicity,
+    )
 
     # get information on one line
     line = grid.get_line(grid_point, "H 1 4861.32A")
