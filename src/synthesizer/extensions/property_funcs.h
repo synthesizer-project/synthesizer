@@ -66,7 +66,7 @@ struct particles {
   double *fesc;
 
   /* Velocities for redshift */
-  double *velocities:
+  double *velocities;
 };
 
 /* Prototypes */
@@ -84,9 +84,9 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    PyArrayObject *np_grid_lines,
                                    PyArrayObject *np_grid_continuum,
                                    const int ndim, const int nlam);
-struct particles *get_part_struct(PyObject *part_tuple,
-                                  PyArrayObject *np_part_mass, PyArrayObject *np_velocities
-                                  PyArrayObject *np_fesc, const int npart,
-                                  const int ndim);
+struct particles *
+get_part_struct(PyObject *part_tuple, PyArrayObject *np_part_mass,
+                PyArrayObject *np_velocities PyArrayObject *np_fesc,
+                const int npart, const int ndim);
 
 #endif // PROPERTY_FUNCS_H_
