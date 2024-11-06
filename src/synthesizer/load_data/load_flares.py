@@ -23,11 +23,6 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
         galaxies (object):
             `ParticleGalaxy` object containing stars
     """
-    
-    if read_abundances:
-        print("Reading abundances...")
-    else:
-        print("Not reading abundances.")
 
     zed = float(tag[5:].replace("p", "."))
     scale_factor = 1.0 / (1.0 + zed)
@@ -71,17 +66,30 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
     for i, (b, e) in enumerate(zip(begin, end)):
         # Create the individual galaxy objects
         galaxies[i] = Galaxy(redshift=zed)
+        
+        if read_abundances == True:
 
-        galaxies[i].load_stars(
-            imasses[b:e] * Msun,
-            ages[b:e] * yr,
-            metallicities[b:e],
-            s_oxygen=s_oxygen[b:e],
-            s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :] * Mpc,
-            current_masses=masses[b:e] * Msun,
-            smoothing_lengths=s_hsml[b:e] * Mpc,
-        )
+            galaxies[i].load_stars(
+                imasses[b:e] * Msun,
+                ages[b:e] * yr,
+                metallicities[b:e],
+                s_oxygen=s_oxygen[b:e],
+                s_hydrogen=s_hydrogen[b:e],
+                coordinates=coods[b:e, :] * Mpc,
+                current_masses=masses[b:e] * Msun,
+                smoothing_lengths=s_hsml[b:e] * Mpc,
+            )
+        
+        if read_abundances == False:
+            
+            galaxies[i].load_stars(
+                imasses[b:e] * Msun,
+                ages[b:e] * yr,
+                metallicities[b:e],
+                coordinates=coods[b:e, :] * Mpc,
+                current_masses=masses[b:e] * Msun,
+                smoothing_lengths=s_hsml[b:e] * Mpc,
+            )
 
     # Get the gas particle begin / end indices
     begin, end = get_len(glens)
