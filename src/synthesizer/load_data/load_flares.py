@@ -78,8 +78,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
                 current_masses=masses[b:e] * Msun,
                 smoothing_lengths=s_hsml[b:e] * Mpc,
             )
-
-        if not read_abundances:
+        else:
             galaxies[i].load_stars(
                 imasses[b:e] * Msun,
                 ages[b:e] * yr,
