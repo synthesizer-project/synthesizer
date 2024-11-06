@@ -74,14 +74,18 @@ def load_EAGLE(
     numThreads = args.nthreads
     chunk = args.chunk
 
-    # get the redshift from the given eagle tag
-    zed = float(tag[5:].replace("p", "."))
-    h = 0.6777
     if chunk > tot_chunks:
         raise InconsistentArguments(
             "Value specified by 'chunk' should be lower"
             "than the total chunks (tot_chunks)"
         )
+
+    # Read some of the simulation box information
+    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
+    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
+    exp_fac = read_header("SUBFIND", fileloc, tag, "ExpansionFactor")
+    zed = (1.0 / exp_fac) - 1.0
+    boxl = boxl / (1 + zed)
 
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
@@ -95,10 +99,6 @@ def load_EAGLE(
 
     if grpno.dtype == object:
         return []
-
-    # Read some of the simulation box information
-    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
-    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
 
     # Get required star particle properties
     s_sgrpno = read_array(
@@ -366,6 +366,12 @@ def load_EAGLE_shm(
             "than the total chunks (tot_chunks)"
         )
 
+    # Read some of the simulation box information
+    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
+    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
+    exp_fac = read_header("SUBFIND", fileloc, tag, "ExpansionFactor")
+    zed = (1.0 / exp_fac) - 1.0
+
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
     ) as hf:
@@ -378,10 +384,6 @@ def load_EAGLE_shm(
 
     if grpno.dtype == object:
         return []
-
-    # Read some of the simulation box information
-    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
-    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
 
     # read in required star particle shared memory arrays
     s_grpno = np_shm_read(
@@ -846,7 +848,7 @@ def get_star_formation_time(scale_factor: float) -> float:
     Returns:
         age of the star particle in years
     """
-    SFz = (1 / scale_factor) - 1.0
+    SFz = (1.0 / scale_factor) - 1.0
     return cosmo.age(SFz).value
 
 
@@ -1009,7 +1011,7 @@ def assign_galaxy_prop(
     # correcting for periodic boundary
     r = cop[ii] - g_coords[ok]
     r = np.sign(r) * np.min(np.dstack(((r) % bounds, (-r) % bounds)), axis=2)
-    # mask for aperture
+    # # mask for aperture
     ok = ok[norm(r, axis=1) <= aperture]
 
     # Assign gas particle properties
