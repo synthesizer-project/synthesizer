@@ -40,8 +40,8 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
         s_hsml = hf[f"{region}/{tag}/Particle/S_sml"][:]  # Mpc (physical)
 
         metallicities = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
-        
-        if read_abundances == True:
+
+        if read_abundances:
             s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
             s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
 
@@ -66,9 +66,8 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
     for i, (b, e) in enumerate(zip(begin, end)):
         # Create the individual galaxy objects
         galaxies[i] = Galaxy(redshift=zed)
-        
-        if read_abundances == True:
 
+        if read_abundances:
             galaxies[i].load_stars(
                 imasses[b:e] * Msun,
                 ages[b:e] * yr,
@@ -79,9 +78,8 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
                 current_masses=masses[b:e] * Msun,
                 smoothing_lengths=s_hsml[b:e] * Mpc,
             )
-        
-        if read_abundances == False:
-            
+
+        if not read_abundances:
             galaxies[i].load_stars(
                 imasses[b:e] * Msun,
                 ages[b:e] * yr,
