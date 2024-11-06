@@ -7,7 +7,7 @@ from synthesizer.load_data.utils import get_len
 from ..particle.galaxy import Galaxy
 
 
-def load_FLARES(master_file, region, tag):
+def load_FLARES(master_file, region, tag, read_abundances=False):
     """
     Load FLARES galaxies from a FLARES master file
 
@@ -23,6 +23,11 @@ def load_FLARES(master_file, region, tag):
         galaxies (object):
             `ParticleGalaxy` object containing stars
     """
+    
+    if read_abundances:
+        print("Reading abundances...")
+    else:
+        print("Not reading abundances.")
 
     zed = float(tag[5:].replace("p", "."))
     scale_factor = 1.0 / (1.0 + zed)
@@ -40,8 +45,10 @@ def load_FLARES(master_file, region, tag):
         s_hsml = hf[f"{region}/{tag}/Particle/S_sml"][:]  # Mpc (physical)
 
         metallicities = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
-        s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
-        s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
+        
+        if read_abundances == True:
+            s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
+            s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
 
         g_sfr = hf[f"{region}/{tag}/Particle/G_SFR"][:]  # Msol / yr
         g_masses = hf[f"{region}/{tag}/Particle/G_Mass"][:]  # 1e10 Msol
