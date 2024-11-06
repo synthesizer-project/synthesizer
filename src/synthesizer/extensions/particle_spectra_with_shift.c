@@ -20,6 +20,18 @@
 #include "timers.h"
 #include "weights.h"
 
+
+/* Find nearest wavelength bin for a given lambda, in a given wavelength array*/
+int find_nearest_bin(double lambda, double *grid_wavelengths, int nlam) {
+    int nearest_index = 0;
+    for (int ilam = 1; ilam < nlam; ilam++) {
+        if (fabs(grid_wavelengths[ilam] - lambda) < fabs(grid_wavelengths[nearest_index] - lambda)) {
+            nearest_index = ilam;
+        }
+    }
+    return nearest_index;
+}
+
 /**
  * @brief This calculates particle spectra using a cloud in cell approach.
  *
@@ -33,17 +45,24 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
                                     double *spectra) {
 
   /* Unpack the grid properties. */
+  double c = 3e8 
   int *dims = grid->dims;
   int ndim = grid->ndim;
   int nlam = grid->nlam;
+  double *wavelength = grid->lam;
   double **grid_props = grid->props;
   double *grid_spectra = grid->spectra;
+
 
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   double *fesc = parts->fesc;
+  double *velocity = parts->velocities;
   int npart = parts->npart;
+
+  /*Array to hold shifted wavelengths */
+  double shifted_wavelengths[nlam];
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -51,7 +70,13 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
     /* Get this particle's mass. */
     const double mass = part_masses[p];
 
-    /* TODO: Get the particle velocity. */
+    /* Get the particle velocity and shift wl array */
+    double vel = velocity[p];
+    double shift_factor = 1.0 + vel / c;
+    for(int ilam=0; ilam<nlam; ilam++){
+      shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+    }
+    
 
     /* Setup the index and mass fraction arrays. */
     int part_indices[ndim];
@@ -114,9 +139,17 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
 
       /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
+        double shifted_lambda = shifted_wavelengths[ilam];
+      /*Find nearest wavelength bin*/
+        int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam); // should never be > nlam hopefully
+      // Interpolate contribution between ilam_shifted and ilam_shifted+1
+        double frac_shifted = (shifted_lambda - wavelength[ilam_shifted]) /
+                                  (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+
 
         /* Add the contribution to this wavelength. */
-        spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
+        spectra[p * nlam + ilam_shifted] += (1.0 - frac_shifted) * weight;
+        spectra[p * nlam + ilam_shifted + 1] += frac_shifted * weight;
       }
     }
   }
