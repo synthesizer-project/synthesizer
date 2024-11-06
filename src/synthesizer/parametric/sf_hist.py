@@ -17,7 +17,9 @@ Example usage:
 
 """
 
-import dense_basis as db
+import io
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import cumulative_trapezoid as cumtrapz
@@ -26,6 +28,15 @@ from unyt import yr
 from synthesizer import exceptions
 from synthesizer.utils.stats import weighted_mean, weighted_median
 from synthesizer.warnings import warn
+
+# This import is in quarantine because it insists on printing
+# "Starting dense_basis" to the console on import! It can stay here until
+# a PR is raised to fix this.
+original_stdout = sys.stdout
+sys.stdout = io.StringIO()
+import dense_basis as db
+
+sys.stdout = original_stdout
 
 # Define a list of the available parametrisations
 parametrisations = (
@@ -724,7 +735,6 @@ class DenseBasis(Common):
             redshift (float)
                 redshift at which to scale the SFH
         """
-
         # Initialise the parent
         Common.__init__(
             self, name="DenseBasis", db_tuple=db_tuple, redshift=redshift
@@ -752,7 +762,6 @@ class DenseBasis(Common):
             max_age (float)
                 maximum age of SFH grid
         """
-
         # Convert the dense basis tuple arguments to sfh in mass fraction units
         tempsfh, temptime = db.tuple_to_sfh(
             self.db_tuple, self.redshift, interpolator=interpolator, vb=False
@@ -774,7 +783,7 @@ class DenseBasis(Common):
 
     def _interp_sfh(self, sfh, tax, newtax):
         """
-        Helper method for interpolating a dense basis SFH
+        Interpolate a dense basis SFH.
 
         Args:
             sfh (array)
@@ -796,7 +805,7 @@ class DenseBasis(Common):
 
     def _sfr(self, age):
         """
-        Return SFR at given `age`
+        Return SFR at given `age`.
 
         Args:
             age (float)
