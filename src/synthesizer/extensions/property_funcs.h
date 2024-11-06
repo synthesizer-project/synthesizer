@@ -64,6 +64,9 @@ struct particles {
 
   /* Escape fractions. */
   double *fesc;
+
+  /* Velocities for redshift */
+  double *velocities:
 };
 
 /* Prototypes */

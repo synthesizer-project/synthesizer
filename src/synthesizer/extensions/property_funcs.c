@@ -315,7 +315,7 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
  * @return struct particles*: A pointer to the particles struct.
  */
 struct particles *get_part_struct(PyObject *part_tuple,
-                                  PyArrayObject *np_part_mass,
+                                  PyArrayObject *np_part_mass, PyArrayObject *np_velocities,
                                   PyArrayObject *np_fesc, const int npart,
                                   const int ndim) {
 
@@ -339,7 +339,15 @@ struct particles *get_part_struct(PyObject *part_tuple,
       return NULL;
     }
   }
-
+  
+  /* Extract a pointer to the particle velocities. */
+  if (np_velocities != NULL) {
+    particles->velocities = extract_data_double(np_velocities, "part_vel");
+    if (particles->velocities == NULL) {
+      return NULL;
+    }
+  }
+  
   /* Extract a pointer to the fesc array. */
   if (np_fesc != NULL) {
     particles->fesc = extract_data_double(np_fesc, "fesc");
