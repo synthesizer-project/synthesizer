@@ -21,6 +21,7 @@ from abc import ABC, abstractmethod
 
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.special
 from astropy.modeling.models import Sersic2D as Sersic2D_
 from unyt import kpc, mas, unyt_array
 from unyt.dimensions import angle, length
@@ -423,14 +424,7 @@ class Gaussian2D(MorphologyBase):
             The population correlation coefficient between x and y.
     """
 
-    def __init__(self, x_mean=0, y_mean=0, stddev_x=1, stddev_y=1, rho=0):
-        # Initialise obj with params:
-        self.x_mean = x_mean
-        self.y_mean = y_mean
-        self.stddev_x = stddev_x
-        self.stddev_y = stddev_y
-        self.rho = rho
-
+    def __init__(self, x_mean, y_mean, stddev_x, stddev_y, rho=0):
         """
         Initialise the morphology.
 
@@ -447,8 +441,14 @@ class Gaussian2D(MorphologyBase):
                 The population correlation coefficient between x and y.
         """
 
+        self.x_mean = x_mean
+        self.y_mean = y_mean
+        self.stddev_x = stddev_x
+        self.stddev_y = stddev_y
+        self.rho = rho
+
     # Define 2D Gaussian matrix
-    def compute_density_grid(self, x, y):
+    def compute_density_grid(self, x, y, units=None):
         """
         Compute density grid.
 
@@ -467,6 +467,14 @@ class Gaussian2D(MorphologyBase):
             ValueError:
                 If either x or y is None.
         """
+
+        if units is None:
+            units = kpc
+
+        self.x_mean = unyt_array(self.x_mean, units)
+        self.y_mean = unyt_array(self.y_mean, units)
+        self.stddev_x = unyt_array(self.stddev_x, units)
+        self.stddev_y = unyt_array(self.stddev_y, units)
 
         # Error for x, y = None
         if x is None or y is None:
@@ -496,6 +504,196 @@ class Gaussian2D(MorphologyBase):
         exp = np.einsum("...k, kl, ...l->...", stack, inv_cov, stack)
 
         # Calc Gaussian vals
-        g_2D_mat = coeff * np.exp(-0.5 * exp)
+        g_2d_mat = coeff * np.exp(-0.5 * exp)
 
-        return g_2D_mat
+        return g_2d_mat
+
+
+class Sersic2DNew(MorphologyBase):
+    """
+    A class holding a 2D Sersic profile.
+
+    Attributes:
+        r_eff_kpc (float): The effective radius in kpc.
+        r_eff_mas (float): The effective radius in milliarcseconds.
+        sersic_index (float): The Sersic index.
+        ellipticity (float): The ellipticity.
+        theta (float): The rotation angle.
+        cosmo (astropy.cosmology): The cosmology object.
+        redshift (float): The redshift.
+        model_kpc : The 2D Sersic model in kpc.
+        model_mas : The 2D Sersic model in milliarcseconds.
+    """
+
+    def __init__(
+        self,
+        r_eff,
+        amplitude=1,
+        n=1,
+        x_0=0,
+        y_0=0,
+        theta=0,
+        ellip=0,
+        cosmo=None,
+        redshift=None,
+    ):
+        """
+        Initialise the morphology.
+
+        Arguments
+            r_eff (unyt)
+                Effective radius. This is converted as required.
+            amplitude (float)
+                Surface brightness at r_eff.
+            n (float)
+                Sersic index.
+            ellipticity (float)
+                Ellipticity.
+            theta (float)
+                Theta, the rotation angle.
+            cosmo (astro.cosmology)
+                astropy cosmology object.
+            redshift (float)
+                Redshift.
+
+        """
+
+        self.r_eff_mas = None
+        self.r_eff_kpc = None
+
+        # Check units of r_eff and convert if necessary.
+        if isinstance(r_eff, unyt_array):
+            if r_eff.units.dimensions == length:
+                self.r_eff_kpc = r_eff.to("kpc").value
+            elif r_eff.units.dimensions == angle:
+                self.r_eff_mas = r_eff.to("mas").value
+            else:
+                raise exceptions.IncorrectUnits(
+                    "The units of r_eff must have length or angle dimensions"
+                )
+            self.r_eff = r_eff
+        else:
+            raise exceptions.MissingAttribute(
+                "The effective radius must be provided"
+            )
+
+        self.amplitude = amplitude
+        self.r_eff = r_eff
+        self.n = n
+        self.x_0 = x_0
+        self.y_0 = y_0
+        self.theta = theta
+        self.ellip = ellip
+
+        # Associate the cosmology and redshift to this object
+        self.cosmo = cosmo
+        self.redshift = redshift
+
+        # Check inputs
+        self._check_args()
+
+        # If cosmology and redshift have been provided we can calculate both
+        # models
+        if cosmo is not None and redshift is not None:
+            # Compute conversion
+            kpc_proper_per_mas = (
+                self.cosmo.kpc_proper_per_arcmin(redshift).to("kpc/mas").value
+            )
+
+            # Calculate one effective radius from the other depending on what
+            # we've been given.
+            if self.r_eff_kpc is not None:
+                self.r_eff_mas = self.r_eff_kpc / kpc_proper_per_mas
+            else:
+                self.r_eff_kpc = self.r_eff_mas * kpc_proper_per_mas
+
+    def _check_args(self):
+        """Test the inputs to ensure they are a valid combination."""
+        # Ensure at least one effective radius has been passed
+        if self.r_eff_kpc is None and self.r_eff_mas is None:
+            raise exceptions.InconsistentArguments(
+                "An effective radius must be defined in either kpc (r_eff_kpc)"
+                "or milliarcseconds (mas)"
+            )
+
+        # Ensure cosmo has been provided if redshift has been passed
+        if self.redshift is not None and self.cosmo is None:
+            raise exceptions.InconsistentArguments(
+                "Astropy.cosmology object is missing, cannot perform "
+                "comoslogical calculations."
+            )
+
+    def compute_density_grid(self, x, y, units=kpc):
+        """
+        Compute the density grid.
+
+        Arguments
+            x: array-like (float)
+                x values on a 2D grid.
+            y: array-like (float)
+                y values on a 2D grid.
+            units : unyt.unit
+                The units in which the coordinate grids are defined.
+
+        Returns
+            density_grid : np.ndarray
+                The density grid produced from either
+                the kpc or mas Sersic profile.
+        """
+
+        # Error for x, y = None
+        if x is None or y is None:
+            raise ValueError("x and y grids must be provided.")
+
+        # Compute coordinate offset from x, y axes
+        a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
+            self.theta
+        )
+
+        b = -(x - self.x_0) * np.sin(self.theta) + (y - self.y_0) * np.cos(
+            self.theta
+        )
+
+        # Compute radius from adjusted x, y coordinates
+        radius = np.sqrt(a**2 + (b / (1 - self.ellip)) ** 2)
+
+        # Define coefficient of Sersic profile from Sersic index
+        b_n = scipy.special.gammaincinv(2 * self.n, 0.5)
+
+        # Compute kpc model
+        if self.r_eff_kpc is not None:
+            self.model_kpc = self.amplitude * np.exp(
+                -b_n * (radius / self.r_eff_kpc) ** (1 / self.n) - 1
+            )
+        else:
+            self.model_kpc = None
+
+        # Compute mas model
+        if self.r_eff_mas is not None:
+            self.model_mas = self.amplitude * np.exp(
+                -b_n * (radius / self.r_eff_mas) ** (1 / self.n) - 1
+            )
+        else:
+            self.model_mas = None
+
+        if units == kpc and self.model_kpc is None:
+            raise exceptions.InconsistentArguments(
+                "Morphology has not been initialised with a kpc method. "
+                "Reinitialise the model or use milliarcseconds."
+            )
+        elif units == mas and self.model_mas is None:
+            raise exceptions.InconsistentArguments(
+                "Morphology has not been initialised with a milliarcsecond "
+                "method. Reinitialise the model or use kpc."
+            )
+
+        # Call the appropriate model function
+        if units == kpc:
+            return self.model_kpc
+        elif units == mas:
+            return self.model_mas
+        else:
+            raise exceptions.InconsistentArguments(
+                "Only kpc and milliarcsecond (mas) units are supported "
+                "for morphologies."
+            )
