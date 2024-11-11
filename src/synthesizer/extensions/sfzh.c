@@ -62,7 +62,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props =
-      get_part_struct(part_tuple, np_part_mass, /*np_fesc*/ NULL, npart, ndim);
+      get_part_struct(part_tuple, np_part_mass, /*np_velocities*/ NULL,/*np_fesc*/ NULL, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
