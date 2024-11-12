@@ -294,7 +294,7 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
  * @param spectra: The output array.
  * @param nthreads: The number of threads to use.
  */
-void spectra_loop_cic(struct grid *grid, struct particles *parts,
+void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
                       double *spectra, const int nthreads) {
 
   double start_time = tic();
@@ -309,7 +309,7 @@ void spectra_loop_cic(struct grid *grid, struct particles *parts,
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_cic_serial(grid, parts, spectra);
+    shifted_spectra_loop_cic_serial(grid, parts, spectra);
   }
 
 #else
@@ -317,7 +317,7 @@ void spectra_loop_cic(struct grid *grid, struct particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_cic_serial(grid, parts, spectra);
+  shifted_spectra_loop_cic_serial(grid, parts, spectra);
 
 #endif
   toc("Cloud in Cell particle spectra loop", start_time);
@@ -571,7 +571,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
-    spectra_loop_cic(grid_props, part_props, spectra, nthreads);
+    shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
     spectra_loop_ngp(grid_props, part_props, spectra, nthreads);
   } else {
