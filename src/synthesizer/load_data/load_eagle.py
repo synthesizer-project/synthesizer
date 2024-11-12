@@ -74,14 +74,18 @@ def load_EAGLE(
     numThreads = args.nthreads
     chunk = args.chunk
 
-    # get the redshift from the given eagle tag
-    zed = float(tag[5:].replace("p", "."))
-    h = 0.6777
     if chunk > tot_chunks:
         raise InconsistentArguments(
             "Value specified by 'chunk' should be lower"
             "than the total chunks (tot_chunks)"
         )
+
+    # Read some of the simulation box information
+    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
+    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
+    exp_fac = read_header("SUBFIND", fileloc, tag, "ExpansionFactor")
+    zed = (1.0 / exp_fac) - 1.0
+    boxl = boxl / (1 + zed)
 
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
@@ -272,6 +276,7 @@ def load_EAGLE(
     _f = partial(
         assign_galaxy_prop,
         zed=zed,
+        boxl=boxl,
         aperture=args.aperture,
         grpno=grpno,
         sgrpno=sgrpno,
@@ -361,6 +366,12 @@ def load_EAGLE_shm(
             "than the total chunks (tot_chunks)"
         )
 
+    # Read some of the simulation box information
+    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
+    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
+    exp_fac = read_header("SUBFIND", fileloc, tag, "ExpansionFactor")
+    zed = (1.0 / exp_fac) - 1.0
+
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
     ) as hf:
@@ -444,6 +455,7 @@ def load_EAGLE_shm(
     _f = partial(
         assign_galaxy_prop,
         zed=zed,
+        boxl=boxl,
         aperture=args.aperture,
         grpno=grpno,
         sgrpno=sgrpno,
@@ -836,7 +848,7 @@ def get_star_formation_time(scale_factor: float) -> float:
     Returns:
         age of the star particle in years
     """
-    SFz = (1 / scale_factor) - 1.0
+    SFz = (1.0 / scale_factor) - 1.0
     return cosmo.age(SFz).value
 
 
@@ -875,6 +887,7 @@ def get_age(
 def assign_galaxy_prop(
     ii: int,
     zed: float,
+    boxl: float,
     aperture: float,
     grpno: NDArray[np.int32],
     sgrpno: NDArray[np.int32],
@@ -908,6 +921,8 @@ def assign_galaxy_prop(
             galaxy number
         zed (float)
             redshift
+        boxl (float)
+            simulation box side length
         aperture (float)
             aperture to use from centre of potential
         grpno (array)
@@ -964,12 +979,17 @@ def assign_galaxy_prop(
 
     galaxy = Galaxy(redshift=zed, verbose=verbose)
 
+    # set the bounds of the box length
+    bounds = np.array([boxl, boxl, boxl])
+
     # Fill individual galaxy objects with star particles
     # mask for current galaxy
     ok = np.where((s_grpno == grpno[ii]) * (s_sgrpno == sgrpno[ii]))[0]
+    # correcting for periodic boundary
+    r = cop[ii] - s_coords[ok]
+    r = np.sign(r) * np.min(np.dstack(((r) % bounds, (-r) % bounds)), axis=2)
     # mask for aperture
-    r = norm(cop[ii] - s_coords[ok], axis=1)
-    ok = ok[r <= aperture]
+    ok = ok[norm(r, axis=1) <= aperture]
 
     # Assign stellar properties
     galaxy.load_stars(
@@ -988,9 +1008,11 @@ def assign_galaxy_prop(
     sfr_flag = g_sfr > 0
     # mask for current galaxy
     ok = np.where((g_grpno == grpno[ii]) * (g_sgrpno == sgrpno[ii]))[0]
-    # mask for aperture
-    r = norm(cop[ii] - g_coords[ok], axis=1)
-    ok = ok[r <= aperture]
+    # correcting for periodic boundary
+    r = cop[ii] - g_coords[ok]
+    r = np.sign(r) * np.min(np.dstack(((r) % bounds, (-r) % bounds)), axis=2)
+    # # mask for aperture
+    ok = ok[norm(r, axis=1) <= aperture]
 
     # Assign gas particle properties
     galaxy.load_gas(
@@ -1001,5 +1023,7 @@ def assign_galaxy_prop(
         smoothing_lengths=g_hsml[ok] * Mpc,
         **g_kwargs,
     )
+
+    galaxy.gas.dust_to_metal_ratio = galaxy.dust_to_metal_vijayan19()
 
     return galaxy
