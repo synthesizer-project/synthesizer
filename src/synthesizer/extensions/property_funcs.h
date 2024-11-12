@@ -64,6 +64,9 @@ struct particles {
 
   /* Escape fractions. */
   double *fesc;
+
+  /* Velocities for redshift */
+  double *velocities;
 };
 
 /* Prototypes */
@@ -83,6 +86,7 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    const int ndim, const int nlam);
 struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_part_mass,
+                                  PyArrayObject *np_velocities,
                                   PyArrayObject *np_fesc, const int npart,
                                   const int ndim);
 

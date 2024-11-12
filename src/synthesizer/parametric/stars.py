@@ -18,12 +18,11 @@ from scipy import integrate
 from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
-from synthesizer.components import StarsComponent
+from synthesizer.components.stellar import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
 
@@ -39,16 +38,11 @@ class Stars(StarsComponent):
     stellar population.
 
     Attributes:
-        log10ages (array-like, float)
-            The array of log10(ages) defining the age axis of the SFZH.
         ages (array-like, float)
             The array of ages defining the age axis of the SFZH.
         metallicities (array-like, float)
             The array of metallicitities defining the metallicity axies of
             the SFZH.
-        log10metallicities (array-like, float)
-            The array of log10(metallicitities) defining the metallicity axes
-            of the SFZH.
         initial_mass (unyt_quantity/float)
             The total initial stellar mass.
         morphology (morphology.* e.g. Sersic2D)
@@ -102,6 +96,7 @@ class Stars(StarsComponent):
         sfzh=None,
         sf_hist=None,
         metal_dist=None,
+        **kwargs,
     ):
         """
         Initialise the parametric stellar population.
@@ -148,18 +143,21 @@ class Stars(StarsComponent):
         """
 
         # Instantiate the parent
-        StarsComponent.__init__(self, 10**log10ages * yr, metallicities)
+        StarsComponent.__init__(
+            self,
+            10**log10ages * yr,
+            metallicities,
+            **kwargs,
+        )
 
-        # Set the age grid properties
-        self.log10ages = log10ages
+        # Set the age grid lims
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
 
-        # Set the metallicity grid properties
+        # Set the metallicity grid lims
         self.metallicities_lims = [
             self.metallicities[0],
             self.metallicities[-1],
         ]
-        self.log10metallicities = np.log10(metallicities)
         self.log10metallicities_lims = [
             self.log10metallicities[0],
             self.log10metallicities[-1],
@@ -589,19 +587,6 @@ class Stars(StarsComponent):
         """
         return weighted_mean(self.metallicities, self.metal_dist)
 
-    def __str__(self):
-        """
-        Return a string representation of the stars object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Stars")
-
     def __add__(self, other_stars):
         """
         Add two Stars instances together.
@@ -833,3 +818,15 @@ class Stars(StarsComponent):
             plt.show()
 
         return fig, ax
+
+    def _prepare_sed_args(self, *args, **kwargs):
+        """Prepare arguments for SED generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )
+
+    def _prepare_line_args(self, *args, **kwargs):
+        """Prepare arguments for line generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )
