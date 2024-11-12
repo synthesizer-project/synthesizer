@@ -42,10 +42,10 @@ int find_nearest_bin(double lambda, double *grid_wavelengths, int nlam) {
  * @param spectra: The output array.
  */
 static void shifted_spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
-                                    double *spectra) {
+                                    double *spectra, c) {
 
   /* Unpack the grid properties. */
-  double c = 3e8 
+  // double c = 3e8 
   int *dims = grid->dims;
   int ndim = grid->ndim;
   int nlam = grid->nlam;
