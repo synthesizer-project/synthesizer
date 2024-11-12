@@ -7,7 +7,7 @@ from synthesizer.load_data.utils import get_len
 from ..particle.galaxy import Galaxy
 
 
-def load_FLARES(master_file, region, tag):
+def load_FLARES(master_file, region, tag, read_abundances=False):
     """
     Load FLARES galaxies from a FLARES master file
 
@@ -40,8 +40,10 @@ def load_FLARES(master_file, region, tag):
         s_hsml = hf[f"{region}/{tag}/Particle/S_sml"][:]  # Mpc (physical)
 
         metallicities = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
-        s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
-        s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
+
+        if read_abundances:
+            s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
+            s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
 
         g_sfr = hf[f"{region}/{tag}/Particle/G_SFR"][:]  # Msol / yr
         g_masses = hf[f"{region}/{tag}/Particle/G_Mass"][:]  # 1e10 Msol
@@ -65,16 +67,26 @@ def load_FLARES(master_file, region, tag):
         # Create the individual galaxy objects
         galaxies[i] = Galaxy(redshift=zed)
 
-        galaxies[i].load_stars(
-            imasses[b:e] * Msun,
-            ages[b:e] * yr,
-            metallicities[b:e],
-            s_oxygen=s_oxygen[b:e],
-            s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :] * Mpc,
-            current_masses=masses[b:e] * Msun,
-            smoothing_lengths=s_hsml[b:e] * Mpc,
-        )
+        if read_abundances:
+            galaxies[i].load_stars(
+                imasses[b:e] * Msun,
+                ages[b:e] * yr,
+                metallicities[b:e],
+                s_oxygen=s_oxygen[b:e],
+                s_hydrogen=s_hydrogen[b:e],
+                coordinates=coods[b:e, :] * Mpc,
+                current_masses=masses[b:e] * Msun,
+                smoothing_lengths=s_hsml[b:e] * Mpc,
+            )
+        else:
+            galaxies[i].load_stars(
+                imasses[b:e] * Msun,
+                ages[b:e] * yr,
+                metallicities[b:e],
+                coordinates=coods[b:e, :] * Mpc,
+                current_masses=masses[b:e] * Msun,
+                smoothing_lengths=s_hsml[b:e] * Mpc,
+            )
 
     # Get the gas particle begin / end indices
     begin, end = get_len(glens)
