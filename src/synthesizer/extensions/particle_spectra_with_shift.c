@@ -621,7 +621,7 @@ static struct PyModuleDef moduledef = {
     NULL,                                  /* m_free */
 };
 
-PyMODINIT_FUNC PyInit_particle_spectra(void) {
+PyMODINIT_FUNC PyInit_particle_spectra_with_shift(void) {
   PyObject *m = PyModule_Create(&moduledef);
   import_array();
   return m;
