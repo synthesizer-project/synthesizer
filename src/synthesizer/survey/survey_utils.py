@@ -192,7 +192,9 @@ def unpack_data(obj, output_path):
             try:
                 obj = obj[key]
             except (KeyError, ValueError, TypeError):
-                raise KeyError(f"Key {key} not found in {type(obj)}")
+                raise KeyError(
+                    f"Key {"/".join(keys)} not found in {type(obj)}"
+                )
 
     return obj
 
