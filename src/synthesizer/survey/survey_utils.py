@@ -188,10 +188,11 @@ def unpack_data(obj, output_path):
             obj = getattr(obj, key)
         elif getattr(obj, "_" + key, None) is not None:
             obj = getattr(obj, "_" + key)
-        elif key in obj:
-            obj = obj[key]
         else:
-            raise KeyError(f"Key {key} not found in {obj}")
+            try:
+                obj = obj[key]
+            except KeyError:
+                raise KeyError(f"Key {key} not found in {type(obj)}")
 
     return obj
 
