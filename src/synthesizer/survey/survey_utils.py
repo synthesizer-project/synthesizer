@@ -191,7 +191,7 @@ def unpack_data(obj, output_path):
         else:
             try:
                 obj = obj[key]
-            except (KeyError, ValueError):
+            except (KeyError, ValueError, TypeError):
                 raise KeyError(f"Key {key} not found in {type(obj)}")
 
     return obj
