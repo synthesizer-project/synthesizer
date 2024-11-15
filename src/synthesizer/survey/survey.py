@@ -1222,30 +1222,30 @@ class Survey:
             if model.emitter == "galaxy":
                 component = ""
             elif model.emitter == "stellar":
-                component = "stars"
+                component = "stars/"
             elif model.emitter == "blackhole":
-                component = "blackholes"
+                component = "blackholes/"
 
             # Handle spectra paths
             if self._got_lnu_spectra:
-                attr_paths.append(f"{component}/spectra/{label}/lnu")
+                attr_paths.append(f"{component}spectra/{label}/lnu")
             if self._got_fnu_spectra:
-                attr_paths.append(f"{component}/spectra/{label}/fnu")
+                attr_paths.append(f"{component}spectra/{label}/fnu")
 
             # Handle line paths
             if self._got_lum_lines:
                 for l_id in self._line_ids:
                     attr_paths.append(
-                        f"{component}/lines/{label}/{l_id}/luminosity"
+                        f"{component}lines/{label}/{l_id}/luminosity"
                     )
                     attr_paths.append(
-                        f"{component}/lines/{label}/{l_id}/continuum"
+                        f"{component}lines/{label}/{l_id}/continuum"
                     )
             if self._got_flux_lines:
                 for l_id in self._line_ids:
-                    attr_paths.append(f"{component}.lines/{label}/{l_id}.flux")
+                    attr_paths.append(f"{component}lines/{label}/{l_id}.flux")
                     attr_paths.append(
-                        f"{component}/lines/{label}/{l_id}.continuum_flux"
+                        f"{component}lines/{label}/{l_id}.continuum_flux"
                     )
 
             # Handle photometry paths
@@ -1254,14 +1254,14 @@ class Survey:
                     if inst.can_do_photometry:
                         for fcode in inst.filters.filter_codes:
                             attr_paths.append(
-                                f"{component}/photo_lnu/{label}/{fcode}"
+                                f"{component}photo_lnu/{label}/{fcode}"
                             )
             if self._got_fluxes:
                 for inst in self.instruments:
                     if inst.can_do_photometry:
                         for fcode in inst.filters.filter_codes:
                             attr_paths.append(
-                                f"{component}/photo_fnu/{label}/{fcode}"
+                                f"{component}photo_fnu/{label}/{fcode}"
                             )
 
             # Handle imaging paths
@@ -1270,21 +1270,21 @@ class Survey:
                     if inst.can_do_imaging:
                         for fcode in inst.filters.filter_codes:
                             attr_paths.append(
-                                f"{component}/images_lnu/{label}/{fcode}/arr"
+                                f"{component}images_lnu/{label}/{fcode}/arr"
                             )
             if self._got_images_flux:
                 for inst in self.instruments:
                     if inst.can_do_imaging:
                         for fcode in inst.filters.filter_codes:
                             attr_paths.append(
-                                f"{component}/images_fnu/{label}/{fcode}/arr"
+                                f"{component}images_fnu/{label}/{fcode}/arr"
                             )
 
             # Handle spectroscopy paths
             if self._got_spectroscopy:
                 for inst in self.instruments:
                     attr_paths.append(
-                        f"{component}/spectra/{label}/{inst.label}"
+                        f"{component}spectra/{label}/{inst.label}"
                     )
 
         self._print(f"Found {len(attr_paths)} datsets to write out.")
