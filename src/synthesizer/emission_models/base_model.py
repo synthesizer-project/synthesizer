@@ -2081,6 +2081,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fesc=None,
         covering_fraction=None,
         mask=None,
+        shift,
         verbose=True,
         spectra=None,
         particle_spectra=None,
@@ -2158,6 +2159,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             particle_spectra (dict)
                 A dictionary of particle spectra to add to. This is used for
                 recursive calls to this function.
+            shift (bool)
+                Flags whether to apply doppler shift to the spectrum.
             _is_related (bool)
                 Are we generating related model spectra? If so we don't want
                 to apply any post processing functions or delete any spectra,
@@ -2214,6 +2217,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters,
             spectra,
             particle_spectra,
+            shift,
             verbose,
             **kwargs,
         )
