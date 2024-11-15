@@ -1362,8 +1362,7 @@ class Survey:
             pack_data(output, data, out_path)
 
         # Add the analysis results to the output
-        for key, data in self._analysis_results.items():
-            pack_data(output, data, f"Galaxies/{key}")
+        output["Galaxies"].update(self._analysis_results)
 
         # Done!
         self._took(start, "Collecting data")
