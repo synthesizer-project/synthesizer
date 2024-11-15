@@ -1548,6 +1548,6 @@ class Survey:
                 # Create the bar and append the list length in brackets
                 bar = "#" * bar_length
                 self._print(
-                    f"Rank {str(count).zfill(len(str(self.size)) + 1)} - "
+                    f"Rank {str(rank).zfill(len(str(self.size)) + 1)} - "
                     f"{bar} ({count})"
                 )
