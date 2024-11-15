@@ -1171,17 +1171,10 @@ class Survey:
             self._analysis_results_keys,
         ):
             func_start = time.perf_counter()
-            if self.nthreads > 1:
-                with Pool(self.nthreads) as pool:
-                    self._analysis_results[key] = pool.map(
-                        partial(func, *args, **kwargs),
-                        self.galaxies,
-                    )
-            else:
-                res = []
-                for g in self.galaxies:
-                    res.append(func(g, *args, **kwargs))
-                self._analysis_results[key] = res
+            res = []
+            for g in self.galaxies:
+                res.append(func(g, *args, **kwargs))
+            self._analysis_results[key] = res
             self._took(func_start, f"{key} extra analysis")
 
         # Done!
