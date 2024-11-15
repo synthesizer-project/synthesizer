@@ -193,7 +193,7 @@ def unpack_data(obj, output_path):
                 obj = obj[key]
             except (KeyError, ValueError, TypeError):
                 raise KeyError(
-                    f"Key {"/".join(keys)} not found in {type(obj)}"
+                    f"Key {'/'.join(keys)} not found in {type(obj)}"
                 )
 
     return obj
@@ -252,8 +252,9 @@ def write_datasets_recursive(hdf, data, key):
                 dset = hdf.create_dataset(key, data=data)
                 dset.attrs["Units"] = "dimensionless"
         except TypeError as e:
-            print(f"Failed to write dataset {key} (type={type(data)})")
-            raise TypeError(e)
+            raise TypeError(
+                f"Failed to write dataset {key} (type={type(data)}) - {e}"
+            )
         return
 
     # Loop over the data
