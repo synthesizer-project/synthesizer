@@ -1227,7 +1227,7 @@ class Survey:
             elif model.emitter == "stellar":
                 component = "stars/"
             elif model.emitter == "blackhole":
-                component = "blackholes/"
+                component = "black_holes/"
 
             # Handle spectra paths
             if self._got_lnu_spectra:
