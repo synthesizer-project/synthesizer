@@ -103,12 +103,6 @@ class Survey:
     write method. This will write out the data to an HDF5 file.
 
     Attributes:
-        gal_loader_func (callable):
-            The function to load galaxies. This function must return a single
-            Galaxy object or None. It should take the galaxy index as the first
-            argument with that arugment being called 'gal_index'. Beyond this
-            it can take any number if additional arguments and keyword
-            arguments which must be passed to the load_galaxies function.
         emission_model (EmissionModel):
             The emission model to use for the survey.
         instruments (list):
@@ -136,9 +130,7 @@ class Survey:
 
     def __init__(
         self,
-        gal_loader_func,
         emission_model,
-        n_galaxies,
         instruments=(),
         nthreads=1,
         comm=None,
@@ -161,18 +153,10 @@ class Survey:
               threads are requested.
 
         Args:
-            gal_loader_func (callable): The function to load galaxies. This
-                function must return a Galaxy object or None. It should take
-                the galaxy index as the first argument with that arugment
-                being called 'gal_index'. Beyond this it can take any number
-                if additional arguments and keyword arguments which must be
-                passed to the load_galaxies function.
             emission_model (EmissionModel): The emission model to use for the
                 survey.
             instruments (list): A list of Instrument objects to use for the
                 survey.
-            n_galaxies (int): How many galaxies will we load in total (i.e.
-                not per rank if using MPI)?
             nthreads (int): The number of threads to use for shared memory
                 parallelism. Default is 1.
             comm (MPI.Comm): The MPI communicator to use for MPI parallelism.
@@ -185,7 +169,6 @@ class Survey:
         self._start_time = time.perf_counter()
 
         # Attach all the attributes we need to know what to do
-        self.gal_loader_func = self._validate_loader(gal_loader_func)
         self.emission_model = emission_model
         self.instruments = instruments
 
@@ -193,12 +176,12 @@ class Survey:
         self.verbose = verbose
 
         # How many galaxies are we going to be looking at?
-        self.n_galaxies = n_galaxies
-        self.n_galaxies_pre_santise = n_galaxies
+        self.n_galaxies = 0
+        self.n_galaxies_local = 0  # Only applicable when using MPI
 
         # Initialise an attribute we'll store our galaxy indices into (this
         # will either be 0-n_galaxies or a subset of these indices if we are
-        # running with MPI). We'll constructed this in load_galaxies.
+        # running with MPI). We'll construct this in load_galaxies.
         self.galaxy_indices = None
 
         # Define the container to hold the galaxies
@@ -620,106 +603,74 @@ class Survey:
 
         self._print(f"Added analysis function: {result_key}")
 
-    def load_galaxies(self, *args, **kwargs):
+    def add_galaxies(self, galaxies, galaxy_indices=None):
         """
-        Load the galaxies using the provided loader function.
+        Add galaxies to the Survey.
 
-        This function will load each individual galaxy in parallel using
-        the number of threads specified in the constructor. The loader
-        function should take the galaxy index as the first argument and can
-        then take any number of additional arguments and keyword arguments
-        passed to this function. The loader function should return a single
-        galaxy.
+        This function will add the provided galaxies to the Survey. This is
+        useful if you have already loaded the galaxies and want to add them to
+        the Survey object.
 
         Args:
-            *args: Any additional arguments to pass to the galaxy loader
-                function. A copy of these will be sent to each thread.
-            **kwargs: Any additional keyword arguments to pass to the galaxy
-                loader function. A copy of these will be sent to each thread.
+            galaxies (list):
+                A list of Galaxy objects to add to the Survey.
+            galaxy_indices (list):
+                The indices of the galaxies to add. If None, the indices will
+                be generated based on the length of the galaxies list. If
+                using MPI, then indices will be generated in rank order.
         """
         start = time.perf_counter()
 
-        if self.nthreads > 1 and self.using_mpi:
-            self._print(
-                f"Loading {self.n_galaxies} galaxies"
-                f" with {self.gal_loader_func.__name__}"
-                f" distributed over {self.size} ranks with "
-                f"{self.nthreads} threads/rank..."
-            )
-        elif self.nthreads > 1:
-            self._print(
-                f"Loading {self.n_galaxies} galaxies"
-                f" with {self.gal_loader_func.__name__}"
-                f" distributed over {self.nthreads} threads..."
-            )
-        elif self.using_mpi:
-            self._print(
-                f"Loading {self.n_galaxies} galaxies"
-                f" with {self.gal_loader_func.__name__}"
-                f" distributed over {self.size} ranks..."
-            )
-        else:
-            self._print(
-                f"Loading {self.n_galaxies} galaxies"
-                f" with {self.gal_loader_func.__name__}..."
-            )
-
-        # Create the galaxy indices array, if needed. If we are running
-        # with MPI this is created when partitioning.
-        if self.using_mpi:
-            if self.galaxy_indices is None:
-                raise exceptions.MissingPartition(
-                    "Before loading the galaxies need to be partitioned. "
-                    "Call partition_galaxies with optional weights first."
-                )
-        else:
-            self.galaxy_indices = range(self.n_galaxies)
-
-        # OK, we've got everything we need to load the galaxies, we'll do
-        # this in parallel if we have more than one thread and pass any extra
-        # args and kwargs to the galaxy loader function.
-        if self.nthreads > 1:
-            with Pool(self.nthreads) as pool:
-                self.galaxies = pool.map(
-                    partial(self.gal_loader_func, *args, **kwargs),
-                    self.galaxy_indices,
-                )
-        else:
-            self.galaxies = [
-                self.gal_loader_func(i, *args, **kwargs)
-                for i in self.galaxy_indices
-            ]
-
-        # Sanitise the galaxies list to remove any None values
-        galaxies = [g for g in self.galaxies if g is not None]
-        indices = [
-            i
-            for i, g in zip(self.galaxy_indices, self.galaxies)
-            if g is not None
-        ]
+        # Attach the galaxies
         self.galaxies = galaxies
-        self.galaxy_indices = indices
+        self.n_galaxies_local = len(galaxies)
 
-        # We want to report how many galaxies we actually loaded accounting
-        # for any sanitisation that may have occurred. In MPI land this means
-        # communicating counts
+        # If we're in MPI land we need sum the local counts across all ranks
+        # to get the total number of galaxies
         if self.using_mpi:
-            self.n_galaxies = self.comm.allreduce(
-                np.array([len(self.galaxies)]), op=sum
-            )[0]
+            self.n_galaxies = self.comm.allreduce(self.n_galaxies_local)
         else:
-            self.n_galaxies = len(self.galaxies)
+            self.n_galaxies = self.n_galaxies_local
 
-        # Report how many galaxies we loaded amd how many were sanitised
-        self._print(
-            f"Loaded {self.n_galaxies} galaxies"
-            f" ({self.n_galaxies_pre_santise - self.n_galaxies}"
-            " were sanitised away)."
-        )
+        # If we don't have galaxy indices, generate them
+        if galaxy_indices is None:
+            galaxy_indices = list(range(self.n_galaxies_local))
+        else:
+            # Ensure the indices we have are unique and contiguous
+            if len(galaxy_indices) != len(set(galaxy_indices)):
+                raise exceptions.InconsistentArguments(
+                    "Galaxy indices must be unique."
+                )
+            if not np.all(np.diff(galaxy_indices) == 1):
+                raise exceptions.InconsistentArguments(
+                    "Galaxy indices must be contiguous."
+                )
+
+        # Make sure we have an array of indices
+        galaxy_indices = np.array(galaxy_indices)
+
+        # If we're in MPI land we need to shift the indices so they are
+        # unique and contiguous across all ranks
+        if self.using_mpi:
+            # Get the counts from all ranks
+            counts = self.comm.allgather(self.n_galaxies_local)
+
+            # Get the offset for this rank
+            ind_offset = sum(counts[: self.rank])
+
+            # Shift the indices
+            galaxy_indices += ind_offset
+
+        # Attach the galaxy indices
+        self.galaxy_indices = galaxy_indices
+
+        # If we have MPI lets report the balance
+        if self.using_mpi:
+            self._report_balance()
 
         # Done!
         self._loaded_galaxies = True
-        self._took(start, "Loading galaxies")
+        self._took(start, "Adding galaxies")
 
     def get_los_optical_depths(
         self, kernel, kernel_threshold=1.0, kappa=0.0795
@@ -1363,7 +1314,9 @@ class Survey:
         # With everything collected we can sort it to be in the original order
         # and return it
         start = time.perf_counter()
-        sorted_output = sort_data_recursive(output, self.galaxy_indices)
+        sorted_output = sort_data_recursive(
+            output, np.argsort(self.galaxy_indices)
+        )
         self._took(start, "Sorting data")
         return sorted_output
 
@@ -1410,7 +1363,9 @@ class Survey:
         # We now need to gather the sorting indices so we can sort the data
         # before writing it out (gathering is guaranteed to be in rank order
         # so we can just gather the indices and get the same order as the data.
-        sinds = np.concatenate(self.comm.gather(self.galaxy_indices))
+        sinds = np.argsort(
+            np.concatenate(self.comm.gather(self.galaxy_indices))
+        )
 
         # Finally we sort and write out the data to the HDF5 file rooted at
         # the galaxy group. We do this recursively to handle arbitrarily nested
@@ -1465,7 +1420,7 @@ class Survey:
                 hdf,
                 rank_output["Galaxies"],
                 "Galaxies",
-                self.galaxy_indices,
+                np.argsort(self.galaxy_indices),
                 self.comm,
             )
 
@@ -1528,6 +1483,11 @@ class Survey:
         # any extra analysis asked for by the user. We'll run these now.
         self._run_extra_analysis()
 
+        # In MPI land just wait until everyone has made it here
+        if self.using_mpi:
+            self._print(f"Rank {self.rank} waiting to write.")
+            self.comm.barrier()
+
         # Set up the outputs dictionary, this is where we'll collect everything
         # together from the individual galaxies before writing it out.
         output, out_paths, attr_paths = self._setup_output()
@@ -1569,84 +1529,35 @@ class Survey:
         # Totally done!
         self._say_goodbye()
 
-    def partition_galaxies(self, galaxy_weights=None, random_seed=42):
+    def repartition_galaxies(self, galaxy_weights=None, random_seed=42):
+        """Given the galaxies repartition them across the ranks."""
+        raise NotImplementedError("Repartitioning is not yet implemented.")
+
+    def _report_balance(self):
         """
-        Partition the galaxies across the available ranks.
+        Report the balance of galaxies across the ranks.
 
-        This will split galaxies evenly across the ranks. This can either be
-        done to balance the number of galaxies across the ranks or, with the
-        provided weights, to balance the total weight of galaxies across the
-        ranks. Better balance should be achieved by ussing weights,
-        representative of the cost of a galaxy (e.g. the number of stars).
-
-        Args:
-            galaxy_weights (array-like, optional):
-                The weight of each galaxy to use when partitioning. If None,
-                galaxies will be partitioned evenly. Default is None.
-            random_seed (int, optional):
-                The random seed to use when randomising the order of
-                galaxies. Default is 42 (of course).
+        This function will print out a nice horizontal bar graph showing the
+        distribution of galaxies across the ranks.
         """
-        # If this is called when not using MPI, tell the user they've been a
-        # bit silly and do nothing.
-        if not self.using_mpi:
-            self._print(
-                "Partitioning galaxies only required when using MPI, "
-                "doing nothing..."
-            )
-            return
-        start = time.perf_counter()
+        # Communicate local counts to rank 0
+        counts = self.comm.gather(self.n_galaxies_local)
 
-        # Early exit if we have no galaxies
-        if self.n_galaxies == 0:
-            self.galaxy_indices = []
-            return
-
-        # Set the random seed
-        np.random.seed(random_seed)
-
-        # If we have no weights, we'll just partition the galaxies evenly
-        # after randomising the order
-        if galaxy_weights is None:
-            inds = np.random.permutation(self.n_galaxies)
-            inds_per_rank = {i: [] for i in range(self.size)}
-            split_inds = np.array_split(inds, self.size)
-            for i in range(self.size):
-                inds_per_rank[i] = split_inds[i]
-            self.galaxy_indices = list(inds_per_rank[self.rank])
-        else:
-            # Randomise the order of the loaded galaxies
-            galaxy_order = np.random.permutation(self.n_galaxies)
-
-            # Partition the galaxies
-            inds_per_rank = {i: [] for i in range(self.size)}
-            weights_per_rank = np.zeros(self.size)
-            for i in galaxy_order:
-                # Find the rank with the lowest weight
-                rank = np.argmin(weights_per_rank)
-                inds_per_rank[rank].append(i)
-                weights_per_rank[rank] += galaxy_weights[i]
-
-            # Assign the indices to the current rank
-            self.galaxy_indices = inds_per_rank[self.rank]
-
-        # Finally we produce a nice horizontal bar graph to show the
+        # Produce a nice horizontal bar graph to show the
         # distribution of galaxies across the ranks. This only needs printing
         # on rank 0 regardless of verbosity.
         if self.rank == 0:
             self._print("Partitioned galaxies across ranks:")
             # Find the maximum list length for scaling
-            max_length = max(len(lst) for lst in inds_per_rank.values())
+            max_count = max(counts)
 
-            for key, lst in inds_per_rank.items():
+            for rank, count in enumerate(counts):
                 # Calculate the length of the bar based on the relative size
-                bar_length = int((len(lst) / max_length) * 50)
+                bar_length = int((count / max_count) * 50)
 
                 # Create the bar and append the list length in brackets
                 bar = "#" * bar_length
                 self._print(
-                    f"Rank {str(key).zfill(len(str(self.size)) + 1)} - "
-                    f"{bar} ({len(lst)})"
+                    f"Rank {str(count).zfill(len(str(self.size)) + 1)} - "
+                    f"{bar} ({count})"
                 )
-
-        self._took(start, "Partitioning galaxies")
