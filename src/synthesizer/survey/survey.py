@@ -635,16 +635,6 @@ class Survey:
         # If we don't have galaxy indices, generate them
         if galaxy_indices is None:
             galaxy_indices = list(range(self.n_galaxies_local))
-        else:
-            # Ensure the indices we have are unique and contiguous
-            if len(galaxy_indices) != len(set(galaxy_indices)):
-                raise exceptions.InconsistentArguments(
-                    "Galaxy indices must be unique."
-                )
-            if not np.all(np.diff(galaxy_indices) == 1):
-                raise exceptions.InconsistentArguments(
-                    "Galaxy indices must be contiguous."
-                )
 
         # Make sure we have an array of indices
         galaxy_indices = np.array(galaxy_indices)
