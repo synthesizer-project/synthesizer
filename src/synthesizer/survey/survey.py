@@ -1219,6 +1219,9 @@ class Survey:
                 continue
 
             # Get the right component
+            # NOTE: the / must be included in the component string to ensure
+            # the galaxy component play properly since these don't require
+            # the component string.
             if model.emitter == "galaxy":
                 component = ""
             elif model.emitter == "stellar":
