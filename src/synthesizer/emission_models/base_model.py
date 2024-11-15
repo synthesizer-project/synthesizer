@@ -2241,6 +2241,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         tau_v=tau_v,
                         fesc=fesc,
                         mask=mask,
+                        shift,
                         verbose=verbose,
                         spectra=spectra,
                         particle_spectra=particle_spectra,
