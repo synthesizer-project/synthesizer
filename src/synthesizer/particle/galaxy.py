@@ -816,7 +816,11 @@ class Galaxy(BaseGalaxy):
         # intialisation). If the user handed dust masses and then called this
         # function, they will be overwritten and it will be confusing but
         # that's so unlikely and they'll work out when they see this comment.
-        self.gas.dust_masses = self.gas.masses * self.gas.dust_to_metal_ratio
+        self.gas.dust_masses = (
+            self.gas.masses
+            * self.gas.metallicities
+            * self.gas.dust_to_metal_ratio
+        )
 
         return dtm
 
