@@ -42,7 +42,7 @@ int find_nearest_bin(double lambda, double *grid_wavelengths, int nlam) {
  * @param spectra: The output array.
  */
 static void shifted_spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
-                                    double *spectra, c) {
+                                    double *spectra, const double c) {
 
   /* Unpack the grid properties. */
   // double c = 3e8 
@@ -142,7 +142,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid, struct particles 
         double shifted_lambda = shifted_wavelengths[ilam];
       /*Find nearest wavelength bin*/
         int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam); 
-        if (ilam_shifted >= nlam - 1) {continue}; // jumps out of the loop if out of bounds
+        if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) {continue}; // jumps out of the loop if out of bounds
       // Interpolate contribution between ilam_shifted and ilam_shifted+1
         double frac_shifted = (shifted_lambda - wavelength[ilam_shifted]) /
                                   (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
