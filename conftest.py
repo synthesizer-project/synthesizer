@@ -9,14 +9,13 @@ from synthesizer.particle.stars import Stars
 
 @pytest.fixture
 def test_grid():
-    """
-    Returns a Grid object
-    """
+    """Return a Grid object."""
     return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
 
 
 @pytest.fixture
 def particle_stars_A():
+    """Return a particle Stars object."""
     return Stars(
         initial_masses=np.array([1.0, 2.0, 3.0]) * 1e6 * Msun,
         ages=np.array([1.0, 2.0, 3.0]) * Myr,
@@ -30,6 +29,7 @@ def particle_stars_A():
 
 @pytest.fixture
 def particle_stars_B():
+    """Return a particle Stars object."""
     return Stars(
         initial_masses=np.array([4.0, 5.0, 6.0, 7.0]) * 1e6 * Msun,
         ages=np.array([4.0, 5.0, 6.0, 7.0]) * Myr,
@@ -43,6 +43,7 @@ def particle_stars_B():
 
 @pytest.fixture
 def particle_gas_A():
+    """Return a particle Gas object."""
     return Gas(
         masses=np.array([1.0, 2.0, 3.0]) * 1e6 * Msun,
         metallicities=np.array([0.01, 0.02, 0.03]),
@@ -54,6 +55,7 @@ def particle_gas_A():
 
 @pytest.fixture
 def particle_gas_B():
+    """Return a particle Gas object."""
     return Gas(
         masses=np.array([4.0, 5.0, 6.0, 7.0]) * 1e6 * Msun,
         metallicities=np.array([0.04, 0.05, 0.06, 0.07]),
