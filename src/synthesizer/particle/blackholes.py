@@ -16,14 +16,27 @@ Example usages:
 import os
 
 import numpy as np
-from unyt import Hz, angstrom, cm, deg, erg, km, rad, s, unyt_array
+from unyt import (
+    Hz,
+    Mpc,
+    Msun,
+    angstrom,
+    cm,
+    deg,
+    erg,
+    km,
+    rad,
+    s,
+    unyt_array,
+    yr,
+)
 
 from synthesizer import exceptions
-from synthesizer.components import BlackholesComponent
+from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
-from synthesizer.units import Quantity
-from synthesizer.utils import TableFormatter, value_to_array
+from synthesizer.units import Quantity, accepts
+from synthesizer.utils import value_to_array
 from synthesizer.warnings import deprecated, warn
 
 
@@ -70,6 +83,21 @@ class BlackHoles(Particles, BlackholesComponent):
     # Define quantities
     smoothing_lengths = Quantity()
 
+    @accepts(
+        masses=Msun.in_base("galactic"),
+        accretion_rates=Msun.in_base("galactic") / yr,
+        inclinations=deg,
+        coordinates=Mpc,
+        velocities=km / s,
+        softening_length=Mpc,
+        smoothing_lengths=Mpc,
+        centre=Mpc,
+        hydrogen_density_blr=1 / cm**3,
+        hydrogen_density_nlr=1 / cm**3,
+        velocity_dispersion_blr=km / s,
+        velocity_dispersion_nlr=km / s,
+        theta_torus=deg,
+    )
     def __init__(
         self,
         masses,
@@ -244,19 +272,6 @@ class BlackHoles(Particles, BlackholesComponent):
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
 
-    def __str__(self):
-        """
-        Return a string representation of the particle object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Black Holes")
-
     def calculate_random_inclination(self):
         """
         Calculate random inclinations to blackholes.
@@ -305,16 +320,15 @@ class BlackHoles(Particles, BlackholesComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
+
         # Which line region is this for?
         if "nlr" in grid.grid_name:
             line_region = "nlr"
         elif "blr" in grid.grid_name:
             line_region = "blr"
         else:
-            raise exceptions.InconsistentArguments(
-                "Grid used for blackholes does not appear to be for"
-                " a line region (nlr or blr)."
-            )
+            # this is a generic disc grid so no line_region
+            line_region = None
 
         # Handle the case where mask is None
         if mask is None:
@@ -382,9 +396,9 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        mass = np.ones(npart, dtype=np.float64)
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
@@ -417,7 +431,7 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_spectra,
             grid_props,
             props,
-            mass,
+            bol_lum,
             fesc,
             grid_dims,
             len(grid_props),
@@ -541,9 +555,9 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        part_mass = np.ones(npart, dtype=np.float64)
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -580,7 +594,7 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_continuum,
             grid_props,
             part_props,
-            part_mass,
+            bol_lum,
             fesc,
             grid_dims,
             len(grid_props),
@@ -657,6 +671,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nbh, masked_spec.shape[-1]))
         spec[mask] = masked_spec
+
         return spec
 
     def generate_particle_line(
@@ -718,7 +733,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have no black holes return zeros
         if self.nbh == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -734,7 +749,7 @@ class BlackHoles(Particles, BlackholesComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -795,7 +810,7 @@ class BlackHoles(Particles, BlackholesComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     @deprecated(
         message="is now just a wrapper "
@@ -874,6 +889,7 @@ class BlackHoles(Particles, BlackholesComponent):
             **kwargs,
         )
         emission_model.set_per_particle(previous_per_part)
+
         return spectra
 
     @deprecated(

@@ -15,15 +15,14 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
-from synthesizer.components import StarsComponent
+from synthesizer.components.stellar import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.units import Quantity
-from synthesizer.utils import TableFormatter, has_units
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
 
@@ -39,16 +38,11 @@ class Stars(StarsComponent):
     stellar population.
 
     Attributes:
-        log10ages (array-like, float)
-            The array of log10(ages) defining the age axis of the SFZH.
         ages (array-like, float)
             The array of ages defining the age axis of the SFZH.
         metallicities (array-like, float)
             The array of metallicitities defining the metallicity axies of
             the SFZH.
-        log10metallicities (array-like, float)
-            The array of log10(metallicitities) defining the metallicity axes
-            of the SFZH.
         initial_mass (unyt_quantity/float)
             The total initial stellar mass.
         morphology (morphology.* e.g. Sersic2D)
@@ -92,6 +86,7 @@ class Stars(StarsComponent):
     # Define quantities
     initial_mass = Quantity()
 
+    @accepts(initial_mass=Msun.in_base("galactic"))
     def __init__(
         self,
         log10ages,
@@ -101,6 +96,7 @@ class Stars(StarsComponent):
         sfzh=None,
         sf_hist=None,
         metal_dist=None,
+        **kwargs,
     ):
         """
         Initialise the parametric stellar population.
@@ -147,18 +143,21 @@ class Stars(StarsComponent):
         """
 
         # Instantiate the parent
-        StarsComponent.__init__(self, 10**log10ages, metallicities)
+        StarsComponent.__init__(
+            self,
+            10**log10ages * yr,
+            metallicities,
+            **kwargs,
+        )
 
-        # Set the age grid properties
-        self.log10ages = log10ages
+        # Set the age grid lims
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
 
-        # Set the metallicity grid properties
+        # Set the metallicity grid lims
         self.metallicities_lims = [
             self.metallicities[0],
             self.metallicities[-1],
         ]
-        self.log10metallicities = np.log10(metallicities)
         self.log10metallicities_lims = [
             self.log10metallicities[0],
             self.log10metallicities[-1],
@@ -571,7 +570,7 @@ class Stars(StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def calculate_median_age(self):
         """
@@ -590,19 +589,6 @@ class Stars(StarsComponent):
         Calculate the mean metallicity of the stellar population.
         """
         return weighted_mean(self.metallicities, self.metal_dist)
-
-    def __str__(self):
-        """
-        Return a string representation of the stars object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Stars")
 
     def __add__(self, other_stars):
         """
@@ -653,6 +639,7 @@ class Stars(StarsComponent):
 
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
+    @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a luminosity in a
@@ -682,10 +669,6 @@ class Stars(StarsComponent):
                 "corresponding spectra method?"
             )
 
-        # Check we have units
-        if not has_units(lum):
-            raise exceptions.MissingUnits("lum must be given with unyt units")
-
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
         current_lum = (
@@ -708,6 +691,7 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
+    @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a flux in a
@@ -735,12 +719,6 @@ class Stars(StarsComponent):
                 f"The requested spectra type ({spectra_type}) does not exist"
                 " in this stellar population. Have you called the "
                 "corresponding spectra method?"
-            )
-
-        # Check we have units
-        if not has_units(flux):
-            raise exceptions.IncorrectUnits(
-                "lum must be given with unyt units"
             )
 
         # Get the sed object
@@ -843,3 +821,15 @@ class Stars(StarsComponent):
             plt.show()
 
         return fig, ax
+
+    def _prepare_sed_args(self, *args, **kwargs):
+        """Prepare arguments for SED generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )
+
+    def _prepare_line_args(self, *args, **kwargs):
+        """Prepare arguments for line generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )

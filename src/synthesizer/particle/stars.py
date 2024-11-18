@@ -25,16 +25,16 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Hz, Myr, angstrom, erg, s
+from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
 
 from synthesizer import exceptions
-from synthesizer.components import StarsComponent
+from synthesizer.components.stellar import StarsComponent
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
-from synthesizer.units import Quantity
-from synthesizer.utils import TableFormatter
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.util_funcs import combine_arrays
 from synthesizer.warnings import deprecated, warn
@@ -42,8 +42,10 @@ from synthesizer.warnings import deprecated, warn
 
 class Stars(Particles, StarsComponent):
     """
-    The base Stars class. This contains all data a collection of stars could
-    contain. It inherits from the base Particles class holding attributes and
+    The base Stars class.
+
+    This contains all data a collection of stars could contain. It inherits
+    from the base Particles class holding attributes and
     methods common to all particle types.
 
     The Stars class can be handed to methods elsewhere to pass information
@@ -108,6 +110,16 @@ class Stars(Particles, StarsComponent):
     current_masses = Quantity()
     smoothing_lengths = Quantity()
 
+    @accepts(
+        initial_masses=Msun.in_base("galactic"),
+        ages=Myr,
+        coordinates=Mpc,
+        velocities=km / s,
+        current_masses=Msun.in_base("galactic"),
+        smoothing_lengths=Mpc,
+        softening_length=Mpc,
+        centre=Mpc,
+    )
     def __init__(
         self,
         initial_masses,
@@ -184,15 +196,9 @@ class Stars(Particles, StarsComponent):
             tau_v=tau_v,
             name="Stars",
         )
-        StarsComponent.__init__(self, ages, metallicities)
+        StarsComponent.__init__(self, ages, metallicities, **kwargs)
 
-        # Ensure initial masses is an accepted type to avoid
-        # issues when masking
-        if isinstance(initial_masses, list):
-            raise exceptions.InconsistentArguments(
-                "Initial mass should be numpy or unyt array."
-            )
-
+        # Ensure we don't have negative ages
         if len(ages) > 0:
             if ages.min() < 0.0:
                 raise exceptions.InconsistentArguments(
@@ -228,10 +234,6 @@ class Stars(Particles, StarsComponent):
         self.initial_masses = initial_masses
         self.ages = ages
         self.metallicities = metallicities
-
-        # Set the extra keyword arguments
-        for key, value in kwargs.items():
-            setattr(self, key, value)
 
         # Set the optional keyword arguments
 
@@ -1195,7 +1197,7 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1211,7 +1213,7 @@ class Stars(Particles, StarsComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1262,7 +1264,7 @@ class Stars(Particles, StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def generate_particle_lnu(
         self,
@@ -1485,7 +1487,7 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1501,7 +1503,7 @@ class Stars(Particles, StarsComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1562,8 +1564,9 @@ class Stars(Particles, StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
+    @accepts(young=yr, old=yr)
     def _get_masks(self, young=None, old=None):
         """
         Get masks for which components we are handling, if a sub-component
@@ -1591,16 +1594,17 @@ class Stars(Particles, StarsComponent):
         # Get the appropriate mask
         if young:
             # Mask out old stars
-            s = self.log10ages <= np.log10(young.to("yr"))
+            s = self.log10ages <= np.log10(young)
         elif old:
             # Mask out young stars
-            s = self.log10ages > np.log10(old.to("yr"))
+            s = self.log10ages > np.log10(old)
         else:
             # Nothing to mask out
             s = np.ones(self.nparticles, dtype=bool)
 
         return s
 
+    @accepts(stellar_mass=Msun.in_base("galactic"))
     def renormalise_mass(self, stellar_mass):
         """
         Renormalises and overwrites the initial masses. Useful when rescaling
@@ -1644,6 +1648,11 @@ class Stars(Particles, StarsComponent):
 
         return (low_lim_g + (upp_lim_g - low_lim_g) * rand) ** (1 / g)
 
+    @accepts(
+        min_age=yr,
+        min_mass=Msun.in_base("galactic"),
+        max_mass=Msun.in_base("galactic"),
+    )
     def resample_young_stars(
         self,
         min_age=1e8,
@@ -2141,12 +2150,14 @@ class Stars(Particles, StarsComponent):
         return lines
 
 
-def sample_sfzh(
+
+@accepts(initial_mass=Msun.in_base("galactic"))
+def sample_sfhz(
     sfzh,
     log10ages,
     log10metallicities,
     nstar,
-    initial_mass=1,
+    initial_mass=1 * Msun,
     **kwargs,
 ):
     """
@@ -2198,7 +2209,7 @@ def sample_sfzh(
     # Instantiate Stars object with extra keyword arguments
     stars = Stars(
         initial_mass * np.ones(nstar),
-        10**log10ages,
+        10**log10ages * yr,
         10**log10metallicities,
         **kwargs,
     )

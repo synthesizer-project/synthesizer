@@ -26,10 +26,9 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import (
     TableFormatter,
-    has_units,
     rebin_1d,
     wavelength_to_rgba,
 )
@@ -76,6 +75,7 @@ class Sed:
     obsnu = Quantity()
     obslam = Quantity()
 
+    @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(self, lam, lnu=None, description=None):
         """
         Initialise a new spectral energy distribution object.
@@ -90,12 +90,6 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
-        # Ensure we have units
-        if not has_units(lam):
-            raise exceptions.MissingUnits("lam must have units.")
-        if lnu is not None and not has_units(lnu):
-            raise exceptions.MissingUnits("lnu must have units.")
-
         start = tic()
 
         # Set the description
@@ -477,6 +471,7 @@ class Sed:
         """
         return self.bolometric_luminosity.value
 
+    @accepts(nu=Hz)
     def get_lnu_at_nu(self, nu, kind=False):
         """
         Return lnu with units at a provided frequency using 1d interpolation.
@@ -496,6 +491,7 @@ class Sed:
         """
         return interp1d(self._nu, self._lnu, kind=kind)(nu) * self.lnu.units
 
+    @accepts(lam=angstrom)
     def get_lnu_at_lam(self, lam, kind=False):
         """
         Return lnu at a provided wavelength.
@@ -563,6 +559,7 @@ class Sed:
 
         return integral * self.lnu.units * self.nu.units
 
+    @accepts(window=angstrom)
     def measure_window_luminosity(
         self, window, integration_method="trapz", nthreads=1
     ):
@@ -608,6 +605,7 @@ class Sed:
 
         return luminosity
 
+    @accepts(window=angstrom)
     def measure_window_lnu(
         self, window, integration_method="trapz", nthreads=1
     ):
@@ -680,6 +678,7 @@ class Sed:
 
         return lnu.to(self.lnu.units)
 
+    @accepts(blue=angstrom, red=angstrom)
     def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
         """
         Measure a spectral break (e.g. the Balmer break) using two windows.
@@ -796,8 +795,12 @@ class Sed:
             integration_method=integration_method,
         )
 
+    @accepts(window=angstrom)
     def measure_beta(
-        self, window=(1250.0, 3000.0), nthreads=1, integration_method="trapz"
+        self,
+        window=(1250.0 * angstrom, 3000.0 * angstrom),
+        nthreads=1,
+        integration_method="trapz",
     ):
         """
         Measure the UV continuum slope (beta).
@@ -1062,6 +1065,7 @@ class Sed:
 
         return 2.5 * np.log10(self.photo_fnu[f2] / self.photo_fnu[f1])
 
+    @accepts(feature=angstrom, blue=angstrom, red=angstrom)
     def measure_index(self, feature, blue, red):
         """
         Measure an absorption feature index.
@@ -1266,7 +1270,7 @@ class Sed:
                 )
 
         # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, self._lam)
+        transmission = dust_curve.get_transmission(tau_v, self.lam)
 
         # Get a copy of the rest frame spectra, we need to avoid
         # modifying the original
@@ -1283,6 +1287,7 @@ class Sed:
 
         return Sed(self.lam, lnu=spectra * self.lnu.units)
 
+    @accepts(ionisation_energy=eV)
     def calculate_ionising_photon_production_rate(
         self, ionisation_energy=13.6 * eV, limit=100, nthreads=1
     ):
@@ -1315,18 +1320,27 @@ class Sed:
         x = self._lam
         y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).value
 
-        # Get value of luminosity at ionisation wavelength
-        ionisation_y = np.interp(
-            ionisation_wavelength.to(angstrom).value, x, y
-        )
-
         # Restrict arrays to ionisation regime
         x = x[ionisation_mask]
-        y = y[ionisation_mask]
+        if len(y.shape) == 1:
+            y = y[ionisation_mask]
+        else:
+            y = y[..., ionisation_mask]
 
-        # Add ionisation wavelength and luminosity values
-        x = np.append(x, ionisation_wavelength.to(angstrom).value)
-        y = np.append(y, ionisation_y)
+        # Add a final data point at the ionising energy to ensure full
+        # coverage.
+        x0 = ionisation_wavelength.to(angstrom).value
+        if len(y.shape) == 1:
+            y0 = np.interp(x0, x, y)
+            y = np.append(y, y0)
+        else:
+            y0 = np.apply_along_axis(
+                lambda y_: np.interp(x0, x, y_), axis=-1, arr=y
+            )
+            y0 = np.expand_dims(y0, -1)
+            y = np.append(y, y0, axis=-1)
+
+        x = np.append(x, x0)
 
         ion_photon_prod_rate = integrate_last_axis(x, y, nthreads=nthreads) / s
 
@@ -1891,6 +1905,7 @@ def get_attenuation(intrinsic_sed, attenuated_sed):
     return -2.5 * np.log10(transmission)
 
 
+@accepts(lam=angstrom)
 def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
     """
     Calculate attenuation at a given wavelength
@@ -1908,11 +1923,6 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
         float/array-like, float
             The attenuation at the passed wavelength/s in magnitudes.
     """
-
-    # Enusre we have units
-    if not has_units(lam):
-        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
-
     # Ensure lam is in the same units as the sed
     if lam.units != intrinsic_sed.lam.units:
         lam = lam.to(intrinsic_sed.lam.units)
