@@ -198,6 +198,7 @@ class FilterCollection:
             and generic_dict is None
             and filters is None
         ):
+            self.lam = None
             return
 
         else:
