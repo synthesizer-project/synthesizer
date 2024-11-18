@@ -153,13 +153,13 @@ def pack_data(d, data, output_key):
 
     # Loop until we reach the "leaf" key, we should have the dictionary
     # structure in place by the time we reach the leaf key, if we don't we
-    # need an error to highlight a mismatch (all ranks must agree on the
+    # error automatically to highlight a mismatch (all ranks must agree on the
     # structure in MPI land)
     for key in keys[:-1]:
         d = d[key]
 
     # Store the data at the leaf key
-    d[keys[-1]] = data
+    d[keys[-1]] = unyt_array(data)
 
 
 def unpack_data(obj, output_path):
@@ -358,7 +358,6 @@ def recursive_gather(data, comm, root=0):
                         try:
                             new_d[k] = np.concatenate(collected_data)
                         except ValueError as e:
-                            print(collected_data)
                             ValueError(f"Failed to concatenate {k} - {e}")
                     else:
                         new_d[k] = []
