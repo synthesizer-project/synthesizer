@@ -714,7 +714,7 @@ class FilterCollection:
                 diffs = np.diff(new_lam)
                 min_res_new = np.max(np.diff(new_lam))
 
-        return new_lam
+        return new_lam * piv_lams[0].units
 
     @accepts(new_lam=angstrom)
     def resample_filters(
