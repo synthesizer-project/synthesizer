@@ -688,7 +688,7 @@ class Generation:
         group.attrs["type"] = "generation"
 
         # Save the generator
-        group.attrs["generator"] = type(self._generator)
+        group.attrs["generator"] = str(type(self._generator))
 
         # Save the dust luminosity models
         if self._lum_intrinsic_model is not None:
@@ -943,7 +943,7 @@ class DustAttenuation:
         group.attrs["type"] = "dust_attenuation"
 
         # Save the dust curve
-        group.attrs["dust_curve"] = type(self._dust_curve)
+        group.attrs["dust_curve"] = str(type(self._dust_curve))
 
         # Save the model to apply the dust curve to
         group.attrs["apply_dust_to"] = self._apply_dust_to.label
