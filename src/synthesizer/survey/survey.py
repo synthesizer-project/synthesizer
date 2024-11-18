@@ -34,6 +34,7 @@ from functools import partial
 import h5py
 import numpy as np
 from pathos.multiprocessing import ProcessingPool as Pool
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
@@ -1293,6 +1294,14 @@ class Survey:
         # Actually collect the data
         for out_path, attr_path in zip(out_paths, attr_paths):
             data = [unpack_data(g, attr_path) for g in self.galaxies]
+
+            # If this is a list of unyt_quantity objects convert to a
+            # unyt_array
+            if all([isinstance(d, (unyt_quantity, unyt_array)) for d in data]):
+                data = unyt_array(data)
+            else:
+                data = np.array(data)
+
             pack_data(output, data, out_path)
 
         # Add the analysis results to the output
