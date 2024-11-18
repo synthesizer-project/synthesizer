@@ -1891,7 +1891,7 @@ class Filter:
 
     def Tpeak(self):
         """
-        Calculate the peak transmission
+        Calculate the peak transmission.
 
         For an SVO filter this uses the transmission from the database.
 
