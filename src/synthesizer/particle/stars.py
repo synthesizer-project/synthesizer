@@ -356,8 +356,7 @@ class Stars(Particles, StarsComponent):
 
     def _concatenate_stars_arrays(self, other):
         """
-        Create a dictionary of attributes from two stars objects combined,
-        self and `other`.
+        Create a dictionary of attributes from two stars objects combined.
 
         Args:
             other (Stars)
@@ -851,7 +850,6 @@ class Stars(Particles, StarsComponent):
             pmask (array-like, bool)
                 A boolean mask to remove stars from the object.
         """
-
         # Remove the masked stars from this object
         self.initial_masses = self.initial_masses[~pmask]
         self.ages = self.ages[~pmask]
@@ -1005,7 +1003,7 @@ class Stars(Particles, StarsComponent):
             10 ** grid.log10ages[grid_indexes[:, 0]] * yr,
             grid.metallicity[grid_indexes[:, 1]],
             redshift=self.redshift,
-            masses=np.zeros(np.sum(stars.sfzh > 0)),
+            masses=np.zeros(np.sum(stars.sfzh > 0)) * Msun,
         )
 
         # Save the old stars privately
