@@ -1287,7 +1287,7 @@ class Survey:
 
         Returns:
             dict:
-                The output dictionary with all arrays sorted by galaxy index.
+                The populated output dictionary.
         """
         start = time.perf_counter()
         # Actually collect the data
@@ -1301,14 +1301,7 @@ class Survey:
         # Done!
         self._took(start, "Collecting data")
 
-        # With everything collected we can sort it to be in the original order
-        # and return it
-        start = time.perf_counter()
-        sorted_output = sort_data_recursive(
-            output, np.argsort(self.galaxy_indices)
-        )
-        self._took(start, "Sorting data")
-        return sorted_output
+        return output
 
     def _parallel_write(self, outpath, rank_output, out_paths, attr_paths):
         """
@@ -1442,10 +1435,20 @@ class Survey:
         # Collected everything from the individual galaxies
         output = self._collect(output, out_paths, attr_paths)
 
+        # With everything collected we can sort it to be in the original order
+        # and return it
+        start = time.perf_counter()
+        sorted_output = sort_data_recursive(
+            output, np.argsort(self.galaxy_indices)
+        )
+        self._took(start, "Sorting data")
+
         # Write out the data to the HDF5 file rooted at the galaxy group. We
         # do this recursively to handle arbitrarily nested dictionaries.
         with h5py.File(outpath, "a") as hdf:
-            write_datasets_recursive(hdf, output["Galaxies"], "Galaxies")
+            write_datasets_recursive(
+                hdf, sorted_output["Galaxies"], "Galaxies"
+            )
 
     def write(self, outpath, particle_datasets=False):
         """
