@@ -474,6 +474,21 @@ class FilterCollection:
         # Update the number of filters we have
         self.nfilters = len(self.filter_codes)
 
+        # Get a combined wavelength array (we resample filters before
+        # applying them to spectra so the actual resolution doesn't matter)
+        if self.lam is not None and other_filters.lam is not None:
+            new_lam = np.linspace(
+                min(self.lam.min(), other_filters.lam.min()),
+                max(self.lam.max(), other_filters.lam.max()),
+                self.lam.size + other_filters.lam.size,
+            )
+        elif self.lam is not None:
+            new_lam = self.lam
+        elif other_filters.lam is not None:
+            new_lam = other_filters.lam
+        else:
+            new_lam = None
+
         # Now resample the filters onto the filter collection's wavelength
         # array,
         # NOTE: If the new filter extends beyond the filter collection's
@@ -482,7 +497,7 @@ class FilterCollection:
         # filter collection's wavelength array modified, if that were
         # to happen it could become inconsistent with Sed wavelength arrays
         # and photometry would be impossible.
-        self.resample_filters(new_lam=self.lam)
+        self.resample_filters(new_lam=new_lam)
 
         return self
 
