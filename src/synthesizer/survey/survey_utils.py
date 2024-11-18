@@ -369,6 +369,8 @@ def recursive_gather(data, comm, root=0):
                         new_d[k] = []
                 else:
                     new_d[k] = []
+                print(comm.rank, k, new_d[k].shape)
+                comm.barrier()
             elif isinstance(v, dict):
                 new_d[k] = _gather(v, comm, root)
             else:
