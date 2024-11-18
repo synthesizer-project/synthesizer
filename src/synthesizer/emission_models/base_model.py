@@ -1455,7 +1455,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         group.attrs["emitter"] = self.emitter
         group.attrs["per_particle"] = self.per_particle
         group.attrs["save"] = self.save
-        group.attrs["fesc"] = self.fesc
+        group.attrs["fesc"] = self.fesc if self.fesc is not None else 0.0
         group.attrs["scale_by"] = self.scale_by
         group.attrs["post_processing"] = (
             [func.__name__ for func in self.post_processing]
