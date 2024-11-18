@@ -660,7 +660,7 @@ class Survey:
 
         # Done!
         self._loaded_galaxies = True
-        self._took(start, "Adding galaxies")
+        self._took(start, f"Adding {self.n_galaxies} galaxies")
 
     def get_los_optical_depths(
         self, kernel, kernel_threshold=1.0, kappa=0.0795
