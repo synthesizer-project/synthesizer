@@ -24,7 +24,6 @@ import os
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, Myr, angstrom, erg, s
 from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
 
 from synthesizer import exceptions
@@ -35,6 +34,7 @@ from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.util_funcs import combine_arrays
 from synthesizer.warnings import deprecated, warn
@@ -2148,7 +2148,6 @@ class Stars(Particles, StarsComponent):
         )
         emission_model.set_per_particle(previous_per_part)
         return lines
-
 
 
 @accepts(initial_mass=Msun.in_base("galactic"))
