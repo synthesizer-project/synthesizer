@@ -291,3 +291,42 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
         rgba.append(wavelength_to_rgba(wavelength, gamma=gamma))
 
     return rgba
+
+
+def combine_arrays(arr1, arr2):
+    """
+    Combine two arrays into a single array.
+
+    This function is a helper used to combine two arrays of the same length
+    into a single array while abstracting some checks and handling improper
+    combinations.
+
+    If both arrays are None then None is returned. If one array is None and
+    the other is not then None is returned along with a warning.
+
+    Args:
+        arr1 (array-like)
+            The first array to combine.
+        arr2 (array-like)
+            The second array to combine.
+
+    Returns:
+        array-like
+            The combined array.
+    """
+    # Are both arrays None?
+    if arr1 is None and arr2 is None:
+        return None
+
+    # If one is None and the other is not then return None
+    elif arr1 is None or arr2 is None:
+        warn("One of the arrays is None, one is not. Returning None.")
+        return None
+
+    # Ensure both arrays aren't 0 dimensional
+    elif arr1.ndim == 0 or arr2.ndim == 0:
+        return None
+
+    # If both are not None then combine them
+    else:
+        return np.concatenate([arr1, arr2])

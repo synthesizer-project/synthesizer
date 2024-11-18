@@ -1,10 +1,8 @@
-import pytest
-
 from synthesizer.grid import Grid
 
 
-@pytest.fixture
-def open_grid():
-    """returns a Grid object"""
-
-    return Grid("test_grid", grid_dir="/tests/test_grid")
+def test_grid_returned(test_grid):
+    """
+    Test that a Grid object is returned.
+    """
+    assert isinstance(test_grid, Grid)
