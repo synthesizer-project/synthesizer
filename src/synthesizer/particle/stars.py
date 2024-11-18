@@ -2149,7 +2149,7 @@ class Stars(Particles, StarsComponent):
 
 
 @accepts(initial_mass=Msun.in_base("galactic"))
-def sample_sfhz(
+def sample_sfzh(
     sfzh,
     log10ages,
     log10metallicities,
@@ -2177,7 +2177,6 @@ def sample_sfhz(
         stars (Stars)
             An instance of Stars containing the fake stellar particles.
     """
-
     # Normalise the sfhz to produce a histogram (binned in time) between 0
     # and 1.
     hist = sfzh / np.sum(sfzh)
