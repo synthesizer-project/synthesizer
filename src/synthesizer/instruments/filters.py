@@ -230,7 +230,7 @@ class FilterCollection:
         # it. NOTE: this can also be done for a loaded FilterCollection
         # so we just do it here outside the logic
         if new_lam is not None:
-            self.resample_filters(new_lam, verbose=verbose)
+            self.resample_filters(new_lam=new_lam, verbose=verbose)
 
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()
