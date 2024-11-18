@@ -316,7 +316,6 @@ class FilterCollection:
         fc.nfilters = hdf["Header"].attrs["nfilters"]
         fc.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
         fc.filter_codes = hdf["Header"].attrs["filter_codes"]
-        print(fc.filter_codes)
 
         # Loop over the groups and make the filters
         for filter_code in fc.filter_codes:
