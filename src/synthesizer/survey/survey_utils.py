@@ -355,7 +355,11 @@ def recursive_gather(data, comm, root=0):
                 if comm.rank == root:
                     collected_data = [d for d in collected_data if len(d) > 0]
                     if len(collected_data) > 0:
-                        new_d[k] = np.concatenate(collected_data)
+                        try:
+                            new_d[k] = np.concatenate(collected_data)
+                        except ValueError as e:
+                            print(collected_data)
+                            ValueError(f"Failed to concatenate {k} - {e}")
                     else:
                         new_d[k] = []
                 else:
