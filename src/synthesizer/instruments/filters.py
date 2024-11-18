@@ -718,7 +718,11 @@ class FilterCollection:
 
     @accepts(new_lam=angstrom)
     def resample_filters(
-        self, new_lam=None, lam_size=None, fill_gaps=False, verbose=True
+        self,
+        new_lam=None,
+        lam_size=None,
+        fill_gaps=False,
+        verbose=True,
     ):
         """
         Resample all filters onto a single wavelength array.
@@ -1462,32 +1466,51 @@ class Filter:
             self.t = np.clip(self.t, 0, 1)
 
     def _make_top_hat_filter(self):
-        """
-        Make a top hat filter from the Filter's attributes.
-        """
-
+        """Make a top hat filter from the Filter's attributes."""
         # Define the type of this filter
         self.filter_type = "TopHat"
 
         # If filter has been defined with an effective wavelength and FWHM
         # calculate the minimum and maximum wavelength.
         if self.lam_eff is not None and self.lam_fwhm is not None:
-            self.lam_min = self.lam_eff - self.lam_fwhm / 2.0
-            self.lam_max = self.lam_eff + self.lam_fwhm / 2.0
+            self.lam_min = self.lam_eff - (self.lam_fwhm / 2.0)
+            self.lam_max = self.lam_eff + (self.lam_fwhm / 2.0)
 
         # Otherwise, use the explict min and max
 
         # Define this top hat filters wavelength array (+/- 1000 Angstrom)
         # if it hasn't been provided
-        if self.lam is None:
-            self.lam = np.arange(
-                np.max([0, self._lam_min - 1000]), self._lam_max + 1000, 1
-            )
+        lam = np.linspace(
+            np.max([0, self._lam_min - 1000]),
+            self._lam_max + 1000,
+            1000,
+        )
 
         # Define the transmission curve (1 inside, 0 outside)
-        self.t = np.zeros(len(self.lam))
-        s = (self.lam > self.lam_min) & (self.lam <= self.lam_max)
+        self.t = np.zeros(len(lam))
+        s = (lam > self.lam_min) & (lam <= self.lam_max)
         self.t[s] = 1.0
+
+        # Ensure we actually have some transmission
+        if self.t.sum() == 0:
+            raise exceptions.InconsistentArguments(
+                f"{self.filter_code} has no non-zero transmission "
+                f"(lam_min={self.lam_min}, lam_max={self.lam_max}). "
+                f"Consider removing this filter ({self.filter_code}) "
+                "or extending the wavelength range."
+            )
+
+        # Set the original arrays to the current arrays (they are the same
+        # for a top hat filter)
+        self.original_lam = lam
+        self.original_t = self.t
+
+        # Do we have a new wavelength array to interpolate onto?
+        if isinstance(self._lam, np.ndarray):
+            self._interpolate_wavelength()
+        else:
+            self.lam = self.original_lam
+            self.t = self.original_t
 
     def _make_svo_filter(self):
         """
@@ -1563,16 +1586,15 @@ class Filter:
             array-like (float)
                 Transmission curve interpolated onto the new wavelength array.
         """
-
         # If we've been handed a wavelength array we must overwrite the
         # current one
         if new_lam is not None:
             # Warn the user if we're about to truncate the existing wavelength
             # array
             truncated = False
-            if new_lam.min() > self.lam[self.t > 0].min():
+            if new_lam.min() > self.original_lam[self.original_t > 0].min():
                 truncated = True
-            if new_lam.max() < self.lam[self.t > 0].max():
+            if new_lam.max() < self.original_lam[self.original_t > 0].max():
                 truncated = True
             if truncated:
                 warn(
@@ -1596,8 +1618,8 @@ class Filter:
         if self.t.sum() == 0:
             raise exceptions.InconsistentWavelengths(
                 "Interpolated transmission curve has no non-zero values. "
-                "Consider removing this filter or extending the wavelength "
-                "range."
+                f"Consider removing this filter ({self.filter_code}), "
+                "extending the wavelength range or increasing the wavelength."
             )
 
         # And ensure transmission is in expected range
