@@ -358,7 +358,9 @@ def recursive_gather(data, comm, root=0):
                         try:
                             new_d[k] = np.concatenate(collected_data)
                         except ValueError as e:
-                            ValueError(f"Failed to concatenate {k} - {e}")
+                            raise ValueError(
+                                f"Failed to concatenate {k} - {e}"
+                            )
                     else:
                         new_d[k] = []
                 else:
