@@ -763,7 +763,9 @@ class FilterCollection:
             # Are we making an array with a fixed size?
             if lam_size is not None:
                 # Create wavelength array
-                new_lam = np.linspace(min_lam, max_lam, lam_size)
+                new_lam = (
+                    np.linspace(min_lam, max_lam, lam_size) * min_lam.units
+                )
 
             else:
                 # Ok, we are trying to be clever, merge the filter wavelength
@@ -778,16 +780,16 @@ class FilterCollection:
                     + "FilterCollection.lam.size = %d" % new_lam.size
                 )
 
-        # Set the wavelength array
-        self.lam = new_lam
-
         # Loop over filters unifying them onto this wavelength array
         # NOTE: Filters already on self.lam will be uneffected but doing a
         # np.all condition to check for matches and skip them is more expensive
         # than just doing the interpolation for all filters
         for fcode in self.filters:
             f = self.filters[fcode]
-            f._interpolate_wavelength(self.lam)
+            f._interpolate_wavelength(new_lam=new_lam)
+
+        # Set the wavelength array
+        self.lam = new_lam
 
     def unify_with_grid(self, grid, loop_spectra=False):
         """
