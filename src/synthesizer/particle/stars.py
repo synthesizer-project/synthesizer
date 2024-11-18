@@ -1001,8 +1001,8 @@ class Stars(Particles, StarsComponent):
 
         # Create new particle stars object from non-empty SFZH entries
         new_stars = self.__class__(
-            stars.sfzh[stars.sfzh > 0],
-            grid.log10ages[grid_indexes[:, 0]],
+            stars.sfzh[stars.sfzh > 0] * Msun,
+            10 ** grid.log10ages[grid_indexes[:, 0]] * yr,
             grid.metallicity[grid_indexes[:, 1]],
             redshift=self.redshift,
             masses=np.zeros(np.sum(stars.sfzh > 0)),
