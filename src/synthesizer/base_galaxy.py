@@ -4,9 +4,12 @@ The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
+from unyt import Mpc
+
 from synthesizer import exceptions
 from synthesizer.emission_models.attenuation.igm import Inoue14
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.warnings import deprecated, deprecation
 
@@ -31,6 +34,7 @@ class BaseGalaxy:
             The BlackHole/s object holding information about the black hole/s.
     """
 
+    @accepts(centre=Mpc)
     def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
         """
         Instantiate the base Galaxy class.
@@ -63,6 +67,10 @@ class BaseGalaxy:
         # Initialise the photometry dictionaries
         self.photo_lnu = {}
         self.photo_fnu = {}
+
+        # Intialise the image dictionaries
+        self.images_lnu = {}
+        self.images_fnu = {}
 
         # Attach the components
         self.stars = stars
@@ -962,6 +970,227 @@ class BaseGalaxy:
                     )
 
         return self.lines[emission_model.label]
+
+    def get_images_luminosity(
+        self,
+        resolution,
+        fov,
+        emission_model,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+    ):
+        """
+        Make an ImageCollection from luminosities.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary photometry is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the images_lnu attribute. The image
+        collection at the root of the emission model will also be returned.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            emission_model (EmissionModel)
+                The emission model to use to generate the images.
+            img_type : str
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            stellar_photometry (string)
+                The stellar spectra key from which to extract photometry
+                to use for the image.
+            blackhole_photometry (string)
+                The black hole spectra key from which to extract photometry
+                to use for the image.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+            limit_to (str)
+                Optionally pass a single model label to limit image generation
+                to only that model.
+
+        Returns:
+            Image : array-like
+                A 2D array containing the image.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric galaxy
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed images."
+            )
+
+        # Get the images
+        images = emission_model._get_images(
+            resolution=resolution,
+            fov=fov,
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=False,
+        )
+
+        # Unpack the images to the right component
+        for model in emission_model._models.values():
+            # Skip models we aren't saving
+            if not model.save or (
+                limit_to is not None and model.label != limit_to
+            ):
+                continue
+            if model.emitter == "galaxy":
+                self.images_lnu[model.label] = images[model.label]
+            elif model.emitter == "stellar":
+                self.stars.images_lnu[model.label] = images[model.label]
+            elif model.emitter == "blackhole":
+                self.black_holes.images_lnu[model.label] = images[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        # Return the image at the root of the emission model
+        return images[emission_model.label]
+
+    def get_images_flux(
+        self,
+        resolution,
+        fov,
+        emission_model,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+    ):
+        """
+        Make an ImageCollection from fluxes.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary photometry is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the images_fnu attribute. The image
+        collection at the root of the emission model will also be returned.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            emission_model (EmissionModel)
+                The emission model to use to generate the images.
+            img_type : str
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            stellar_photometry (string)
+                The stellar spectra key from which to extract photometry
+                to use for the image.
+            blackhole_photometry (string)
+                The black hole spectra key from which to extract photometry
+                to use for the image.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+
+        Returns:
+            Image : array-like
+                A 2D array containing the image.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric galaxy
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed images."
+            )
+
+        # Get the images
+        images = emission_model._get_images(
+            resolution=resolution,
+            fov=fov,
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=True,
+        )
+
+        # Unpack the images to the right component
+        for model in emission_model._models.values():
+            # Skip models we aren't saving
+            if not model.save or (
+                limit_to is not None and model.label != limit_to
+            ):
+                continue
+            if model.emitter == "galaxy":
+                self.images_fnu[model.label] = images[model.label]
+            elif model.emitter == "stellar":
+                self.stars.images_fnu[model.label] = images[model.label]
+            elif model.emitter == "blackhole":
+                self.black_holes.images_fnu[model.label] = images[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        # Return the image at the root of the emission model
+        return images[emission_model.label]
 
     def clear_all_spectra(self):
         """

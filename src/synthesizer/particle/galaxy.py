@@ -20,14 +20,16 @@ import copy
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Myr, rad, unyt_quantity
+from unyt import Mpc, Msun, Myr, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.imaging import Image, ImageCollection, SpectralCube
-from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle import Gas, Stars
+from synthesizer.imaging import Image, SpectralCube
+from synthesizer.parametric.stars import Stars as ParametricStars
+from synthesizer.particle.gas import Gas
+from synthesizer.particle.stars import Stars
+from synthesizer.units import accepts
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.warnings import deprecated, warn
 
@@ -52,6 +54,7 @@ class Galaxy(BaseGalaxy):
         "gas_mass",
     ]
 
+    @accepts(centre=Mpc)
     def __init__(
         self,
         name="particle galaxy",
@@ -201,6 +204,7 @@ class Galaxy(BaseGalaxy):
                 "setting sf_gas_mass and sf_gas_metallicity to `None`"
             )
 
+    @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
         self,
         initial_masses=None,
@@ -260,6 +264,7 @@ class Galaxy(BaseGalaxy):
         if self.centre is not None:
             self.stars.centre = self.centre
 
+    @accepts(masses=Msun.in_base("galactic"))
     def load_gas(
         self,
         masses=None,
@@ -749,6 +754,7 @@ class Galaxy(BaseGalaxy):
 
         return gamma
 
+    @accepts(stellar_mass_weighted_age=Myr)
     def dust_to_metal_vijayan19(
         self, stellar_mass_weighted_age=None, ism_metallicity=None
     ):
@@ -810,241 +816,13 @@ class Galaxy(BaseGalaxy):
         # intialisation). If the user handed dust masses and then called this
         # function, they will be overwritten and it will be confusing but
         # that's so unlikely and they'll work out when they see this comment.
-        self.gas.dust_masses = self.gas.masses * self.gas.dust_to_metal_ratio
+        self.gas.dust_masses = (
+            self.gas.masses
+            * self.gas.metallicities
+            * self.gas.dust_to_metal_ratio
+        )
 
         return dtm
-
-    def get_images_luminosity(
-        self,
-        resolution,
-        fov,
-        img_type="hist",
-        stellar_photometry=None,
-        blackhole_photometry=None,
-        kernel=None,
-        kernel_threshold=1,
-        nthreads=1,
-    ):
-        """
-        Make an ImageCollection from luminosities.
-
-        Images can either be a simple histogram ("hist") or an image with
-        particles smoothed over their SPH kernel. The photometry used for these
-        images is extracted from the Sed stored on a component under the key
-        defined by <component>_spectra.
-
-        Note that black holes will never be smoothed and only produce a
-        histogram due to the point source nature of black holes.
-
-        If multiple components are requested they will be combined into a
-        single output image.
-
-        NOTE: Either npix or fov must be defined.
-
-        Args:
-            resolution (Quantity, float)
-                The size of a pixel.
-                (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
-                The width of the image in image coordinates.
-            img_type : str
-                The type of image to be made, either "hist" -> a histogram, or
-                "smoothed" -> particles smoothed over a kernel.
-            stellar_photometry (string)
-                The stellar spectra key from which to extract photometry
-                to use for the image.
-            blackhole_photometry (string)
-                The black hole spectra key from which to extract photometry
-                to use for the image.
-            kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions
-                module. Only used for smoothed images.
-            kernel_threshold (float)
-                The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
-                The number of threads to use in the tree search. Default is 1.
-
-        Returns:
-            Image : array-like
-                A 2D array containing the image.
-        """
-        # Make sure we have an image to make
-        if stellar_photometry is None and blackhole_photometry is None:
-            raise exceptions.InconsistentArguments(
-                "At least one spectra type must be provided "
-                "(stellar_photometry or blackhole_photometry)!"
-                " What component do you want images of?"
-            )
-
-        # Make stellar image if requested
-        if stellar_photometry is not None:
-            # Instantiate the Image colection ready to make the image.
-            stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
-
-            # Make the image
-            if img_type == "hist":
-                # Compute the image
-                stellar_imgs.get_imgs_hist(
-                    photometry=self.stars.particle_spectra[
-                        stellar_photometry
-                    ].photo_lnu,
-                    coordinates=self.stars.centered_coordinates,
-                )
-
-            elif img_type == "smoothed":
-                # Compute the image
-                stellar_imgs.get_imgs_smoothed(
-                    photometry=self.stars.particle_spectra[
-                        stellar_photometry
-                    ].photo_lnu,
-                    coordinates=self.stars.centered_coordinates,
-                    smoothing_lengths=self.stars.smoothing_lengths,
-                    kernel=kernel,
-                    kernel_threshold=kernel_threshold,
-                    nthreads=nthreads,
-                )
-
-            else:
-                raise exceptions.UnknownImageType(
-                    "Unknown img_type %s. (Options are 'hist' or "
-                    "'smoothed')" % img_type
-                )
-
-        # Make blackhole image if requested
-        if blackhole_photometry is not None:
-            # Instantiate the Image colection ready to make the image.
-            blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
-
-            # Compute the image
-            blackhole_imgs.get_imgs_hist(
-                photometry=self.black_holes.particle_spectra[
-                    blackhole_photometry
-                ].photo_lnu,
-                coordinates=self.black_holes.centered_coordinates,
-            )
-
-        # Return the images, combining if there are multiple components
-        if stellar_photometry is not None and blackhole_photometry is not None:
-            return stellar_imgs + blackhole_imgs
-        elif stellar_photometry is not None:
-            return stellar_imgs
-        return blackhole_imgs
-
-    def get_images_flux(
-        self,
-        resolution,
-        fov,
-        img_type="hist",
-        stellar_photometry=None,
-        blackhole_photometry=None,
-        kernel=None,
-        kernel_threshold=1,
-        nthreads=1,
-    ):
-        """
-        Make an ImageCollection from fluxes.
-
-        Images can either be a simple histogram ("hist") or an image with
-        particles smoothed over their SPH kernel. The photometry used for these
-        images is extracted from the Sed stored on a component under the key
-        defined by <component>_spectra.
-
-        Note that black holes will never be smoothed and only produce a
-        histogram due to the point source nature of black holes.
-
-        If multiple components are requested they will be combined into a
-        single output image.
-
-        NOTE: Either npix or fov must be defined.
-
-        Args:
-            resolution (Quantity, float)
-                The size of a pixel.
-                (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
-                The width of the image in image coordinates.
-            img_type : str
-                The type of image to be made, either "hist" -> a histogram, or
-                "smoothed" -> particles smoothed over a kernel.
-            stellar_photometry (string)
-                The stellar spectra key from which to extract photometry
-                to use for the image.
-            blackhole_photometry (string)
-                The black hole spectra key from which to extract photometry
-                to use for the image.
-            kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions
-                module. Only used for smoothed images.
-            kernel_threshold (float)
-                The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
-                The number of threads to use in the tree search. Default is 1.
-
-        Returns:
-            Image : array-like
-                A 2D array containing the image.
-        """
-        # Make sure we have an image to make
-        if stellar_photometry is None and blackhole_photometry is None:
-            raise exceptions.InconsistentArguments(
-                "At least one spectra type must be provided "
-                "(stellar_photometry or blackhole_photometry)!"
-                " What component do you want images of?"
-            )
-
-        # Make stellar image if requested
-        if stellar_photometry is not None:
-            # Instantiate the Image colection ready to make the image.
-            stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
-
-            # Make the image
-            if img_type == "hist":
-                # Compute the image
-                stellar_imgs.get_imgs_hist(
-                    photometry=self.stars.particle_spectra[
-                        stellar_photometry
-                    ].photo_fnu,
-                    coordinates=self.stars.centered_coordinates,
-                )
-
-            elif img_type == "smoothed":
-                # Compute the image
-                stellar_imgs.get_imgs_smoothed(
-                    photometry=self.stars.particle_spectra[
-                        stellar_photometry
-                    ].photo_fnu,
-                    coordinates=self.stars.centered_coordinates,
-                    smoothing_lengths=self.stars.smoothing_lengths,
-                    kernel=kernel,
-                    kernel_threshold=kernel_threshold,
-                    nthreads=nthreads,
-                )
-
-            else:
-                raise exceptions.UnknownImageType(
-                    "Unknown img_type %s. (Options are 'hist' or "
-                    "'smoothed')" % img_type
-                )
-
-        # Make blackhole image if requested
-        if blackhole_photometry is not None:
-            # Instantiate the Image colection ready to make the image.
-            blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
-
-            # Compute the image
-            blackhole_imgs.get_imgs_hist(
-                photometry=self.black_holes.particle_spectra[
-                    blackhole_photometry
-                ].photo_fnu,
-                coordinates=self.black_holes.centered_coordinates,
-            )
-
-        # Return the images, combining if there are multiple components
-        if stellar_photometry is not None and blackhole_photometry is not None:
-            return stellar_imgs + blackhole_imgs
-        elif stellar_photometry is not None:
-            return stellar_imgs
-        return blackhole_imgs
 
     def get_map_stellar_mass(
         self,
@@ -1797,6 +1575,7 @@ class Galaxy(BaseGalaxy):
         toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
 
+    @accepts(phi=rad, theta=rad)
     def rotate_particles(
         self,
         phi=0 * rad,
