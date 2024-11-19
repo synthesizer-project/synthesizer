@@ -59,7 +59,7 @@ class Extraction:
         emitters,
         spectra,
         particle_spectra,
-        shift,
+        shift=False,
         verbose,
         **kwargs,
     ):
@@ -116,9 +116,9 @@ class Extraction:
 
             # Get the generator function
             if this_model.per_particle:
-                generator_func = emitter.generate_particle_lnu
+                generator_func = emitter.generate_particle_lnu # this should be ok now
             else:
-                generator_func = emitter.generate_lnu
+                generator_func = emitter.generate_lnu # this wont work yet. need to modify compute_integrated_spectra
 
             # Get this base spectra
             sed = Sed(
