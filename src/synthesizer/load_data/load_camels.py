@@ -632,7 +632,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     # Get subhalos with minimum number of star particles
     mask = np.where(lentype[:, 4] > min_star_part)[0]
 
-    # convert formation times to ages
+    # Convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
     universe_age = cosmo.age(redshift)
 
@@ -675,7 +675,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         g_coods,
         g_hsml,
     ):
-        gal = Galaxy()
+        gal = Galaxy(name=idx)
         gal.redshift = redshift
         gal.centre = pos[idx] * kpc
         gal.index = idx
