@@ -290,7 +290,7 @@ class Component(ABC):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        # Get the spectra
+        # Get the spectra / emission_model._get_spectra just uses _extract_spectra, which should also be ok now (19/11)
         spectra, particle_spectra = emission_model._get_spectra(
             emitters={"stellar": self}
             if self.component_type == "Stars"
