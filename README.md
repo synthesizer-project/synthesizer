@@ -1,6 +1,6 @@
 # Synthesizer
 
-<img src="docs/source/img/synthesizer_logo.png" align="left" width="100px"/>
+<img src="docs/source/img/synthesizer_logo.png" align="right" width="100px"/>
 
 [![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/flaresimulations/synthesizer/actions)
 [![Documentation Status](https://github.com/flaresimulations/synthesizer/actions/workflows/publish_docs.yml/badge.svg)](https://flaresimulations.github.io/synthesizer/)
