@@ -42,10 +42,10 @@ int find_nearest_bin(double lambda, double *grid_wavelengths, int nlam) {
  * @param spectra: The output array.
  */
 static void shifted_spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
-                                    double *spectra) {
+                                    double *spectra, const double c) {
 
   /* Unpack the grid properties. */
-  double c = 3e8 
+  // double c = 3e8 
   int *dims = grid->dims;
   int ndim = grid->ndim;
   int nlam = grid->nlam;
@@ -141,15 +141,16 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid, struct particles 
       for (int ilam = 0; ilam < nlam; ilam++) {
         double shifted_lambda = shifted_wavelengths[ilam];
       /*Find nearest wavelength bin*/
-        int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam); // should never be > nlam hopefully
+        int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam); 
+        if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) {continue}; // jumps out of the loop if out of bounds
       // Interpolate contribution between ilam_shifted and ilam_shifted+1
         double frac_shifted = (shifted_lambda - wavelength[ilam_shifted]) /
                                   (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
 
 
         /* Add the contribution to this wavelength. */
-        spectra[p * nlam + ilam_shifted] += (1.0 - frac_shifted) * weight;
-        spectra[p * nlam + ilam_shifted + 1] += frac_shifted * weight;
+        spectra[p * nlam + ilam_shifted] += grid_spectra[spectra_ind + ilam] * (1.0 - frac_shifted) * weight;
+        spectra[p * nlam + ilam_shifted + 1] += grid_spectra[spectra_ind + ilam] * frac_shifted * weight;
       }
     }
   }
@@ -510,20 +511,21 @@ void spectra_loop_ngp(struct grid *grid, struct particles *parts,
 }
 
 /**
- * @brief Computes an integrated SED for a collection of particles.
+ * @brief Computes an integrated doppler-shifted SED for a collection of particles with non-zero velocities.
  *
  * @param np_grid_spectra: The SPS spectra array.
  * @param grid_tuple: The tuple containing arrays of grid axis properties.
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
+ * @param np_velocities: The particles velocities array.
  * @param fesc: The escape fraction.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
  */
-PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
+PyObject *compute_particle_seds_shifted(PyObject *self, PyObject *args) {
 
   double start_time = tic();
   double setup_start = tic();
@@ -536,11 +538,12 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
+  PyArrayObject *np_velocities;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
+                        &part_tuple, &np_part_mass, &np_fesc, &np_velocities, &np_ndims, &ndim,
                         &npart, &nlam, &method, &nthreads))
     return NULL;
 
@@ -553,7 +556,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props =
-      get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
+      get_part_struct(part_tuple, np_part_mass, np_velocities, np_fesc, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
@@ -605,20 +608,20 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef SedMethods[] = {
     {"compute_particle_seds", (PyCFunction)compute_particle_seds, METH_VARARGS,
-     "Method for calculating particle intrinsic spectra."},
+     "Method for calculating particle doppler-shifted spectra."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "make_particle_sed",                   /* m_name */
-    "A module to calculate particle seds", /* m_doc */
-    -1,                                    /* m_size */
-    SedMethods,                            /* m_methods */
-    NULL,                                  /* m_reload */
-    NULL,                                  /* m_traverse */
-    NULL,                                  /* m_clear */
-    NULL,                                  /* m_free */
+    "make_particle_shifted_sed",                           /* m_name */
+    "A module to calculate doppler-shifted particle seds", /* m_doc */
+    -1,                                                    /* m_size */
+    SedMethods,                                            /* m_methods */
+    NULL,                                                  /* m_reload */
+    NULL,                                                  /* m_traverse */
+    NULL,                                                  /* m_clear */
+    NULL,                                                  /* m_free */
 };
 
 PyMODINIT_FUNC PyInit_particle_spectra_with_shift(void) {
