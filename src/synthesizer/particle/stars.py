@@ -566,10 +566,8 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        if shift=False:
-            lnu_particle = compute_integrated_sed(*args) 
-        else:
-            lnu_particle = compute_integrated_sed(*args) # need to modify this too?
+
+        lnu_particle = compute_integrated_sed(*args. shift) 
             
         if parametric_young_stars:
             return lnu_particle + lnu_parametric
@@ -1026,11 +1024,8 @@ class Stars(Particles, StarsComponent):
         toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        if shift=False:
-            masked_spec = compute_particle_seds(*args)
-        else:
-            masked_spec = compute_particle_seds_shifted(*args) # How do we add velocities into these args?
-
+        masked_spec = compute_particle_seds(*args, shift) # I think this works but im not sure
+            
         start = tic()
 
         # If there's no mask we're done
