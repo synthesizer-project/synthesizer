@@ -371,6 +371,7 @@ class Stars(Particles, StarsComponent):
         young=None,
         old=None,
         mask=None,
+        shift=False,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -565,8 +566,9 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        lnu_particle = compute_integrated_sed(*args)
 
+        lnu_particle = compute_integrated_sed(*args. shift)  # this hass not been modified yet, wont work as is, but shouldnt be hard to make it as compute_particle_sed
+            
         if parametric_young_stars:
             return lnu_particle + lnu_parametric
         else:
@@ -878,6 +880,7 @@ class Stars(Particles, StarsComponent):
         spectra_name,
         fesc=0.0,
         verbose=False,
+        shift=False,
         do_grid_check=False,
         mask=None,
         grid_assignment_method="cic",
@@ -904,6 +907,8 @@ class Stars(Particles, StarsComponent):
                 for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
+            shift (bool)
+                Flags whether to apply doppler shift to the spectrum.
             do_grid_check (bool)
                 Whether to check how many particles lie outside the grid. This
                 is a sanity check that can be used to check the
@@ -1005,6 +1010,7 @@ class Stars(Particles, StarsComponent):
             return np.zeros((self.nstars, len(grid.lam)))
 
         from ..extensions.particle_spectra import compute_particle_seds
+        from ..extensions.particle_spectra import compute_particle_seds_shifted
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -1018,8 +1024,8 @@ class Stars(Particles, StarsComponent):
         toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args)
-
+        masked_spec = compute_particle_seds(*args, shift) # I think this works but im not sure
+            
         start = tic()
 
         # If there's no mask we're done

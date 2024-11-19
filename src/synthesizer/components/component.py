@@ -233,6 +233,7 @@ class Component(ABC):
         tau_v=None,
         fesc=None,
         mask=None,
+        shift=False,
         verbose=True,
         **kwargs,
     ):
@@ -275,6 +276,8 @@ class Component(ABC):
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
+            shift (bool):
+                Flags whether to apply doppler shift to the spectra.
             verbose (bool)
                 Are we talking?
             kwargs (dict)
@@ -287,7 +290,7 @@ class Component(ABC):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        # Get the spectra
+        # Get the spectra / emission_model._get_spectra just uses _extract_spectra, which should also be ok now (19/11)
         spectra, particle_spectra = emission_model._get_spectra(
             emitters={"stellar": self}
             if self.component_type == "Stars"
@@ -296,6 +299,7 @@ class Component(ABC):
             tau_v=tau_v,
             fesc=fesc,
             mask=mask,
+            shift,
             verbose=verbose,
             **kwargs,
         )

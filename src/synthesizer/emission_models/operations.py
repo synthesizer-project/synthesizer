@@ -59,6 +59,7 @@ class Extraction:
         emitters,
         spectra,
         particle_spectra,
+        shift=False,
         verbose,
         **kwargs,
     ):
@@ -74,6 +75,8 @@ class Extraction:
                 The dictionary to store the extracted spectra in.
             particle_spectra (dict):
                 The dictionary to store the extracted particle spectra in.
+            shift (bool):
+                Flags whether to apply doppler shift to the spectra
             verbose (bool):
                 Are we talking?
             kwargs (dict):
@@ -113,9 +116,9 @@ class Extraction:
 
             # Get the generator function
             if this_model.per_particle:
-                generator_func = emitter.generate_particle_lnu
+                generator_func = emitter.generate_particle_lnu # this should be ok now
             else:
-                generator_func = emitter.generate_lnu
+                generator_func = emitter.generate_lnu # this wont work yet. need to modify compute_integrated_spectra
 
             # Get this base spectra
             sed = Sed(
@@ -127,6 +130,7 @@ class Extraction:
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
+                    shift,
                     verbose=verbose,
                     **kwargs,
                 )
