@@ -567,7 +567,7 @@ class Stars(Particles, StarsComponent):
 
         # Get the integrated spectra in grid units (erg / s / Hz)
 
-        lnu_particle = compute_integrated_sed(*args. shift) 
+        lnu_particle = compute_integrated_sed(*args. shift)  # this hass not been modified yet, wont work as is, but shouldnt be hard to make it as compute_particle_sed
             
         if parametric_young_stars:
             return lnu_particle + lnu_parametric
