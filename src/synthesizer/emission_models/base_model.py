@@ -2081,7 +2081,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fesc=None,
         covering_fraction=None,
         mask=None,
-        shift,
+        shift=False,
         verbose=True,
         spectra=None,
         particle_spectra=None,
@@ -2211,7 +2211,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 "want to use a child model you are saving instead?"
             )
 
-        # Perform all extractions
+        # Perform all extractions (this should be ok, 19/11)
         spectra, particle_spectra = self._extract_spectra(
             emission_model,
             emitters,
