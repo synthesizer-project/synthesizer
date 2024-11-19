@@ -1,10 +1,10 @@
 """A module for working with arrays of stellar particles.
 
-Contains the Stars class for use with particle based systems. This houses all
+Contains the Stars class for use with particle based systems. This contains all
 the data detailing collections of stellar particles. Each property is
 stored in (N_star, ) shaped arrays for efficiency.
 
-We also provide functions for creating "fake" stellar distributions by
+We also provide functions for creating "fake" stellar distributions, by
 sampling a SFZH.
 
 In both cases a myriad of extra optional properties can be set by providing
@@ -14,7 +14,7 @@ Example usages:
 
     stars = Stars(initial_masses, ages, metallicities,
                   redshift=redshift, current_masses=current_masses, ...)
-    stars = sample_sfhz(sfzh, n, total_initial_mass,
+    stars = sample_sfzh(sfzh, n, total_initial_mass,
                         smoothing_lengths=smoothing_lengths,
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
@@ -34,7 +34,9 @@ from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.plt import single_histxy
+from synthesizer.utils.util_funcs import combine_arrays
 from synthesizer.warnings import deprecated, warn
 
 
@@ -132,7 +134,7 @@ class Stars(Particles, StarsComponent):
         smoothing_lengths=None,
         s_oxygen=None,
         s_hydrogen=None,
-        softening_length=None,
+        softening_lengths=None,
         centre=None,
         metallicity_floor=1e-5,
         **kwargs,
@@ -169,7 +171,7 @@ class Stars(Particles, StarsComponent):
                 The fractional oxygen abundance.
             s_hydrogen (array-like, float)
                 The fractional hydrogen abundance.
-            softening_length (float)
+            softening_lengths (float)
                 The gravitational softening lengths of each stellar
                 particle in simulation units
             centre (array-like, float)
@@ -187,7 +189,7 @@ class Stars(Particles, StarsComponent):
             velocities=velocities,
             masses=current_masses,
             redshift=redshift,
-            softening_length=softening_length,
+            softening_lengths=softening_lengths,
             nparticles=initial_masses.size,
             centre=centre,
             metallicity_floor=metallicity_floor,
@@ -202,6 +204,31 @@ class Stars(Particles, StarsComponent):
                 raise exceptions.InconsistentArguments(
                     "Ages cannot be negative."
                 )
+
+        # Check for nan and inf on input
+        if np.sum(~np.isfinite(initial_masses)) > 0:
+            raise ValueError(
+                (
+                    "NaN or inf on `initial_masses` input, "
+                    f"indices: {np.where(~np.isfinite(initial_masses))[0]}"
+                )
+            )
+
+        if np.sum(~np.isfinite(ages)) > 0:
+            raise ValueError(
+                (
+                    "NaN or inf on `ages` input, "
+                    f"indices: {np.where(~np.isfinite(ages))[0]}"
+                )
+            )
+
+        if np.sum(~np.isfinite(metallicities)) > 0:
+            raise ValueError(
+                (
+                    "NaN or inf on `metallicities` input, "
+                    f"indices: {np.where(~np.isfinite(metallicities))[0]}"
+                )
+            )
 
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
@@ -230,6 +257,9 @@ class Stars(Particles, StarsComponent):
         # Intialise the flag for resampling
         self.resampled = False
 
+        # Initialise the flag for parametric young stars
+        self.young_stars_parametrisation = False
+
         # Set a frontfacing clone of the number of particles
         # with clearer naming
         self.nstars = self.nparticles
@@ -240,6 +270,56 @@ class Stars(Particles, StarsComponent):
         # Particle stars can calculate and attach a SFZH analogous to a
         # parametric galaxy
         self.sfzh = None
+
+    def get_sfr(self, timescale=10 * Myr):
+        """
+        Return the star formation rate of the stellar particles.
+
+        Args:
+            timescale (float)
+                The timescale over which to calculate the star formation rate.
+
+        Returns:
+            sfr (float)
+                The star formation rate of the stellar particles.
+        """
+        age_mask = self.ages < timescale
+        sfr = np.sum(self.initial_masses[age_mask]) / timescale  # Msun / Myr
+        return sfr.to("Msun / yr")
+
+    @property
+    def total_mass(self):
+        """
+        Return the total mass of the stellar particles.
+
+        Returns:
+            total_mass (float)
+                The total mass of the stellar particles.
+        """
+        total_mass = 0.0
+
+        # Check if we're using parametric young stars
+        if self.young_stars_parametrisation is not False:
+            # Grab the old particle masses and sum
+            total_mass += np.sum(self._old_stars.masses)
+
+        # Get current masses of particles (if parametric young
+        # stars are used, then the new star particles *should*
+        # have zero current mass)
+        total_mass += np.sum(self.masses)
+
+        return total_mass
+
+    @property
+    def log10ages(self):
+        """
+        Return stellar particle ages in log (base 10).
+
+        Returns:
+            log10ages (array)
+                log10 stellar ages
+        """
+        return np.log10(self.ages)
 
     def _check_star_args(self):
         """
@@ -260,6 +340,226 @@ class Stars(Particles, StarsComponent):
                         "Inconsistent stellar array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
+
+    def __str__(self):
+        """
+        Return a string representation of the stars object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Stars")
+
+    def _concatenate_stars_arrays(self, other):
+        """
+        Create a dictionary of attributes from two stars objects combined.
+
+        Args:
+            other (Stars)
+                The other Stars object to add to this one.
+
+        Returns:
+            dict
+                A dictionary of all the attributes of the combined Stars
+                objects
+        """
+        # Check the other object is the same type
+        if not isinstance(other, Stars):
+            raise exceptions.InconsistentAddition(
+                "Cannot add Stars object to %s object" % type(other)
+            )
+
+        # Concatenate all the named arguments which need it (Nones are handled
+        # inside the combine_arrays function)
+        initial_masses = combine_arrays(
+            self.initial_masses, other.initial_masses
+        )
+        ages = combine_arrays(self.ages, other.ages)
+        metallicities = combine_arrays(self.metallicities, other.metallicities)
+        alpha_enhancement = combine_arrays(
+            self.alpha_enhancement, other.alpha_enhancement
+        )
+        coordinates = combine_arrays(self.coordinates, other.coordinates)
+        velocities = combine_arrays(self.velocities, other.velocities)
+        current_masses = combine_arrays(
+            self.current_masses, other.current_masses
+        )
+        smoothing_lengths = combine_arrays(
+            self.smoothing_lengths, other.smoothing_lengths
+        )
+        s_oxygen = combine_arrays(self.s_oxygen, other.s_oxygen)
+        s_hydrogen = combine_arrays(self.s_hydrogen, other.s_hydrogen)
+
+        # Handle tau_v which can either be arrays or single values that need
+        # to be converted to arrays
+        if self.tau_v is None and other.tau_v is None:
+            tau_v = None
+        elif self.tau_v is None:
+            tau_v = None
+        elif other.tau_v is None:
+            tau_v = None
+        elif isinstance(self.tau_v, np.ndarray) and isinstance(
+            other.tau_v, np.ndarray
+        ):
+            tau_v = np.concatenate([self.tau_v, other.tau_v])
+        elif isinstance(self.tau_v, np.ndarray):
+            tau_v = np.concatenate(
+                [self.tau_v, np.full(other.nparticles, other.tau_v)]
+            )
+        elif isinstance(other.tau_v, np.ndarray):
+            tau_v = np.concatenate(
+                [np.full(self.nparticles, self.tau_v), other.tau_v]
+            )
+        else:
+            self_tau_v = np.full(self.nparticles, self.tau_v)
+            other_tau_v = np.full(other.nparticles, other.tau_v)
+            tau_v = np.concatenate([self_tau_v, other_tau_v])
+
+        # Handle softening lengths which can be arrays or single values that
+        # need to be converted to arrays
+        if self.softening_lengths is None and other.softening_lengths is None:
+            softening_lengths = None
+        elif self.softening_lengths is None:
+            softening_lengths = None
+        elif other.softening_lengths is None:
+            softening_lengths = None
+        elif isinstance(self.softening_lengths, np.ndarray) and isinstance(
+            other.softening_lengths, np.ndarray
+        ):
+            softening_lengths = np.concatenate(
+                [self.softening_lengths, other.softening_lengths]
+            )
+        elif isinstance(self.softening_lengths, np.ndarray):
+            softening_lengths = np.concatenate(
+                [
+                    self.softening_lengths,
+                    np.full(other.nparticles, other.softening_lengths),
+                ]
+            )
+        elif isinstance(other.softening_lengths, np.ndarray):
+            softening_lengths = np.concatenate(
+                [
+                    np.full(self.nparticles, self.softening_lengths),
+                    other.softening_lengths,
+                ]
+            )
+        else:
+            self_softening_lengths = np.full(
+                self.nparticles, self.softening_lengths
+            )
+            other_softening_lengths = np.full(
+                other.nparticles, other.softening_lengths
+            )
+            softening_lengths = np.concatenate(
+                [self_softening_lengths, other_softening_lengths]
+            )
+
+        # Handle the redshifts which must be the same
+        if self.redshift != other.redshift:
+            raise exceptions.InconsistentAddition(
+                "Cannot add Stars objects with different redshifts"
+            )
+        else:
+            redshift = self.redshift
+
+        # Handle the metallicity floors where we take the minimum
+        metallicity_floor = min(
+            self.metallicity_floor, other.metallicity_floor
+        )
+
+        # Handle the centre of the particles, this will be taken from the
+        # first object but warn if they differ (and are not None)
+        if self.centre is not None and other.centre is not None:
+            if not np.allclose(self.centre, other.centre):
+                warn(
+                    "Centres of the Stars objects differ. "
+                    "Using the centre of the first object."
+                )
+        centre = self.centre
+
+        # Store everything we've done in a dictionary
+        kwargs = {
+            "initial_masses": initial_masses,
+            "ages": ages,
+            "metallicities": metallicities,
+            "redshift": redshift,
+            "tau_v": tau_v,
+            "alpha_enhancement": alpha_enhancement,
+            "coordinates": coordinates,
+            "velocities": velocities,
+            "current_masses": current_masses,
+            "smoothing_lengths": smoothing_lengths,
+            "s_oxygen": s_oxygen,
+            "s_hydrogen": s_hydrogen,
+            "softening_lengths": softening_lengths,
+            "centre": centre,
+            "metallicity_floor": metallicity_floor,
+        }
+
+        # Handle the extra keyword arguments
+        for key in self.__dict__.keys():
+            # Skip methods
+            if callable(getattr(self, key)):
+                continue
+
+            # Skip any attributes which aren't on both objects
+            if key not in other.__dict__:
+                continue
+
+            if key not in kwargs:
+                # Combine the attributes, concatenate if arrays, copied if
+                # scalars and the same for both objects or added if different
+                # on each. If the attribute is None for one object and not the
+                # other we'll assume None overall because the combination is
+                # undefined.
+                if getattr(self, key) is None or getattr(other, key) is None:
+                    kwargs[key] = None
+                elif isinstance(getattr(self, key), np.ndarray) and isinstance(
+                    getattr(other, key), np.ndarray
+                ):
+                    kwargs[key] = np.concatenate(
+                        [getattr(self, key), getattr(other, key)]
+                    )
+                elif (
+                    isinstance(getattr(self, key), (int, float))
+                    and isinstance(getattr(other, key), (int, float))
+                    and getattr(self, key) == getattr(other, key)
+                ):
+                    kwargs[key] = getattr(self, key)
+                elif isinstance(
+                    getattr(self, key), (int, float)
+                ) and isinstance(getattr(other, key), (int, float)):
+                    kwargs[key] = getattr(self, key) + getattr(other, key)
+
+        return kwargs
+
+    def __add__(self, other):
+        """
+        Add two Stars objects together.
+
+        This will correctly combine named arguments and create a new Stars
+        object with the combined particles. Any extra keyword arguments will
+        be either concatenated for arrays, summed for differing scalars or
+        copied if the same for both objects.
+
+        If either object carries None for an attribute the new instance will
+        also have None for that attribute.
+
+        Args:
+            other (Stars)
+                The other Stars object to add to this one.
+
+        Returns:
+            Stars
+                A new Stars object containing the combined particles.
+        """
+        kwargs = self._concatenate_stars_arrays(other)
+
+        return Stars(**kwargs)
 
     def _prepare_sed_args(
         self,
@@ -374,8 +674,6 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
-        parametric_young_stars=None,
-        parametric_sfh="constant",
         aperture=None,
         nthreads=0,
     ):
@@ -412,14 +710,6 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
-            parametric_young_stars (bool/float)
-                If not None, specifies age in Myr below which we replace
-                individual star particles with a parametric SFH.
-            parametric_sfh (string)
-                Form of the parametric SFH to use for young stars.
-                Currently two are supported, `Constant` and
-                `TruncatedExponential`, selected using the keyword
-                arguments `constant` and `exponential`.
             aperture (float)
                 If not None, specifies the radius of a spherical aperture
                 to apply to the particles.
@@ -508,13 +798,20 @@ class Stars(Particles, StarsComponent):
 
         # Get particle age masks
         if mask is None:
-            mask = self._get_masks(young, old)
+            mask = np.ones(self.nparticles, dtype=bool)
+
+        age_mask = self._get_masks(young, old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
-            warn("Age mask has filtered out all particles")
-
+            warn("`mask` has filtered out all particles")
             return np.zeros(len(grid.lam))
+
+        if np.sum(age_mask) == 0:
+            warn("Age mask has filtered out all particles")
+            return np.zeros(len(grid.lam))
+
+        mask = mask & age_mask
 
         if aperture is not None:
             # Get aperture mask
@@ -527,30 +824,6 @@ class Stars(Particles, StarsComponent):
                 return np.zeros(len(grid.lam))
         else:
             aperture_mask = np.ones(self.nparticles, dtype=bool)
-
-        if parametric_young_stars:
-            # Get mask for particles we're going to replace with parametric
-            pmask = self._get_masks(parametric_young_stars, None)
-
-            # Check we have particles to replace
-            if np.sum(pmask & aperture_mask) > 0:
-                # Update the young/old mask to ignore those we're replacing
-                mask[pmask] = False
-
-                lnu_parametric = self._parametric_young_stars(
-                    pmask=pmask & aperture_mask,
-                    age=parametric_young_stars,
-                    parametric_sfh=parametric_sfh,
-                    grid=grid,
-                    spectra_name=spectra_name,
-                )
-            else:
-                # Create a dummy empty array
-                lnu_parametric = np.zeros(len(grid.lam))
-
-            if np.sum(mask & aperture_mask) == 0:
-                warn("All particles replaced with parametric forms")
-                return lnu_parametric
 
         from ..extensions.integrated_spectra import compute_integrated_sed
 
@@ -567,29 +840,65 @@ class Stars(Particles, StarsComponent):
         # Get the integrated spectra in grid units (erg / s / Hz)
         lnu_particle = compute_integrated_sed(*args)
 
-        if parametric_young_stars:
-            return lnu_particle + lnu_parametric
-        else:
-            return lnu_particle
+        return lnu_particle
 
-    def _parametric_young_stars(
+    def _remove_stars(self, pmask):
+        """
+        Update stars attribute arrays based on a mask, `pmask`.
+
+        Args:
+            pmask (array-like, bool)
+                A boolean mask to remove stars from the object.
+        """
+        # Remove the masked stars from this object
+        self.initial_masses = self.initial_masses[~pmask]
+        self.ages = self.ages[~pmask]
+        self.metallicities = self.metallicities[~pmask]
+        if self.masses is not None:
+            self.masses = self.masses[~pmask]
+        if self.coordinates is not None:
+            self.coordinates = self.coordinates[~pmask]
+        if self.tau_v is not None:
+            self.tau_v = self.tau_v[~pmask]
+        if self.alpha_enhancement is not None:
+            self.alpha_enhancement = self.alpha_enhancement[~pmask]
+        if self.velocities is not None:
+            self.velocities = self.velocities[~pmask]
+        if self.current_masses is not None:
+            self.current_masses = self.current_masses[~pmask]
+        if self.s_oxygen is not None:
+            self.s_oxygen = self.s_oxygen[~pmask]
+        if self.s_hydrogen is not None:
+            self.s_hydrogen = self.s_hydrogen[~pmask]
+
+        if self.redshift is not None:
+            if isinstance(self.redshift, np.ndarray):
+                self.redshift = self.redshift[~pmask]
+        if self.smoothing_lengths is not None:
+            if isinstance(self.smoothing_lengths, np.ndarray):
+                self.smoothing_lengths = self.smoothing_lengths[~pmask]
+
+        self.nparticles = len(self.initial_masses)
+        self.nstars = self.nparticles
+
+        # Check the arguments we've been given
+        self._check_star_args()
+
+    def parametric_young_stars(
         self,
-        pmask,
         age,
         parametric_sfh,
         grid,
-        spectra_name,
+        **kwargs,
     ):
         """
-        Replace young stars with individual parametric SFH's. Can be either a
-        constant or truncated exponential, selected with the `parametric_sfh`
-        argument. Returns the emission from these replaced particles assuming
-        this SFH. The metallicity is set to the metallicity of the parent
-        star particle.
+        Replace young stars with individual parametric SFH's.
+
+        Can be either a constant or truncated exponential, selected with the
+        `parametric_sfh` argument. The metallicity is set to the metallicity
+        of the parent star particle.
 
         Args:
-            pmask (bool array)
-                Star particles to replace
             age (float)
                 Age in Myr below which we replace Star particles.
                 Used to set the duration of parametric SFH
@@ -600,19 +909,53 @@ class Stars(Particles, StarsComponent):
                 arguments `constant` and `exponential`.
             grid (Grid)
                 The spectral grid object.
-            spectra_name (string)
-                The name of the target spectra inside the grid file.
-
-        Returns:
-            numpy.ndarray:
-                Numpy array of integrated spectra in units of (erg / s / Hz).
         """
+        if self.young_stars_parametrisation is not False:
+            warn(
+                (
+                    "This Stars object has already replaced young stars."
+                    "\nParametrisation:"
+                    f" {self.young_stars_parametrisation['parametrisation']}, "
+                    f"\nAge: {self.young_stars_parametrisation['age']}. \n"
+                    "Undoing before applying new parametric form..."
+                )
+            )
+
+            pmask = self._get_masks(
+                self.young_stars_parametrisation["age"], None
+            )
+
+            # Remove the 'parametric' stars from the object
+            self._remove_stars(pmask)
+
+            # Add old stars back on to object
+            concat_arrays = self._concatenate_stars_arrays(self._old_stars)
+
+            for key, value in concat_arrays.items():
+                setattr(self, key, value)
+
+            self.nparticles = len(self.initial_masses)
+            self.nstars = self.nparticles
+
+            # Check the arguments we've been given
+            self._check_star_args()
+
+        # Mask for particles below age
+        pmask = self._get_masks(age, None)
+
+        if np.sum(pmask) == 0:
+            return None
 
         # initialise SFH object
         if parametric_sfh == "constant":
-            sfh = SFH.Constant(duration=age)
+            sfh = SFH.Constant(max_age=age, **kwargs)
         elif parametric_sfh == "exponential":
-            sfh = SFH.TruncatedExponential(tau=age / 2, max_age=age)
+            sfh = SFH.TruncatedExponential(
+                tau=age / 2,
+                max_age=age,
+                min_age=0.0 * Myr,
+                **kwargs,
+            )
         else:
             raise ValueError(
                 (
@@ -641,8 +984,57 @@ class Stars(Particles, StarsComponent):
         else:
             stars = stars[0]
 
-        # Get the spectra for this parametric form
-        return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
+        self._parametric_young_stars = stars
+
+        # Create index pairs for the SFZH
+        index_pairs = np.asarray(
+            [
+                [[j, i] for i in np.arange(len(grid.metallicity))]
+                for j in np.arange(len(grid.log10age))
+            ]
+        )
+
+        # Find the grid indexes on the parametric grid
+        grid_indexes = index_pairs[stars.sfzh > 0]
+
+        # Create new particle stars object from non-empty SFZH entries
+        new_stars = self.__class__(
+            stars.sfzh[stars.sfzh > 0] * Msun,
+            10 ** grid.log10ages[grid_indexes[:, 0]] * yr,
+            grid.metallicity[grid_indexes[:, 1]],
+            redshift=self.redshift,
+            masses=np.zeros(np.sum(stars.sfzh > 0)) * Msun,
+        )
+
+        # Save the old stars privately
+        self._old_stars = self.__class__(
+            self.initial_masses[pmask],
+            self.ages[pmask],
+            self.metallicities[pmask],
+            redshift=self.redshift,
+            current_masses=(
+                self.masses[pmask] if self.masses is not None else None
+            ),
+        )
+
+        self._remove_stars(pmask)
+
+        # Add to current stars object
+        concat_arrays = self._concatenate_stars_arrays(new_stars)
+
+        for key, value in concat_arrays.items():
+            setattr(self, key, value)
+
+        self.nparticles = len(self.initial_masses)
+        self.nstars = self.nparticles
+
+        # Check the arguments we've been given
+        self._check_star_args()
+
+        self.young_stars_parametrisation = {
+            "parametrisation": parametric_sfh,
+            "age": age,
+        }
 
     def _prepare_line_args(
         self,
@@ -803,7 +1195,7 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -819,7 +1211,7 @@ class Stars(Particles, StarsComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1093,7 +1485,7 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1109,7 +1501,7 @@ class Stars(Particles, StarsComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1757,7 +2149,7 @@ class Stars(Particles, StarsComponent):
 
 
 @accepts(initial_mass=Msun.in_base("galactic"))
-def sample_sfhz(
+def sample_sfzh(
     sfzh,
     log10ages,
     log10metallicities,
@@ -1785,7 +2177,6 @@ def sample_sfhz(
         stars (Stars)
             An instance of Stars containing the fake stellar particles.
     """
-
     # Normalise the sfhz to produce a histogram (binned in time) between 0
     # and 1.
     hist = sfzh / np.sum(sfzh)

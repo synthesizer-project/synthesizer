@@ -643,11 +643,15 @@ class Sed:
                     np.array(
                         [
                             np.sum(_lnu * transmission) / np.sum(transmission)
-                            for _lnu in self._lnu
+                            for _lnu in self._lnu.reshape(
+                                -1, self._lnu.shape[-1]
+                            )
                         ]
                     )
                     * self.lnu.units
                 )
+
+                lnu = lnu.reshape(self._lnu.shape[:-1])
 
             else:
                 lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
@@ -836,9 +840,11 @@ class Sed:
                             np.log10(self._lam[s]), np.log10(_lnu[..., s])
                         )[0]
                         - 2.0
-                        for _lnu in self.lnu
+                        for _lnu in self.lnu.reshape(-1, self.lnu.shape[-1])
                     ]
                 )
+
+                beta = beta.reshape(self.lnu.shape[:-1])
 
             else:
                 beta = (
@@ -1314,18 +1320,27 @@ class Sed:
         x = self._lam
         y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).value
 
-        # Get value of luminosity at ionisation wavelength
-        ionisation_y = np.interp(
-            ionisation_wavelength.to(angstrom).value, x, y
-        )
-
         # Restrict arrays to ionisation regime
         x = x[ionisation_mask]
-        y = y[ionisation_mask]
+        if len(y.shape) == 1:
+            y = y[ionisation_mask]
+        else:
+            y = y[..., ionisation_mask]
 
-        # Add ionisation wavelength and luminosity values
-        x = np.append(x, ionisation_wavelength.to(angstrom).value)
-        y = np.append(y, ionisation_y)
+        # Add a final data point at the ionising energy to ensure full
+        # coverage.
+        x0 = ionisation_wavelength.to(angstrom).value
+        if len(y.shape) == 1:
+            y0 = np.interp(x0, x, y)
+            y = np.append(y, y0)
+        else:
+            y0 = np.apply_along_axis(
+                lambda y_: np.interp(x0, x, y_), axis=-1, arr=y
+            )
+            y0 = np.expand_dims(y0, -1)
+            y = np.append(y, y0, axis=-1)
+
+        x = np.append(x, x0)
 
         ion_photon_prod_rate = integrate_last_axis(x, y, nthreads=nthreads) / s
 

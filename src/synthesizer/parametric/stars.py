@@ -490,6 +490,9 @@ class Stars(StarsComponent):
             elif young is not None:
                 mask = self.get_mask("log10ages", young, "<=", mask=mask)
 
+        if fesc is None:
+            fesc = 0.0
+
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
