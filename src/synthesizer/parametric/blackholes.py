@@ -233,16 +233,15 @@ class BlackHole(BlackholesComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
+
         # Which line region is this for?
         if "nlr" in grid.grid_name:
             line_region = "nlr"
         elif "blr" in grid.grid_name:
             line_region = "blr"
         else:
-            raise exceptions.InconsistentArguments(
-                "Grid used for blackholes does not appear to be for"
-                " a line region (nlr or blr)."
-            )
+            # this is a generic disc grid so no line_region
+            line_region = None
 
         # Set up the inputs to the C function.
         grid_props = [
@@ -292,9 +291,9 @@ class BlackHole(BlackholesComponent):
             np.ascontiguousarray(prop, dtype=np.float64) for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        mass = np.ones(1, dtype=np.float64)
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
@@ -323,7 +322,7 @@ class BlackHole(BlackholesComponent):
             grid_spectra,
             grid_props,
             props,
-            mass,
+            bol_lum,
             np.array([fesc]),
             grid_dims,
             len(grid_props),
@@ -448,9 +447,9 @@ class BlackHole(BlackholesComponent):
             for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        part_mass = np.ones(npart, dtype=np.float64)
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -487,7 +486,7 @@ class BlackHole(BlackholesComponent):
             grid_continuum,
             grid_props,
             part_props,
-            part_mass,
+            bol_lum,
             fesc,
             grid_dims,
             len(grid_props),
