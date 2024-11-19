@@ -299,6 +299,10 @@ class Extraction:
             if limit_to is not None and label != limit_to:
                 continue
 
+            # Also skip any models we didn't save
+            if not self._models[label].save:
+                continue
+
             # Get the model
             this_model = self._models[label]
 
@@ -306,18 +310,22 @@ class Extraction:
             emitter = emitters[this_model.emitter]
 
             # Store the resulting image collection
-            images[label] = _generate_image_collection_generic(
-                resolution,
-                fov,
-                img_type,
-                do_flux,
-                this_model.per_particle,
-                kernel,
-                kernel_threshold,
-                nthreads,
-                label,
-                emitter,
-            )
+            try:
+                images[label] = _generate_image_collection_generic(
+                    resolution,
+                    fov,
+                    img_type,
+                    do_flux,
+                    this_model.per_particle,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                    label,
+                    emitter,
+                )
+            except Exception as e:
+                print(f"Failed to generate image for {label}: {e}")
+                raise e
 
         return images
 
@@ -1079,24 +1087,41 @@ class Combination:
             this_model (EmissionModel):
                 The model defining the combination.
         """
+        # Check we saved the models we are combining
+        missing = [
+            model.label
+            for model in this_model.combine
+            if model.label not in images
+        ]
+        if len(missing) > 0:
+            raise exceptions.MissingSpectraType(
+                "The following models weren't saved when generating spectra: "
+                f"{missing}\n"
+                f"To make an image for {this_model.label} these must be saved."
+            )
+
         # Get the image for each model we are combining
         combine_labels = []
         combine_images = []
         for model in this_model.combine:
             # If the image hasn't been made try to generate it
             if model.label not in images:
-                img = _generate_image_collection_generic(
-                    resolution,
-                    fov,
-                    img_type,
-                    do_flux,
-                    model.per_particle,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                    model.label,
-                    emitters[model.emitter],
-                )
+                try:
+                    img = _generate_image_collection_generic(
+                        resolution,
+                        fov,
+                        img_type,
+                        do_flux,
+                        model.per_particle,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                        model.label,
+                        emitters[model.emitter],
+                    )
+                except Exception as e:
+                    print(f"Failed to generate image for {model.label}: {e}")
+                    raise e
             else:
                 img = images[model.label]
             combine_labels.append(model.label)
