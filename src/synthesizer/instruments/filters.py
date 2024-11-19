@@ -39,8 +39,7 @@ from synthesizer.warnings import warn
 @accepts(new_lam=angstrom)
 def UVJ(new_lam=None):
     """
-    Helper function to produce a FilterCollection containing
-    UVJ tophat filters.
+    Return a FilterCollection of UVJ top hat filters.
 
     Args:
         new_lam (array-like, float)
@@ -51,7 +50,6 @@ def UVJ(new_lam=None):
         FilterCollection
             A FilterCollection containing top hat UVJ filters.
     """
-
     # Define the UVJ filters dictionary.
     tophat_dict = {
         "U": {"lam_eff": 3650 * angstrom, "lam_fwhm": 660 * angstrom},
@@ -64,6 +62,8 @@ def UVJ(new_lam=None):
 
 class FilterCollection:
     """
+    A container for multiple Filter objects.
+
     Holds a collection of filters (`Filter` objects) and enables various
     quality of life operations such as plotting, adding, looping, len,
     and comparisons as if the collection was a simple list.
@@ -198,6 +198,7 @@ class FilterCollection:
             and generic_dict is None
             and filters is None
         ):
+            self.lam = None
             return
 
         else:
@@ -229,7 +230,7 @@ class FilterCollection:
         # it. NOTE: this can also be done for a loaded FilterCollection
         # so we just do it here outside the logic
         if new_lam is not None:
-            self.resample_filters(new_lam, verbose=verbose)
+            self.resample_filters(new_lam=new_lam, verbose=verbose)
 
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()
@@ -315,7 +316,6 @@ class FilterCollection:
         fc.nfilters = hdf["Header"].attrs["nfilters"]
         fc.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
         fc.filter_codes = hdf["Header"].attrs["filter_codes"]
-        print(fc.filter_codes)
 
         # Loop over the groups and make the filters
         for filter_code in fc.filter_codes:
@@ -425,8 +425,7 @@ class FilterCollection:
 
     def _include_synthesizer_filters(self, filters):
         """
-        Populate the `FilterCollection` with a list of individual
-        `Filter` objects.
+        Populate the `FilterCollection` from a list of `Filter` objects.
 
         Args:
             filter_codes (list, string)
@@ -441,7 +440,9 @@ class FilterCollection:
 
     def __add__(self, other_filters):
         """
-        Enable the addition of FilterCollections and Filters with
+        Add together two FilterCollections or a FilterCollection and a Filter.
+
+        Enables the addition of FilterCollections and Filters with
         filtercollection1 + filtercollection2 or filtercollection + filter
         syntax.
 
@@ -450,7 +451,6 @@ class FilterCollection:
                 This filter collection containing the filter/filters from
                 other_filters.
         """
-
         # Are we adding a collection or a single filter?
         if isinstance(other_filters, FilterCollection):
             # Loop over the filters in other_filters
@@ -474,6 +474,21 @@ class FilterCollection:
         # Update the number of filters we have
         self.nfilters = len(self.filter_codes)
 
+        # Get a combined wavelength array (we resample filters before
+        # applying them to spectra so the actual resolution doesn't matter)
+        if self.lam is not None and other_filters.lam is not None:
+            new_lam = np.linspace(
+                min(self.lam.min(), other_filters.lam.min()),
+                max(self.lam.max(), other_filters.lam.max()),
+                self.lam.size + other_filters.lam.size,
+            )
+        elif self.lam is not None:
+            new_lam = self.lam
+        elif other_filters.lam is not None:
+            new_lam = other_filters.lam
+        else:
+            new_lam = None
+
         # Now resample the filters onto the filter collection's wavelength
         # array,
         # NOTE: If the new filter extends beyond the filter collection's
@@ -482,18 +497,18 @@ class FilterCollection:
         # filter collection's wavelength array modified, if that were
         # to happen it could become inconsistent with Sed wavelength arrays
         # and photometry would be impossible.
-        self.resample_filters(new_lam=self.lam)
+        self.resample_filters(new_lam=new_lam)
 
         return self
 
     def __len__(self):
-        """
-        Overload the len operator to return how many filters there are.
-        """
+        """Return how many filters there are."""
         return len(self.filters)
 
     def __iter__(self):
         """
+        Iterate over the filters in the collection.
+
         Overload iteration to allow simple looping over filter objects,
         combined with __next__ this enables for f in FilterCollection syntax
         """
@@ -501,10 +516,11 @@ class FilterCollection:
 
     def __next__(self):
         """
+        Return the next filter in the collection.
+
         Overload iteration to allow simple looping over filter objects,
         combined with __iter__ this enables for f in FilterCollection syntax
         """
-
         # Check we haven't finished
         if self._current_ind >= self.nfilters:
             self._current_ind = 0
@@ -518,6 +534,8 @@ class FilterCollection:
 
     def __ne__(self, other_filters):
         """
+        Test if two FilterCollections are not equal.
+
         Enables the != comparison of two filter collections. If the filter
         collections contain the same filter codes they are guaranteed to
         be identical.
@@ -530,7 +548,6 @@ class FilterCollection:
             True/False (bool)
                 Are the FilterCollections the same?
         """
-
         # Do they have the same number of filters?
         if self.nfilters != other_filters.nfilters:
             return True
@@ -546,6 +563,8 @@ class FilterCollection:
 
     def __eq__(self, other_filters):
         """
+        Test if two FilterCollections are equal.
+
         Enables the == comparison of two filter collections. If the filter
         collections contain the same filter codes they are guaranteed to
         be identical.
@@ -558,7 +577,6 @@ class FilterCollection:
             True/False (bool)
                 Are the FilterCollections the same?
         """
-
         # Do they have the same number of filters?
         if self.nfilters != other_filters.nfilters:
             return False
@@ -574,6 +592,8 @@ class FilterCollection:
 
     def __getitem__(self, key):
         """
+        Return the Filter object with the given filter code.
+
         Enables the extraction of filter objects from the FilterCollection by
         getitem syntax (FilterCollection[key] rather than
         FilterCollection.filters[key]).
@@ -699,11 +719,15 @@ class FilterCollection:
                 diffs = np.diff(new_lam)
                 min_res_new = np.max(np.diff(new_lam))
 
-        return new_lam
+        return new_lam * piv_lams[0].units
 
     @accepts(new_lam=angstrom)
     def resample_filters(
-        self, new_lam=None, lam_size=None, fill_gaps=False, verbose=True
+        self,
+        new_lam=None,
+        lam_size=None,
+        fill_gaps=False,
+        verbose=True,
     ):
         """
         Resample all filters onto a single wavelength array.
@@ -748,7 +772,9 @@ class FilterCollection:
             # Are we making an array with a fixed size?
             if lam_size is not None:
                 # Create wavelength array
-                new_lam = np.linspace(min_lam, max_lam, lam_size)
+                new_lam = (
+                    np.linspace(min_lam, max_lam, lam_size) * min_lam.units
+                )
 
             else:
                 # Ok, we are trying to be clever, merge the filter wavelength
@@ -763,16 +789,16 @@ class FilterCollection:
                     + "FilterCollection.lam.size = %d" % new_lam.size
                 )
 
-        # Set the wavelength array
-        self.lam = new_lam
-
         # Loop over filters unifying them onto this wavelength array
         # NOTE: Filters already on self.lam will be uneffected but doing a
         # np.all condition to check for matches and skip them is more expensive
         # than just doing the interpolation for all filters
         for fcode in self.filters:
             f = self.filters[fcode]
-            f._interpolate_wavelength(self.lam)
+            f._interpolate_wavelength(new_lam=new_lam)
+
+        # Set the wavelength array
+        self.lam = new_lam
 
     def unify_with_grid(self, grid, loop_spectra=False):
         """
@@ -817,8 +843,7 @@ class FilterCollection:
         self, show=False, fig=None, ax=None, **kwargs
     ):
         """
-        Create a filter transmission curve plot of all Filters in the
-        FilterCollection.
+        Plot the transmission curves of all filters in the FilterCollection.
 
         Args:
             show (bool)
@@ -862,15 +887,13 @@ class FilterCollection:
 
     def calc_pivot_lams(self):
         """
-        Calculates the rest frame pivot wavelengths of all filters in this
-        FilterCollection.
+        Calculate the pivot wavelengths of all filters in the FilterCollection.
 
         Returns:
             pivot_lams (ndarray, float)
                 An array containing the rest frame pivot wavelengths of each
                 filter in the same order as self.filter_codes.
         """
-
         # Calculate each filters pivot wavelength
         pivot_lams = np.zeros(len(self))
         for ind, f in enumerate(self):
@@ -880,15 +903,13 @@ class FilterCollection:
 
     def calc_mean_lams(self):
         """
-        Calculates the rest frame mean wavelengths of all filters in this
-        FilterCollection.
+        Calculate the mean wavelengths of all filters in the FilterCollection.
 
         Returns:
             mean_lams (ndarray, float)
                 An array containing the rest frame mean wavelengths of each
                 filter in the same order as self.filter_codes.
         """
-
         # Calculate each filters pivot wavelength
         mean_lams = np.zeros(len(self))
         for ind, f in enumerate(self):
@@ -1104,7 +1125,8 @@ class FilterCollection:
 
 class Filter:
     """
-    A class holding a filter's transmission curve and wavelength array.
+    A container for a filter's transmission curve and wavelength array.
+
     A filter can either be retrieved from the
     `SVO database <http://svo2.cab.inta-csic.es/svo/theory/fps3/>`__,
     made from specific top hat filter properties, or made from a generic
@@ -1209,7 +1231,6 @@ class Filter:
                 The HDF5 root group of a HDF5 file from which to load the
                 filter.
         """
-
         # Metadata of this filter
         self.filter_code = filter_code
         self.observatory = None
@@ -1427,14 +1448,13 @@ class Filter:
 
     def clip_transmission(self):
         """
-        Clips transmission curve between 0 and 1.
+        Clip transmission curve between 0 and 1.
 
         Some transmission curves from SVO can come with strange
         upper limits, the way we use them requires the maxiumum of a
         transmission curve is at most 1. So for one final check lets
         clip the transmission curve between 0 and 1
         """
-
         # Warn the user we are are doing this
         if self.t.max() > 1 or self.t.min() < 0:
             warn(
@@ -1445,35 +1465,56 @@ class Filter:
             self.t = np.clip(self.t, 0, 1)
 
     def _make_top_hat_filter(self):
-        """
-        Make a top hat filter from the Filter's attributes.
-        """
-
+        """Make a top hat filter from the Filter's attributes."""
         # Define the type of this filter
         self.filter_type = "TopHat"
 
         # If filter has been defined with an effective wavelength and FWHM
         # calculate the minimum and maximum wavelength.
         if self.lam_eff is not None and self.lam_fwhm is not None:
-            self.lam_min = self.lam_eff - self.lam_fwhm / 2.0
-            self.lam_max = self.lam_eff + self.lam_fwhm / 2.0
+            self.lam_min = self.lam_eff - (self.lam_fwhm / 2.0)
+            self.lam_max = self.lam_eff + (self.lam_fwhm / 2.0)
 
         # Otherwise, use the explict min and max
 
         # Define this top hat filters wavelength array (+/- 1000 Angstrom)
         # if it hasn't been provided
-        if self.lam is None:
-            self.lam = np.arange(
-                np.max([0, self._lam_min - 1000]), self._lam_max + 1000, 1
-            )
+        lam = np.linspace(
+            np.max([0, self._lam_min - 1000]),
+            self._lam_max + 1000,
+            1000,
+        )
 
         # Define the transmission curve (1 inside, 0 outside)
-        self.t = np.zeros(len(self.lam))
-        s = (self.lam > self.lam_min) & (self.lam <= self.lam_max)
+        self.t = np.zeros(len(lam))
+        s = (lam > self.lam_min) & (lam <= self.lam_max)
         self.t[s] = 1.0
+
+        # Ensure we actually have some transmission
+        if self.t.sum() == 0:
+            raise exceptions.InconsistentArguments(
+                f"{self.filter_code} has no non-zero transmission "
+                f"(lam_min={self.lam_min}, lam_max={self.lam_max}). "
+                f"Consider removing this filter ({self.filter_code}) "
+                "or extending the wavelength range."
+            )
+
+        # Set the original arrays to the current arrays (they are the same
+        # for a top hat filter)
+        self.original_lam = lam
+        self.original_t = self.t
+
+        # Do we have a new wavelength array to interpolate onto?
+        if isinstance(self._lam, np.ndarray):
+            self._interpolate_wavelength()
+        else:
+            self.lam = self.original_lam
+            self.t = self.original_t
 
     def _make_svo_filter(self):
         """
+        Intialise a Filter from the SVO database.
+
         Retrieve a filter's data from the SVO database based on the Filter's
         attributes.
 
@@ -1482,7 +1523,6 @@ class Filter:
                 If a filter code cannot be matched to a database entry or a
                 connection cannot be made to the database and error is thrown.
         """
-
         # Define the type of this filter
         self.filter_type = "SVO"
 
@@ -1534,8 +1574,7 @@ class Filter:
     @accepts(new_lam=angstrom)
     def _interpolate_wavelength(self, new_lam=None):
         """
-        Interpolates a filter transmission curve onto the Filter's wavelength
-        array.
+        Interpolate a the transmission curve onto the a wavelength array.
 
         Args:
             new_lam (array-like, float)
@@ -1546,16 +1585,15 @@ class Filter:
             array-like (float)
                 Transmission curve interpolated onto the new wavelength array.
         """
-
         # If we've been handed a wavelength array we must overwrite the
         # current one
         if new_lam is not None:
             # Warn the user if we're about to truncate the existing wavelength
             # array
             truncated = False
-            if new_lam.min() > self.lam[self.t > 0].min():
+            if new_lam.min() > self.original_lam[self.original_t > 0].min():
                 truncated = True
-            if new_lam.max() < self.lam[self.t > 0].max():
+            if new_lam.max() < self.original_lam[self.original_t > 0].max():
                 truncated = True
             if truncated:
                 warn(
@@ -1579,8 +1617,8 @@ class Filter:
         if self.t.sum() == 0:
             raise exceptions.InconsistentWavelengths(
                 "Interpolated transmission curve has no non-zero values. "
-                "Consider removing this filter or extending the wavelength "
-                "range."
+                f"Consider removing this filter ({self.filter_code}), "
+                "extending the wavelength range or increasing the wavelength."
             )
 
         # And ensure transmission is in expected range
@@ -1748,6 +1786,7 @@ class Filter:
     def pivwv(self):
         """
         Calculate the pivot wavelength.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1755,7 +1794,6 @@ class Filter:
             float
                 Pivot wavelength.
         """
-
         return (
             np.sqrt(
                 np.trapz(
@@ -1771,6 +1809,7 @@ class Filter:
     def pivT(self):
         """
         Calculate the transmission at the pivot wavelength.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1778,7 +1817,6 @@ class Filter:
             float
                 Transmission at pivot wavelength.
         """
-
         return np.interp(
             self.pivwv().value, self._original_lam, self.original_t
         )
@@ -1786,6 +1824,7 @@ class Filter:
     def meanwv(self):
         """
         Calculate the mean wavelength.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1793,7 +1832,6 @@ class Filter:
             float
                 Mean wavelength.
         """
-
         return (
             np.exp(
                 np.trapz(
@@ -1812,6 +1850,7 @@ class Filter:
     def bandw(self):
         """
         Calculate the bandwidth.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1819,7 +1858,6 @@ class Filter:
             float
                 The bandwidth.
         """
-
         # Calculate the left and right hand side.
         A = np.sqrt(
             np.trapz(
@@ -1841,6 +1879,7 @@ class Filter:
     def fwhm(self):
         """
         Calculate the FWHM.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1848,24 +1887,24 @@ class Filter:
             float
                 The FWHM of the filter.
         """
-
         return np.sqrt(8.0 * np.log(2)) * self.bandw()
 
     def Tpeak(self):
         """
-        Calculate the peak transmission
+        Calculate the peak transmission.
+
         For an SVO filter this uses the transmission from the database.
 
         Returns:
             float
                 The peak transmission.
         """
-
         return np.max(self.original_t)
 
     def rectw(self):
         """
         Calculate the rectangular width.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1873,12 +1912,12 @@ class Filter:
             float
                 The rectangular width.
         """
-
         return np.trapz(self.original_t, x=self._original_lam) / self.Tpeak()
 
     def max(self):
         """
-        Calculate the longest wavelength where the transmission is still >0.01
+        Calculate the longest wavelength with transmission >0.01.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1886,12 +1925,12 @@ class Filter:
             float
                 The maximum wavelength at which transmission is nonzero.
         """
-
         return self.original_lam[self.original_t > 1e-2][-1]
 
     def min(self):
         """
-        Calculate the shortest wavelength where the transmission is still >0.01
+        Calculate the shortest wavelength with transmission >0.01.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1899,12 +1938,12 @@ class Filter:
             float
                 The minimum wavelength at which transmission is nonzero.
         """
-
         return self.original_lam[self.original_t > 1e-2][0]
 
     def mnmx(self):
         """
         Calculate the minimum and maximum wavelengths.
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
 
@@ -1914,5 +1953,4 @@ class Filter:
             float
                 The maximum wavelength.
         """
-
         return (self.original_lam.min(), self.original_lam.max())
