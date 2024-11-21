@@ -371,7 +371,7 @@ class Stars(Particles, StarsComponent):
         young=None,
         old=None,
         mask=None,
-        shift=False,
+        vel_shift=False,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -554,6 +554,7 @@ class Stars(Particles, StarsComponent):
                 return lnu_parametric
 
         from ..extensions.integrated_spectra import compute_integrated_sed
+        from ..extension.particle_spectra import compute_particle_seds
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -566,8 +567,11 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-
-        lnu_particle = compute_integrated_sed(*args. shift)  # this hass not been modified yet, wont work as is, but shouldnt be hard to make it as compute_particle_sed
+        
+        if vel_shift:
+            lnu_particle = compute_particle_seds(*args, vel_shift) # ?
+        else:
+            lnu_particle = compute_integrated_sed(*args)  
             
         if parametric_young_stars:
             return lnu_particle + lnu_parametric
