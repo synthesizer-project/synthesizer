@@ -1,53 +1,51 @@
+from synthesizer.emission_models.agn import AGN_MODELS
+from synthesizer.emission_models.agn.models import (
+    AGNIntrinsicEmission,
+    BLREmission,
+    BLRIncidentEmission,
+    BLRTransmittedEmission,
+    DiscEmission,
+    DiscEscapedEmission,
+    DiscIncidentEmission,
+    DiscTransmittedEmission,
+    NLREmission,
+    NLRIncidentEmission,
+    NLRTransmittedEmission,
+    TorusEmission,
+)
+from synthesizer.emission_models.agn.unified_agn import UnifiedAGN
 from synthesizer.emission_models.base_model import (
-    EmissionModel,
-    StellarEmissionModel,
     BlackHoleEmissionModel,
+    EmissionModel,
     GalaxyEmissionModel,
+    StellarEmissionModel,
 )
 from synthesizer.emission_models.models import (
-    DustEmission,
     AttenuatedEmission,
+    DustEmission,
     TemplateEmission,
 )
+from synthesizer.emission_models.stellar import STELLAR_MODELS
 from synthesizer.emission_models.stellar.models import (
-    IncidentEmission,
-    LineContributionEmission
-    LymanAlphaEmission,
-    LineContinuumEmission,
-    TransmittedEmission,
+    EmergentEmission,
     EscapedEmission,
+    IncidentEmission,
+    IntrinsicEmission,
+    LineContinuumEmission,
+    LineContributionEmission,
+    LymanAlphaEmission,
     NebularContinuumEmission,
     NebularEmission,
     ReprocessedEmission,
-    IntrinsicEmission,
-    EmergentEmission,
     TotalEmission,
+    TransmittedEmission,
 )
 from synthesizer.emission_models.stellar.pacman_model import (
-    PacmanEmission,
     BimodalPacmanEmission,
     CharlotFall2000,
+    PacmanEmission,
     ScreenEmission,
 )
-from synthesizer.emission_models.agn.models import (
-    NLRIncidentEmission,
-    BLRIncidentEmission,
-    NLRTransmittedEmission,
-    BLRTransmittedEmission,
-    NLREmission,
-    BLREmission,
-    DiscIncidentEmission,
-    DiscTransmittedEmission,
-    DiscEscapedEmission,
-    DiscEmission,
-    TorusEmission,
-    AGNIntrinsicEmission,
-)
-from synthesizer.emission_models.agn.unified_agn import UnifiedAGN
-
-
-from synthesizer.emission_models.stellar import STELLAR_MODELS
-from synthesizer.emission_models.agn import AGN_MODELS
 
 # List of premade common models
 COMMON_MODELS = [
