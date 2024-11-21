@@ -1035,7 +1035,7 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
- * @param shift: flag whether to consider doppler shift in spectra computation.
+ * @param vel_shift: bool flag whether to consider doppler shift in spectra computation. Defaults to False
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
@@ -1048,7 +1048,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyObject vel_shift; // does this have to be a pyobject? can we parse vel_shift = 0 to default to False?
+  PyObject vel_shift; 
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
   PyArrayObject *np_velocities;
