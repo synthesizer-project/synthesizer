@@ -11,6 +11,8 @@ from synthesizer.emission_models.models import (
 )
 from synthesizer.emission_models.stellar.models import (
     IncidentEmission,
+    LineContributionEmission
+    LymanAlphaEmission,
     LineContinuumEmission,
     TransmittedEmission,
     EscapedEmission,

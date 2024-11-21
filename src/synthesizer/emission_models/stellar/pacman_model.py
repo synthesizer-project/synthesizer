@@ -812,7 +812,8 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op="<",
-            fesc=self._fesc_ly_alpha,
+            fesc_ly_alpha=self._fesc_ly_alpha,
+            fesc=self._fesc,
             **kwargs,
         )
         old_line_cont = LineContinuumEmission(
@@ -821,7 +822,8 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op=">=",
-            fesc=self._fesc_ly_alpha,
+            fesc_ly_alpha=self._fesc_ly_alpha,
+            fesc=self._fesc,
             **kwargs,
         )
 

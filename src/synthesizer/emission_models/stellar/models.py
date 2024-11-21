@@ -59,9 +59,9 @@ class IncidentEmission(StellarEmissionModel):
         )
 
 
-class LineContinuumEmission(StellarEmissionModel):
+class LineContributionEmission(StellarEmissionModel):
     """
-    An emission model that extracts the line continuum emission.
+    An emission model that extracts the line contribution.
 
     This defines an extraction of key "linecont" from a SPS grid.
 
@@ -83,7 +83,7 @@ class LineContinuumEmission(StellarEmissionModel):
         **kwargs,
     ):
         """
-        Initialise the LineContinuumEmission object.
+        Initialise the LineContributionEmission object.
 
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
@@ -96,6 +96,108 @@ class LineContinuumEmission(StellarEmissionModel):
             label=label,
             extract="linecont",
             fesc=fesc,
+            **kwargs,
+        )
+
+
+class LymanAlphaEmission(StellarEmissionModel):
+    """
+    An emission model that extracts the lyman-alpha emission.
+
+    This defines an extraction of key "ly_alpha" from a SPS grid.
+
+    This is a child of the EmissionModel class for a full description of the
+    parameters see the EmissionModel class.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object to extract from.
+        label (str): The label for this emission model.
+        extract (str): The key to extract from the grid.
+        fesc (float): The escape fraction of the emission.
+    """
+
+    def __init__(
+        self,
+        grid,
+        label="ly_alpha",
+        fesc_ly_alpha=0.0,
+        **kwargs,
+    ):
+        """
+        Initialise the LymanAlphaEmission object.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            label (str): The label for this emission model.
+            fesc (float): The escape fraction of the emission.
+        """
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            extract="lyman_alpha",
+            fesc=fesc_ly_alpha,
+            **kwargs,
+        )
+
+
+class LineContinuumEmission(StellarEmissionModel):
+    """
+    An emission model that extracts the line continuum emission.
+
+    This defines the combination of the line emission and lyman-alpha emission.
+
+    This is a child of the EmissionModel class for a full description of the
+    parameters see the EmissionModel class.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object to extract from.
+        label (str): The label for this emission model.
+        extract (str): The key to extract from the grid.
+        fesc (float): The escape fraction of the emission.
+    """
+
+    def __init__(
+        self,
+        grid,
+        fesc_ly_alpha,
+        label="linecont",
+        fesc=0.0,
+        linecont=None,
+        lyman_alpha=None,
+        **kwargs,
+    ):
+        """
+        Initialise the LineContinuumEmission object.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            label (str): The label for this emission model.
+            fesc (float): The escape fraction of the emission.
+            linecont (EmissionModel): The line continuum model to use, if None
+                then one will be created.
+            lyman_alpha (EmissionModel): The Lyman-alpha model to use, if None
+                then one will be created.
+        """
+        # Create the child models
+        if linecont is None:
+            linecont = LineContributionEmission(
+                grid=grid,
+                fesc=fesc,
+                **kwargs,
+            )
+        if lyman_alpha is None:
+            lyman_alpha = LymanAlphaEmission(
+                grid=grid,
+                fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
+            )
+
+        # Instantiate the combination model
+        StellarEmissionModel.__init__(
+            self,
+            combine=(linecont, lyman_alpha),
             **kwargs,
         )
 
@@ -274,7 +376,8 @@ class NebularEmission(StellarEmissionModel):
             if linecont is None:
                 linecont = LineContinuumEmission(
                     grid=grid,
-                    fesc=fesc_ly_alpha,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    fesc=fesc,
                     **kwargs,
                 )
 
