@@ -824,6 +824,7 @@ class BlackHoles(Particles, BlackholesComponent):
         tau_v=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=False,
         verbose=True,
         **kwargs,
     ):
@@ -886,6 +887,7 @@ class BlackHoles(Particles, BlackholesComponent):
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
