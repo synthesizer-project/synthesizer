@@ -62,7 +62,7 @@ from synthesizer.emission_models.models import (
 from synthesizer.emission_models.stellar.models import (
     EscapedEmission,
     IncidentEmission,
-    LineContinuumEmission,
+    LineContributionEmission,
     NebularContinuumEmission,
     NebularEmission,
     TransmittedEmission,
@@ -251,6 +251,8 @@ class PacmanEmission(StellarEmissionModel):
         # No spectra if grid hasn't been reprocessed
         if not self.grid_reprocessed:
             return None
+
+        print("top level", self._fesc, self._fesc_ly_alpha)
 
         return NebularEmission(
             grid=self._grid,
@@ -806,7 +808,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             return None, None, None
 
         # Get the line continuum emission
-        young_line_cont = LineContinuumEmission(
+        young_line_cont = LineContributionEmission(
             grid=self._grid,
             label="young_linecont",
             mask_attr="log10ages",
@@ -816,7 +818,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             fesc=self._fesc,
             **kwargs,
         )
-        old_line_cont = LineContinuumEmission(
+        old_line_cont = LineContributionEmission(
             grid=self._grid,
             label="old_linecont",
             mask_attr="log10ages",
