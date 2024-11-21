@@ -99,7 +99,7 @@ class LineContributionEmission(StellarEmissionModel):
         linecont_no_lyman = StellarEmissionModel(
             grid=grid,
             label="linecont",
-            extract="linecont",
+            extract="linecont_no_lyman",
             fesc=fesc,
             **kwargs,
         )
