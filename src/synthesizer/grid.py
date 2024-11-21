@@ -322,7 +322,7 @@ class Grid:
 
             # Get the lyman alpha wavelength elements and create a mask for
             # the line (to account for an spreading between bins)
-            lyman_alpha_ind = np.argmin(np.abs(self.lam - 1216.0))
+            lyman_alpha_ind = np.argmin(np.abs(self.lam - 1216.0 * angstrom))
             lyman_alpha_mask = np.zeros_like(self.lam, dtype=bool)
             lyman_alpha_mask[lyman_alpha_ind] = True
             if lyman_alpha_ind > 0:
