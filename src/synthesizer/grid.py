@@ -306,15 +306,42 @@ class Grid:
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed:
+            # The total emission (ignoring any dust reprocessing) is just
+            # the transmitted plus the nebular
             self.spectra["total"] = (
                 self.spectra["transmitted"] + self.spectra["nebular"]
             )
             self.available_spectra.append("total")
 
+            # The nebular continuum is the nebular emission with the line
+            # contribution removed
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
             self.available_spectra.append("nebular_continuum")
+
+            # Get the lyman alpha wavelength elements and create a mask for
+            # the line (to account for an spreading between bins)
+            lyman_alpha_ind = np.argmin(np.abs(self.lam - 1216.0))
+            lyman_alpha_mask = np.zeros_like(self.lam, dtype=bool)
+            lyman_alpha_mask[lyman_alpha_ind] = True
+            if lyman_alpha_ind > 0:
+                lyman_alpha_mask[lyman_alpha_ind - 1] = True
+            if lyman_alpha_ind < len(self.lam) - 1:
+                lyman_alpha_mask[lyman_alpha_ind + 1] = True
+
+            # Compute the lyman alpha spectra, this is just the line
+            # contribution at the lyman alpha wavelength
+            self.available_spectra.append("lyman_alpha")
+            self.spectra["lyman_alpha"] = np.zeros_like(
+                self.spectra["linecont"]
+            )
+            self.spectra["lyman_alpha"][:, :, lyman_alpha_mask] = self.spectra[
+                "linecont"
+            ][:, :, lyman_alpha_mask]
+
+            # Remove the lyman alpha contribution from the linecont
+            self.spectra["linecont"][:, :, lyman_alpha_mask] = 0.0
 
     def _get_lines_grid(self, read_lines):
         """
