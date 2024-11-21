@@ -320,32 +320,6 @@ class Grid:
             )
             self.available_spectra.append("nebular_continuum")
 
-            # Get the lyman alpha wavelength elements and create a mask for
-            # the line (to account for an spreading between bins)
-            lyman_alpha_ind = np.argmin(np.abs(self.lam - 1216.0 * angstrom))
-            lyman_alpha_mask = np.zeros_like(self.lam, dtype=bool)
-            lyman_alpha_mask[lyman_alpha_ind] = True
-            if lyman_alpha_ind > 0:
-                lyman_alpha_mask[lyman_alpha_ind - 1] = True
-            if lyman_alpha_ind < len(self.lam) - 1:
-                lyman_alpha_mask[lyman_alpha_ind + 1] = True
-
-            # Compute the lyman alpha spectra, this is just the line
-            # contribution at the lyman alpha wavelength
-            self.available_spectra.append("lyman_alpha")
-            self.spectra["lyman_alpha"] = np.zeros_like(
-                self.spectra["linecont"]
-            )
-            self.spectra["lyman_alpha"][:, :, lyman_alpha_mask] = self.spectra[
-                "linecont"
-            ][:, :, lyman_alpha_mask]
-
-            # Remove the lyman alpha contribution from the linecont to make a
-            # new lin contribution for use in conjunction with lyman alpha
-            self.spectra["linecont_no_lyman"] = (
-                self.spectra["linecont"] - self.spectra["lyman_alpha"]
-            )
-
     def _get_lines_grid(self, read_lines):
         """
         Get the lines grid from the HDF5 file.
