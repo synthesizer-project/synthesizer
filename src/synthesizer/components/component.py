@@ -299,7 +299,7 @@ class Component(ABC):
             tau_v=tau_v,
             fesc=fesc,
             mask=mask,
-            vel_shift,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
