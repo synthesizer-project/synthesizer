@@ -340,8 +340,11 @@ class Grid:
                 "linecont"
             ][:, :, lyman_alpha_mask]
 
-            # Remove the lyman alpha contribution from the linecont
-            self.spectra["linecont"][:, :, lyman_alpha_mask] = 0.0
+            # Remove the lyman alpha contribution from the linecont to make a
+            # new lin contribution for use in conjunction with lyman alpha
+            self.spectra["linecont_no_lyman"] = (
+                self.spectra["linecont"] - self.spectra["lyman_alpha"]
+            )
 
     def _get_lines_grid(self, read_lines):
         """
