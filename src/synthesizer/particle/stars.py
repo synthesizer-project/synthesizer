@@ -880,7 +880,7 @@ class Stars(Particles, StarsComponent):
         spectra_name,
         fesc=0.0,
         verbose=False,
-        shift=False,
+        vel_shift=False,
         do_grid_check=False,
         mask=None,
         grid_assignment_method="cic",
@@ -1010,7 +1010,6 @@ class Stars(Particles, StarsComponent):
             return np.zeros((self.nstars, len(grid.lam)))
 
         from ..extensions.particle_spectra import compute_particle_seds
-        from ..extensions.particle_spectra import compute_particle_seds_shifted
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -1024,7 +1023,7 @@ class Stars(Particles, StarsComponent):
         toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args, shift) # I think this works but im not sure
+        masked_spec = compute_particle_seds(*args, vel_shift) # I think this works but im not sure
             
         start = tic()
 
