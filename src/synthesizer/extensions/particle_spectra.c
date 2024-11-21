@@ -1048,7 +1048,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyObject shift; // flag for spectral shift, do we want it as a pyobject or just as a c bool in this func?
+  PyObject vel_shift; // does this have to be a pyobject? can we parse vel_shift = 0 to default to False?
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
   PyArrayObject *np_velocities;
@@ -1057,7 +1057,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_velocities, &np_ndims, &ndim,
-                        &npart, &nlam, &method, &shift, &nthreads))
+                        &npart, &nlam, &method, &vel_shift, &nthreads))
     return NULL;
 
   /* Extract the grid struct. */
@@ -1084,7 +1084,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   toc("Extracting Python data", setup_start);
 
-  if (!shift) {
+  if (!vel_shift) {
     /*No shift*/
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
