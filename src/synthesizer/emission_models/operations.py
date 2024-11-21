@@ -59,7 +59,7 @@ class Extraction:
         emitters,
         spectra,
         particle_spectra,
-        shift=False,
+        vel_shift=False,
         verbose,
         **kwargs,
     ):
@@ -130,7 +130,7 @@ class Extraction:
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
-                    shift,
+                    vel_shift,
                     verbose=verbose,
                     **kwargs,
                 )
