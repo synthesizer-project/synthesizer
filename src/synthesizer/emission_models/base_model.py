@@ -2081,7 +2081,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fesc=None,
         covering_fraction=None,
         mask=None,
-        shift=False,
+        vel_shift=False,
         verbose=True,
         spectra=None,
         particle_spectra=None,
@@ -2217,7 +2217,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters,
             spectra,
             particle_spectra,
-            shift,
+            vel_shift,
             verbose,
             **kwargs,
         )
