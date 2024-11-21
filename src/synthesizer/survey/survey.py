@@ -235,6 +235,20 @@ class Survey:
         # so we'll store these should get_lines be called.
         self._line_ids = []
 
+        # Initialise containers for all the data we can generate
+        self.sfzh = None
+        self.lnu_spectra = {}
+        self.fnu_spectra = {}
+        self.luminosities = {}
+        self.fluxes = {}
+        self.lum_lines = {}
+        self.flux_lines = {}
+        self.images_lum = {}
+        self.images_flux = {}
+        self.lnu_data_cubes = {}
+        self.fnu_data_cubes = {}
+        self.spectroscopy = {}
+
         # Everything that follows is only needed for hybrid parallelism
         # (running with MPI in addition to shared memory parallelism)
 
@@ -728,6 +742,12 @@ class Survey:
             elif g.stars is not None and g.stars.nstars > 0:
                 g.get_sfzh(grid, nthreads=self.nthreads)
 
+        # Unpack the SFZH attributes into a single array on the Survey object
+        self.sfzh = unyt_array(
+            [g.sfzh.value for g in self.galaxies],
+            self.galaxies[0].sfzh.units,
+        )
+
         # Done!
         self._got_sfzh = True
         self._took(start, "Getting SFZH")
@@ -765,6 +785,49 @@ class Survey:
             for g in self.galaxies:
                 g.get_observed_spectra(cosmo=cosmo)
 
+        # Ubpack the spectra into a dictionary on the Survey object
+        self.lnu_spectra = {"Stars": {}, "BlackHole": {}}
+        self.fnu_spectra = {"Stars": {}, "BlackHole": {}}
+        for g in self.galaxies:
+            for spec_type, spec in g.spectra.items():
+                self.lnu_spectra.setdefault(spec_type, []).append(spec.lnu)
+                if cosmo is not None:
+                    self.fnu_spectra.setdefault(spec_type, []).append(spec.fnu)
+            for spec_type, spec in g.stars.spectra.items():
+                self.lnu_spectra["Stars"].setdefault(spec_type, []).append(
+                    spec.lnu
+                )
+                if cosmo is not None:
+                    self.fnu_spectra["Stars"].setdefault(spec_type, []).append(
+                        spec.fnu
+                    )
+            for spec_type, spec in g.black_hole.spectra.items():
+                self.lnu_spectra["BlackHole"].setdefault(spec_type, []).append(
+                    spec.lnu
+                )
+                if cosmo is not None:
+                    self.fnu_spectra["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(spec.fnu)
+
+        # Convert the lists of spectra to unyt arrays
+        for spec_type, spec in self.lnu_spectra.items():
+            if spec_type == "Stars" or spec_type == "BlackHole":
+                continue
+            self.lnu_spectra[spec_type] = unyt_array(spec)
+        for spec_type, spec in self.lnu_spectra["Stars"].items():
+            self.lnu_spectra["Stars"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.lnu_spectra["BlackHole"].items():
+            self.lnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.fnu_spectra.items():
+            if spec_type == "Stars" or spec_type == "BlackHole":
+                continue
+            self.fnu_spectra[spec_type] = unyt_array(spec)
+        for spec_type, spec in self.fnu_spectra["Stars"].items():
+            self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.fnu_spectra["BlackHole"].items():
+            self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+
         # Done!
         self._got_lnu_spectra = True
         self._got_fnu_spectra = True if cosmo is not None else False
@@ -792,6 +855,40 @@ class Survey:
         for g in self.galaxies:
             g.get_photo_lnu(filters=self.filters, nthreads=self.nthreads)
 
+        # Unpack the luminosities into a dictionary on the Survey object
+        self.luminosities = {"Stars": {}, "BlackHole": {}}
+        for g in self.galaxies:
+            for spec_type, phot in g.photo_lnu.items():
+                for filt, lnu in phot.items():
+                    self.luminosities.setdefault(spec_type, {}).setdefault(
+                        filt, []
+                    ).append(lnu)
+            for spec_type, phot in g.stars.photo_lnu.items():
+                for filt, lnu in phot.items():
+                    self.luminosities["Stars"].setdefault(
+                        spec_type, {}
+                    ).setdefault(filt, []).append(lnu)
+            for spec_type, phot in g.black_hole.photo_lnu.items():
+                for filt, lnu in phot.items():
+                    self.luminosities["BlackHole"].setdefault(
+                        spec_type, {}
+                    ).setdefault(filt, []).append(lnu)
+
+        # Convert the lists of luminosities to unyt arrays
+        for spec_type, phot in self.luminosities.items():
+            if spec_type == "Stars" or spec_type == "BlackHole":
+                continue
+            for filt, lnu in phot.items():
+                self.luminosities[spec_type][filt] = unyt_array(lnu)
+        for spec_type, phot in self.luminosities["Stars"].items():
+            for filt, lnu in phot.items():
+                self.luminosities["Stars"][spec_type][filt] = unyt_array(lnu)
+        for spec_type, phot in self.luminosities["BlackHole"].items():
+            for filt, lnu in phot.items():
+                self.luminosities["BlackHole"][spec_type][filt] = unyt_array(
+                    lnu
+                )
+
         # Done!
         self._got_luminosities = True
         self._took(start, "Getting photometric luminosities")
@@ -817,6 +914,38 @@ class Survey:
         # the galaxies at this level
         for g in self.galaxies:
             g.get_photo_fnu(filters=self.filters, nthreads=self.nthreads)
+
+        # Unpack the fluxes into a dictionary on the Survey object
+        self.fluxes = {"Stars": {}, "BlackHole": {}}
+        for g in self.galaxies:
+            for spec_type, phot in g.photo_fnu.items():
+                for filt, fnu in phot.items():
+                    self.fluxes.setdefault(spec_type, {}).setdefault(
+                        filt, []
+                    ).append(fnu)
+            for spec_type, phot in g.stars.photo_fnu.items():
+                for filt, fnu in phot.items():
+                    self.fluxes["Stars"].setdefault(spec_type, {}).setdefault(
+                        filt, []
+                    ).append(fnu)
+            for spec_type, phot in g.black_hole.photo_fnu.items():
+                for filt, fnu in phot.items():
+                    self.fluxes["BlackHole"].setdefault(
+                        spec_type, {}
+                    ).setdefault(filt, []).append(fnu)
+
+        # Convert the lists of fluxes to unyt arrays
+        for spec_type, phot in self.fluxes.items():
+            if spec_type == "Stars" or spec_type == "BlackHole":
+                continue
+            for filt, fnu in phot.items():
+                self.fluxes[spec_type][filt] = unyt_array(fnu)
+        for spec_type, phot in self.fluxes["Stars"].items():
+            for filt, fnu in phot.items():
+                self.fluxes["Stars"][spec_type][filt] = unyt_array(fnu)
+        for spec_type, phot in self.fluxes["BlackHole"].items():
+            for filt, fnu in phot.items():
+                self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
 
         # Done!
         self._got_fluxes = True
