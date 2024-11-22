@@ -28,26 +28,20 @@ Example usage:
 ```
 """
 
-import itertools
 import time
 from functools import partial
 
 import h5py
 import numpy as np
 from pathos.multiprocessing import ProcessingPool as Pool
-from unyt import unyt_array, unyt_quantity
+from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.survey.survey_utils import (
-    discover_outputs_recursive,
-    pack_data,
-    recursive_gather,
     sort_data_recursive,
-    unpack_data,
     write_datasets_recursive,
-    write_datasets_recursive_parallel,
 )
 from synthesizer.utils.art import Art
 from synthesizer.warnings import warn
@@ -828,7 +822,7 @@ class Survey:
             self.lnu_spectra["Stars"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.lnu_spectra["BlackHole"].items():
             self.lnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.fnu_spectra.items():
+        for spec_type, spec in self.fnu_spectra["Galaxy"].items():
             self.fnu_spectra[spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["Stars"].items():
             self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
@@ -1484,187 +1478,7 @@ class Survey:
         # Done!
         self._took(start, "Extra analysis")
 
-    def _setup_output(self):
-        """
-        Set up the paths we will write out.
-
-        We will find the path to all attributes (e.g. lnu from spectra on stars
-        will be "/stars/spectra/spectra_key/lnu"), and then convert these to
-        HDF5 keys (e.g. "/Stars/Spectra/SpectraKey/Lnu").
-
-        Once we know what we will be writing out we can construct the output
-        dictionary structure. It's important we set this structure up before
-        actually extracting the data from the galaxies so that all ranks agree
-        on the output structure in MPI land, regardless of the actual galaxy
-        content of each rank.
-
-        Returns:
-            dict:
-                The output dictionary populated with the output structure.
-            list:
-                The list of output paths.
-            list:
-                The list of attribute paths.
-        """
-        start = time.perf_counter()
-
-        # Create a set to store all the paths in
-        output_set = set()
-
-        # Recurse through each of the output dictionaries and add the paths to
-        # the set
-        output_set = discover_outputs_recursive(
-            self.lnu_spectra["Galaxy"],
-            prefix="Galaxies/Spectra/SpectralLuminosityDensity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.lnu_spectra["Stars"],
-            prefix="Galaxies/Stars/Spectra/SpectralLuminosityDensity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.lnu_spectra["BlackHole"],
-            prefix="Galaxies/BlackHole/Spectra/SpectralLuminosityDensity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.fnu_spectra["Galaxy"],
-            prefix="Galaxies/Spectra/SpectralFluxDensity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.fnu_spectra["Stars"],
-            prefix="Galaxies/Stars/Spectra/SpectralFluxDensity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.fnu_spectra["BlackHole"],
-            prefix="Galaxies/BlackHole/Spectra/SpectralFluxDensity/",
-            output_set=output_set,
-        )
-
-        output_set = discover_outputs_recursive(
-            self.luminosities,
-            prefix="Galaxies/Photometry/Luminosities/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.fluxes,
-            prefix="Galaxies/Photometry/Fluxes/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.lines_lum,
-            prefix="Galaxies/Lines/Luminosity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.line_cont_lum,
-            prefix="Galaxies/Lines/Continuum/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.images_lum,
-            prefix="Galaxies/Images/Luminosity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.images_flux,
-            prefix="Galaxies/Images/Flux/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.images_lum_psf,
-            prefix="Galaxies/PSFImages/Luminosity/",
-            output_set=output_set,
-        )
-        output_set = discover_outputs_recursive(
-            self.images_flux_psf,
-            prefix="Galaxies/PSFImages/Flux/",
-            output_set=output_set,
-        )
-
-        self._print(f"Found {len(output_set)} datasets to write out.")
-
-        # In MPI land make sure we all agree on the output structure
-        if self.using_mpi:
-            rank_out_paths = self.comm.gather(set(output_set))
-
-            # Combine all the paths from all the ranks and redistribute them
-            # to all the ranks
-            output_set = self.comm.bcast(set(itertools.chain(*rank_out_paths)))
-
-        # Convert the set to a list
-        out_paths = list(output_set)
-
-        print(out_paths)
-
-        # Define a dictionary in which we'll collect EVERYTHING
-        output = {}
-
-        # Populate it with the outpaths we just created
-        for path in out_paths:
-            path = path.split("/")
-            d = output
-            for key in path[:-1]:
-                d = d.setdefault(key, {})
-
-        # Done!
-        self._took(start, "Setting up output")
-
-        return output, out_paths
-
-    def _collect(self, output, out_paths, attr_paths):
-        """
-        Collect the data from the galaxies.
-
-        This is done attribute by attribute in stages. First we collect an
-        attribute from all the galaxies (unpack_data) and then we pack it into
-        the output dictionary (pack_data). This is done recursively to handle
-        arbitrarily nested dictionaries.
-
-        Before we output the collected data it is sorted by galaxy index to
-        restore the original order.
-
-        Args:
-            output (dict):
-                The dictionary to store the output data. This has been
-                populated with the keys necessary for what we will collect
-                and write out.
-            out_paths (list):
-                The list of key paths to write the data to.
-            attr_paths (list):
-                The list of attribute paths to collect the data from the
-                galaxies.
-
-        Returns:
-            dict:
-                The populated output dictionary.
-        """
-        start = time.perf_counter()
-        # Actually collect the data
-        for out_path, attr_path in zip(out_paths, attr_paths):
-            data = [unpack_data(g, attr_path) for g in self.galaxies]
-
-            # If this is a list of unyt_quantity objects convert to a
-            # unyt_array
-            if all([isinstance(d, (unyt_quantity, unyt_array)) for d in data]):
-                data = unyt_array(data)
-            else:
-                data = np.array(data)
-
-            pack_data(output, data, out_path)
-
-        # Add the analysis results to the output
-        output["Galaxies"].update(self._analysis_results)
-
-        # Done!
-        self._took(start, "Collecting data")
-
-        return output
-
-    def _parallel_write(self, outpath, rank_output, out_paths, attr_paths):
+    def _parallel_write(self, outpath):
         """
         Collect and write the data in parallel.
 
@@ -1675,62 +1489,23 @@ class Survey:
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
-            rank_output (dict):
-                The dictionary to store the local output data. This has been
-                populated with the keys necessary for what we will collect
-                and write out.
-            out_paths (list):
-                The list of key paths to write the data to.
-            attr_paths (list):
-                The list of attribute paths to collect the data from
-                the galaxies.
         """
         # If we have parallel h5py we can write in parallel using MPI,
-        # redirect to the function that does this.
+        # redirect to the function that does this. TODO
         if hasattr(h5py.get_config(), "mpi") and h5py.get_config().mpi:
-            self._true_parallel_write(
-                outpath,
-                rank_output,
-                out_paths,
-                attr_paths,
+            warn(
+                "True parallel writing across multiple ranks is coming soon."
+                "Falling back to rank 0 writing."
             )
-            return
+            # self._true_parallel_write(
+            #     outpath,
+            #     rank_output,
+            #     out_paths,
+            #     attr_paths,
+            # )
+            # return
 
-        # Ok, we have to bring it to rank 0 and write it out there.
-
-        # First we need to collect all the local data on each rank
-        rank_output = self._collect(rank_output, out_paths, attr_paths)
-
-        # Then we can recursively gather all the data on rank 0
-        output = recursive_gather(rank_output, self.comm)
-
-        # We now need to gather the sorting indices so we can sort the data
-        # before writing it out (gathering is guaranteed to be in rank order
-        # so we can just gather the indices and get the same order as the data.
-        sinds = np.argsort(
-            np.concatenate(self.comm.gather(self.galaxy_indices))
-        )
-
-        # Finally we sort and write out the data to the HDF5 file rooted at
-        # the galaxy group. We do this recursively to handle arbitrarily nested
-        # dictionaries.
-        if self.rank == 0:
-            with h5py.File(outpath, "a") as hdf:
-                write_datasets_recursive(
-                    hdf,
-                    sort_data_recursive(output["Galaxies"], sinds),
-                    "Galaxies",
-                )
-        else:
-            return
-
-    def _true_parallel_write(
-        self,
-        outpath,
-        rank_output,
-        out_paths,
-        attr_paths,
-    ):
+    def _true_parallel_write(self, outpath):
         """
         Write the data in parallel using MPI.
 
@@ -1743,38 +1518,12 @@ class Survey:
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
-            rank_output (dict):
-                The dictionary to store the local output data. This has been
-                populated with the keys necessary for what we will collect
-                and write out.
-            out_paths (list):
-                The list of key paths to write the data to.
-            attr_paths (list):
-                The list of attribute paths to collect the data from the
-                galaxies.
         """
-        # First we need to collect all the local data on each rank
-        rank_output = self._collect(rank_output, out_paths, attr_paths)
+        raise NotImplementedError(
+            "True parallel writing is not yet implemented."
+        )
 
-        # Finally we write out the data to the HDF5 file rooted at the galaxy
-        # group. We do this recursively to handle arbitrarily nested
-        # dictionaries.
-        with h5py.File(outpath, "a", driver="mpio", comm=self.comm) as hdf:
-            write_datasets_recursive_parallel(
-                hdf,
-                rank_output["Galaxies"],
-                "Galaxies",
-                np.argsort(self.galaxy_indices),
-                self.comm,
-            )
-
-    def _serial_write(
-        self,
-        outpath,
-        output,
-        out_paths,
-        attr_paths,
-    ):
+    def _serial_write(self, outpath):
         """
         Collect and write the data on a single rank.
 
@@ -1783,33 +1532,285 @@ class Survey:
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
-            output (dict):
-                The dictionary to store the output data. This has been
-                populated with the keys necessary for what we will collect
-                and write out.
-            out_paths (list):
-                The list of key paths to write the data to.
-            attr_paths (list):
-                The list of attribute paths to collect the data from the
-                galaxies.
         """
-        # Collected everything from the individual galaxies
-        output = self._collect(output, out_paths, attr_paths)
-
-        # With everything collected we can sort it to be in the original order
-        # and return it
-        start = time.perf_counter()
-        sorted_output = sort_data_recursive(
-            output, np.argsort(self.galaxy_indices)
-        )
-        self._took(start, "Sorting data")
-
-        # Write out the data to the HDF5 file rooted at the galaxy group. We
-        # do this recursively to handle arbitrarily nested dictionaries.
+        # We'll write each dataset we have actually computed but while doing
+        # so we need to ensure everything is correctly sorted. We'll chain
+        # these operations together in every call below where everything is
+        # done recursively to avoid writing out the same code multiple times.
         with h5py.File(outpath, "a") as hdf:
-            write_datasets_recursive(
-                hdf, sorted_output["Galaxies"], "Galaxies"
-            )
+            # Write spectral luminosity densities
+            if self._got_lnu_spectra:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.lnu_spectra["Galaxy"], self.galaxy_indices
+                    ),
+                    "Galaxies/Spectra/SpectralLuminosityDensity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.lnu_spectra["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Spectra/SpectralLuminosityDensity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.lnu_spectra["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensity",
+                )
+
+            # Write spectral flux densities
+            if self._got_fnu_spectra:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.fnu_spectra["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Spectra/SpectralFluxDensity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.fnu_spectra["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Spectra/SpectralFluxDensity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.fnu_spectra["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Spectra/SpectralFluxDensity",
+                )
+
+            # Write photometric luminosities
+            if self._got_luminosities:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.luminosities["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Photometry/Luminosities",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.luminosities["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Photometry/Luminosities",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.luminosities["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Photometry/Luminosities",
+                )
+
+            # Write photometric fluxes
+            if self._got_fluxes:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.fluxes["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Photometry/Fluxes",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.fluxes["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Photometry/Fluxes",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.fluxes["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Photometry/Fluxes",
+                )
+
+            # Write emission line luminosities
+            if self._got_lum_lines:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.lines_lum["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Lines/Luminosity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.lines_lum["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Lines/Luminosity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.lines_lum["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Lines/Luminosity",
+                )
+
+            # Write emission line continuum luminosities
+            if self._got_lum_lines:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.line_cont_lum["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Lines/Continuum",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.line_cont_lum["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Lines/Continuum",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.line_cont_lum["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Lines/Continuum",
+                )
+
+            # Write luminosity images
+            if self._got_images_lum:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_lum["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Images/Luminosity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_lum["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Images/Luminosity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_lum["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Images/Luminosity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_lum_psf["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/PSFImages/Luminosity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_lum_psf["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/PSFImages/Luminosity",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_lum_psf["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/PSFImages/Luminosity",
+                )
+
+            # Write flux images
+            if self._got_images_flux:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_flux["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Images/Flux",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_flux["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/Images/Flux",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_flux["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/Images/Flux",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_flux_psf["Galaxy"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/PSFImages/Flux",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_flux_psf["Stars"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/Stars/PSFImages/Flux",
+                )
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self.images_flux_psf["BlackHole"],
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies/BlackHoles/PSFImages/Flux",
+                )
+
+            # Write out the extra analysis results
+            if len(self._analysis_results) > 0:
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(
+                        self._analysis_results,
+                        self.galaxy_indices,
+                    ),
+                    "Galaxies",
+                )
 
     def write(self, outpath, particle_datasets=False):
         """
@@ -1842,10 +1843,6 @@ class Survey:
             self._print(f"Rank {self.rank} waiting to write.")
             self.comm.barrier()
 
-        # Set up the outputs dictionary, this is where we'll collect everything
-        # together from the individual galaxies before writing it out.
-        output, out_paths, attr_paths = self._setup_output()
-
         # Regardless of parallel HDF5, we first need to create our file, some
         # basic structure and store some top level metadata (we will
         # overwrite any existing file with the same name)
@@ -1875,9 +1872,9 @@ class Survey:
         # have parallel h5py
         write_start = time.perf_counter()
         if self.using_mpi:
-            self._parallel_write(outpath, output, out_paths, attr_paths)
+            self._parallel_write(outpath)
         else:
-            self._serial_write(outpath, output, out_paths, attr_paths)
+            self._serial_write(outpath)
         self._took(write_start, f"Writing output to {outpath}")
 
         # Totally done!
