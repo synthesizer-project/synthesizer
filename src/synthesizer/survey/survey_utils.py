@@ -212,19 +212,16 @@ def sort_data_recursive(data, sinds):
         # If there is no data we can't sort it, just return the empty array.
         # This can happen if there are no galaxies.
         if len(data) == 0:
-            return data
+            return unyt_array(data)
 
         # Convert the list of data to an array (but we don't want to lose the
         # units)
-        if isinstance(data[0], (unyt_quantity, unyt_array)):
-            data = unyt_array(np.array([d.value for d in data]), data[0].units)
-        else:
-            data = np.array(data)
+        data = unyt_array([d.value for d in data])
 
         try:
             # Apply the sorting indices to the first axis
             return np.take_along_axis(data, sinds, axis=0)
-        except (IndexError, ValueError) as e:
+        except (IndexError, ValueError, AttributeError) as e:
             print(data)
             print(data.shape)
             raise IndexError(f"Failed to sort data - {e}")
