@@ -348,7 +348,9 @@ def recursive_gather(data, comm, root=0):
     # Before we get to the meat, lets make sure we have the same structure
     # on all ranks
     gathered_out_paths = comm.gather(discover_outputs(data), root=root)
-    out_paths = comm.bcast(set.union(*gathered_out_paths), root=root)
+    out_paths = comm.bcast(
+        set.union(*gathered_out_paths) if comm.rank == 0 else None, root=root
+    )
 
     # Ensure all ranks have the same structure
     for path in out_paths:
