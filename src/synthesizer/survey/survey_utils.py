@@ -207,6 +207,10 @@ def sort_data_recursive(data, sinds):
         data (dict): The data to sort.
         sinds (dict): The sorted indices.
     """
+    # Early exit if data is None
+    if data is None:
+        return None
+
     # If the data isn't a dictionary just return the sorted data
     if not isinstance(data, dict):
         # If there is no data we can't sort it, just return the empty array.
@@ -244,6 +248,10 @@ def write_datasets_recursive(hdf, data, key):
         data (dict): The data to write.
         key (str): The key to write the data to.
     """
+    # Early exit if data is None
+    if data is None:
+        return
+
     # If the data isn't a dictionary just write the dataset
     if not isinstance(data, dict):
         try:

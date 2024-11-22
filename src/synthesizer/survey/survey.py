@@ -1509,7 +1509,8 @@ class Survey:
         # Before we do anything we need to collect together the galaxy indices
         # for all ranks, we can do this here separately because the order of
         # a gather is guaranteed.
-        sinds = np.concatenate(self.comm.gather(self.galaxy_indices, root=0))
+        sinds = self.comm.gather(self.galaxy_indices, root=0)
+        sinds = np.concatenate(sinds) if self.rank == 0 else None
 
         # We'll collect and write each dataset we have actually computed but
         # while doing so we need to ensure everything is correctly sorted.
