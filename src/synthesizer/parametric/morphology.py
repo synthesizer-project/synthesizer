@@ -49,7 +49,7 @@ class MorphologyBase(ABC):
         """
         Make a quick density plot.
 
-        Arguments
+        Args:
             resolution (float)
                 The resolution (in the same units provded to the child class).
             npix (int)
@@ -137,7 +137,7 @@ class PointSource(MorphologyBase):
         """
         Initialise the morphology.
 
-        Arguments
+        Args
             offset (unyt_array/float)
                 The [x,y] offset in angular or physical units from the centre
                 of the image. The default (0,0) places the source in the centre
@@ -189,7 +189,7 @@ class PointSource(MorphologyBase):
         This acts as a wrapper to astropy functionality (defined above) which
         only work in units of kpc or milliarcseconds (mas)
 
-        Arguments
+        Args
             xx: array-like (float)
                 x values on a 2D grid.
             yy: array-like (float)
@@ -250,7 +250,7 @@ class Gaussian2D(MorphologyBase):
         """
         Initialise the morphology.
 
-        Arguments:
+        Args:
             x_mean: (float)
                 The mean of the Gaussian along the x-axis.
             y_mean: (float)
@@ -262,7 +262,6 @@ class Gaussian2D(MorphologyBase):
             rho: (float)
                 The population correlation coefficient between x and y.
         """
-
         self.x_mean = x_mean
         self.y_mean = y_mean
         self.stddev_x = stddev_x
@@ -274,14 +273,14 @@ class Gaussian2D(MorphologyBase):
         """
         Compute density grid.
 
-        Arguments:
+        Args:
             x: array-like (float)
                 A 1D array of x values.
             y: array-like (float)
                 A 1D array of y values.
 
         Returns:
-            g_2D_mat: np.ndarray:
+            g_2d_mat: np.ndarray:
                 A 2D array representing the Gaussian density values at each
                 (x, y) point.
 
@@ -289,7 +288,6 @@ class Gaussian2D(MorphologyBase):
             ValueError:
                 If either x or y is None.
         """
-
         if units is None:
             units = kpc
 
@@ -362,7 +360,7 @@ class Sersic2D(MorphologyBase):
         """
         Initialise the morphology.
 
-        Arguments
+        Args
             r_eff (unyt)
                 Effective radius. This is converted as required.
             amplitude (float)
@@ -379,7 +377,6 @@ class Sersic2D(MorphologyBase):
                 Redshift.
 
         """
-
         self.r_eff_mas = None
         self.r_eff_kpc = None
 
@@ -449,7 +446,7 @@ class Sersic2D(MorphologyBase):
         """
         Compute the density grid.
 
-        Arguments
+        Args
             x: array-like (float)
                 x values on a 2D grid.
             y: array-like (float)
@@ -462,7 +459,6 @@ class Sersic2D(MorphologyBase):
                 The density grid produced from either
                 the kpc or mas Sersic profile.
         """
-
         # Error for x, y = None
         if x is None or y is None:
             raise ValueError("x and y grids must be provided.")
