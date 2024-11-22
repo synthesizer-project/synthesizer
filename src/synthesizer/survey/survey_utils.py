@@ -376,15 +376,17 @@ def recursive_gather(data, comm, root=0):
                     collected_data = [d for d in collected_data if len(d) > 0]
                     if len(collected_data) > 0:
                         try:
-                            new_d[k] = np.concatenate(collected_data)
+                            new_d[k] = unyt_array(
+                                np.concatenate(collected_data)
+                            )
                         except ValueError as e:
                             raise ValueError(
                                 f"Failed to concatenate {k} - {e}"
                             )
                     else:
-                        new_d[k] = []
+                        new_d[k] = unyt_array([], "dimensionless")
                 else:
-                    new_d[k] = []
+                    new_d[k] = unyt_array([], "dimensionless")
                 comm.barrier()
             elif isinstance(v, dict):
                 new_d[k] = _gather(v, comm, root)
