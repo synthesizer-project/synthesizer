@@ -339,11 +339,11 @@ def recursive_gather(data, comm, root=0):
         if comm.rank == root:
             collected_data = [d for d in collected_data if len(d) > 0]
             if len(collected_data) > 0:
-                return np.concatenate(collected_data)
+                return unyt_array(np.concatenate(collected_data))
             else:
-                return []
+                return unyt_array([], "dimensionless")
         else:
-            return []
+            return unyt_array([], "dimensionless")
 
     # Before we get to the meat, lets make sure we have the same structure
     # on all ranks
@@ -353,10 +353,11 @@ def recursive_gather(data, comm, root=0):
     # Ensure all ranks have the same structure
     for path in out_paths:
         d = data
-        for key in path.split("/"):
+        for key in path.split("/")[:-1]:
             d = d.setdefault(key, {})
+        d[path.split("/")[-1]] = unyt_array([], "dimensionsless")
 
-    # Recurse through the whole dict communicating an lists or
+    # Recurse through the whole dict communicating all lists or
     # arrays we hit along the way
     def _gather(d, comm, root):
         new_d = {}
@@ -369,10 +370,6 @@ def recursive_gather(data, comm, root=0):
                         try:
                             new_d[k] = np.concatenate(collected_data)
                         except ValueError as e:
-                            for d in collected_data:
-                                print(d)
-                                print(d.shape)
-                                print()
                             raise ValueError(
                                 f"Failed to concatenate {k} - {e}"
                             )
@@ -380,7 +377,6 @@ def recursive_gather(data, comm, root=0):
                         new_d[k] = []
                 else:
                     new_d[k] = []
-                print(comm.rank, k)
                 comm.barrier()
             elif isinstance(v, dict):
                 new_d[k] = _gather(v, comm, root)
