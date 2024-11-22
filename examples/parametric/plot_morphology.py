@@ -22,13 +22,27 @@ from unyt import kpc, unyt_array
 from synthesizer.parametric.morphology import (
     Gaussian2D,
     PointSource,
-    Sersic2DNew,
+    Sersic2D,
 )
 
 # Define resolution and npix for density grid
 resolution = 0.1 * kpc
 npix = (100, 100)
 
+
+# Define arrays for 2D grid
+x_dat = unyt_array(np.linspace(-5, 5, 100), "kpc")
+y_dat = unyt_array(np.linspace(-5, 5, 100), "kpc")
+
+xx, yy = np.meshgrid(x_dat, y_dat)
+
+
+# Define cosmology and redshift
+cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
+redshift = 0.5
+
+
+# 2D Gaussian example usage
 
 # Define gaussian values with units
 gaussian = Gaussian2D(
@@ -41,16 +55,11 @@ gaussian = Gaussian2D(
 
 
 # Define Gaussian plot density grid
-density_grid = gaussian.get_density_grid(resolution, npix)
-
-x_dat = unyt_array(np.linspace(-5, 5, 100), "kpc")
-y_dat = unyt_array(np.linspace(-5, 5, 100), "kpc")
-
-xx, yy = np.meshgrid(x_dat, y_dat)
+gaussian_density_grid = gaussian.get_density_grid(resolution, npix)
 
 
 # Plot figure from
-plt.contourf(xx, yy, density_grid, levels=50)
+plt.contourf(xx, yy, gaussian_density_grid, levels=50)
 plt.colorbar(label="Density")
 plt.xlabel("X Axis (kpc)")
 plt.ylabel("Y Axis (kpc)")
@@ -59,11 +68,6 @@ plt.show()
 
 
 # PointSource example usage
-
-# Define cosmology and redshift
-cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
-redshift = 0.5
-
 
 # Define offset and create density grid
 offset = unyt_array([2.0, 2.0], units=kpc)
@@ -79,17 +83,23 @@ plt.title("Example Point Source")
 plt.show()
 
 
-# New Sersic example usage
+# 2D Sersic example usage
 
 # Define Sersic profile and density grid
-sersic = Sersic2DNew(
-    r_eff=5 * kpc, theta=45, ellip=0.2, cosmo=cosmo, redshift=redshift
+sersic = Sersic2D(
+    r_eff=5 * kpc,
+    theta=45,
+    ellipticity=0.2,
+    cosmo=cosmo,
+    redshift=redshift,
+    sersic_index=1,
 )
 
-density_grid_sersic = sersic.get_density_grid(resolution, npix)
+sersic_density_grid = sersic.get_density_grid(resolution, npix)
+
 
 # Plot figure
-plt.contourf(xx, yy, density_grid_sersic, levels=50)
+plt.contourf(xx, yy, sersic_density_grid, levels=50)
 plt.colorbar(label="Luminosity Density")
 plt.title("Example Sersic Profile")
 plt.xlabel("X Axis (kpc)")
