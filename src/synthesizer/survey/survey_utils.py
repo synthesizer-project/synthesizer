@@ -228,6 +228,7 @@ def sort_data_recursive(data, sinds):
         except (IndexError, ValueError, AttributeError) as e:
             print(data)
             print(sinds)
+            print(len(sinds))
             print(data.shape)
             raise IndexError(f"Failed to sort data - {e}")
 
