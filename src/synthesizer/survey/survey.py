@@ -651,6 +651,15 @@ class Survey:
         # Make sure we have an array of indices
         galaxy_indices = np.array(galaxy_indices)
 
+        # Make sure the indices number of galaxies match the number of indices
+        if len(galaxy_indices) != self.n_galaxies_local:
+            raise exceptions.InconsistentArguments(
+                "The number of galaxy indices does not match the number of "
+                f"galaxies provided (found len(galaxy_indices) "
+                f"= {len(galaxy_indices)} and len(galaxies) "
+                f"= {self.n_galaxies_local})."
+            )
+
         # If we're in MPI land we need to shift the indices so they are
         # unique and contiguous across all ranks
         if self.using_mpi:
