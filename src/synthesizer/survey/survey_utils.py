@@ -70,7 +70,7 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
     elif obj is None:
         return output_set
 
-    # Skip undesiable types
+    # Skip undesirable types
     elif isinstance(obj, (str, bool)):
         return output_set
 
@@ -344,6 +344,17 @@ def recursive_gather(data, comm, root=0):
                 return []
         else:
             return []
+
+    # Before we get to the meat, lets make sure we have the same structure
+    # on all ranks
+    gathered_out_paths = comm.gather(discover_outputs(data), root=root)
+    out_paths = comm.bcast(set.union(*gathered_out_paths), root=root)
+
+    # Ensure all ranks have the same structure
+    for path in out_paths:
+        d = data
+        for key in path.split("/"):
+            d = d.setdefault(key, {})
 
     # Recurse through the whole dict communicating an lists or
     # arrays we hit along the way
