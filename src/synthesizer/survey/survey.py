@@ -28,6 +28,7 @@ Example usage:
 ```
 """
 
+import itertools
 import time
 from functools import partial
 
@@ -40,6 +41,7 @@ from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.survey.survey_utils import (
+    discover_outputs_recursive,
     pack_data,
     recursive_gather,
     sort_data_recursive,
@@ -241,10 +243,13 @@ class Survey:
         self.fnu_spectra = {}
         self.luminosities = {}
         self.fluxes = {}
-        self.lum_lines = {}
+        self.lines_lum = {}
+        self.line_cont_lum = {}
         self.flux_lines = {}
         self.images_lum = {}
+        self.images_lum_psf = {}
         self.images_flux = {}
+        self.images_flux_psf = {}
         self.lnu_data_cubes = {}
         self.fnu_data_cubes = {}
         self.spectroscopy = {}
@@ -786,42 +791,44 @@ class Survey:
                 g.get_observed_spectra(cosmo=cosmo)
 
         # Ubpack the spectra into a dictionary on the Survey object
-        self.lnu_spectra = {"Stars": {}, "BlackHole": {}}
-        self.fnu_spectra = {"Stars": {}, "BlackHole": {}}
+        self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
             for spec_type, spec in g.spectra.items():
-                self.lnu_spectra.setdefault(spec_type, []).append(spec.lnu)
-                if cosmo is not None:
-                    self.fnu_spectra.setdefault(spec_type, []).append(spec.fnu)
-            for spec_type, spec in g.stars.spectra.items():
-                self.lnu_spectra["Stars"].setdefault(spec_type, []).append(
+                self.lnu_spectra["Galaxy"].setdefault(spec_type, []).append(
                     spec.lnu
                 )
                 if cosmo is not None:
-                    self.fnu_spectra["Stars"].setdefault(spec_type, []).append(
-                        spec.fnu
-                    )
-            for spec_type, spec in g.black_hole.spectra.items():
-                self.lnu_spectra["BlackHole"].setdefault(spec_type, []).append(
-                    spec.lnu
-                )
-                if cosmo is not None:
-                    self.fnu_spectra["BlackHole"].setdefault(
+                    self.fnu_spectra["Galaxy"].setdefault(
                         spec_type, []
                     ).append(spec.fnu)
+            if g.stars is not None:
+                for spec_type, spec in g.stars.spectra.items():
+                    self.lnu_spectra["Stars"].setdefault(spec_type, []).append(
+                        spec.lnu
+                    )
+                    if cosmo is not None:
+                        self.fnu_spectra["Stars"].setdefault(
+                            spec_type, []
+                        ).append(spec.fnu)
+            if g.black_holes is not None:
+                for spec_type, spec in g.black_holes.spectra.items():
+                    self.lnu_spectra["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(spec.lnu)
+                    if cosmo is not None:
+                        self.fnu_spectra["BlackHole"].setdefault(
+                            spec_type, []
+                        ).append(spec.fnu)
 
         # Convert the lists of spectra to unyt arrays
-        for spec_type, spec in self.lnu_spectra.items():
-            if spec_type == "Stars" or spec_type == "BlackHole":
-                continue
-            self.lnu_spectra[spec_type] = unyt_array(spec)
+        for spec_type, spec in self.lnu_spectra["Galaxy"].items():
+            self.lnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.lnu_spectra["Stars"].items():
             self.lnu_spectra["Stars"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.lnu_spectra["BlackHole"].items():
             self.lnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra.items():
-            if spec_type == "Stars" or spec_type == "BlackHole":
-                continue
             self.fnu_spectra[spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["Stars"].items():
             self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
@@ -856,30 +863,30 @@ class Survey:
             g.get_photo_lnu(filters=self.filters, nthreads=self.nthreads)
 
         # Unpack the luminosities into a dictionary on the Survey object
-        self.luminosities = {"Stars": {}, "BlackHole": {}}
+        self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
             for spec_type, phot in g.photo_lnu.items():
                 for filt, lnu in phot.items():
-                    self.luminosities.setdefault(spec_type, {}).setdefault(
-                        filt, []
-                    ).append(lnu)
-            for spec_type, phot in g.stars.photo_lnu.items():
-                for filt, lnu in phot.items():
-                    self.luminosities["Stars"].setdefault(
+                    self.luminosities["Galaxy"].setdefault(
                         spec_type, {}
                     ).setdefault(filt, []).append(lnu)
-            for spec_type, phot in g.black_hole.photo_lnu.items():
-                for filt, lnu in phot.items():
-                    self.luminosities["BlackHole"].setdefault(
-                        spec_type, {}
-                    ).setdefault(filt, []).append(lnu)
+            if g.stars is not None:
+                for spec_type, phot in g.stars.photo_lnu.items():
+                    for filt, lnu in phot.items():
+                        self.luminosities["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(lnu)
+            if g.black_holes is not None:
+                for spec_type, phot in g.black_holes.photo_lnu.items():
+                    for filt, lnu in phot.items():
+                        self.luminosities["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(lnu)
 
         # Convert the lists of luminosities to unyt arrays
-        for spec_type, phot in self.luminosities.items():
-            if spec_type == "Stars" or spec_type == "BlackHole":
-                continue
+        for spec_type, phot in self.luminosities["Galaxy"].items():
             for filt, lnu in phot.items():
-                self.luminosities[spec_type][filt] = unyt_array(lnu)
+                self.luminosities["Galaxy"][spec_type][filt] = unyt_array(lnu)
         for spec_type, phot in self.luminosities["Stars"].items():
             for filt, lnu in phot.items():
                 self.luminosities["Stars"][spec_type][filt] = unyt_array(lnu)
@@ -916,30 +923,30 @@ class Survey:
             g.get_photo_fnu(filters=self.filters, nthreads=self.nthreads)
 
         # Unpack the fluxes into a dictionary on the Survey object
-        self.fluxes = {"Stars": {}, "BlackHole": {}}
+        self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
             for spec_type, phot in g.photo_fnu.items():
                 for filt, fnu in phot.items():
-                    self.fluxes.setdefault(spec_type, {}).setdefault(
+                    self.fluxes["Galaxy"].setdefault(spec_type, {}).setdefault(
                         filt, []
                     ).append(fnu)
-            for spec_type, phot in g.stars.photo_fnu.items():
-                for filt, fnu in phot.items():
-                    self.fluxes["Stars"].setdefault(spec_type, {}).setdefault(
-                        filt, []
-                    ).append(fnu)
-            for spec_type, phot in g.black_hole.photo_fnu.items():
-                for filt, fnu in phot.items():
-                    self.fluxes["BlackHole"].setdefault(
-                        spec_type, {}
-                    ).setdefault(filt, []).append(fnu)
+            if g.stars is not None:
+                for spec_type, phot in g.stars.photo_fnu.items():
+                    for filt, fnu in phot.items():
+                        self.fluxes["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(fnu)
+            if g.black_holes is not None:
+                for spec_type, phot in g.black_holes.photo_fnu.items():
+                    for filt, fnu in phot.items():
+                        self.fluxes["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(fnu)
 
         # Convert the lists of fluxes to unyt arrays
-        for spec_type, phot in self.fluxes.items():
-            if spec_type == "Stars" or spec_type == "BlackHole":
-                continue
+        for spec_type, phot in self.fluxes["Galaxy"].items():
             for filt, fnu in phot.items():
-                self.fluxes[spec_type][filt] = unyt_array(fnu)
+                self.fluxes["Galaxy"][spec_type][filt] = unyt_array(fnu)
         for spec_type, phot in self.fluxes["Stars"].items():
             for filt, fnu in phot.items():
                 self.fluxes["Stars"][spec_type][filt] = unyt_array(fnu)
@@ -979,6 +986,50 @@ class Survey:
 
         # Store the line IDs for later
         self._line_ids = line_ids
+
+        # Unpack the luminosity lines into a dictionary on the Survey object
+        self.lines_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_cont_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        for g in self.galaxies:
+            for spec_type, lines in g.lines.items():
+                for line in lines:
+                    self.lines_lum["Galaxy"].setdefault(
+                        spec_type, {}
+                    ).setdefault(line.id, []).append(line.luminosity)
+                    self.line_cont_lum["Galaxy"].setdefault(
+                        spec_type, {}
+                    ).setdefault(line.id, []).append(line.continuum)
+            if g.stars is not None:
+                for spec_type, lines in g.stars.lines.items():
+                    for line in lines:
+                        self.lines_lum["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(line.id, []).append(line.luminosity)
+                        self.line_cont_lum["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(line.id, []).append(line.continuum)
+            if g.black_holes is not None:
+                for spec_type, lines in g.black_holes.lines.items():
+                    for line in lines:
+                        self.lines_lum["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(line.id, []).append(line.luminosity)
+                        self.line_cont_lum["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(line.id, []).append(line.continuum)
+
+        # Convert the lists of luminosities to unyt arrays
+        for spec_type, lines in self.lines_lum["Galaxy"].items():
+            for line_id, lum in lines.items():
+                self.lines_lum["Galaxy"][spec_type][line_id] = unyt_array(lum)
+        for spec_type, lines in self.lines_lum["Stars"].items():
+            for line_id, lum in lines.items():
+                self.lines_lum["Stars"][spec_type][line_id] = unyt_array(lum)
+        for spec_type, lines in self.lines_lum["BlackHole"].items():
+            for line_id, lum in lines.items():
+                self.lines_lum["BlackHole"][spec_type][line_id] = unyt_array(
+                    lum
+                )
 
         # Done!
         self._got_lum_lines = True
@@ -1023,7 +1074,15 @@ class Survey:
             )
 
         def _apply_psfs(g, psfs):
-            """"""
+            """
+            Apply a PSF to all the images in the galaxy and its components.
+
+            Args:
+                g (Galaxy):
+                    The galaxy to apply the PSF to.
+                psfs (dict):
+                    The PSFs to apply to the images.
+            """
             psfd_imgs = getattr(g, "images_psf_lnu", {})
             for key, imgs in g.images_lnu.items():
                 psfd_imgs.setdefault(key, {})
@@ -1031,6 +1090,24 @@ class Survey:
                     if f in psfs:
                         psfd_imgs[key][f] = img.apply_psf(psfs[f])
             g.images_psf_lnu = psfd_imgs
+
+            if g.stars is not None:
+                psfd_imgs = getattr(g.stars, "images_psf_lnu", {})
+                for key, imgs in g.stars.images_lnu.items():
+                    psfd_imgs.setdefault(key, {})
+                    for f, img in imgs.items():
+                        if f in psfs:
+                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
+                g.stars.images_psf_lnu = psfd_imgs
+
+            if g.black_holes is not None:
+                psfd_imgs = getattr(g.black_holes, "images_psf_lnu", {})
+                for key, imgs in g.black_holes.images_lnu.items():
+                    psfd_imgs.setdefault(key, {})
+                    for f, img in imgs.items():
+                        if f in psfs:
+                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
+                g.black_holes.images_psf_lnu = psfd_imgs
 
         def _apply_noise(g):
             """"""
@@ -1086,6 +1163,71 @@ class Survey:
                     for g in self.galaxies:
                         _apply_noise(instrument=inst)
 
+        # Unpack the luminosity images into a dictionary on the Survey object
+        self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        for g in self.galaxies:
+            for spec_type, imgs in g.images_lnu.items():
+                for f, img in imgs.items():
+                    self.images_lum["Galaxy"].setdefault(
+                        spec_type, {}
+                    ).setdefault(f, []).append(img.arr * img.units)
+            if hasattr(g, "images_psf_lnu"):
+                for spec_type, imgs in g.images_psf_lnu.items():
+                    for f, img in imgs.items():
+                        self.images_lum_psf["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if g.stars is not None:
+                for spec_type, imgs in g.stars.images_lnu.items():
+                    for f, img in imgs.items():
+                        self.images_lum["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+                if hasattr(g.stars, "images_psf_lnu"):
+                    for spec_type, imgs in g.stars.images_psf_lnu.items():
+                        for f, img in imgs.items():
+                            self.images_lum_psf["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if g.black_holes is not None:
+                for spec_type, imgs in g.black_holes.images_lnu.items():
+                    for f, img in imgs.items():
+                        self.images_lum["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+                if hasattr(g.black_holes, "images_psf_lnu"):
+                    for (
+                        spec_type,
+                        imgs,
+                    ) in g.black_holes.images_psf_lnu.items():
+                        for f, img in imgs.items():
+                            self.images_lum_psf["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Convert the lists of images to unyt arrays
+        for spec_type, imgs in self.images_lum["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_lum["Galaxy"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum["Stars"].items():
+            for f, img in imgs.items():
+                self.images_lum["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_lum["BlackHole"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum_psf.items():
+            for f, img in imgs.items():
+                self.images_lum_psf[spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum_psf["Stars"].items():
+            for f, img in imgs.items():
+                self.images_lum_psf["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum_psf["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_lum_psf["BlackHole"][spec_type][f] = unyt_array(
+                    img
+                )
+
         # Done!
         self._got_images_lum = True
         self._took(start, "Getting luminosity images")
@@ -1129,14 +1271,40 @@ class Survey:
             )
 
         def _apply_psfs(g, psfs):
-            """"""
-            psfd_imgs = getattr(g, "images_psf_lnu", {})
-            for key, imgs in g.images_lnu.items():
+            """
+            Apply a PSF to all the images in the galaxy and its components.
+
+            Args:
+                g (Galaxy):
+                    The galaxy to apply the PSF to.
+                psfs (dict):
+                    The PSFs to apply to the images.
+            """
+            psfd_imgs = getattr(g, "images_psf_fnu", {})
+            for key, imgs in g.images_fnu.items():
                 psfd_imgs.setdefault(key, {})
                 for f, img in imgs.items():
                     if f in psfs:
                         psfd_imgs[key][f] = img.apply_psf(psfs[f])
-            g.images_psf_lnu = psfd_imgs
+            g.images_psf_fnu = psfd_imgs
+
+            if g.stars is not None:
+                psfd_imgs = getattr(g.stars, "images_psf_fnu", {})
+                for key, imgs in g.stars.images_fnu.items():
+                    psfd_imgs.setdefault(key, {})
+                    for f, img in imgs.items():
+                        if f in psfs:
+                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
+                g.stars.images_psf_fnu = psfd_imgs
+
+            if g.black_holes is not None:
+                psfd_imgs = getattr(g.black_holes, "images_psf_fnu", {})
+                for key, imgs in g.black_holes.images_fnu.items():
+                    psfd_imgs.setdefault(key, {})
+                    for f, img in imgs.items():
+                        if f in psfs:
+                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
+                g.black_holes.images_psf_fnu = psfd_imgs
 
         def _apply_noise(g):
             """"""
@@ -1191,6 +1359,71 @@ class Survey:
                 else:
                     for g in self.galaxies:
                         _apply_noise(g)
+
+        # Unpack the luminosity images into a dictionary on the Survey object
+        self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        for g in self.galaxies:
+            for spec_type, imgs in g.images_fnu.items():
+                for f, img in imgs.items():
+                    self.images_flux["Galaxy"].setdefault(
+                        spec_type, {}
+                    ).setdefault(f, []).append(img.arr * img.units)
+            if hasattr(g, "images_psf_fnu"):
+                for spec_type, imgs in g.images_psf_fnu.items():
+                    for f, img in imgs.items():
+                        self.images_flux_psf["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if g.stars is not None:
+                for spec_type, imgs in g.stars.images_fnu.items():
+                    for f, img in imgs.items():
+                        self.images_flux["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+                if hasattr(g.stars, "images_psf_fnu"):
+                    for spec_type, imgs in g.stars.images_psf_fnu.items():
+                        for f, img in imgs.items():
+                            self.images_flux_psf["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if g.black_holes is not None:
+                for spec_type, imgs in g.black_holes.images_fnu.items():
+                    for f, img in imgs.items():
+                        self.images_flux["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+                if hasattr(g.black_holes, "images_psf_fnu"):
+                    for (
+                        spec_type,
+                        imgs,
+                    ) in g.black_holes.images_psf_fnu.items():
+                        for f, img in imgs.items():
+                            self.images_flux_psf["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Convert the lists of images to unyt arrays
+        for spec_type, imgs in self.images_flux["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_flux["Galaxy"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux["Stars"].items():
+            for f, img in imgs.items():
+                self.images_flux["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_flux["BlackHole"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux_psf.items():
+            for f, img in imgs.items():
+                self.images_flux_psf[spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux_psf["Stars"].items():
+            for f, img in imgs.items():
+                self.images_flux_psf["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux_psf["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_flux_psf["BlackHole"][spec_type][f] = unyt_array(
+                    img
+                )
 
         # Done!
         self._got_images_flux = True
@@ -1275,107 +1508,97 @@ class Survey:
         """
         start = time.perf_counter()
 
-        # Construct the data and outputs path
-        attr_paths = []
-        for label, model in self.emission_model._models.items():
-            # Skip unsaved models
-            if not model.save:
-                continue
+        # Create a set to store all the paths in
+        output_set = set()
 
-            # Get the right component
-            # NOTE: the / must be included in the component string to ensure
-            # the galaxy component play properly since these don't require
-            # the component string.
-            if model.emitter == "galaxy":
-                component = ""
-            elif model.emitter == "stellar":
-                component = "stars/"
-            elif model.emitter == "blackhole":
-                component = "black_holes/"
+        # Recurse through each of the output dictionaries and add the paths to
+        # the set
+        output_set = discover_outputs_recursive(
+            self.lnu_spectra["Galaxy"],
+            prefix="Galaxies/Spectra/SpectralLuminosityDensity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.lnu_spectra["Stars"],
+            prefix="Galaxies/Stars/Spectra/SpectralLuminosityDensity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.lnu_spectra["BlackHole"],
+            prefix="Galaxies/BlackHole/Spectra/SpectralLuminosityDensity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.fnu_spectra["Galaxy"],
+            prefix="Galaxies/Spectra/SpectralFluxDensity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.fnu_spectra["Stars"],
+            prefix="Galaxies/Stars/Spectra/SpectralFluxDensity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.fnu_spectra["BlackHole"],
+            prefix="Galaxies/BlackHole/Spectra/SpectralFluxDensity/",
+            output_set=output_set,
+        )
 
-            # Handle spectra paths
-            if self._got_lnu_spectra:
-                attr_paths.append(f"{component}spectra/{label}/lnu")
-            if self._got_fnu_spectra:
-                attr_paths.append(f"{component}spectra/{label}/fnu")
+        output_set = discover_outputs_recursive(
+            self.luminosities,
+            prefix="Galaxies/Photometry/Luminosities/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.fluxes,
+            prefix="Galaxies/Photometry/Fluxes/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.lines_lum,
+            prefix="Galaxies/Lines/Luminosity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.line_cont_lum,
+            prefix="Galaxies/Lines/Continuum/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.images_lum,
+            prefix="Galaxies/Images/Luminosity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.images_flux,
+            prefix="Galaxies/Images/Flux/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.images_lum_psf,
+            prefix="Galaxies/PSFImages/Luminosity/",
+            output_set=output_set,
+        )
+        output_set = discover_outputs_recursive(
+            self.images_flux_psf,
+            prefix="Galaxies/PSFImages/Flux/",
+            output_set=output_set,
+        )
 
-            # Handle line paths
-            if self._got_lum_lines:
-                for l_id in self._line_ids:
-                    attr_paths.append(
-                        f"{component}lines/{label}/{l_id}/luminosity"
-                    )
-                    attr_paths.append(
-                        f"{component}lines/{label}/{l_id}/continuum"
-                    )
-            if self._got_flux_lines:
-                for l_id in self._line_ids:
-                    attr_paths.append(f"{component}lines/{label}/{l_id}.flux")
-                    attr_paths.append(
-                        f"{component}lines/{label}/{l_id}.continuum_flux"
-                    )
+        self._print(f"Found {len(output_set)} datasets to write out.")
 
-            # Handle photometry paths
-            if self._got_luminosities:
-                for inst in self.instruments:
-                    if inst.can_do_photometry:
-                        for fcode in inst.filters.filter_codes:
-                            attr_paths.append(
-                                f"{component}photo_lnu/{label}/{fcode}"
-                            )
-            if self._got_fluxes:
-                for inst in self.instruments:
-                    if inst.can_do_photometry:
-                        for fcode in inst.filters.filter_codes:
-                            attr_paths.append(
-                                f"{component}photo_fnu/{label}/{fcode}"
-                            )
+        # In MPI land make sure we all agree on the output structure
+        if self.using_mpi:
+            rank_out_paths = self.comm.gather(set(output_set))
 
-            # Handle imaging paths
-            if self._got_images_lum:
-                for inst in self.instruments:
-                    if inst.can_do_imaging:
-                        for fcode in inst.filters.filter_codes:
-                            attr_paths.append(
-                                f"{component}images_lnu/{label}/{fcode}/arr"
-                            )
-            if self._got_images_flux:
-                for inst in self.instruments:
-                    if inst.can_do_imaging:
-                        for fcode in inst.filters.filter_codes:
-                            attr_paths.append(
-                                f"{component}images_fnu/{label}/{fcode}/arr"
-                            )
+            # Combine all the paths from all the ranks and redistribute them
+            # to all the ranks
+            output_set = self.comm.bcast(set(itertools.chain(*rank_out_paths)))
 
-            # Handle spectroscopy paths
-            if self._got_spectroscopy:
-                for inst in self.instruments:
-                    attr_paths.append(
-                        f"{component}spectra/{label}/{inst.label}"
-                    )
+        # Convert the set to a list
+        out_paths = list(output_set)
 
-        self._print(f"Found {len(attr_paths)} datsets to write out.")
-
-        # Convert the attribute paths into the output paths by removing
-        # underscores, converting to camel case, and replacing dots with
-        # slashes. This is the structure we'll use to write out the data.
-        out_paths = [
-            "Galaxies/"
-            + "/".join(
-                [
-                    "".join(
-                        [
-                            word
-                            if len(word) > 0 and word[0].isupper()
-                            else word.capitalize()
-                            for word in p.split("_")
-                        ]
-                    )
-                    for p in path.replace(".", "/").split("/")
-                ]
-            )
-            for path in attr_paths
-        ]
+        print(out_paths)
 
         # Define a dictionary in which we'll collect EVERYTHING
         output = {}
@@ -1390,7 +1613,7 @@ class Survey:
         # Done!
         self._took(start, "Setting up output")
 
-        return output, out_paths, attr_paths
+        return output, out_paths
 
     def _collect(self, output, out_paths, attr_paths):
         """
