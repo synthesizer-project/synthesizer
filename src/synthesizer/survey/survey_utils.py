@@ -221,7 +221,11 @@ def sort_data_recursive(data, sinds):
         else:
             data = np.array(data)
 
-        return data[sinds]
+        try:
+            return data[sinds]
+        except (IndexError, ValueError) as e:
+            print(data)
+            raise IndexError(f"Failed to sort data - {e}")
 
     # Loop over the data
     sorted_data = {}
