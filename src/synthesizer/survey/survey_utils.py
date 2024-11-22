@@ -222,9 +222,11 @@ def sort_data_recursive(data, sinds):
             data = np.array(data)
 
         try:
-            return data[sinds]
+            # Apply the sorting indices to the first axis
+            return np.take_along_axis(data, sinds, axis=0)
         except (IndexError, ValueError) as e:
             print(data)
+            print(data.shape)
             raise IndexError(f"Failed to sort data - {e}")
 
     # Loop over the data
