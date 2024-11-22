@@ -223,6 +223,7 @@ def sort_data_recursive(data, sinds):
             return np.take_along_axis(data, sinds, axis=0)
         except (IndexError, ValueError, AttributeError) as e:
             print(data)
+            print(sinds)
             print(data.shape)
             raise IndexError(f"Failed to sort data - {e}")
 
