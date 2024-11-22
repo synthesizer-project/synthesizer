@@ -322,9 +322,6 @@ class Survey:
         elif self.nthreads > 1:
             self._print(f"Running with {self.nthreads} threads.")
 
-        # Print the number of galaxies we are going to load
-        self._print(f"Will process {self.n_galaxies} galaxies.")
-
         # Print some information about the emission model
         self._print(f"Root emission model: {self.emission_model.label}")
         self._print(
