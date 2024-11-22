@@ -1527,31 +1527,34 @@ class Survey:
                     recursive_gather(self.lnu_spectra["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    gal_data,
-                    "Galaxies/Spectra/SpectralLuminosityDensity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        gal_data,
+                        "Galaxies/Spectra/SpectralLuminosityDensity",
+                    )
                 del gal_data
                 star_data = sort_data_recursive(
                     recursive_gather(self.lnu_spectra["Stars"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    star_data,
-                    "Galaxies/Stars/Spectra/SpectralLuminosityDensity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        star_data,
+                        "Galaxies/Stars/Spectra/SpectralLuminosityDensity",
+                    )
                 del star_data
                 bh_data = sort_data_recursive(
                     recursive_gather(self.lnu_spectra["BlackHole"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    bh_data,
-                    "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        bh_data,
+                        "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensity",
+                    )
                 del bh_data
 
             # Write spectral flux densities (we'll collect these separately
@@ -1561,31 +1564,34 @@ class Survey:
                     recursive_gather(self.fnu_spectra["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    gal_data,
-                    "Galaxies/Spectra/SpectralFluxDensity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        gal_data,
+                        "Galaxies/Spectra/SpectralFluxDensity",
+                    )
                 del gal_data
                 star_data = sort_data_recursive(
                     recursive_gather(self.fnu_spectra["Stars"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    star_data,
-                    "Galaxies/Stars/Spectra/SpectralFluxDensity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        star_data,
+                        "Galaxies/Stars/Spectra/SpectralFluxDensity",
+                    )
                 del star_data
                 bh_data = sort_data_recursive(
                     recursive_gather(self.fnu_spectra["BlackHole"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    bh_data,
-                    "Galaxies/BlackHoles/Spectra/SpectralFluxDensity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        bh_data,
+                        "Galaxies/BlackHoles/Spectra/SpectralFluxDensity",
+                    )
                 del bh_data
 
             # Write photometric luminosities
@@ -1594,21 +1600,22 @@ class Survey:
                     recursive_gather(self.luminosities["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    data["Galaxy"],
-                    "Galaxies/Photometry/Luminosities",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["Stars"],
-                    "Galaxies/Stars/Photometry/Luminosities",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["BlackHole"],
-                    "Galaxies/BlackHoles/Photometry/Luminosities",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        data["Galaxy"],
+                        "Galaxies/Photometry/Luminosities",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["Stars"],
+                        "Galaxies/Stars/Photometry/Luminosities",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["BlackHole"],
+                        "Galaxies/BlackHoles/Photometry/Luminosities",
+                    )
 
             # Write photometric fluxes
             if self._got_fluxes:
@@ -1616,21 +1623,22 @@ class Survey:
                     recursive_gather(self.fluxes["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    data["Galaxy"],
-                    "Galaxies/Photometry/Fluxes",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["Stars"],
-                    "Galaxies/Stars/Photometry/Fluxes",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["BlackHole"],
-                    "Galaxies/BlackHoles/Photometry/Fluxes",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        data["Galaxy"],
+                        "Galaxies/Photometry/Fluxes",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["Stars"],
+                        "Galaxies/Stars/Photometry/Fluxes",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["BlackHole"],
+                        "Galaxies/BlackHoles/Photometry/Fluxes",
+                    )
 
             # Write emission line luminosities
             if self._got_lum_lines:
@@ -1638,21 +1646,22 @@ class Survey:
                     recursive_gather(self.lines_lum["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    data["Galaxy"],
-                    "Galaxies/Lines/Luminosity",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["Stars"],
-                    "Galaxies/Stars/Lines/Luminosity",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["BlackHole"],
-                    "Galaxies/BlackHoles/Lines/Luminosity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        data["Galaxy"],
+                        "Galaxies/Lines/Luminosity",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["Stars"],
+                        "Galaxies/Stars/Lines/Luminosity",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["BlackHole"],
+                        "Galaxies/BlackHoles/Lines/Luminosity",
+                    )
 
             # Write emission line continuum luminosities
             if self._got_lum_lines:
@@ -1660,21 +1669,22 @@ class Survey:
                     recursive_gather(self.line_cont_lum["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    data["Galaxy"],
-                    "Galaxies/Lines/Continuum",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["Stars"],
-                    "Galaxies/Stars/Lines/Continuum",
-                )
-                write_datasets_recursive(
-                    hdf,
-                    data["BlackHole"],
-                    "Galaxies/BlackHoles/Lines/Continuum",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        data["Galaxy"],
+                        "Galaxies/Lines/Continuum",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["Stars"],
+                        "Galaxies/Stars/Lines/Continuum",
+                    )
+                    write_datasets_recursive(
+                        hdf,
+                        data["BlackHole"],
+                        "Galaxies/BlackHoles/Lines/Continuum",
+                    )
 
             # Write luminosity images (again these are heavy so we'll collect
             # them separately)
@@ -1683,51 +1693,56 @@ class Survey:
                     recursive_gather(self.images_lum["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    gal_data,
-                    "Galaxies/Images/Luminosity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        gal_data,
+                        "Galaxies/Images/Luminosity",
+                    )
                 del gal_data
                 star_data = sort_data_recursive(
                     recursive_gather(self.images_lum["Stars"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    star_data,
-                    "Galaxies/Stars/Images/Luminosity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        star_data,
+                        "Galaxies/Stars/Images/Luminosity",
+                    )
                 del star_data
                 bh_data = sort_data_recursive(
                     recursive_gather(self.images_lum["BlackHole"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    bh_data,
-                    "Galaxies/BlackHoles/Images/Luminosity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        bh_data,
+                        "Galaxies/BlackHoles/Images/Luminosity",
+                    )
                 del bh_data
                 gal_data = sort_data_recursive(
                     recursive_gather(self.images_lum_psf["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    gal_data,
-                    "Galaxies/PSFImages/Luminosity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        gal_data,
+                        "Galaxies/PSFImages/Luminosity",
+                    )
                 del gal_data
                 star_data = sort_data_recursive(
                     recursive_gather(self.images_lum_psf["Stars"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    star_data,
-                    "Galaxies/Stars/PSFImages/Luminosity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        star_data,
+                        "Galaxies/Stars/PSFImages/Luminosity",
+                    )
                 del star_data
                 bh_data = sort_data_recursive(
                     recursive_gather(
@@ -1735,11 +1750,12 @@ class Survey:
                     ),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    bh_data,
-                    "Galaxies/BlackHoles/PSFImages/Luminosity",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        bh_data,
+                        "Galaxies/BlackHoles/PSFImages/Luminosity",
+                    )
                 del bh_data
 
             # Write flux images (again these are heavy so we'll collect them
@@ -1749,31 +1765,34 @@ class Survey:
                     recursive_gather(self.images_flux["Galaxy"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    gal_data,
-                    "Galaxies/Images/Flux",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        gal_data,
+                        "Galaxies/Images/Flux",
+                    )
                 del gal_data
                 star_data = sort_data_recursive(
                     recursive_gather(self.images_flux["Stars"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    star_data,
-                    "Galaxies/Stars/Images/Flux",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        star_data,
+                        "Galaxies/Stars/Images/Flux",
+                    )
                 del star_data
                 bh_data = sort_data_recursive(
                     recursive_gather(self.images_flux["BlackHole"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    bh_data,
-                    "Galaxies/BlackHoles/Images/Flux",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        bh_data,
+                        "Galaxies/BlackHoles/Images/Flux",
+                    )
                 del bh_data
                 gal_data = sort_data_recursive(
                     recursive_gather(
@@ -1781,21 +1800,23 @@ class Survey:
                     ),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    gal_data,
-                    "Galaxies/PSFImages/Flux",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        gal_data,
+                        "Galaxies/PSFImages/Flux",
+                    )
                 del gal_data
                 star_data = sort_data_recursive(
                     recursive_gather(self.images_flux_psf["Stars"], self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    star_data,
-                    "Galaxies/Stars/PSFImages/Flux",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        star_data,
+                        "Galaxies/Stars/PSFImages/Flux",
+                    )
                 del star_data
                 bh_data = sort_data_recursive(
                     recursive_gather(
@@ -1803,11 +1824,12 @@ class Survey:
                     ),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    bh_data,
-                    "Galaxies/BlackHoles/PSFImages/Flux",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        bh_data,
+                        "Galaxies/BlackHoles/PSFImages/Flux",
+                    )
                 del bh_data
 
             # Write out the extra analysis results
@@ -1816,11 +1838,12 @@ class Survey:
                     recursive_gather(self._analysis_results, self.comm),
                     sinds,
                 )
-                write_datasets_recursive(
-                    hdf,
-                    data,
-                    "Galaxies",
-                )
+                if self.rank == 0:
+                    write_datasets_recursive(
+                        hdf,
+                        data,
+                        "Galaxies",
+                    )
                 del data
 
     def _true_parallel_write(self, outpath):
