@@ -2262,6 +2262,7 @@ class Survey:
         """
         # Communicate local counts to rank 0
         counts = self.comm.gather(self.n_galaxies_local)
+        print(counts)
 
         # Produce a nice horizontal bar graph to show the
         # distribution of galaxies across the ranks. This only needs printing
