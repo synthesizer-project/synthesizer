@@ -248,6 +248,34 @@ class PhotometryCollection:
 
         return table
 
+    def select(self, *filter_codes):
+        """
+        Return a PhotometryCollection with only the specified filters.
+
+        Args:
+            filter_codes (list, string):
+                The filter codes of the desired photometry.
+        """
+        # If no filters are specified return the full photometry
+        if len(filter_codes) == 0:
+            return self
+
+        # Check if the filter codes are valid
+        for code in filter_codes:
+            if code not in self.filter_codes:
+                raise KeyError(
+                    f"Filter code {code} not found in photometry collection."
+                )
+
+        # Get the photometry for the specified filters
+        photometry = {code: self._look_up[code] for code in filter_codes}
+
+        # Also extract a subset of the filters
+        filters = self.filters.get_filters(*filter_codes)
+
+        # Return a new PhotometryCollection with the specified photometry
+        return PhotometryCollection(filters, **photometry)
+
     def plot_photometry(
         self,
         fig=None,
