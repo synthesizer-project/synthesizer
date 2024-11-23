@@ -32,7 +32,6 @@ import time
 from functools import partial
 
 import h5py
-import numpy as np
 from pathos.multiprocessing import ProcessingPool as Pool
 from unyt import unyt_array
 
@@ -1471,12 +1470,6 @@ class Survey:
             #     attr_paths,
             # )
             # return
-
-        # Before we do anything we need to collect together the galaxy indices
-        # for all ranks, we can do this here separately because the order of
-        # a gather is guaranteed.
-        sinds = self.comm.gather(root=0)
-        sinds = np.concatenate(sinds) if self.rank == 0 else None
 
         # We'll collect and write each dataset we have actually computed but
         # while doing so we need to ensure everything is correctly sorted.
