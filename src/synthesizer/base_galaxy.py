@@ -1128,22 +1128,25 @@ class BaseGalaxy:
             # Attach the image to the right component
             if model.emitter == "galaxy":
                 if instrument_name is not None:
-                    self.images_lnu.setdefault(model.label, {})[
-                        instrument_name
-                    ] = images[model.label]
+                    self.images_lnu.setdefault(instrument_name, {})
+                    self.images_lnu[instrument_name][model.label] = images[
+                        model.label
+                    ]
                 else:
                     self.images_lnu[model.label] = images[model.label]
             elif model.emitter == "stellar":
                 if instrument_name is not None:
-                    self.stars.images_lnu.setdefault(model.label, {})[
-                        instrument_name
-                    ] = images[model.label]
+                    self.stars.images_lnu.setdefault(instrument_name, {})
+                    self.stars.images_lnu[instrument_name][model.label] = (
+                        images[model.label]
+                    )
                 else:
                     self.stars.images_lnu[model.label] = images[model.label]
             elif model.emitter == "blackhole":
                 if instrument_name is not None:
-                    self.black_holes.images_lnu.setdefault(model.label, {})[
-                        instrument_name
+                    self.black_holes.images_lnu.setdefault(instrument_name, {})
+                    self.black_holes.images_lnu[instrument_name][
+                        model.label
                     ] = images[model.label]
                 else:
                     self.black_holes.images_lnu[model.label] = images[
@@ -1265,22 +1268,25 @@ class BaseGalaxy:
             # Attach the image to the right component
             if model.emitter == "galaxy":
                 if instrument_name is not None:
-                    self.images_fnu.setdefault(model.label, {})[
-                        instrument_name
-                    ] = images[model.label]
+                    self.images_fnu.setdefault(instrument_name, {})
+                    self.images_fnu[instrument_name][model.label] = images[
+                        model.label
+                    ]
                 else:
                     self.images_fnu[model.label] = images[model.label]
             elif model.emitter == "stellar":
                 if instrument_name is not None:
-                    self.stars.images_fnu.setdefault(model.label, {})[
-                        instrument_name
-                    ] = images[model.label]
+                    self.stars.images_fnu.setdefault(instrument_name, {})
+                    self.stars.images_fnu[instrument_name][model.label] = (
+                        images[model.label]
+                    )
                 else:
                     self.stars.images_fnu[model.label] = images[model.label]
             elif model.emitter == "blackhole":
                 if instrument_name is not None:
-                    self.black_holes.images_fnu.setdefault(model.label, {})[
-                        instrument_name
+                    self.black_holes.images_fnu.setdefault(instrument_name, {})
+                    self.black_holes.images_fnu[instrument_name][
+                        model.label
                     ] = images[model.label]
                 else:
                     self.black_holes.images_fnu[model.label] = images[
