@@ -613,6 +613,36 @@ class FilterCollection:
         """
         return self.filters[key]
 
+    def __contains__(self, key):
+        """
+        Test if a filter is in the FilterCollection.
+
+        Enables the in syntax to check if a filter is in the FilterCollection.
+
+        Args:
+            key (string)
+                The filter code of the desired filter.
+
+        Returns:
+            True/False (bool)
+                Is the filter in the FilterCollection?
+        """
+        return key in self.filters
+
+    def select(self, *filter_codes):
+        """
+        Return a FilterCollection containing the filters with the given codes.
+
+        Args:
+            filter_codes (list, string)
+                The filter codes of the desired filters.
+        """
+        # Get the requested filters
+        filters = [self.filters[f] for f in filter_codes]
+
+        # Create a new FilterCollection
+        return FilterCollection(filters=filters, new_lam=self.lam)
+
     def get_non_zero_lam_lims(self):
         """
         Find the minimum and maximum wavelengths with non-zero transmission.
