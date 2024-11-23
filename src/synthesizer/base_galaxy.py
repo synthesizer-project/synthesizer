@@ -1030,6 +1030,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
+        instrument_name=None,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -1082,6 +1083,9 @@ class BaseGalaxy:
             limit_to (str)
                 Optionally pass a single model label to limit image generation
                 to only that model.
+            instrument_name (str)
+                The name of the instrument were making and image for. This is
+                only used for labelling purposes for now. Default is None.
 
         Returns:
             Image : array-like
@@ -1113,17 +1117,38 @@ class BaseGalaxy:
 
         # Unpack the images to the right component
         for model in emission_model._models.values():
-            # Skip models we aren't saving
-            if not model.save or (
-                limit_to is not None and model.label != limit_to
-            ):
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label != limit_to:
                 continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the image to the right component
             if model.emitter == "galaxy":
-                self.images_lnu[model.label] = images[model.label]
+                if instrument_name is not None:
+                    self.images_lnu.setdefault(model.label, {})[
+                        instrument_name
+                    ] = images[model.label]
+                else:
+                    self.images_lnu[model.label] = images[model.label]
             elif model.emitter == "stellar":
-                self.stars.images_lnu[model.label] = images[model.label]
+                if instrument_name is not None:
+                    self.stars.images_lnu.setdefault(model.label, {})[
+                        instrument_name
+                    ] = images[model.label]
+                else:
+                    self.stars.images_lnu[model.label] = images[model.label]
             elif model.emitter == "blackhole":
-                self.black_holes.images_lnu[model.label] = images[model.label]
+                if instrument_name is not None:
+                    self.black_holes.images_lnu.setdefault(model.label, {})[
+                        instrument_name
+                    ] = images[model.label]
+                else:
+                    self.black_holes.images_lnu[model.label] = images[
+                        model.label
+                    ]
             else:
                 raise KeyError(
                     f"Unknown emitter in emission model. ({model.emitter})"
@@ -1142,6 +1167,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
+        instrument_name=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -1191,6 +1217,12 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
+            limit_to (str)
+                Optionally pass a single model label to limit image generation
+                to only that model.
+            instrument_name (str)
+                The name of the instrument were making and image for. This is
+                only used for labelling purposes for now. Default is None.
 
         Returns:
             Image : array-like
@@ -1222,17 +1254,38 @@ class BaseGalaxy:
 
         # Unpack the images to the right component
         for model in emission_model._models.values():
-            # Skip models we aren't saving
-            if not model.save or (
-                limit_to is not None and model.label != limit_to
-            ):
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label != limit_to:
                 continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the image to the right component
             if model.emitter == "galaxy":
-                self.images_fnu[model.label] = images[model.label]
+                if instrument_name is not None:
+                    self.images_fnu.setdefault(model.label, {})[
+                        instrument_name
+                    ] = images[model.label]
+                else:
+                    self.images_fnu[model.label] = images[model.label]
             elif model.emitter == "stellar":
-                self.stars.images_fnu[model.label] = images[model.label]
+                if instrument_name is not None:
+                    self.stars.images_fnu.setdefault(model.label, {})[
+                        instrument_name
+                    ] = images[model.label]
+                else:
+                    self.stars.images_fnu[model.label] = images[model.label]
             elif model.emitter == "blackhole":
-                self.black_holes.images_fnu[model.label] = images[model.label]
+                if instrument_name is not None:
+                    self.black_holes.images_fnu.setdefault(model.label, {})[
+                        instrument_name
+                    ] = images[model.label]
+                else:
+                    self.black_holes.images_fnu[model.label] = images[
+                        model.label
+                    ]
             else:
                 raise KeyError(
                     f"Unknown emitter in emission model. ({model.emitter})"
