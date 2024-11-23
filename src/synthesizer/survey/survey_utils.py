@@ -240,6 +240,38 @@ def sort_data_recursive(data, sinds):
     return sorted_data
 
 
+def write_dataset(hdf, data, key):
+    """
+    Write a dataset to an HDF5 file.
+
+    We handle various different cases here:
+    - If the data is a unyt object, we write the value and units.
+    - If the data is a string we'll convert it to a h5py compatible string and
+      write it with dimensionless units.
+    - If the data is a numpy array, we write the data and set the units to
+      "dimensionless".
+
+    Args:
+        hdf (h5py.File): The HDF5 file to write to.
+        data (any): The data to write.
+        key (str): The key to write the data to.
+    """
+    # Strip the units off the data and convert to a numpy array
+    if hasattr(data, "units"):
+        units = str(data.units)
+        data = data.value
+    else:
+        units = "dimensionless"
+
+    # If we have an array of strings, convert to a h5py compatible string
+    if data.dtype.kind == "U":
+        data = np.array([d.encode("utf-8") for d in data])
+
+    # Write the dataset with the appropriate units
+    dset = hdf.create_dataset(key, data=data.value)
+    dset.attrs["Units"] = units
+
+
 def write_datasets_recursive(hdf, data, key):
     """
     Write a dictionary to an HDF5 file recursively.
@@ -257,14 +289,7 @@ def write_datasets_recursive(hdf, data, key):
     if not isinstance(data, dict):
         print(f"Writing: {key}", data)
         try:
-            # Write the dataset with the appropriate units (if its not
-            # dimensionless if will be a unyt object)
-            if isinstance(data, (unyt_quantity, unyt_array)):
-                dset = hdf.create_dataset(key, data=data.value)
-                dset.attrs["Units"] = str(data.units)
-            else:
-                dset = hdf.create_dataset(key, data=data)
-                dset.attrs["Units"] = "dimensionless"
+            write_dataset(hdf, data, key)
         except TypeError as e:
             raise TypeError(
                 f"Failed to write dataset {key} (type={type(data)}) - {e}"
