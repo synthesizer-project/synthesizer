@@ -1435,7 +1435,7 @@ class Survey:
             res = []
             for g in self.galaxies:
                 res.append(func(g, *args, **kwargs))
-            self._analysis_results[key] = res
+            self._analysis_results[key] = unyt_array(res)
             self._took(func_start, f"{key} extra analysis")
 
         # Done!
