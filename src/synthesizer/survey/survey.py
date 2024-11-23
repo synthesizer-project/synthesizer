@@ -29,7 +29,6 @@ Example usage:
 """
 
 import time
-from functools import partial
 
 import h5py
 from pathos.multiprocessing import ProcessingPool as Pool
@@ -206,7 +205,9 @@ class Survey:
         self._got_lum_lines = False
         self._got_flux_lines = False
         self._got_images_lum = False
+        self._got_images_lum_psf = False
         self._got_images_flux = False
+        self._got_images_flux_psf = False
         self._got_lnu_data_cubes = False
         self._got_fnu_data_cubes = False
         self._got_spectroscopy = False
@@ -1030,49 +1031,6 @@ class Survey:
                 "Call get_photometry_luminosities first."
             )
 
-        def _apply_psfs(g, psfs):
-            """
-            Apply a PSF to all the images in the galaxy and its components.
-
-            Args:
-                g (Galaxy):
-                    The galaxy to apply the PSF to.
-                psfs (dict):
-                    The PSFs to apply to the images.
-            """
-            psfd_imgs = getattr(g, "images_psf_lnu", {})
-            for key, imgs in g.images_lnu.items():
-                psfd_imgs.setdefault(key, {})
-                for f, img in imgs.items():
-                    if f in psfs:
-                        psfd_imgs[key][f] = img.apply_psf(psfs[f])
-            g.images_psf_lnu = psfd_imgs
-
-            if g.stars is not None:
-                psfd_imgs = getattr(g.stars, "images_psf_lnu", {})
-                for key, imgs in g.stars.images_lnu.items():
-                    psfd_imgs.setdefault(key, {})
-                    for f, img in imgs.items():
-                        if f in psfs:
-                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
-                g.stars.images_psf_lnu = psfd_imgs
-
-            if g.black_holes is not None:
-                psfd_imgs = getattr(g.black_holes, "images_psf_lnu", {})
-                for key, imgs in g.black_holes.images_lnu.items():
-                    psfd_imgs.setdefault(key, {})
-                    for f, img in imgs.items():
-                        if f in psfs:
-                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
-                g.black_holes.images_psf_lnu = psfd_imgs
-
-        def _apply_noise(g):
-            """"""
-            for inst in self.instruments:
-                if inst.can_do_noisy_imaging:
-                    for img in g.images_lnu:
-                        img.apply_noise(inst.noise_maps)
-
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
@@ -1091,75 +1049,30 @@ class Survey:
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     nthreads=self.nthreads,
+                    instrument_name=inst.name,
                 )
-
-            # If the instrument has a PSF we can apply that here. If we can
-            # we'll use a pool of threads to do this in parallel since there
-            # is no internal shared memory parallelism in this process.
-            if inst.can_do_psf_imaging:
-                # Do we have multiple threads?
-                if self.nthreads > 1:
-                    with Pool(self.nthreads) as pool:
-                        pool.map(
-                            partial(_apply_psfs, psfs=inst.psfs),
-                            self.galaxies,
-                        )
-                else:
-                    for g in self.galaxies:
-                        _apply_psfs(g, inst.psfs)
-
-            # If the instrument has noise we can apply that here. Again, if
-            # we can we'll use a pool of threads to do this in parallel since
-            # there is no internal shared memory parallelism in this process.
-            if inst.can_do_noisy_imaging:
-                # Do we have multiple threads?
-                if self.nthreads > 1:
-                    with Pool(self.nthreads) as pool:
-                        pool.map(_apply_noise, self.galaxies)
-                else:
-                    for g in self.galaxies:
-                        _apply_noise(instrument=inst)
 
         # Unpack the luminosity images into a dictionary on the Survey object
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
-            for spec_type, imgs in g.images_lnu.items():
-                for f, img in imgs.items():
-                    self.images_lum["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(f, []).append(img.arr * img.units)
-            if hasattr(g, "images_psf_lnu"):
-                for spec_type, imgs in g.images_psf_lnu.items():
+            for d in g.images_lnu.values():
+                for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_lum_psf["Galaxy"].setdefault(
+                        self.images_lum["Galaxy"].setdefault(
                             spec_type, {}
                         ).setdefault(f, []).append(img.arr * img.units)
             if g.stars is not None:
-                for spec_type, imgs in g.stars.images_lnu.items():
-                    for f, img in imgs.items():
-                        self.images_lum["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
-                if hasattr(g.stars, "images_psf_lnu"):
-                    for spec_type, imgs in g.stars.images_psf_lnu.items():
+                for d in g.stars.images_lnu.values():
+                    for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum_psf["Stars"].setdefault(
+                            self.images_lum["Stars"].setdefault(
                                 spec_type, {}
                             ).setdefault(f, []).append(img.arr * img.units)
             if g.black_holes is not None:
-                for spec_type, imgs in g.black_holes.images_lnu.items():
-                    for f, img in imgs.items():
-                        self.images_lum["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
-                if hasattr(g.black_holes, "images_psf_lnu"):
-                    for (
-                        spec_type,
-                        imgs,
-                    ) in g.black_holes.images_psf_lnu.items():
+                for d in g.black_holes.images_lnu.values():
+                    for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum_psf["BlackHole"].setdefault(
+                            self.images_lum["BlackHole"].setdefault(
                                 spec_type, {}
                             ).setdefault(f, []).append(img.arr * img.units)
 
@@ -1173,7 +1086,91 @@ class Survey:
         for spec_type, imgs in self.images_lum["BlackHole"].items():
             for f, img in imgs.items():
                 self.images_lum["BlackHole"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_lum_psf.items():
+
+        # Done!
+        self._got_images_lum = True
+        self._took(start, "Getting luminosity images")
+
+    def apply_psfs_luminosity(self):
+        """Apply any instrument PSFs to the luminosity images."""
+        start = time.perf_counter()
+
+        # Ensure we are ready
+        if not self._got_images_lum:
+            raise exceptions.SurveyNotReady(
+                "Cannot apply PSF to images before images are generated! "
+                "Call get_images_luminosity first."
+            )
+
+        # Loop over instruments and perform any imaging they define
+        for inst in self.instruments:
+            # Skip if the instrument can't do imaging
+            if not inst.can_do_psf_imaging:
+                continue
+
+            # Loop over galaxies
+            for g in self.galaxies:
+                # Ensure we have the PSF dictionary on the galaxy
+                if not hasattr(g, "images_psf_lnu"):
+                    g.images_psf_lnu = {}
+
+                # Apply PSFs to the galaxy level images
+                g.images_psf_lnu.setdefault(inst.name, {})
+                for spec_type, imgs in g.images_lnu[inst.name].items():
+                    g.images_psf_lnu[inst.name][spec_type] = imgs.apply_psfs(
+                        inst.psfs,
+                    )
+
+                    # Unpack the image arrays onto the Survey object
+                    for f, img in g.images_psf_lnu[inst.name][
+                        spec_type
+                    ].items():
+                        self.images_lum_psf["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+
+                # Apply PSFs to the stars level images
+                if g.stars is not None:
+                    g.stars.images_psf_lnu.setdefault(inst.name, {})
+                    for spec_type, imgs in g.stars.images_lnu[
+                        inst.name
+                    ].items():
+                        g.stars.images_psf_lnu[inst.name][spec_type] = (
+                            imgs.apply_psfs(
+                                inst.psfs,
+                            )
+                        )
+
+                        # Unpack the image arrays onto the Survey object
+                        for f, img in g.stars.images_psf_lnu[inst.name][
+                            spec_type
+                        ].items():
+                            self.images_lum_psf["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+                # Apply PSFs to the black hole level images
+                if g.black_holes is not None:
+                    g.black_holes.images_psf_lnu.setdefault(inst.name, {})
+                    for spec_type, imgs in g.black_holes.images_lnu[
+                        inst.name
+                    ].items():
+                        g.black_holes.images_psf_lnu[inst.name][spec_type] = (
+                            imgs.apply_psfs(
+                                inst.psfs,
+                            )
+                        )
+
+                        # Unpack the image arrays onto the Survey object
+                        for f, img in g.black_holes.images_psf_lnu[inst.name][
+                            spec_type
+                        ].items():
+                            self.images_lum_psf["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Convert the lists of images to unyt arrays
+        for spec_type, imgs in self.images_lum_psf["Galaxy"].items():
             for f, img in imgs.items():
                 self.images_lum_psf[spec_type][f] = unyt_array(img)
         for spec_type, imgs in self.images_lum_psf["Stars"].items():
@@ -1186,8 +1183,8 @@ class Survey:
                 )
 
         # Done!
-        self._got_images_lum = True
-        self._took(start, "Getting luminosity images")
+        self._got_images_lum_psf = True
+        self._took(start, "Applying PSFs to luminosity images")
 
     def get_images_flux(
         self,
@@ -1199,9 +1196,9 @@ class Survey:
         """
         Compute the flux images for the galaxies.
 
-        This function will compute the flux images for all spectra types
-        that were saved when spectra were generated, in all filters included
-        in the Survey instruments.
+        This function will compute the flux images for all spectra types that
+        were saved when spectra were generated, in all filters included in the
+        Survey instruments.
 
         A PSF and/or noise will be applied if they are available on the
         instrument.
@@ -1227,49 +1224,6 @@ class Survey:
                 "Call get_photometry_fluxes first."
             )
 
-        def _apply_psfs(g, psfs):
-            """
-            Apply a PSF to all the images in the galaxy and its components.
-
-            Args:
-                g (Galaxy):
-                    The galaxy to apply the PSF to.
-                psfs (dict):
-                    The PSFs to apply to the images.
-            """
-            psfd_imgs = getattr(g, "images_psf_fnu", {})
-            for key, imgs in g.images_fnu.items():
-                psfd_imgs.setdefault(key, {})
-                for f, img in imgs.items():
-                    if f in psfs:
-                        psfd_imgs[key][f] = img.apply_psf(psfs[f])
-            g.images_psf_fnu = psfd_imgs
-
-            if g.stars is not None:
-                psfd_imgs = getattr(g.stars, "images_psf_fnu", {})
-                for key, imgs in g.stars.images_fnu.items():
-                    psfd_imgs.setdefault(key, {})
-                    for f, img in imgs.items():
-                        if f in psfs:
-                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
-                g.stars.images_psf_fnu = psfd_imgs
-
-            if g.black_holes is not None:
-                psfd_imgs = getattr(g.black_holes, "images_psf_fnu", {})
-                for key, imgs in g.black_holes.images_fnu.items():
-                    psfd_imgs.setdefault(key, {})
-                    for f, img in imgs.items():
-                        if f in psfs:
-                            psfd_imgs[key][f] = img.apply_psf(psfs[f])
-                g.black_holes.images_psf_fnu = psfd_imgs
-
-        def _apply_noise(g):
-            """"""
-            for inst in self.instruments:
-                if inst.can_do_noisy_imaging:
-                    for img in g.images_fnu:
-                        img.apply_noise(inst.noise_maps)
-
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
@@ -1288,75 +1242,30 @@ class Survey:
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     nthreads=self.nthreads,
+                    instrument_name=inst.name,
                 )
 
-            # If the instrument has a PSF we can apply that here. If we can
-            # we'll use a pool of threads to do this in parallel since there
-            # is no internal shared memory parallelism in this process.
-            if inst.can_do_psf_imaging:
-                # Do we have multiple threads?
-                if self.nthreads > 1:
-                    with Pool(self.nthreads) as pool:
-                        pool.map(
-                            partial(_apply_psfs, psfs=inst.psfs),
-                            self.galaxies,
-                        )
-                else:
-                    for g in self.galaxies:
-                        _apply_psfs(g)
-
-            # If the instrument has noise we can apply that here. Again, if
-            # we can we'll use a pool of threads to do this in parallel since
-            # there is no internal shared memory parallelism in this process.
-            if inst.can_do_noisy_imaging:
-                # Do we have multiple threads?
-                if self.nthreads > 1:
-                    with Pool(self.nthreads) as pool:
-                        pool.map(_apply_noise, self.galaxies)
-                else:
-                    for g in self.galaxies:
-                        _apply_noise(g)
-
-        # Unpack the luminosity images into a dictionary on the Survey object
+        # Unpack the flux images into a dictionary on the Survey object
         self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
-            for spec_type, imgs in g.images_fnu.items():
-                for f, img in imgs.items():
-                    self.images_flux["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(f, []).append(img.arr * img.units)
-            if hasattr(g, "images_psf_fnu"):
-                for spec_type, imgs in g.images_psf_fnu.items():
+            for d in g.images_fnu.values():
+                for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_flux_psf["Galaxy"].setdefault(
+                        self.images_flux["Galaxy"].setdefault(
                             spec_type, {}
                         ).setdefault(f, []).append(img.arr * img.units)
             if g.stars is not None:
-                for spec_type, imgs in g.stars.images_fnu.items():
-                    for f, img in imgs.items():
-                        self.images_flux["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
-                if hasattr(g.stars, "images_psf_fnu"):
-                    for spec_type, imgs in g.stars.images_psf_fnu.items():
+                for d in g.stars.images_fnu.values():
+                    for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux_psf["Stars"].setdefault(
+                            self.images_flux["Stars"].setdefault(
                                 spec_type, {}
                             ).setdefault(f, []).append(img.arr * img.units)
             if g.black_holes is not None:
-                for spec_type, imgs in g.black_holes.images_fnu.items():
-                    for f, img in imgs.items():
-                        self.images_flux["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
-                if hasattr(g.black_holes, "images_psf_fnu"):
-                    for (
-                        spec_type,
-                        imgs,
-                    ) in g.black_holes.images_psf_fnu.items():
+                for d in g.black_holes.images_fnu.values():
+                    for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux_psf["BlackHole"].setdefault(
+                            self.images_flux["BlackHole"].setdefault(
                                 spec_type, {}
                             ).setdefault(f, []).append(img.arr * img.units)
 
@@ -1370,9 +1279,93 @@ class Survey:
         for spec_type, imgs in self.images_flux["BlackHole"].items():
             for f, img in imgs.items():
                 self.images_flux["BlackHole"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_flux_psf.items():
+
+        # Done!
+        self._got_images_flux = True
+        self._took(start, "Getting flux images")
+
+    def apply_psfs_flux(self):
+        """Apply any instrument PSFs to the flux images."""
+        start = time.perf_counter()
+
+        # Ensure we are ready
+        if not self._got_images_flux:
+            raise exceptions.SurveyNotReady(
+                "Cannot apply PSF to images before images are generated! "
+                "Call get_images_flux first."
+            )
+
+        # Loop over instruments and perform any imaging they define
+        for inst in self.instruments:
+            # Skip if the instrument can't do imaging
+            if not inst.can_do_psf_imaging:
+                continue
+
+            # Loop over galaxies
+            for g in self.galaxies:
+                # Ensure we have the PSF dictionary on the galaxy
+                if not hasattr(g, "images_psf_fnu"):
+                    g.images_psf_fnu = {}
+
+                # Apply PSFs to the galaxy level images
+                g.images_psf_fnu.setdefault(inst.name, {})
+                for spec_type, imgs in g.images_flux[inst.name].items():
+                    g.images_psf_fnu[inst.name][spec_type] = imgs.apply_psfs(
+                        inst.psfs,
+                    )
+
+                    # Unpack the image arrays onto the Survey object
+                    for f, img in g.images_psf_fnu[inst.name][
+                        spec_type
+                    ].items():
+                        self.images_flux_psf["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+
+                # Apply PSFs to the stars level images
+                if g.stars is not None:
+                    g.stars.images_psf_fnu.setdefault(inst.name, {})
+                    for spec_type, imgs in g.stars.images_flux[
+                        inst.name
+                    ].items():
+                        g.stars.images_psf_fnu[inst.name][spec_type] = (
+                            imgs.apply_psfs(
+                                inst.psfs,
+                            )
+                        )
+
+                        # Unpack the image arrays onto the Survey object
+                        for f, img in g.stars.images_psf_fnu[inst.name][
+                            spec_type
+                        ].items():
+                            self.images_flux_psf["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+                # Apply PSFs to the black hole level images
+                if g.black_holes is not None:
+                    g.black_holes.images_psf_fnu.setdefault(inst.name, {})
+                    for spec_type, imgs in g.black_holes.images_flux[
+                        inst.name
+                    ].items():
+                        g.black_holes.images_psf_fnu[inst.name][spec_type] = (
+                            imgs.apply_psfs(
+                                inst.psfs,
+                            )
+                        )
+
+                        # Unpack the image arrays onto the Survey object
+                        for f, img in g.black_holes.images_psf_fnu[inst.name][
+                            spec_type
+                        ].items():
+                            self.images_flux_psf["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Convert the lists of images to unyt arrays
+        for spec_type, imgs in self.images_flux_psf["Galaxy"].items():
             for f, img in imgs.items():
-                self.images_flux_psf[spec_type][f] = unyt_array(img)
+                self.images_flux_psf["Galaxy"][spec_type][f] = unyt_array(img)
         for spec_type, imgs in self.images_flux_psf["Stars"].items():
             for f, img in imgs.items():
                 self.images_flux_psf["Stars"][spec_type][f] = unyt_array(img)
@@ -1383,8 +1376,8 @@ class Survey:
                 )
 
         # Done!
-        self._got_images_flux = True
-        self._took(start, "Getting flux images")
+        self._got_images_flux_psf = True
+        self._took(start, "Applying PSFs to flux images")
 
     def get_lnu_data_cubes(self):
         """Compute the spectral luminosity density data cubes."""
