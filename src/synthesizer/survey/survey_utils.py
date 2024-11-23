@@ -255,7 +255,7 @@ def write_datasets_recursive(hdf, data, key):
 
     # If the data isn't a dictionary just write the dataset
     if not isinstance(data, dict):
-        print("Writing:", data)
+        print(f"Writing: {key}", data)
         try:
             # Write the dataset with the appropriate units (if its not
             # dimensionless if will be a unyt object)
