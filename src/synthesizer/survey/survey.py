@@ -1545,7 +1545,7 @@ class Survey:
 
         # Write photometric luminosities
         if self._got_luminosities:
-            data = recursive_gather(self.luminosities["Galaxy"], self.comm)
+            data = recursive_gather(self.luminosities, self.comm)
             if self.rank == 0:
                 with h5py.File(outpath, "a") as hdf:
                     write_datasets_recursive(
@@ -1566,7 +1566,7 @@ class Survey:
 
         # Write photometric fluxes
         if self._got_fluxes:
-            data = recursive_gather(self.fluxes["Galaxy"], self.comm)
+            data = recursive_gather(self.fluxes, self.comm)
             if self.rank == 0:
                 with h5py.File(outpath, "a") as hdf:
                     write_datasets_recursive(
@@ -1587,7 +1587,7 @@ class Survey:
 
         # Write emission line luminosities
         if self._got_lum_lines:
-            data = recursive_gather(self.lines_lum["Galaxy"], self.comm)
+            data = recursive_gather(self.lines_lum, self.comm)
             if self.rank == 0:
                 with h5py.File(outpath, "a") as hdf:
                     write_datasets_recursive(
@@ -1608,7 +1608,7 @@ class Survey:
 
         # Write emission line continuum luminosities
         if self._got_lum_lines:
-            data = recursive_gather(self.line_cont_lum["Galaxy"], self.comm)
+            data = recursive_gather(self.line_cont_lum, self.comm)
             if self.rank == 0:
                 with h5py.File(outpath, "a") as hdf:
                     write_datasets_recursive(
