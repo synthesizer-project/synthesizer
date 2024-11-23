@@ -287,7 +287,6 @@ def write_datasets_recursive(hdf, data, key):
 
     # If the data isn't a dictionary just write the dataset
     if not isinstance(data, dict):
-        print(f"Writing: {key}", data.units)
         try:
             write_dataset(hdf, data, key)
         except TypeError as e:
