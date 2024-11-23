@@ -2745,6 +2745,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         kernel=None,
         kernel_threshold=1.0,
         nthreads=1,
+        instrument=None,
         **kwargs,
     ):
         """
@@ -2786,6 +2787,15 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             do_flux (bool)
                 If True, the images will be generated from fluxes, if False
                 they will be generated from luminosities.
+            kernel (str)
+                The convolution kernel to use for the image generation. If
+                None, no convolution will be applied.
+            kernel_threshold (float)
+                The threshold for the convolution kernel.
+            nthreads (int)
+                The number of threads to use for the image generation.
+            instrument (Instrument)
+                The instrument to use for the image generation.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2818,6 +2828,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 kernel_threshold,
                 nthreads,
                 limit_to,
+                instrument,
             )
         )
 
@@ -2848,6 +2859,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             kernel=kernel,
                             kernel_threshold=kernel_threshold,
                             nthreads=nthreads,
+                            instrument=instrument,
                             **kwargs,
                         )
                     )
@@ -2888,6 +2900,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         kernel,
                         kernel_threshold,
                         nthreads,
+                        instrument,
                     )
                 except Exception as e:
                     print(f"Error in {this_model.label}!")
@@ -2906,6 +2919,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         kernel,
                         kernel_threshold,
                         nthreads,
+                        instrument,
                     )
                 except Exception as e:
                     print(f"Error in {this_model.label}!")
@@ -2924,6 +2938,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         kernel,
                         kernel_threshold,
                         nthreads,
+                        instrument,
                     )
                 except Exception as e:
                     print(f"Error in {this_model.label}!")

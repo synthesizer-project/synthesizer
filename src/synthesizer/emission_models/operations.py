@@ -263,6 +263,7 @@ class Extraction:
         kernel_threshold,
         nthreads,
         limit_to,
+        instrument=None,
     ):
         """
         Create images for all the extraction keys.
@@ -288,6 +289,8 @@ class Extraction:
                 The number of threads to use when generating images.
             limit_to (str):
                 Limit the images to a specific model.
+            instrument (Instrument):
+                The instrument to use when generating images.
 
         Returns:
             dict:
@@ -322,6 +325,7 @@ class Extraction:
                     nthreads,
                     label,
                     emitter,
+                    instrument,
                 )
             except Exception as e:
                 print(f"Failed to generate image for {label}: {e}")
@@ -613,6 +617,7 @@ class Generation:
         kernel,
         kernel_threshold,
         nthreads,
+        instrument=None,
     ):
         """
         Create an image for a generation key.
@@ -638,6 +643,8 @@ class Generation:
                 The threshold to use when generating images.
             nthreads (int):
                 The number of threads to use when generating images.
+            instrument (Instrument):
+                The instrument to use when generating images.
 
         Returns:
             dict:
@@ -656,6 +663,7 @@ class Generation:
             nthreads,
             this_model.label,
             emitter,
+            instrument,
         )
 
         return images
@@ -877,6 +885,7 @@ class DustAttenuation:
         kernel,
         kernel_threshold,
         nthreads,
+        instrument=None,
     ):
         """
         Create an image for an attenuation key.
@@ -902,6 +911,8 @@ class DustAttenuation:
                 The threshold to use when generating images.
             nthreads (int):
                 The number of threads to use when generating images.
+            instrument (Instrument):
+                The instrument to use when generating images.
 
         Returns:
             dict:
@@ -920,6 +931,7 @@ class DustAttenuation:
             nthreads,
             this_model.label,
             emitter,
+            instrument,
         )
 
         return images
@@ -1121,17 +1133,34 @@ class Combination:
         kernel,
         kernel_threshold,
         nthreads,
+        instrument=None,
     ):
         """
         Combine the images by addition.
 
         Args:
-            emission_model (EmissionModel):
-                The root emission model.
             images (dict):
-                The dictionary of images.
+                The dictionary of image collections.
             this_model (EmissionModel):
                 The model defining the combination.
+            resolution (float):
+                The resolution of the images.
+            fov (float):
+                The field of view of the images.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitters (dict):
+                The emitters to generate the images for.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+            instrument (Instrument):
+                The instrument to use when generating images.
         """
         # Check we saved the models we are combining
         missing = [
@@ -1164,6 +1193,7 @@ class Combination:
                         nthreads,
                         model.label,
                         emitters[model.emitter],
+                        instrument,
                     )
                 except Exception as e:
                     print(f"Failed to generate image for {model.label}: {e}")
