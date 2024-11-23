@@ -1611,6 +1611,9 @@ class Survey:
                 "Galaxies/BlackHoles/Images/Luminosity",
                 self.comm,
             )
+
+        # Write PSF luminosity images
+        if self._got_images_lum_psf:
             gather_and_write_datasets(
                 hdf,
                 self.images_lum_psf["Galaxy"],
@@ -1651,6 +1654,9 @@ class Survey:
                 "Galaxies/BlackHoles/Images/Flux",
                 self.comm,
             )
+
+        # Write PSF flux images
+        if self._got_images_flux_psf:
             gather_and_write_datasets(
                 hdf,
                 self.images_flux_psf["Galaxy"],
