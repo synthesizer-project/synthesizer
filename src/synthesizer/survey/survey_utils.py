@@ -357,13 +357,69 @@ def write_datasets_recursive_parallel(hdf, data, key, indexes, comm):
         write_datasets_recursive_parallel(hdf, v, f"{key}/{k}", indexes, comm)
 
 
-def recursive_gather(data, comm, root=0):
+def _gather_and_write_recursive(hdf, data, key, comm, root):
     """
-    Recursively collect data from all ranks onto the root.
+    Recursively gather data and write it out.
 
-    This function is effectively just comm.gather but will ensure the
-    gather is performed at the root of any passed dictionaries to avoid
-    overflows and any later recursive concatenation issues.
+    We will recurse through the dictionary and gather all arrays or lists
+    at the leaves and write them out to the HDF5 file. Doing so limits the
+    size of communications and minimises the amount of data we have collected
+    on the root rank at any one time.
+
+    Args:
+        hdf (h5py.File): The HDF5 file to write to.
+        data (dict): The data to write.
+        key (str): The key to write the data to.
+        comm (mpi.Comm): The MPI communicator.
+        root (int): The root rank to gather data to.
+    """
+    # If the data is a dictionary we need to recurse
+    if isinstance(data, dict):
+        for k, v in data.items():
+            _gather_and_write_recursive(hdf, v, f"{key}/{k}", comm, root)
+        return
+
+    # First gather the data
+    collected_data = comm.gather(data, root=root)
+
+    # If we aren't the root we're done
+    if collected_data is None:
+        return
+
+    # Remove any empty datasets
+    collected_data = [d for d in collected_data if len(d) > 0]
+
+    # If there's nothing to write we're done
+    if len(collected_data) == 0:
+        return
+
+    # Right, we know we have data so lets combine the list of arrays into a
+    # single unyt_array
+    try:
+        combined_data = unyt_array(np.concatenate(collected_data))
+    except ValueError as e:
+        raise ValueError(f"Failed to concatenate {key} - {e}")
+
+    # Write the dataset
+    try:
+        write_dataset(hdf, combined_data, key)
+    except TypeError as e:
+        raise TypeError(f"Failed to write dataset {key} - {e}")
+
+    # Now that data has been written we can clear the list of collected data
+    # The garbage collector would probably do this for us but we're being
+    # explicit here
+    del collected_data
+
+
+def gather_and_write_datasets(hdf, data, key, comm, root=0):
+    """
+    Recursively collect data from all ranks onto the root and write it out.
+
+    We will recurse through the dictionary and gather all arrays or lists
+    at the leaves and write them out to the HDF5 file. Doing so limits the
+    size of communications and minimises the amount of data we have collected
+    on the root rank at any one time.
 
     Args:
         data (any): The data to gather.
@@ -371,20 +427,14 @@ def recursive_gather(data, comm, root=0):
         root (int): The root rank to gather data to.
         sinds (array): The sorting indices.
     """
-    # If we don't have a dict, just gather the data straight away
+    # If we don't have a dict, just gather and write the data straight away,
+    # theres no need to check the structure
     if not isinstance(data, dict):
-        collected_data = comm.gather(data, root=root)
-        if comm.rank == root:
-            collected_data = [d for d in collected_data if len(d) > 0]
-            if len(collected_data) > 0:
-                return unyt_array(np.concatenate(collected_data))
-            else:
-                return unyt_array([], "dimensionless")
-        else:
-            return unyt_array([], "dimensionless")
+        _gather_and_write_recursive(hdf, data, key, comm, root)
+        return
 
-    # Before we get to the meat, lets make sure we have the same structure
-    # on all ranks
+    # Ok, we have a dict. Before we get to the meat, lets make sure we have
+    # the same structure on all ranks
     gathered_out_paths = comm.gather(discover_outputs(data), root=root)
     out_paths = comm.bcast(
         set.union(*gathered_out_paths) if comm.rank == 0 else None, root=root
@@ -393,37 +443,10 @@ def recursive_gather(data, comm, root=0):
     # Ensure all ranks have the same structure
     for path in out_paths:
         d = data
-        for key in path.split("/")[:-1]:
-            d = d.setdefault(key, {})
+        for k in path.split("/")[:-1]:
+            d = d.setdefault(k, {})
         d[path.split("/")[-1]] = unyt_array([], "dimensionsless")
 
-    # Recurse through the whole dict communicating all lists or
+    # Recurse through the whole dict communicating and writing all lists or
     # arrays we hit along the way
-    def _gather(d, comm, root):
-        new_d = {}
-        for k, v in d.items():
-            if isinstance(v, (list, np.ndarray)):
-                collected_data = comm.gather(v, root=root)
-                if comm.rank == root:
-                    collected_data = [d for d in collected_data if len(d) > 0]
-                    if len(collected_data) > 0:
-                        try:
-                            new_d[k] = unyt_array(
-                                np.concatenate(collected_data)
-                            )
-                        except ValueError as e:
-                            raise ValueError(
-                                f"Failed to concatenate {k} - {e}"
-                            )
-                    else:
-                        new_d[k] = unyt_array([], "dimensionless")
-                else:
-                    new_d[k] = unyt_array([], "dimensionless")
-                comm.barrier()
-            elif isinstance(v, dict):
-                new_d[k] = _gather(v, comm, root)
-            else:
-                raise ValueError(f"Unexpected type {type(v)}")
-        return new_d
-
-    return _gather(data, comm, root)
+    _gather_and_write_recursive(hdf, data, key, comm, root)
