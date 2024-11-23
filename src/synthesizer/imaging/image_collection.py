@@ -961,6 +961,7 @@ def _generate_image_collection_generic(
     nthreads,
     label,
     emitter,
+    instrument=None,
 ):
     """
     Generate an image collection for a generic emitter.
@@ -997,6 +998,9 @@ def _generate_image_collection_generic(
             The label of the photometry to use.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
+        instrument (Instrument)
+            The instrument to create the images for, used to limit the filter
+            set. If None all filters are used.
 
     Returns:
         ImageCollection
@@ -1024,13 +1028,17 @@ def _generate_image_collection_generic(
             "Did you not save the spectra or produce the photometry?"
         )
 
+    # Select only the photometry for this instrument
+    if instrument is not None:
+        photometry = photometry.select(instrument.filter_codes)
+
     # If the emitter is a particle BlackHoles object we can only make a hist
     # image
     if getattr(emitter, "name", None) == "Black Holes":
         img_type = "hist"
 
     # Instantiate the Image colection ready to make the image.
-    imgs = ImageCollection(resolution=resolution, fov=fov)
+    imgs = ImageCollection(resolution=instrument.resolution, fov=fov)
 
     # Make the image handling the different types of image creation
     if img_type == "hist":
@@ -1063,7 +1071,7 @@ def _generate_image_collection_generic(
             # Following args are only applicable for parametric
             # components, they'll automatically be None otherwise
             density_grid=emitter.morphology.get_density_grid(
-                resolution, imgs.npix
+                instrument.resolution, imgs.npix
             )
             if hasattr(emitter, "morphology")
             else None,

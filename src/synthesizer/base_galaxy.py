@@ -1030,7 +1030,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
-        instrument_name=None,
+        instrument=None,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -1083,9 +1083,10 @@ class BaseGalaxy:
             limit_to (str)
                 Optionally pass a single model label to limit image generation
                 to only that model.
-            instrument_name (str)
-                The name of the instrument were making and image for. This is
-                only used for labelling purposes for now. Default is None.
+            instrument (Instrument)
+                The instrument to use for the image. This can be None but if
+                not it will be used to limit the included filters and label
+                the images by instrument.
 
         Returns:
             Image : array-like
@@ -1113,7 +1114,14 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=False,
+            instrument=instrument,
         )
+
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
 
         # Unpack the images to the right component
         for model in emission_model._models.values():
@@ -1170,7 +1178,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
-        instrument_name=None,
+        instrument=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -1223,9 +1231,10 @@ class BaseGalaxy:
             limit_to (str)
                 Optionally pass a single model label to limit image generation
                 to only that model.
-            instrument_name (str)
-                The name of the instrument were making and image for. This is
-                only used for labelling purposes for now. Default is None.
+            instrument (Instrument)
+                The instrument to use for the image. This can be None but if
+                not it will be used to limit the included filters and label
+                the images by instrument.
 
         Returns:
             Image : array-like
@@ -1253,7 +1262,14 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=True,
+            instrument=instrument,
         )
+
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
 
         # Unpack the images to the right component
         for model in emission_model._models.values():
