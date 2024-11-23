@@ -39,7 +39,7 @@ from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.survey.survey_utils import (
-    recursive_gather,
+    gather_and_write_datasets,
     write_datasets_recursive,
 )
 from synthesizer.utils.art import Art
@@ -1463,311 +1463,230 @@ class Survey:
                 "True parallel writing across multiple ranks is coming soon."
                 "Falling back to rank 0 writing."
             )
-            # self._true_parallel_write(
-            #     outpath,
-            #     rank_output,
-            #     out_paths,
-            #     attr_paths,
-            # )
-            # return
 
-        # We'll collect and write each dataset we have actually computed but
-        # while doing so we need to ensure everything is correctly sorted.
-        # We'll chain these operations together in every call below where
-        # everything is done recursively to avoid writing out the same code
-        # multiple times.
+        # Below we'll write out everything recursively. To do so we will
+        # recurse to the leaves of the dictionaries and gather and write out
+        # the data there. This limits the amount of data we need to gather at
+        # any one time and limits the amount of collected data held on rank 0.
 
-        # Write spectral luminosity densities (we'll collect these
-        # separately since they are the most memory intensive)
+        # Open the file only on rank 0
+        if self.rank == 0:
+            hdf = h5py.File(outpath, "w")
+        else:
+            hdf = None
+
+        # Write spectral luminosity densities
         if self._got_lnu_spectra:
-            gal_data = recursive_gather(self.lnu_spectra["Galaxy"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        gal_data,
-                        "Galaxies/Spectra/SpectralLuminosityDensity",
-                    )
-            del gal_data
-            star_data = recursive_gather(self.lnu_spectra["Stars"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        star_data,
-                        "Galaxies/Stars/Spectra/SpectralLuminosityDensity",
-                    )
-            del star_data
-            bh_data = recursive_gather(
-                self.lnu_spectra["BlackHole"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.lnu_spectra["Galaxy"],
+                "Galaxies/Spectra/SpectralLuminosityDensities",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        bh_data,
-                        "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensity",
-                    )
-            del bh_data
+            gather_and_write_datasets(
+                hdf,
+                self.lnu_spectra["Stars"],
+                "Galaxies/Stars/Spectra/SpectralLuminosityDensities",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.lnu_spectra["BlackHole"],
+                "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensities",
+                self.comm,
+            )
 
-        # Write spectral flux densities (we'll collect these separately
-        # since they are the most memory intensive)
+        # Write spectral flux densities
         if self._got_fnu_spectra:
-            gal_data = recursive_gather(self.fnu_spectra["Galaxy"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        gal_data,
-                        "Galaxies/Spectra/SpectralFluxDensity",
-                    )
-            del gal_data
-            star_data = recursive_gather(self.fnu_spectra["Stars"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        star_data,
-                        "Galaxies/Stars/Spectra/SpectralFluxDensity",
-                    )
-            del star_data
-            bh_data = recursive_gather(
-                self.fnu_spectra["BlackHole"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.fnu_spectra["Galaxy"],
+                "Galaxies/Spectra/SpectralFluxDensities",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        bh_data,
-                        "Galaxies/BlackHoles/Spectra/SpectralFluxDensity",
-                    )
-            del bh_data
+            gather_and_write_datasets(
+                hdf,
+                self.fnu_spectra["Stars"],
+                "Galaxies/Stars/Spectra/SpectralFluxDensities",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.fnu_spectra["BlackHole"],
+                "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
+                self.comm,
+            )
 
         # Write photometric luminosities
         if self._got_luminosities:
-            data = recursive_gather(self.luminosities, self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        data["Galaxy"],
-                        "Galaxies/Photometry/Luminosities",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["Stars"],
-                        "Galaxies/Stars/Photometry/Luminosities",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["BlackHole"],
-                        "Galaxies/BlackHoles/Photometry/Luminosities",
-                    )
+            gather_and_write_datasets(
+                hdf,
+                self.luminosities["Galaxy"],
+                "Galaxies/Photometry/Luminosities",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.luminosities["Stars"],
+                "Galaxies/Stars/Photometry/Luminosities",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.luminosities["BlackHole"],
+                "Galaxies/BlackHoles/Photometry/Luminosities",
+                self.comm,
+            )
 
         # Write photometric fluxes
         if self._got_fluxes:
-            data = recursive_gather(self.fluxes, self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        data["Galaxy"],
-                        "Galaxies/Photometry/Fluxes",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["Stars"],
-                        "Galaxies/Stars/Photometry/Fluxes",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["BlackHole"],
-                        "Galaxies/BlackHoles/Photometry/Fluxes",
-                    )
+            gather_and_write_datasets(
+                hdf,
+                self.fluxes["Galaxy"],
+                "Galaxies/Photometry/Fluxes",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.fluxes["Stars"],
+                "Galaxies/Stars/Photometry/Fluxes",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.fluxes["BlackHole"],
+                "Galaxies/BlackHoles/Photometry/Fluxes",
+                self.comm,
+            )
 
         # Write emission line luminosities
         if self._got_lum_lines:
-            data = recursive_gather(self.lines_lum, self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        data["Galaxy"],
-                        "Galaxies/Lines/Luminosity",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["Stars"],
-                        "Galaxies/Stars/Lines/Luminosity",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["BlackHole"],
-                        "Galaxies/BlackHoles/Lines/Luminosity",
-                    )
+            gather_and_write_datasets(
+                hdf,
+                self.lines_lum["Galaxy"],
+                "Galaxies/Lines/Luminosity",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.lines_lum["Stars"],
+                "Galaxies/Stars/Lines/Luminosity",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.lines_lum["BlackHole"],
+                "Galaxies/BlackHoles/Lines/Luminosity",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.line_cont_lum["Galaxy"],
+                "Galaxies/Lines/Continuum",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.line_cont_lum["Stars"],
+                "Galaxies/Stars/Lines/Continuum",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.line_cont_lum["BlackHole"],
+                "Galaxies/BlackHoles/Lines/Continuum",
+                self.comm,
+            )
 
-        # Write emission line continuum luminosities
-        if self._got_lum_lines:
-            data = recursive_gather(self.line_cont_lum, self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        data["Galaxy"],
-                        "Galaxies/Lines/Continuum",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["Stars"],
-                        "Galaxies/Stars/Lines/Continuum",
-                    )
-                    write_datasets_recursive(
-                        hdf,
-                        data["BlackHole"],
-                        "Galaxies/BlackHoles/Lines/Continuum",
-                    )
-
-        # Write luminosity images (again these are heavy so we'll collect
-        # them separately)
+        # Write luminosity images
         if self._got_images_lum:
-            gal_data = recursive_gather(self.images_lum["Galaxy"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        gal_data,
-                        "Galaxies/Images/Luminosity",
-                    )
-            del gal_data
-            star_data = recursive_gather(self.images_lum["Stars"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        star_data,
-                        "Galaxies/Stars/Images/Luminosity",
-                    )
-            del star_data
-            bh_data = recursive_gather(self.images_lum["BlackHole"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        bh_data,
-                        "Galaxies/BlackHoles/Images/Luminosity",
-                    )
-            del bh_data
-            gal_data = recursive_gather(
-                self.images_lum_psf["Galaxy"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.images_lum["Galaxy"],
+                "Galaxies/Images/Luminosity",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        gal_data,
-                        "Galaxies/PSFImages/Luminosity",
-                    )
-            del gal_data
-            star_data = recursive_gather(
-                self.images_lum_psf["Stars"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.images_lum["Stars"],
+                "Galaxies/Stars/Images/Luminosity",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        star_data,
-                        "Galaxies/Stars/PSFImages/Luminosity",
-                    )
-            del star_data
-            bh_data = recursive_gather(
-                self.images_lum_psf["BlackHole"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.images_lum["BlackHole"],
+                "Galaxies/BlackHoles/Images/Luminosity",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        bh_data,
-                        "Galaxies/BlackHoles/PSFImages/Luminosity",
-                    )
-            del bh_data
+            gather_and_write_datasets(
+                hdf,
+                self.images_lum_psf["Galaxy"],
+                "Galaxies/PSFImages/Luminosity",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.images_lum_psf["Stars"],
+                "Galaxies/Stars/PSFImages/Luminosity",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.images_lum_psf["BlackHole"],
+                "Galaxies/BlackHoles/PSFImages/Luminosity",
+                self.comm,
+            )
 
         # Write flux images (again these are heavy so we'll collect them
         # separately)
         if self._got_images_flux:
-            gal_data = recursive_gather(self.images_flux["Galaxy"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        gal_data,
-                        "Galaxies/Images/Flux",
-                    )
-            del gal_data
-            star_data = recursive_gather(self.images_flux["Stars"], self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        star_data,
-                        "Galaxies/Stars/Images/Flux",
-                    )
-            del star_data
-            bh_data = recursive_gather(
-                self.images_flux["BlackHole"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.images_flux["Galaxy"],
+                "Galaxies/Images/Flux",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        bh_data,
-                        "Galaxies/BlackHoles/Images/Flux",
-                    )
-            del bh_data
-            gal_data = recursive_gather(
-                self.images_flux_psf["Galaxy"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.images_flux["Stars"],
+                "Galaxies/Stars/Images/Flux",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        gal_data,
-                        "Galaxies/PSFImages/Flux",
-                    )
-            del gal_data
-            star_data = recursive_gather(
-                self.images_flux_psf["Stars"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.images_flux["BlackHole"],
+                "Galaxies/BlackHoles/Images/Flux",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        star_data,
-                        "Galaxies/Stars/PSFImages/Flux",
-                    )
-            del star_data
-            bh_data = recursive_gather(
-                self.images_flux_psf["BlackHole"], self.comm
+            gather_and_write_datasets(
+                hdf,
+                self.images_flux_psf["Galaxy"],
+                "Galaxies/PSFImages/Flux",
+                self.comm,
             )
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        bh_data,
-                        "Galaxies/BlackHoles/PSFImages/Flux",
-                    )
-            del bh_data
+            gather_and_write_datasets(
+                hdf,
+                self.images_flux_psf["Stars"],
+                "Galaxies/Stars/PSFImages/Flux",
+                self.comm,
+            )
+            gather_and_write_datasets(
+                hdf,
+                self.images_flux_psf["BlackHole"],
+                "Galaxies/BlackHoles/PSFImages/Flux",
+                self.comm,
+            )
 
         # Write out the extra analysis results
         if len(self._analysis_results) > 0:
-            data = recursive_gather(self._analysis_results, self.comm)
-            if self.rank == 0:
-                with h5py.File(outpath, "a") as hdf:
-                    write_datasets_recursive(
-                        hdf,
-                        data,
-                        "Galaxies",
-                    )
-            del data
+            gather_and_write_datasets(
+                hdf,
+                self._analysis_results,
+                "Galaxies",
+                self.comm,
+            )
+
+        hdf.close()
 
     def _true_parallel_write(self, outpath):
         """
