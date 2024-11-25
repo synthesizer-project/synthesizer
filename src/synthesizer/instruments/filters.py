@@ -22,6 +22,7 @@ Example usage::
 
 import urllib.request
 from urllib.error import URLError
+from xml.etree import ElementTree
 
 import h5py
 import matplotlib.pyplot as plt
@@ -1534,14 +1535,22 @@ class Filter:
         # Read directly from the SVO archive.
         self.svo_url = (
             f"http://svo2.cab.inta-csic.es/theory/"
-            f"fps/getdata.php?format=ascii&id={self.observatory}"
-            f"/{self.instrument}.{self.filter_}"
+            f"fps/fps.php?ID={self.observatory}/"
+            f"{self.instrument}.{self.filter_}"
         )
 
         # Make a request for the data and handle a failure more informatively
         try:
             with urllib.request.urlopen(self.svo_url) as f:
-                df = np.loadtxt(f)
+                # Get the root of the XML tree
+                root = ElementTree.parse(f).getroot()
+
+                # Find the unit data
+                field = root.find(".//*[@name='Transmission']")
+
+                # Find the Table data
+                data = root.find(".//TABLEDATA")
+
         except URLError:
             raise exceptions.SVOInaccessible(
                 (
@@ -1550,18 +1559,38 @@ class Filter:
                 )
             )
 
+        if field.attrib["unit"] != "":
+            raise exceptions.SVOTransmissionHasUnits(
+                (
+                    f"The SVO filter at {self.svo_url} is "
+                    "returning units, which should not be "
+                    "the case for a transmission curve. This "
+                    "can sometimes occur where the effective "
+                    "area is returned instead. Please check "
+                    "that the filter you are querying returns "
+                    "the transmission."
+                )
+            )
+
         # Throw an error if we didn't find the filter.
-        if df.size == 0:
+        if field is None:
             raise exceptions.SVOFilterNotFound(
-                f"Filter ({self.filter_code}) not in the database. "
-                "Double check the database: http://svo2.cab.inta-csic.es/"
-                "svo/theory/fps3/. This could also mean you have no"
-                " connection."
+                (
+                    f"Filter ({self.filter_code}) not in the database. "
+                    "Double check the database: http://svo2.cab.inta-csic.es/"
+                    "svo/theory/fps3/. This could also mean you have no"
+                    " connection."
+                )
             )
 
         # Extract the wavelength and transmission given by SVO
-        self.original_lam = df[:, 0]
-        self.original_t = df[:, 1]
+        self.original_lam = np.array(
+            [float(child.findall("TD")[0].text) for child in data]
+        )
+
+        self.original_t = np.array(
+            [float(child.findall("TD")[1].text) for child in data]
+        )
 
         # If a new wavelength grid is provided, interpolate
         # the transmission curve on to that grid
