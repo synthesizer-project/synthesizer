@@ -1323,7 +1323,7 @@ class Survey:
 
                 # Apply PSFs to the galaxy level images
                 g.images_psf_fnu.setdefault(inst.label, {})
-                for spec_type, imgs in g.images_flux[inst.label].items():
+                for spec_type, imgs in g.images_fnu[inst.label].items():
                     g.images_psf_fnu[inst.label][spec_type] = imgs.apply_psfs(
                         inst.psfs,
                     )
