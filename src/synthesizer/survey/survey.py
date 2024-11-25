@@ -980,13 +980,22 @@ class Survey:
         for spec_type, lines in self.lines_lum["Galaxy"].items():
             for line_id, lum in lines.items():
                 self.lines_lum["Galaxy"][spec_type][line_id] = unyt_array(lum)
+                self.line_cont_lum["Galaxy"][spec_type][line_id] = unyt_array(
+                    lum
+                )
         for spec_type, lines in self.lines_lum["Stars"].items():
             for line_id, lum in lines.items():
                 self.lines_lum["Stars"][spec_type][line_id] = unyt_array(lum)
+                self.line_cont_lum["Stars"][spec_type][line_id] = unyt_array(
+                    lum
+                )
         for spec_type, lines in self.lines_lum["BlackHole"].items():
             for line_id, lum in lines.items():
                 self.lines_lum["BlackHole"][spec_type][line_id] = unyt_array(
                     lum
+                )
+                self.line_cont_lum["BlackHole"][spec_type][line_id] = (
+                    unyt_array(lum)
                 )
 
         # Done!
@@ -1049,7 +1058,7 @@ class Survey:
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     nthreads=self.nthreads,
-                    instrument_name=inst.label,
+                    instrument=inst,
                 )
 
         # Unpack the luminosity images into a dictionary on the Survey object
@@ -1247,7 +1256,7 @@ class Survey:
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     nthreads=self.nthreads,
-                    instrument_name=inst.label,
+                    instrument=inst,
                 )
 
         # Unpack the flux images into a dictionary on the Survey object
@@ -1854,6 +1863,9 @@ class Survey:
                     self.images_lum["BlackHole"],
                     "Galaxies/BlackHoles/Images/Luminosity",
                 )
+
+            # Write PSF luminosity images
+            if self._got_images_lum_psf:
                 write_datasets_recursive(
                     hdf,
                     self.images_lum_psf["Galaxy"],
@@ -1887,6 +1899,9 @@ class Survey:
                     self.images_flux["BlackHole"],
                     "Galaxies/BlackHoles/Images/Flux",
                 )
+
+            # Write PSF flux images
+            if self._got_images_flux_psf:
                 write_datasets_recursive(
                     hdf,
                     self.images_flux_psf["Galaxy"],
