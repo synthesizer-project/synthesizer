@@ -858,7 +858,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_op="<",
             fesc=self._fesc,
             fesc_ly_alpha=self._fesc_ly_alpha,
-            linecont=young_neb_line,
+            nebular_line=young_neb_line,
             nebular_continuum=young_neb_cont,
             **kwargs,
         )
@@ -870,7 +870,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_op=">=",
             fesc=self._fesc,
             fesc_ly_alpha=self._fesc_ly_alpha,
-            linecont=old_neb_line,
+            nebular_line=old_neb_line,
             nebular_continuum=old_neb_cont,
             **kwargs,
         )
