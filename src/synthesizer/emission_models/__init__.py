@@ -31,7 +31,7 @@ from synthesizer.emission_models.stellar.models import (
     EscapedEmission,
     IncidentEmission,
     IntrinsicEmission,
-    LineContributionEmission,
+    NebularLineEmission,
     NebularContinuumEmission,
     NebularEmission,
     ReprocessedEmission,
