@@ -641,8 +641,9 @@ class BlackHoles(Particles, BlackholesComponent):
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
-            lam_mask (array-like, bool)
-                If not None this mask will be applied to the wavelengths.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -664,6 +665,12 @@ class BlackHoles(Particles, BlackholesComponent):
         if self.nbh == 0:
             return np.zeros((self.nbh, len(grid.lam)))
 
+        # Handle the case where the masks are None
+        if mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+        if lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
+
         from ..extensions.particle_spectra import compute_particle_seds
 
         # Prepare the arguments for the C function.
@@ -674,6 +681,7 @@ class BlackHoles(Particles, BlackholesComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            lam_mask=lam_mask,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -684,15 +692,8 @@ class BlackHoles(Particles, BlackholesComponent):
             return masked_spec
 
         # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nbh, masked_spec.shape[-1]))
-        spec[mask] = masked_spec
-
-        # Apply the wavelength mask if provided
-        spec[:, ~lam_mask] = 0.0
-
-        # TODO: Wavelength masking could be done before the C function call to
-        # reduce compute, but would require modifying the `grid` object to
-        # include the mask.
+        spec = np.zeros((self.nbh, grid.lam.size))
+        spec[np.ix_(mask, lam_mask)] = masked_spec
 
         return spec
 
