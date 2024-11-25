@@ -447,6 +447,7 @@ class Stars(StarsComponent):
         old=None,
         young=None,
         mask=None,
+        lam_mask=None,
         fesc=0.0,
         **kwargs,
     ):
@@ -472,6 +473,14 @@ class Stars(StarsComponent):
                 Are we extracting only young stars? If so only SFZH bins with
                 log10(Ages) <= young will be included in the spectra. Defaults
                 to False.
+            mask (array):
+                An array to mask the SFZH grid. This can be used to mask
+                specific SFZH bins.
+            lam_mask (array-like, bool)
+                Boolean array of wavelengths to include.
+            fesc (float)
+                The Lyman continuum escape fraction, the fraction of
+                ionising photons that entirely escape.
 
         Returns:
             The Stars's integrated rest frame spectra in erg / s / Hz.
@@ -501,6 +510,10 @@ class Stars(StarsComponent):
             grid.spectra[spectra_name][mask] * sfzh[mask],
             axis=0,
         )
+
+        # Apply the wavelength mask if provided
+        if lam_mask is not None:
+            spectra[~lam_mask] = 0.0
 
         return spectra
 
