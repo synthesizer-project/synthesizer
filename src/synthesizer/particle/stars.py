@@ -568,11 +568,11 @@ class Stars(Particles, StarsComponent):
         spectra_type,
         mask,
         grid_assignment_method,
+        lam_mask,
         nthreads,
     ):
         """
-        A method to prepare the arguments for SED computation with the C
-        functions.
+        Prepare the arguments for SED computation with the C functions.
 
         Args:
             grid (Grid)
@@ -590,6 +590,9 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
@@ -598,10 +601,16 @@ class Stars(Particles, StarsComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
-
         # Make a dummy mask if none has been passed
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
+
+        # If lam_mask is None then we want all wavelengths
+        if lam_mask is None:
+            lam_mask = np.ones(
+                grid.spectra[spectra_type].shape[-1],
+                dtype=bool,
+            )
 
         # Set up the inputs to the C function.
         grid_props = [
@@ -623,13 +632,16 @@ class Stars(Particles, StarsComponent):
         npart = np.int32(np.sum(mask))
 
         # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+        nlam = np.int32(np.sum(lam_mask))
 
         # Slice the spectral grids and pad them with copies of the edges.
         grid_spectra = np.ascontiguousarray(
             grid.spectra[spectra_type],
             np.float64,
         )
+
+        # Apply the wavelength mask
+        grid_spectra = grid_spectra[..., lam_mask]
 
         # Get the grid dimensions after slicing what we need
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
