@@ -1030,7 +1030,7 @@ def _generate_image_collection_generic(
 
     # Select only the photometry for this instrument
     if instrument is not None:
-        photometry = photometry.select(instrument.filter_codes)
+        photometry = photometry.select(*instrument.filters.filter_codes)
 
     # If the emitter is a particle BlackHoles object we can only make a hist
     # image

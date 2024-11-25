@@ -271,7 +271,7 @@ class PhotometryCollection:
         photometry = {code: self._look_up[code] for code in filter_codes}
 
         # Also extract a subset of the filters
-        filters = self.filters.get_filters(*filter_codes)
+        filters = self.filters.select(*filter_codes)
 
         # Return a new PhotometryCollection with the specified photometry
         return PhotometryCollection(filters, **photometry)
