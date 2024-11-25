@@ -691,8 +691,9 @@ class Stars(Particles, StarsComponent):
         nthreads=0,
     ):
         """
-        Generate the integrated rest frame spectra for a given grid key
-        spectra for all stars. Can optionally apply masks.
+        Generate the integrated rest frame spectra for a given grid key.
+
+        Can optionally apply masks.
 
         Args:
             grid (Grid)
@@ -711,8 +712,9 @@ class Stars(Particles, StarsComponent):
                 for old star particles.
             mask (array-like, bool)
                 Boolean array of star particles to include.
-            lam_mask (array-like, bool)
-                Boolean array of wavelengths to include.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             verbose (bool)
                 Flag for verbose output.
             do_grid_check (bool)
@@ -736,7 +738,6 @@ class Stars(Particles, StarsComponent):
             numpy.ndarray:
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
-
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
@@ -850,20 +851,20 @@ class Stars(Particles, StarsComponent):
             mask=mask & aperture_mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            lam_mask=lam_mask,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        lnu = compute_integrated_sed(*args)
+        spec = compute_integrated_sed(*args)
 
-        # Apply the wavelength mask if provided
+        # If we had a wavelength mask we need to make sure we return a spectra
+        # compatible with the original wavelength array.
         if lam_mask is not None:
-            lnu[~lam_mask] = 0.0
+            out_spec = np.zeros(len(grid.lam))
+            out_spec[lam_mask] = spec
+            spec = out_spec
 
-        # TODO: Wavelength masking could be done before the C function call to
-        # reduce compute, but would require modifying the `grid` object to
-        # include the mask.
-
-        return lnu
+        return spec
 
     def _remove_stars(self, pmask):
         """
@@ -1321,8 +1322,9 @@ class Stars(Particles, StarsComponent):
                 default because the check is extreme expensive.
             mask (array-like, bool)
                 Boolean array of star particles to include.
-            lam_mask (array-like, bool)
-                Boolean array of wavelengths to include.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1348,6 +1350,12 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return np.zeros((self.nstars, len(grid.lam)))
+
+        # Handle the case where the masks are None
+        if mask is None:
+            mask = np.ones(self.nsptars, dtype=bool)
+        if lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
 
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
@@ -1428,6 +1436,7 @@ class Stars(Particles, StarsComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            lam_mask=lam_mask,
         )
         toc("Preparing C args", start)
 
@@ -1437,21 +1446,14 @@ class Stars(Particles, StarsComponent):
         start = tic()
 
         # If there's no mask we're done
-        if mask is None:
+        if mask is None and lam_mask is None:
             return masked_spec
 
         # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nstars, masked_spec.shape[-1]))
-        spec[mask] = masked_spec
+        spec = np.zeros((self.nstars, grid.lam.size))
+        spec[np.ix_(mask, lam_mask)] = masked_spec
 
         toc("Masking spectra and adding contribution", start)
-
-        # Apply the wavelength mask if provided
-        spec[:, ~lam_mask] = 0.0
-
-        # TODO: Masking could be done before the C function call to reduce
-        # compute, but would require modifying the `grid` object to include
-        # the mask.
 
         return spec
 

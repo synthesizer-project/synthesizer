@@ -476,8 +476,9 @@ class Stars(StarsComponent):
             mask (array):
                 An array to mask the SFZH grid. This can be used to mask
                 specific SFZH bins.
-            lam_mask (array-like, bool)
-                Boolean array of wavelengths to include.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             fesc (float)
                 The Lyman continuum escape fraction, the fraction of
                 ionising photons that entirely escape.
@@ -505,15 +506,23 @@ class Stars(StarsComponent):
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
+        # Get the grid spectra (including any wavelength mask)
+        if lam_mask is not None:
+            grid_spectra = grid.spectra[spectra_name][..., lam_mask]
+        else:
+            grid_spectra = grid.spectra[spectra_name]
+
         # Compute the spectra
         spectra = (1 - fesc) * np.sum(
-            grid.spectra[spectra_name][mask] * sfzh[mask],
+            grid_spectra[mask] * sfzh[mask],
             axis=0,
         )
 
         # Apply the wavelength mask if provided
         if lam_mask is not None:
-            spectra[~lam_mask] = 0.0
+            out_spec = np.zeros(grid.lam.size)
+            out_spec[lam_mask] = spectra
+            spectra = out_spec
 
         return spectra
 

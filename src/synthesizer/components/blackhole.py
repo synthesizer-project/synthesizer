@@ -296,6 +296,9 @@ class BlackholesComponent(Component):
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -339,7 +342,16 @@ class BlackholesComponent(Component):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        return compute_integrated_sed(*args)
+        spec = compute_integrated_sed(*args)
+
+        # If we had a wavelength mask we need to make sure we return a spectra
+        # compatible with the original wavelength array.
+        if lam_mask is not None:
+            out_spec = np.zeros(len(grid.lam))
+            out_spec[lam_mask] = spec
+            spec = out_spec
+
+        return spec
 
     def generate_line(
         self,
