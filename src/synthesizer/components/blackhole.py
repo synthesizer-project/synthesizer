@@ -274,6 +274,7 @@ class BlackholesComponent(Component):
         spectra_name,
         fesc=0.0,
         mask=None,
+        lam_mask=None,
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
@@ -334,6 +335,7 @@ class BlackholesComponent(Component):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            lam_mask=lam_mask,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
