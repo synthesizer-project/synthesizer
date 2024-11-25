@@ -1310,6 +1310,7 @@ class Survey:
             )
 
         # Loop over instruments and perform any imaging they define
+        self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
             if not inst.can_do_psf_imaging:
