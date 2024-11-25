@@ -1088,7 +1088,6 @@ class Survey:
         # Convert the lists of images to unyt arrays
         for spec_type, imgs in self.images_lum["Galaxy"].items():
             for f, img in imgs.items():
-                print([i.shape for i in img])
                 self.images_lum["Galaxy"][spec_type][f] = unyt_array(img)
         for spec_type, imgs in self.images_lum["Stars"].items():
             for f, img in imgs.items():
@@ -1113,6 +1112,7 @@ class Survey:
             )
 
         # Loop over instruments and perform any imaging they define
+        self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
             if not inst.can_do_psf_imaging:
