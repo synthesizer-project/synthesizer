@@ -109,7 +109,7 @@ class NebularLineEmission(StellarEmissionModel):
             # Create the child models
             linecont_no_lyman = StellarEmissionModel(
                 grid=grid,
-                label=label + "_linecont_no_lyman",
+                label=label + "_no_lyman",
                 extract="linecont",
                 fesc=fesc,
                 lam_mask=~lyman_alpha_mask,
