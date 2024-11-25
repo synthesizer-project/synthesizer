@@ -1186,7 +1186,7 @@ class Survey:
         # Convert the lists of images to unyt arrays
         for spec_type, imgs in self.images_lum_psf["Galaxy"].items():
             for f, img in imgs.items():
-                self.images_lum_psf[spec_type][f] = unyt_array(img)
+                self.images_lum_psf["Galaxy"][spec_type][f] = unyt_array(img)
         for spec_type, imgs in self.images_lum_psf["Stars"].items():
             for f, img in imgs.items():
                 self.images_lum_psf["Stars"][spec_type][f] = unyt_array(img)
