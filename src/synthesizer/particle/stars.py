@@ -1353,7 +1353,7 @@ class Stars(Particles, StarsComponent):
 
         # Handle the case where the masks are None
         if mask is None:
-            mask = np.ones(self.nsptars, dtype=bool)
+            mask = np.ones(self.nstars, dtype=bool)
         if lam_mask is None:
             lam_mask = np.ones(len(grid.lam), dtype=bool)
 
