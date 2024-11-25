@@ -32,7 +32,7 @@ class Extraction:
             The escape fraction.
     """
 
-    def __init__(self, grid, extract, fesc):
+    def __init__(self, grid, extract, fesc, lam_mask):
         """
         Initialise the extraction model.
 
@@ -43,6 +43,8 @@ class Extraction:
                 The key for the spectra to extract.
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The wavelength mask to apply to the spectra.
         """
         # Attach the grid
         self._grid = grid
@@ -52,6 +54,9 @@ class Extraction:
 
         # Attach the escape fraction
         self._fesc = fesc
+
+        # Attach the wavelength mask
+        self._lam_mask = lam_mask
 
     def _extract_spectra(
         self,
@@ -100,7 +105,7 @@ class Extraction:
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
-            # Do we have to define a mask?
+            # Do we have to define a property mask?
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
@@ -127,6 +132,7 @@ class Extraction:
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
+                    lam_mask=this_model._lam_mask,
                     verbose=verbose,
                     **kwargs,
                 )
