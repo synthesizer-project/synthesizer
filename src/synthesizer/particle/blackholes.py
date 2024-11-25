@@ -609,6 +609,7 @@ class BlackHoles(Particles, BlackholesComponent):
         spectra_name,
         fesc=0.0,
         mask=None,
+        lam_mask=None,
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
@@ -628,6 +629,8 @@ class BlackHoles(Particles, BlackholesComponent):
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
+            lam_mask (array-like, bool)
+                If not None this mask will be applied to the wavelengths.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -671,6 +674,13 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nbh, masked_spec.shape[-1]))
         spec[mask] = masked_spec
+
+        # Apply the wavelength mask if provided
+        spec[:, ~lam_mask] = 0.0
+
+        # TODO: Wavelength masking could be done before the C function call to
+        # reduce compute, but would require modifying the `grid` object to
+        # include the mask.
 
         return spec
 

@@ -1,6 +1,6 @@
 STELLAR_MODELS = [
     "IncidentEmission",
-    "LineContributionEmission",
+    "NebularLineEmission",
     "TransmittedEmission",
     "EscapedEmission",
     "NebularContinuumEmission",

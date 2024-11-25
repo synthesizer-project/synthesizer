@@ -671,6 +671,7 @@ class Stars(Particles, StarsComponent):
         young=None,
         old=None,
         mask=None,
+        lam_mask=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -696,8 +697,10 @@ class Stars(Particles, StarsComponent):
             old (bool/float)
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
-            mask (array)
-                Boolean array of star particles to include
+            mask (array-like, bool)
+                Boolean array of star particles to include.
+            lam_mask (array-like, bool)
+                Boolean array of wavelengths to include.
             verbose (bool)
                 Flag for verbose output.
             do_grid_check (bool)
@@ -838,9 +841,17 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        lnu_particle = compute_integrated_sed(*args)
+        lnu = compute_integrated_sed(*args)
 
-        return lnu_particle
+        # Apply the wavelength mask if provided
+        if lam_mask is not None:
+            lnu[~lam_mask] = 0.0
+
+        # TODO: Wavelength masking could be done before the C function call to
+        # reduce compute, but would require modifying the `grid` object to
+        # include the mask.
+
+        return lnu
 
     def _remove_stars(self, pmask):
         """
@@ -1272,6 +1283,7 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         mask=None,
+        lam_mask=None,
         grid_assignment_method="cic",
         nthreads=0,
     ):
@@ -1288,12 +1300,6 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
             do_grid_check (bool)
@@ -1301,6 +1307,10 @@ class Stars(Particles, StarsComponent):
                 is a sanity check that can be used to check the
                 consistency of your particles with the grid. It is False by
                 default because the check is extreme expensive.
+            mask (array-like, bool)
+                Boolean array of star particles to include.
+            lam_mask (array-like, bool)
+                Boolean array of wavelengths to include.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1423,6 +1433,13 @@ class Stars(Particles, StarsComponent):
         spec[mask] = masked_spec
 
         toc("Masking spectra and adding contribution", start)
+
+        # Apply the wavelength mask if provided
+        spec[:, ~lam_mask] = 0.0
+
+        # TODO: Masking could be done before the C function call to reduce
+        # compute, but would require modifying the `grid` object to include
+        # the mask.
 
         return spec
 

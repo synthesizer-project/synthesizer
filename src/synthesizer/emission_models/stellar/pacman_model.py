@@ -51,6 +51,7 @@ Example::
 
 from unyt import dimensionless
 
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emission_models.base_model import (
     EmissionModel,
     StellarEmissionModel,
@@ -62,9 +63,9 @@ from synthesizer.emission_models.models import (
 from synthesizer.emission_models.stellar.models import (
     EscapedEmission,
     IncidentEmission,
-    LineContributionEmission,
     NebularContinuumEmission,
     NebularEmission,
+    NebularLineEmission,
     TransmittedEmission,
 )
 
@@ -113,7 +114,7 @@ class PacmanEmission(StellarEmissionModel):
         self,
         grid,
         tau_v,
-        dust_curve,
+        dust_curve=PowerLaw(),
         dust_emission=None,
         fesc=0.0,
         fesc_ly_alpha=1.0,
@@ -807,8 +808,8 @@ class BimodalPacmanEmission(StellarEmissionModel):
         if not self.grid_reprocessed:
             return None, None, None
 
-        # Get the line continuum emission
-        young_line_cont = LineContributionEmission(
+        # Get the line emission
+        young_neb_line = NebularLineEmission(
             grid=self._grid,
             label="young_linecont",
             mask_attr="log10ages",
@@ -818,7 +819,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             fesc=self._fesc,
             **kwargs,
         )
-        old_line_cont = LineContributionEmission(
+        old_neb_line = NebularLineEmission(
             grid=self._grid,
             label="old_linecont",
             mask_attr="log10ages",
@@ -857,7 +858,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_op="<",
             fesc=self._fesc,
             fesc_ly_alpha=self._fesc_ly_alpha,
-            linecont=young_line_cont,
+            linecont=young_neb_line,
             nebular_continuum=young_neb_cont,
             **kwargs,
         )
@@ -869,7 +870,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_op=">=",
             fesc=self._fesc,
             fesc_ly_alpha=self._fesc_ly_alpha,
-            linecont=old_line_cont,
+            linecont=old_neb_line,
             nebular_continuum=old_neb_cont,
             **kwargs,
         )
@@ -909,8 +910,8 @@ class BimodalPacmanEmission(StellarEmissionModel):
         Make the intrinsic emission model for an un-reprocessed grid.
 
         This will produce the exact same emission as the incident emission but
-        unlikely the incident emission, the intrinsic emission will be
-        take into account an escape fraction.
+        unlike the incident emission, the intrinsic emission will take into
+        account an escape fraction.
 
         Returns:
             StellarEmissionModel:
@@ -945,6 +946,15 @@ class BimodalPacmanEmission(StellarEmissionModel):
         return young_intrinsic, old_intrinsic, intrinsic
 
     def _make_intrinsic_reprocessed(self, **kwargs):
+        """
+        Make the intrinsic emission model for a reprocessed grid.
+
+        Returns:
+            StellarEmissionModel:
+                - young_intrinsic
+                - old_intrinsic
+                - intrinsic
+        """
         # If fesc is zero then the intrinsic emission is the same as the
         # reprocessed emission
         if self._fesc == 0.0:
@@ -984,6 +994,17 @@ class BimodalPacmanEmission(StellarEmissionModel):
         return young_intrinsic, old_intrinsic, intrinsic
 
     def _make_attenuated(self, **kwargs):
+        """
+        Make the attenuated emission model.
+
+        Returns:
+            StellarEmissionModel:
+                - young_attenuated_nebular
+                - young_attenuated_ism
+                - young_attenuated
+                - old_attenuated
+                - attenuated
+        """
         young_attenuated_nebular = AttenuatedEmission(
             label="young_attenuated_nebular",
             tau_v=self.tau_v_birth,
