@@ -1342,7 +1342,7 @@ class Survey:
                     if not hasattr(g.stars, "images_psf_fnu"):
                         g.stars.images_psf_fnu = {}
                     g.stars.images_psf_fnu.setdefault(inst.label, {})
-                    for spec_type, imgs in g.stars.images_flux[
+                    for spec_type, imgs in g.stars.images_fnu[
                         inst.label
                     ].items():
                         g.stars.images_psf_fnu[inst.label][spec_type] = (
@@ -1364,7 +1364,7 @@ class Survey:
                     if not hasattr(g.black_holes, "images_psf_fnu"):
                         g.black_holes.images_psf_fnu = {}
                     g.black_holes.images_psf_fnu.setdefault(inst.label, {})
-                    for spec_type, imgs in g.black_holes.images_flux[
+                    for spec_type, imgs in g.black_holes.images_fnu[
                         inst.label
                     ].items():
                         g.black_holes.images_psf_fnu[inst.label][spec_type] = (
