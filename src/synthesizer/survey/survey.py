@@ -1339,6 +1339,8 @@ class Survey:
 
                 # Apply PSFs to the stars level images
                 if g.stars is not None:
+                    if not hasattr(g.stars, "images_psf_fnu"):
+                        g.stars.images_psf_fnu = {}
                     g.stars.images_psf_fnu.setdefault(inst.label, {})
                     for spec_type, imgs in g.stars.images_flux[
                         inst.label
@@ -1359,6 +1361,8 @@ class Survey:
 
                 # Apply PSFs to the black hole level images
                 if g.black_holes is not None:
+                    if not hasattr(g.black_holes, "images_psf_fnu"):
+                        g.black_holes.images_psf_fnu = {}
                     g.black_holes.images_psf_fnu.setdefault(inst.label, {})
                     for spec_type, imgs in g.black_holes.images_flux[
                         inst.label
