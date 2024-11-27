@@ -37,6 +37,8 @@ except ImportError:
 
 from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
 
+from synthesizer.load_data.utils import lookup_age
+
 from ..particle.galaxy import Galaxy
 
 # define EAGLE cosmology
@@ -165,7 +167,7 @@ def load_EAGLE(
         numThreads=numThreads,
         verbose=verbose,
     )[ok]
-    s_ages = get_age(s_ages, zed, numThreads=numThreads)  # Gyr
+    s_ages = get_age(s_ages, zed, args, numThreads=numThreads)  # Gyr
     s_Zsmooth = read_array(
         "PARTDATA",
         fileloc,
@@ -853,7 +855,10 @@ def get_star_formation_time(scale_factor: float) -> float:
 
 
 def get_age(
-    scale_factors: NDArray[Any], z: float, numThreads: int = 4
+    scale_factors: NDArray[Any],
+    z: float,
+    args: namedtuple,
+    numThreads: int = 4,
 ) -> NDArray[Any]:
     """
     Function to convert scale factor to z
@@ -863,23 +868,34 @@ def get_age(
             scale factor of the star particle
         z (float)
             redshift
+        args (namedtuple):
+            parser arguments passed on to this job
         numThreads (int)
             number of threads to use
 
     Returns:
         array of ages of the star particles in years
     """
-    if numThreads == 1:
-        pool = schwimmbad.SerialPool()
-    elif numThreads == -1:
-        pool = schwimmbad.MultiPool()
-    else:
-        pool = schwimmbad.MultiPool(processes=numThreads)
+    if args.age_lookup:
+        table = np.load(args.age_lookup)
+        scale_factor = table["scale_factor"]
+        ages = table["ages"]
+        Age = cosmo.age(z).value - lookup_age(
+            scale_factors, scale_factor, ages
+        )
 
-    Age = cosmo.age(z).value - np.array(
-        list(pool.map(get_star_formation_time, scale_factors))
-    )
-    pool.close()
+    else:
+        if numThreads == 1:
+            pool = schwimmbad.SerialPool()
+        elif numThreads == -1:
+            pool = schwimmbad.MultiPool()
+        else:
+            pool = schwimmbad.MultiPool(processes=numThreads)
+
+        Age = cosmo.age(z).value - np.array(
+            list(pool.map(get_star_formation_time, scale_factors))
+        )
+        pool.close()
 
     return Age
 
