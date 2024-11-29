@@ -1341,7 +1341,6 @@ class Stars(Particles, StarsComponent):
             numpy.ndarray:
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
-
         start = tic()
 
         # Ensure we have a total key in the grid. If not error.
@@ -1451,6 +1450,10 @@ class Stars(Particles, StarsComponent):
         # If there's no mask we're done
         if mask is None and lam_mask is None:
             return masked_spec
+        elif mask is None:
+            mask = np.ones(self.nstars, dtype=bool)
+        elif lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
 
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nstars, grid.lam.size))
