@@ -33,6 +33,7 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
@@ -290,11 +291,11 @@ class BlackHoles(Particles, BlackholesComponent):
         spectra_type,
         mask,
         grid_assignment_method,
+        lam_mask,
         nthreads,
     ):
         """
-        A method to prepare the arguments for SED computation with the C
-        functions.
+        Prepare the arguments for the C extension to compute SEDs.
 
         Args:
             grid (Grid)
@@ -312,6 +313,9 @@ class BlackHoles(Particles, BlackholesComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             nthreads (int)
                 The number of threads to use for the computation. If -1 then
                 all available threads are used.
@@ -320,7 +324,6 @@ class BlackHoles(Particles, BlackholesComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
-
         # Which line region is this for?
         if "nlr" in grid.grid_name:
             line_region = "nlr"
@@ -333,6 +336,13 @@ class BlackHoles(Particles, BlackholesComponent):
         # Handle the case where mask is None
         if mask is None:
             mask = np.ones(self.nbh, dtype=bool)
+
+        # If lam_mask is None then we want all wavelengths
+        if lam_mask is None:
+            lam_mask = np.ones(
+                grid.spectra[spectra_type].shape[-1],
+                dtype=bool,
+            )
 
         # Set up the inputs to the C function.
         grid_props = [
@@ -401,12 +411,18 @@ class BlackHoles(Particles, BlackholesComponent):
         bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+        nlam = np.int32(np.sum(lam_mask))
 
         # Get the grid spctra
         grid_spectra = np.ascontiguousarray(
             grid.spectra[spectra_type],
             dtype=np.float64,
+        )
+
+        # Apply the wavelength mask
+        grid_spectra = np.ascontiguousarray(
+            grid_spectra[..., lam_mask],
+            np.float64,
         )
 
         # Get the grid dimensions after slicing what we need
@@ -609,6 +625,7 @@ class BlackHoles(Particles, BlackholesComponent):
         spectra_name,
         fesc=0.0,
         mask=None,
+        lam_mask=None,
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
@@ -628,6 +645,9 @@ class BlackHoles(Particles, BlackholesComponent):
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -639,6 +659,8 @@ class BlackHoles(Particles, BlackholesComponent):
                 The number of threads to use for the computation. If -1 then
                 all available threads are used.
         """
+        start = tic()
+
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
@@ -648,6 +670,16 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have no black holes return zeros
         if self.nbh == 0:
             return np.zeros((self.nbh, len(grid.lam)))
+
+        # Handle the case where the masks are None
+        if mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+        if lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
+
+        # Handle malformed masks
+        if mask.size != self.nbh:
+            mask = np.ones(self.nbh, dtype=bool)
 
         from ..extensions.particle_spectra import compute_particle_seds
 
@@ -659,18 +691,29 @@ class BlackHoles(Particles, BlackholesComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            lam_mask=lam_mask,
         )
+
+        toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         masked_spec = compute_particle_seds(*args)
 
+        start = tic()
+
         # If there's no mask we're done
-        if mask is None:
+        if mask is None and lam_mask is None:
             return masked_spec
+        elif mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+        elif lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
 
         # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nbh, masked_spec.shape[-1]))
-        spec[mask] = masked_spec
+        spec = np.zeros((self.nbh, grid.lam.size))
+        spec[np.ix_(mask, lam_mask)] = masked_spec
+
+        toc("Masking spectra and adding contribution", start)
 
         return spec
 
