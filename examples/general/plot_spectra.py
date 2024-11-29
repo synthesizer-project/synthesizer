@@ -17,6 +17,7 @@ from synthesizer.emission_models import PacmanEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
+from synthesizer.sed import plot_spectra
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
@@ -96,9 +97,7 @@ if __name__ == "__main__":
     galaxy.stars.get_spectra(model)
 
     for _spec in [
-        "nebular_line",
         "intrinsic",
-        "nebular_continuum",
         "transmitted",
         "nebular",
     ]:
@@ -114,6 +113,9 @@ if __name__ == "__main__":
     plt.xlabel(r"$\rm log_{10}(\lambda/\AA)$")
     plt.ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
     plt.show()
+
+    # Store nebular spectra for comparison
+    nebular_spectra = galaxy.stars.spectra["nebular"]
 
     # Define a new emission model with lyman-alpha escape fraction of zero
     model = PacmanEmission(
@@ -144,3 +146,14 @@ if __name__ == "__main__":
     plt.xlabel(r"$\rm log_{10}(\lambda/\AA)$")
     plt.ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
     plt.show()
+
+    # Store nebular spectra for comparison
+    nebular_spectra_no_lya = galaxy.stars.spectra["nebular"]
+
+    plot_spectra(
+        {
+            "nebular_no_lya": nebular_spectra_no_lya,
+            "nebular": nebular_spectra,
+        },
+        show=True,
+    )
