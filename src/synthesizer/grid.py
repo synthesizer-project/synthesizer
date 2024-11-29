@@ -306,11 +306,15 @@ class Grid:
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed:
+            # The total emission (ignoring any dust reprocessing) is just
+            # the transmitted plus the nebular
             self.spectra["total"] = (
                 self.spectra["transmitted"] + self.spectra["nebular"]
             )
             self.available_spectra.append("total")
 
+            # The nebular continuum is the nebular emission with the line
+            # contribution removed
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
