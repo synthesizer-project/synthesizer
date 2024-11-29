@@ -671,6 +671,11 @@ class BlackHoles(Particles, BlackholesComponent):
         if lam_mask is None:
             lam_mask = np.ones(len(grid.lam), dtype=bool)
 
+        # Handle malformed masks
+        if mask.size != self.nbh:
+            print(spectra_name, mask.size, self.nbh)
+            mask = np.ones(self.nbh, dtype=bool)
+
         from ..extensions.particle_spectra import compute_particle_seds
 
         # Prepare the arguments for the C function.
@@ -688,12 +693,13 @@ class BlackHoles(Particles, BlackholesComponent):
         masked_spec = compute_particle_seds(*args)
 
         # If there's no mask we're done
-        if mask is None:
+        if mask is None and lam_mask is None:
             return masked_spec
 
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nbh, grid.lam.size))
-        spec[np.ix_(mask, lam_mask)] = masked_spec
+        print(masked_spec.shape, spec.shape, mask.shape)
+        spec[mask, :] = masked_spec
 
         return spec
 
