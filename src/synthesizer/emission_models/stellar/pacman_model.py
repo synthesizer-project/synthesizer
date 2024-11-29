@@ -253,8 +253,6 @@ class PacmanEmission(StellarEmissionModel):
         if not self.grid_reprocessed:
             return None
 
-        print("top level", self._fesc, self._fesc_ly_alpha)
-
         return NebularEmission(
             grid=self._grid,
             label="nebular",
