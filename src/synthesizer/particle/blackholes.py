@@ -33,6 +33,7 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
@@ -658,6 +659,8 @@ class BlackHoles(Particles, BlackholesComponent):
                 The number of threads to use for the computation. If -1 then
                 all available threads are used.
         """
+        start = tic()
+
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
@@ -676,7 +679,6 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Handle malformed masks
         if mask.size != self.nbh:
-            print(spectra_name, mask.size, self.nbh)
             mask = np.ones(self.nbh, dtype=bool)
 
         from ..extensions.particle_spectra import compute_particle_seds
@@ -692,17 +694,26 @@ class BlackHoles(Particles, BlackholesComponent):
             lam_mask=lam_mask,
         )
 
+        toc("Preparing C args", start)
+
         # Get the integrated spectra in grid units (erg / s / Hz)
         masked_spec = compute_particle_seds(*args)
+
+        start = tic()
 
         # If there's no mask we're done
         if mask is None and lam_mask is None:
             return masked_spec
+        elif mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+        elif lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
 
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nbh, grid.lam.size))
-        print(masked_spec.shape, spec.shape, mask.shape)
-        spec[mask, :] = masked_spec
+        spec[np.ix_(mask, lam_mask)] = masked_spec
+
+        toc("Masking spectra and adding contribution", start)
 
         return spec
 
