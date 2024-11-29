@@ -1099,39 +1099,30 @@ class Combination:
             for model in this_model.combine
             if model.label not in images
         ]
+
+        # Ok, we don't have the models so we have no choice but to generate
+        # the image directly from the spectra
         if len(missing) > 0:
-            raise exceptions.MissingSpectraType(
-                "The following models weren't saved when generating spectra: "
-                f"{missing}\n"
-                f"To make an image for {this_model.label} these must be saved."
+            images[this_model.label] = _generate_image_collection_generic(
+                resolution,
+                fov,
+                img_type,
+                do_flux,
+                this_model.per_particle,
+                kernel,
+                kernel_threshold,
+                nthreads,
+                this_model.label,
+                emitters[this_model.emitter],
             )
+            return images
 
         # Get the image for each model we are combining
         combine_labels = []
         combine_images = []
         for model in this_model.combine:
-            # If the image hasn't been made try to generate it
-            if model.label not in images:
-                try:
-                    img = _generate_image_collection_generic(
-                        resolution,
-                        fov,
-                        img_type,
-                        do_flux,
-                        model.per_particle,
-                        kernel,
-                        kernel_threshold,
-                        nthreads,
-                        model.label,
-                        emitters[model.emitter],
-                    )
-                except Exception as e:
-                    print(f"Failed to generate image for {model.label}: {e}")
-                    raise e
-            else:
-                img = images[model.label]
             combine_labels.append(model.label)
-            combine_images.append(img)
+            combine_images.append(images[model.label])
 
         # Get the first image to add to
         out_image = combine_images[0]
