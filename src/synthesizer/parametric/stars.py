@@ -557,6 +557,7 @@ class Stars(StarsComponent):
 
         # Set up a list to hold each individual Line
         lines = []
+        print(line_type, fesc)
 
         # Loop over the ids in this container
         for line_id_ in line_id.split(","):
