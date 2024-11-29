@@ -641,7 +641,10 @@ class Stars(Particles, StarsComponent):
         )
 
         # Apply the wavelength mask
-        grid_spectra = grid_spectra[..., lam_mask]
+        grid_spectra = np.ascontiguousarray(
+            grid_spectra[..., lam_mask],
+            np.float64,
+        )
 
         # Get the grid dimensions after slicing what we need
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
