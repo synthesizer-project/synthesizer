@@ -96,11 +96,14 @@ class NebularLineEmission(StellarEmissionModel):
         """
         if fesc_ly_alpha < 1.0:
             # Get the lyman alpha wavelength elements and create a mask for
-            # the line (to account for spreading between bins)
+            # the line
             lyman_alpha_ind = np.argmin(np.abs(grid.lam - 1216.0 * Angstrom))
             lyman_alpha_mask = np.zeros(len(grid.lam), dtype=bool)
             lyman_alpha_mask[lyman_alpha_ind] = True
 
+            # Since the spectra may have been resampled, we may have split the
+            # lyman-alpha line into two. Therefore, we need to mask the
+            # surrounding elements as well.
             if lyman_alpha_ind > 0:
                 lyman_alpha_mask[lyman_alpha_ind - 1] = True
             if lyman_alpha_ind < len(grid.lam) - 1:
