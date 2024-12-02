@@ -1697,7 +1697,6 @@ class Survey:
 
         # Write out the extra analysis results
         for key, res in self._analysis_results.items():
-            print(key, type(res))
             gather_and_write_datasets(
                 hdf,
                 res,
