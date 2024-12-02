@@ -404,6 +404,7 @@ def _gather_and_write_recursive(hdf, data, key, comm, root):
     try:
         write_dataset(hdf, combined_data, key)
     except TypeError as e:
+        print(combined_data)
         raise TypeError(f"Failed to write dataset {key} - {e}")
 
     # Now that data has been written we can clear the list of collected data
