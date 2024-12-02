@@ -1704,7 +1704,9 @@ class Survey:
                 self.comm,
             )
 
-        hdf.close()
+        # If we are rank 0 we can close the file
+        if self.rank == 0:
+            hdf.close()
 
     def _true_parallel_write(self, outpath):
         """
