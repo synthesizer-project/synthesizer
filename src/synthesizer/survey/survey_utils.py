@@ -199,6 +199,49 @@ def unpack_data(obj, output_path):
     return obj
 
 
+def combine_list_of_dicts(dicts):
+    """
+    Combine a list of dictionaries into a single dictionary.
+
+    Args:
+        dicts (list):
+            A list of dictionaries to combine.
+
+    Returns:
+        dict:
+            The combined dictionary.
+    """
+
+    def combine_values(*values):
+        # Combine values into a unyt_array
+        return unyt_array(values)
+
+    def recursive_merge(dict_list):
+        if not isinstance(dict_list[0], dict):
+            # Base case: combine non-dict leaves
+            return combine_values(*dict_list)
+
+        # Recursive case: merge dictionaries
+        merged = {}
+        keys = dict_list[0].keys()
+        for key in keys:
+            # Ensure all dictionaries have the same keys
+            if not all(key in d for d in dict_list):
+                raise ValueError(
+                    f"Key '{key}' is missing in some dictionaries."
+                )
+            # Recurse for each key
+            merged[key] = recursive_merge([d[key] for d in dict_list])
+        return merged
+
+    if not isinstance(dicts[0], dict):
+        TypeError(
+            f"Input must be a list of dictionaries, not {type(dicts[0])}"
+        )
+
+    return recursive_merge(dicts)
+
+
 def sort_data_recursive(data, sinds):
     """
     Sort a dictionary recursively.

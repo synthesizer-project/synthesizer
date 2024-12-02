@@ -38,6 +38,7 @@ from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.survey.survey_utils import (
+    combine_list_of_dicts,
     gather_and_write_datasets,
     write_datasets_recursive,
 )
@@ -1447,7 +1448,11 @@ class Survey:
             res = []
             for g in self.galaxies:
                 res.append(func(g, *args, **kwargs))
-            self._analysis_results[key] = unyt_array(res)
+            self._analysis_results[key] = (
+                combine_list_of_dicts(res)
+                if isinstance(res[0], dict)
+                else unyt_array(res)
+            )
             self._took(func_start, f"{key} extra analysis")
 
         # Done!
