@@ -303,6 +303,20 @@ class Grid:
             for spectra_id in self.available_spectra:
                 self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
+            # THIS IS A HACK BECAUSE SW CHANGED THE AGN EMISSIONS WITHOUT
+            # UPDATING THE TEST GRIDS AND ONLY HE HAS ACCESS TO THE DROPBOX.
+            # THIS WILL BE REMOVED WHEN THE GRIDS ARE UPDATED.
+            if "nlr" in self.grid_filename or "blr" in self.grid_filename:
+                for spectra_id in self.available_spectra:
+                    # Normalise spectra by bolometric luminosity
+                    sed = Sed(
+                        self.lam, lnu=self.spectra[spectra_id] * erg / s / Hz
+                    )
+                    self.spectra[spectra_id] = (
+                        self.spectra[spectra_id]
+                        / sed.bolometric_luminosity[..., None]
+                    )
+
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed:
