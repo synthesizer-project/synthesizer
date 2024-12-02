@@ -148,16 +148,8 @@ def _download(
         save_dir (str)
             The directory in which to save the file.
     """
-    # Try the primary host
-    try:
-        _download_from_xcs_host(filename, save_dir)
-    except KeyboardInterrupt as e:
-        # Re-raise the keyboard interrupt
-        raise KeyboardInterrupt(e)
-    except Exception as e:
-        print("Failed to download from primary host:", e)
-        print("Trying dropbox...")
-        _download_from_dropbox(filename, save_dir)
+    # Download from the dropbox
+    _download_from_dropbox(filename, save_dir)
 
 
 def download_test_grids(destination):
