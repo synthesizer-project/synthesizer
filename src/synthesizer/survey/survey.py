@@ -31,6 +31,7 @@ Example usage:
 import time
 
 import h5py
+import numpy as np
 from pathos.multiprocessing import ProcessingPool as Pool
 from unyt import unyt_array
 
@@ -41,6 +42,7 @@ from synthesizer.survey.survey_utils import (
     combine_list_of_dicts,
     gather_and_write_datasets,
     write_datasets_recursive,
+    write_datasets_recursive_parallel,
 )
 from synthesizer.utils.art import Art
 from synthesizer.warnings import warn
@@ -1727,9 +1729,268 @@ class Survey:
             outpath (str):
                 The path to the HDF5 file to write.
         """
-        raise NotImplementedError(
-            "True parallel writing is not yet implemented."
+        # First off collect together the galaxy counts on each rank to make
+        # the indices for each rank consistent
+        galaxy_counts = self.comm.allgather(len(self.galaxies))
+        galaxy_stars = np.cumsum(galaxy_counts) - galaxy_counts
+        galaxy_ends = np.cumsum(galaxy_counts) - 1
+        galaxy_indices = np.arange(
+            galaxy_stars[self.rank],
+            galaxy_ends[self.rank] + 1,
         )
+
+        # Open the file on all ranks
+        hdf = h5py.File(outpath, "w", driver="mpio", comm=self.comm)
+
+        # Write spectral luminosity densities
+        if self._got_lnu_spectra:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.lnu_spectra["Galaxy"],
+                "Galaxies/Spectra/SpectralLuminosityDensities",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.lnu_spectra["Stars"],
+                "Galaxies/Stars/Spectra/SpectralLuminosityDensities",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.lnu_spectra["BlackHole"],
+                "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensities",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write spectral flux densities
+        if self._got_fnu_spectra:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.fnu_spectra["Galaxy"],
+                "Galaxies/Spectra/SpectralFluxDensities",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.fnu_spectra["Stars"],
+                "Galaxies/Stars/Spectra/SpectralFluxDensities",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.fnu_spectra["BlackHole"],
+                "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write photometric luminosities
+        if self._got_luminosities:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.luminosities["Galaxy"],
+                "Galaxies/Photometry/Luminosities",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.luminosities["Stars"],
+                "Galaxies/Stars/Photometry/Luminosities",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.luminosities["BlackHole"],
+                "Galaxies/BlackHoles/Photometry/Luminosities",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write photometric fluxes
+        if self._got_fluxes:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.fluxes["Galaxy"],
+                "Galaxies/Photometry/Fluxes",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.fluxes["Stars"],
+                "Galaxies/Stars/Photometry/Fluxes",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.fluxes["BlackHole"],
+                "Galaxies/BlackHoles/Photometry/Fluxes",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write emission line luminosities
+        if self._got_lum_lines:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.lines_lum["Galaxy"],
+                "Galaxies/Lines/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.lines_lum["Stars"],
+                "Galaxies/Stars/Lines/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.lines_lum["BlackHole"],
+                "Galaxies/BlackHoles/Lines/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.line_cont_lum["Galaxy"],
+                "Galaxies/Lines/Continuum",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.line_cont_lum["Stars"],
+                "Galaxies/Stars/Lines/Continuum",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.line_cont_lum["BlackHole"],
+                "Galaxies/BlackHoles/Lines/Continuum",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write luminosity images
+        if self._got_images_lum:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_lum["Galaxy"],
+                "Galaxies/Images/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_lum["Stars"],
+                "Galaxies/Stars/Images/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_lum["BlackHole"],
+                "Galaxies/BlackHoles/Images/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write PSF luminosity images
+        if self._got_images_lum_psf:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_lum_psf["Galaxy"],
+                "Galaxies/PSFImages/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_lum_psf["Stars"],
+                "Galaxies/Stars/PSFImages/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_lum_psf["BlackHole"],
+                "Galaxies/BlackHoles/PSFImages/Luminosity",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write flux images (again these are heavy so we'll collect them
+        # separately)
+        if self._got_images_flux:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_flux["Galaxy"],
+                "Galaxies/Images/Flux",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_flux["Stars"],
+                "Galaxies/Stars/Images/Flux",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_flux["BlackHole"],
+                "Galaxies/BlackHoles/Images/Flux",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write PSF flux images
+        if self._got_images_flux_psf:
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_flux_psf["Galaxy"],
+                "Galaxies/PSFImages/Flux",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_flux_psf["Stars"],
+                "Galaxies/Stars/PSFImages/Flux",
+                galaxy_indices,
+                self.comm,
+            )
+            write_datasets_recursive_parallel(
+                hdf,
+                self.images_flux_psf["BlackHole"],
+                "Galaxies/BlackHoles/PSFImages/Flux",
+                galaxy_indices,
+                self.comm,
+            )
+
+        # Write out the extra analysis results
+        for key, res in self._analysis_results.items():
+            write_datasets_recursive_parallel(
+                hdf,
+                res,
+                f"Galaxies/{key}",
+                galaxy_indices,
+                self.comm,
+            )
+
+        hdf.close()
 
     def _serial_write(self, outpath):
         """

@@ -353,43 +353,50 @@ def write_datasets_recursive_parallel(hdf, data, key, indexes, comm):
         hdf (h5py.File): The HDF5 file to write to.
         data (dict): The data to write.
         key (str): The key to write the data to.
+        indexes (array): The sorting indices.
+        comm (mpi.Comm): The MPI communicator
     """
     # If the data isn't a dictionary, just write the dataset
     if not isinstance(data, dict):
         try:
             # Gather the shape from everyone
-            shape = comm.gather(data.shape, root=0)
+            shapes = comm.gather(data.shape, root=0)
 
             # Only rank 0 creates the dataset
             if comm.rank == 0:
+                # Get the dtype
                 dtype = (
                     data.value.dtype
                     if isinstance(data, (unyt_quantity, unyt_array))
                     else data.dtype
                 )
+
+                # Get the shape of the dataset, only the number of galaxies
+                # has been distributed so we only need to sum the first axis
+                n = np.sum([s[0] for s in shapes])
+                shape = [n]
+                for i, s in shapes[0]:
+                    if i == 0:
+                        continue
+                    shape.append(s)
+
+                # Create the dataset
                 dset = hdf.create_dataset(
                     key,
-                    shape=np.sum(shape, axis=0),
+                    shape=shape,
                     dtype=dtype,
                 )
-                dset.attrs["Units"] = (
-                    str(data.units)
-                    if isinstance(data, (unyt_quantity, unyt_array))
-                    else "dimensionless"
-                )
+                dset.attrs["Units"] = str(data.units)
+
             # Ensure all ranks see the dataset
             comm.barrier()
 
             # Get the dataset on all ranks
             dset = hdf[key]
 
-            # Each rank writes its own part of the data based on 'indexes'
-            for idx in indexes:
-                dset[idx] = (
-                    data.value[idx]
-                    if isinstance(data, (unyt_quantity, unyt_array))
-                    else data[idx]
-                )
+            # Write the data
+            dset[indexes] = data
+
         except TypeError as e:
             print(f"Failed to write dataset {key}")
             raise TypeError(e)
