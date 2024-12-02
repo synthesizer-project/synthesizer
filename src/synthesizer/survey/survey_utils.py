@@ -3,7 +3,7 @@
 from functools import lru_cache
 
 import numpy as np
-from unyt import unyt_array, unyt_quantity
+from unyt import unyt_array
 
 
 def discover_outputs_recursive(obj, prefix="", output_set=None):
@@ -343,7 +343,14 @@ def write_datasets_recursive(hdf, data, key):
         write_datasets_recursive(hdf, v, f"{key}/{k}")
 
 
-def write_datasets_recursive_parallel(hdf, data, key, indexes, comm):
+def write_datasets_recursive_parallel(
+    hdf,
+    data,
+    key,
+    indexes,
+    comm,
+    num_galaxies,
+):
     """
     Write a dictionary to an HDF5 file recursively in parallel.
 
@@ -354,57 +361,65 @@ def write_datasets_recursive_parallel(hdf, data, key, indexes, comm):
         data (dict): The data to write.
         key (str): The key to write the data to.
         indexes (array): The sorting indices.
-        comm (mpi.Comm): The MPI communicator
+        comm (mpi.Comm): The MPI communicator.
+        num_galaxies (int): The total number of galaxies (first axis count).
     """
-    # If the data isn't a dictionary, just write the dataset
+    rank = comm.Get_rank()
+
+    # If the data isn't a dictionary, write the dataset
     if not isinstance(data, dict):
         try:
-            # Gather the shape from everyone
-            shapes = comm.gather(data.shape, root=0)
+            local_shape = data.shape
 
             # Only rank 0 creates the dataset
-            if comm.rank == 0:
-                # Get the dtype
-                dtype = (
-                    data.value.dtype
-                    if isinstance(data, (unyt_quantity, unyt_array))
-                    else data.dtype
-                )
+            if rank == 0:
+                # Determine dtype
+                if hasattr(data, "value"):
+                    dtype = data.value.dtype
+                else:
+                    dtype = data.dtype
 
-                # Get the shape of the dataset, only the number of galaxies
-                # has been distributed so we only need to sum the first axis
-                n = np.sum([s[0] for s in shapes])
-                shape = [n]
-                for i, s in shapes[0]:
-                    if i == 0:
-                        continue
-                    shape.append(s)
+                # Calculate global shape
+                global_shape = [num_galaxies]
+                for i in range(1, len(local_shape)):
+                    global_shape.append(local_shape[i])
 
                 # Create the dataset
                 dset = hdf.create_dataset(
                     key,
-                    shape=shape,
+                    shape=tuple(global_shape),
                     dtype=dtype,
                 )
-                dset.attrs["Units"] = str(data.units)
 
-            # Ensure all ranks see the dataset
+                # Handle units if present
+                if hasattr(data, "units"):
+                    dset.attrs["Units"] = str(data.units)
+
+            # Synchronize all ranks before writing
             comm.barrier()
 
             # Get the dataset on all ranks
             dset = hdf[key]
 
-            # Write the data
-            dset[indexes] = data
+            # Set collective I/O property for the write operation
+            with dset.collective:
+                # Write the data using the appropriate slice
+                start = sum(comm.allgather(local_shape[0])[:rank])
+                end = start + local_shape[0]
+                dset[start:end, ...] = data
 
-        except TypeError as e:
-            print(f"Failed to write dataset {key}")
-            raise TypeError(e)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to write dataset '{key}' on rank {rank}: {e}"
+            )
+
         return
 
-    # Loop over the data
+    # Recursively handle dictionary data
     for k, v in data.items():
-        write_datasets_recursive_parallel(hdf, v, f"{key}/{k}", indexes, comm)
+        write_datasets_recursive_parallel(
+            hdf, v, f"{key}/{k}", indexes, comm, num_galaxies
+        )
 
 
 def _gather_and_write_recursive(hdf, data, key, comm, root):
