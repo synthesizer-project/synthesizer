@@ -1189,6 +1189,7 @@ class Combination:
                 nthreads,
                 this_model.label,
                 emitters[this_model.emitter],
+                instrument=instrument,
             )
             return images
 
