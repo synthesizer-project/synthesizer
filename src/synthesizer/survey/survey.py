@@ -1696,11 +1696,12 @@ class Survey:
             )
 
         # Write out the extra analysis results
-        if len(self._analysis_results) > 0:
+        for key, res in self._analysis_results.items():
+            print(key, type(res))
             gather_and_write_datasets(
                 hdf,
-                self._analysis_results,
-                "Galaxies",
+                res,
+                f"Galaxies/{key}",
                 self.comm,
             )
 
