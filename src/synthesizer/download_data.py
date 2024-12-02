@@ -31,13 +31,13 @@ AVAILABLE_FILES = {
     },
     "test_grid_agn-blr.hdf5": {
         "file": "agnsed-limited_cloudy-c23.01-blr.hdf5",
-        "id": "4rnwbxnzwp3v0pmiju06h",
-        "rlkey": "rdqy9p7royyxnljtloh2a2zj7",
+        "id": "r7pbdvbvujypgx8ady6bl",
+        "rlkey": "4tdscxnoaepvog8skil15ehgk",
     },
     "test_grid_agn-nlr.hdf5": {
         "file": "agnsed-limited_cloudy-c23.01-nlr.hdf5",
-        "id": "4dxp06jzv276pn8qxq1nx",
-        "rlkey": "35tietcw2j40q4ad1guj2swg1",
+        "id": "7h971875rkkmkxvmgdqnn",
+        "rlkey": "e6oyr8l9gyqlz3i2nlko7pne6",
     },
     "MW3.1.hdf5": {
         "file": "MW3.1.hdf5",
