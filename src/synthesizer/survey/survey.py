@@ -1750,6 +1750,7 @@ class Survey:
                 "Galaxies/Spectra/SpectralLuminosityDensities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1757,6 +1758,7 @@ class Survey:
                 "Galaxies/Stars/Spectra/SpectralLuminosityDensities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1764,6 +1766,7 @@ class Survey:
                 "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write spectral flux densities
@@ -1774,6 +1777,7 @@ class Survey:
                 "Galaxies/Spectra/SpectralFluxDensities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1781,6 +1785,7 @@ class Survey:
                 "Galaxies/Stars/Spectra/SpectralFluxDensities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1788,6 +1793,7 @@ class Survey:
                 "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write photometric luminosities
@@ -1798,6 +1804,7 @@ class Survey:
                 "Galaxies/Photometry/Luminosities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1805,6 +1812,7 @@ class Survey:
                 "Galaxies/Stars/Photometry/Luminosities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1812,6 +1820,7 @@ class Survey:
                 "Galaxies/BlackHoles/Photometry/Luminosities",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write photometric fluxes
@@ -1822,6 +1831,7 @@ class Survey:
                 "Galaxies/Photometry/Fluxes",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1829,6 +1839,7 @@ class Survey:
                 "Galaxies/Stars/Photometry/Fluxes",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1836,6 +1847,7 @@ class Survey:
                 "Galaxies/BlackHoles/Photometry/Fluxes",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write emission line luminosities
@@ -1846,6 +1858,7 @@ class Survey:
                 "Galaxies/Lines/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1853,6 +1866,7 @@ class Survey:
                 "Galaxies/Stars/Lines/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1860,6 +1874,7 @@ class Survey:
                 "Galaxies/BlackHoles/Lines/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1867,6 +1882,7 @@ class Survey:
                 "Galaxies/Lines/Continuum",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1874,6 +1890,7 @@ class Survey:
                 "Galaxies/Stars/Lines/Continuum",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1881,6 +1898,7 @@ class Survey:
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write luminosity images
@@ -1891,6 +1909,7 @@ class Survey:
                 "Galaxies/Images/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1898,6 +1917,7 @@ class Survey:
                 "Galaxies/Stars/Images/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1905,6 +1925,7 @@ class Survey:
                 "Galaxies/BlackHoles/Images/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write PSF luminosity images
@@ -1915,6 +1936,7 @@ class Survey:
                 "Galaxies/PSFImages/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1922,6 +1944,7 @@ class Survey:
                 "Galaxies/Stars/PSFImages/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1929,6 +1952,7 @@ class Survey:
                 "Galaxies/BlackHoles/PSFImages/Luminosity",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write flux images (again these are heavy so we'll collect them
@@ -1940,6 +1964,7 @@ class Survey:
                 "Galaxies/Images/Flux",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1947,6 +1972,7 @@ class Survey:
                 "Galaxies/Stars/Images/Flux",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1954,6 +1980,7 @@ class Survey:
                 "Galaxies/BlackHoles/Images/Flux",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write PSF flux images
@@ -1964,6 +1991,7 @@ class Survey:
                 "Galaxies/PSFImages/Flux",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1971,6 +1999,7 @@ class Survey:
                 "Galaxies/Stars/PSFImages/Flux",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
             write_datasets_recursive_parallel(
                 hdf,
@@ -1978,6 +2007,7 @@ class Survey:
                 "Galaxies/BlackHoles/PSFImages/Flux",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         # Write out the extra analysis results
@@ -1988,6 +2018,7 @@ class Survey:
                 f"Galaxies/{key}",
                 galaxy_indices,
                 self.comm,
+                len(self.galaxies),
             )
 
         hdf.close()
