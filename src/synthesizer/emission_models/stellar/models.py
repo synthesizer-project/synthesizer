@@ -20,6 +20,9 @@ Example usage::
 
 """
 
+import numpy as np
+from unyt import Angstrom
+
 from synthesizer.emission_models.base_model import StellarEmissionModel
 from synthesizer.emission_models.models import AttenuatedEmission, DustEmission
 
@@ -37,10 +40,9 @@ class IncidentEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object to extract from.
         label (str): The label for this emission model.
         extract (str): The key to extract from the grid.
-        fesc (float): The escape fraction of the emission.
     """
 
-    def __init__(self, grid, label="incident", fesc=0.0, **kwargs):
+    def __init__(self, grid, label="incident", **kwargs):
         """
         Initialise the IncidentEmission object.
 
@@ -54,18 +56,18 @@ class IncidentEmission(StellarEmissionModel):
             grid=grid,
             label=label,
             extract="incident",
-            fesc=fesc,
             **kwargs,
         )
 
 
-class LineContinuumEmission(StellarEmissionModel):
+class NebularLineEmission(StellarEmissionModel):
     """
-    An emission model that extracts the line continuum emission.
+    An emission model for the nebular line emission.
 
-    This defines an extraction of key "linecont" from a SPS grid.
+    This defines the luminosity contribution of the lines to the total
+    nebular output.
 
-    This is a child of the EmissionModel class for a full description of the
+    This is a child of the EmissionModel class; for a full description of the
     parameters see the EmissionModel class.
 
     Attributes:
@@ -78,26 +80,74 @@ class LineContinuumEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
-        label="linecont",
+        label="nebular_line",
         fesc=0.0,
+        fesc_ly_alpha=1.0,
         **kwargs,
     ):
         """
-        Initialise the LineContinuumEmission object.
+        Initialise the NebularLineEmission object.
 
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
         """
-        StellarEmissionModel.__init__(
-            self,
-            grid=grid,
-            label=label,
-            extract="linecont",
-            fesc=fesc,
-            **kwargs,
-        )
+        if fesc_ly_alpha < 1.0:
+            # Get the lyman alpha wavelength elements and create a mask for
+            # the line
+            lyman_alpha_ind = np.argmin(np.abs(grid.lam - 1216.0 * Angstrom))
+            lyman_alpha_mask = np.zeros(len(grid.lam), dtype=bool)
+            lyman_alpha_mask[lyman_alpha_ind] = True
+
+            # Since the spectra may have been resampled, we may have split the
+            # lyman-alpha line into two. Therefore, we need to mask the
+            # surrounding elements as well.
+            if lyman_alpha_ind > 0:
+                lyman_alpha_mask[lyman_alpha_ind - 1] = True
+            if lyman_alpha_ind < len(grid.lam) - 1:
+                lyman_alpha_mask[lyman_alpha_ind + 1] = True
+
+            # Create the child models
+            linecont_no_lyman = StellarEmissionModel(
+                grid=grid,
+                label=label + "_no_lyman",
+                extract="linecont",
+                fesc=fesc,
+                lam_mask=~lyman_alpha_mask,
+                save=False,
+                **kwargs,
+            )
+
+            # For lyman-alpha, we reduce the overall luminosity by fesc,
+            # then the remaining luminosity by fesc_ly_alpha
+            lyman_alpha = StellarEmissionModel(
+                label=label + "_lyman_alpha",
+                extract="linecont",
+                grid=grid,
+                fesc=(1 - (1 - fesc) * fesc_ly_alpha),
+                lam_mask=lyman_alpha_mask,
+                save=False,
+                **kwargs,
+            )
+
+            # Instantiate the combination model
+            StellarEmissionModel.__init__(
+                self,
+                label=label,
+                combine=(linecont_no_lyman, lyman_alpha),
+                **kwargs,
+            )
+        else:
+            StellarEmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                extract="linecont",
+                fesc=fesc,
+                **kwargs,
+            )
 
 
 class TransmittedEmission(StellarEmissionModel):
@@ -227,7 +277,7 @@ class NebularContinuumEmission(StellarEmissionModel):
 
 class NebularEmission(StellarEmissionModel):
     """
-    An emission model that combines the nebular emission.
+    An emission model that combines the nebular emissions.
 
     This defines a combination of the nebular continuum and line emission
     components.
@@ -248,7 +298,7 @@ class NebularEmission(StellarEmissionModel):
         label="nebular",
         fesc=0.0,
         fesc_ly_alpha=1.0,
-        linecont=None,
+        nebular_line=None,
         nebular_continuum=None,
         **kwargs,
     ):
@@ -260,21 +310,22 @@ class NebularEmission(StellarEmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
             feac_ly_alpha (float): The escape fraction of Lyman-alpha.
-            linecont (EmissionModel): The line continuum model to use, if None
-                then one will be created. Only used if fesc_ly_alpha < 1.0.
+            nebular_line (EmissionModel): The nebular line model to use, if
+                None then one will be created. Only used if
+                fesc_ly_alpha < 1.0.
             nebular_continuum (EmissionModel): The nebular continuum model to
                 use, if None then one will be created. Only used if
                 fesc_ly_alpha < 1.0.
         """
-        # If we have a Lyman-alpha escape fraction then we need to combine
-        # the Lyman-alpha line emission with the nebular continuum emission
-        # and the rest of the line emission
+        # If we have a Lyman-alpha escape fraction then calculate the
+        # updated line emission and combine with the nebular continuum.
         if fesc_ly_alpha < 1.0:
-            # Make a line continuum model if we need one
-            if linecont is None:
-                linecont = LineContinuumEmission(
+            # Make a nebular line model if we need one
+            if nebular_line is None:
+                nebular_line = NebularLineEmission(
                     grid=grid,
-                    fesc=fesc_ly_alpha,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    fesc=fesc,
                     **kwargs,
                 )
 
@@ -289,12 +340,13 @@ class NebularEmission(StellarEmissionModel):
             StellarEmissionModel.__init__(
                 self,
                 label=label,
-                combine=(linecont, nebular_continuum),
+                combine=(nebular_line, nebular_continuum),
                 **kwargs,
             )
 
         else:
-            # Otherwise, we just need the nebular emission from the grid
+            # Otherwise, we just get the nebular emission directly
+            # from the grid
             StellarEmissionModel.__init__(
                 self,
                 grid=grid,
