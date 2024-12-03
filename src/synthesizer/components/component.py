@@ -12,6 +12,7 @@ respectively.
 from abc import ABC, abstractmethod
 
 from synthesizer import exceptions
+from synthesizer.instruments import Instrument
 from synthesizer.sed import plot_spectra
 from synthesizer.warnings import deprecated, deprecation
 
@@ -422,6 +423,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
+        instrument=None,
     ):
         """
         Make an ImageCollection from component luminosities.
@@ -471,6 +473,8 @@ class Component(ABC):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
+            instrument (Instrument)
+                The instrument to use to generate the images.
 
         Returns:
             Image : array-like
@@ -483,6 +487,10 @@ class Component(ABC):
                 f"Parametric {self.component_type} can only produce "
                 "smoothed images."
             )
+
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
 
         # Get the images
         images = emission_model._get_images(
@@ -516,6 +524,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
+        instrument=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -565,6 +574,8 @@ class Component(ABC):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
+            instrument (Instrument)
+                The instrument to use to generate the images.
 
         Returns:
             Image : array-like
@@ -578,9 +589,13 @@ class Component(ABC):
                 "smoothed images."
             )
 
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
+
         # Get the images
         images = emission_model._get_images(
-            resolution=resolution,
+            instrument=instrument,
             fov=fov,
             emitters={"stellar": self}
             if self.component_type == "Stars"

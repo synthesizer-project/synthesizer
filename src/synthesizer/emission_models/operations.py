@@ -259,7 +259,7 @@ class Extraction:
 
     def _extract_images(
         self,
-        resolution,
+        instrument,
         fov,
         img_type,
         do_flux,
@@ -269,14 +269,13 @@ class Extraction:
         kernel_threshold,
         nthreads,
         limit_to,
-        instrument=None,
     ):
         """
         Create images for all the extraction keys.
 
         Args:
-            resolution (float):
-                The resolution of the images.
+            instrument (Instrument):
+                The instrument to use when generating images.
             fov (float):
                 The field of view of the images.
             img_type (str):
@@ -295,8 +294,6 @@ class Extraction:
                 The number of threads to use when generating images.
             limit_to (str):
                 Limit the images to a specific model.
-            instrument (Instrument):
-                The instrument to use when generating images.
 
         Returns:
             dict:
@@ -321,7 +318,7 @@ class Extraction:
             # Store the resulting image collection
             try:
                 images[label] = _generate_image_collection_generic(
-                    resolution,
+                    instrument,
                     fov,
                     img_type,
                     do_flux,
@@ -331,7 +328,6 @@ class Extraction:
                     nthreads,
                     label,
                     emitter,
-                    instrument,
                 )
             except Exception as e:
                 print(f"Failed to generate image for {label}: {e}")
@@ -613,7 +609,7 @@ class Generation:
 
     def _generate_images(
         self,
-        resolution,
+        instrument,
         fov,
         this_model,
         img_type,
@@ -623,14 +619,13 @@ class Generation:
         kernel,
         kernel_threshold,
         nthreads,
-        instrument=None,
     ):
         """
         Create an image for a generation key.
 
         Args:
-            resolution (float):
-                The resolution of the images.
+            instrument (Instrument):
+                The instrument to use when generating images.
             fov (float):
                 The field of view of the images.
             this_model (EmissionModel):
@@ -649,8 +644,6 @@ class Generation:
                 The threshold to use when generating images.
             nthreads (int):
                 The number of threads to use when generating images.
-            instrument (Instrument):
-                The instrument to use when generating images.
 
         Returns:
             dict:
@@ -659,7 +652,7 @@ class Generation:
         """
         # Store the resulting image collection
         images[this_model.label] = _generate_image_collection_generic(
-            resolution,
+            instrument,
             fov,
             img_type,
             do_flux,
@@ -669,7 +662,6 @@ class Generation:
             nthreads,
             this_model.label,
             emitter,
-            instrument,
         )
 
         return images
@@ -881,7 +873,7 @@ class DustAttenuation:
 
     def _attenuate_images(
         self,
-        resolution,
+        instrument,
         fov,
         this_model,
         img_type,
@@ -891,14 +883,13 @@ class DustAttenuation:
         kernel,
         kernel_threshold,
         nthreads,
-        instrument=None,
     ):
         """
         Create an image for an attenuation key.
 
         Args:
-            resolution (float):
-                The resolution of the images.
+            instrument (Instrument):
+                The instrument to use when generating images.
             fov (float):
                 The field of view of the images.
             this_model (EmissionModel):
@@ -927,7 +918,7 @@ class DustAttenuation:
         """
         # Store the resulting image collection
         images[this_model.label] = _generate_image_collection_generic(
-            resolution,
+            instrument,
             fov,
             img_type,
             do_flux,
@@ -937,7 +928,6 @@ class DustAttenuation:
             nthreads,
             this_model.label,
             emitter,
-            instrument,
         )
 
         return images
@@ -1131,7 +1121,7 @@ class Combination:
         self,
         images,
         this_model,
-        resolution,
+        instrument,
         fov,
         img_type,
         do_flux,
@@ -1139,7 +1129,6 @@ class Combination:
         kernel,
         kernel_threshold,
         nthreads,
-        instrument=None,
     ):
         """
         Combine the images by addition.
@@ -1149,8 +1138,8 @@ class Combination:
                 The dictionary of image collections.
             this_model (EmissionModel):
                 The model defining the combination.
-            resolution (float):
-                The resolution of the images.
+            instrument (Instrument):
+                The instrument to use when generating images.
             fov (float):
                 The field of view of the images.
             img_type (str):
@@ -1165,8 +1154,6 @@ class Combination:
                 The threshold to use when generating images.
             nthreads (int):
                 The number of threads to use when generating images.
-            instrument (Instrument):
-                The instrument to use when generating images.
         """
         # Check we saved the models we are combining
         missing = [
@@ -1179,7 +1166,7 @@ class Combination:
         # the image directly from the spectra
         if len(missing) > 0:
             images[this_model.label] = _generate_image_collection_generic(
-                resolution,
+                instrument,
                 fov,
                 img_type,
                 do_flux,
@@ -1189,7 +1176,6 @@ class Combination:
                 nthreads,
                 this_model.label,
                 emitters[this_model.emitter],
-                instrument=instrument,
             )
             return images
 

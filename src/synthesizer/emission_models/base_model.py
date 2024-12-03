@@ -2743,7 +2743,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     @accepts(resolution=kpc, fov=kpc)
     def _get_images(
         self,
-        resolution,
+        instrument,
         fov,
         emitters,
         img_type="smoothed",
@@ -2754,7 +2754,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         kernel=None,
         kernel_threshold=1.0,
         nthreads=1,
-        instrument=None,
         **kwargs,
     ):
         """
@@ -2771,9 +2770,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         further down in the tree.
 
         Args:
-            resolution (float):
-                The pixel resolution of the image in spatial units (e.g. pc,
-                kpc, Mpc).
+            instrument (Instrument)
+                The instrument to use for the image generation.
             fov (float):
                 The field of view of the image in angular units (e.g. arcsec,
                 arcmin, deg).
@@ -2803,8 +2801,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 The threshold for the convolution kernel.
             nthreads (int)
                 The number of threads to use for the image generation.
-            instrument (Instrument)
-                The instrument to use for the image generation.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2827,7 +2823,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Get all the images at the extraction leaves of the tree
         images.update(
             self._extract_images(
-                resolution,
+                instrument,
                 fov,
                 img_type,
                 do_flux,
@@ -2837,7 +2833,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 kernel_threshold,
                 nthreads,
                 limit_to,
-                instrument,
             )
         )
 
@@ -2857,7 +2852,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 if related_model.label not in images:
                     images.update(
                         related_model._get_images(
-                            resolution,
+                            instrument,
                             fov,
                             emitters,
                             img_type,
@@ -2868,7 +2863,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             kernel=kernel,
                             kernel_threshold=kernel_threshold,
                             nthreads=nthreads,
-                            instrument=instrument,
                             **kwargs,
                         )
                     )
@@ -2901,7 +2895,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     images = self._combine_images(
                         images,
                         this_model,
-                        resolution,
+                        instrument,
                         fov,
                         img_type,
                         do_flux,
@@ -2909,7 +2903,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         kernel,
                         kernel_threshold,
                         nthreads,
-                        instrument,
                     )
                 except Exception as e:
                     print(f"Error in {this_model.label}!")
@@ -2918,7 +2911,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             elif this_model._is_dust_attenuating:
                 try:
                     images = self._attenuate_images(
-                        resolution,
+                        instrument,
                         fov,
                         this_model,
                         img_type,
@@ -2928,7 +2921,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         kernel,
                         kernel_threshold,
                         nthreads,
-                        instrument,
                     )
                 except Exception as e:
                     print(f"Error in {this_model.label}!")
@@ -2937,7 +2929,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
                     images = self._generate_images(
-                        resolution,
+                        instrument,
                         fov,
                         this_model,
                         img_type,
@@ -2947,7 +2939,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         kernel,
                         kernel_threshold,
                         nthreads,
-                        instrument,
                     )
                 except Exception as e:
                     print(f"Error in {this_model.label}!")
