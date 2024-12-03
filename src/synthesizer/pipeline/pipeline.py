@@ -1,17 +1,17 @@
 """A module containing a pipeline helper class.
 
-This module contains the Survey class which is used to run observable
+This module contains the Pipeline class which is used to run observable
 generation pipelines on a set of galaxies. To use this functionality the user
-needs to define the properties of the Survey and a function to load the
+needs to define the properties of the Pipeline and a function to load the
 galaxies. After which the user can call the various methods to generate the
 data they need, simplifying a complex pipeline full of boilerplate code to a
-handle full of definitions and calls to the Survey object.
+handle full of definitions and calls to the Pipeline object.
 
 Example usage:
 ```python
-    from synthesizer import Survey
+    from synthesizer import Pipeline
 
-    survey = Survey(
+    survey = Pipeline(
         gal_loader_func=load_galaxy,
         emission_model=emission_model,
         instruments=[instrument1, instrument2],
@@ -44,7 +44,7 @@ from synthesizer.utils.art import Art
 from synthesizer.warnings import warn
 
 
-class Survey:
+class Pipeline:
     """
     A class for running observable generation pipelines on a set of galaxies.
 
@@ -59,8 +59,8 @@ class Survey:
 
     Finally the verbosity level can be set to control the amount of output.
 
-    Once the Survey object has been instantiated the user can call the various
-    methods to generate the data they need.
+    Once the Pipeline object has been instantiated the user can call the
+    various methods to generate the data they need.
 
     For spectra:
         - get_spectra (passing a cosmology object if redshifted spectra are
@@ -129,7 +129,7 @@ class Survey:
         verbose=1,
     ):
         """
-        Initialise the Survey object.
+        Initialise the Pipeline object.
 
         This will not perform any part of the calculation, it only sets it up.
 
@@ -305,7 +305,7 @@ class Survey:
         print()
 
     def _report(self):
-        """Print a report containing the Survey setup."""
+        """Print a report containing the Pipeline setup."""
         # Print the MPI setup if we are using MPI
         if self.using_mpi:
             self._print(f"Running with MPI on {self.size} ranks.")
@@ -472,8 +472,8 @@ class Survey:
         Print a message to the screen with extra information.
 
         The prints behave differently depending on whether we are using MPI or
-        not. We can also set the verbosity level at the Survey level which will
-        control the verbosity of the print statements.
+        not. We can also set the verbosity level at the Pipeline level which
+        will control the verbosity of the print statements.
 
         Verbosity:
             0: No output beyond hello and goodbye.
@@ -538,16 +538,16 @@ class Survey:
 
     def add_analysis_func(self, func, result_key, *args, **kwargs):
         """
-        Add an analysis function to the Survey.
+        Add an analysis function to the Pipeline.
 
-        The provided function will be called on each galaxy in the Survey once
-        all data has been generated. The function should take a galaxy object
-        as the first argument and can take any number of additional arguments
-        and keyword arguments.
+        The provided function will be called on each galaxy in the Pipeline
+        once all data has been generated. The function should take a galaxy
+        object as the first argument and can take any number of additional
+        arguments and keyword arguments.
 
         The results of the analysis function should be returned. This can
         be a scalar, array, or a dictionary of arbitrary structure. We'll
-        store it in a dictionary on the Survey object with the key being the
+        store it in a dictionary on the Pipeline object with the key being the
         result_key argument.
 
         For example:
@@ -570,7 +570,7 @@ class Survey:
 
         Args:
             func (callable):
-                The analysis function to add to the Survey. This function
+                The analysis function to add to the Pipeline. This function
                 should take a galaxy object as the first argument and can take
                 any number of additional arguments and keyword arguments.
             result_key (str):
@@ -611,15 +611,15 @@ class Survey:
 
     def add_galaxies(self, galaxies):
         """
-        Add galaxies to the Survey.
+        Add galaxies to the Pipeline.
 
-        This function will add the provided galaxies to the Survey. This is
+        This function will add the provided galaxies to the Pipeline. This is
         useful if you have already loaded the galaxies and want to add them to
-        the Survey object.
+        the Pipeline object.
 
         Args:
             galaxies (list):
-                A list of Galaxy objects to add to the Survey.
+                A list of Galaxy objects to add to the Pipeline.
         """
         start = time.perf_counter()
 
@@ -707,7 +707,7 @@ class Survey:
             elif g.stars is not None and g.stars.nstars > 0:
                 g.get_sfzh(grid, nthreads=self.nthreads)
 
-        # Unpack the SFZH attributes into a single array on the Survey object
+        # Unpack the SFZH attributes into a single array on the Pipeline object
         self.sfzh = unyt_array(
             [g.sfzh.value for g in self.galaxies],
             self.galaxies[0].sfzh.units,
@@ -750,7 +750,7 @@ class Survey:
             for g in self.galaxies:
                 g.get_observed_spectra(cosmo=cosmo)
 
-        # Ubpack the spectra into a dictionary on the Survey object
+        # Ubpack the spectra into a dictionary on the Pipeline object
         self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
@@ -822,7 +822,7 @@ class Survey:
         for g in self.galaxies:
             g.get_photo_lnu(filters=self.filters, nthreads=self.nthreads)
 
-        # Unpack the luminosities into a dictionary on the Survey object
+        # Unpack the luminosities into a dictionary on the Pipeline object
         self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
             for spec_type, phot in g.photo_lnu.items():
@@ -882,7 +882,7 @@ class Survey:
         for g in self.galaxies:
             g.get_photo_fnu(filters=self.filters, nthreads=self.nthreads)
 
-        # Unpack the fluxes into a dictionary on the Survey object
+        # Unpack the fluxes into a dictionary on the Pipeline object
         self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
             for spec_type, phot in g.photo_fnu.items():
@@ -947,7 +947,7 @@ class Survey:
         # Store the line IDs for later
         self._line_ids = line_ids
 
-        # Unpack the luminosity lines into a dictionary on the Survey object
+        # Unpack the luminosity lines into a dictionary on the Pipeline object
         self.lines_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_cont_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
@@ -1016,7 +1016,7 @@ class Survey:
 
         This function will compute the luminosity images for all spectra types
         that were saved when spectra were generated, in all filters included in
-        the Survey instruments.
+        the Pipeline instruments.
 
         A PSF and/or noise will be applied if they are available on the
         instrument.
@@ -1063,7 +1063,7 @@ class Survey:
                     instrument=inst,
                 )
 
-        # Unpack the luminosity images into a dictionary on the Survey object
+        # Unpack the luminosity images into a dictionary on the Pipeline object
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
             for d in g.images_lnu.values():
@@ -1133,7 +1133,7 @@ class Survey:
                         inst.psfs,
                     )
 
-                    # Unpack the image arrays onto the Survey object
+                    # Unpack the image arrays onto the Pipeline object
                     for f, img in g.images_psf_lnu[inst.label][
                         spec_type
                     ].items():
@@ -1155,7 +1155,7 @@ class Survey:
                             )
                         )
 
-                        # Unpack the image arrays onto the Survey object
+                        # Unpack the image arrays onto the Pipeline object
                         for f, img in g.stars.images_psf_lnu[inst.label][
                             spec_type
                         ].items():
@@ -1177,7 +1177,7 @@ class Survey:
                             )
                         )
 
-                        # Unpack the image arrays onto the Survey object
+                        # Unpack the image arrays onto the Pipeline object
                         for f, img in g.black_holes.images_psf_lnu[inst.label][
                             spec_type
                         ].items():
@@ -1214,7 +1214,7 @@ class Survey:
 
         This function will compute the flux images for all spectra types that
         were saved when spectra were generated, in all filters included in the
-        Survey instruments.
+        Pipeline instruments.
 
         A PSF and/or noise will be applied if they are available on the
         instrument.
@@ -1261,7 +1261,7 @@ class Survey:
                     instrument=inst,
                 )
 
-        # Unpack the flux images into a dictionary on the Survey object
+        # Unpack the flux images into a dictionary on the Pipeline object
         self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for g in self.galaxies:
             for d in g.images_fnu.values():
@@ -1331,7 +1331,7 @@ class Survey:
                         inst.psfs,
                     )
 
-                    # Unpack the image arrays onto the Survey object
+                    # Unpack the image arrays onto the Pipeline object
                     for f, img in g.images_psf_fnu[inst.label][
                         spec_type
                     ].items():
@@ -1353,7 +1353,7 @@ class Survey:
                             )
                         )
 
-                        # Unpack the image arrays onto the Survey object
+                        # Unpack the image arrays onto the Pipeline object
                         for f, img in g.stars.images_psf_fnu[inst.label][
                             spec_type
                         ].items():
@@ -1375,7 +1375,7 @@ class Survey:
                             )
                         )
 
-                        # Unpack the image arrays onto the Survey object
+                        # Unpack the image arrays onto the Pipeline object
                         for f, img in g.black_holes.images_psf_fnu[inst.label][
                             spec_type
                         ].items():
@@ -1404,7 +1404,7 @@ class Survey:
         """Compute the spectral luminosity density data cubes."""
         start = time.perf_counter()
         raise exceptions.NotImplemented(
-            "Data cubes are not yet implemented in Surveys."
+            "Data cubes are not yet implemented in Pipelines."
         )
 
         # Done!
@@ -1415,7 +1415,7 @@ class Survey:
         """Compute the Spectral flux density data cubes."""
         start = time.perf_counter()
         raise exceptions.NotImplemented(
-            "Data cubes are not yet implemented in Surveys."
+            "Data cubes are not yet implemented in Pipelines."
         )
 
         # Done!

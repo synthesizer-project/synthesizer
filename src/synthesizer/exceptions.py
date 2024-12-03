@@ -356,7 +356,7 @@ class DownloadError(Exception):
 
 class MissingPartition(Exception):
     """
-    Exception class for when the partition hasn't been run for a Survey.
+    Exception class for when the partition hasn't been run for a Pipeline.
     """
 
     def __init__(self, *args):
@@ -385,4 +385,4 @@ class PipelineNotReady(Exception):
     def __str__(self):
         if self.message:
             return "{0} ".format(self.message)
-        return "Survey isn't ready to run current operation."
+        return "Pipeline isn't ready to run current operation."

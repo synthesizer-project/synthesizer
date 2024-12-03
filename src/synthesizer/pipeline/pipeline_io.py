@@ -124,8 +124,8 @@ class PipelineIO:
         Print a message to the screen with extra information.
 
         The prints behave differently depending on whether we are using MPI or
-        not. We can also set the verbosity level at the Survey level which will
-        control the verbosity of the print statements.
+        not. We can also set the verbosity level at the Pipeline level which
+        will control the verbosity of the print statements.
 
         Verbosity:
             0: No output beyond hello and goodbye.
