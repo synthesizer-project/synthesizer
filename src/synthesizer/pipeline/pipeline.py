@@ -11,7 +11,7 @@ Example usage:
 ```python
     from synthesizer import Pipeline
 
-    survey = Pipeline(
+    pipeline = Pipeline(
         gal_loader_func=load_galaxy,
         emission_model=emission_model,
         instruments=[instrument1, instrument2],
@@ -21,10 +21,10 @@ Example usage:
         verbose=1,
         )
 
-    survey.load_galaxies()
-    survey.get_spectra()
-    survey.get_photometry_luminosities()
-    survey.write("output.hdf5")
+    pipeline.load_galaxies()
+    pipeline.get_spectra()
+    pipeline.get_photometry_luminosities()
+    pipeline.write("output.hdf5")
 ```
 """
 
@@ -36,8 +36,8 @@ from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
 from synthesizer.instruments.filters import FilterCollection
-from synthesizer.survey.pipeline_io import PipelineIO
-from synthesizer.survey.survey_utils import (
+from synthesizer.pipeline.pipeline_io import PipelineIO
+from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
 )
 from synthesizer.utils.art import Art
@@ -98,9 +98,9 @@ class Pipeline:
 
     Attributes:
         emission_model (EmissionModel):
-            The emission model to use for the survey.
+            The emission model to use for the pipeline.
         instruments (list):
-            A list of Instrument objects to use for the survey.
+            A list of Instrument objects to use for the pipeline.
         n_galaxies (int):
             How many galaxies will we load in total (i.e. not per rank if using
             MPI)?
@@ -133,7 +133,7 @@ class Pipeline:
 
         This will not perform any part of the calculation, it only sets it up.
 
-        This will attach all the passed attributes of the survey and set up
+        This will attach all the passed attributes of the pipeline and set up
         anything we'll need later like MPI variables (if applicable), flags
         to indicate what stages we've completed and containers for any
         ouputs and additional analysis functions.
@@ -146,9 +146,9 @@ class Pipeline:
 
         Args:
             emission_model (EmissionModel): The emission model to use for the
-                survey.
+                pipeline.
             instruments (list): A list of Instrument objects to use for the
-                survey.
+                pipeline.
             nthreads (int): The number of threads to use for shared memory
                 parallelism. Default is 1.
             comm (MPI.Comm): The MPI communicator to use for MPI parallelism.
@@ -556,7 +556,7 @@ class Pipeline:
             def my_analysis_func(galaxy, *args, **kwargs):
                 return galaxy.some_attribute * 2
 
-            survey.add_analysis_func(my_analysis_func, "MyAnalysisResult")
+            pipeline.add_analysis_func(my_analysis_func, "MyAnalysisResult")
             ```
 
         Or for a specific component of the galaxy:
@@ -565,7 +565,7 @@ class Pipeline:
             def my_analysis_func(galaxy, *args, **kwargs):
                 return galaxy.stars.mass.sum()
 
-            survey.add_analysis_func(my_analysis_func, "Stars/Mass")
+            pipeline.add_analysis_func(my_analysis_func, "Stars/Mass")
             ```
 
         Args:
