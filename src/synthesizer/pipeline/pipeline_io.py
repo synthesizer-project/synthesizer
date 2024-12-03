@@ -104,18 +104,25 @@ class PipelineIO:
         self.verbose = verbose
 
         # Report some useful information
-        self._print(f"Writing to {filepath}.")
-        if self.is_parallel:
-            self._print(f"Writing in parallel with {comm.Get_size()} ranks.")
         if self.is_collective:
-            self._print("Using collective I/O.")
+            self._print(
+                f"Writing in parallel to {filepath} "
+                f"with {comm.Get_size()} ranks, and collective I/O."
+            )
+        elif self.is_parallel:
+            self._print(
+                f"Writing in parallel to {filepath} "
+                f"with {comm.Get_size()} ranks."
+            )
+        else:
+            self._print(f"Writing to {filepath}.")
 
         # Time how long we have to wait for everyone to get here
         start = time.perf_counter()
         if self.is_parallel:
-            self._print("Waiting for all ranks to get to I/O.")
+            self._print("Waiting for all ranks to get to I/O...")
             self.comm.barrier()
-            self._took(start, "Waiting for all ranks to get to I/O.")
+            self._took(start, "Waiting for all ranks to get to I/O")
 
     def __del__(self):
         """Close the HDF5 file when the object is deleted."""
