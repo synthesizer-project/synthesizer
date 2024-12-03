@@ -8,6 +8,7 @@ from unyt import Mpc
 
 from synthesizer import exceptions
 from synthesizer.emission_models.attenuation.igm import Inoue14
+from synthesizer.instruments import Instrument
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
@@ -1098,9 +1099,13 @@ class BaseGalaxy:
                 "Parametric Galaxies can only produce smoothed images."
             )
 
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
+
         # Get the images
         images = emission_model._get_images(
-            resolution=resolution,
+            instrument=instrument,
             fov=fov,
             emitters={
                 "stellar": self.stars,
@@ -1114,7 +1119,6 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=False,
-            instrument=instrument,
         )
 
         # Get the instrument name if we have one
@@ -1240,9 +1244,13 @@ class BaseGalaxy:
                 "Parametric Galaxies can only produce smoothed images."
             )
 
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
+
         # Get the images
         images = emission_model._get_images(
-            resolution=resolution,
+            instrument=instrument,
             fov=fov,
             emitters={
                 "stellar": self.stars,
@@ -1256,7 +1264,6 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=True,
-            instrument=instrument,
         )
 
         # Get the instrument name if we have one

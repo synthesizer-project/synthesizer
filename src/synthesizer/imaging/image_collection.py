@@ -951,7 +951,7 @@ class ImageCollection:
 
 
 def _generate_image_collection_generic(
-    resolution,
+    instrument,
     fov,
     img_type,
     do_flux,
@@ -961,7 +961,6 @@ def _generate_image_collection_generic(
     nthreads,
     label,
     emitter,
-    instrument=None,
 ):
     """
     Generate an image collection for a generic emitter.
@@ -974,8 +973,8 @@ def _generate_image_collection_generic(
     imaging can only be smoothed.
 
     Args:
-        resolution (unyt_quantity)
-            The size of a pixel.
+        instrument (Instrument)
+            The instrument to create the images for.
         fov (unyt_quantity/tuple, unyt_quantity)
             The width of the image.
         img_type (str)
@@ -998,9 +997,6 @@ def _generate_image_collection_generic(
             The label of the photometry to use.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
-        instrument (Instrument)
-            The instrument to create the images for, used to limit the filter
-            set. If None all filters are used.
 
     Returns:
         ImageCollection
@@ -1029,7 +1025,7 @@ def _generate_image_collection_generic(
         )
 
     # Select only the photometry for this instrument
-    if instrument is not None:
+    if instrument.filters is not None:
         photometry = photometry.select(*instrument.filters.filter_codes)
 
     # If the emitter is a particle BlackHoles object we can only make a hist
