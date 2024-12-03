@@ -373,7 +373,7 @@ class MissingPartition(Exception):
 
 class PipelineNotReady(Exception):
     """
-    Exception class for when a required survey step hasn't been run.
+    Exception class for when a required pipeline step hasn't been run.
     """
 
     def __init__(self, *args):
