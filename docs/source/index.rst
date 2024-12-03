@@ -28,7 +28,7 @@ Contents
    instrumentation/instrument_example
    photometry/photometry
    imaging/imaging
-   surveys/survey_example
+   pipelines/pipeline_example
    parallelism/openmp
    advanced/advanced
    notebook_examples/cookbook
