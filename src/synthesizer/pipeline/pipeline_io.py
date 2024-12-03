@@ -113,6 +113,7 @@ class PipelineIO:
         # Time how long we have to wait for everyone to get here
         start = time.perf_counter()
         if self.is_parallel:
+            self._print("Waiting for all ranks to get to I/O.")
             self.comm.barrier()
             self._took(start, "Waiting for all ranks to get to I/O.")
 
