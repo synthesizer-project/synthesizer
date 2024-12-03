@@ -1691,6 +1691,9 @@ class Survey:
 
         self._took(write_start, "Writing data")
 
+        # Close the HDF5 file
+        self.io_helper.hdf.close()
+
         # Totally done!
         self._say_goodbye()
 
