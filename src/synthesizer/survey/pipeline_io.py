@@ -427,10 +427,9 @@ class PipelineIO:
             indexes (array, optional): The sorting indices for parallel writes.
             root (int, optional): The root rank for gathering and writing.
         """
-        if self.is_parallel:
-            if indexes is not None:
-                self.write_datasets_recursive_parallel(data, key, indexes)
-            else:
-                self.gather_and_write_datasets(data, key, root)
+        if self.is_collective:
+            self.write_datasets_recursive_parallel(data, key, indexes)
+        elif self.is_parallel:
+            self.gather_and_write_datasets(data, key, root)
         else:
             self.write_datasets_recursive(data, key)
