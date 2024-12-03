@@ -494,7 +494,7 @@ class Component(ABC):
 
         # Get the images
         images = emission_model._get_images(
-            resolution=resolution,
+            instrument=instrument,
             fov=fov,
             emitters={"stellar": self}
             if self.component_type == "Stars"
