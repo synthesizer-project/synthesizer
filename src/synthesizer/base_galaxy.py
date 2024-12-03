@@ -1169,6 +1169,10 @@ class BaseGalaxy:
                     f"Unknown emitter in emission model. ({model.emitter})"
                 )
 
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
+
         # Return the image at the root of the emission model
         return images[emission_model.label]
 
@@ -1313,6 +1317,10 @@ class BaseGalaxy:
                 raise KeyError(
                     f"Unknown emitter in emission model. ({model.emitter})"
                 )
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
