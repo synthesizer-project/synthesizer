@@ -86,12 +86,12 @@ class PipelineIO:
         # Store the communicator and number of galaxies
         self.comm = comm
         self.num_galaxies = num_galaxies
-        self.size = comm.Get_size() if comm is not None else None
-        self.rank = comm.Get_rank() if comm is not None else None
+        self.size = comm.Get_size() if comm is not None else 1
+        self.rank = comm.Get_rank() if comm is not None else 0
 
         # Flags for behavior
         self.is_parallel = comm is not None
-        self.is_root = self.rank == 0 if self.is_parallel else True
+        self.is_root = self.rank == 0
         self.is_collective = self.is_parallel and self.PARALLEL
 
         # Store the start time
@@ -121,7 +121,7 @@ class PipelineIO:
         start = time.perf_counter()
         if self.is_parallel:
             self._print("Waiting for all ranks to get to I/O...")
-            self.comm.barrier()
+            self.comm.Barrier()
             self._took(start, "Waiting for all ranks to get to I/O")
 
     def __del__(self):
@@ -222,15 +222,22 @@ class PipelineIO:
             self.hdf.create_group("Galaxies")  # we'll use this in a mo
 
             # Write out the instruments
+            inst_start = time.perf_counter()
             inst_group.attrs["ninstruments"] = instruments.ninstruments
             for label, instrument in instruments.items():
                 instrument.to_hdf5(inst_group.create_group(label))
+            self._took(inst_start, "Writing instruments")
 
             # Write out the emission model
+            model_start = time.perf_counter()
             for label, model in emission_model.items():
                 model.to_hdf5(model_group.create_group(label))
+            self._took(model_start, "Writing emission model")
 
             self._took(start, "Writing metadata")
+
+        if self.is_parallel:
+            self.comm.Barrier()
 
     def write_dataset(self, data, key):
         """
