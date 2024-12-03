@@ -723,7 +723,7 @@ class Survey:
 
         # Ensure we are ready
         if not self._loaded_galaxies:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate spectra before galaxies are loaded! "
                 "Call load_galaxies first."
             )
@@ -806,12 +806,12 @@ class Survey:
 
         # Ensure we are ready
         if not self._got_lnu_spectra:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate photometry before lnu spectra are generated! "
                 "Call get_spectra first."
             )
         elif len(self.filters) == 0:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate photometry without instruments! "
                 "Add instruments with filters and try again."
             )
@@ -866,12 +866,12 @@ class Survey:
 
         # Ensure we are ready
         if not self._got_fnu_spectra:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate photometry before fnu spectra are generated! "
                 "Call get_spectra with a cosmology object first."
             )
         elif len(self.filters) == 0:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate photometry without instruments! "
                 "Add instruments with filters and try again."
             )
@@ -935,7 +935,7 @@ class Survey:
 
         # Ensure we are ready
         if not self._loaded_galaxies:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate emission lines before galaxies are loaded! "
                 "Call load_galaxies first."
             )
@@ -1037,7 +1037,7 @@ class Survey:
 
         # Ensure we are ready
         if not self._got_luminosities:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate images before luminosities are generated! "
                 "Call get_photometry_luminosities first."
             )
@@ -1108,7 +1108,7 @@ class Survey:
 
         # Ensure we are ready
         if not self._got_images_lum:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot apply PSF to images before images are generated! "
                 "Call get_images_luminosity first."
             )
@@ -1235,7 +1235,7 @@ class Survey:
 
         # Ensure we are ready
         if not self._got_fluxes:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot generate images before fluxes are generated! "
                 "Call get_photometry_fluxes first."
             )
@@ -1306,7 +1306,7 @@ class Survey:
 
         # Ensure we are ready
         if not self._got_images_flux:
-            raise exceptions.SurveyNotReady(
+            raise exceptions.PipelineNotReady(
                 "Cannot apply PSF to images before images are generated! "
                 "Call get_images_flux first."
             )

@@ -371,7 +371,7 @@ class MissingPartition(Exception):
         return "Partition hasn't been done yet."
 
 
-class SurveyNotReady(Exception):
+class PipelineNotReady(Exception):
     """
     Exception class for when a required survey step hasn't been run.
     """
