@@ -87,6 +87,7 @@ class PipelineIO:
         self.comm = comm
         self.num_galaxies = num_galaxies
         self.rank = comm.Get_rank() if comm is not None else None
+        self.size = comm.Get_size() if comm is not None else None
 
         # Flags for behavior
         self.is_parallel = comm is not None
