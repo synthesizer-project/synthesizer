@@ -504,3 +504,5 @@ class PipelineIO:
             self.gather_and_write_datasets(data, key, root)
         else:
             self.write_datasets_recursive(data, key)
+
+        self.close()
