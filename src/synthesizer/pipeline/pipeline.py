@@ -1718,7 +1718,7 @@ class Pipeline:
         # distribution of galaxies across the ranks. This only needs printing
         # on rank 0 regardless of verbosity.
         if self.rank == 0:
-            self._print("Partitioned galaxies across ranks:")
+            self._print("Galaxy balance across ranks:")
             # Find the maximum list length for scaling
             max_count = max(counts)
 
