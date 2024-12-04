@@ -297,10 +297,6 @@ class PipelineIO:
             comm=self.comm,
         ) as hdf:
             dset = hdf[key]
-            self._print(
-                f"Writing dataset {key} with shape {self.start}"
-                f" to {self.end} of {data.shape}"
-            )
             dset[self.start : self.end, ...] = data
 
         self._print(f"Wrote dataset {key} with shape {data.shape}")
@@ -460,6 +456,7 @@ class PipelineIO:
         # Use the appropriate write method
         if self.is_collective:
             paths = self.create_datasets_parallel(data, key)
+            self._print(paths)
             self.comm.barrier()
             self.write_datasets_parallel(data, key, paths)
         elif self.is_parallel:
