@@ -507,8 +507,8 @@ class PipelineIO:
         # Define the new file path
         ext = self.filepath.split(".")[-1]
         path_no_ext = ".".join(self.filepath.split(".")[:-1])
-        new_path = "_".join(path_no_ext.split("_")[:1]) + f".{ext}"
-        temp_path = "_".join(path_no_ext.split("_")[:1]) + "_<rank>.hdf5"
+        new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
+        temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
 
         # Open the output file
         with h5py.File(new_path, "w") as hdf:
