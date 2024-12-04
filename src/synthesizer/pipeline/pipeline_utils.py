@@ -303,11 +303,9 @@ def get_dataset_properties(data, comm, root=0):
     gathered_out_paths = comm.gather(my_out_paths, root=root)
     if comm.rank == root:
         unique_out_paths = set.union(*gathered_out_paths)
-        print(unique_out_paths, len(unique_out_paths))
     else:
         unique_out_paths = None
     out_paths = comm.bcast(unique_out_paths, root=root)
-    print(len(out_paths))
 
     # Create a dictionary to store the shapes and dtypes
     shapes = {}
@@ -317,6 +315,7 @@ def get_dataset_properties(data, comm, root=0):
     # Loop over the paths and get the shapes
     for path in out_paths:
         d = data
+        print(path.split("/"))
         for k in path.split("/"):
             d = d[k]
         shapes[path] = d.shape
