@@ -490,7 +490,7 @@ class PipelineIO:
                         dset = dest[k]
 
                     # Copy the data into the slice
-                    dset[slice, ...] = v[:]
+                    dset[slice, ...] = v[...]
 
                     # Copy the attributes
                     for attr in v.attrs:
@@ -541,7 +541,7 @@ class PipelineIO:
                     _recursive_copy(
                         rank_hdf,
                         hdf,
-                        slice=slice(starts[rank], ends[rank] - 1),
+                        slice=slice(starts[rank], ends[rank]),
                     )
 
                 # Delete the rank file
