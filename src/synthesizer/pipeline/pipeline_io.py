@@ -486,8 +486,11 @@ class PipelineIO:
                             shape=(self.num_galaxies, *v.shape[1:]),
                             dtype=v.dtype,
                         )
+                    else:
+                        dset = dest[k]
 
                     # Copy the data into the slice
+                    print(k, slice, v[:].shape, dset[slice, ...].shape)
                     dset[slice, ...] = v[:]
 
                     # Copy the attributes
