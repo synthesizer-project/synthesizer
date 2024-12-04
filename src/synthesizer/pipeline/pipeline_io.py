@@ -339,12 +339,14 @@ class PipelineIO:
         """
         # If the data isn't a dictionary, write the dataset
         if not isinstance(data, dict):
+            self._print(f"Writing dataset {key} with shape {data.shape}")
             self.write_dataset_parallel(unyt_array(data), key)
+            self._print(f"Finished writing dataset {key}")
             return
 
         # Recursively handle dictionary data
         for k, v in data.items():
-            print(f"Recursing into {key}/{k}")
+            self._print(f"Recursing into {key}/{k}")
             self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
 
     def create_datasets_parallel(self, data, key):
