@@ -156,8 +156,10 @@ class PipelineIO:
         """Close the HDF5 file."""
         if self._hdf is not None:
             self._hdf.close()
+            self._hdf = None
         if self._hdf_mpi is not None:
             self._hdf_mpi.close()
+            self._hdf_mpi = None
 
     def _print(self, *args, **kwargs):
         """
