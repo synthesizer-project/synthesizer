@@ -269,6 +269,7 @@ class Stars(Particles, StarsComponent):
         mask,
         grid_assignment_method,
         nthreads,
+        vel_shift
     ):
         """
         A method to prepare the arguments for SED computation with the C
@@ -293,6 +294,9 @@ class Stars(Particles, StarsComponent):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Flags whether to apply doppler shift to the spectra. Defaults
+                to False.
 
         Returns:
             tuple
@@ -361,6 +365,7 @@ class Stars(Particles, StarsComponent):
             nlam,
             grid_assignment_method,
             nthreads,
+            vel_shift
         )
 
     def generate_lnu(
@@ -371,7 +376,6 @@ class Stars(Particles, StarsComponent):
         young=None,
         old=None,
         mask=None,
-        vel_shift=False,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -379,6 +383,7 @@ class Stars(Particles, StarsComponent):
         parametric_sfh="constant",
         aperture=None,
         nthreads=0,
+        vel_shift=False
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -564,12 +569,13 @@ class Stars(Particles, StarsComponent):
             mask=mask & aperture_mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         
         if vel_shift:
-            lnu_particle = compute_particle_seds(*args, vel_shift) # ?
+            lnu_particle = np.sum(compute_particle_seds(*args), axis=0)
         else:
             lnu_particle = compute_integrated_sed(*args)  
             
@@ -884,11 +890,11 @@ class Stars(Particles, StarsComponent):
         spectra_name,
         fesc=0.0,
         verbose=False,
-        vel_shift=False,
         do_grid_check=False,
         mask=None,
         grid_assignment_method="cic",
         nthreads=0,
+        vel_shift=False,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -1023,11 +1029,12 @@ class Stars(Particles, StarsComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
         )
         toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args, vel_shift) # I think this works but im not sure
+        masked_spec = compute_particle_seds(*args)
             
         start = tic()
 
