@@ -87,6 +87,10 @@ class PipelineIO:
         self._hdf = None
         self._hdf_mpi = None
 
+        # Create the file in memory ready to be appended to in the methods
+        # below (this will overwrite any existing file)
+        h5py.File(filepath, "w").close()
+
         # Store the communicator and number of galaxies
         self.comm = comm
         self.num_galaxies = num_galaxies
@@ -136,7 +140,7 @@ class PipelineIO:
     def hdf(self):
         """Return a reference to the HDF5 file for serial writes."""
         if self._hdf is None:
-            self._hdf = h5py.File(self.filepath, "w")
+            self._hdf = h5py.File(self.filepath, "a")
         return self._hdf
 
     @property
@@ -144,7 +148,7 @@ class PipelineIO:
         """Return a reference to the HDF5 file for parallel writes."""
         if self._hdf_mpi is None:
             self._hdf_mpi = h5py.File(
-                self.filepath, "w", driver="mpio", comm=self.comm
+                self.filepath, "a", driver="mpio", comm=self.comm
             )
         return self._hdf_mpi
 
