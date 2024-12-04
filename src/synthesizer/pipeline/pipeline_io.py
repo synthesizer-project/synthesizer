@@ -418,6 +418,11 @@ class PipelineIO:
         # Create the datasets
         if self.is_root:
             for k, shape in shapes.items():
+                self._print(
+                    f"Creating dataset {key}/{k} with shape {shape}"
+                    f" and dtype {dtypes[k]}"
+                    f" and units {units[k]}"
+                )
                 dset = self.hdf.create_dataset(
                     f"{key}/{k}",
                     shape=shape,
@@ -425,8 +430,6 @@ class PipelineIO:
                 )
                 dset.attrs["Units"] = units[k]
             self.close()
-
-        self.comm.Barrier()
 
         self._took(start, f"Creating datasets for {key}")
 
@@ -511,6 +514,7 @@ class PipelineIO:
         # Use the appropriate write method
         if self.is_collective:
             self.create_datasets_parallel(data, key)
+            self.comm.barrier()
             self.write_datasets_recursive_parallel(data, key, indexes)
         elif self.is_parallel:
             self.gather_and_write_datasets(data, key, root)
