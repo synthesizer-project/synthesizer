@@ -118,6 +118,60 @@ def discover_outputs(galaxies):
     return output_set
 
 
+def discover_dict_recursive(data, prefix="", output_set=None):
+    """
+    Recursively discover all leaves in a dictionary.
+
+    Args:
+        obj (dict):
+            The dictionary to search.
+        prefix (str):
+            A prefix to add to the keys of the arrays.
+        output_set (set):
+            A set to store the output paths in.
+
+    Returns:
+        dict:
+            A dictionary of all the numpy arrays in the input dictionary.
+    """
+    # If the obj is a dictionary, loop over the keys and values and recurse
+    if isinstance(data, dict):
+        for k, v in data.items():
+            output_set = discover_dict_recursive(
+                v,
+                prefix=f"{prefix}/{k}",
+                output_set=output_set,
+            )
+
+    # Otherwise, we have something we need to write out so add the path to
+    # the set
+    else:
+        output_set.add(prefix.replace(" ", "_"))
+
+    return output_set
+
+
+def discover_dict_structure(data):
+    """
+    Recursively discover the structure of a dictionary.
+
+    Args:
+        data (dict):
+            The dictionary to search.
+
+    Returns:
+        dict:
+            A dictionary of all the paths in the input dictionary.
+    """
+    # Set up the set to hold the global output paths
+    output_set = set()
+
+    # Loop over the galaxies and recursively discover the outputs
+    output_set = discover_dict_recursive(data, output_set=output_set)
+
+    return output_set
+
+
 @lru_cache(maxsize=500)
 def cached_split(split_key):
     """
@@ -199,8 +253,7 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
 
     # Ok, we have a dict. Before we get to the meat, lets make sure we have
     # the same structure on all ranks
-    my_out_paths = set()
-    my_out_paths = discover_outputs_recursive(data, output_set=my_out_paths)
+    my_out_paths = discover_dict_structure(data)
     gathered_out_paths = comm.gather(my_out_paths, root=root)
     if comm.rank == root:
         unique_out_paths = set.union(*gathered_out_paths)
@@ -246,8 +299,7 @@ def get_dataset_properties(data, comm, root=0):
 
     # Ok, we have a dict. Before we get to the meat, lets make sure we have
     # the same structure on all ranks
-    my_out_paths = set()
-    my_out_paths = discover_outputs_recursive(data, output_set=my_out_paths)
+    my_out_paths = discover_dict_structure(data)
     gathered_out_paths = comm.gather(my_out_paths, root=root)
     if comm.rank == root:
         unique_out_paths = set.union(*gathered_out_paths)
