@@ -535,7 +535,7 @@ class PipelineIO:
                     _recursive_copy(
                         rank_hdf,
                         hdf,
-                        slice=slice(starts[rank], ends[rank]),
+                        slice=slice(starts[rank], ends[rank] - 1),
                     )
 
                 # Delete the rank file
