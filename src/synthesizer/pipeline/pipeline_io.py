@@ -327,7 +327,7 @@ class PipelineIO:
                 "Parallel write requested but no MPI communicator provided."
             )
 
-        start = time.perf_counter()
+        tstart = time.perf_counter()
 
         local_shape = data.shape
 
@@ -364,7 +364,7 @@ class PipelineIO:
             end = start + local_shape[0]
             dset[start:end, ...] = data
 
-        self._took(start, f"Writing dataset {key}")
+        self._took(tstart, f"Writing dataset {key}")
 
     def write_datasets_recursive(self, data, key):
         """
@@ -485,6 +485,7 @@ class PipelineIO:
             indexes (array, optional): The sorting indices for parallel writes.
             root (int, optional): The root rank for gathering and writing.
         """
+        start = time.perf_counter()
         # In parallel land we need to make sure we're on the same page with
         # the structure we are writing
         if self.is_parallel:
@@ -498,4 +499,4 @@ class PipelineIO:
         else:
             self.write_datasets_recursive(data, key)
 
-        self.close()
+        self._took(start, f"Writing {key} (and subgroups)")
