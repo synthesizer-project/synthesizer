@@ -83,11 +83,6 @@ class PipelineIO:
         # Store the file path
         self.filepath = filepath
 
-        # Create the private hdf attributes we'll use to store the file object
-        # itself when its open
-        self._hdf = None
-        self._hdf_mpi = None
-
         # Create the file in memory ready to be appended to in the methods
         # below (this will overwrite any existing file)
         h5py.File(filepath, "w").close()
@@ -142,41 +137,6 @@ class PipelineIO:
             self.num_galaxies = ngalaxies_local
             self.start = 0
             self.end = ngalaxies_local
-
-    def __del__(self):
-        """Close the HDF5 file when the object is deleted."""
-        self.close()
-
-    @property
-    def hdf(self):
-        """Return a reference to the HDF5 file for serial writes."""
-        if self._hdf is None:
-            self._print("Opening HDF5 file in serial mode.")
-            self._hdf = h5py.File(self.filepath, "a")
-        return self._hdf
-
-    @property
-    def hdf_mpi(self):
-        """Return a reference to the HDF5 file for parallel writes."""
-        if self._hdf_mpi is None:
-            self._print("Opening HDF5 file in parallel mode.")
-            self._hdf_mpi = h5py.File(
-                self.filepath,
-                "a",
-                driver="mpio",
-                comm=self.comm,
-            )
-        return self._hdf_mpi
-
-    def close(self):
-        """Close the HDF5 file."""
-        self._print("Attempting to close HDF5 file.")
-        if self._hdf is not None:
-            self._hdf.close()
-            self._hdf = None
-        if self._hdf_mpi is not None:
-            self._hdf_mpi.close()
-            self._hdf_mpi = None
 
     def _print(self, *args, **kwargs):
         """
@@ -262,32 +222,30 @@ class PipelineIO:
 
         # Only write this metadata once
         if self.is_root:
-            # Write out some top level metadata
-            self.hdf.attrs["synthesizer_version"] = __version__
+            with h5py.File(self.filepath, "a") as hdf:
+                # Write out some top level metadata
+                hdf.attrs["synthesizer_version"] = __version__
 
-            # Create groups for the instruments, emission model, and
-            # galaxies
-            inst_group = self.hdf.create_group("Instruments")
-            model_group = self.hdf.create_group("EmissionModel")
-            self.hdf.create_group("Galaxies")  # we'll use this in a mo
+                # Create groups for the instruments, emission model, and
+                # galaxies
+                inst_group = hdf.create_group("Instruments")
+                model_group = hdf.create_group("EmissionModel")
+                hdf.create_group("Galaxies")  # we'll use this in a mo
 
-            # Write out the instruments
-            inst_start = time.perf_counter()
-            inst_group.attrs["ninstruments"] = instruments.ninstruments
-            for label, instrument in instruments.items():
-                instrument.to_hdf5(inst_group.create_group(label))
-            self._took(inst_start, "Writing instruments")
+                # Write out the instruments
+                inst_start = time.perf_counter()
+                inst_group.attrs["ninstruments"] = instruments.ninstruments
+                for label, instrument in instruments.items():
+                    instrument.to_hdf5(inst_group.create_group(label))
+                self._took(inst_start, "Writing instruments")
 
-            # Write out the emission model
-            model_start = time.perf_counter()
-            for label, model in emission_model.items():
-                model.to_hdf5(model_group.create_group(label))
-            self._took(model_start, "Writing emission model")
+                # Write out the emission model
+                model_start = time.perf_counter()
+                for label, model in emission_model.items():
+                    model.to_hdf5(model_group.create_group(label))
+                self._took(model_start, "Writing emission model")
 
-            self._took(start, "Writing metadata")
-
-        # Close the open file
-        self.close()
+                self._took(start, "Writing metadata")
 
         if self.is_parallel:
             self.comm.Barrier()
@@ -319,8 +277,9 @@ class PipelineIO:
             data = np.array([d.encode("utf-8") for d in data])
 
         # Write the dataset with the appropriate units
-        dset = self.hdf.create_dataset(key, data=data)
-        dset.attrs["Units"] = units
+        with h5py.File(self.filepath, "a") as hdf:
+            dset = hdf.create_dataset(key, data=data)
+            dset.attrs["Units"] = units
 
     def write_dataset_parallel(self, data, key):
         """
@@ -342,7 +301,13 @@ class PipelineIO:
             data = np.array([d.encode("utf-8") for d in data])
 
         # Write the data for our slice
-        self.hdf_mpi[key][self.start : self.end, ...] = data
+        with h5py.File(
+            self.filepath,
+            "a",
+            driver="mpio",
+            comm=self.comm,
+        ) as hdf:
+            hdf[key][self.start : self.end, ...] = data
 
         self._print(f"Writing dataset {key} with shape {data.shape}")
 
@@ -416,16 +381,14 @@ class PipelineIO:
 
         # Create the datasets
         if self.is_root:
-            for k, shape in shapes.items():
-                dset = self.hdf.create_dataset(
-                    f"{key}/{k}",
-                    shape=shape,
-                    dtype=dtypes[k],
-                )
-                dset.attrs["Units"] = units[k]
-
-        self.hdf.close()
-        self._hdf = None
+            with h5py.File(self.filepath, "a") as hdf:
+                for k, shape in shapes.items():
+                    dset = hdf.create_dataset(
+                        f"{key}/{k}",
+                        shape=shape,
+                        dtype=dtypes[k],
+                    )
+                    dset.attrs["Units"] = units[k]
 
         self._took(start, f"Creating datasets for {key}")
 
