@@ -130,7 +130,7 @@ class Extraction:
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
-                    vel_shift,
+                    vel_shift=vel_shift,
                     verbose=verbose,
                     **kwargs,
                 )
