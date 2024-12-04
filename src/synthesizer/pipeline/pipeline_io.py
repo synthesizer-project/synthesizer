@@ -395,7 +395,6 @@ class PipelineIO:
 
         # Recursively handle dictionary data
         for k, v in data.items():
-            self._print(f"Recursing into {key}/{k}, {type(v)}")
             self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
 
     def create_datasets_parallel(self, data, key):
@@ -414,23 +413,16 @@ class PipelineIO:
 
         # Get the shapes and dtypes of the data
         shapes, dtypes, units = get_dataset_properties(data, self.comm)
-        self._print(len(shapes), len(dtypes), len(units))
 
         # Create the datasets
         if self.is_root:
             for k, shape in shapes.items():
-                self._print(
-                    f"Creating dataset {key}/{k} with shape {shape}"
-                    f" and dtype {dtypes[k]}"
-                    f" and units {units[k]}"
-                )
                 dset = self.hdf.create_dataset(
                     f"{key}/{k}",
                     shape=shape,
                     dtype=dtypes[k],
                 )
                 dset.attrs["Units"] = units[k]
-            self.close()
 
         self._took(start, f"Creating datasets for {key}")
 
