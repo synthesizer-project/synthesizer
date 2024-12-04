@@ -516,3 +516,37 @@ def gather_and_write_datasets(hdf, data, key, comm, root=0):
     # Recurse through the whole dict communicating and writing all lists or
     # arrays we hit along the way
     _gather_and_write_recursive(hdf, data, key, comm, root)
+
+
+def unify_dict_structure_across_ranks(data, comm, root=0):
+    """
+    Recursively unify the structure of a dictionary across all ranks.
+
+    This function will ensure that all ranks have the same structure in their
+    dictionaries. This is necessary for writing out the data in parallel.
+
+    Args:
+        data (dict): The data to unify.
+        comm (mpi.Comm): The MPI communicator.
+        root (int): The root rank to gather data to.
+    """
+    # If we don't have a dict, just return the data straight away, theres no
+    # need to check the structure
+    if not isinstance(data, dict):
+        return unyt_array(data)
+
+    # Ok, we have a dict. Before we get to the meat, lets make sure we have
+    # the same structure on all ranks
+    gathered_out_paths = comm.gather(discover_outputs(data), root=root)
+    out_paths = comm.bcast(
+        set.union(*gathered_out_paths) if comm.rank == 0 else None, root=root
+    )
+
+    # Ensure all ranks have the same structure
+    for path in out_paths:
+        d = data
+        for k in path.split("/")[:-1]:
+            d = d.setdefault(k, {})
+        d[path.split("/")[-1]] = unyt_array([], "dimensionsless")
+
+    return data

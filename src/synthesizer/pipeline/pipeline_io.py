@@ -20,6 +20,9 @@ import numpy as np
 from unyt import unyt_array
 
 from synthesizer._version import __version__
+from synthesizer.pipeline.pipeline_utils import (
+    unify_dict_structure_across_ranks,
+)
 
 
 class PipelineIO:
@@ -443,6 +446,12 @@ class PipelineIO:
             indexes (array, optional): The sorting indices for parallel writes.
             root (int, optional): The root rank for gathering and writing.
         """
+        # In parallel land we need to make sure we're on the same page with
+        # the structure we are writing
+        if self.is_parallel:
+            data = unify_dict_structure_across_ranks(data, self.comm)
+
+        # Use the appropriate write method
         if self.is_collective:
             self.write_datasets_recursive_parallel(data, key, indexes)
         elif self.is_parallel:
