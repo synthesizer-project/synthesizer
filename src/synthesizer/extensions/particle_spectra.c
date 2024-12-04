@@ -1057,7 +1057,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_velocities, &np_ndims, &ndim,
-                        &npart, &nlam, &method, &vel_shift, &nthreads))
+                        &npart, &nlam, &method, &vel_shift, &nthreads)) 
     return NULL;
 
   /* Extract the grid struct. */
@@ -1069,7 +1069,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props =
-      get_part_struct(part_tuple, np_part_mass, *np_velocities*, np_fesc, npart, ndim);
+      get_part_struct(part_tuple, np_part_mass, np_velocities, np_fesc, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
