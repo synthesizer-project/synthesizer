@@ -410,7 +410,7 @@ class PipelineIO:
 
         # If the data isn't a dictionary, write the dataset
         if not isinstance(data, dict):
-            self.write_dataset_parallel(data, key)
+            self.write_dataset_parallel(unyt_array(data), key)
             return
 
         # Recursively handle dictionary data
