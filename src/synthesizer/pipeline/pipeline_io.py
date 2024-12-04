@@ -128,7 +128,6 @@ class PipelineIO:
         # Time how long we have to wait for everyone to get here
         start = time.perf_counter()
         if self.is_parallel:
-            self._print("Waiting for all ranks to get to I/O...")
             self.comm.Barrier()
             self._took(start, "Waiting for all ranks to get to I/O")
 
@@ -157,6 +156,7 @@ class PipelineIO:
 
     def close(self):
         """Close the HDF5 file."""
+        self._print("Attempting to close HDF5 file.")
         if self._hdf is not None:
             self._hdf.close()
             self._hdf = None
@@ -293,8 +293,6 @@ class PipelineIO:
             data (any): The data to write.
             key (str): The key to write the data to.
         """
-        start = time.perf_counter()
-
         # Strip the units off the data and convert to a numpy array
         if hasattr(data, "units"):
             units = str(data.units)
@@ -310,8 +308,6 @@ class PipelineIO:
         dset = self.hdf.create_dataset(key, data=data)
         dset.attrs["Units"] = units
 
-        self._took(start, f"Writing dataset {key}")
-
     def write_dataset_parallel(self, data, key):
         """
         Write a dataset to an HDF5 file in parallel.
@@ -326,8 +322,6 @@ class PipelineIO:
             raise RuntimeError(
                 "Parallel write requested but no MPI communicator provided."
             )
-
-        tstart = time.perf_counter()
 
         local_shape = data.shape
 
@@ -363,8 +357,6 @@ class PipelineIO:
             start = sum(self.comm.allgather(local_shape[0])[: self.rank])
             end = start + local_shape[0]
             dset[start:end, ...] = data
-
-        self._took(tstart, f"Writing dataset {key}")
 
     def write_datasets_recursive(self, data, key):
         """
