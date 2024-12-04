@@ -417,6 +417,7 @@ class PipelineIO:
 
         # If the data isn't a dictionary, write the dataset
         if not isinstance(data, dict):
+            self.write_dataset_parallel(data, key)
             return
 
         # Recursively handle dictionary data
@@ -476,7 +477,6 @@ class PipelineIO:
         try:
             self.write_dataset(combined_data, key)
         except TypeError as e:
-            print(type(data), type(combined_data))
             raise TypeError(f"Failed to write dataset {key} - {e}")
 
         # Clear collected data explicitly
