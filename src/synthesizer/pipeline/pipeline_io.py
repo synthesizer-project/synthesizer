@@ -461,7 +461,7 @@ class PipelineIO:
                         dest[k].attrs[attr] = v.attrs[attr]
 
                     # Recurse
-                    _recursive_copy(v, dest[k])
+                    _recursive_copy(v, dest[k], slice)
                 else:
                     # If the dataset doesn't exist we need to create it
                     if k not in dest:
