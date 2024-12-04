@@ -146,7 +146,7 @@ def discover_dict_recursive(data, prefix="", output_set=None):
     # Otherwise, we have something we need to write out so add the path to
     # the set
     else:
-        output_set.add(prefix.replace(" ", "_"))
+        output_set.add(prefix[1:].replace(" ", "_"))
 
     return output_set
 
