@@ -79,12 +79,13 @@ class PipelineIO:
                 only print on rank 0, 2 will print on all ranks, 0 will be
                 silent. Defaults to 1.
         """
-        # Open the HDF5 file, either in MPI mode or not based on the h5py
-        # build and the communicator provided
-        if comm is not None and self.PARALLEL:
-            self.hdf = h5py.File(filepath, "w", driver="mpio", comm=comm)
-        else:
-            self.hdf = h5py.File(filepath, "w")
+        # Store the file path
+        self.filepath = filepath
+
+        # Create the private hdf attributes we'll use to store the file object
+        # itself when its open
+        self._hdf = None
+        self._hdf_mpi = None
 
         # Store the communicator and number of galaxies
         self.comm = comm
@@ -129,7 +130,30 @@ class PipelineIO:
 
     def __del__(self):
         """Close the HDF5 file when the object is deleted."""
-        self.hdf.close()
+        self.close()
+
+    @property
+    def hdf(self):
+        """Return a reference to the HDF5 file for serial writes."""
+        if self._hdf is None:
+            self._hdf = h5py.File(self.filepath, "w")
+        return self._hdf
+
+    @property
+    def hdf_mpi(self):
+        """Return a reference to the HDF5 file for parallel writes."""
+        if self._hdf_mpi is None:
+            self._hdf_mpi = h5py.File(
+                self.filepath, "w", driver="mpio", comm=self.comm
+            )
+        return self._hdf_mpi
+
+    def close(self):
+        """Close the HDF5 file."""
+        if self._hdf is not None:
+            self._hdf.close()
+        if self._hdf_mpi is not None:
+            self._hdf_mpi.close()
 
     def _print(self, *args, **kwargs):
         """
@@ -239,6 +263,9 @@ class PipelineIO:
 
             self._took(start, "Writing metadata")
 
+        # Close the open file
+        self.close()
+
         if self.is_parallel:
             self.comm.Barrier()
 
@@ -273,6 +300,70 @@ class PipelineIO:
         # Write the dataset with the appropriate units
         dset = self.hdf.create_dataset(key, data=data)
         dset.attrs["Units"] = units
+
+        self._took(start, f"Writing dataset {key}")
+
+    def write_dataset_parallel(self, data, key):
+        """
+        Write a dataset to an HDF5 file in parallel.
+
+        This function requires that h5py has been built with parallel support.
+
+        Args:
+            data (any): The data to write.
+            key (str): The key to write the data to.
+        """
+        if not self.is_parallel:
+            raise RuntimeError(
+                "Parallel write requested but no MPI communicator provided."
+            )
+
+        start = time.perf_counter()
+
+        try:
+            local_shape = data.shape
+
+            # Only rank 0 creates the dataset
+            if self.rank == 0:
+                # Determine dtype
+                if hasattr(data, "value"):
+                    dtype = data.value.dtype
+                else:
+                    dtype = data.dtype
+
+                # Calculate global shape
+                global_shape = [self.num_galaxies]
+                for i in range(1, len(local_shape)):
+                    global_shape.append(local_shape[i])
+
+                # Create the dataset
+                dset = self.hdf_mpi.create_dataset(
+                    key,
+                    shape=tuple(global_shape),
+                    dtype=dtype,
+                )
+
+                # Handle units if present
+                if hasattr(data, "units"):
+                    dset.attrs["Units"] = str(data.units)
+
+            # Synchronize all ranks before writing
+            self.comm.barrier()
+
+            # Get the dataset on all ranks
+            dset = self.hdf_mpi[key]
+
+            # Set collective I/O property for the write operation
+            with dset.collective:
+                # Write the data using the appropriate slice
+                start = sum(self.comm.allgather(local_shape[0])[: self.rank])
+                end = start + local_shape[0]
+                dset[start:end, ...] = data
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to write dataset '{key}' on rank {self.rank}: {e}"
+            )
 
         self._took(start, f"Writing dataset {key}")
 
@@ -320,57 +411,6 @@ class PipelineIO:
 
         # If the data isn't a dictionary, write the dataset
         if not isinstance(data, dict):
-            start = time.perf_counter()
-
-            try:
-                local_shape = data.shape
-
-                # Only rank 0 creates the dataset
-                if self.rank == 0:
-                    # Determine dtype
-                    if hasattr(data, "value"):
-                        dtype = data.value.dtype
-                    else:
-                        dtype = data.dtype
-
-                    # Calculate global shape
-                    global_shape = [self.num_galaxies]
-                    for i in range(1, len(local_shape)):
-                        global_shape.append(local_shape[i])
-
-                    # Create the dataset
-                    dset = self.hdf.create_dataset(
-                        key,
-                        shape=tuple(global_shape),
-                        dtype=dtype,
-                    )
-
-                    # Handle units if present
-                    if hasattr(data, "units"):
-                        dset.attrs["Units"] = str(data.units)
-
-                # Synchronize all ranks before writing
-                self.comm.barrier()
-
-                # Get the dataset on all ranks
-                dset = self.hdf[key]
-
-                # Set collective I/O property for the write operation
-                with dset.collective:
-                    # Write the data using the appropriate slice
-                    start = sum(
-                        self.comm.allgather(local_shape[0])[: self.rank]
-                    )
-                    end = start + local_shape[0]
-                    dset[start:end, ...] = data
-
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to write dataset '{key}' on rank {self.rank}: {e}"
-                )
-
-            self._took(start, f"Writing dataset {key}")
-
             return
 
         # Recursively handle dictionary data
