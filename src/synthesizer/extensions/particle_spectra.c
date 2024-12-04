@@ -1155,4 +1155,4 @@ PyMODINIT_FUNC PyInit_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
   import_array();
   return m;
-}
+};
