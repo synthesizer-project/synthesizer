@@ -4,6 +4,8 @@ from functools import lru_cache
 
 from unyt import unyt_array
 
+from synthesizer.warnings import warn
+
 
 def discover_outputs_recursive(obj, prefix="", output_set=None):
     """
@@ -197,6 +199,52 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
 
     # Ok, we have a dict. Before we get to the meat, lets make sure we have
     # the same structure on all ranks
+    my_out_paths = discover_outputs(data)
+    gathered_out_paths = comm.gather(my_out_paths, root=root)
+    if comm.rank == root:
+        unique_out_paths = set.union(*gathered_out_paths)
+    else:
+        unique_out_paths = None
+    out_paths = comm.bcast(unique_out_paths, root=root)
+
+    # Warn the user if the structure is different
+    if len(out_paths) != len(unique_out_paths):
+        warn(
+            "The structure of the data is different on different ranks. "
+            "We'll unify the structure but something has gone awry."
+        )
+
+        # Ensure all ranks have the same structure
+        for path in out_paths:
+            d = data
+            for k in path.split("/")[:-1]:
+                d = d.setdefault(k, {})
+            d.setdefault(path.split("/")[-1], unyt_array([], "dimensionsless"))
+
+    return data
+
+
+def get_dataset_propeties(data, comm, root=0):
+    """
+    Return the shapes, dtypes and units of all data arrays in a dictionary.
+
+    Args:
+        data (dict): The data to get the shapes of.
+        comm (mpi.Comm): The MPI communicator.
+        root (int): The root rank to gather data to.
+
+    Returns:
+        dict: A dictionary of the shapes of all data arrays.
+        dict: A dictionary of the dtypes of all data arrays.
+        dict: A dictionary of the units of all data arrays.
+    """
+    # If we don't have a dict, just return the data straight away, theres no
+    # need to check the structure
+    if not isinstance(data, dict):
+        return {"": data.shape}, {"": data.dtype}
+
+    # Ok, we have a dict. Before we get to the meat, lets make sure we have
+    # the same structure on all ranks
     gathered_out_paths = comm.gather(discover_outputs(data), root=root)
     if comm.rank == root:
         unique_out_paths = set.union(*gathered_out_paths)
@@ -204,11 +252,18 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
         unique_out_paths = None
     out_paths = comm.bcast(unique_out_paths, root=root)
 
-    # Ensure all ranks have the same structure
+    # Create a dictionary to store the shapes and dtypes
+    shapes = {}
+    dtypes = {}
+    units = {}
+
+    # Loop over the paths and get the shapes
     for path in out_paths:
         d = data
-        for k in path.split("/")[:-1]:
-            d = d.setdefault(k, {})
-        d[path.split("/")[-1]] = unyt_array([], "dimensionsless")
+        for k in path.split("/"):
+            d = d[k]
+        shapes[path] = d.shape
+        dtypes[path] = d.dtype
+        units[path] = str(d.units)
 
-    return data
+    return shapes, dtypes, units
