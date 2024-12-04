@@ -1492,7 +1492,9 @@ class Pipeline:
         )
 
         # Write out the metadata
-        self.io_helper.write_metadata(self.instruments, self.emission_model)
+        self.io_helper.create_file_with_metadata(
+            self.instruments, self.emission_model
+        )
 
         # In MPI land we need to collect together the galaxy counts on each
         # rank to make the indices for each rank consistent
