@@ -332,6 +332,9 @@ class PipelineIO:
 
         local_shape = data.shape
 
+        # Get the parallel version of the HDF5 handler
+        hdf = self.hdf_mpi
+
         # Only rank 0 creates the dataset
         if self.rank == 0:
             # Determine dtype
@@ -346,7 +349,7 @@ class PipelineIO:
                 global_shape.append(local_shape[i])
 
             # Create the dataset
-            dset = self.hdf_mpi.create_dataset(
+            dset = hdf.create_dataset(
                 key,
                 shape=tuple(global_shape),
                 dtype=dtype,
@@ -365,7 +368,7 @@ class PipelineIO:
         self.comm.barrier()
 
         # Get the dataset on all ranks
-        dset = self.hdf_mpi[key]
+        dset = hdf[key]
 
         # Set collective I/O property for the write operation
         with dset.collective:
