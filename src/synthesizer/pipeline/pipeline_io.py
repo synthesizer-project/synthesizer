@@ -368,6 +368,8 @@ class PipelineIO:
             # Write the data using the appropriate slice
             dset[self.start : self.end, ...] = data
 
+        self._print(f"Writing dataset {key} with shape {local_shape}")
+
     def write_datasets_recursive(self, data, key):
         """
         Write a dictionary to an HDF5 file recursively.
