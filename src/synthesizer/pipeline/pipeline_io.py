@@ -424,6 +424,9 @@ class PipelineIO:
                 )
                 dset.attrs["Units"] = units[k]
 
+        self.hdf.close()
+        self._hdf = None
+
         self._took(start, f"Creating datasets for {key}")
 
     def gather_and_write_datasets(self, data, key, root=0):
