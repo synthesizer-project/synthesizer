@@ -344,7 +344,7 @@ class PipelineIO:
         # Loop over each path and write the data
         for path in paths:
             d = data
-            for k, v in path.split("/"):
+            for k in path.split("/"):
                 d = d[k]
             self.write_dataset_parallel(d, f"{key}/{path}")
 
