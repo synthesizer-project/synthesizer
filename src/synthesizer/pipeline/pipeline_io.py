@@ -7,7 +7,7 @@ handling the MPI communications for parallel I/O operations.
 Example usage:
 
     # Write data to an HDF5 file
-    writer = HDF5Writer(hdf)
+    writer = PipelineIO("output.hdf5")
     writer.write_data(data, key)
 
 
@@ -33,12 +33,6 @@ class PipelineIO:
     This class provides methods for writing data to an HDF5 file. It can
     handle writing data in parallel using MPI if the h5py library has been
     built with parallel support.
-
-    Example usage:
-
-            # Write data to an HDF5 file
-            writer = HDF5Writer(hdf)
-            writer.write_data(data, key)
 
     Attributes:
         hdf (h5py.File): The HDF5 file to write to.
@@ -291,11 +285,6 @@ class PipelineIO:
             data (any): The data to write.
             key (str): The key to write the data to.
         """
-        if not self.is_parallel:
-            raise RuntimeError(
-                "Parallel write requested but no MPI communicator provided."
-            )
-
         # If we have an array of strings, convert to a h5py compatible string
         if data.dtype.kind == "U":
             data = np.array([d.encode("utf-8") for d in data])
@@ -348,11 +337,6 @@ class PipelineIO:
             key (str): The key to write the data to.
             indexes (array): The sorting indices.
         """
-        if not self.is_parallel:
-            raise RuntimeError(
-                "Parallel write requested but no MPI communicator provided."
-            )
-
         # If the data isn't a dictionary, write the dataset
         if not isinstance(data, dict):
             self.write_dataset_parallel(unyt_array(data), key)
@@ -360,6 +344,7 @@ class PipelineIO:
 
         # Recursively handle dictionary data
         for k, v in data.items():
+            print(f"Recursing into {key}/{k}")
             self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
 
     def create_datasets_parallel(self, data, key):
