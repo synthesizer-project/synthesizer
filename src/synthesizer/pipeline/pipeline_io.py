@@ -414,6 +414,7 @@ class PipelineIO:
 
         # Get the shapes and dtypes of the data
         shapes, dtypes, units = get_dataset_properties(data, self.comm)
+        self._print(len(shapes), len(dtypes), len(units))
 
         # Create the datasets
         if self.is_root:
