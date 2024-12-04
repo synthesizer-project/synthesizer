@@ -148,8 +148,12 @@ class PipelineIO:
         """Return a reference to the HDF5 file for parallel writes."""
         if self._hdf_mpi is None:
             self._hdf_mpi = h5py.File(
-                self.filepath, "a", driver="mpio", comm=self.comm
+                self.filepath,
+                "a",
+                driver="mpio",
+                comm=self.comm,
             )
+        self._print("Opened HDF5 file for parallel write.")
         return self._hdf_mpi
 
     def close(self):
@@ -351,8 +355,13 @@ class PipelineIO:
             # Handle units if present
             if hasattr(data, "units"):
                 dset.attrs["Units"] = str(data.units)
+            else:
+                dset.attrs["Units"] = "dimensionless"
+
+            print(f"Created dataset {key} with shape {global_shape}")
 
         # Synchronize all ranks before writing
+        self._print("Synchronizing ranks before writing...")
         self.comm.barrier()
 
         # Get the dataset on all ranks
