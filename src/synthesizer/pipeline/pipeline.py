@@ -1459,7 +1459,7 @@ class Pipeline:
         # Done!
         self._took(start, "Extra analysis")
 
-    def write(self, outpath, verbose=1):
+    def write(self, outpath, verbose=None):
         """
         Write what we have produced to a HDF5 file.
 
@@ -1484,7 +1484,7 @@ class Pipeline:
             self.comm,
             self.n_galaxies,
             self._start_time,
-            verbose,
+            verbose if verbose is not None else self.verbose,
         )
 
         # Write out the metadata
