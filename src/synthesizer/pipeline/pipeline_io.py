@@ -61,7 +61,7 @@ class PipelineIO:
         self,
         filepath,
         comm=None,
-        num_galaxies=None,
+        ngalaxies_local=None,
         start_time=None,
         verbose=1,
     ):
@@ -71,7 +71,7 @@ class PipelineIO:
         Args:
             hdf (h5py.File): The HDF5 file to write to.
             comm (mpi.Comm, optional): The MPI communicator.
-            num_galaxies (int, optional): The total number of galaxies.
+            ngalaxies_local (int, optional): The local number of galaxies.
             pipeline (Pipeline): The pipeline object.
             start_time (float, optional): The start time of the pipeline, used
                 for timing information.
@@ -91,9 +91,8 @@ class PipelineIO:
         # below (this will overwrite any existing file)
         h5py.File(filepath, "w").close()
 
-        # Store the communicator and number of galaxies
+        # Store the communicator and its properties
         self.comm = comm
-        self.num_galaxies = num_galaxies
         self.size = comm.Get_size() if comm is not None else 1
         self.rank = comm.Get_rank() if comm is not None else 0
 
@@ -130,6 +129,18 @@ class PipelineIO:
         if self.is_parallel:
             self.comm.Barrier()
             self._took(start, "Waiting for all ranks to get to I/O")
+
+        # For collective I/O we need the counts on each rank so we know where
+        # to write the data
+        if self.is_collective:
+            rank_gal_counts = self.comm.allgather(ngalaxies_local)
+            self.num_galaxies = sum(rank_gal_counts)
+            self.start = sum(rank_gal_counts[: self.rank])
+            self.end = self.start + ngalaxies_local
+        else:
+            self.num_galaxies = ngalaxies_local
+            self.start = 0
+            self.end = ngalaxies_local
 
     def __del__(self):
         """Close the HDF5 file when the object is deleted."""
@@ -355,9 +366,7 @@ class PipelineIO:
         # Set collective I/O property for the write operation
         with dset.collective:
             # Write the data using the appropriate slice
-            start = sum(self.comm.allgather(local_shape[0])[: self.rank])
-            end = start + local_shape[0]
-            dset[start:end, ...] = data
+            dset[self.start : self.end, ...] = data
 
     def write_datasets_recursive(self, data, key):
         """
