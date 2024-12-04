@@ -348,11 +348,18 @@ class PipelineIO:
             global_shape.append(local_shape[i])
 
         # All ranks participate in the dataset creation
-        self._print(f"Creating dataset {key} with shape {global_shape}")
+        self._print(
+            f"Creating dataset {key} with shape "
+            f"{global_shape} and dtype {dtype}"
+        )
         dset = self.hdf_mpi.create_dataset(
             key,
             shape=tuple(global_shape),
             dtype=dtype,
+        )
+        self._print(
+            f"Created dataset {key} with shape "
+            f"{global_shape} and dtype {dtype}"
         )
 
         # Handle units if present (only rank 0 sets the attribute to
