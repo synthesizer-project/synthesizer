@@ -17,6 +17,7 @@ import time
 
 import h5py
 import numpy as np
+from unyt import unyt_array
 
 from synthesizer._version import __version__
 from synthesizer.pipeline.pipeline_utils import (
@@ -110,6 +111,11 @@ class PipelineIO:
         # Are we talking?
         self.verbose = verbose
 
+        # If we are writing in parallel but not using collective I/O we need
+        # write a file per rank. Modify the file path to include the rank.
+        ext = filepath.split(".")[-1]
+        self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
+
         # Report some useful information
         if self.is_collective:
             self._print(
@@ -118,8 +124,8 @@ class PipelineIO:
             )
         elif self.is_parallel:
             self._print(
-                f"Writing in parallel to {filepath} "
-                f"with {comm.Get_size()} ranks."
+                f"Writing to {filepath} "
+                f"with {comm.Get_size()} ranks, and a file per rank."
             )
         else:
             self._print(f"Writing to {filepath}.")
@@ -141,11 +147,6 @@ class PipelineIO:
             self.num_galaxies = ngalaxies_local
             self.start = 0
             self.end = ngalaxies_local
-
-        # If we are writing in parallel but not using collective I/O we need
-        # write a file per rank. Modify the file path to include the rank.
-        ext = filepath.split(".")[-1]
-        self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
 
     def _print(self, *args, **kwargs):
         """
@@ -274,6 +275,9 @@ class PipelineIO:
             data (any): The data to write.
             key (str): The key to write the data to.
         """
+        # Ensure we are working with a unyt_array
+        data = unyt_array(data)
+
         # Strip the units off the data and convert to a numpy array
         if hasattr(data, "units"):
             units = str(data.units)
