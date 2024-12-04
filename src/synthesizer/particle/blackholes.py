@@ -660,10 +660,11 @@ class BlackHoles(Particles, BlackholesComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args, vel_shift)
+        masked_spec = compute_particle_seds(*args)
 
         # If there's no mask we're done
         if mask is None:
