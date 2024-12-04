@@ -446,8 +446,15 @@ class PipelineIO:
                 dest (h5py.Group): The destination group.
                 slice: The slice (along the first axis) the data belongs to.
             """
+            # Copy over the attributes
+            for attr in src.attrs:
+                dest.attrs[attr] = src.attrs[attr]
+
             # Loop over the items in the source group
             for k, v in src.items():
+                if k in ["Instruments", "EmissionModel"]:
+                    continue
+
                 # If we found a group we need to recurse and create the group
                 # in the destination file if it doesn't exist. We also need to
                 # copy the attributes.
@@ -456,12 +463,21 @@ class PipelineIO:
                     if k not in dest:
                         dest.create_group(k)
 
-                    # Copy the attributes
-                    for attr in v.attrs:
-                        dest[k].attrs[attr] = v.attrs[attr]
-
                     # Recurse
                     _recursive_copy(v, dest[k], slice)
+
+                elif slice is None:
+                    # Just copy the dataset directly
+                    dset = dest.create_dataset(
+                        k,
+                        data=v[:],
+                        dtype=v.dtype,
+                    )
+
+                    # Copy the attributes
+                    for attr in v.attrs:
+                        dset.attrs[attr] = v.attrs[attr]
+
                 else:
                     # If the dataset doesn't exist we need to create it
                     if k not in dest:
@@ -472,7 +488,6 @@ class PipelineIO:
                         )
 
                     # Copy the data into the slice
-                    print(slice, v[:].shape, dset.shape)
                     dset[slice, ...] = v[:]
 
                     # Copy the attributes
@@ -495,6 +510,24 @@ class PipelineIO:
                 with h5py.File(
                     self.filepath.replace(f"_{rank}", ""), "r"
                 ) as rank_hdf:
+                    # We only the metadata groups once
+                    if rank == 0:
+                        # Copy the instruments over (no slice needed)
+                        hdf.create_group("Instruments")
+                        _recursive_copy(
+                            rank_hdf["Instruments"],
+                            hdf["Instruments"],
+                            slice=None,
+                        )
+
+                        # Copy the emission model over (no slice needed)
+                        hdf.create_group("EmissionModel")
+                        _recursive_copy(
+                            rank_hdf["EmissionModel"],
+                            hdf["EmissionModel"],
+                            slice=None,
+                        )
+
                     # Copy the contents of the rank file to the output file
                     _recursive_copy(
                         rank_hdf,
