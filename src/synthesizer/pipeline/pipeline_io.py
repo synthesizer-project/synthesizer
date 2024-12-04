@@ -17,7 +17,6 @@ import time
 
 import h5py
 import numpy as np
-from unyt import unyt_array
 
 from synthesizer._version import __version__
 from synthesizer.pipeline.pipeline_utils import (
@@ -59,6 +58,7 @@ class PipelineIO:
         ngalaxies_local=None,
         start_time=None,
         verbose=1,
+        parallel_io=False,
     ):
         """
         Initialize the HDF5Writer class.
@@ -73,6 +73,9 @@ class PipelineIO:
             verbose (int, optional): How verbose the output should be. 1 will
                 only print on rank 0, 2 will print on all ranks, 0 will be
                 silent. Defaults to 1.
+            parallel_io (bool, optional): Whether to use parallel I/O. This
+                requires h5py to be built with parallel support. Defaults to
+                False.
         """
         # Store the file path
         self.filepath = filepath
@@ -86,10 +89,17 @@ class PipelineIO:
         self.size = comm.Get_size() if comm is not None else 1
         self.rank = comm.Get_rank() if comm is not None else 0
 
+        # Make sure we can write in parallel if requested
+        if parallel_io and not self.PARALLEL:
+            raise RuntimeError(
+                "h5py not built with parallel support. "
+                "Cannot use parallel_io option."
+            )
+
         # Flags for behavior
         self.is_parallel = comm is not None
         self.is_root = self.rank == 0
-        self.is_collective = self.is_parallel and self.PARALLEL
+        self.is_collective = self.is_parallel and self.PARALLEL and parallel_io
 
         # Store the start time
         if start_time is None:
@@ -122,7 +132,7 @@ class PipelineIO:
 
         # For collective I/O we need the counts on each rank so we know where
         # to write the data
-        if self.is_collective:
+        if self.is_collective or self.is_parallel:
             rank_gal_counts = self.comm.allgather(ngalaxies_local)
             self.num_galaxies = sum(rank_gal_counts)
             self.start = sum(rank_gal_counts[: self.rank])
@@ -131,6 +141,11 @@ class PipelineIO:
             self.num_galaxies = ngalaxies_local
             self.start = 0
             self.end = ngalaxies_local
+
+        # If we are writing in parallel but not using collective I/O we need
+        # write a file per rank. Modify the file path to include the rank.
+        ext = filepath.split(".")[-1]
+        self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
 
     def _print(self, *args, **kwargs):
         """
@@ -376,64 +391,6 @@ class PipelineIO:
 
         return paths
 
-    def gather_and_write_datasets(self, data, key, root=0):
-        """
-        Recursively collect data from all ranks onto the root and write it out.
-
-        We will recurse through the dictionary and gather all arrays or lists
-        at the leaves and write them out to the HDF5 file. Doing so limits the
-        size of communications and minimises the amount of data we have
-        collected on the root rank at any one time.
-
-        Args:
-            data (any): The data to gather.
-            key (str): The key to write the data to.
-            root (int): The root rank to gather data to.
-        """
-        if not self.is_parallel:
-            raise RuntimeError(
-                "Gather and write requested but no MPI communicator provided."
-            )
-
-        # If the data is a dictionary we need to recurse
-        if isinstance(data, dict):
-            for k, v in data.items():
-                self.gather_and_write_datasets(v, f"{key}/{k}", root)
-            return
-
-        start = time.perf_counter()
-
-        # First gather the data
-        collected_data = self.comm.gather(data, root=root)
-
-        # If we aren't the root we're done
-        if collected_data is None:
-            return
-
-        # Remove any empty datasets
-        collected_data = [d for d in collected_data if len(d) > 0]
-
-        # If there's nothing to write we're done
-        if len(collected_data) == 0:
-            return
-
-        # Combine the list of arrays into a single unyt_array
-        try:
-            combined_data = unyt_array(np.concatenate(collected_data))
-        except ValueError as e:
-            raise ValueError(f"Failed to concatenate {key} - {e}")
-
-        self._took(start, f"Gathering {key}")
-
-        # Write the dataset
-        try:
-            self.write_dataset(combined_data, key)
-        except TypeError as e:
-            raise TypeError(f"Failed to write dataset {key} - {e}")
-
-        # Clear collected data explicitly
-        del collected_data
-
     def write_data(self, data, key, indexes=None, root=0):
         """
         Write data using the appropriate method based on the environment.
@@ -455,13 +412,15 @@ class PipelineIO:
 
         # Use the appropriate write method
         if self.is_collective:
+            # For collective I/O we need to create the datasets first, then
+            # write the data to them in parallel.
             paths = self.create_datasets_parallel(data, key)
-            self._print(paths)
             self.comm.barrier()
             self.write_datasets_parallel(data, key, paths)
-        elif self.is_parallel:
-            self.gather_and_write_datasets(data, key, root)
         else:
+            # Otherwise, we can just write everything recursively. Bear in mind
+            # that when using MPI this will write a file per rank ready for
+            # later combination into a virtual file.
             self.write_datasets_recursive(data, key)
 
         self._took(start, f"Writing {key} (and subgroups)")
