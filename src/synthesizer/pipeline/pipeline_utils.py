@@ -2,7 +2,6 @@
 
 from functools import lru_cache
 
-import numpy as np
 from unyt import unyt_array
 
 
@@ -136,69 +135,6 @@ def cached_split(split_key):
     return split_key.split("/")
 
 
-def pack_data(d, data, output_key):
-    """
-    Pack data into a dictionary recursively.
-
-    Args:
-        d (dict):
-            The dictionary to pack the data into.
-        data (any):
-            The data to store at output_key.
-        output_key (str):
-            The key to pack the data into in "key1/key2/.../keyN" format.
-    """
-    # Split the keys
-    keys = cached_split(output_key)
-
-    # Loop until we reach the "leaf" key, we should have the dictionary
-    # structure in place by the time we reach the leaf key, if we don't we
-    # error automatically to highlight a mismatch (all ranks must agree on the
-    # structure in MPI land)
-    for key in keys[:-1]:
-        d = d[key]
-
-    # Store the data at the leaf key
-    d[keys[-1]] = unyt_array(data)
-
-
-def unpack_data(obj, output_path):
-    """
-    Unpack data from an object recursively.
-
-    This is a helper function for traversing complex attribute paths. These
-    can include attributes which are dictionaries or objects with their own
-    attributes. A "/" defines the string to the right of it as the key to
-    a dictionary, while a "." defines the string to the right of it as an
-    attribute of an object.
-
-    Args:
-        obj (dict):
-            The dictionary to search.
-        output_path (tuple):
-            The path to the desired attribute of the form
-            ".attr1/key2.attr2/.../keyN".
-    """
-    # Split the output path
-    keys = cached_split(output_path)
-
-    # Recurse until we reach the desired attribute
-    for key in keys:
-        if getattr(obj, key, None) is not None:
-            obj = getattr(obj, key)
-        elif getattr(obj, "_" + key, None) is not None:
-            obj = getattr(obj, "_" + key)
-        else:
-            try:
-                obj = obj[key]
-            except (KeyError, ValueError, TypeError):
-                raise KeyError(
-                    f"Key {'/'.join(keys)} not found in {type(obj)}"
-                )
-
-    return obj
-
-
 def combine_list_of_dicts(dicts):
     """
     Combine a list of dictionaries into a single dictionary.
@@ -240,47 +176,6 @@ def combine_list_of_dicts(dicts):
         )
 
     return recursive_merge(dicts)
-
-
-def sort_data_recursive(data, sinds):
-    """
-    Sort a dictionary recursively.
-
-    Args:
-        data (dict): The data to sort.
-        sinds (dict): The sorted indices.
-    """
-    # Early exit if data is None
-    if data is None:
-        return None
-
-    # If the data isn't a dictionary just return the sorted data
-    if not isinstance(data, dict):
-        # If there is no data we can't sort it, just return the empty array.
-        # This can happen if there are no galaxies.
-        if len(data) == 0:
-            return unyt_array(data)
-
-        # Convert the list of data to an array (but we don't want to lose the
-        # units)
-        data = unyt_array([d.value for d in data])
-
-        try:
-            # Apply the sorting indices to the first axis
-            return np.take_along_axis(data, sinds, axis=0)
-        except (IndexError, ValueError, AttributeError) as e:
-            print(data)
-            print(sinds)
-            print(len(sinds))
-            print(data.shape)
-            raise IndexError(f"Failed to sort data - {e}")
-
-    # Loop over the data
-    sorted_data = {}
-    for k, v in data.items():
-        sorted_data[k] = sort_data_recursive(v, sinds)
-
-    return sorted_data
 
 
 def unify_dict_structure_across_ranks(data, comm, root=0):
