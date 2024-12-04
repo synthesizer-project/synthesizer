@@ -490,7 +490,6 @@ class PipelineIO:
                         dset = dest[k]
 
                     # Copy the data into the slice
-                    print(slice, v.shape, dset.shape)
                     dset[slice, ...] = v[...]
 
                     # Copy the attributes
