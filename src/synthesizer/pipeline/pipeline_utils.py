@@ -224,7 +224,7 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
     return data
 
 
-def get_dataset_propeties(data, comm, root=0):
+def get_dataset_properties(data, comm, root=0):
     """
     Return the shapes, dtypes and units of all data arrays in a dictionary.
 
