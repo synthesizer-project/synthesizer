@@ -1486,7 +1486,7 @@ class Pipeline:
         self.io_helper = PipelineIO(
             outpath,
             self.comm,
-            self.n_galaxies,
+            self.n_galaxies_local,
             self._start_time,
             verbose if verbose is not None else self.verbose,
         )
