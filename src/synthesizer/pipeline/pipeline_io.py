@@ -13,6 +13,7 @@ Example usage:
 
 """
 
+import os
 import time
 
 import h5py
@@ -136,11 +137,13 @@ class PipelineIO:
         # to write the data
         if self.is_collective or self.is_parallel:
             rank_gal_counts = self.comm.allgather(ngalaxies_local)
+            self._ngalaxies_local = ngalaxies_local
             self.num_galaxies = sum(rank_gal_counts)
             self.start = sum(rank_gal_counts[: self.rank])
             self.end = self.start + ngalaxies_local
         else:
             self.num_galaxies = ngalaxies_local
+            self._ngalaxies_local = ngalaxies_local
             self.start = 0
             self.end = ngalaxies_local
 
@@ -424,3 +427,81 @@ class PipelineIO:
             self.write_datasets_recursive(data, key)
 
         self._took(start, f"Writing {key} (and subgroups)")
+
+    def combine_rank_files(self):
+        """
+        Combine the rank files into a single file.
+
+        Args:
+            output_file (str): The name of the output file.
+        """
+        start = time.perf_counter()
+
+        def _recursive_copy(src, dest, slice):
+            """
+            Recursively copy the contents of an HDF5 group.
+
+            Args:
+                src (h5py.Group): The source group.
+                dest (h5py.Group): The destination group.
+                slice: The slice (along the first axis) the data belongs to.
+            """
+            # Loop over the items in the source group
+            for k, v in src.items():
+                # If we found a group we need to recurse and create the group
+                # in the destination file if it doesn't exist. We also need to
+                # copy the attributes.
+                if isinstance(v, h5py.Group):
+                    # Create the group if it doesn't exist
+                    if k not in dest:
+                        dest.create_group(k)
+
+                    # Copy the attributes
+                    for attr in v.attrs:
+                        dest[k].attrs[attr] = v.attrs[attr]
+
+                    # Recurse
+                    _recursive_copy(v, dest[k])
+                else:
+                    # If the dataset doesn't exist we need to create it
+                    if k not in dest:
+                        dset = dest.create_dataset(
+                            k,
+                            shape=(self.num_galaxies, *v.shape[1:]),
+                            dtype=v.dtype,
+                        )
+
+                    # Copy the data into the slice
+                    dset[slice, ...] = v[:]
+
+                    # Copy the attributes
+                    for attr in v.attrs:
+                        dset.attrs[attr] = v.attrs[attr]
+
+        # Get the number of galaxies on each rank
+        starts = self.comm.gather(self.start, root=0)
+        ends = self.comm.gather(self.end, root=0)
+
+        # Only the root rank needs to do this work
+        if not self.is_root:
+            return
+
+        # Open the output file
+        with h5py.File(self.filepath.replace(f"_{self.rank}", ""), "w") as hdf:
+            # Loop over each rank file
+            for rank in range(self.size):
+                # Open the rank file
+                with h5py.File(
+                    self.filepath.replace(f"_{rank}", ""), "r"
+                ) as rank_hdf:
+                    # Copy the contents of the rank file to the output file
+                    _recursive_copy(
+                        rank_hdf,
+                        hdf,
+                        slice=slice(starts[rank], ends[rank]),
+                    )
+
+                # Delete the rank file
+                os.remove(self.filepath.replace(f"_{rank}", ""))
+
+        self._took(start, "Combining files")
