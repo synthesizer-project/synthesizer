@@ -1699,6 +1699,7 @@ class Pipeline:
         # a single file on rank 0
         if self.using_mpi and not self.io_helper.is_collective:
             self.io_helper.combine_rank_files()
+            self.comm.barrier()
 
         self._took(write_start, "Writing data")
 
