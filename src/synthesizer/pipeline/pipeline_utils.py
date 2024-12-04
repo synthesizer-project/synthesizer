@@ -321,4 +321,4 @@ def get_dataset_properties(data, comm, root=0):
         dtypes[path] = d.dtype
         units[path] = str(d.units)
 
-    return shapes, dtypes, units
+    return shapes, dtypes, units, out_paths
