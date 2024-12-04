@@ -21,6 +21,7 @@ from unyt import unyt_array
 
 from synthesizer._version import __version__
 from synthesizer.pipeline.pipeline_utils import (
+    get_dataset_properties,
     unify_dict_structure_across_ranks,
 )
 
@@ -150,6 +151,7 @@ class PipelineIO:
     def hdf(self):
         """Return a reference to the HDF5 file for serial writes."""
         if self._hdf is None:
+            self._print("Opening HDF5 file in serial mode.")
             self._hdf = h5py.File(self.filepath, "a")
         return self._hdf
 
@@ -157,6 +159,7 @@ class PipelineIO:
     def hdf_mpi(self):
         """Return a reference to the HDF5 file for parallel writes."""
         if self._hdf_mpi is None:
+            self._print("Opening HDF5 file in parallel mode.")
             self._hdf_mpi = h5py.File(
                 self.filepath,
                 "a",
@@ -334,48 +337,14 @@ class PipelineIO:
                 "Parallel write requested but no MPI communicator provided."
             )
 
-        local_shape = data.shape
+        # If we have an array of strings, convert to a h5py compatible string
+        if data.dtype.kind == "U":
+            data = np.array([d.encode("utf-8") for d in data])
 
-        # Determine dtype
-        if hasattr(data, "value"):
-            dtype = data.value.dtype
-        else:
-            dtype = data.dtype
+        # Write the data for our slice
+        self.hdf_mpi[key][self.start : self.end, ...] = data
 
-        # Calculate global shape
-        global_shape = [self.num_galaxies]
-        for i in range(1, len(local_shape)):
-            global_shape.append(local_shape[i])
-
-        # All ranks participate in the dataset creation
-        self._print(
-            f"Creating dataset {key} with shape "
-            f"{global_shape} and dtype {dtype}"
-        )
-        dset = self.hdf_mpi.create_dataset(
-            key,
-            shape=tuple(global_shape),
-            dtype=dtype,
-        )
-        self._print(
-            f"Created dataset {key} with shape "
-            f"{global_shape} and dtype {dtype}"
-        )
-
-        # Handle units if present (only rank 0 sets the attribute to
-        # avoid race conditions)
-        if self.rank == 0:
-            if hasattr(data, "units"):
-                dset.attrs["Units"] = str(data.units)
-            else:
-                dset.attrs["Units"] = "dimensionless"
-
-        # Set collective I/O property for the write operation
-        with dset.collective:
-            # Write the data using the appropriate slice
-            dset[self.start : self.end, ...] = data
-
-        self._print(f"Writing dataset {key} with shape {local_shape}")
+        self._print(f"Writing dataset {key} with shape {data.shape}")
 
     def write_datasets_recursive(self, data, key):
         """
@@ -428,6 +397,38 @@ class PipelineIO:
         for k, v in data.items():
             self._print(f"Recursing into {key}/{k}, {type(v)}")
             self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
+
+    def create_datasets_parallel(self, data, key):
+        """
+        Create datasets ready to be populated in parallel.
+
+        This is only needed for collective I/O operations. We will first make
+        the datasets here in serial so they can be written to in any order on
+        any rank.
+
+        Args:
+            shapes (dict): The shapes of the datasets to create.
+            dtypes (dict): The data types of the datasets to create.
+        """
+        start = time.perf_counter()
+
+        # Get the shapes and dtypes of the data
+        shapes, dtypes, units = get_dataset_properties(data, self.comm)
+
+        # Create the datasets
+        if self.is_root:
+            for k, shape in shapes.items():
+                dset = self.hdf.create_dataset(
+                    f"{key}/{k}",
+                    shape=shape,
+                    dtype=dtypes[k],
+                )
+                dset.attrs["Units"] = units[k]
+            self.close()
+
+        self.comm.Barrier()
+
+        self._took(start, f"Creating datasets for {key}")
 
     def gather_and_write_datasets(self, data, key, root=0):
         """
@@ -509,6 +510,7 @@ class PipelineIO:
 
         # Use the appropriate write method
         if self.is_collective:
+            self.create_datasets_parallel(data, key)
             self.write_datasets_recursive_parallel(data, key, indexes)
         elif self.is_parallel:
             self.gather_and_write_datasets(data, key, root)
