@@ -331,7 +331,7 @@ class PipelineIO:
         for k, v in data.items():
             self.write_datasets_recursive(v, f"{key}/{k}")
 
-    def write_datasets_recursive_parallel(self, data, key, indexes):
+    def write_datasets_parallel(self, data, key, paths):
         """
         Write a dictionary to an HDF5 file recursively in parallel.
 
@@ -340,19 +340,13 @@ class PipelineIO:
         Args:
             data (dict): The data to write.
             key (str): The key to write the data to.
-            indexes (array): The sorting indices.
         """
-        # If the data isn't a dictionary, write the dataset
-        if not isinstance(data, dict):
-            self._print(f"Writing dataset {key} with shape {data.shape}")
-            self.write_dataset_parallel(unyt_array(data), key)
-            self._print(f"Finished writing dataset {key}")
-            return
-
-        # Recursively handle dictionary data
-        for k, v in data.items():
-            self._print(f"Recursing into {key}/{k}")
-            self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
+        # Loop over each path and write the data
+        for path in paths:
+            d = data
+            for k, v in path.split("/"):
+                d = d[k]
+            self.write_dataset_parallel(d, f"{key}/{path}")
 
     def create_datasets_parallel(self, data, key):
         """
@@ -369,7 +363,7 @@ class PipelineIO:
         start = time.perf_counter()
 
         # Get the shapes and dtypes of the data
-        shapes, dtypes, units = get_dataset_properties(data, self.comm)
+        shapes, dtypes, units, paths = get_dataset_properties(data, self.comm)
 
         # Create the datasets
         if self.is_root:
@@ -383,6 +377,8 @@ class PipelineIO:
                     dset.attrs["Units"] = units[k]
 
         self._took(start, f"Creating datasets for {key}")
+
+        return paths
 
     def gather_and_write_datasets(self, data, key, root=0):
         """
@@ -449,7 +445,6 @@ class PipelineIO:
         Args:
             data (any): The data to write.
             key (str): The key to write the data to.
-            indexes (array, optional): The sorting indices for parallel writes.
             root (int, optional): The root rank for gathering and writing.
         """
         start = time.perf_counter()
@@ -464,9 +459,9 @@ class PipelineIO:
 
         # Use the appropriate write method
         if self.is_collective:
-            self.create_datasets_parallel(data, key)
+            paths = self.create_datasets_parallel(data, key)
             self.comm.barrier()
-            self.write_datasets_recursive_parallel(data, key, indexes)
+            self.write_datasets_parallel(data, key, paths)
         elif self.is_parallel:
             self.gather_and_write_datasets(data, key, root)
         else:
