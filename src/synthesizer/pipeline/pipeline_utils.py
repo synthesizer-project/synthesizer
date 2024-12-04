@@ -303,9 +303,11 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
     # Ok, we have a dict. Before we get to the meat, lets make sure we have
     # the same structure on all ranks
     gathered_out_paths = comm.gather(discover_outputs(data), root=root)
-    out_paths = comm.bcast(
-        set.union(*gathered_out_paths) if comm.rank == 0 else None, root=root
-    )
+    if comm.rank == root:
+        unique_out_paths = set.union(*gathered_out_paths)
+    else:
+        unique_out_paths = None
+    out_paths = comm.bcast(unique_out_paths, root=root)
 
     # Ensure all ranks have the same structure
     for path in out_paths:

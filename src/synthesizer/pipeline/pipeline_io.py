@@ -326,50 +326,44 @@ class PipelineIO:
 
         start = time.perf_counter()
 
-        try:
-            local_shape = data.shape
+        local_shape = data.shape
 
-            # Only rank 0 creates the dataset
-            if self.rank == 0:
-                # Determine dtype
-                if hasattr(data, "value"):
-                    dtype = data.value.dtype
-                else:
-                    dtype = data.dtype
+        # Only rank 0 creates the dataset
+        if self.rank == 0:
+            # Determine dtype
+            if hasattr(data, "value"):
+                dtype = data.value.dtype
+            else:
+                dtype = data.dtype
 
-                # Calculate global shape
-                global_shape = [self.num_galaxies]
-                for i in range(1, len(local_shape)):
-                    global_shape.append(local_shape[i])
+            # Calculate global shape
+            global_shape = [self.num_galaxies]
+            for i in range(1, len(local_shape)):
+                global_shape.append(local_shape[i])
 
-                # Create the dataset
-                dset = self.hdf_mpi.create_dataset(
-                    key,
-                    shape=tuple(global_shape),
-                    dtype=dtype,
-                )
-
-                # Handle units if present
-                if hasattr(data, "units"):
-                    dset.attrs["Units"] = str(data.units)
-
-            # Synchronize all ranks before writing
-            self.comm.barrier()
-
-            # Get the dataset on all ranks
-            dset = self.hdf_mpi[key]
-
-            # Set collective I/O property for the write operation
-            with dset.collective:
-                # Write the data using the appropriate slice
-                start = sum(self.comm.allgather(local_shape[0])[: self.rank])
-                end = start + local_shape[0]
-                dset[start:end, ...] = data
-
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to write dataset '{key}' on rank {self.rank}: {e}"
+            # Create the dataset
+            dset = self.hdf_mpi.create_dataset(
+                key,
+                shape=tuple(global_shape),
+                dtype=dtype,
             )
+
+            # Handle units if present
+            if hasattr(data, "units"):
+                dset.attrs["Units"] = str(data.units)
+
+        # Synchronize all ranks before writing
+        self.comm.barrier()
+
+        # Get the dataset on all ranks
+        dset = self.hdf_mpi[key]
+
+        # Set collective I/O property for the write operation
+        with dset.collective:
+            # Write the data using the appropriate slice
+            start = sum(self.comm.allgather(local_shape[0])[: self.rank])
+            end = start + local_shape[0]
+            dset[start:end, ...] = data
 
         self._took(start, f"Writing dataset {key}")
 
