@@ -199,7 +199,8 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
 
     # Ok, we have a dict. Before we get to the meat, lets make sure we have
     # the same structure on all ranks
-    my_out_paths = discover_outputs(data)
+    my_out_paths = set()
+    my_out_paths = discover_outputs_recursive(data, output_set=my_out_paths)
     gathered_out_paths = comm.gather(my_out_paths, root=root)
     if comm.rank == root:
         unique_out_paths = set.union(*gathered_out_paths)
@@ -245,10 +246,12 @@ def get_dataset_properties(data, comm, root=0):
 
     # Ok, we have a dict. Before we get to the meat, lets make sure we have
     # the same structure on all ranks
-    gathered_out_paths = comm.gather(discover_outputs(data), root=root)
-    print(gathered_out_paths)
+    my_out_paths = set()
+    my_out_paths = discover_outputs_recursive(data, output_set=my_out_paths)
+    gathered_out_paths = comm.gather(my_out_paths, root=root)
     if comm.rank == root:
         unique_out_paths = set.union(*gathered_out_paths)
+        print(unique_out_paths, len(unique_out_paths))
     else:
         unique_out_paths = None
     out_paths = comm.bcast(unique_out_paths, root=root)
