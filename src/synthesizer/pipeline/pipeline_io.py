@@ -153,7 +153,6 @@ class PipelineIO:
                 driver="mpio",
                 comm=self.comm,
             )
-        self._print("Opened HDF5 file for parallel write.")
         return self._hdf_mpi
 
     def close(self):
@@ -358,9 +357,6 @@ class PipelineIO:
             else:
                 dset.attrs["Units"] = "dimensionless"
 
-        # Synchronize all ranks before writing
-        self.comm.barrier()
-
         # Set collective I/O property for the write operation
         with dset.collective:
             # Write the data using the appropriate slice
@@ -419,7 +415,6 @@ class PipelineIO:
 
         # Recursively handle dictionary data
         for k, v in data.items():
-            print(f"Recursing into {key}/{k}")
             self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
 
     def gather_and_write_datasets(self, data, key, root=0):
@@ -494,7 +489,6 @@ class PipelineIO:
         # the structure we are writing
         if self.is_parallel:
             data = unify_dict_structure_across_ranks(data, self.comm)
-            print("Data unified")
 
         # Use the appropriate write method
         if self.is_collective:

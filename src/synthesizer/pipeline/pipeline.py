@@ -246,7 +246,7 @@ class Pipeline:
         # If we are running with hybrid parallelism, we need to know about
         # the communicator for MPI
         self.comm = comm
-        self.using_mpi = comm is not None
+        self.using_mpi = comm is not None and comm.Get_size() > 1
 
         # Get some MPI informaiton if we are using MPI
         if self.using_mpi:
@@ -262,6 +262,10 @@ class Pipeline:
 
         # Attach the writer, we'll assign this later in the write method
         self.io_helper = None
+
+        # Hold back everyone in MPI land until we're all ready to go
+        if self.using_mpi:
+            comm.Barrier()
 
     def _validate_loader(self, func):
         """
