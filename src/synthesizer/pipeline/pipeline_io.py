@@ -296,9 +296,14 @@ class PipelineIO:
             driver="mpio",
             comm=self.comm,
         ) as hdf:
-            hdf[key][self.start : self.end, ...] = data
+            dset = hdf[key]
+            self._print(
+                f"Writing dataset {key} with shape {self.start}"
+                f" to {self.end} of {data.shape}"
+            )
+            dset[self.start : self.end, ...] = data
 
-        self._print(f"Writing dataset {key} with shape {data.shape}")
+        self._print(f"Wrote dataset {key} with shape {data.shape}")
 
     def write_datasets_recursive(self, data, key):
         """
