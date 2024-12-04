@@ -208,7 +208,7 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
     out_paths = comm.bcast(unique_out_paths, root=root)
 
     # Warn the user if the structure is different
-    if len(out_paths) != len(unique_out_paths):
+    if len(out_paths) != len(my_out_paths):
         warn(
             "The structure of the data is different on different ranks. "
             "We'll unify the structure but something has gone awry."
