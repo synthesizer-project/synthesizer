@@ -416,6 +416,7 @@ class PipelineIO:
 
         # Recursively handle dictionary data
         for k, v in data.items():
+            print(f"Recursing into {key}/{k}")
             self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
 
     def gather_and_write_datasets(self, data, key, root=0):
@@ -490,6 +491,7 @@ class PipelineIO:
         # the structure we are writing
         if self.is_parallel:
             data = unify_dict_structure_across_ranks(data, self.comm)
+            print("Data unified")
 
         # Use the appropriate write method
         if self.is_collective:
