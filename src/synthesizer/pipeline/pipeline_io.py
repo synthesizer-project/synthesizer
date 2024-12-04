@@ -467,11 +467,10 @@ class PipelineIO:
                     _recursive_copy(v, dest[k], slice)
 
                 elif slice is None:
-                    print(k, v.shape, v)
                     # Just copy the dataset directly
                     dset = dest.create_dataset(
                         k,
-                        data=v[:],
+                        data=v[...],
                         dtype=v.dtype,
                     )
 
