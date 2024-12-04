@@ -337,6 +337,7 @@ class PipelineIO:
             global_shape.append(local_shape[i])
 
         # All ranks participate in the dataset creation
+        self._print(f"Creating dataset {key} with shape {global_shape}")
         dset = self.hdf_mpi.create_dataset(
             key,
             shape=tuple(global_shape),
@@ -407,7 +408,7 @@ class PipelineIO:
 
         # Recursively handle dictionary data
         for k, v in data.items():
-            self._print(f"Recursing into {key}/{k}")
+            self._print(f"Recursing into {key}/{k}, {type(v)}")
             self.write_datasets_recursive_parallel(v, f"{key}/{k}", indexes)
 
     def gather_and_write_datasets(self, data, key, root=0):
