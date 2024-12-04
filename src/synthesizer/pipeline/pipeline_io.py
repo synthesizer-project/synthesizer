@@ -516,7 +516,7 @@ class PipelineIO:
             for rank in range(self.size):
                 # Open the rank file
                 with h5py.File(
-                    temp_path.replace("<rank>", rank),
+                    temp_path.replace("<rank>", str(rank)),
                     "r",
                 ) as rank_hdf:
                     # We only the metadata groups once
@@ -545,6 +545,6 @@ class PipelineIO:
                     )
 
                 # Delete the rank file
-                os.remove(temp_path.replace("<rank>", rank))
+                os.remove(temp_path.replace("<rank>", str(rank)))
 
         self._took(start, "Combining files")
