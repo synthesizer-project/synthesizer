@@ -332,43 +332,34 @@ class PipelineIO:
 
         local_shape = data.shape
 
-        # Get the parallel version of the HDF5 handler
-        hdf = self.hdf_mpi
+        # Determine dtype
+        if hasattr(data, "value"):
+            dtype = data.value.dtype
+        else:
+            dtype = data.dtype
 
-        # Only rank 0 creates the dataset
+        # Calculate global shape
+        global_shape = [self.num_galaxies]
+        for i in range(1, len(local_shape)):
+            global_shape.append(local_shape[i])
+
+        # All ranks participate in the dataset creation
+        dset = self.hdf_mpi.create_dataset(
+            key,
+            shape=tuple(global_shape),
+            dtype=dtype,
+        )
+
+        # Handle units if present (only rank 0 sets the attribute to
+        # avoid race conditions)
         if self.rank == 0:
-            # Determine dtype
-            if hasattr(data, "value"):
-                dtype = data.value.dtype
-            else:
-                dtype = data.dtype
-
-            # Calculate global shape
-            global_shape = [self.num_galaxies]
-            for i in range(1, len(local_shape)):
-                global_shape.append(local_shape[i])
-
-            # Create the dataset
-            dset = hdf.create_dataset(
-                key,
-                shape=tuple(global_shape),
-                dtype=dtype,
-            )
-
-            # Handle units if present
             if hasattr(data, "units"):
                 dset.attrs["Units"] = str(data.units)
             else:
                 dset.attrs["Units"] = "dimensionless"
 
-            print(f"Created dataset {key} with shape {global_shape}")
-
         # Synchronize all ranks before writing
-        self._print("Synchronizing ranks before writing...")
         self.comm.barrier()
-
-        # Get the dataset on all ranks
-        dset = hdf[key]
 
         # Set collective I/O property for the write operation
         with dset.collective:
