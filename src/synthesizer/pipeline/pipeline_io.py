@@ -505,13 +505,20 @@ class PipelineIO:
         if not self.is_root:
             return
 
+        # Define the new file path
+        ext = self.filepath.split(".")[-1]
+        path_no_ext = ".".join(self.filepath.split(".")[:-1])
+        new_path = "_".join(path_no_ext.split("_")[:1]) + f".{ext}"
+        temp_path = "_".join(path_no_ext.split("_")[:1]) + "_<rank>.hdf5"
+
         # Open the output file
-        with h5py.File(self.filepath.replace(f"_{self.rank}", ""), "w") as hdf:
+        with h5py.File(new_path, "w") as hdf:
             # Loop over each rank file
             for rank in range(self.size):
                 # Open the rank file
                 with h5py.File(
-                    self.filepath.replace(f"_{rank}", ""), "r"
+                    temp_path.replace("<rank>", rank),
+                    "r",
                 ) as rank_hdf:
                     # We only the metadata groups once
                     if rank == 0:
@@ -539,6 +546,6 @@ class PipelineIO:
                     )
 
                 # Delete the rank file
-                os.remove(self.filepath.replace(f"_{rank}", ""))
+                os.remove(temp_path.replace("<rank>", rank))
 
         self._took(start, "Combining files")
