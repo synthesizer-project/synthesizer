@@ -81,10 +81,6 @@ class PipelineIO:
         # Store the file path
         self.filepath = filepath
 
-        # Create the file in memory ready to be appended to in the methods
-        # below (this will overwrite any existing file)
-        h5py.File(filepath, "w").close()
-
         # Store the communicator and its properties
         self.comm = comm
         self.size = comm.Get_size() if comm is not None else 1
@@ -217,7 +213,7 @@ class PipelineIO:
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
-    def write_metadata(self, instruments, emission_model):
+    def create_file_with_metadata(self, instruments, emission_model):
         """
         Write metadata to the HDF5 file.
 
@@ -232,7 +228,7 @@ class PipelineIO:
 
         # Only write this metadata once
         if self.is_root:
-            with h5py.File(self.filepath, "a") as hdf:
+            with h5py.File(self.filepath, "w") as hdf:
                 # Write out some top level metadata
                 hdf.attrs["synthesizer_version"] = __version__
 
