@@ -315,7 +315,6 @@ def get_dataset_properties(data, comm, root=0):
     # Loop over the paths and get the shapes
     for path in out_paths:
         d = data
-        print(path.split("/"))
         for k in path.split("/"):
             d = d[k]
         shapes[path] = d.shape
