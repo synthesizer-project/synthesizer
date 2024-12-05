@@ -1164,7 +1164,7 @@ class Combination:
 
         # Ok, we don't have the models so we have no choice but to generate
         # the image directly from the spectra
-        if len(missing) > 0:
+        if len(missing) > 0 and this_model.emitter != "galaxy":
             images[this_model.label] = _generate_image_collection_generic(
                 instrument,
                 fov,
@@ -1178,6 +1178,12 @@ class Combination:
                 emitters[this_model.emitter],
             )
             return images
+
+        elif len(missing) > 0 and this_model.emitter == "galaxy":
+            raise exceptions.MissingImage(
+                "Can't generate galaxy level images without saving the "
+                f"spectra from the component models ({', '.join(missing)})."
+            )
 
         # Get the image for each model we are combining
         combine_labels = []
