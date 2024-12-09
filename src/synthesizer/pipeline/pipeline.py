@@ -1698,7 +1698,7 @@ class Pipeline:
         # If we didn't use collective I/O we need to gather the data into
         # a single file on rank 0
         if self.using_mpi and not self.io_helper.is_collective:
-            self.io_helper.combine_rank_files()
+            self.io_helper.combine_rank_files_virtual()
             self.comm.barrier()
 
         self._took(write_start, "Writing data")
