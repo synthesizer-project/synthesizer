@@ -548,3 +548,119 @@ class PipelineIO:
                 os.remove(temp_path.replace("<rank>", str(rank)))
 
         self._took(start, "Combining files")
+
+    def combine_rank_files_virtual(self):
+        """
+        Create a single virtual HDF5 file.
+
+        This file references the data in each of the individual rank files
+        without physically copying the data.
+
+        This is done using HDF5 Virtual Datasets (VDS).
+
+        The original rank files must remain accessible at their current
+        paths for the virtual dataset to read data. If you remove or move
+        these files, the virtual dataset will no longer function.
+        """
+        start = time.perf_counter()
+
+        # Gather start/end indices from all ranks
+        starts = self.comm.gather(self.start, root=0)
+        ends = self.comm.gather(self.end, root=0)
+
+        # Only the root rank (rank == 0) needs to create the virtual file
+        if not self.is_root:
+            return
+
+        # Compute total number of galaxies (the dimension along which
+        # data is concatenated)
+        total_size = ends[-1] if ends else 0
+
+        # Define file paths
+        ext = self.filepath.split(".")[-1]
+        path_no_ext = ".".join(self.filepath.split(".")[:-1])
+        temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
+        new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
+
+        # Remove the old combined file if it exists
+        if os.path.exists(new_path):
+            os.remove(new_path)
+
+        # Open the first rank file (rank 0 file) to discover the structure
+        first_file_path = temp_path.replace("<rank>", "0")
+        with h5py.File(first_file_path, "r") as f0:
+            # Gather info about datasets (excluding "Instruments" and
+            # "EmissionModel")
+            datasets_info = []
+
+            def gather_datasets(group, group_path="/"):
+                for k, v in group.items():
+                    if k in ["Instruments", "EmissionModel"]:
+                        continue
+                    current_path = f"{group_path}{k}"
+                    if isinstance(v, h5py.Group):
+                        gather_datasets(v, current_path + "/")
+                    else:
+                        # Record dataset path, shape, dtype, and attributes
+                        datasets_info.append(
+                            (current_path, v.shape, v.dtype, dict(v.attrs))
+                        )
+
+            gather_datasets(f0)
+
+            # Gather group structure (to replicate in the virtual file)
+            groups_info = []
+
+            def gather_groups(group, group_path="/"):
+                for k, v in group.items():
+                    if k in ["Instruments", "EmissionModel"]:
+                        continue
+                    current_path = f"{group_path}{k}"
+                    if isinstance(v, h5py.Group):
+                        groups_info.append((current_path, dict(v.attrs)))
+                        gather_groups(v, current_path + "/")
+
+            gather_groups(f0)
+
+            # Create the virtual file
+            with h5py.File(new_path, "w") as hdf:
+                # Copy Instruments and EmissionModel groups & attributes
+                # from rank 0 file
+                for meta_group in ["Instruments", "EmissionModel"]:
+                    if meta_group in f0:
+                        # This copies the entire group structure and
+                        # datasets as-is.
+                        # If these contain datasets that should also be
+                        # virtualized, you'd need a different approach.
+                        # For pure metadata, a copy suffices.
+                        hdf.copy(f0[meta_group], meta_group)
+
+                # Create empty group structure
+                for gpath, gattrs in groups_info:
+                    grp = hdf.create_group(gpath)
+                    for attr_name, attr_val in gattrs.items():
+                        grp.attrs[attr_name] = attr_val
+
+                # Construct the virtual datasets for each dataset
+                for dpath, shape, dtype, dattrs in datasets_info:
+                    final_shape = (total_size,) + shape[1:]
+                    layout = h5py.VirtualLayout(shape=final_shape, dtype=dtype)
+
+                    # Map each rank's portion of the dataset into the layout
+                    for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
+                        src_file = temp_path.replace("<rank>", str(rank))
+                        vsource = h5py.VirtualSource(
+                            src_file, dpath, shape=shape
+                        )
+                        layout[start_i:end_i, ...] = vsource[
+                            0 : (end_i - start_i), ...
+                        ]
+
+                    # Create the virtual dataset in the final file
+                    vds = hdf.create_virtual_dataset(dpath, layout)
+
+                    # Copy dataset attributes
+                    for attr_name, attr_val in dattrs.items():
+                        vds.attrs[attr_name] = attr_val
+
+        self._took(start, "Creating virtual file")
