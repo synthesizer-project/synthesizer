@@ -2221,7 +2221,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             spectra,
             particle_spectra,
             vel_shift=vel_shift,
-            c_speed=c,
+            c=c,
             verbose,
             **kwargs,
         )
