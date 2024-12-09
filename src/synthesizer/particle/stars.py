@@ -269,7 +269,8 @@ class Stars(Particles, StarsComponent):
         mask,
         grid_assignment_method,
         nthreads,
-        vel_shift
+        vel_shift,
+        c_speed
     ):
         """
         A method to prepare the arguments for SED computation with the C
@@ -365,7 +366,8 @@ class Stars(Particles, StarsComponent):
             nlam,
             grid_assignment_method,
             nthreads,
-            vel_shift
+            vel_shift,
+            c_speed
         )
 
     def generate_lnu(
