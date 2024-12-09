@@ -108,6 +108,12 @@ class PipelineIO:
         # Are we talking?
         self.verbose = verbose
 
+        # Time how long we have to wait for everyone to get here
+        start = time.perf_counter()
+        if self.is_parallel:
+            self.comm.Barrier()
+            self._took(start, "Waiting for all ranks to get to I/O")
+
         # If we are writing in parallel but not using collective I/O we need
         # write a file per rank. Modify the file path to include the rank.
         ext = filepath.split(".")[-1]
@@ -126,12 +132,6 @@ class PipelineIO:
             )
         else:
             self._print(f"Writing to {filepath}.")
-
-        # Time how long we have to wait for everyone to get here
-        start = time.perf_counter()
-        if self.is_parallel:
-            self.comm.Barrier()
-            self._took(start, "Waiting for all ranks to get to I/O")
 
         # For collective I/O we need the counts on each rank so we know where
         # to write the data
