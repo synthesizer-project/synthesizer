@@ -383,7 +383,8 @@ class Stars(Particles, StarsComponent):
         parametric_sfh="constant",
         aperture=None,
         nthreads=0,
-        vel_shift=False
+        vel_shift=False,
+        c
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -569,7 +570,8 @@ class Stars(Particles, StarsComponent):
             mask=mask & aperture_mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
-            vel_shift=vel_shift
+            vel_shift=vel_shift,
+            c_speed=c,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
