@@ -897,6 +897,7 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
         vel_shift=False,
+        c,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -1032,6 +1033,7 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
             vel_shift=vel_shift,
+            c_speed=c,
         )
         toc("Preparing C args", start)
 
