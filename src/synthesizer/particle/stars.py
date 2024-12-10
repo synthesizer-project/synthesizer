@@ -903,7 +903,7 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
         vel_shift=False,
-        c,
+        c=2.998e8,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -926,8 +926,10 @@ class Stars(Particles, StarsComponent):
                 for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
-            shift (bool)
+            vel_shift (bool)
                 Flags whether to apply doppler shift to the spectrum.
+            c (float)
+                Speed of light, defaults to 2.998e8 m/s
             do_grid_check (bool)
                 Whether to check how many particles lie outside the grid. This
                 is a sanity check that can be used to check the
