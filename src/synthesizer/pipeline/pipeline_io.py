@@ -550,8 +550,12 @@ class PipelineIO:
         self._took(start, "Combining files")
 
     def combine_rank_files_virtual(self):
-        """ """
+        """
+        Combine the rank files into a single virtual file.
 
+        Note that the virtual file this produces requires the rank files to
+        remain in the same location as when they were created.
+        """
         start = time.perf_counter()
 
         # Gather start/end indices from all ranks
@@ -561,9 +565,6 @@ class PipelineIO:
         # Only the root rank (rank == 0) needs to create the virtual file
         if not self.is_root:
             return
-
-        # Compute total number of galaxies along the first dimension
-        total_size = ends[-1] if ends else 0
 
         # Define file paths
         ext = self.filepath.split(".")[-1]
@@ -578,6 +579,7 @@ class PipelineIO:
         # Open the first rank file (rank 0 file) to discover the structure
         first_file_path = temp_path.replace("<rank>", "0")
         with h5py.File(first_file_path, "r") as f0:
+            # Gather dataset information (for virtual datasets)
             datasets_info = []
 
             def gather_datasets(group, group_path="/"):
@@ -623,22 +625,26 @@ class PipelineIO:
 
                 # Construct the virtual datasets for each dataset
                 for dpath, shape, dtype, dattrs in datasets_info:
-                    final_shape = (total_size,) + shape[1:]
+                    final_shape = (self.num_galaxies,) + shape[1:]
                     layout = h5py.VirtualLayout(shape=final_shape, dtype=dtype)
 
+                    # Loop over each rank and map the data to the layout
                     for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
                             src_dset = rank_f[dpath]
                             local_size = src_dset.shape[0]
 
+                        # Ensure the local size is as expected
                         expected_size = end_i - start_i
                         if local_size != expected_size:
                             end_i = start_i + local_size
 
+                        # Create a virtual source for this rank
                         vsource = h5py.VirtualSource(
                             src_file, dpath, shape=(local_size,) + shape[1:]
                         )
+
                         # Map the portion of the layout to this source slice
                         layout[start_i:end_i, ...] = vsource[...]
 
