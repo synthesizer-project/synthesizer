@@ -2082,7 +2082,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         covering_fraction=None,
         mask=None,
         vel_shift=False,
-        c,
+        c=2.998e8,
         verbose=True,
         spectra=None,
         particle_spectra=None,
