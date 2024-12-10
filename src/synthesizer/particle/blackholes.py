@@ -832,7 +832,7 @@ class BlackHoles(Particles, BlackholesComponent):
         covering_fraction=None,
         mask=None,
         vel_shift=False,
-        c,
+        c=2.998e8,
         verbose=True,
         **kwargs,
     ):
