@@ -652,6 +652,10 @@ class PipelineIO:
                         vsource = h5py.VirtualSource(
                             src_file, dpath, shape=shape
                         )
+                        print(
+                            layout[start_i:end_i, ...].shape,
+                            vsource[...].shape,
+                        )
                         layout[start_i:end_i, ...] = vsource[...]
 
                     # Create the virtual dataset in the final file
