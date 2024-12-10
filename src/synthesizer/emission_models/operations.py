@@ -60,7 +60,7 @@ class Extraction:
         spectra,
         particle_spectra,
         vel_shift=False,
-        c,
+        c=2.998e8,
         verbose,
         **kwargs,
     ):
