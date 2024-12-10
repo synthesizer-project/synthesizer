@@ -386,7 +386,7 @@ class Stars(Particles, StarsComponent):
         aperture=None,
         nthreads=0,
         vel_shift=False,
-        c
+        c=2.998e8
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -435,6 +435,10 @@ class Stars(Particles, StarsComponent):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Flags whether doppler shift is applied to the spectrum
+            c (float)
+                Speed of light, defaults to 2.998e8 m/s
 
         Returns:
             numpy.ndarray:
