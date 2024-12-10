@@ -1701,18 +1701,30 @@ class Pipeline:
         """
         Combine inidividual rank files into a single file.
 
+        Only applicable to MPI runs.
+
         This will create a physical file on disk with all the data copied from
         the inidivdual rank files. The rank files themselves will be deleted.
         Once all data has been copied.
 
         This method is cleaner but has the potential to be very slow.
         """
+        # Nothing to do if we're not using MPI
+        if not self.using_mpi:
+            self._print("Not using MPI, nothing to combine.")
+            return
+
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! "
                 "Call write first."
             )
+
+        # Nothing to do if we're using collective I/O
+        if self.io_helper.collective_io:
+            self._print("Using collective I/O, nothing to combine.")
+            return
 
         # Combine the files
         self.io_helper.combine_rank_files()
@@ -1721,16 +1733,28 @@ class Pipeline:
         """
         Combine inidividual rank files into a single virtual file.
 
+        Only applicable to MPI runs.
+
         This will create a file where all the data is accessible but not
         physically copied. This is much faster than making a true copy but
         requires each individual rank file remains accessible.
         """
+        # Nothing to do if we're not using MPI
+        if not self.using_mpi:
+            self._print("Not using MPI, nothing to combine.")
+            return
+
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! "
                 "Call write first."
             )
+
+        # Nothing to do if we're using collective I/O
+        if self.io_helper.collective_io:
+            self._print("Using collective I/O, nothing to combine.")
+            return
 
         # Combine the files
         self.io_helper.combine_rank_files_virtual()
