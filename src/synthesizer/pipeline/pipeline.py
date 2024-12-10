@@ -1709,6 +1709,8 @@ class Pipeline:
 
         This method is cleaner but has the potential to be very slow.
         """
+        start = time.perf_counter()
+
         # Nothing to do if we're not using MPI
         if not self.using_mpi:
             self._print("Not using MPI, nothing to combine.")
@@ -1729,6 +1731,8 @@ class Pipeline:
         # Combine the files
         self.io_helper.combine_rank_files()
 
+        self._took(start, "Combining files")
+
     def combine_files_virtual(self):
         """
         Combine inidividual rank files into a single virtual file.
@@ -1739,6 +1743,8 @@ class Pipeline:
         physically copied. This is much faster than making a true copy but
         requires each individual rank file remains accessible.
         """
+        start = time.perf_counter()
+
         # Nothing to do if we're not using MPI
         if not self.using_mpi:
             self._print("Not using MPI, nothing to combine.")
@@ -1758,6 +1764,8 @@ class Pipeline:
 
         # Combine the files
         self.io_helper.combine_rank_files_virtual()
+
+        self._took(start, "Combining files (virtual)")
 
     def repartition_galaxies(self, galaxy_weights=None, random_seed=42):
         """Given the galaxies repartition them across the ranks."""
