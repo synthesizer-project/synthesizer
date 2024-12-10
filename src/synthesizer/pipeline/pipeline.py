@@ -1463,27 +1463,15 @@ class Pipeline:
         # Done!
         self._took(start, "Extra analysis")
 
-    def write(self, outpath, verbose=None, virtual=True):
+    def write(self, outpath, verbose=None):
         """
         Write what we have produced to a HDF5 file.
-
-        First we collect everything up into a dictionary where all the galaxy
-        data is stored in contiguous arrays. In MPI land when then gather all
-        these individual arrays together. Finally, we write the dictionary
-        out to a HDF5 file.
 
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
             verbose (bool, optional):
                 If set, override the Pipeline verbose setting.
-            virtual (bool, optional):
-                Only applicable for MPI runs without collective I/O. If True,
-                the files produced by each rank will be combined into a single
-                virtual file. If False, the files will be combined into a
-                single physical file and the individual files will be deleted.
-                Note, that the latter approach can be extremely time
-                consuming for large files. Default is True.
         """
         # We're done with everything so we know we'll have what is needed for
         # any extra analysis asked for by the user. We'll run these now.
@@ -1704,19 +1692,48 @@ class Pipeline:
                 galaxy_indices,
             )
 
-        # If we have MPI and we are not using collective I/O we need to
-        # combine the files into a single file. This can either be done as a
-        # virtual file or a physical file.
-        if self.using_mpi and not self.io_helper.collective_io:
-            if virtual:
-                self.io_helper.combine_files_virtual()
-            else:
-                self.io_helper.combine_rank_files()
-
         self._took(write_start, "Writing data")
 
         # Totally done!
         self._say_goodbye()
+
+    def combine_files(self):
+        """
+        Combine inidividual rank files into a single file.
+
+        This will create a physical file on disk with all the data copied from
+        the inidivdual rank files. The rank files themselves will be deleted.
+        Once all data has been copied.
+
+        This method is cleaner but has the potential to be very slow.
+        """
+        # Ensure we have written the data
+        if self.io_helper is None:
+            raise exceptions.PipelineNotReady(
+                "Cannot combine files before writing data! "
+                "Call write first."
+            )
+
+        # Combine the files
+        self.io_helper.combine_rank_files()
+
+    def combine_files_virtual(self):
+        """
+        Combine inidividual rank files into a single virtual file.
+
+        This will create a file where all the data is accessible but not
+        physically copied. This is much faster than making a true copy but
+        requires each individual rank file remains accessible.
+        """
+        # Ensure we have written the data
+        if self.io_helper is None:
+            raise exceptions.PipelineNotReady(
+                "Cannot combine files before writing data! "
+                "Call write first."
+            )
+
+        # Combine the files
+        self.io_helper.combine_rank_files_virtual()
 
     def repartition_galaxies(self, galaxy_weights=None, random_seed=42):
         """Given the galaxies repartition them across the ranks."""
