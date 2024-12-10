@@ -653,8 +653,9 @@ class PipelineIO:
                             src_file, dpath, shape=shape
                         )
                         print(
-                            layout[start_i:end_i, ...].shape,
-                            vsource[...].shape,
+                            end_i - start_i,
+                            layout.shape,
+                            vsource.shape,
                         )
                         layout[start_i:end_i, ...] = vsource[...]
 
