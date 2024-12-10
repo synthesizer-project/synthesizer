@@ -1463,7 +1463,7 @@ class Pipeline:
         # Done!
         self._took(start, "Extra analysis")
 
-    def write(self, outpath, verbose=None):
+    def write(self, outpath, verbose=None, virtual=True):
         """
         Write what we have produced to a HDF5 file.
 
@@ -1475,6 +1475,15 @@ class Pipeline:
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
+            verbose (bool, optional):
+                If set, override the Pipeline verbose setting.
+            virtual (bool, optional):
+                Only applicable for MPI runs without collective I/O. If True,
+                the files produced by each rank will be combined into a single
+                virtual file. If False, the files will be combined into a
+                single physical file and the individual files will be deleted.
+                Note, that the latter approach can be extremely time
+                consuming for large files. Default is True.
         """
         # We're done with everything so we know we'll have what is needed for
         # any extra analysis asked for by the user. We'll run these now.
@@ -1695,11 +1704,14 @@ class Pipeline:
                 galaxy_indices,
             )
 
-        # If we didn't use collective I/O we need to gather the data into
-        # a single file on rank 0
-        if self.using_mpi and not self.io_helper.is_collective:
-            self.io_helper.combine_rank_files_virtual()
-            self.comm.barrier()
+        # If we have MPI and we are not using collective I/O we need to
+        # combine the files into a single file. This can either be done as a
+        # virtual file or a physical file.
+        if self.using_mpi and not self.io_helper.collective_io:
+            if virtual:
+                self.io_helper.combine_files_virtual()
+            else:
+                self.io_helper.combine_rank_files()
 
         self._took(write_start, "Writing data")
 
