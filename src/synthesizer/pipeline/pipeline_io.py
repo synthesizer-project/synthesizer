@@ -550,18 +550,8 @@ class PipelineIO:
         self._took(start, "Combining files")
 
     def combine_rank_files_virtual(self):
-        """
-        Create a single virtual HDF5 file.
+        """ """
 
-        This file references the data in each of the individual rank files
-        without physically copying the data.
-
-        This is done using HDF5 Virtual Datasets (VDS).
-
-        The original rank files must remain accessible at their current
-        paths for the virtual dataset to read data. If you remove or move
-        these files, the virtual dataset will no longer function.
-        """
         start = time.perf_counter()
 
         # Gather start/end indices from all ranks
@@ -572,8 +562,7 @@ class PipelineIO:
         if not self.is_root:
             return
 
-        # Compute total number of galaxies (the dimension along which
-        # data is concatenated)
+        # Compute total number of galaxies along the first dimension
         total_size = ends[-1] if ends else 0
 
         # Define file paths
@@ -589,8 +578,6 @@ class PipelineIO:
         # Open the first rank file (rank 0 file) to discover the structure
         first_file_path = temp_path.replace("<rank>", "0")
         with h5py.File(first_file_path, "r") as f0:
-            # Gather info about datasets (excluding "Instruments" and
-            # "EmissionModel")
             datasets_info = []
 
             def gather_datasets(group, group_path="/"):
@@ -624,15 +611,8 @@ class PipelineIO:
 
             # Create the virtual file
             with h5py.File(new_path, "w") as hdf:
-                # Copy Instruments and EmissionModel groups & attributes
-                # from rank 0 file
                 for meta_group in ["Instruments", "EmissionModel"]:
                     if meta_group in f0:
-                        # This copies the entire group structure and
-                        # datasets as-is.
-                        # If these contain datasets that should also be
-                        # virtualized, you'd need a different approach.
-                        # For pure metadata, a copy suffices.
                         hdf.copy(f0[meta_group], meta_group)
 
                 # Create empty group structure
@@ -646,17 +626,20 @@ class PipelineIO:
                     final_shape = (total_size,) + shape[1:]
                     layout = h5py.VirtualLayout(shape=final_shape, dtype=dtype)
 
-                    # Map each rank's portion of the dataset into the layout
                     for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
                         src_file = temp_path.replace("<rank>", str(rank))
+                        with h5py.File(src_file, "r") as rank_f:
+                            src_dset = rank_f[dpath]
+                            local_size = src_dset.shape[0]
+
+                        expected_size = end_i - start_i
+                        if local_size != expected_size:
+                            end_i = start_i + local_size
+
                         vsource = h5py.VirtualSource(
-                            src_file, dpath, shape=shape
+                            src_file, dpath, shape=(local_size,) + shape[1:]
                         )
-                        print(
-                            end_i - start_i,
-                            layout.shape,
-                            vsource.shape,
-                        )
+                        # Map the portion of the layout to this source slice
                         layout[start_i:end_i, ...] = vsource[...]
 
                     # Create the virtual dataset in the final file
