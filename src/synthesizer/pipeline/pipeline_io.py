@@ -25,6 +25,7 @@ from synthesizer.pipeline.pipeline_utils import (
     get_dataset_properties,
     unify_dict_structure_across_ranks,
 )
+from synthesizer.warnings import warn
 
 
 class PipelineIO:
@@ -98,6 +99,15 @@ class PipelineIO:
         self.is_parallel = comm is not None
         self.is_root = self.rank == 0
         self.is_collective = self.is_parallel and self.PARALLEL and parallel_io
+
+        # TODO: fix collective I/O
+        if self.is_collective:
+            self.is_collective = False
+            warn(
+                "Collective I/O is not currently locks up. "
+                "Writing a file per rank instead. "
+                "Feel free to contribute a fix!"
+            )
 
         # Store the start time
         if start_time is None:
