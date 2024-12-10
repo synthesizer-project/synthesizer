@@ -617,7 +617,7 @@ class BlackHoles(Particles, BlackholesComponent):
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
-        c,
+        c=2.998e8,
     ):
         """
         Generate per particle rest frame spectra for a given key.
