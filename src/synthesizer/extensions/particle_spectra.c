@@ -731,7 +731,7 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid, struct particles 
     for (int ilam = 0; ilam < nlam; ilam++) {
       double shifted_lambda = shifted_wavelengths[ilam];
       int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam); 
-      if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) {continue}; // jumps out of the loop if out of bounds
+      if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) continue; // jumps out of the loop if out of bounds
       double frac_shifted = (shifted_lambda - wavelength[ilam_shifted]) / (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
       
       /* Add the contribution to this wavelength. */
@@ -1003,7 +1003,7 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
+    shifted_spectra_loop_ngp_serial(grid, parts, spectra, nthreads, c);
   }
 
 #else
@@ -1103,9 +1103,9 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {
-      spectra_loop_cic_shifted(grid_props, part_props, spectra, nthreads, c); // make these 1
+      shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads, c); // make these 1
     } else if (strcmp(method, "ngp") == 0) {
-      spectra_loop_ngp_shifted(grid_props, part_props, spectra, nthreads, c); // 2
+      shifted_spectra_loop_ngp(grid_props, part_props, spectra, nthreads, c); // 2
     } else {
       PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
       return NULL;
