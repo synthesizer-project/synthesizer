@@ -231,7 +231,7 @@ class Component(ABC):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         mask=None,
         vel_shift=False,
         verbose=True,
@@ -290,7 +290,7 @@ class Component(ABC):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        # Get the spectra / emission_model._get_spectra just uses _extract_spectra, which should also be ok now (19/11)
+        # Get the spectra
         spectra, particle_spectra = emission_model._get_spectra(
             emitters={"stellar": self}
             if self.component_type == "Stars"
@@ -322,7 +322,7 @@ class Component(ABC):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         mask=None,
         verbose=True,
         **kwargs,

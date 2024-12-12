@@ -133,6 +133,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             The operation to apply. Can be "<", ">", "<=", ">=", "==", or "!=".
         fesc (float):
             The escape fraction.
+        lam_mask (ndarray):
+            The mask to apply to the wavelength array.
         scale_by (list):
             A list of attributes to scale the spectra by.
         post_processing (list):
@@ -169,7 +171,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask_attr=None,
         mask_thresh=None,
         mask_op=None,
-        fesc=None,
+        fesc=0.0,
+        lam_mask=None,
         related_models=None,
         emitter=None,
         fixed_parameters={},
@@ -230,6 +233,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 or "!=".
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The mask to apply to the wavelength array.
             related_models (set/list/EmissionModel):
                 A set of related models to this model. A related model is a
                 model that is connected somewhere within the model tree but is
@@ -326,6 +331,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             lum_intrinsic_model=lum_intrinsic_model,
             lum_attenuated_model=lum_attenuated_model,
             fesc=fesc,
+            lam_mask=lam_mask,
         )
 
         # Containers for children and parents
@@ -384,6 +390,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         lum_intrinsic_model,
         lum_attenuated_model,
         fesc,
+        lam_mask,
     ):
         """
         Initialise the correct parent operation.
@@ -414,10 +421,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 luminosity when computing dust emission.
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The mask to apply to the wavelength array.
         """
         # Which operation are we doing?
         if self._is_extracting:
-            Extraction.__init__(self, grid, extract, fesc)
+            Extraction.__init__(self, grid, extract, fesc, lam_mask)
         elif self._is_combining:
             Combination.__init__(self, combine)
         elif self._is_dust_attenuating:
@@ -2078,7 +2087,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emitters,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         covering_fraction=None,
         mask=None,
         vel_shift=False,
@@ -2222,7 +2231,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             particle_spectra,
             vel_shift=vel_shift,
             c=c,
-            verbose,
+            verbose=verbose,
             **kwargs,
         )
 
@@ -2401,7 +2410,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emitters,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         covering_fraction=None,
         mask=None,
         verbose=True,
