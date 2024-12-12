@@ -2801,6 +2801,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         )
                     )
 
+            # Skip if we didn't save this model
+            if not this_model.save:
+                continue
+
             # Skip models for a different emitters
             if (
                 this_model.emitter not in emitters
@@ -2821,44 +2825,58 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Call the appropriate method to generate the image for this model
             if this_model._is_combining:
-                images = self._combine_images(
-                    images,
-                    this_model,
-                    resolution,
-                    fov,
-                    img_type,
-                    do_flux,
-                    emitters,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                )
+                try:
+                    images = self._combine_images(
+                        images,
+                        this_model,
+                        resolution,
+                        fov,
+                        img_type,
+                        do_flux,
+                        emitters,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
+
             elif this_model._is_dust_attenuating:
-                images = self._attenuate_images(
-                    resolution,
-                    fov,
-                    this_model,
-                    img_type,
-                    do_flux,
-                    emitter,
-                    images,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                )
+                try:
+                    images = self._attenuate_images(
+                        resolution,
+                        fov,
+                        this_model,
+                        img_type,
+                        do_flux,
+                        emitter,
+                        images,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
+
             elif this_model._is_dust_emitting or this_model._is_generating:
-                images = self._generate_images(
-                    resolution,
-                    fov,
-                    this_model,
-                    img_type,
-                    do_flux,
-                    emitter,
-                    images,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                )
+                try:
+                    images = self._generate_images(
+                        resolution,
+                        fov,
+                        this_model,
+                        img_type,
+                        do_flux,
+                        emitter,
+                        images,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
         return images
 
