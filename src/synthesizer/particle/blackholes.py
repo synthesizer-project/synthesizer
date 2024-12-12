@@ -291,6 +291,8 @@ class BlackHoles(Particles, BlackholesComponent):
         mask,
         grid_assignment_method,
         nthreads,
+        vel_shift,
+        c_speed
     ):
         """
         A method to prepare the arguments for SED computation with the C
@@ -439,6 +441,8 @@ class BlackHoles(Particles, BlackholesComponent):
             nlam,
             grid_assignment_method,
             nthreads,
+            vel_shift,
+            c_speed
         )
 
     def _prepare_line_args(
@@ -609,10 +613,11 @@ class BlackHoles(Particles, BlackholesComponent):
         spectra_name,
         fesc=0.0,
         mask=None,
-        shift=False,
+        vel_shift=False,
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
+        c=2.998e8,
     ):
         """
         Generate per particle rest frame spectra for a given key.
@@ -660,10 +665,12 @@ class BlackHoles(Particles, BlackholesComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
+            c_speed=c,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args, shift)
+        masked_spec = compute_particle_seds(*args)
 
         # If there's no mask we're done
         if mask is None:
@@ -824,6 +831,8 @@ class BlackHoles(Particles, BlackholesComponent):
         tau_v=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=False,
+        c=2.998e8,
         verbose=True,
         **kwargs,
     ):
@@ -886,6 +895,8 @@ class BlackHoles(Particles, BlackholesComponent):
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
+            c=c,
             verbose=verbose,
             **kwargs,
         )

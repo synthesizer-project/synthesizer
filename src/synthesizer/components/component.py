@@ -233,7 +233,7 @@ class Component(ABC):
         tau_v=None,
         fesc=None,
         mask=None,
-        shift=False,
+        vel_shift=False,
         verbose=True,
         **kwargs,
     ):
@@ -299,7 +299,7 @@ class Component(ABC):
             tau_v=tau_v,
             fesc=fesc,
             mask=mask,
-            shift,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )

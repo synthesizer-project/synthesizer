@@ -569,6 +569,8 @@ class Stars(Particles, StarsComponent):
         mask,
         grid_assignment_method,
         nthreads,
+        vel_shift,
+        c_speed
     ):
         """
         A method to prepare the arguments for SED computation with the C
@@ -593,6 +595,9 @@ class Stars(Particles, StarsComponent):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Flags whether to apply doppler shift to the spectra. Defaults
+                to False.
 
         Returns:
             tuple
@@ -661,6 +666,8 @@ class Stars(Particles, StarsComponent):
             nlam,
             grid_assignment_method,
             nthreads,
+            vel_shift,
+            c_speed
         )
 
     def generate_lnu(
@@ -671,12 +678,13 @@ class Stars(Particles, StarsComponent):
         young=None,
         old=None,
         mask=None,
-        shift=False,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
         aperture=None,
         nthreads=0,
+        vel_shift=False,
+        c=2.998e8
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -717,6 +725,10 @@ class Stars(Particles, StarsComponent):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Flags whether doppler shift is applied to the spectrum
+            c (float)
+                Speed of light, defaults to 2.998e8 m/s
 
         Returns:
             numpy.ndarray:
@@ -827,6 +839,7 @@ class Stars(Particles, StarsComponent):
             aperture_mask = np.ones(self.nparticles, dtype=bool)
 
         from ..extensions.integrated_spectra import compute_integrated_sed
+        from ..extension.particle_spectra import compute_particle_seds
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -836,10 +849,15 @@ class Stars(Particles, StarsComponent):
             mask=mask & aperture_mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
+            c_speed=c,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        lnu_particle = compute_integrated_sed(*args. shift)  # this hass not been modified yet, wont work as is, but shouldnt be hard to make it as compute_particle_sed
+        if vel_shift:
+            lnu_particle = np.sum(compute_particle_seds(*args), axis=0)
+        else:
+            lnu_particle = compute_integrated_sed(*args)  
             
         if parametric_young_stars:
             return lnu_particle + lnu_parametric
@@ -1275,11 +1293,12 @@ class Stars(Particles, StarsComponent):
         spectra_name,
         fesc=0.0,
         verbose=False,
-        shift=False,
         do_grid_check=False,
         mask=None,
         grid_assignment_method="cic",
         nthreads=0,
+        vel_shift=False,
+        c=2.998e8,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -1302,8 +1321,10 @@ class Stars(Particles, StarsComponent):
                 for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
-            shift (bool)
+            vel_shift (bool)
                 Flags whether to apply doppler shift to the spectrum.
+            c (float)
+                Speed of light, defaults to 2.998e8 m/s
             do_grid_check (bool)
                 Whether to check how many particles lie outside the grid. This
                 is a sanity check that can be used to check the
@@ -1405,7 +1426,6 @@ class Stars(Particles, StarsComponent):
             return np.zeros((self.nstars, len(grid.lam)))
 
         from ..extensions.particle_spectra import compute_particle_seds
-        from ..extensions.particle_spectra import compute_particle_seds_shifted
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -1415,11 +1435,13 @@ class Stars(Particles, StarsComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
+            c_speed=c,
         )
         toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args, shift) # I think this works but im not sure
+        masked_spec = compute_particle_seds(*args)
             
         start = tic()
 
