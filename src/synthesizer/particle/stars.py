@@ -24,7 +24,7 @@ import os
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
+from unyt import Hz, Mpc, Msun, Myr, angstrom, c, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
@@ -568,13 +568,12 @@ class Stars(Particles, StarsComponent):
         spectra_type,
         mask,
         grid_assignment_method,
+        lam_mask,
         nthreads,
         vel_shift,
-        c_speed
     ):
         """
-        A method to prepare the arguments for SED computation with the C
-        functions.
+        Prepare the arguments for SED computation with the C functions.
 
         Args:
             grid (Grid)
@@ -592,6 +591,9 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
@@ -603,10 +605,16 @@ class Stars(Particles, StarsComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
-
         # Make a dummy mask if none has been passed
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
+
+        # If lam_mask is None then we want all wavelengths
+        if lam_mask is None:
+            lam_mask = np.ones(
+                grid.spectra[spectra_type].shape[-1],
+                dtype=bool,
+            )
 
         # Set up the inputs to the C function.
         grid_props = [
@@ -623,16 +631,27 @@ class Stars(Particles, StarsComponent):
             self._initial_masses[mask],
             dtype=np.float64,
         )
+        part_vels = np.ascontiguousarray(
+            self._velocities[mask],
+            dtype=np.float64,
+        )
+        vel_units = self.velocities.units
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
 
         # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+        nlam = np.int32(np.sum(lam_mask))
 
         # Slice the spectral grids and pad them with copies of the edges.
         grid_spectra = np.ascontiguousarray(
             grid.spectra[spectra_type],
+            np.float64,
+        )
+
+        # Apply the wavelength mask
+        grid_spectra = np.ascontiguousarray(
+            grid_spectra[..., lam_mask],
             np.float64,
         )
 
@@ -660,6 +679,7 @@ class Stars(Particles, StarsComponent):
             part_props,
             part_mass,
             fesc,
+            part_vels,
             grid_dims,
             len(grid_props),
             npart,
@@ -667,7 +687,7 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
             nthreads,
             vel_shift,
-            c_speed
+            c.to(vel_units).value,
         )
 
     def generate_lnu(
@@ -678,17 +698,19 @@ class Stars(Particles, StarsComponent):
         young=None,
         old=None,
         mask=None,
+        lam_mask=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
         aperture=None,
         nthreads=0,
         vel_shift=False,
-        c=2.998e8
+        c=2.998e8,
     ):
         """
-        Generate the integrated rest frame spectra for a given grid key
-        spectra for all stars. Can optionally apply masks.
+        Generate the integrated rest frame spectra for a given grid key.
+
+        Can optionally apply masks.
 
         Args:
             grid (Grid)
@@ -705,8 +727,11 @@ class Stars(Particles, StarsComponent):
             old (bool/float)
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
-            mask (array)
-                Boolean array of star particles to include
+            mask (array-like, bool)
+                Boolean array of star particles to include.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             verbose (bool)
                 Flag for verbose output.
             do_grid_check (bool)
@@ -734,7 +759,6 @@ class Stars(Particles, StarsComponent):
             numpy.ndarray:
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
-
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
@@ -838,8 +862,8 @@ class Stars(Particles, StarsComponent):
         else:
             aperture_mask = np.ones(self.nparticles, dtype=bool)
 
-        from ..extensions.integrated_spectra import compute_integrated_sed
         from ..extension.particle_spectra import compute_particle_seds
+        from ..extensions.integrated_spectra import compute_integrated_sed
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -851,19 +875,23 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
             vel_shift=vel_shift,
             c_speed=c,
+            lam_mask=lam_mask,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         if vel_shift:
-            lnu_particle = np.sum(compute_particle_seds(*args), axis=0)
+            spec = np.sum(compute_particle_seds(*args), axis=0)
         else:
-            lnu_particle = compute_integrated_sed(*args)  
-            
-        if parametric_young_stars:
-            return lnu_particle + lnu_parametric
-        else:
-            return lnu_particle
-        return lnu_particle
+            spec = compute_integrated_sed(*args)
+
+        # If we had a wavelength mask we need to make sure we return a spectra
+        # compatible with the original wavelength array.
+        if lam_mask is not None:
+            out_spec = np.zeros(len(grid.lam))
+            out_spec[lam_mask] = spec
+            spec = out_spec
+
+        return spec
 
     def _remove_stars(self, pmask):
         """
@@ -1295,6 +1323,7 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         mask=None,
+        lam_mask=None,
         grid_assignment_method="cic",
         nthreads=0,
         vel_shift=False,
@@ -1313,12 +1342,6 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
             vel_shift (bool)
@@ -1330,6 +1353,11 @@ class Stars(Particles, StarsComponent):
                 is a sanity check that can be used to check the
                 consistency of your particles with the grid. It is False by
                 default because the check is extreme expensive.
+            mask (array-like, bool)
+                Boolean array of star particles to include.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1343,7 +1371,6 @@ class Stars(Particles, StarsComponent):
             numpy.ndarray:
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
-
         start = tic()
 
         # Ensure we have a total key in the grid. If not error.
@@ -1355,6 +1382,12 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return np.zeros((self.nstars, len(grid.lam)))
+
+        # Handle the case where the masks are None
+        if mask is None:
+            mask = np.ones(self.nstars, dtype=bool)
+        if lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
 
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
@@ -1437,21 +1470,26 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
             vel_shift=vel_shift,
             c_speed=c,
+            lam_mask=lam_mask,
         )
         toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         masked_spec = compute_particle_seds(*args)
-            
+
         start = tic()
 
         # If there's no mask we're done
-        if mask is None:
+        if mask is None and lam_mask is None:
             return masked_spec
+        elif mask is None:
+            mask = np.ones(self.nstars, dtype=bool)
+        elif lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
 
         # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nstars, masked_spec.shape[-1]))
-        spec[mask] = masked_spec
+        spec = np.zeros((self.nstars, grid.lam.size))
+        spec[np.ix_(mask, lam_mask)] = masked_spec
 
         toc("Masking spectra and adding contribution", start)
 
@@ -2020,7 +2058,7 @@ class Stars(Particles, StarsComponent):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         mask=None,
         verbose=True,
         **kwargs,
@@ -2102,7 +2140,7 @@ class Stars(Particles, StarsComponent):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         mask=None,
         verbose=True,
         **kwargs,
