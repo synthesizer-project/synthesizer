@@ -497,6 +497,10 @@ class Component(ABC):
         # Store the images
         self.images_lnu.update(images)
 
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
+
         # Return the image at the root of the emission model
         return images[emission_model.label]
 
@@ -590,6 +594,10 @@ class Component(ABC):
 
         # Store the images
         self.images_fnu.update(images)
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
