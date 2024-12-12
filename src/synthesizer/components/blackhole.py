@@ -277,6 +277,8 @@ class BlackholesComponent(Component):
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
+        vel_shift=False,
+        c,
     ):
         """
         Generate integrated rest frame spectra for a given key.
@@ -305,6 +307,10 @@ class BlackholesComponent(Component):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Flags whether to apply doppler shift to the spectrum.
+            c (float)
+                Speed of light
         """
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
@@ -334,10 +340,15 @@ class BlackholesComponent(Component):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
+            c_speed=c
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        return compute_integrated_sed(*args)
+        if vel_shift:
+            return np.sum(compute_particle_sed(*args), axis=0)
+        else:
+            return compute_integrated_sed(*args)
 
     def generate_line(
         self,

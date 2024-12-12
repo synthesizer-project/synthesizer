@@ -143,7 +143,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid, struct particles 
         double shifted_lambda = shifted_wavelengths[ilam];
       /*Find nearest wavelength bin*/
         int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam); 
-        if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) {continue}; // jumps out of the loop if out of bounds
+        if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) continue; // jumps out of the loop if out of bounds
       // Interpolate contribution between ilam_shifted and ilam_shifted+1
         double frac_shifted = (shifted_lambda - wavelength[ilam_shifted]) /
                                   (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
@@ -581,7 +581,7 @@ void spectra_loop_cic(struct grid *grid, struct particles *parts,
  * @param nthreads: The number of threads to use.
  */
 void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
-                      double *spectra, const int nthreads) {
+                      double *spectra, const int nthreads, const double c) {
 
   double start_time = tic();
 
@@ -591,11 +591,11 @@ void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    shifted_spectra_loop_cic_omp(grid, parts, spectra, nthreads);
+    shifted_spectra_loop_cic_omp(grid, parts, spectra, nthreads, c);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    shifted_spectra_loop_cic_serial(grid, parts, spectra);
+    shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
   }
 
 #else
@@ -603,7 +603,7 @@ void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  shifted_spectra_loop_cic_serial(grid, parts, spectra);
+  shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
 
 #endif
   toc("Cloud in Cell particle spectra loop", start_time);
@@ -989,7 +989,7 @@ void spectra_loop_ngp(struct grid *grid, struct particles *parts,
  * @param nthreads: The number of threads to use.
  */
 void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
-                      double *spectra, const int nthreads) {
+                      double *spectra, const int nthreads, const double c) {
 
   double start_time = tic();
 
@@ -999,11 +999,11 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    shifted_spectra_loop_ngp_omp(grid, parts, spectra, nthreads);
+    shifted_spectra_loop_ngp_omp(grid, parts, spectra, nthreads, c);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    shifted_spectra_loop_ngp_serial(grid, parts, spectra);
+    shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
   }
 
 #else
@@ -1035,7 +1035,8 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
- * @param shift: flag whether to consider doppler shift in spectra computation.
+ * @param vel_shift: bool flag whether to consider doppler shift in spectra computation. Defaults to False
+ * @param c: speed of light
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
@@ -1048,7 +1049,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyObject shift; // flag for spectral shift, do we want it as a pyobject or just as a c bool in this func?
+  PyObject vel_shift; 
+  PyObject c;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
   PyArrayObject *np_velocities;
@@ -1057,7 +1059,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_velocities, &np_ndims, &ndim,
-                        &npart, &nlam, &method, &shift, &nthreads))
+                        &npart, &nlam, &method, &vel_shift, &nthreads, &c)) 
     return NULL;
 
   /* Extract the grid struct. */
@@ -1069,7 +1071,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props =
-      get_part_struct(part_tuple, np_part_mass, *np_velocities*, np_fesc, npart, ndim);
+      get_part_struct(part_tuple, np_part_mass, np_velocities, np_fesc, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
@@ -1084,7 +1086,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   toc("Extracting Python data", setup_start);
 
-  if (!shift) {
+  if (!vel_shift) {
     /*No shift*/
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
@@ -1101,9 +1103,9 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {
-      spectra_loop_cic_shifted(grid_props, part_props, spectra, nthreads); // make these 1
+      spectra_loop_cic_shifted(grid_props, part_props, spectra, nthreads, c); // make these 1
     } else if (strcmp(method, "ngp") == 0) {
-      spectra_loop_ngp_shifted(grid_props, part_props, spectra, nthreads); // 2
+      spectra_loop_ngp_shifted(grid_props, part_props, spectra, nthreads, c); // 2
     } else {
       PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
       return NULL;
@@ -1130,7 +1132,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   toc("Computing particle SEDs", start_time);
 
   return Py_BuildValue("N", out_spectra);
-}
+};
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef SedMethods[] = {
@@ -1155,4 +1157,4 @@ PyMODINIT_FUNC PyInit_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
   import_array();
   return m;
-}
+};
