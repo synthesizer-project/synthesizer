@@ -1131,12 +1131,6 @@ class BaseGalaxy:
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            stellar_photometry (string)
-                The stellar spectra key from which to extract photometry
-                to use for the image.
-            blackhole_photometry (string)
-                The black hole spectra key from which to extract photometry
-                to use for the image.
             kernel (array-like, float)
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
