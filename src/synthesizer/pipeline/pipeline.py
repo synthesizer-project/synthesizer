@@ -1,11 +1,11 @@
 """A module containing a pipeline helper class.
 
-This module contains the Pipeline class which is used to run observable
+This module contains the `Pipeline` class, which is used to run observable
 generation pipelines on a set of galaxies. To use this functionality the user
 needs to define the properties of the Pipeline and a function to load the
-galaxies. After which the user can call the various methods to generate the
+galaxies. The user can then call the various methods to generate the mock
 data they need, simplifying a complex pipeline full of boilerplate code to a
-handle full of definitions and calls to the Pipeline object.
+handfull of definitions and calls to the Pipeline object.
 
 Example usage:
 ```python
