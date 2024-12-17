@@ -259,7 +259,7 @@ class Extraction:
 
     def _extract_images(
         self,
-        resolution,
+        instrument,
         fov,
         img_type,
         do_flux,
@@ -274,8 +274,8 @@ class Extraction:
         Create images for all the extraction keys.
 
         Args:
-            resolution (float):
-                The resolution of the images.
+            instrument (Instrument):
+                The instrument to use when generating images.
             fov (float):
                 The field of view of the images.
             img_type (str):
@@ -318,7 +318,7 @@ class Extraction:
             # Store the resulting image collection
             try:
                 images[label] = _generate_image_collection_generic(
-                    resolution,
+                    instrument,
                     fov,
                     img_type,
                     do_flux,
@@ -347,6 +347,20 @@ class Extraction:
         summary.append(f"  Escape fraction: {self._fesc}")
 
         return summary
+
+    def extract_to_hdf5(self, group):
+        """Save the extraction model to an HDF5 group."""
+        # Flag it's extraction
+        group.attrs["type"] = "extraction"
+
+        # Save the grid
+        group.attrs["grid"] = self._grid.grid_name
+
+        # Save the extract key
+        group.attrs["extract"] = self._extract
+
+        # Save the escape fraction
+        group.attrs["fesc"] = self._fesc if self._fesc is not None else "None"
 
 
 class Generation:
@@ -595,7 +609,7 @@ class Generation:
 
     def _generate_images(
         self,
-        resolution,
+        instrument,
         fov,
         this_model,
         img_type,
@@ -610,8 +624,8 @@ class Generation:
         Create an image for a generation key.
 
         Args:
-            resolution (float):
-                The resolution of the images.
+            instrument (Instrument):
+                The instrument to use when generating images.
             fov (float):
                 The field of view of the images.
             this_model (EmissionModel):
@@ -638,7 +652,7 @@ class Generation:
         """
         # Store the resulting image collection
         images[this_model.label] = _generate_image_collection_generic(
-            resolution,
+            instrument,
             fov,
             img_type,
             do_flux,
@@ -673,6 +687,24 @@ class Generation:
             summary.append(f"  Scale by: {self._lum_intrinsic_model.label}")
 
         return summary
+
+    def generate_to_hdf5(self, group):
+        """Save the generation model to an HDF5 group."""
+        # Flag it's generation
+        group.attrs["type"] = "generation"
+
+        # Save the generator
+        group.attrs["generator"] = str(type(self._generator))
+
+        # Save the dust luminosity models
+        if self._lum_intrinsic_model is not None:
+            group.attrs["lum_intrinsic_model"] = (
+                self._lum_intrinsic_model.label
+            )
+        if self._lum_attenuated_model is not None:
+            group.attrs["lum_attenuated_model"] = (
+                self._lum_attenuated_model.label
+            )
 
 
 class DustAttenuation:
@@ -841,7 +873,7 @@ class DustAttenuation:
 
     def _attenuate_images(
         self,
-        resolution,
+        instrument,
         fov,
         this_model,
         img_type,
@@ -856,8 +888,8 @@ class DustAttenuation:
         Create an image for an attenuation key.
 
         Args:
-            resolution (float):
-                The resolution of the images.
+            instrument (Instrument):
+                The instrument to use when generating images.
             fov (float):
                 The field of view of the images.
             this_model (EmissionModel):
@@ -876,6 +908,8 @@ class DustAttenuation:
                 The threshold to use when generating images.
             nthreads (int):
                 The number of threads to use when generating images.
+            instrument (Instrument):
+                The instrument to use when generating images.
 
         Returns:
             dict:
@@ -884,7 +918,7 @@ class DustAttenuation:
         """
         # Store the resulting image collection
         images[this_model.label] = _generate_image_collection_generic(
-            resolution,
+            instrument,
             fov,
             img_type,
             do_flux,
@@ -910,6 +944,20 @@ class DustAttenuation:
         summary.append(f"  Optical depth (tau_v): {self._tau_v}")
 
         return summary
+
+    def attenuate_to_hdf5(self, group):
+        """Save the dust attenuation model to an HDF5 group."""
+        # Flag it's dust attenuation
+        group.attrs["type"] = "dust_attenuation"
+
+        # Save the dust curve
+        group.attrs["dust_curve"] = str(type(self._dust_curve))
+
+        # Save the model to apply the dust curve to
+        group.attrs["apply_dust_to"] = self._apply_dust_to.label
+
+        # Save the optical depth
+        group.attrs["tau_v"] = self._tau_v
 
 
 class Combination:
@@ -1073,7 +1121,7 @@ class Combination:
         self,
         images,
         this_model,
-        resolution,
+        instrument,
         fov,
         img_type,
         do_flux,
@@ -1086,12 +1134,26 @@ class Combination:
         Combine the images by addition.
 
         Args:
-            emission_model (EmissionModel):
-                The root emission model.
             images (dict):
-                The dictionary of images.
+                The dictionary of image collections.
             this_model (EmissionModel):
                 The model defining the combination.
+            instrument (Instrument):
+                The instrument to use when generating images.
+            fov (float):
+                The field of view of the images.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitters (dict):
+                The emitters to generate the images for.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
         """
         # Check we saved the models we are combining
         missing = [
@@ -1102,9 +1164,9 @@ class Combination:
 
         # Ok, we don't have the models so we have no choice but to generate
         # the image directly from the spectra
-        if len(missing) > 0:
+        if len(missing) > 0 and this_model.emitter != "galaxy":
             images[this_model.label] = _generate_image_collection_generic(
-                resolution,
+                instrument,
                 fov,
                 img_type,
                 do_flux,
@@ -1116,6 +1178,12 @@ class Combination:
                 emitters[this_model.emitter],
             )
             return images
+
+        elif len(missing) > 0 and this_model.emitter == "galaxy":
+            raise exceptions.MissingImage(
+                "Can't generate galaxy level images without saving the "
+                f"spectra from the component models ({', '.join(missing)})."
+            )
 
         # Get the image for each model we are combining
         combine_labels = []
@@ -1150,3 +1218,11 @@ class Combination:
         )
 
         return summary
+
+    def combine_to_hdf5(self, group):
+        """Save the combination model to an HDF5 group."""
+        # Flag it's combination
+        group.attrs["type"] = "combination"
+
+        # Save the models to combine
+        group.attrs["combine"] = [model.label for model in self._combine]
