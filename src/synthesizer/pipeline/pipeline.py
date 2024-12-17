@@ -1369,7 +1369,7 @@ class Pipeline:
         self._got_images_flux_psf = True
         self._took(start, "Applying PSFs to flux images")
 
-    def get_lnu_data_cubes(self):
+    def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
         start = time.perf_counter()
         raise exceptions.NotImplemented(
@@ -1380,7 +1380,7 @@ class Pipeline:
         self._got_lnu_data_cubes = True
         self._took(start, "Getting lnu data cubes")
 
-    def get_fnu_data_cubes(self):
+    def get_data_cubes_fnu(self):
         """Compute the Spectral flux density data cubes."""
         start = time.perf_counter()
         raise exceptions.NotImplemented(
