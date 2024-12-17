@@ -1559,16 +1559,16 @@ class Filter:
                 )
             )
 
-        if field.attrib["unit"] != "":
+        if field.attrib["unit"] not in ["", "ephot"]:
             raise exceptions.SVOTransmissionHasUnits(
                 (
-                    f"The SVO filter at {self.svo_url} is "
-                    "returning units, which should not be "
+                    f"The SVO filter at {self.svo_url} has "
+                    f"units {field.attrib['unit']}, which should not be "
                     "the case for a transmission curve. This "
                     "can sometimes occur where the effective "
                     "area is returned instead. Please check "
                     "that the filter you are querying returns "
-                    "the transmission."
+                    "the transmission / response."
                 )
             )
 
