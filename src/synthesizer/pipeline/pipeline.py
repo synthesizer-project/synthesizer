@@ -267,41 +267,6 @@ class Pipeline:
         if self.using_mpi:
             comm.Barrier()
 
-    def _validate_loader(self, func):
-        """
-        Validate the galaxy loader function.
-
-        This function checks that the galaxy loader function is a callable
-        and that it takes at least one argument (the galaxy index). If the
-        function is not valid, an exception is raised.
-
-        Args:
-            func (callable): The galaxy loader function to validate.
-        """
-        # Ensure we have a callable function
-        if not callable(func):
-            raise exceptions.InconsistentArguments(
-                "gal_loader_func is not a callable function"
-                f" (found {type(func)})."
-            )
-
-        # Ensure we have at least 1 argument
-        if len(func.__code__.co_varnames) < 1:
-            raise exceptions.InconsistentArguments(
-                "gal_loader_func must take at least one "
-                f"argument (found {len(func.__code__.co_varnames)})."
-            )
-
-        # Ensure the first argument is called "gal_index"
-        if func.__code__.co_varnames[0] != "gal_index":
-            raise exceptions.InconsistentArguments(
-                "The first argument of gal_loader_func must be the index "
-                "of the galaxy to load and must be called 'gal_index'. "
-                f"(found '{func.__code__.co_varnames[0]}')."
-            )
-
-        return func
-
     def _say_hello(self):
         """Print a nice welcome."""
         print()
