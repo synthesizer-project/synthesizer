@@ -10,7 +10,7 @@ Example usage:
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
     sed.apply_attenutation(tau_v=0.7)
-    sed.get_photo_fnu(filters)
+    sed.get_photo_fnu(filters, nthreads=4)
 """
 
 import re
@@ -449,7 +449,6 @@ class Sed:
         integral = -integrate_last_axis(
             self._nu,
             self._lnu,
-            nthreads=1,
             method="trapz",
         )
 
@@ -953,7 +952,7 @@ class Sed:
 
         return self.fnu
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate broadband luminosities using a FilterCollection object
 
@@ -962,6 +961,9 @@ class Sed:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             photo_lnu (dict)
@@ -973,17 +975,9 @@ class Sed:
 
         # Loop over filters
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Apply the filter transmission curve and store the resulting
             # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu)
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
             photo_lnu[f.filter_code] = bb_lum * self.lnu.units
 
         # Create the photometry collection and store it in the object
@@ -991,7 +985,7 @@ class Sed:
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate broadband fluxes using a FilterCollection object
 
@@ -1000,6 +994,9 @@ class Sed:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             (dict)
@@ -1021,16 +1018,12 @@ class Sed:
 
         # Loop over filters in filter collection
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
+            bb_flux = f.apply_filter(
+                self._fnu,
+                nu=self._obsnu,
+                nthreads=nthreads,
+            )
             photo_fnu[f.filter_code] = bb_flux * self.fnu.units
 
         # Create the photometry collection and store it in the object
