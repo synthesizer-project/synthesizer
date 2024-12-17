@@ -1446,18 +1446,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             group (h5py.Group):
                 The group to save the model to.
         """
-        # First off call the operation to save operation specific attributes
-        # to the group
-        if self._is_extracting:
-            self.extract_to_hdf5(group)
-        elif self._is_combining:
-            self.combine_to_hdf5(group)
-        elif self._is_dust_attenuating:
-            self.attenuate_to_hdf5(group)
-        elif self._is_dust_emitting:
-            self.generate_to_hdf5(group)
-        elif self._is_generating:
-            self.generate_to_hdf5(group)
+        # First off write out the operation specific attributes
+        self._to_hdf5(group)
 
         # Save the model attributes
         group.attrs["label"] = self.label
