@@ -348,7 +348,7 @@ class Extraction:
 
         return summary
 
-    def extract_to_hdf5(self, group):
+    def _to_hdf5(self, group):
         """Save the extraction model to an HDF5 group."""
         # Flag it's extraction
         group.attrs["type"] = "extraction"
@@ -688,7 +688,7 @@ class Generation:
 
         return summary
 
-    def generate_to_hdf5(self, group):
+    def _to_hdf5(self, group):
         """Save the generation model to an HDF5 group."""
         # Flag it's generation
         group.attrs["type"] = "generation"
@@ -945,7 +945,7 @@ class DustAttenuation:
 
         return summary
 
-    def attenuate_to_hdf5(self, group):
+    def _to_hdf5(self, group):
         """Save the dust attenuation model to an HDF5 group."""
         # Flag it's dust attenuation
         group.attrs["type"] = "dust_attenuation"
@@ -1219,7 +1219,7 @@ class Combination:
 
         return summary
 
-    def combine_to_hdf5(self, group):
+    def _to_hdf5(self, group):
         """Save the combination model to an HDF5 group."""
         # Flag it's combination
         group.attrs["type"] = "combination"
