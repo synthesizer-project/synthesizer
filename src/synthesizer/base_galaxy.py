@@ -760,7 +760,7 @@ class BaseGalaxy:
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         covering_fraction=None,
         mask=None,
         verbose=True,
@@ -867,7 +867,7 @@ class BaseGalaxy:
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         covering_fraction=None,
         mask=None,
         verbose=True,
@@ -1080,6 +1080,10 @@ class BaseGalaxy:
                     f"Unknown emitter in emission model. ({model.emitter})"
                 )
 
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
+
         # Return the image at the root of the emission model
         return images[emission_model.label]
 
@@ -1182,6 +1186,10 @@ class BaseGalaxy:
                 raise KeyError(
                     f"Unknown emitter in emission model. ({model.emitter})"
                 )
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
 
         # Return the image at the root of the emission model
         return images[emission_model.label]

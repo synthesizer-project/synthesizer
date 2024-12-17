@@ -23,7 +23,7 @@ jobs:
           sudo apt install pandoc
       - name: Download test data
         run: |
-          synthesizer-download --test-grids -d tests/test_grid/
+          synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
       - name: Sphinx Build
         run: |
           cd docs
