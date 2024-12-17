@@ -172,6 +172,26 @@ class SVOFilterNotFound(Exception):
             return "Filter not found!"
 
 
+class SVOTransmissionHasUnits(Exception):
+    """
+    Exception class for when an SVO filter returns units, which should not be
+    the case for the transmission. For example, where the effective area is
+    provided.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        else:
+            return "Filter provides units, but transmission is dimensionless!"
+
+
 class InconsistentWavelengths(Exception):
     """
     Exception class for when array dimensions don't
