@@ -50,12 +50,16 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
   double **grid_props = grid->props;
   double *grid_spectra = grid->spectra;
 
+  printf("dims=%d, ndim=%d, nlam=%d\n", dims[0], ndim, nlam);
+
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   double *fesc = parts->fesc;
   double *velocity = parts->velocities;
   int npart = parts->npart;
+
+  printf("npart=%d\n", npart);
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -66,6 +70,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
     /* Get the particle velocity and red/blue shift factor. */
     double vel = velocity[p];
     double shift_factor = 1.0 + vel / c;
+    printf("vel=%f, shift_factor=%f\n", vel, shift_factor);
 
     /* Shift the wavelengths and get the mapping for each wavelength bin. We
      * do this for each element because there is no guarantee the input
@@ -77,6 +82,9 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
           find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
+      printf("lamdba=%f, ilam=%d, shifted_wavelengths=%f, mapped_indices=%d\n",
+             wavelength[ilam], ilam, shifted_wavelengths[ilam],
+             mapped_indices[ilam]);
     }
 
     /* Setup the index and mass fraction arrays. */
@@ -629,10 +637,12 @@ void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
+    printf("nthreads=%d\n", nthreads);
     shifted_spectra_loop_cic_omp(grid, parts, spectra, nthreads, c);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
+    printf("serial\n");
     shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
   }
 
@@ -1135,22 +1145,22 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyObject *grid_tuple, *part_tuple;
   PyObject *py_vel_shift;
   PyObject *py_c;
-  PyArrayObject *np_grid_spectra;
+  PyArrayObject *np_grid_spectra, *np_lam;
   PyArrayObject *np_fesc;
   PyArrayObject *np_velocities;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiiisOiO", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_fesc, &np_velocities,
-                        &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
-                        &py_vel_shift, &py_c)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOOOiiisiOO", &np_grid_spectra, &np_lam,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
+                        &np_velocities, &np_ndims, &ndim, &npart, &nlam,
+                        &method, &nthreads, &py_vel_shift, &py_c)) {
     return NULL;
   }
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
-      grid_tuple, np_ndims, np_grid_spectra, ndim, nlam);
+      grid_tuple, np_ndims, np_grid_spectra, np_lam, ndim, nlam);
   if (grid_props == NULL) {
     return NULL;
   }

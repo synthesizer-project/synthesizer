@@ -655,6 +655,12 @@ class Stars(Particles, StarsComponent):
             np.float64,
         )
 
+        # Get the grid wavelength array
+        grid_lam = np.ascontiguousarray(
+            grid._lam[lam_mask],
+            np.float64,
+        )
+
         # Get the grid dimensions after slicing what we need
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
         for ind, g in enumerate(grid_props):
@@ -675,6 +681,7 @@ class Stars(Particles, StarsComponent):
 
         return (
             grid_spectra,
+            grid_lam,
             grid_props,
             part_props,
             part_mass,
