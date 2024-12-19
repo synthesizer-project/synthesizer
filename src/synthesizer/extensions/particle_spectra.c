@@ -25,14 +25,7 @@
  * array. Used by the spectra loop functions when considering doppler shift
  */
 int find_nearest_bin(double lambda, double *grid_wavelengths, int nlam) {
-  int nearest_index = 0;
-  for (int ilam = 1; ilam < nlam; ilam++) {
-    if (fabs(grid_wavelengths[ilam] - lambda) <
-        fabs(grid_wavelengths[nearest_index] - lambda)) {
-      nearest_index = ilam;
-    }
-  }
-  return nearest_index;
+  return binary_search(0, nlam - 1, grid_wavelengths, lambda);
 }
 
 /**
@@ -64,20 +57,26 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
   double *velocity = parts->velocities;
   int npart = parts->npart;
 
-  /*Array to hold shifted wavelengths */
-  double shifted_wavelengths[nlam];
-
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
     /* Get this particle's mass. */
     const double mass = part_masses[p];
 
-    /* Get the particle velocity and shift wl array */
+    /* Get the particle velocity and red/blue shift factor. */
     double vel = velocity[p];
     double shift_factor = 1.0 + vel / c;
+
+    /* Shift the wavelengths and get the mapping for each wavelength bin. We
+     * do this for each element because there is no guarantee the input
+     * wavelengths will be evenly spaced but we also don't want to repeat
+     * the nearest bin search to many times. */
+    double shifted_wavelengths[nlam];
+    int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+      mapped_indices[ilam] =
+          find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
     }
 
     /* Setup the index and mass fraction arrays. */
@@ -139,21 +138,31 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
 
       /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
-        double shifted_lambda = shifted_wavelengths[ilam];
-        /*Find nearest wavelength bin*/
-        int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam);
-        if (ilam_shifted >= nlam - 1 || ilam_shifted < 0)
-          continue; // jumps out of the loop if out of bounds
-        // Interpolate contribution between ilam_shifted and ilam_shifted+1
-        double frac_shifted =
-            (shifted_lambda - wavelength[ilam_shifted]) /
-            (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
 
-        /* Add the contribution to this wavelength. */
+        /* Get the shifted wavelength and index. */
+        int ilam_shifted = mapped_indices[ilam];
+        double shifted_lambda = shifted_wavelengths[ilam];
+
+        /* Compute the fraction of the shifted wavelength between the two
+         * closest wavelength elements. */
+        double frac_shifted = 0.0;
+        if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+          frac_shifted =
+              (shifted_lambda - wavelength[ilam_shifted]) /
+              (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+        } else {
+          /* Out of bounds, skip this wavelength */
+          continue;
+        }
+
+        /* Get the grid spectra value for this wavelength. */
+        double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
+
+        /* Add the contribution to the corresponding wavelength element. */
         spectra[p * nlam + ilam_shifted] +=
-            grid_spectra[spectra_ind + ilam] * (1.0 - frac_shifted) * weight;
+            (1.0 - frac_shifted) * grid_spectra_value;
         spectra[p * nlam + ilam_shifted + 1] +=
-            grid_spectra[spectra_ind + ilam] * frac_shifted * weight;
+            frac_shifted * grid_spectra_value;
       }
     }
   }
@@ -424,8 +433,6 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
     double *velocity = parts->velocities;
     int npart = parts->npart;
 
-    double shifted_wavelengths[nlam];
-
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
@@ -451,11 +458,21 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
 
       /* Get this particle's mass. velocity and doppler shift. */
       const double mass = part_masses[p];
+
+      /* Get the particle velocity and red/blue shift factor. */
       double vel = velocity[p];
       double shift_factor = 1.0 + vel / c;
-      // Fill up the shifted lam array
+
+      /* Shift the wavelengths and get the mapping for each wavelength bin. We
+       * do this for each element because there is no guarantee the input
+       * wavelengths will be evenly spaced but we also don't want to repeat
+       * the nearest bin search to many times. */
+      double shifted_wavelengths[nlam];
+      int mapped_indices[nlam];
       for (int ilam = 0; ilam < nlam; ilam++) {
         shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+        mapped_indices[ilam] =
+            find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
       }
 
       /* Setup the index and mass fraction arrays. */
@@ -516,21 +533,31 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
 
         /* Add this grid cell's contribution to the spectra */
         for (int ilam = 0; ilam < nlam; ilam++) {
-          double shifted_lambda = shifted_wavelengths[ilam];
-          int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam);
-          if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) {
-            continue
-          }; // jumps out of the loop if out of bounds
-          // Interpolate contribution between ilam_shifted and ilam_shifted+1
-          double frac_shifted =
-              (shifted_lambda - wavelength[ilam_shifted]) /
-              (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
 
-          /* Add the contribution to this wavelength. */
+          /* Get the shifted wavelength and index. */
+          int ilam_shifted = mapped_indices[ilam];
+          double shifted_lambda = shifted_wavelengths[ilam];
+
+          /* Compute the fraction of the shifted wavelength between the two
+           * closest wavelength elements. */
+          double frac_shifted = 0.0;
+          if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+            frac_shifted =
+                (shifted_lambda - wavelength[ilam_shifted]) /
+                (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+          } else {
+            /* Out of bounds, skip this wavelength */
+            continue;
+          }
+
+          /* Get the grid spectra value for this wavelength. */
+          double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
+
+          /* Add the contribution to the corresponding wavelength element. */
           spectra[p * nlam + ilam_shifted] +=
-              grid_spectra[spectra_ind + ilam] * (1.0 - frac_shifted) * weight;
+              (1.0 - frac_shifted) * grid_spectra_value;
           spectra[p * nlam + ilam_shifted + 1] +=
-              grid_spectra[spectra_ind + ilam] * frac_shifted * weight;
+              frac_shifted * grid_spectra_value;
         }
       }
     }
@@ -707,17 +734,26 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
   double *velocity = parts->velocities;
   int npart = parts->npart;
 
-  double shifted_wavelengths[nlam];
-
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
     /* Get this particle's mass, velocity and doppler shift. */
     const double mass = part_masses[p];
+
+    /* Get the particle velocity and red/blue shift factor. */
     double vel = velocity[p];
     double shift_factor = 1.0 + vel / c;
+
+    /* Shift the wavelengths and get the mapping for each wavelength bin. We
+     * do this for each element because there is no guarantee the input
+     * wavelengths will be evenly spaced but we also don't want to repeat
+     * the nearest bin search to many times. */
+    double shifted_wavelengths[nlam];
+    int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+      mapped_indices[ilam] =
+          find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
     }
 
     /* Setup the index array. */
@@ -740,19 +776,30 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
 
     /* Add this grid cell's contribution to the spectra */
     for (int ilam = 0; ilam < nlam; ilam++) {
-      double shifted_lambda = shifted_wavelengths[ilam];
-      int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam);
-      if (ilam_shifted >= nlam - 1 || ilam_shifted < 0)
-        continue; // jumps out of the loop if out of bounds
-      double frac_shifted =
-          (shifted_lambda - wavelength[ilam_shifted]) /
-          (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
 
-      /* Add the contribution to this wavelength. */
+      /* Get the shifted wavelength and index. */
+      int ilam_shifted = mapped_indices[ilam];
+      double shifted_lambda = shifted_wavelengths[ilam];
+
+      /* Compute the fraction of the shifted wavelength between the two
+       * closest wavelength elements. */
+      double frac_shifted = 0.0;
+      if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+        frac_shifted =
+            (shifted_lambda - wavelength[ilam_shifted]) /
+            (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+      } else {
+        /* Out of bounds, skip this wavelength */
+        continue;
+      }
+
+      /* Get the grid spectra value for this wavelength. */
+      double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
+
+      /* Add the contribution to the corresponding wavelength element. */
       spectra[p * nlam + ilam_shifted] +=
-          grid_spectra[spectra_ind + ilam] * (1.0 - frac_shifted) * weight;
-      spectra[p * nlam + ilam_shifted + 1] +=
-          grid_spectra[spectra_ind + ilam] * frac_shifted * weight;
+          (1.0 - frac_shifted) * grid_spectra_value;
+      spectra[p * nlam + ilam_shifted + 1] += frac_shifted * grid_spectra_value;
     }
   }
 }
@@ -882,8 +929,6 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
     double *velocity = parts->velocities;
     int npart = parts->npart;
 
-    double shifted_wavelengths[nlam];
-
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
@@ -909,10 +954,21 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
 
       /* Get this particle's mass, velocity and doppler shift contribution. */
       const double mass = part_masses[p];
+
+      /* Get the particle velocity and red/blue shift factor. */
       double vel = velocity[p];
       double shift_factor = 1.0 + vel / c;
-      for (int i = 0, i < nlam, i++) {
-        shifted_wavelengths[i] = wavelength[i] * shift_factor;
+
+      /* Shift the wavelengths and get the mapping for each wavelength bin. We
+       * do this for each element because there is no guarantee the input
+       * wavelengths will be evenly spaced but we also don't want to repeat
+       * the nearest bin search to many times. */
+      double shifted_wavelengths[nlam];
+      int mapped_indices[nlam];
+      for (int ilam = 0; ilam < nlam; ilam++) {
+        shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+        mapped_indices[ilam] =
+            find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
       }
 
       /* Setup the index array. */
@@ -935,21 +991,31 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
 
       /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
-        double shifted_lambda = shifted_wavelengths[ilam];
-        /*Find nearest wavelength bin*/
-        int ilam_shifted = find_nearest_bin(shifted_lambda, wavelength, nlam);
-        if (ilam_shifted >= nlam - 1 || ilam_shifted < 0) {
-          continue
-        }; // jumps out of the loop if out of bounds
-        double frac_shifted =
-            (shifted_lambda - wavelength[ilam_shifted]) /
-            (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
 
-        /* Add the contribution to this wavelength. */
+        /* Get the shifted wavelength and index. */
+        int ilam_shifted = mapped_indices[ilam];
+        double shifted_lambda = shifted_wavelengths[ilam];
+
+        /* Compute the fraction of the shifted wavelength between the two
+         * closest wavelength elements. */
+        double frac_shifted = 0.0;
+        if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+          frac_shifted =
+              (shifted_lambda - wavelength[ilam_shifted]) /
+              (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+        } else {
+          /* Out of bounds, skip this wavelength */
+          continue;
+        }
+
+        /* Get the grid spectra value for this wavelength. */
+        double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
+
+        /* Add the contribution to the corresponding wavelength element. */
         spectra[p * nlam + ilam_shifted] +=
-            grid_spectra[spectra_ind + ilam] * (1.0 - frac_shifted) * weight;
+            (1.0 - frac_shifted) * grid_spectra_value;
         spectra[p * nlam + ilam_shifted + 1] +=
-            grid_spectra[spectra_ind + ilam] * frac_shifted * weight;
+            frac_shifted * grid_spectra_value;
       }
     }
   }
@@ -1032,7 +1098,7 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  shifted_spectra_loop_ngp_serial(grid, parts, spectra);
+  shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
 
 #endif
   toc("Nearest Grid Point particle spectra loop", start_time);
@@ -1075,7 +1141,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOOOOiiisOiO", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_velocities,
                         &np_ndims, &ndim, &npart, &nlam, &method, &vel_shift,
                         &nthreads, &c))
@@ -1111,8 +1177,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   toc("Extracting Python data", setup_start);
 
+  /*No shift*/
   if (!vel_shift) {
-    /*No shift*/
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {
@@ -1123,16 +1189,16 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
       return NULL;
     }
-  } else {
-    /*With shift shift*/
+  }
+
+  /* With velocity shift. */
+  else {
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {
-      shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads,
-                               c); // make these 1
+      shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads, c);
     } else if (strcmp(method, "ngp") == 0) {
-      shifted_spectra_loop_ngp(grid_props, part_props, spectra, nthreads,
-                               c); // 2
+      shifted_spectra_loop_ngp(grid_props, part_props, spectra, nthreads, c);
     } else {
       PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
       return NULL;
