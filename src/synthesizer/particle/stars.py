@@ -705,7 +705,6 @@ class Stars(Particles, StarsComponent):
         aperture=None,
         nthreads=0,
         vel_shift=False,
-        c=2.998e8,
     ):
         """
         Generate the integrated rest frame spectra for a given grid key.
@@ -752,8 +751,6 @@ class Stars(Particles, StarsComponent):
                 all available threads are used.
             vel_shift (bool)
                 Flags whether doppler shift is applied to the spectrum
-            c (float)
-                Speed of light, defaults to 2.998e8 m/s
 
         Returns:
             numpy.ndarray:
@@ -874,7 +871,6 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
             vel_shift=vel_shift,
-            c_speed=c,
             lam_mask=lam_mask,
         )
 
@@ -1327,7 +1323,6 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
         vel_shift=False,
-        c=2.998e8,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -1366,6 +1361,8 @@ class Stars(Particles, StarsComponent):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Flags whether doppler shift is applied to the spectrum.
 
         Returns:
             numpy.ndarray:
@@ -1469,7 +1466,6 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
             vel_shift=vel_shift,
-            c_speed=c,
             lam_mask=lam_mask,
         )
         toc("Preparing C args", start)
