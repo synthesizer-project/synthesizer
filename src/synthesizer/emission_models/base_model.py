@@ -2151,7 +2151,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         covering_fraction=None,
         mask=None,
         vel_shift=False,
-        c=2.998e8,
         verbose=True,
         spectra=None,
         particle_spectra=None,
@@ -2231,8 +2230,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 recursive calls to this function.
             vel_shift (bool)
                 Flags whether to apply doppler shift to the spectrum.
-            c (float)
-                speed of light
             _is_related (bool)
                 Are we generating related model spectra? If so we don't want
                 to apply any post processing functions or delete any spectra,
@@ -2283,14 +2280,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 "want to use a child model you are saving instead?"
             )
 
-        # Perform all extractions (this should be ok, 19/11)
+        # Perform all extractions
         spectra, particle_spectra = self._extract_spectra(
             emission_model,
             emitters,
             spectra,
             particle_spectra,
             vel_shift=vel_shift,
-            c=c,
             verbose=verbose,
             **kwargs,
         )

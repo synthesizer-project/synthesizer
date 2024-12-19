@@ -1143,8 +1143,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   if (!PyArg_ParseTuple(args, "OOOOOOOiiisOiO", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_velocities,
-                        &np_ndims, &ndim, &npart, &nlam, &method, &py_vel_shift,
-                        &nthreads, &py_c)) {
+                        &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
+                        &py_vel_shift, &py_c)) {
     return NULL;
   }
 
@@ -1180,6 +1180,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /*No shift*/
   if (!vel_shift) {
+    printf("Computing spectra without velocity shift\n");
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {
@@ -1194,6 +1195,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* With velocity shift. */
   else {
+    printf("Computing spectra with velocity shift\n");
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {

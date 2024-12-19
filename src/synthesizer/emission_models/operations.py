@@ -82,8 +82,6 @@ class Extraction:
                 The dictionary to store the extracted particle spectra in.
             vel_shift (bool):
                 Flags whether to apply doppler shift to the spectra
-            c (float):
-                speed of light
             verbose (bool):
                 Are we talking?
             kwargs (dict):
