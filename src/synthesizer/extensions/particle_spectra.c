@@ -23,6 +23,9 @@
 /**
  * @brief Find nearest wavelength bin for a given lambda, in a given wavelength
  * array. Used by the spectra loop functions when considering doppler shift
+ *
+ * Note: binary search returns the index of the upper bin of those that straddle
+ * the given lambda.
  */
 int find_nearest_bin(double lambda, double *grid_wavelengths, int nlam) {
   return binary_search(0, nlam - 1, grid_wavelengths, lambda);
@@ -50,16 +53,12 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
   double **grid_props = grid->props;
   double *grid_spectra = grid->spectra;
 
-  printf("dims=%d, ndim=%d, nlam=%d\n", dims[0], ndim, nlam);
-
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   double *fesc = parts->fesc;
   double *velocity = parts->velocities;
   int npart = parts->npart;
-
-  printf("npart=%d\n", npart);
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -70,7 +69,6 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
     /* Get the particle velocity and red/blue shift factor. */
     double vel = velocity[p];
     double shift_factor = 1.0 + vel / c;
-    printf("vel=%f, shift_factor=%f\n", vel, shift_factor);
 
     /* Shift the wavelengths and get the mapping for each wavelength bin. We
      * do this for each element because there is no guarantee the input
@@ -82,9 +80,6 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
           find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
-      printf("lamdba=%f, ilam=%d, shifted_wavelengths=%f, mapped_indices=%d\n",
-             wavelength[ilam], ilam, shifted_wavelengths[ilam],
-             mapped_indices[ilam]);
     }
 
     /* Setup the index and mass fraction arrays. */
@@ -154,10 +149,10 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
         /* Compute the fraction of the shifted wavelength between the two
          * closest wavelength elements. */
         double frac_shifted = 0.0;
-        if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+        if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
           frac_shifted =
-              (shifted_lambda - wavelength[ilam_shifted]) /
-              (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+              (shifted_lambda - wavelength[ilam_shifted - 1]) /
+              (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
         } else {
           /* Out of bounds, skip this wavelength */
           continue;
@@ -167,10 +162,9 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
         double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
         /* Add the contribution to the corresponding wavelength element. */
-        spectra[p * nlam + ilam_shifted] +=
+        spectra[p * nlam + ilam_shifted - 1] +=
             (1.0 - frac_shifted) * grid_spectra_value;
-        spectra[p * nlam + ilam_shifted + 1] +=
-            frac_shifted * grid_spectra_value;
+        spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
       }
     }
   }
@@ -549,10 +543,10 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
           /* Compute the fraction of the shifted wavelength between the two
            * closest wavelength elements. */
           double frac_shifted = 0.0;
-          if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+          if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
             frac_shifted =
-                (shifted_lambda - wavelength[ilam_shifted]) /
-                (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+                (shifted_lambda - wavelength[ilam_shifted - 1]) /
+                (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
           } else {
             /* Out of bounds, skip this wavelength */
             continue;
@@ -562,10 +556,9 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
           double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
           /* Add the contribution to the corresponding wavelength element. */
-          spectra[p * nlam + ilam_shifted] +=
+          spectra[p * nlam + ilam_shifted - 1] +=
               (1.0 - frac_shifted) * grid_spectra_value;
-          spectra[p * nlam + ilam_shifted + 1] +=
-              frac_shifted * grid_spectra_value;
+          spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
         }
       }
     }
@@ -637,12 +630,10 @@ void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    printf("nthreads=%d\n", nthreads);
     shifted_spectra_loop_cic_omp(grid, parts, spectra, nthreads, c);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    printf("serial\n");
     shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
   }
 
@@ -794,10 +785,10 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
       /* Compute the fraction of the shifted wavelength between the two
        * closest wavelength elements. */
       double frac_shifted = 0.0;
-      if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+      if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
         frac_shifted =
-            (shifted_lambda - wavelength[ilam_shifted]) /
-            (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+            (shifted_lambda - wavelength[ilam_shifted - 1]) /
+            (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
       } else {
         /* Out of bounds, skip this wavelength */
         continue;
@@ -807,9 +798,9 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
       double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
       /* Add the contribution to the corresponding wavelength element. */
-      spectra[p * nlam + ilam_shifted] +=
+      spectra[p * nlam + ilam_shifted - 1] +=
           (1.0 - frac_shifted) * grid_spectra_value;
-      spectra[p * nlam + ilam_shifted + 1] += frac_shifted * grid_spectra_value;
+      spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
     }
   }
 }
@@ -1009,10 +1000,10 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
         /* Compute the fraction of the shifted wavelength between the two
          * closest wavelength elements. */
         double frac_shifted = 0.0;
-        if (ilam_shifted >= 0 && ilam_shifted < nlam - 1) {
+        if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
           frac_shifted =
-              (shifted_lambda - wavelength[ilam_shifted]) /
-              (wavelength[ilam_shifted + 1] - wavelength[ilam_shifted]);
+              (shifted_lambda - wavelength[ilam_shifted - 1]) /
+              (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
         } else {
           /* Out of bounds, skip this wavelength */
           continue;
@@ -1022,10 +1013,9 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
         double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
         /* Add the contribution to the corresponding wavelength element. */
-        spectra[p * nlam + ilam_shifted] +=
+        spectra[p * nlam + ilam_shifted - 1] +=
             (1.0 - frac_shifted) * grid_spectra_value;
-        spectra[p * nlam + ilam_shifted + 1] +=
-            frac_shifted * grid_spectra_value;
+        spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
       }
     }
   }
@@ -1190,7 +1180,6 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /*No shift*/
   if (!vel_shift) {
-    printf("Computing spectra without velocity shift\n");
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {
@@ -1205,7 +1194,6 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* With velocity shift. */
   else {
-    printf("Computing spectra with velocity shift\n");
     /* With everything set up we can compute the spectra for each particle using
      * the requested method. */
     if (strcmp(method, "cic") == 0) {
