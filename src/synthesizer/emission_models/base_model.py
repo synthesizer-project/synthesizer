@@ -637,6 +637,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         return "|\n|".join(parts)
 
+    def items(self):
+        """Return the items in the model."""
+        return self._models.items()
+
     def __getitem__(self, label):
         """
         Enable label look up.
@@ -1433,6 +1437,62 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 The parameters to fix.
         """
         self.fixed_parameters.update(kwargs)
+
+    def to_hdf5(self, group):
+        """
+        Save the model to an HDF5 group.
+
+        Args:
+            group (h5py.Group):
+                The group to save the model to.
+        """
+        # First off call the operation to save operation specific attributes
+        # to the group
+        if self._is_extracting:
+            self.extract_to_hdf5(group)
+        elif self._is_combining:
+            self.combine_to_hdf5(group)
+        elif self._is_dust_attenuating:
+            self.attenuate_to_hdf5(group)
+        elif self._is_dust_emitting:
+            self.generate_to_hdf5(group)
+        elif self._is_generating:
+            self.generate_to_hdf5(group)
+
+        # Save the model attributes
+        group.attrs["label"] = self.label
+        group.attrs["emitter"] = self.emitter
+        group.attrs["per_particle"] = self.per_particle
+        group.attrs["save"] = self.save
+        group.attrs["fesc"] = self.fesc if self.fesc is not None else 0.0
+        group.attrs["scale_by"] = self.scale_by
+        group.attrs["post_processing"] = (
+            [func.__name__ for func in self.post_processing]
+            if len(self._post_processing) > 0
+            else "None"
+        )
+
+        # Save the masks
+        if len(self.masks) > 0:
+            masks = group.create_group("Masks")
+            for ind, mask in enumerate(self.masks):
+                mask_group = masks.create_group(f"mask_{ind}")
+                mask_group.attrs["attr"] = mask["attr"]
+                mask_group.attrs["op"] = mask["op"]
+                mask_group.attrs["thresh"] = mask["thresh"]
+
+        # Save the fixed parameters
+        if len(self.fixed_parameters) > 0:
+            fixed_parameters = group.create_group("FixedParameters")
+            for key, value in self.fixed_parameters.items():
+                fixed_parameters.attrs[key] = value
+
+        # Save the children
+        if len(self._children) > 0:
+            group.create_dataset(
+                "Children",
+                data=[child.label.encode("utf-8") for child in self._children],
+            )
 
     def _get_tree_levels(self, root):
         """
@@ -2692,7 +2752,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     @accepts(resolution=kpc, fov=kpc)
     def _get_images(
         self,
-        resolution,
+        instrument,
         fov,
         emitters,
         img_type="smoothed",
@@ -2719,9 +2779,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         further down in the tree.
 
         Args:
-            resolution (float):
-                The pixel resolution of the image in spatial units (e.g. pc,
-                kpc, Mpc).
+            instrument (Instrument)
+                The instrument to use for the image generation.
             fov (float):
                 The field of view of the image in angular units (e.g. arcsec,
                 arcmin, deg).
@@ -2744,6 +2803,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             do_flux (bool)
                 If True, the images will be generated from fluxes, if False
                 they will be generated from luminosities.
+            kernel (str)
+                The convolution kernel to use for the image generation. If
+                None, no convolution will be applied.
+            kernel_threshold (float)
+                The threshold for the convolution kernel.
+            nthreads (int)
+                The number of threads to use for the image generation.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2766,7 +2832,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Get all the images at the extraction leaves of the tree
         images.update(
             self._extract_images(
-                resolution,
+                instrument,
                 fov,
                 img_type,
                 do_flux,
@@ -2795,7 +2861,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 if related_model.label not in images:
                     images.update(
                         related_model._get_images(
-                            resolution,
+                            instrument,
                             fov,
                             emitters,
                             img_type,
@@ -2838,7 +2904,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     images = self._combine_images(
                         images,
                         this_model,
-                        resolution,
+                        instrument,
                         fov,
                         img_type,
                         do_flux,
@@ -2854,7 +2920,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             elif this_model._is_dust_attenuating:
                 try:
                     images = self._attenuate_images(
-                        resolution,
+                        instrument,
                         fov,
                         this_model,
                         img_type,
@@ -2872,7 +2938,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
                     images = self._generate_images(
-                        resolution,
+                        instrument,
                         fov,
                         this_model,
                         img_type,

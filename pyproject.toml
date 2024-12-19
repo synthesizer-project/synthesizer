@@ -92,6 +92,7 @@ dependencies = [
   "spectres",
   "tqdm",
   "requests",
+  "pathos",
   "dense_basis@git+https://github.com/kartheikiyer/dense_basis",
   "statsmodels",
 ]
