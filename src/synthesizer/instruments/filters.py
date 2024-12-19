@@ -803,9 +803,7 @@ class FilterCollection:
             # Are we making an array with a fixed size?
             if lam_size is not None:
                 # Create wavelength array
-                new_lam = (
-                    np.linspace(min_lam, max_lam, lam_size) * min_lam.units
-                )
+                new_lam = np.linspace(min_lam, max_lam, lam_size)
 
             else:
                 # Ok, we are trying to be clever, merge the filter wavelength
