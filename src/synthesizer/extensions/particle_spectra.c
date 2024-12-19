@@ -1143,8 +1143,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   if (!PyArg_ParseTuple(args, "OOOOOOOiiisOiO", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_velocities,
-                        &np_ndims, &ndim, &npart, &nlam, &method, py_vel_shift,
-                        &nthreads, py_c)) {
+                        &np_ndims, &ndim, &npart, &nlam, &method, &py_vel_shift,
+                        &nthreads, &py_c)) {
     return NULL;
   }
 
