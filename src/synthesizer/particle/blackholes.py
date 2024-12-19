@@ -427,6 +427,12 @@ class BlackHoles(Particles, BlackholesComponent):
             dtype=np.float64,
         )
 
+        # Get the grid wavelengths
+        grid_lam = np.ascontiguousarray(
+            grid._lam,
+            dtype=np.float64,
+        )
+
         # Apply the wavelength mask
         grid_spectra = np.ascontiguousarray(
             grid_spectra[..., lam_mask],
@@ -453,6 +459,7 @@ class BlackHoles(Particles, BlackholesComponent):
 
         return (
             grid_spectra,
+            grid_lam,
             grid_props,
             props,
             bol_lum,

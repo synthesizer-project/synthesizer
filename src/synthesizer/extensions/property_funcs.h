@@ -78,7 +78,8 @@ double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,
-                                     const int ndim, const int nlam);
+                                     PyArrayObject *np_lam, const int ndim,
+                                     const int nlam);
 struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    PyArrayObject *np_ndims,
                                    PyArrayObject *np_grid_lines,

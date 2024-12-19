@@ -171,7 +171,8 @@ double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,
-                                     const int ndim, const int nlam) {
+                                     PyArrayObject *np_lam, const int ndim,
+                                     const int nlam) {
 
   /* Initialise the grid struct. */
   struct grid *grid = malloc(sizeof(struct grid));
@@ -218,6 +219,14 @@ struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
   if (np_grid_spectra != NULL) {
     grid->spectra = extract_data_double(np_grid_spectra, "grid_spectra");
     if (grid->spectra == NULL) {
+      return NULL;
+    }
+  }
+
+  /* Extract the wavelength array. */
+  if (np_lam != NULL) {
+    grid->lam = extract_data_double(np_lam, "lam");
+    if (grid->lam == NULL) {
       return NULL;
     }
   }
@@ -315,7 +324,8 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
  * @return struct particles*: A pointer to the particles struct.
  */
 struct particles *get_part_struct(PyObject *part_tuple,
-                                  PyArrayObject *np_part_mass, PyArrayObject *np_velocities,
+                                  PyArrayObject *np_part_mass,
+                                  PyArrayObject *np_velocities,
                                   PyArrayObject *np_fesc, const int npart,
                                   const int ndim) {
 
@@ -339,7 +349,7 @@ struct particles *get_part_struct(PyObject *part_tuple,
       return NULL;
     }
   }
-  
+
   /* Extract a pointer to the particle velocities. */
   if (np_velocities != NULL) {
     particles->velocities = extract_data_double(np_velocities, "part_vel");
@@ -347,7 +357,7 @@ struct particles *get_part_struct(PyObject *part_tuple,
       return NULL;
     }
   }
-  
+
   /* Extract a pointer to the fesc array. */
   if (np_fesc != NULL) {
     particles->fesc = extract_data_double(np_fesc, "fesc");
