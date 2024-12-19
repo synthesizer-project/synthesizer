@@ -70,7 +70,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
     /* Shift the wavelengths and get the mapping for each wavelength bin. We
      * do this for each element because there is no guarantee the input
      * wavelengths will be evenly spaced but we also don't want to repeat
-     * the nearest bin search to many times. */
+     * the nearest bin search too many times. */
     double shifted_wavelengths[nlam];
     int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
@@ -466,7 +466,7 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
       /* Shift the wavelengths and get the mapping for each wavelength bin. We
        * do this for each element because there is no guarantee the input
        * wavelengths will be evenly spaced but we also don't want to repeat
-       * the nearest bin search to many times. */
+       * the nearest bin search too many times. */
       double shifted_wavelengths[nlam];
       int mapped_indices[nlam];
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -747,7 +747,7 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
     /* Shift the wavelengths and get the mapping for each wavelength bin. We
      * do this for each element because there is no guarantee the input
      * wavelengths will be evenly spaced but we also don't want to repeat
-     * the nearest bin search to many times. */
+     * the nearest bin search too many times. */
     double shifted_wavelengths[nlam];
     int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
@@ -962,7 +962,7 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
       /* Shift the wavelengths and get the mapping for each wavelength bin. We
        * do this for each element because there is no guarantee the input
        * wavelengths will be evenly spaced but we also don't want to repeat
-       * the nearest bin search to many times. */
+       * the nearest bin search too many times. */
       double shifted_wavelengths[nlam];
       int mapped_indices[nlam];
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -1090,7 +1090,7 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    shifted_spectra_loop_ngp_serial(grid, parts, spectra, nthreads, c);
+    shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
   }
 
 #else
@@ -1133,8 +1133,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyObject vel_shift;
-  PyObject c;
+  PyObject *py_vel_shift;
+  PyObject *py_c;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
   PyArrayObject *np_velocities;
@@ -1143,9 +1143,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   if (!PyArg_ParseTuple(args, "OOOOOOOiiisOiO", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_velocities,
-                        &np_ndims, &ndim, &npart, &nlam, &method, &vel_shift,
-                        &nthreads, &c))
+                        &np_ndims, &ndim, &npart, &nlam, &method, py_vel_shift,
+                        &nthreads, py_c)) {
     return NULL;
+  }
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
@@ -1170,10 +1171,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   }
 
   /* Convert velocity Python boolean flag to int. */
-  int vel_shift = PyObject_IsTrue(vel_shift);
+  int vel_shift = PyObject_IsTrue(py_vel_shift);
 
   /* Convert c to double */
-  double c = PyFloat_AsDouble(c);
+  double c = PyFloat_AsDouble(py_c);
 
   toc("Extracting Python data", setup_start);
 
@@ -1203,51 +1204,52 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
       return NULL;
     }
+  }
 
-    /* Check we got the spectra sucessfully. (Any error messages will already be
-     * set) */
-    if (spectra == NULL) {
-      return NULL;
-    }
+  /* Check we got the spectra sucessfully. (Any error messages will already be
+   * set) */
+  if (spectra == NULL) {
+    return NULL;
+  }
 
-    /* Clean up memory! */
-    free(part_props);
-    free(grid_props);
+  /* Clean up memory! */
+  free(part_props);
+  free(grid_props);
 
-    /* Reconstruct the python array to return. */
-    npy_intp np_dims[2] = {
-        npart,
-        nlam,
-    };
-    PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
-        2, np_dims, NPY_FLOAT64, spectra);
-
-    toc("Computing particle SEDs", start_time);
-
-    return Py_BuildValue("N", out_spectra);
+  /* Reconstruct the python array to return. */
+  npy_intp np_dims[2] = {
+      npart,
+      nlam,
   };
+  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
+      2, np_dims, NPY_FLOAT64, spectra);
 
-  /* Below is all the gubbins needed to make the module importable in Python. */
-  static PyMethodDef SedMethods[] = {
-      {"compute_particle_seds", (PyCFunction)compute_particle_seds,
-       METH_VARARGS, "Method for calculating particle intrinsic spectra."},
-      {NULL, NULL, 0, NULL}};
+  toc("Computing particle SEDs", start_time);
 
-  /* Make this importable. */
-  static struct PyModuleDef moduledef = {
-      PyModuleDef_HEAD_INIT,
-      "make_particle_sed",                   /* m_name */
-      "A module to calculate particle seds", /* m_doc */
-      -1,                                    /* m_size */
-      SedMethods,                            /* m_methods */
-      NULL,                                  /* m_reload */
-      NULL,                                  /* m_traverse */
-      NULL,                                  /* m_clear */
-      NULL,                                  /* m_free */
-  };
+  return Py_BuildValue("N", out_spectra);
+}
 
-  PyMODINIT_FUNC PyInit_particle_spectra(void) {
-    PyObject *m = PyModule_Create(&moduledef);
-    import_array();
-    return m;
-  };
+/* Below is all the gubbins needed to make the module importable in Python. */
+static PyMethodDef SedMethods[] = {
+    {"compute_particle_seds", (PyCFunction)compute_particle_seds, METH_VARARGS,
+     "Method for calculating particle intrinsic spectra."},
+    {NULL, NULL, 0, NULL}};
+
+/* Make this importable. */
+static struct PyModuleDef moduledef = {
+    PyModuleDef_HEAD_INIT,
+    "make_particle_sed",                   /* m_name */
+    "A module to calculate particle seds", /* m_doc */
+    -1,                                    /* m_size */
+    SedMethods,                            /* m_methods */
+    NULL,                                  /* m_reload */
+    NULL,                                  /* m_traverse */
+    NULL,                                  /* m_clear */
+    NULL,                                  /* m_free */
+};
+
+PyMODINIT_FUNC PyInit_particle_spectra(void) {
+  PyObject *m = PyModule_Create(&moduledef);
+  import_array();
+  return m;
+};
