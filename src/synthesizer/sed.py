@@ -892,7 +892,7 @@ class Sed:
         Uses a standard distance of 10 pcs.
 
         This will also populate the observed wavelength and frequency arrays
-        in the which in this case are the same as the emitted arrays.
+        which in this case are the same as the emitted arrays.
 
         Returns:
             fnu (ndarray)
