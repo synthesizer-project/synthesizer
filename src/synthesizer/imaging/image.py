@@ -645,6 +645,7 @@ class Image:
     def plot_map(
         self,
         show=False,
+        extent=None,
         cmap="Greys_r",
         cbar_label=None,
         norm=None,
@@ -660,6 +661,8 @@ class Image:
         Args:
             show (bool)
                 Whether to show the plot or not (Default False).
+            extent (array_like)
+                The extent of the x and y axes.
             cmap (str)
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
@@ -695,13 +698,14 @@ class Image:
         if ax is None:
             ax = fig.add_subplot(111)
 
-        # Get the extent of the image
-        extent = [
-            -self._fov[0] / 2,
-            self._fov[0] / 2,
-            -self._fov[1] / 2,
-            self._fov[1] / 2,
-        ]
+        # If no extent has been passed, calculate it
+        if extent is None:
+            extent = [
+                -self._fov[0] / 2,
+                self._fov[0] / 2,
+                -self._fov[1] / 2,
+                self._fov[1] / 2,
+            ]
 
         # Plot the image and remove the surrounding axis
         im = ax.imshow(
