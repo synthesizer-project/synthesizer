@@ -16,7 +16,7 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom, Hz, angstrom, cm, erg, s
+from unyt import Angstrom, Hz, angstrom, cm, erg, pc, s
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
@@ -536,6 +536,46 @@ class LineCollection:
 
         return get_diagram_labels(diagram_id)
 
+    def get_flux0(self):
+        """
+        Calculate the rest frame line flux for all lines.
+
+        Uses a standard distance of 10pc to calculate the flux.
+
+        Returns:
+            flux (unyt_quantity)
+                Flux of the line in units of erg/s/cm2 by default.
+        """
+        for line in self.lines.values():
+            line.get_flux0()
+
+    def get_flux(self, cosmo, z, igm=None):
+        """
+        Calculate the line flux given a redshift and cosmology for all lines.
+
+        This will also populate the observed_wavelength attribute with the
+        wavelength of the line when observed.
+
+        NOTE: if a redshift of 0 is passed the flux return will be calculated
+        assuming a distance of 10 pc omitting IGM since at this distance
+        IGM contribution makes no sense.
+
+        Args:
+            cosmo (astropy.cosmology.)
+                Astropy cosmology object.
+            z (float)
+                The redshift.
+            igm (igm)
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
+
+        Returns:
+            flux (unyt_quantity)
+                Flux of the line in units of erg/s/cm2 by default.
+        """
+        for line in self.lines.values():
+            line.get_flux(cosmo, z, igm)
+
 
 class Line:
     """
@@ -576,6 +616,7 @@ class Line:
     continuum = Quantity()
     luminosity = Quantity()
     flux = Quantity()
+    observed_wavelength = Quantity()
 
     @accepts(
         wavelength=angstrom,
@@ -647,8 +688,10 @@ class Line:
             combine_lines if len(combine_lines) > 0 else [self]
         )
 
-        # Initialise the flux (populated by get_flux when called)
+        # Initialise the flux and observed wavelength (populated by
+        # get_flux/get_flux0 when called)
         self.flux = None
+        self.observed_wavelength = None
 
         # Calculate the vacuum wavelength.
         self.vacuum_wavelength = standard_to_vacuum(self.wavelength)
@@ -792,20 +835,58 @@ class Line:
             continuum=np.sum(self.continuum),
         )
 
-    def get_flux(self, cosmo, z):
+    def get_flux0(self):
         """
-        Calculate the line flux.
+        Calculate the rest frame line flux.
+
+        Uses a standard distance of 10pc to calculate the flux.
+
+        This will also populate the observed_wavelength attribute with the
+        wavelength of the line when observed (which in the rest frame is the
+        same as the emitted wavelength).
+
+        Returns:
+            flux (unyt_quantity)
+                Flux of the line in units of erg/s/cm2 by default.
+        """
+        # Compute flux
+        self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
+
+        # Set the observed wavelength (in this case this is the rest frame
+        # wavelength)
+        self.observed_wavelength = self.wavelength
+
+        return self.flux
+
+    def get_flux(self, cosmo, z, igm=None):
+        """
+        Calculate the line flux given a redshift and cosmology.
+
+        This will also populate the observed_wavelength attribute with the
+        wavelength of the line when observed.
+
+        NOTE: if a redshift of 0 is passed the flux return will be calculated
+        assuming a distance of 10 pc omitting IGM since at this distance
+        IGM contribution makes no sense.
 
         Args:
             cosmo (astropy.cosmology.)
                 Astropy cosmology object.
             z (float)
                 The redshift.
+            igm (igm)
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
 
         Returns:
-            flux (float)
+            flux (unyt_quantity)
                 Flux of the line in units of erg/s/cm2 by default.
         """
+        # If the redshift is 0 we can assume a distance of 10pc and ignore
+        # the IGM
+        if z == 0:
+            return self.get_flux0()
+
         # Get the luminosity distance
         luminosity_distance = (
             cosmo.luminosity_distance(z).to("cm").value
@@ -813,6 +894,13 @@ class Line:
 
         # Compute flux
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
+
+        # Set the observed wavelength
+        self.observed_wavelength = self.wavelength * (1 + z)
+
+        # If we are applying an IGM model apply it
+        if igm is not None:
+            self.flux *= igm().get_transmission(z, self.observed_wavelength)
 
         return self.flux
 
