@@ -616,7 +616,7 @@ class Line:
     continuum = Quantity()
     luminosity = Quantity()
     flux = Quantity()
-    observed_wavelength = Quantity()
+    obslam = Quantity()
 
     @accepts(
         wavelength=angstrom,
@@ -854,7 +854,7 @@ class Line:
 
         # Set the observed wavelength (in this case this is the rest frame
         # wavelength)
-        self.observed_wavelength = self.wavelength
+        self.obslam = self.wavelength
 
         return self.flux
 
@@ -896,11 +896,11 @@ class Line:
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
 
         # Set the observed wavelength
-        self.observed_wavelength = self.wavelength * (1 + z)
+        self.obslam = self.wavelength * (1 + z)
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            self.flux *= igm().get_transmission(z, self.observed_wavelength)
+            self.flux *= igm().get_transmission(z, self._obslam)
 
         return self.flux
 
