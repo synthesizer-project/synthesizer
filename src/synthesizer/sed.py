@@ -909,10 +909,12 @@ class Sed:
 
     def get_fnu0(self):
         """
-        Calculate a dummy observed frame spectral energy distribution.
-        Useful when you want rest-frame quantities.
+        Calculate the rest frame spectral flux density.
 
         Uses a standard distance of 10 pcs.
+
+        This will also populate the observed wavelength and frequency arrays
+        which in this case are the same as the emitted arrays.
 
         Returns:
             fnu (ndarray)
@@ -930,6 +932,9 @@ class Sed:
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
+
+        This will also populate the observed wavelength and frequency arrays
+        with the observer frame values.
 
         NOTE: if a redshift of 0 is passed the flux return will be calculated
         assuming a distance of 10 pc omitting IGM since at this distance
@@ -969,14 +974,14 @@ class Sed:
         self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
-        if igm:
+        if igm is not None:
             self._fnu *= igm().get_transmission(z, self._obslam)
 
         return self.fnu
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband luminosities using a FilterCollection object
+        Calculate broadband luminosities using a FilterCollection object.
 
         Args:
             filters (filters.FilterCollection)
@@ -991,7 +996,6 @@ class Sed:
             photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
-
         # Intialise result dictionary
         photo_lnu = {}
 
@@ -1009,7 +1013,7 @@ class Sed:
 
     def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband fluxes using a FilterCollection object
+        Calculate broadband fluxes using a FilterCollection object.
 
         Args:
             filters (object)
@@ -1024,7 +1028,6 @@ class Sed:
             (dict)
                 A dictionary of fluxes in each filter in filters.
         """
-
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             return ValueError(
