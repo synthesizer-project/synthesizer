@@ -408,6 +408,28 @@ class Sed:
         return self.lam
 
     @property
+    def frequency(self):
+        """
+        Alias to nu (frequency array).
+
+        Returns
+            frequency (unyt_array)
+                The frequency array.
+        """
+        return self.nu
+
+    @property
+    def energy(self):
+        """
+        Get the wavelengths in terms of photon energies in eV.
+
+        Returns
+            energy (unyt_array)
+                The energy coordinate.
+        """
+        return (h * c / self.lam).to(eV)
+
+    @property
     def ndim(self):
         """
         Get the dimensions of the spectra array.
