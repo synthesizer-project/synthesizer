@@ -223,17 +223,25 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
+  /* Note that many of the following arguements are specific to the particle
+   * spectra, but since we have a single argument preparation function we need
+   * to have all arguments present, regardless of whether they are used. */
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyArrayObject *np_grid_spectra;
+  PyObject *py_vel_shift;
+  PyObject *py_c;
+  PyArrayObject *np_grid_spectra, *np_lam;
   PyArrayObject *np_fesc;
+  PyArrayObject *np_velocities;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
-                        &npart, &nlam, &method, &nthreads))
+  if (!PyArg_ParseTuple(args, "OOOOOOOOiiisiOO", &np_grid_spectra, &np_lam,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
+                        &np_velocities, &np_ndims, &ndim, &npart, &nlam,
+                        &method, &nthreads, &py_vel_shift, &py_c)) {
     return NULL;
+  }
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
