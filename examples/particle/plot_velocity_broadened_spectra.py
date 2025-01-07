@@ -10,8 +10,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial import cKDTree
-from unyt import km, s
+from unyt import km, rad, s
 
 from synthesizer.emission_models import NebularEmission
 from synthesizer.grid import Grid
@@ -20,21 +19,6 @@ from synthesizer.sed import plot_spectra
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
-
-
-def calculate_smoothing_lengths(positions, num_neighbors=56):
-    """Calculate the SPH smoothing lengths for a set of coordinates."""
-    tree = cKDTree(positions)
-    distances, _ = tree.query(positions, k=num_neighbors + 1)
-
-    # The k-th nearest neighbor distance (k = num_neighbors)
-    kth_distances = distances[:, num_neighbors]
-
-    # Set the smoothing length to the k-th nearest neighbor
-    # distance divided by 2.0
-    smoothing_lengths = kth_distances / 2.0
-
-    return smoothing_lengths
 
 
 # Set the seed
@@ -46,10 +30,7 @@ grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Define the model
-model = NebularEmission(
-    grid,
-    per_particle=True,
-)
+model = NebularEmission(grid)
 
 # Create galaxy object
 galaxy = load_CAMELS_IllustrisTNG(
@@ -61,7 +42,7 @@ galaxy = load_CAMELS_IllustrisTNG(
 
 # Invent some fake velocities for the stars (with a bulk moving towards us)
 galaxy.stars.velocities = (
-    np.random.normal(100, 200, galaxy.stars.coordinates.shape) * km / s
+    np.random.normal(100, 500, galaxy.stars.coordinates.shape) * km / s
 )
 
 # Get the spectra (this will automatically use the tau_vs we just calculated
@@ -72,9 +53,6 @@ print(
     "Time to get spectra with velocity shift: "
     f"{time.time() - start_with_shift}"
 )
-
-# Plot the Sed
-galaxy.plot_spectra(show=True, combined_spectra=False, stellar_spectra=True)
 
 # Unpack the spectra with the velocity broadening
 with_shift = galaxy.stars.spectra["nebular"]
@@ -99,14 +77,23 @@ plot_spectra(
     show=True,
 )
 
-# Plot the difference between the two spectra
-plt.figure()
-plt.loglog(
-    with_shift._lam, (with_shift.lnu - without_shift.lnu) / with_shift.lnu
-)
+# Exagerate the velocities for the next part
+galaxy.stars.velocities *= 10
 
-plt.xlabel("Wavelength [Angstrom]")
-plt.ylabel("Difference in Luminosity")
-plt.title("Difference in Luminosity with and without Velocity Broadening")
+# Compute the velocity broadened spectra for a range of random rotations
+# and plot the difference in the spectra
+phis = np.linspace(0, 2 * np.pi, 10) * rad
+thetas = np.linspace(0, np.pi, 10) * rad
+spectra = {}
+for phi, theta in zip(phis, thetas):
+    # Rotate the stars
+    galaxy.stars.rotate_particles(phi, theta)
 
-plt.show()
+    # Get the spectra
+    spec = galaxy.stars.get_spectra(model, vel_shift=True)
+
+    # Store it for plotting
+    spectra[f"phi={phi:.2f}, theta={theta:.2f}"] = spec
+
+# Plot the spectra
+plot_spectra(spectra, show=True, xlimits=(10**3, 10**4))
