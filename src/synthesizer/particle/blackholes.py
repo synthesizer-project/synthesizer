@@ -408,11 +408,26 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
-        part_vels = np.ascontiguousarray(
-            self._velocities[mask],
-            dtype=np.float64,
-        )
-        vel_units = self.velocities.units
+        # Handle the velocities (and make sure we have velocities if a shift
+        # has been requested)
+        if self.velocities is not None:
+            part_vels = np.ascontiguousarray(
+                self._velocities[mask],
+                dtype=np.float64,
+            )
+            vel_units = self.velocities.units
+        elif vel_shift and self.velocities is None:
+            raise exceptions.InconsistentArguments(
+                "Velocity shifted spectra requested but no "
+                "black hole velocities provided."
+            )
+        else:
+            # We aren't doing a shift so just pass a dummy array and units
+            part_vels = np.ascontiguousarray(
+                np.zeros((np.sum(mask), 3)),
+                dtype=np.float64,
+            )
+            vel_units = km / s
 
         # For black holes the grid Sed are normalised to 1.0 so we need to
         # scale by the bolometric luminosity.
