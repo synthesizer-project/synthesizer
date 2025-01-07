@@ -643,7 +643,7 @@ class Stars(Particles, StarsComponent):
         elif vel_shift and self.velocities is None:
             raise exceptions.InconsistentArguments(
                 "Velocity shifted spectra requested but no "
-                "particle velocities provided."
+                "star velocities provided."
             )
         else:
             # We aren't doing a shift so just pass a dummy array and units
