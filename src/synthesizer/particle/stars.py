@@ -882,9 +882,6 @@ class Stars(Particles, StarsComponent):
         else:
             aperture_mask = np.ones(self.nparticles, dtype=bool)
 
-        from ..extension.particle_spectra import compute_particle_seds
-        from ..extensions.integrated_spectra import compute_integrated_sed
-
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
@@ -899,8 +896,16 @@ class Stars(Particles, StarsComponent):
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         if vel_shift:
+            from synthesizer.extensions.particle_spectra import (
+                compute_particle_seds,
+            )
+
             spec = np.sum(compute_particle_seds(*args), axis=0)
         else:
+            from synthesizer.extensions.integrated_spectra import (
+                compute_integrated_sed,
+            )
+
             spec = compute_integrated_sed(*args)
 
         # If we had a wavelength mask we need to make sure we return a spectra
