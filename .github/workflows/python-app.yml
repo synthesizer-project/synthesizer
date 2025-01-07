@@ -57,4 +57,4 @@ jobs:
           # Test sphinx build (runs all notebooks)
           cd docs
           make clean
-          make html
+          make html SPHINXOPTS="-j auto"
