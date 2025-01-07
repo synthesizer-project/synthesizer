@@ -96,4 +96,11 @@ for phi, theta in zip(phis, thetas):
     spectra[f"phi={phi:.2f}, theta={theta:.2f}"] = spec
 
 # Plot the spectra
-plot_spectra(spectra, show=True, xlimits=(10**3, 10**4))
+fig, ax = plot_spectra(
+    spectra, xlimits=(10**3, 10**4), show=False, figsize=(10, 6)
+)
+
+# Modify the legend
+ax.legend(ncol=2)
+
+plt.show()
