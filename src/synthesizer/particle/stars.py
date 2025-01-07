@@ -634,7 +634,7 @@ class Stars(Particles, StarsComponent):
 
         # Handle the velocities (and make sure we have velocities if a shift
         # has been requested)
-        if self.velocities is not None:
+        if self.velocities is not None and vel_shift:
             part_vels = np.ascontiguousarray(
                 self._velocities[mask],
                 dtype=np.float64,
@@ -646,12 +646,8 @@ class Stars(Particles, StarsComponent):
                 "star velocities provided."
             )
         else:
-            # We aren't doing a shift so just pass a dummy array and units
-            part_vels = np.ascontiguousarray(
-                np.zeros((np.sum(mask), 3)),
-                dtype=np.float64,
-            )
-            vel_units = km / s
+            part_vels = None
+            vel_units = None
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -671,11 +667,14 @@ class Stars(Particles, StarsComponent):
             np.float64,
         )
 
-        # Get the grid wavelength array
-        grid_lam = np.ascontiguousarray(
-            grid._lam[lam_mask],
-            np.float64,
-        )
+        # Get the grid wavelength arrays (and needed for velocity shifts)
+        if vel_shift:
+            grid_lam = np.ascontiguousarray(
+                grid._lam[lam_mask],
+                np.float64,
+            )
+        else:
+            grid_lam = None
 
         # Get the grid dimensions after slicing what we need
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
@@ -695,23 +694,39 @@ class Stars(Particles, StarsComponent):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        return (
-            grid_spectra,
-            grid_lam,
-            grid_props,
-            part_props,
-            part_mass,
-            fesc,
-            part_vels,
-            grid_dims,
-            len(grid_props),
-            npart,
-            nlam,
-            grid_assignment_method,
-            nthreads,
-            vel_shift,
-            c.to(vel_units).value,
-        )
+        # Return the right arguments for the situation (either with all the
+        # extra velocity information or without)
+        if vel_shift:
+            return (
+                grid_spectra,
+                grid_lam,
+                grid_props,
+                part_props,
+                part_mass,
+                fesc,
+                part_vels,
+                grid_dims,
+                len(grid_props),
+                npart,
+                nlam,
+                grid_assignment_method,
+                nthreads,
+                c.to(vel_units).value,
+            )
+        else:
+            return (
+                grid_spectra,
+                grid_props,
+                part_props,
+                part_mass,
+                fesc,
+                grid_dims,
+                len(grid_props),
+                npart,
+                nlam,
+                grid_assignment_method,
+                nthreads,
+            )
 
     def generate_lnu(
         self,
@@ -897,10 +912,10 @@ class Stars(Particles, StarsComponent):
         # Get the integrated spectra in grid units (erg / s / Hz)
         if vel_shift:
             from synthesizer.extensions.particle_spectra import (
-                compute_particle_seds,
+                compute_part_seds_with_vel_shift,
             )
 
-            spec = np.sum(compute_particle_seds(*args), axis=0)
+            spec = np.sum(compute_part_seds_with_vel_shift(*args), axis=0)
         else:
             from synthesizer.extensions.integrated_spectra import (
                 compute_integrated_sed,
@@ -1483,8 +1498,6 @@ class Stars(Particles, StarsComponent):
 
             return np.zeros((self.nstars, len(grid.lam)))
 
-        from ..extensions.particle_spectra import compute_particle_seds
-
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
@@ -1498,8 +1511,20 @@ class Stars(Particles, StarsComponent):
         )
         toc("Preparing C args", start)
 
-        # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args)
+        # Get the integrated spectra in grid units (erg / s / Hz) using the
+        # appropriate method
+        if vel_shift:
+            from synthesizer.extensions.particle_spectra import (
+                compute_part_seds_with_vel_shift,
+            )
+
+            masked_spec = compute_part_seds_with_vel_shift(*args)
+        else:
+            from synthesizer.extensions.particle_spectra import (
+                compute_particle_seds,
+            )
+
+            masked_spec = compute_particle_seds(*args)
 
         start = tic()
 

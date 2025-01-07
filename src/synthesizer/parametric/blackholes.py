@@ -335,20 +335,16 @@ class BlackHole(BlackholesComponent):
 
         return (
             grid_spectra,
-            None,
             grid_props,
             props,
             bol_lum,
             np.array([fesc]),
-            None,
             grid_dims,
             len(grid_props),
             np.int32(1),
             nlam,
             grid_assignment_method,
             nthreads,
-            None,
-            None,
         )
 
     def _prepare_line_args(

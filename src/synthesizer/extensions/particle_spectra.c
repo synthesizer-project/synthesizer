@@ -1133,31 +1133,27 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyObject *py_vel_shift;
-  PyObject *py_c;
-  PyArrayObject *np_grid_spectra, *np_lam;
+  PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
-  PyArrayObject *np_velocities;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOOiiisiOO", &np_grid_spectra, &np_lam,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
-                        &np_velocities, &np_ndims, &ndim, &npart, &nlam,
-                        &method, &nthreads, &py_vel_shift, &py_c)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
+                        &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
+                        &npart, &nlam, &method, &nthreads)) {
     return NULL;
   }
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
-      grid_tuple, np_ndims, np_grid_spectra, np_lam, ndim, nlam);
+      grid_tuple, np_ndims, np_grid_spectra, /*np_lam*/ NULL, ndim, nlam);
   if (grid_props == NULL) {
     return NULL;
   }
 
   /* Extract the particle struct. */
   struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, np_velocities, np_fesc, npart, ndim);
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_fesc, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
@@ -1170,40 +1166,17 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert velocity Python boolean flag to int. */
-  int vel_shift = PyObject_IsTrue(py_vel_shift);
-
-  /* Convert c to double */
-  double c = PyFloat_AsDouble(py_c);
-
   toc("Extracting Python data", setup_start);
 
-  /*No shift*/
-  if (!vel_shift) {
-    /* With everything set up we can compute the spectra for each particle using
-     * the requested method. */
-    if (strcmp(method, "cic") == 0) {
-      spectra_loop_cic(grid_props, part_props, spectra, nthreads);
-    } else if (strcmp(method, "ngp") == 0) {
-      spectra_loop_ngp(grid_props, part_props, spectra, nthreads);
-    } else {
-      PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
-      return NULL;
-    }
-  }
-
-  /* With velocity shift. */
-  else {
-    /* With everything set up we can compute the spectra for each particle using
-     * the requested method. */
-    if (strcmp(method, "cic") == 0) {
-      shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads, c);
-    } else if (strcmp(method, "ngp") == 0) {
-      shifted_spectra_loop_ngp(grid_props, part_props, spectra, nthreads, c);
-    } else {
-      PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
-      return NULL;
-    }
+  /* With everything set up we can compute the spectra for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    spectra_loop_cic(grid_props, part_props, spectra, nthreads);
+  } else if (strcmp(method, "ngp") == 0) {
+    spectra_loop_ngp(grid_props, part_props, spectra, nthreads);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
   }
 
   /* Check we got the spectra sucessfully. (Any error messages will already be
@@ -1229,10 +1202,119 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", out_spectra);
 }
 
+/**
+ * @brief Computes an integrated SED for a collection of particles.
+ *
+ * @param np_grid_spectra: The SPS spectra array.
+ * @param grid_tuple: The tuple containing arrays of grid axis properties.
+ * @param part_tuple: The tuple of particle property arrays (in the same order
+ *                    as grid_tuple).
+ * @param np_part_mass: The particle mass array.
+ * @param fesc: The escape fraction.
+ * @param np_velocities: The velocities array.
+ * @param np_ndims: The size of each grid axis.
+ * @param ndim: The number of grid axes.
+ * @param npart: The number of particles.
+ * @param nlam: The number of wavelength elements.
+ * @param vel_shift: bool flag whether to consider doppler shift in spectra
+ * computation. Defaults to False
+ * @param c: speed of light
+ */
+PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
+
+  double start_time = tic();
+  double setup_start = tic();
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  int ndim, npart, nlam, nthreads;
+  PyObject *grid_tuple, *part_tuple;
+  PyObject *py_vel_shift;
+  PyObject *py_c;
+  PyArrayObject *np_grid_spectra, *np_lam;
+  PyArrayObject *np_fesc;
+  PyArrayObject *np_velocities;
+  PyArrayObject *np_part_mass, *np_ndims;
+  char *method;
+
+  if (!PyArg_ParseTuple(args, "OOOOOOOOiiisiO", &np_grid_spectra, &np_lam,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
+                        &np_velocities, &np_ndims, &ndim, &npart, &nlam,
+                        &method, &nthreads, &py_c)) {
+    return NULL;
+  }
+
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_spectra_grid_struct(
+      grid_tuple, np_ndims, np_grid_spectra, np_lam, ndim, nlam);
+  if (grid_props == NULL) {
+    return NULL;
+  }
+
+  /* Extract the particle struct. */
+  struct particles *part_props = get_part_struct(
+      part_tuple, np_part_mass, np_velocities, np_fesc, npart, ndim);
+  if (part_props == NULL) {
+    return NULL;
+  }
+
+  /* Allocate the spectra. */
+  double *spectra = calloc(npart * nlam, sizeof(double));
+  if (spectra == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Could not allocate memory for spectra.");
+    return NULL;
+  }
+
+  /* Convert c to double */
+  double c = PyFloat_AsDouble(py_c);
+
+  toc("Extracting Python data", setup_start);
+
+  /* With everything set up we can compute the spectra for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads, c);
+  } else if (strcmp(method, "ngp") == 0) {
+    shifted_spectra_loop_ngp(grid_props, part_props, spectra, nthreads, c);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
+
+  /* Check we got the spectra sucessfully. (Any error messages will already be
+   * set) */
+  if (spectra == NULL) {
+    return NULL;
+  }
+
+  /* Clean up memory! */
+  free(part_props);
+  free(grid_props);
+
+  /* Reconstruct the python array to return. */
+  npy_intp np_dims[2] = {
+      npart,
+      nlam,
+  };
+  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
+      2, np_dims, NPY_FLOAT64, spectra);
+
+  toc("Computing particle SEDs (with velocity shift)", start_time);
+
+  return Py_BuildValue("N", out_spectra);
+}
+
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef SedMethods[] = {
     {"compute_particle_seds", (PyCFunction)compute_particle_seds, METH_VARARGS,
      "Method for calculating particle intrinsic spectra."},
+    {"compute_part_seds_with_vel_shift",
+     (PyCFunction)compute_part_seds_with_vel_shift, METH_VARARGS,
+     "Method for calculating particle intrinsic spectra accounting for "
+     "velocity shift."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */

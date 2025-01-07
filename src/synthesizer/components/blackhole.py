@@ -347,9 +347,11 @@ class BlackholesComponent(Component):
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         if vel_shift:
-            from ..extensions.particle_spectra import compute_particle_sed
+            from ..extensions.particle_spectra import (
+                compute_part_sed_with_vel_shift,
+            )
 
-            spec = np.sum(compute_particle_sed(*args), axis=0)
+            spec = np.sum(compute_part_sed_with_vel_shift(*args), axis=0)
         else:
             from ..extensions.integrated_spectra import compute_integrated_sed
 
