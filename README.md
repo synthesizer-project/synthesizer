@@ -36,12 +36,12 @@ Make sure you stay up to date with the latest versions through git:
 
 ### Getting test data
 
-If you want to run some of the examples or like some data for development purposes you'll need to download the test data. This can be done using the download tool on the command line. Run the following at the root of the Synthesizer repo,
+If you wish to run the examples, or need some data for development purposes, we provide [test data](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo,
 
 ```bash
 synthesizer-download --test-grids --dust-grid -d tests/test_grid
 ```
-This command will store the SPS, AGN, and dust grids in the `tests` directory where all examples expect them to be.
+This command will store the SPS, AGN, and dust grids in the `tests` directory at the root of the repo; all examples expect this data to reside in this location.
 
 ## Contributing
 
