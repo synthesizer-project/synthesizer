@@ -91,7 +91,7 @@ class Stars(StarsComponent):
         self,
         log10ages,
         metallicities,
-        initial_mass=1.0,
+        initial_mass=None,
         morphology=None,
         sfzh=None,
         sf_hist=None,
@@ -117,7 +117,8 @@ class Stars(StarsComponent):
                 The array of metallicitities defining the metallicity axies of
                 the SFZH.
             initial_mass (unyt_quantity/float)
-                The total initial stellar mass.
+                The total initial stellar mass. If provided the SFZH grid will
+                be rescaled to obey this total mass.
             morphology (morphology.* e.g. Sersic2D)
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
@@ -220,6 +221,19 @@ class Stars(StarsComponent):
             # Store the SFZH grid
             self.sfzh = sfzh
 
+            # It's somewhat nonsensical to have both an SFZH grid and
+            # set the initial mass, but if the user has lets rescale the SFZH
+            # to obey their initial mass request
+            if self.initial_mass is not None:
+                # Normalise the SFZH grid
+                self.sfzh /= np.sum(self.sfzh)
+
+                # ... and multiply it by the initial mass of stars
+                self.sfzh *= self._initial_mass
+            else:
+                # Otherwise calculate the total initial mass
+                self._initial_mass = np.sum(self.sfzh)
+
             # Project the SFZH to get the 1D SFH
             self.sf_hist = np.sum(self.sfzh, axis=1)
 
@@ -257,7 +271,7 @@ class Stars(StarsComponent):
 
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """
-        Computes the SFZH for all possible combinations of input.
+        Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
         the SFH and ZH arrays are computed first.
@@ -270,6 +284,9 @@ class Stars(StarsComponent):
                 A metallicity at which to compute an instantaneous ZH, i.e. all
                 stellar populating a single ZH bin.
         """
+        # If we have no initial mass then set it to 1
+        if self.initial_mass is None:
+            self.initial_mass = 1 * Msun
 
         # If no units assume unit system
         if instant_sf is not None and not isinstance(
