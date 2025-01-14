@@ -243,14 +243,6 @@ class Grid:
             log_name = f"_log10{name[1:]}"
             log_plural_name = f"_log10{plural_name[1:]}"
             log_singular_name = f"_log10{singular_name[1:]}"
-        print(
-            name,
-            plural_name,
-            singular_name,
-            log_name,
-            log_plural_name,
-            log_singular_name,
-        )
 
         # If we have the axis name, return the axis with units (handling all
         # the silly pluralisation and logging conventions)
@@ -374,25 +366,31 @@ class Grid:
             self.parameters = {k: v for k, v in hf.attrs.items()}
 
             # Get list of axes
-            self.axes = list(hf.attrs["axes"])
-            print(self.axes)
+            axes = list(hf.attrs["axes"])
 
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
-            for axis in self.axes:
+            for axis in axes:
                 # What are the units of this axis?
                 axis_units = hf["axes"][axis].attrs.get(
                     "Units", "dimensionless"
                 )
                 log_axis = hf["axes"][axis].attrs.get("log_on_read", False)
 
+                if "log10" in axis:
+                    log_axis = True
+
+                # Get the values
+                values = hf["axes"][axis][:]
+                if "log10" in axis:
+                    values = 10**values
+                    axis = axis.replace("log10", "")
+
                 # Set all the axis attributes
-                self._axes_values[axis] = hf["axes"][axis][:]
+                self.axes.append(axis)
+                self._axes_values[axis] = values
                 self._axes_units[axis] = axis_units
-                if log_axis:
-                    self._logged_axes.append(True)
-                else:
-                    self._logged_axes.append(False)
+                self._logged_axes.append(log_axis)
 
             # Number of axes
             self.naxes = len(self.axes)
