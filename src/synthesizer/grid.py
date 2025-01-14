@@ -235,10 +235,22 @@ class Grid:
 
         # Another old convention was allowing for logged axes to be stored in
         # the grid file (this is no longer allowed)
-        log_name = f"log10{name}"
-        log_plural_name = f"log10{plural_name}"
-        log_singular_name = f"log10{singular_name}"
-        print(name, plural_name, singular_name)
+        if name[0] != "_":
+            log_name = f"log10{name}"
+            log_plural_name = f"log10{plural_name}"
+            log_singular_name = f"log10{singular_name}"
+        else:
+            log_name = f"_log10{name[1:]}"
+            log_plural_name = f"_log10{plural_name[1:]}"
+            log_singular_name = f"_log10{singular_name[1:]}"
+        print(
+            name,
+            plural_name,
+            singular_name,
+            log_name,
+            log_plural_name,
+            log_singular_name,
+        )
 
         # If we have the axis name, return the axis with units (handling all
         # the silly pluralisation and logging conventions)
