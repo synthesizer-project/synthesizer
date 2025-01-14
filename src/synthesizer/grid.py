@@ -40,6 +40,7 @@ from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.warnings import warn
 
@@ -164,6 +165,10 @@ class Grid:
         self.parameters = {}
 
         # Get the axes of the grid from the HDF5 file
+        self.axes = []  # axes names
+        self._logged_axes = []  # need to know which have been logged
+        self._axes_values = {}
+        self._axes_units = {}
         self._get_axes()
 
         # Get the ionising luminosity (if available)
@@ -210,20 +215,70 @@ class Grid:
             f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
         )
 
-    @property
-    def log10metallicities(self):
-        """Return the log10 metallicity axis."""
-        return np.log10(self.metallicity)
-
-    @property
-    def log10ages(self):
+    def __getattr__(self, name):
         """
-        Return the log10 age axis.
+        Return an attribute handling arbitrary axis names.
 
-        This is an alias to provide a pluralised version of the log10age
-        attribute.
+        This method allows for the dynamic extraction of axes with units,
+        either logged or not or using singular or plural axis names (to handle
+        legacy naming conventions).
         """
-        return self.log10age
+        # First up, do we just have the attribute and it isn't an axis?
+        if name in self.__dict__:
+            return self.__dict__[name]
+
+        # Now, do some silly pluralisation checks to handle old naming
+        # conventions. We do this now so everything works, we can grumble
+        # about it later
+        plural_name = pluralize(name)
+        singular_name = depluralize(name)
+
+        # If we have the axis name, return the axis with units
+        if name in self.axes:
+            return unyt_array(self._axes_values[name], self._axes_units[name])
+
+        # If we have the plural axis name, return the axis with units
+        elif plural_name in self.axes:
+            return unyt_array(
+                self._axes_values[plural_name], self._axes_units[plural_name]
+            )
+
+        # If we have the singular axis name, return the axis with units
+        elif singular_name in self.axes:
+            return unyt_array(
+                self._axes_values[singular_name],
+                self._axes_units[singular_name],
+            )
+
+        # It might be a Quantity style unitless request?
+        elif name[1:] in self.axes:
+            return self._axes_values[name[1:]]
+
+        # It might be a Quantity style unitless request for a pluralised axis?
+        elif plural_name[1:] in self.axes:
+            return self._axes_values[plural_name[1:]]
+
+        # It might be a Quantity style unitless request for
+        # a singularised axis?
+        elif singular_name[1:] in self.axes:
+            return self._axes_values[singular_name[1:]]
+
+        # Are we doing a log10 request?
+        elif name[:5] == "log10" and name[5:] in self.axes:
+            return np.log10(self._axes_values[name[5:]])
+
+        # Are we doing a log10 request for a pluralised axis?
+        elif plural_name[:5] == "log10" and plural_name[5:] in self.axes:
+            return np.log10(self._axes_values[plural_name[5:]])
+
+        # Are we doing a log10 request for a singularised axis?
+        elif singular_name[:5] == "log10" and singular_name[5:] in self.axes:
+            return np.log10(self._axes_values[singular_name[5:]])
+
+        # If we get here, we don't have the attribute
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
 
     def _get_axes(self):
         """Get the grid axes from the HDF5 file."""
@@ -237,7 +292,19 @@ class Grid:
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in self.axes:
-                setattr(self, axis, hf["axes"][axis][:])
+                # What are the units of this axis?
+                axis_units = hf["axes"][axis].attrs.get(
+                    "Units", "dimensionless"
+                )
+                log_axis = hf["axes"][axis].attrs.get("log_on_read", False)
+
+                # Set all the axis attributes
+                self._axes_values[axis] = hf["axes"][axis][:]
+                self._axes_units[axis] = axis_units
+                if log_axis:
+                    self._logged_axes.append(True)
+                else:
+                    self._logged_axes.append(False)
 
             # Number of axes
             self.naxes = len(self.axes)
