@@ -252,13 +252,18 @@ class Stars(StarsComponent):
 
         # Check if metallicities are uniformly binned in log10metallicity or
         # linear metallicity or not at all (e.g. BPASS)
-        if len(set(self.metallicities[:-1] - self.metallicities[1:])) == 1:
+        if (
+            len(np.unique(self.metallicities[:-1] - self.metallicities[1:]))
+            == 1
+        ):
             # Regular linearly
             self.metallicity_grid_type = "Z"
 
         elif (
             len(
-                set(self.log10metallicities[:-1] - self.log10metallicities[1:])
+                np.unique(
+                    self.log10metallicities[:-1] - self.log10metallicities[1:]
+                )
             )
             == 1
         ):
