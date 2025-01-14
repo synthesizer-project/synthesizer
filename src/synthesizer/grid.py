@@ -233,47 +233,122 @@ class Grid:
         plural_name = pluralize(name)
         singular_name = depluralize(name)
 
-        # If we have the axis name, return the axis with units
+        # Another old convention was allowing for logged axes to be stored in
+        # the grid file (this is no longer allowed)
+        log_name = f"log10{name}"
+        log_plural_name = f"log10{plural_name}"
+        log_singular_name = f"log10{singular_name}"
+        print(name, plural_name, singular_name)
+
+        # If we have the axis name, return the axis with units (handling all
+        # the silly pluralisation and logging conventions)
         if name in self.axes:
             return unyt_array(self._axes_values[name], self._axes_units[name])
-
-        # If we have the plural axis name, return the axis with units
         elif plural_name in self.axes:
             return unyt_array(
                 self._axes_values[plural_name], self._axes_units[plural_name]
             )
-
-        # If we have the singular axis name, return the axis with units
         elif singular_name in self.axes:
+            warn(
+                "The use of singular axis names is deprecated. Update "
+                "your grid file."
+            )
             return unyt_array(
                 self._axes_values[singular_name],
                 self._axes_units[singular_name],
             )
+        elif log_name in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return unyt_array(
+                10 ** self._axes_values[log_name], self._axes_units[log_name]
+            )
+        elif log_plural_name in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return unyt_array(
+                10 ** self._axes_values[log_plural_name],
+                self._axes_units[log_plural_name],
+            )
+        elif log_singular_name in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return unyt_array(
+                10 ** self._axes_values[log_singular_name],
+                self._axes_units[log_singular_name],
+            )
 
-        # It might be a Quantity style unitless request?
+        # It might be a Quantity style unitless request? (handling all
+        # the silly pluralisation and logging conventions)
         elif name[1:] in self.axes:
             return self._axes_values[name[1:]]
-
-        # It might be a Quantity style unitless request for a pluralised axis?
         elif plural_name[1:] in self.axes:
             return self._axes_values[plural_name[1:]]
-
-        # It might be a Quantity style unitless request for
-        # a singularised axis?
         elif singular_name[1:] in self.axes:
+            warn(
+                "The use of singular axis names is deprecated. Update "
+                "your grid file."
+            )
             return self._axes_values[singular_name[1:]]
+        elif log_name[1:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return 10 ** self._axes_values[log_name[1:]]
+        elif log_plural_name[1:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return 10 ** self._axes_values[log_plural_name[1:]]
+        elif log_singular_name[1:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return 10 ** self._axes_values[log_singular_name[1:]]
 
-        # Are we doing a log10 request?
+        # Are we doing a log10 request? (handling all the silly pluralisation)
         elif name[:5] == "log10" and name[5:] in self.axes:
             return np.log10(self._axes_values[name[5:]])
-
-        # Are we doing a log10 request for a pluralised axis?
         elif plural_name[:5] == "log10" and plural_name[5:] in self.axes:
             return np.log10(self._axes_values[plural_name[5:]])
-
-        # Are we doing a log10 request for a singularised axis?
         elif singular_name[:5] == "log10" and singular_name[5:] in self.axes:
+            warn(
+                "The use of singular axis names is deprecated. Update "
+                "your grid file."
+            )
             return np.log10(self._axes_values[singular_name[5:]])
+        elif log_name[:5] == "log10" and log_name[5:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return self._axes_values[log_name[5:]]
+        elif (
+            log_plural_name[:5] == "log10" and log_plural_name[5:] in self.axes
+        ):
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return self._axes_values[log_plural_name[5:]]
+        elif (
+            log_singular_name[:5] == "log10"
+            and log_singular_name[5:] in self.axes
+        ):
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return self._axes_values[log_singular_name[5:]]
 
         # If we get here, we don't have the attribute
         raise AttributeError(
@@ -288,6 +363,7 @@ class Grid:
 
             # Get list of axes
             self.axes = list(hf.attrs["axes"])
+            print(self.axes)
 
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
