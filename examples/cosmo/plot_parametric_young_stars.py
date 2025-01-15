@@ -79,17 +79,16 @@ if __name__ == "__main__":
     )
 
     """
-    We can also do this directly from call to `generate_lnu`,
-    as well as any downstream `get_spectra_*` methods.
-    This shows an example on `get_spectra_incident`, supplying
-    the optional `parametric_young_stars` keyword argument.
+    We can also do this directly by calling the parametric_young_stars
+    method on the Stars to resample in place.
     """
-
-    combined_spec = gal.stars.get_spectra(
-        model, parametric_young_stars=age_lim
+    gal.stars.parametric_young_stars(
+        age=age_lim,
+        parametric_sfh="constant",
+        grid=grid,
     )
 
-    assert (combined_spec.lnu == (part_spec_old.lnu + para_spec.lnu)).all()
+    combined_spec = gal.stars.get_spectra(model)
 
     """
     Plot intrinsic emission from pure particle, parametric
@@ -127,18 +126,6 @@ if __name__ == "__main__":
     """
     binLimits = np.linspace(5, 10, 30)
 
-    ax2.hist(
-        np.log10(np.hstack([gal.stars.ages[~pmask].value, stars.ages.value])),
-        histtype="step",
-        weights=np.hstack(
-            [gal.stars.initial_masses[~pmask].value, stars.sf_hist]
-        ),
-        bins=binLimits,
-        log=True,
-        label="Particle + Parametric",
-        color="C2",
-        linewidth=3,
-    )
     ax2.hist(
         np.log10(gal.stars.ages),
         histtype="step",

@@ -31,13 +31,13 @@ AVAILABLE_FILES = {
     },
     "test_grid_agn-blr.hdf5": {
         "file": "agnsed-limited_cloudy-c23.01-blr.hdf5",
-        "id": "4rnwbxnzwp3v0pmiju06h",
-        "rlkey": "rdqy9p7royyxnljtloh2a2zj7",
+        "id": "r7pbdvbvujypgx8ady6bl",
+        "rlkey": "4tdscxnoaepvog8skil15ehgk",
     },
     "test_grid_agn-nlr.hdf5": {
         "file": "agnsed-limited_cloudy-c23.01-nlr.hdf5",
-        "id": "4dxp06jzv276pn8qxq1nx",
-        "rlkey": "35tietcw2j40q4ad1guj2swg1",
+        "id": "7h971875rkkmkxvmgdqnn",
+        "rlkey": "e6oyr8l9gyqlz3i2nlko7pne6",
     },
     "MW3.1.hdf5": {
         "file": "MW3.1.hdf5",
@@ -148,16 +148,8 @@ def _download(
         save_dir (str)
             The directory in which to save the file.
     """
-    # Try the primary host
-    try:
-        _download_from_xcs_host(filename, save_dir)
-    except KeyboardInterrupt as e:
-        # Re-raise the keyboard interrupt
-        raise KeyboardInterrupt(e)
-    except Exception as e:
-        print("Failed to download from primary host:", e)
-        print("Trying dropbox...")
-        _download_from_dropbox(filename, save_dir)
+    # Download from the dropbox
+    _download_from_dropbox(filename, save_dir)
 
 
 def download_test_grids(destination):

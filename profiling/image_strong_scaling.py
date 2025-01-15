@@ -26,7 +26,7 @@ from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.particle.stars import sample_sfhz
+from synthesizer.particle.stars import sample_sfzh
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -100,7 +100,7 @@ def image_strong_scaling(
     # Sample the SFZH, producing a Stars object
     # we will also pass some keyword arguments for attributes
     # we will need for imaging
-    stars = sample_sfhz(
+    stars = sample_sfzh(
         param_stars.sfzh,
         param_stars.log10ages,
         param_stars.log10metallicities,

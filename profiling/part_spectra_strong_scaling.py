@@ -19,7 +19,7 @@ from unyt import Myr
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle.stars import sample_sfhz
+from synthesizer.particle.stars import sample_sfzh
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -58,7 +58,7 @@ def part_spectra_strong_scaling(
     )
 
     # Sample the SFZH, producing a Stars object
-    stars = sample_sfhz(
+    stars = sample_sfzh(
         param_stars.sfzh,
         param_stars.log10ages,
         param_stars.log10metallicities,

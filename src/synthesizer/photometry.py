@@ -123,7 +123,25 @@ class PhotometryCollection:
                 The filter code of the desired photometry.
         """
         # Perform the look up
-        return self._look_up[filter_code]
+        if filter_code in self._look_up:
+            return self._look_up[filter_code]
+
+        # We may be being asked for all the photometry for an observatory, e.g.
+        # "JWST", in which case we should return all the photometry for that
+        # observatory.
+        out = {}
+        for key in self.filter_codes:
+            if filter_code in key:
+                out[key.replace(filter_code + "/", "")] = self._look_up[key]
+
+        # If we have found some photometry return it
+        if len(out) > 0:
+            return out
+
+        # We haven't found any photometry raise an error
+        raise KeyError(
+            f"Filter code {filter_code} not found in photometry collection."
+        )
 
     def keys(self):
         """
@@ -229,6 +247,34 @@ class PhotometryCollection:
         table += f"-{sep.replace('|', '-')}-\n"
 
         return table
+
+    def select(self, *filter_codes):
+        """
+        Return a PhotometryCollection with only the specified filters.
+
+        Args:
+            filter_codes (list, string):
+                The filter codes of the desired photometry.
+        """
+        # If no filters are specified return the full photometry
+        if len(filter_codes) == 0:
+            return self
+
+        # Check if the filter codes are valid
+        for code in filter_codes:
+            if code not in self.filter_codes:
+                raise KeyError(
+                    f"Filter code {code} not found in photometry collection."
+                )
+
+        # Get the photometry for the specified filters
+        photometry = {code: self._look_up[code] for code in filter_codes}
+
+        # Also extract a subset of the filters
+        filters = self.filters.select(*filter_codes)
+
+        # Return a new PhotometryCollection with the specified photometry
+        return PhotometryCollection(filters, **photometry)
 
     def plot_photometry(
         self,

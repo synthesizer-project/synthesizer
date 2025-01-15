@@ -282,3 +282,13 @@ class InstrumentCollection:
         self.add_instruments(other)
 
         return self
+
+    def items(self):
+        """
+        Get the items in the InstrumentCollection.
+
+        Returns:
+            dict_items
+                The items in the InstrumentCollection.
+        """
+        return self.instruments.items()

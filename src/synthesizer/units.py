@@ -533,15 +533,15 @@ def _check_arg(units, name, value):
         IncorrectUnits
             If the argument has incompatible units.
     """
+    # Early exit if the argument isn't in the units dictionary
+    if name not in units:
+        return value
+
     # If the argument is None just skip it, its an optional argument that
     # hasn't been passed... or the user has somehow managed to pass None
     # which is sufficently weird to cause an obvious error elsewhere
     if value is None:
         return None
-
-    # Early exit if the argument isn't in the units dictionary
-    if name not in units:
-        return value
 
     # Handle the unyt_array/unyt_quantity cases
     if isinstance(value, (unyt_array, unyt_quantity)):
@@ -578,7 +578,7 @@ def _check_arg(units, name, value):
             # Convert to the expected units
             elif v.units != units[name]:
                 try:
-                    converted.append(_check_arg(units, name, v))
+                    converted[j] = _check_arg(units, name, v)
                 except UnitConversionError:
                     raise exceptions.IncorrectUnits(
                         f"{name}@{j} passed with "
@@ -589,7 +589,7 @@ def _check_arg(units, name, value):
                     )
             else:
                 # Otherwise the value is in the expected units
-                converted.append(v)
+                converted[j] = v
 
         return converted
 

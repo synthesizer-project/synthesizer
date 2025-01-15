@@ -15,7 +15,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
-from synthesizer.particle.stars import sample_sfhz
+from synthesizer.particle.stars import sample_sfzh
 
 # Define the grid
 grid_name = "test_grid"
@@ -44,7 +44,7 @@ sfzh = ParametricStars(
 nstar = 10**5
 
 # Get the stars object
-stars = sample_sfhz(
+stars = sample_sfzh(
     sfzh.sfzh,
     sfzh.log10ages,
     sfzh.log10metallicities,

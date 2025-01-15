@@ -10,7 +10,7 @@ Example usage:
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
     sed.apply_attenutation(tau_v=0.7)
-    sed.get_photo_fnu(filters)
+    sed.get_photo_fnu(filters, nthreads=4)
 """
 
 import re
@@ -418,6 +418,28 @@ class Sed:
         return self.lam
 
     @property
+    def frequency(self):
+        """
+        Alias to nu (frequency array).
+
+        Returns
+            frequency (unyt_array)
+                The frequency array.
+        """
+        return self.nu
+
+    @property
+    def energy(self):
+        """
+        Get the wavelengths in terms of photon energies in eV.
+
+        Returns
+            energy (unyt_array)
+                The energy coordinate.
+        """
+        return (h * c / self.lam).to(eV)
+
+    @property
     def ndim(self):
         """
         Get the dimensions of the spectra array.
@@ -459,7 +481,6 @@ class Sed:
         integral = -integrate_last_axis(
             self._nu,
             self._lnu,
-            nthreads=1,
             method="trapz",
         )
 
@@ -653,11 +674,15 @@ class Sed:
                     np.array(
                         [
                             np.sum(_lnu * transmission) / np.sum(transmission)
-                            for _lnu in self._lnu
+                            for _lnu in self._lnu.reshape(
+                                -1, self._lnu.shape[-1]
+                            )
                         ]
                     )
                     * self.lnu.units
                 )
+
+                lnu = lnu.reshape(self._lnu.shape[:-1])
 
             else:
                 lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
@@ -846,9 +871,11 @@ class Sed:
                             np.log10(self._lam[s]), np.log10(_lnu[..., s])
                         )[0]
                         - 2.0
-                        for _lnu in self.lnu
+                        for _lnu in self.lnu.reshape(-1, self.lnu.shape[-1])
                     ]
                 )
+
+                beta = beta.reshape(self.lnu.shape[:-1])
 
             else:
                 beta = (
@@ -892,10 +919,12 @@ class Sed:
 
     def get_fnu0(self):
         """
-        Calculate a dummy observed frame spectral energy distribution.
-        Useful when you want rest-frame quantities.
+        Calculate the rest frame spectral flux density.
 
         Uses a standard distance of 10 pcs.
+
+        This will also populate the observed wavelength and frequency arrays
+        which in this case are the same as the emitted arrays.
 
         Returns:
             fnu (ndarray)
@@ -913,6 +942,9 @@ class Sed:
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
+
+        This will also populate the observed wavelength and frequency arrays
+        with the observer frame values.
 
         NOTE: if a redshift of 0 is passed the flux return will be calculated
         assuming a distance of 10 pc omitting IGM since at this distance
@@ -952,42 +984,36 @@ class Sed:
         self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
-        if igm:
+        if igm is not None:
             self._fnu *= igm().get_transmission(z, self._obslam)
 
         return self.fnu
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband luminosities using a FilterCollection object
+        Calculate broadband luminosities using a FilterCollection object.
 
         Args:
             filters (filters.FilterCollection)
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
-
         # Intialise result dictionary
         photo_lnu = {}
 
         # Loop over filters
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Apply the filter transmission curve and store the resulting
             # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu)
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
             photo_lnu[f.filter_code] = bb_lum * self.lnu.units
 
         # Create the photometry collection and store it in the object
@@ -995,21 +1021,23 @@ class Sed:
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband fluxes using a FilterCollection object
+        Calculate broadband fluxes using a FilterCollection object.
 
         Args:
             filters (object)
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             (dict)
                 A dictionary of fluxes in each filter in filters.
         """
-
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             return ValueError(
@@ -1025,16 +1053,12 @@ class Sed:
 
         # Loop over filters in filter collection
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
+            bb_flux = f.apply_filter(
+                self._fnu,
+                nu=self._obsnu,
+                nthreads=nthreads,
+            )
             photo_fnu[f.filter_code] = bb_flux * self.fnu.units
 
         # Create the photometry collection and store it in the object

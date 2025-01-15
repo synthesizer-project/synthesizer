@@ -12,6 +12,7 @@ respectively.
 from abc import ABC, abstractmethod
 
 from synthesizer import exceptions
+from synthesizer.instruments import Instrument
 from synthesizer.sed import plot_spectra
 from synthesizer.warnings import deprecated, deprecation
 
@@ -130,7 +131,7 @@ class Component(ABC):
         """Prepare arguments for the line generation."""
         pass
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -139,6 +140,9 @@ class Component(ABC):
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             photo_lnu (dict)
@@ -148,7 +152,9 @@ class Component(ABC):
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
         return self.photo_lnu
@@ -178,7 +184,7 @@ class Component(ABC):
         """
         return self.get_photo_lnu(filters, verbose)
 
-    def get_photo_fnu(self, filters, verbose=True):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -187,6 +193,9 @@ class Component(ABC):
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             (dict)
@@ -196,7 +205,9 @@ class Component(ABC):
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
         return self.photo_fnu
@@ -231,8 +242,9 @@ class Component(ABC):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         mask=None,
+        vel_shift=False,
         verbose=True,
         **kwargs,
     ):
@@ -275,6 +287,8 @@ class Component(ABC):
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
+            shift (bool):
+                Flags whether to apply doppler shift to the spectra.
             verbose (bool)
                 Are we talking?
             kwargs (dict)
@@ -296,6 +310,7 @@ class Component(ABC):
             tau_v=tau_v,
             fesc=fesc,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
@@ -318,7 +333,7 @@ class Component(ABC):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         mask=None,
         verbose=True,
         **kwargs,
@@ -412,6 +427,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
+        instrument=None,
     ):
         """
         Make an ImageCollection from component luminosities.
@@ -461,6 +477,8 @@ class Component(ABC):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
+            instrument (Instrument)
+                The instrument to use to generate the images.
 
         Returns:
             Image : array-like
@@ -474,9 +492,13 @@ class Component(ABC):
                 "smoothed images."
             )
 
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
+
         # Get the images
         images = emission_model._get_images(
-            resolution=resolution,
+            instrument=instrument,
             fov=fov,
             emitters={"stellar": self}
             if self.component_type == "Stars"
@@ -493,6 +515,10 @@ class Component(ABC):
         # Store the images
         self.images_lnu.update(images)
 
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
+
         # Return the image at the root of the emission model
         return images[emission_model.label]
 
@@ -506,6 +532,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
+        instrument=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -555,6 +582,8 @@ class Component(ABC):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
+            instrument (Instrument)
+                The instrument to use to generate the images.
 
         Returns:
             Image : array-like
@@ -568,9 +597,13 @@ class Component(ABC):
                 "smoothed images."
             )
 
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
+
         # Get the images
         images = emission_model._get_images(
-            resolution=resolution,
+            instrument=instrument,
             fov=fov,
             emitters={"stellar": self}
             if self.component_type == "Stars"
@@ -586,6 +619,10 @@ class Component(ABC):
 
         # Store the images
         self.images_fnu.update(images)
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
 
         # Return the image at the root of the emission model
         return images[emission_model.label]

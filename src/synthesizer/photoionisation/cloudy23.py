@@ -159,6 +159,8 @@ def create_cloudy_input(
         "CMB": None,
         # include cosmic rays
         "cosmic_rays": None,
+        # include metals
+        "metals": True,
         # include dust grains
         "grains": None,
         # the geometry
@@ -200,13 +202,24 @@ def create_cloudy_input(
     if params["depletion_model"] is not None:
         # Define the chemical composition, here we use the depleted (gas-phase)
         # abundances and set "no grains".
-        for ele in ["He"] + abundances.metals:
-            cinput.append(
-                (
-                    f"element abundance {abundances.element_name[ele]} "
-                    f"{abundances.gas[ele]} no grains\n"
+        if params["metals"]:
+            for ele in ["He"] + abundances.metals:
+                cinput.append(
+                    (
+                        f"element abundance {abundances.element_name[ele]} "
+                        f"{abundances.total[ele]} no grains\n"
+                    )
                 )
-            )
+
+            # In this case it would be inconsistent to turn
+            # on grains, so don't.
+
+        else:
+            cinput.append("element abundance he -1")
+            for ele in abundances.metals:
+                cinput.append(
+                    (f"elements {abundances.element_name[ele]} off \n")
+                )
 
         """
         add graphite and silicate grains
@@ -316,15 +329,24 @@ def create_cloudy_input(
     else:
         warn("No depletion (or unrecognised depletion) specified")
 
-        for ele in ["He"] + abundances.metals:
-            cinput.append(
-                (
-                    f"element abundance {abundances.element_name[ele]} "
-                    f"{abundances.total[ele]}\n"
+        if params["metals"]:
+            for ele in ["He"] + abundances.metals:
+                cinput.append(
+                    (
+                        f"element abundance {abundances.element_name[ele]} "
+                        f"{abundances.total[ele]}\n"
+                    )
                 )
-            )
 
-        # In this case it would be inconsistent to turn on grains, so don't.
+            # In this case it would be inconsistent to turn on
+            # grains, so don't.
+
+        else:
+            cinput.append("element abundance he -1")
+            for ele in abundances.metals:
+                cinput.append(
+                    (f"elements {abundances.element_name[ele]} off \n")
+                )
 
     ionisation_parameter = params["ionisation_parameter"]
 

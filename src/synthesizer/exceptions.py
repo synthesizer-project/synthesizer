@@ -172,6 +172,26 @@ class SVOFilterNotFound(Exception):
             return "Filter not found!"
 
 
+class SVOTransmissionHasUnits(Exception):
+    """
+    Exception class for when an SVO filter returns units, which should not be
+    the case for the transmission. For example, where the effective area is
+    provided.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        else:
+            return "Filter provides units, but transmission is dimensionless!"
+
+
 class InconsistentWavelengths(Exception):
     """
     Exception class for when array dimensions don't
@@ -352,3 +372,37 @@ class DownloadError(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "There was an error downloading the data."
+
+
+class MissingPartition(Exception):
+    """
+    Exception class for when the partition hasn't been run for a Pipeline.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Partition hasn't been done yet."
+
+
+class PipelineNotReady(Exception):
+    """
+    Exception class for when a required pipeline step hasn't been run.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Pipeline isn't ready to run current operation."

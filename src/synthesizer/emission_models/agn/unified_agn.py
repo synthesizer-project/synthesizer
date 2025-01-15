@@ -216,7 +216,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_incident_isotropic,
                 self.disc_incident,
             ),
-            post_processing=(scale_by_incident_isotropic,),
             **kwargs,
         )
 
