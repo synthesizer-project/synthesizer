@@ -2,8 +2,8 @@
 Plot velocity broadened spectra
 ===============================
 
-This example shows how to compute line of sight dust surface densities,
-and plots some diagnostics.
+This example will demonstrate how to compute spectra with and without
+self consistent velocity broadening derived from the particle velocities.
 """
 
 import time
