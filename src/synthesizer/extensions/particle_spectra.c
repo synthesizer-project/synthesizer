@@ -27,7 +27,7 @@
  * Note: binary search returns the index of the upper bin of those that straddle
  * the given lambda.
  */
-int find_nearest_bin(double lambda, double *grid_wavelengths, int nlam) {
+int get_upper_lam_bin(double lambda, double *grid_wavelengths, int nlam) {
   return binary_search(0, nlam - 1, grid_wavelengths, lambda);
 }
 
@@ -79,7 +79,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
-          find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
+          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
     }
 
     /* Setup the index and mass fraction arrays. */
@@ -474,7 +474,7 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
       for (int ilam = 0; ilam < nlam; ilam++) {
         shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
         mapped_indices[ilam] =
-            find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
+            get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
       }
 
       /* Setup the index and mass fraction arrays. */
@@ -754,7 +754,7 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
-          find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
+          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
     }
 
     /* Setup the index array. */
@@ -969,7 +969,7 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
       for (int ilam = 0; ilam < nlam; ilam++) {
         shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
         mapped_indices[ilam] =
-            find_nearest_bin(shifted_wavelengths[ilam], wavelength, nlam);
+            get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
       }
 
       /* Setup the index array. */
