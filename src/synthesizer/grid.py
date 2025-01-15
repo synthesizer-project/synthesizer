@@ -1084,10 +1084,7 @@ class Grid:
         y = np.arange(len(self.metallicity))
 
         # Select grid for specific ion
-        if hasattr(self, "log10_specific_ionising_lum"):
-            log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
-        else:
-            log10_specific_ionising_lum = self.log10Q[ion]
+        log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
 
         # Truncate grid if max age provided
         if max_log10age is not None:
