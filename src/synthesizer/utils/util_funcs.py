@@ -330,3 +330,59 @@ def combine_arrays(arr1, arr2):
     # If both are not None then combine them
     else:
         return np.concatenate([arr1, arr2])
+
+
+def pluralize(word: str) -> str:
+    """Pluralize a singular word.
+
+    Args:
+        word (str): The word to pluralize.
+
+    Returns:
+        str: The pluralized word.
+    """
+    if (
+        word.endswith("s")
+        or word.endswith("x")
+        or word.endswith("z")
+        or word.endswith("sh")
+        or word.endswith("ch")
+    ):
+        return word + "es"
+    elif word.endswith("y") and word[-2] not in "aeiou":
+        return word[:-1] + "ies"
+    elif word.endswith("f"):
+        return word[:-1] + "ves"
+    elif word.endswith("fe"):
+        return word[:-2] + "ves"
+    elif word.endswith("o") and word[-2] not in "aeiou":
+        return word + "es"
+    else:
+        return word + "s"
+
+
+def depluralize(word: str) -> str:
+    """
+    Convert a plural word to its singular form based on simple rules.
+
+    Args:
+        word (str): The word to depluralize.
+
+    Returns:
+        str: The depluralized word.
+    """
+
+    if word.endswith("ies") and len(word) > 3:  # babies -> baby
+        return word[:-3] + "y"
+    elif word.endswith("ves"):  # leaves -> leaf, knives -> knife
+        return word[:-3] + "f"
+    elif word.endswith("oes"):  # heroes -> hero, potatoes -> potato
+        return word[:-2]
+    elif word.endswith(
+        ("ches", "shes", "xes", "sses")
+    ):  # boxes -> box, churches -> church
+        return word[:-2]
+    elif word.endswith("s") and len(word) > 2:  # general case: cats -> cat
+        return word[:-1]
+
+    return word  # Return unchanged if no rule applies
