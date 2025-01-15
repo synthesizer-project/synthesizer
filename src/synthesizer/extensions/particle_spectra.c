@@ -896,7 +896,7 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
 /**
  * @brief This calculates particle spectra using a nearest grid point approach.
  * This is the version of the function that accounts for doppler shift.
- * This is the serial version of the function.
+ * This is the parallel version of the function.
  *
  * @param grid: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
