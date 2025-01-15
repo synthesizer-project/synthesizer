@@ -171,6 +171,10 @@ class Grid:
         self._axes_units = {}
         self._get_axes()
 
+        # Read in the metadata
+        self._weight_var = None
+        self._get_grid_metadata()
+
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
 
@@ -214,6 +218,20 @@ class Grid:
         self.grid_filename = (
             f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
         )
+
+    def _get_grid_metadata(self):
+        """Unpack the grids metadata into the Grid."""
+        # Open the file
+        with h5py.File(self.grid_filename, "r") as hf:
+            # What component variable do we need to weight by for the
+            # emission in the grid?
+            self._weight_var = hf.attrs.get("WeightVariable", None)
+
+            # Loop over the Model metadata stored in the Model group
+            # and store it in the Grid object
+            if "Model" in hf:
+                for key, value in hf["Model"].attrs.items():
+                    setattr(self, key, value)
 
     def __getattr__(self, name):
         """
