@@ -173,6 +173,7 @@ class Grid:
 
         # Read in the metadata
         self._weight_var = None
+        self._model_metadata = {}
         self._get_grid_metadata()
 
         # Get the ionising luminosity (if available)
@@ -231,7 +232,7 @@ class Grid:
             # and store it in the Grid object
             if "Model" in hf:
                 for key, value in hf["Model"].attrs.items():
-                    setattr(self, key, value)
+                    self._model_metadata[key] = value
 
     def __getattr__(self, name):
         """
