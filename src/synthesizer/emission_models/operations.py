@@ -64,6 +64,7 @@ class Extraction:
         emitters,
         spectra,
         particle_spectra,
+        vel_shift,
         verbose,
         **kwargs,
     ):
@@ -79,6 +80,8 @@ class Extraction:
                 The dictionary to store the extracted spectra in.
             particle_spectra (dict):
                 The dictionary to store the extracted particle spectra in.
+            vel_shift (bool):
+                Flags whether to apply doppler shift to the spectra
             verbose (bool):
                 Are we talking?
             kwargs (dict):
@@ -132,6 +135,7 @@ class Extraction:
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
+                    vel_shift=vel_shift,
                     lam_mask=this_model._lam_mask,
                     verbose=verbose,
                     **kwargs,

@@ -791,6 +791,7 @@ class BaseGalaxy:
         fesc=0.0,
         covering_fraction=None,
         mask=None,
+        vel_shift=False,
         verbose=True,
         **kwargs,
     ):
@@ -850,6 +851,7 @@ class BaseGalaxy:
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
