@@ -21,6 +21,7 @@ from unyt import (
     Mpc,
     Msun,
     angstrom,
+    c,
     cm,
     deg,
     erg,
@@ -293,6 +294,7 @@ class BlackHoles(Particles, BlackholesComponent):
         grid_assignment_method,
         lam_mask,
         nthreads,
+        vel_shift,
     ):
         """
         Prepare the arguments for the C extension to compute SEDs.
@@ -406,6 +408,27 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
+        # Handle the velocities (and make sure we have velocities if a shift
+        # has been requested)
+        if self.velocities is not None:
+            part_vels = np.ascontiguousarray(
+                self._velocities[mask],
+                dtype=np.float64,
+            )
+            vel_units = self.velocities.units
+        elif vel_shift and self.velocities is None:
+            raise exceptions.InconsistentArguments(
+                "Velocity shifted spectra requested but no "
+                "black hole velocities provided."
+            )
+        else:
+            # We aren't doing a shift so just pass a dummy array and units
+            part_vels = np.ascontiguousarray(
+                np.zeros((np.sum(mask), 3)),
+                dtype=np.float64,
+            )
+            vel_units = km / s
+
         # For black holes the grid Sed are normalised to 1.0 so we need to
         # scale by the bolometric luminosity.
         bol_lum = self.bolometric_luminosity.value
@@ -416,6 +439,12 @@ class BlackHoles(Particles, BlackholesComponent):
         # Get the grid spctra
         grid_spectra = np.ascontiguousarray(
             grid.spectra[spectra_type],
+            dtype=np.float64,
+        )
+
+        # Get the grid wavelengths
+        grid_lam = np.ascontiguousarray(
+            grid._lam,
             dtype=np.float64,
         )
 
@@ -443,19 +472,39 @@ class BlackHoles(Particles, BlackholesComponent):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        return (
-            grid_spectra,
-            grid_props,
-            props,
-            bol_lum,
-            fesc,
-            grid_dims,
-            len(grid_props),
-            np.int32(npart),
-            nlam,
-            grid_assignment_method,
-            nthreads,
-        )
+        # Return the right arguments for the situation (either with all the
+        # extra velocity information or without)
+        if vel_shift:
+            return (
+                grid_spectra,
+                grid_lam,
+                grid_props,
+                props,
+                bol_lum,
+                fesc,
+                part_vels,
+                grid_dims,
+                len(grid_props),
+                np.int32(npart),
+                nlam,
+                grid_assignment_method,
+                nthreads,
+                c.to(vel_units).value,
+            )
+        else:
+            return (
+                grid_spectra,
+                grid_props,
+                props,
+                bol_lum,
+                fesc,
+                grid_dims,
+                len(grid_props),
+                np.int32(npart),
+                nlam,
+                grid_assignment_method,
+                nthreads,
+            )
 
     def _prepare_line_args(
         self,
@@ -629,6 +678,7 @@ class BlackHoles(Particles, BlackholesComponent):
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
+        vel_shift=False,
     ):
         """
         Generate per particle rest frame spectra for a given key.
@@ -658,6 +708,8 @@ class BlackHoles(Particles, BlackholesComponent):
             nthreads (int)
                 The number of threads to use for the computation. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Should the spectra be velocity shifted?
         """
         start = tic()
 
@@ -681,8 +733,6 @@ class BlackHoles(Particles, BlackholesComponent):
         if mask.size != self.nbh:
             mask = np.ones(self.nbh, dtype=bool)
 
-        from ..extensions.particle_spectra import compute_particle_seds
-
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
@@ -691,13 +741,26 @@ class BlackHoles(Particles, BlackholesComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
             lam_mask=lam_mask,
         )
 
         toc("Preparing C args", start)
 
-        # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args)
+        # Get the integrated spectra in grid units (erg / s / Hz) using the
+        # appropriate method
+        if vel_shift:
+            from synthesizer.extensions.particle_spectra import (
+                compute_part_seds_with_vel_shift,
+            )
+
+            masked_spec = compute_part_seds_with_vel_shift(*args)
+        else:
+            from synthesizer.extensions.particle_spectra import (
+                compute_particle_seds,
+            )
+
+            masked_spec = compute_particle_seds(*args)
 
         start = tic()
 
@@ -866,6 +929,7 @@ class BlackHoles(Particles, BlackholesComponent):
         tau_v=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=False,
         verbose=True,
         **kwargs,
     ):
@@ -928,6 +992,7 @@ class BlackHoles(Particles, BlackholesComponent):
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
