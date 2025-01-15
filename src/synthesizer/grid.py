@@ -428,9 +428,11 @@ class Grid:
 
             # Old name for backwards compatibility (DEPRECATED)
             if "log10Q" in hf.keys():
-                self.log10Q = {}
+                self.log10_specific_ionising_lum = {}
                 for ion in hf["log10Q"].keys():
-                    self.log10Q[ion] = hf["log10Q"][ion][:]
+                    self.log10_specific_ionising_lum[ion] = hf["log10Q"][ion][
+                        :
+                    ]
 
     def _get_spectra_grid(self, spectra_to_read):
         """
