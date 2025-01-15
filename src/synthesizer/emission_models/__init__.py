@@ -1,51 +1,49 @@
-from synthesizer.emission_models.base_model import (
-    EmissionModel,
-    StellarEmissionModel,
-    BlackHoleEmissionModel,
-    GalaxyEmissionModel,
-)
-from synthesizer.emission_models.models import (
-    DustEmission,
-    AttenuatedEmission,
-    TemplateEmission,
-)
-from synthesizer.emission_models.stellar.models import (
-    IncidentEmission,
-    LineContinuumEmission,
-    TransmittedEmission,
-    EscapedEmission,
-    NebularContinuumEmission,
-    NebularEmission,
-    ReprocessedEmission,
-    IntrinsicEmission,
-    EmergentEmission,
-    TotalEmission,
-)
-from synthesizer.emission_models.stellar.pacman_model import (
-    PacmanEmission,
-    BimodalPacmanEmission,
-    CharlotFall2000,
-    ScreenEmission,
-)
+from synthesizer.emission_models.agn import AGN_MODELS
 from synthesizer.emission_models.agn.models import (
-    NLRIncidentEmission,
-    BLRIncidentEmission,
-    NLRTransmittedEmission,
-    BLRTransmittedEmission,
-    NLREmission,
+    AGNIntrinsicEmission,
     BLREmission,
+    BLRIncidentEmission,
+    BLRTransmittedEmission,
+    DiscEmission,
+    DiscEscapedEmission,
     DiscIncidentEmission,
     DiscTransmittedEmission,
-    DiscEscapedEmission,
-    DiscEmission,
+    NLREmission,
+    NLRIncidentEmission,
+    NLRTransmittedEmission,
     TorusEmission,
-    AGNIntrinsicEmission,
 )
 from synthesizer.emission_models.agn.unified_agn import UnifiedAGN
-
-
+from synthesizer.emission_models.base_model import (
+    BlackHoleEmissionModel,
+    EmissionModel,
+    GalaxyEmissionModel,
+    StellarEmissionModel,
+)
+from synthesizer.emission_models.models import (
+    AttenuatedEmission,
+    DustEmission,
+    TemplateEmission,
+)
 from synthesizer.emission_models.stellar import STELLAR_MODELS
-from synthesizer.emission_models.agn import AGN_MODELS
+from synthesizer.emission_models.stellar.models import (
+    EmergentEmission,
+    EscapedEmission,
+    IncidentEmission,
+    IntrinsicEmission,
+    NebularContinuumEmission,
+    NebularEmission,
+    NebularLineEmission,
+    ReprocessedEmission,
+    TotalEmission,
+    TransmittedEmission,
+)
+from synthesizer.emission_models.stellar.pacman_model import (
+    BimodalPacmanEmission,
+    CharlotFall2000,
+    PacmanEmission,
+    ScreenEmission,
+)
 
 # List of premade common models
 COMMON_MODELS = [

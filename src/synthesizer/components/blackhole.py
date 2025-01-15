@@ -274,9 +274,11 @@ class BlackholesComponent(Component):
         spectra_name,
         fesc=0.0,
         mask=None,
+        lam_mask=None,
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
+        vel_shift=False,
     ):
         """
         Generate integrated rest frame spectra for a given key.
@@ -295,6 +297,9 @@ class BlackholesComponent(Component):
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -305,6 +310,10 @@ class BlackholesComponent(Component):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Flags whether to apply doppler shift to the spectrum.
+            c (float)
+                Speed of light
         """
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
@@ -324,8 +333,6 @@ class BlackholesComponent(Component):
         if mask is not None and np.sum(mask) == 0:
             return np.zeros(len(grid.lam))
 
-        from ..extensions.integrated_spectra import compute_integrated_sed
-
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
@@ -334,10 +341,30 @@ class BlackholesComponent(Component):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
+            lam_mask=lam_mask,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        return compute_integrated_sed(*args)
+        if vel_shift:
+            from ..extensions.particle_spectra import (
+                compute_part_sed_with_vel_shift,
+            )
+
+            spec = np.sum(compute_part_sed_with_vel_shift(*args), axis=0)
+        else:
+            from ..extensions.integrated_spectra import compute_integrated_sed
+
+            spec = compute_integrated_sed(*args)
+
+        # If we had a wavelength mask we need to make sure we return a spectra
+        # compatible with the original wavelength array.
+        if lam_mask is not None:
+            out_spec = np.zeros(len(grid.lam))
+            out_spec[lam_mask] = spec
+            spec = out_spec
+
+        return spec
 
     def generate_line(
         self,

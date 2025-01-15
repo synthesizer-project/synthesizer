@@ -37,6 +37,8 @@ except ImportError:
 
 from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
 
+from synthesizer.load_data.utils import lookup_age
+
 from ..particle.galaxy import Galaxy
 
 # define EAGLE cosmology
@@ -74,14 +76,18 @@ def load_EAGLE(
     numThreads = args.nthreads
     chunk = args.chunk
 
-    # get the redshift from the given eagle tag
-    zed = float(tag[5:].replace("p", "."))
-    h = 0.6777
     if chunk > tot_chunks:
         raise InconsistentArguments(
             "Value specified by 'chunk' should be lower"
             "than the total chunks (tot_chunks)"
         )
+
+    # Read some of the simulation box information
+    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
+    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
+    exp_fac = read_header("SUBFIND", fileloc, tag, "ExpansionFactor")
+    zed = (1.0 / exp_fac) - 1.0
+    boxl = boxl / (1 + zed)
 
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
@@ -95,10 +101,6 @@ def load_EAGLE(
 
     if grpno.dtype == object:
         return []
-
-    # Read some of the simulation box information
-    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
-    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
 
     # Get required star particle properties
     s_sgrpno = read_array(
@@ -165,7 +167,7 @@ def load_EAGLE(
         numThreads=numThreads,
         verbose=verbose,
     )[ok]
-    s_ages = get_age(s_ages, zed, numThreads=numThreads)  # Gyr
+    s_ages = get_age(s_ages, zed, args, numThreads=numThreads)  # Gyr
     s_Zsmooth = read_array(
         "PARTDATA",
         fileloc,
@@ -366,6 +368,12 @@ def load_EAGLE_shm(
             "than the total chunks (tot_chunks)"
         )
 
+    # Read some of the simulation box information
+    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
+    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
+    exp_fac = read_header("SUBFIND", fileloc, tag, "ExpansionFactor")
+    zed = (1.0 / exp_fac) - 1.0
+
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
     ) as hf:
@@ -378,10 +386,6 @@ def load_EAGLE_shm(
 
     if grpno.dtype == object:
         return []
-
-    # Read some of the simulation box information
-    h = read_header("SUBFIND", fileloc, tag, "HubbleParam")
-    boxl = read_header("SUBFIND", fileloc, tag, "BoxSize") / h
 
     # read in required star particle shared memory arrays
     s_grpno = np_shm_read(
@@ -846,12 +850,15 @@ def get_star_formation_time(scale_factor: float) -> float:
     Returns:
         age of the star particle in years
     """
-    SFz = (1 / scale_factor) - 1.0
+    SFz = (1.0 / scale_factor) - 1.0
     return cosmo.age(SFz).value
 
 
 def get_age(
-    scale_factors: NDArray[Any], z: float, numThreads: int = 4
+    scale_factors: NDArray[Any],
+    z: float,
+    args: namedtuple,
+    numThreads: int = 4,
 ) -> NDArray[Any]:
     """
     Function to convert scale factor to z
@@ -861,23 +868,34 @@ def get_age(
             scale factor of the star particle
         z (float)
             redshift
+        args (namedtuple):
+            parser arguments passed on to this job
         numThreads (int)
             number of threads to use
 
     Returns:
         array of ages of the star particles in years
     """
-    if numThreads == 1:
-        pool = schwimmbad.SerialPool()
-    elif numThreads == -1:
-        pool = schwimmbad.MultiPool()
-    else:
-        pool = schwimmbad.MultiPool(processes=numThreads)
+    if args.age_lookup:
+        table = np.load(args.age_lookup)
+        scale_factor = table["scale_factor"]
+        ages = table["ages"]
+        Age = cosmo.age(z).value - lookup_age(
+            scale_factors, scale_factor, ages
+        )
 
-    Age = cosmo.age(z).value - np.array(
-        list(pool.map(get_star_formation_time, scale_factors))
-    )
-    pool.close()
+    else:
+        if numThreads == 1:
+            pool = schwimmbad.SerialPool()
+        elif numThreads == -1:
+            pool = schwimmbad.MultiPool()
+        else:
+            pool = schwimmbad.MultiPool(processes=numThreads)
+
+        Age = cosmo.age(z).value - np.array(
+            list(pool.map(get_star_formation_time, scale_factors))
+        )
+        pool.close()
 
     return Age
 
@@ -1009,7 +1027,7 @@ def assign_galaxy_prop(
     # correcting for periodic boundary
     r = cop[ii] - g_coords[ok]
     r = np.sign(r) * np.min(np.dstack(((r) % bounds, (-r) % bounds)), axis=2)
-    # mask for aperture
+    # # mask for aperture
     ok = ok[norm(r, axis=1) <= aperture]
 
     # Assign gas particle properties

@@ -133,6 +133,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             The operation to apply. Can be "<", ">", "<=", ">=", "==", or "!=".
         fesc (float):
             The escape fraction.
+        lam_mask (ndarray):
+            The mask to apply to the wavelength array.
         scale_by (list):
             A list of attributes to scale the spectra by.
         post_processing (list):
@@ -169,7 +171,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask_attr=None,
         mask_thresh=None,
         mask_op=None,
-        fesc=None,
+        fesc=0.0,
+        lam_mask=None,
         related_models=None,
         emitter=None,
         fixed_parameters={},
@@ -230,6 +233,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 or "!=".
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The mask to apply to the wavelength array.
             related_models (set/list/EmissionModel):
                 A set of related models to this model. A related model is a
                 model that is connected somewhere within the model tree but is
@@ -326,6 +331,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             lum_intrinsic_model=lum_intrinsic_model,
             lum_attenuated_model=lum_attenuated_model,
             fesc=fesc,
+            lam_mask=lam_mask,
         )
 
         # Containers for children and parents
@@ -384,6 +390,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         lum_intrinsic_model,
         lum_attenuated_model,
         fesc,
+        lam_mask,
     ):
         """
         Initialise the correct parent operation.
@@ -414,10 +421,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 luminosity when computing dust emission.
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The mask to apply to the wavelength array.
         """
         # Which operation are we doing?
         if self._is_extracting:
-            Extraction.__init__(self, grid, extract, fesc)
+            Extraction.__init__(self, grid, extract, fesc, lam_mask)
         elif self._is_combining:
             Combination.__init__(self, combine)
         elif self._is_dust_attenuating:
@@ -627,6 +636,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         parts[-1] += "|"
 
         return "|\n|".join(parts)
+
+    def items(self):
+        """Return the items in the model."""
+        return self._models.items()
 
     def __getitem__(self, label):
         """
@@ -1425,6 +1438,62 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """
         self.fixed_parameters.update(kwargs)
 
+    def to_hdf5(self, group):
+        """
+        Save the model to an HDF5 group.
+
+        Args:
+            group (h5py.Group):
+                The group to save the model to.
+        """
+        # First off call the operation to save operation specific attributes
+        # to the group
+        if self._is_extracting:
+            self.extract_to_hdf5(group)
+        elif self._is_combining:
+            self.combine_to_hdf5(group)
+        elif self._is_dust_attenuating:
+            self.attenuate_to_hdf5(group)
+        elif self._is_dust_emitting:
+            self.generate_to_hdf5(group)
+        elif self._is_generating:
+            self.generate_to_hdf5(group)
+
+        # Save the model attributes
+        group.attrs["label"] = self.label
+        group.attrs["emitter"] = self.emitter
+        group.attrs["per_particle"] = self.per_particle
+        group.attrs["save"] = self.save
+        group.attrs["fesc"] = self.fesc if self.fesc is not None else 0.0
+        group.attrs["scale_by"] = self.scale_by
+        group.attrs["post_processing"] = (
+            [func.__name__ for func in self.post_processing]
+            if len(self._post_processing) > 0
+            else "None"
+        )
+
+        # Save the masks
+        if len(self.masks) > 0:
+            masks = group.create_group("Masks")
+            for ind, mask in enumerate(self.masks):
+                mask_group = masks.create_group(f"mask_{ind}")
+                mask_group.attrs["attr"] = mask["attr"]
+                mask_group.attrs["op"] = mask["op"]
+                mask_group.attrs["thresh"] = mask["thresh"]
+
+        # Save the fixed parameters
+        if len(self.fixed_parameters) > 0:
+            fixed_parameters = group.create_group("FixedParameters")
+            for key, value in self.fixed_parameters.items():
+                fixed_parameters.attrs[key] = value
+
+        # Save the children
+        if len(self._children) > 0:
+            group.create_dataset(
+                "Children",
+                data=[child.label.encode("utf-8") for child in self._children],
+            )
+
     def _get_tree_levels(self, root):
         """
         Get the levels of the tree.
@@ -2078,9 +2147,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emitters,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         covering_fraction=None,
         mask=None,
+        vel_shift=False,
         verbose=True,
         spectra=None,
         particle_spectra=None,
@@ -2158,6 +2228,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             particle_spectra (dict)
                 A dictionary of particle spectra to add to. This is used for
                 recursive calls to this function.
+            vel_shift (bool)
+                Flags whether to apply doppler shift to the spectrum.
             _is_related (bool)
                 Are we generating related model spectra? If so we don't want
                 to apply any post processing functions or delete any spectra,
@@ -2214,7 +2286,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters,
             spectra,
             particle_spectra,
-            verbose,
+            vel_shift=vel_shift,
+            verbose=verbose,
             **kwargs,
         )
 
@@ -2237,6 +2310,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         tau_v=tau_v,
                         fesc=fesc,
                         mask=mask,
+                        vel_shift=vel_shift,
                         verbose=verbose,
                         spectra=spectra,
                         particle_spectra=particle_spectra,
@@ -2392,7 +2466,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emitters,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         covering_fraction=None,
         mask=None,
         verbose=True,
@@ -2674,7 +2748,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     @accepts(resolution=kpc, fov=kpc)
     def _get_images(
         self,
-        resolution,
+        instrument,
         fov,
         emitters,
         img_type="smoothed",
@@ -2701,9 +2775,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         further down in the tree.
 
         Args:
-            resolution (float):
-                The pixel resolution of the image in spatial units (e.g. pc,
-                kpc, Mpc).
+            instrument (Instrument)
+                The instrument to use for the image generation.
             fov (float):
                 The field of view of the image in angular units (e.g. arcsec,
                 arcmin, deg).
@@ -2726,6 +2799,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             do_flux (bool)
                 If True, the images will be generated from fluxes, if False
                 they will be generated from luminosities.
+            kernel (str)
+                The convolution kernel to use for the image generation. If
+                None, no convolution will be applied.
+            kernel_threshold (float)
+                The threshold for the convolution kernel.
+            nthreads (int)
+                The number of threads to use for the image generation.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2748,7 +2828,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Get all the images at the extraction leaves of the tree
         images.update(
             self._extract_images(
-                resolution,
+                instrument,
                 fov,
                 img_type,
                 do_flux,
@@ -2777,7 +2857,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 if related_model.label not in images:
                     images.update(
                         related_model._get_images(
-                            resolution,
+                            instrument,
                             fov,
                             emitters,
                             img_type,
@@ -2791,6 +2871,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             **kwargs,
                         )
                     )
+
+            # Skip if we didn't save this model
+            if not this_model.save:
+                continue
 
             # Skip models for a different emitters
             if (
@@ -2812,44 +2896,58 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Call the appropriate method to generate the image for this model
             if this_model._is_combining:
-                images = self._combine_images(
-                    images,
-                    this_model,
-                    resolution,
-                    fov,
-                    img_type,
-                    do_flux,
-                    emitters,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                )
+                try:
+                    images = self._combine_images(
+                        images,
+                        this_model,
+                        instrument,
+                        fov,
+                        img_type,
+                        do_flux,
+                        emitters,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
+
             elif this_model._is_dust_attenuating:
-                images = self._attenuate_images(
-                    resolution,
-                    fov,
-                    this_model,
-                    img_type,
-                    do_flux,
-                    emitter,
-                    images,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                )
+                try:
+                    images = self._attenuate_images(
+                        instrument,
+                        fov,
+                        this_model,
+                        img_type,
+                        do_flux,
+                        emitter,
+                        images,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
+
             elif this_model._is_dust_emitting or this_model._is_generating:
-                images = self._generate_images(
-                    resolution,
-                    fov,
-                    this_model,
-                    img_type,
-                    do_flux,
-                    emitter,
-                    images,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                )
+                try:
+                    images = self._generate_images(
+                        instrument,
+                        fov,
+                        this_model,
+                        img_type,
+                        do_flux,
+                        emitter,
+                        images,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
         return images
 

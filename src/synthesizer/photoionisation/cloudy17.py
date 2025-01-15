@@ -147,6 +147,8 @@ def create_cloudy_input(
         "CMB": False,
         # include cosmic rays
         "cosmic_rays": False,
+        # include metals
+        "metals": True,
         # include dust grains
         "grains": False,
         # the geometry
@@ -177,13 +179,21 @@ def create_cloudy_input(
     cinput += shape_commands
 
     # --- Define the chemical composition
-    for ele in ["He"] + abundances.metals:
-        cinput.append(
-            (
-                f"element abundance {abundances.element_name[ele]} "
-                f"{abundances.gas[ele]} no grains\n"
+    if params["metals"]:
+        for ele in ["He"] + abundances.metals:
+            cinput.append(
+                (
+                    f"element abundance {abundances.element_name[ele]} "
+                    f"{abundances.total[ele]} no grains\n"
+                )
             )
-        )
+
+        # In this case it would be inconsistent to turn on grains, so don't.
+
+    else:
+        cinput.append("element abundance he -1")
+        for ele in abundances.metals:
+            cinput.append((f"elements {abundances.element_name[ele]} off \n"))
 
     """
     add graphite and silicate grains

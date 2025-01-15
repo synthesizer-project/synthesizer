@@ -91,7 +91,7 @@ class Stars(StarsComponent):
         self,
         log10ages,
         metallicities,
-        initial_mass=1.0,
+        initial_mass=None,
         morphology=None,
         sfzh=None,
         sf_hist=None,
@@ -117,7 +117,8 @@ class Stars(StarsComponent):
                 The array of metallicitities defining the metallicity axies of
                 the SFZH.
             initial_mass (unyt_quantity/float)
-                The total initial stellar mass.
+                The total initial stellar mass. If provided the SFZH grid will
+                be rescaled to obey this total mass.
             morphology (morphology.* e.g. Sersic2D)
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
@@ -220,6 +221,19 @@ class Stars(StarsComponent):
             # Store the SFZH grid
             self.sfzh = sfzh
 
+            # It's somewhat nonsensical to have both an SFZH grid and
+            # set the initial mass, but if the user has lets rescale the SFZH
+            # to obey their initial mass request
+            if self.initial_mass is not None:
+                # Normalise the SFZH grid
+                self.sfzh /= np.sum(self.sfzh)
+
+                # ... and multiply it by the initial mass of stars
+                self.sfzh *= self._initial_mass
+            else:
+                # Otherwise calculate the total initial mass
+                self._initial_mass = np.sum(self.sfzh)
+
             # Project the SFZH to get the 1D SFH
             self.sf_hist = np.sum(self.sfzh, axis=1)
 
@@ -238,13 +252,18 @@ class Stars(StarsComponent):
 
         # Check if metallicities are uniformly binned in log10metallicity or
         # linear metallicity or not at all (e.g. BPASS)
-        if len(set(self.metallicities[:-1] - self.metallicities[1:])) == 1:
+        if (
+            len(np.unique(self.metallicities[:-1] - self.metallicities[1:]))
+            == 1
+        ):
             # Regular linearly
             self.metallicity_grid_type = "Z"
 
         elif (
             len(
-                set(self.log10metallicities[:-1] - self.log10metallicities[1:])
+                np.unique(
+                    self.log10metallicities[:-1] - self.log10metallicities[1:]
+                )
             )
             == 1
         ):
@@ -257,7 +276,7 @@ class Stars(StarsComponent):
 
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """
-        Computes the SFZH for all possible combinations of input.
+        Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
         the SFH and ZH arrays are computed first.
@@ -270,6 +289,9 @@ class Stars(StarsComponent):
                 A metallicity at which to compute an instantaneous ZH, i.e. all
                 stellar populating a single ZH bin.
         """
+        # If we have no initial mass then set it to 1
+        if self.initial_mass is None:
+            self.initial_mass = 1 * Msun
 
         # If no units assume unit system
         if instant_sf is not None and not isinstance(
@@ -447,6 +469,7 @@ class Stars(StarsComponent):
         old=None,
         young=None,
         mask=None,
+        lam_mask=None,
         fesc=0.0,
         **kwargs,
     ):
@@ -472,6 +495,15 @@ class Stars(StarsComponent):
                 Are we extracting only young stars? If so only SFZH bins with
                 log10(Ages) <= young will be included in the spectra. Defaults
                 to False.
+            mask (array):
+                An array to mask the SFZH grid. This can be used to mask
+                specific SFZH bins.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
+            fesc (float)
+                The Lyman continuum escape fraction, the fraction of
+                ionising photons that entirely escape.
 
         Returns:
             The Stars's integrated rest frame spectra in erg / s / Hz.
@@ -490,14 +522,29 @@ class Stars(StarsComponent):
             elif young is not None:
                 mask = self.get_mask("log10ages", young, "<=", mask=mask)
 
+        if fesc is None:
+            fesc = 0.0
+
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
+        # Get the grid spectra (including any wavelength mask)
+        if lam_mask is not None:
+            grid_spectra = grid.spectra[spectra_name][..., lam_mask]
+        else:
+            grid_spectra = grid.spectra[spectra_name]
+
         # Compute the spectra
         spectra = (1 - fesc) * np.sum(
-            grid.spectra[spectra_name][mask] * sfzh[mask],
+            grid_spectra[mask] * sfzh[mask],
             axis=0,
         )
+
+        # Apply the wavelength mask if provided
+        if lam_mask is not None:
+            out_spec = np.zeros(grid.lam.size)
+            out_spec[lam_mask] = spectra
+            spectra = out_spec
 
         return spectra
 
