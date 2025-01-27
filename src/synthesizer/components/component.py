@@ -242,7 +242,7 @@ class Component(ABC):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         mask=None,
         vel_shift=False,
         verbose=True,
