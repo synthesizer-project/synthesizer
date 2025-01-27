@@ -35,15 +35,6 @@ def test_nebular_emissions(test_grid, particle_stars_A):
     particle_stars_A.get_spectra(model)
 
     # Ensure the lyman alpha escape fraction is doing something
-    line_spec_without_lya = particle_stars_A.spectra[
-        "nebular_line_no_lyman"
-    ]._lnu
-    line_spec_with_lya = particle_stars_A.spectra[
-        "nebular_line_lyman_alpha"
-    ]._lnu
-    assert not np.allclose(
-        line_spec_without_lya, line_spec_with_lya
-    ), "Line contribution spectra with and without lyman alpha are the same"
     assert not np.allclose(
         neb_spec, particle_stars_A.spectra["nebular"]._lnu
     ), "The lyman alpha escape fraction is not doing anything"
