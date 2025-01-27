@@ -788,7 +788,7 @@ class BaseGalaxy:
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         covering_fraction=None,
         mask=None,
         vel_shift=False,
