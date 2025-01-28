@@ -21,8 +21,6 @@ Example usages:
 
 import os
 
-import cmasher as cmr
-import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Hz, Mpc, Msun, Myr, angstrom, c, erg, km, s, yr
 
@@ -35,7 +33,6 @@ from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.util_funcs import combine_arrays
 from synthesizer.warnings import deprecated, warn
 
@@ -196,7 +193,13 @@ class Stars(Particles, StarsComponent):
             tau_v=tau_v,
             name="Stars",
         )
-        StarsComponent.__init__(self, ages, metallicities, **kwargs)
+        StarsComponent.__init__(
+            self,
+            ages,
+            metallicities,
+            _star_type="particle",
+            **kwargs,
+        )
 
         # Ensure we don't have negative ages
         if len(ages) > 0:
@@ -1921,7 +1924,8 @@ class Stars(Particles, StarsComponent):
 
     def _prepare_sfzh_args(
         self,
-        grid,
+        log10ages,
+        metallicities,
         grid_assignment_method,
         nthreads,
     ):
@@ -1929,8 +1933,10 @@ class Stars(Particles, StarsComponent):
         Prepare the arguments for SFZH computation with the C functions.
 
         Args:
-            grid (Grid)
-                The SPS grid object to extract spectra from.
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1943,8 +1949,8 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(log10ages, dtype=np.float64),
+            np.ascontiguousarray(metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
@@ -1983,48 +1989,63 @@ class Stars(Particles, StarsComponent):
 
     def get_sfzh(
         self,
-        grid,
+        log10ages,
+        metallicities,
         grid_assignment_method="cic",
         nthreads=0,
     ):
         """
-        Generate the binned SFZH history of this collection of particles.
+        Generate the binned SFZH history of these stars.
+
+        The binned SFZH is calculated by binning the particles onto the
+        desired grid defined by the input log10ages and metallicities.
 
         The binned SFZH produced by this method is equivalent to the weights
         used to extract spectra from the grid.
 
         Args:
-            grid (Grid)
-                The spectral grid object.
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
+                grid point (ngp) or their uppercase equivalents (CIC, NGP).
+                Defaults to cic. (particle only)
             nthreads (int)
                 The number of threads to use in the computation. If set to -1
-                all available threads will be used.
+                all available threads will be used. (particle only)
 
         Returns:
             numpy.ndarray:
                 Numpy array of containing the SFZH.
         """
-
+        # Import parametric stars here to avoid circular imports
         from synthesizer.extensions.sfzh import compute_sfzh
+        from synthesizer.parametric import Stars as ParametricStars
 
         # Prepare the arguments for the C function.
         args = self._prepare_sfzh_args(
-            grid,
+            log10ages,
+            metallicities,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
 
-        # Get the SFZH
-        self.sfzh = compute_sfzh(*args)
+        # Get the SFZH and create the ParametricStars object
+        self.sfzh = ParametricStars(
+            log10ages,
+            metallicities,
+            sfzh=compute_sfzh(*args),
+        )
 
         return self.sfzh
 
-    def plot_sfzh(self, grid, grid_assignment_method="cic", show=True):
+    def plot_sfzh(
+        self,
+        show=True,
+    ):
         """
         Plot the binned SZFH.
 
@@ -2038,65 +2059,99 @@ class Stars(Particles, StarsComponent):
             ax
                 The Axes object containing the plotted data.
         """
-
         # Ensure we have the SFZH
         if self.sfzh is None:
-            self.get_sfzh(grid, grid_assignment_method)
+            raise exceptions.MissingAttribute(
+                "The SFZH has not been calculated. Run get_sfzh() first."
+            )
+        return self.sfzh.plot_sfzh(show=show)
 
-        # Get the grid axes
-        log10ages = grid.log10age
-        log10metallicities = np.log10(grid.metallicity)
+    def _prepare_sfh_args(
+        self,
+        log10ages,
+        metallicities,
+        grid_assignment_method,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for SFH computation with the C functions.
 
-        # Create the figure and extra axes for histograms
-        fig, ax, haxx, haxy = single_histxy()
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
 
-        # Visulise the SFZH grid
-        ax.pcolormesh(
-            log10ages,
-            log10metallicities,
-            self.sfzh.T,
-            cmap=cmr.sunburst,
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(log10ages, dtype=np.float64),
+            np.ascontiguousarray(metallicities, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
         )
 
-        # Add binned Z to right of the plot
-        metal_dist = np.sum(self.sfzh, axis=0)
-        haxy.fill_betweenx(
-            log10metallicities,
-            metal_dist / np.max(metal_dist),
-            step="mid",
-            color="k",
-            alpha=0.3,
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(len(part_mass))
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_props,
+            part_props,
+            part_mass,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+            nthreads,
         )
 
-        # Add binned SF_HIST to top of the plot
-        sf_hist = np.sum(self.sfzh, axis=1)
-        haxx.fill_between(
-            log10ages,
-            sf_hist / np.max(sf_hist),
-            step="mid",
-            color="k",
-            alpha=0.3,
-        )
+    def get_sfh(self, log10ages):
+        """
+        Generate the SFH of these stars.
 
-        # Set plot limits
-        haxy.set_xlim([0.0, 1.2])
-        haxy.set_ylim(log10metallicities[0], log10metallicities[-1])
-        haxx.set_ylim([0.0, 1.2])
-        haxx.set_xlim(log10ages[0], log10ages[-1])
+        The SFH is calculated by summing the mass of the particles in each age
+        bin defined by the input log10ages.
 
-        # Set labels
-        ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
-        ax.set_ylabel(r"$\log_{10}Z$")
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFH.
 
-        # Set the limits so all axes line up
-        ax.set_ylim(log10metallicities[0], log10metallicities[-1])
-        ax.set_xlim(log10ages[0], log10ages[-1])
+        Returns:
+            numpy.ndarray:
+                Numpy array of containing the SFH.
+        """
+        # Ensure we have the SFZH
+        if self.sfzh is None:
+            raise exceptions.MissingAttribute(
+                "The SFZH has not been calculated. Run get_sfzh() first."
+            )
 
-        # Shall we show it?
-        if show:
-            plt.show()
-
-        return fig, ax
+        # Get the SFH
+        return self.sfzh.get_sfh(log10ages)
 
     @deprecated(
         message="is now just a wrapper "
