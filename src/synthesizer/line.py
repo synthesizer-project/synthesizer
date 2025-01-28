@@ -21,6 +21,7 @@ from unyt import Angstrom, Hz, angstrom, cm, erg, pc, s
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils import TableFormatter
 from synthesizer.warnings import deprecation
 
 
@@ -414,6 +415,19 @@ class LineCollection:
     def __len__(self):
         """Return the number of lines in the collection."""
         return self.nlines
+
+    def __str__(self):
+        """
+        Return a string representation of the galaxy object.
+
+        Returns:
+            table (str)
+                A string representation of the galaxy object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("LineCollection")
 
     def sum(self):
         """
