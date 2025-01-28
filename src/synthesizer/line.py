@@ -597,7 +597,8 @@ class LineCollection:
 
         Args:
             wavelength_bins (unyt_array)
-                The wavelength bins into which the lines will be blended.
+                The wavelength bin edges into which the lines will be blended.
+                Any lines outside the range of the bins will be ignored.
 
         Returns:
             LineCollection
@@ -615,6 +616,11 @@ class LineCollection:
 
         # Loop bin indices and combine the lines into the blended_lines array
         for i, bin_ind in enumerate(bin_inds):
+            # If the bin index is 0 or the length of the bins then it lay
+            # outside the range of the bins
+            if bin_ind == 0 or bin_ind == len(wavelength_bins):
+                continue
+
             # Get the line id
             line_id = self.line_ids[i]
 
