@@ -361,33 +361,6 @@ class LineCollection:
 
         return LineCollection(my_lines)
 
-    def __str__(self):
-        """
-        Function to print a basic summary of the LineCollection object.
-
-        Returns a string containing the id, wavelength, luminosity,
-        equivalent width, and flux if generated.
-
-        Returns:
-            summary (str)
-                Summary string containing the total mass formed and
-                lists of the available SEDs, lines, and images.
-        """
-
-        # Set up string for printing
-        summary = ""
-
-        # Add the content of the summary to the string to be printed
-        summary += "-" * 10 + "\n"
-        summary += "LINE COLLECTION\n"
-        summary += f"number of lines: {len(self.line_ids)}\n"
-        summary += f"lines: {self.line_ids}\n"
-        summary += f"available ratios: {self.available_ratios}\n"
-        summary += f"available diagrams: {self.available_diagrams}\n"
-        summary += "-" * 10
-
-        return summary
-
     def __iter__(self):
         """
         Overload iteration to allow simple looping over Line objects,
@@ -418,11 +391,11 @@ class LineCollection:
 
     def __str__(self):
         """
-        Return a string representation of the galaxy object.
+        Return a string representation of the LineCollection object.
 
         Returns:
             table (str)
-                A string representation of the galaxy object.
+                A string representation of the LineCollection object.
         """
         # Intialise the table formatter
         formatter = TableFormatter(self)
@@ -855,52 +828,16 @@ class Line:
 
     def __str__(self):
         """
-        Return a basic summary of the Line object.
-
-        Returns a string containing the id, wavelength, luminosity,
-        equivalent width, and flux if generated.
+        Return a string representation of the LineCollection object.
 
         Returns:
-            summary (str)
-                Summary string containing the total mass formed and
-                lists of the available SEDs, lines, and images.
+            table (str)
+                A string representation of the LineCollection object.
         """
-        # Set up string for printing
-        pstr = ""
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += f"SUMMARY OF {self.id}" + "\n"
-        pstr += f"wavelength: {self.wavelength:.1f}" + "\n"
-        if isinstance(self.luminosity, np.ndarray):
-            mean_lum = np.mean(self._luminosity)
-            pstr += f"Npart: {self.luminosity.size}\n"
-            pstr += (
-                f"<log10(luminosity/{self.luminosity.units})>: "
-                f"{np.log10(mean_lum):.2f}\n"
-            )
-            mean_eq = np.mean(self.equivalent_width)
-            pstr += f"<equivalent width>: {mean_eq:.0f}" + "\n"
-            mean_flux = np.mean(self.flux) if self.flux is not None else None
-            pstr += (
-                f"<log10(flux/{self.flux.units}): {np.log10(mean_flux):.2f}"
-                if self.flux is not None
-                else ""
-            )
-        else:
-            pstr += (
-                f"log10(luminosity/{self.luminosity.units}): "
-                f"{np.log10(self.luminosity):.2f}\n"
-            )
-            pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
-            pstr += (
-                f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
-                if self.flux is not None
-                else ""
-            )
-        pstr += "-" * 10
-
-        return pstr
+        return formatter.get_table("Line")
 
     def __add__(self, second_line):
         """
