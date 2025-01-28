@@ -621,6 +621,9 @@ class LineCollection:
             if bin_ind == 0 or bin_ind == len(wavelength_bins):
                 continue
 
+            # Ok, now we can handle the off by 1 error that digitize gives us
+            bin_ind -= 1
+
             # Get the line id
             line_id = self.line_ids[i]
 
