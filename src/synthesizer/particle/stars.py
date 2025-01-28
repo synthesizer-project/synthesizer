@@ -2354,10 +2354,10 @@ class Stars(Particles, StarsComponent):
         # Plot the SFH as a step function
         fig, ax = plt.subplots()
         ax.semilogy()
-        ax.step(metallicities, metal_dist, where="mid", color="blue")
+        ax.step(metallicities, metal_dist, where="mid", color="red")
 
         ax.fill_between(
-            metallicities, metal_dist, step="mid", alpha=0.5, color="blue"
+            metallicities, metal_dist, step="mid", alpha=0.5, color="red"
         )
         ax.set_xlabel(r"$Z$")
         ax.set_ylabel(r"Z_D / M$_\odot$")
