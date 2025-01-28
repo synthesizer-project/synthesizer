@@ -143,7 +143,6 @@ class Stars(StarsComponent):
                       will be used to calculate an array describing the
                       metallicity distribution.
         """
-
         # Instantiate the parent
         StarsComponent.__init__(
             self,
@@ -329,23 +328,25 @@ class Stars(StarsComponent):
 
         # Handle the instantaneous SFH case
         elif instant_sf is not None and instant_metallicity is None:
-            # Create SFH array
-            self.sf_hist = np.zeros(self.ages.size)
+            inst_stars = ParticleStars(
+                initial_masses=np.array([self._initial_mass]) * Msun,
+                ages=np.array([instant_sf.to("yr").value]) * yr,
+                metallicities=np.array([0]),  # this is a dummy value
+            )
 
-            # Interpolate the SFH to
-            ia = (np.abs(self.ages - instant_sf)).argmin()
-            self.sf_hist[ia] = self.initial_mass
+            # Create SFH array
+            self.sf_hist = inst_stars.get_sfh(self.log10ages)
 
         # Handle the instantaneous ZH case
         elif instant_metallicity is not None and instant_sf is None:
-            # Create SFH array
-            self.metal_dist = np.zeros(self.metallicities.size)
+            inst_stars = ParticleStars(
+                initial_masses=np.array([self._initial_mass]) * Msun,
+                ages=np.array([0]) * yr,  # this is a dummy value
+                metallicities=np.array([instant_metallicity]),
+            )
 
-            # Get the bin
-            imetal = (
-                np.abs(self.metallicities - instant_metallicity)
-            ).argmin()
-            self.metal_dist[imetal] = self.initial_mass
+            # Create metal distribution array
+            self.metal_dist = inst_stars.get_metal_dist(self.metallicities)
 
         # Calculate SFH from function if necessary
         if self.sf_hist_func is not None and self.sf_hist is None:
@@ -909,7 +910,7 @@ class Stars(StarsComponent):
         # Visulise the SFZH grid
         ax.pcolormesh(
             self.log10ages,
-            self.metallicities,
+            self.log10metallicities,
             self.sfzh.T,
             cmap=cmr.sunburst,
         )
@@ -917,7 +918,7 @@ class Stars(StarsComponent):
         # Add binned Z to right of the plot
         metal_dist = np.sum(self.sfzh, axis=0)
         haxy.fill_betweenx(
-            self.metallicities,
+            self.log10metallicities,
             metal_dist / np.max(metal_dist),
             step="mid",
             color="k",
@@ -936,7 +937,7 @@ class Stars(StarsComponent):
 
         # Set plot limits
         haxy.set_xlim([0.0, 1.2])
-        haxy.set_ylim(self.metallicities[0], self.metallicities[-1])
+        haxy.set_ylim(self.log10metallicities[0], self.log10metallicities[-1])
         haxx.set_ylim([0.0, 1.2])
         haxx.set_xlim(self.log10ages[0], self.log10ages[-1])
 
@@ -945,7 +946,7 @@ class Stars(StarsComponent):
         ax.set_ylabel(r"$Z$")
 
         # Set the limits so all axes line up
-        ax.set_ylim(self.metallicities[0], self.metallicities[-1])
+        ax.set_ylim(self.log10metallicities[0], self.log10metallicities[-1])
         ax.set_xlim(self.log10ages[0], self.log10ages[-1])
 
         # Shall we show it?
