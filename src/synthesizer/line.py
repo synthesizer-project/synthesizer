@@ -411,6 +411,10 @@ class LineCollection:
             # Return the filter
             return self.lines[self.line_ids[self._current_ind - 1]]
 
+    def __len__(self):
+        """Return the number of lines in the collection."""
+        return self.nlines
+
     def sum(self):
         """
         For collections containing lines from multiple particles calculate the
