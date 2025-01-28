@@ -248,6 +248,9 @@ class LineCollection:
             A list of available line diagrams.
     """
 
+    # Define quantities
+    wavelengths = Quantity()
+
     def __init__(self, lines):
         """
         Initialise LineCollection.
@@ -575,6 +578,61 @@ class LineCollection:
         """
         for line in self.lines.values():
             line.get_flux(cosmo, z, igm)
+
+    @accepts(wavelength_bins=angstrom)
+    def get_blended_lines(self, wavelength_bins):
+        """
+        Blend lines separated by less than the provided wavelength resolution.
+
+        We use a set of wavelength bins to enable the user to control exactly
+        which lines are blended together. This also enables an array to be
+        used emulating an instrument resolution.
+
+        A simple resolution would lead to ambiguity in situations where A and
+        B are blended, and B and C are blended, but A and C are not.
+
+        Args:
+            wavelength_bins (unyt_array)
+                The wavelength bins into which the lines will be blended.
+
+        Returns:
+            LineCollection
+                A new LineCollection object containing the blended lines.
+        """
+        # Sort wavelengths into the bins getting the indices in each bin
+        bin_inds = np.digitize(self.wavelengths, wavelength_bins)
+
+        # Create a dictionary to hold the blended lines
+        blended_lines = np.empty(len(wavelength_bins), dtype=object)
+
+        # Initialise the array of blended lines to None
+        for i in range(blended_lines.size):
+            blended_lines[i] = None
+
+        # Loop bin indices and combine the lines into the blended_lines array
+        for i, bin_ind in enumerate(bin_inds):
+            # Get the line id
+            line_id = self.line_ids[i]
+
+            # Get the line itself
+            line = self.lines[line_id]
+
+            # If the bin is empty, just store the line
+            if blended_lines[bin_ind] is None:
+                blended_lines[bin_ind] = line
+
+            # Otherwise, combine the line with the existing line
+            else:
+                blended_lines[bin_ind] = blended_lines[bin_ind] + line
+
+        # Convert the array of lines to a dictionary ready to make a new
+        # LineCollection
+        new_lines = {}
+        for line in blended_lines:
+            if line is not None:
+                new_lines[line.id] = line
+
+        return LineCollection(new_lines)
 
 
 class Line:
