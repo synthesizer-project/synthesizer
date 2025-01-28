@@ -8,6 +8,7 @@ import shutil
 import numpy as np
 from unyt import angstrom, c, h, unyt_array
 
+from synthesizer.exceptions import UnrecognisedOption
 from synthesizer.photoionisation import calculate_Q_from_U
 
 
@@ -219,9 +220,9 @@ def create_cloudy_input(
     grains approach is metals/element abundances do not talk
     to the grains command and hence there is issues with mass
     conservation (see cloudy documentation). To alleviate
-    this one needs to make the orion grain abundances
-    consistent with the depletion values. Assume 1 per cent of
-    C is in PAH's.
+    this one needs to make the orion or ism (in-built in cloudy)
+    grain abundances consistent with the depletion values. Assume
+    1 per cent of C is in PAH's.
 
     PAHs appear to exist mainly at the interface between the
     H+ region and the molecular clouds. Apparently PAHs are
@@ -244,25 +245,52 @@ def create_cloudy_input(
     which will again introduce issues on mass conservation.
     """
 
-    if (abundances.dust_to_metal_ratio > 0) and (params["grains"] is not None):
-        delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
-        delta_PAH = 0.01 * (10 ** abundances.total["C"])
-        delta_graphite = delta_C - delta_PAH
-        delta_Si = 10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
-        orion_C_abund = -3.6259
-        orion_Si_abund = -4.5547
-        PAH_abund = -4.446
-        f_graphite = delta_graphite / (10 ** (orion_C_abund))
-        f_Si = delta_Si / (10 ** (orion_Si_abund))
-        f_pah = delta_PAH / (10 ** (PAH_abund))
+    # If grain physics are required, add this self-consistently
+    if params["grains"] is None:
+        f_graphite, f_Si, f_pah = 0, 0, 0
+
+    else:
+        if params["no_grain_scaling"] is False:
+            delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
+            delta_PAH = 0.01 * (10 ** abundances.total["C"])
+            delta_graphite = delta_C - delta_PAH
+            delta_Si = (
+                10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
+            )
+
+            # define the reference abundances for the different grain types
+            # this should be the dust-phase abundance in the particular
+            # reference environment.
+            if params["grains"] == "Orion":
+                reference_C_abund = -3.6259
+                reference_Si_abund = -4.5547
+            # this is incorrect since the abundance in the ISM is probably
+            # different.
+            elif params["grains"] == "ISM":
+                reference_C_abund = -3.5553
+                reference_Si_abund = -4.4841
+            else:
+                raise UnrecognisedOption(
+                    "Only Orion and ISM grain types are " "available in cloudy"
+                )
+
+            PAH_abund = -4.446
+            f_graphite = delta_graphite / (10 ** (reference_C_abund))
+            f_Si = delta_Si / (10 ** (reference_Si_abund))
+            f_pah = delta_PAH / (10 ** (PAH_abund))
+
+        else:
+            f_graphite = 1.0
+            f_Si = 1.0
+            f_pah = 1.0
+
         command = (
-            f"grains Orion graphite {f_graphite} \n"
-            f"grains Orion silicate {f_Si} \n"
+            f"grains {params['grains']} graphite {f_graphite} \n"
+            f"grains {params['grains']} silicate {f_Si} \n"
             f"grains PAH {f_pah}"
         )
+
         cinput.append(command + "\n")
-    else:
-        f_graphite, f_Si, f_pah = 0, 0, 0
 
     U = params["ionisation_parameter"]
     log10U = np.log10(U)
