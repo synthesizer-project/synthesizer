@@ -292,11 +292,11 @@ class LineCollection:
         self.wavelengths = self.wavelengths[sorted_arguments]
 
         # Include line ratio and diagram definitions
-        self.line_ratios = line_ratios
+        self._line_ratios = line_ratios
 
         # Create list of available line ratios
         self.available_ratios = []
-        for ratio_id, ratio in self.line_ratios.ratios.items():
+        for ratio_id, ratio in self._line_ratios.ratios.items():
             # Create a set from the ratio line ids while also unpacking
             # any comma separated lines
             ratio_line_ids = set()
@@ -309,7 +309,7 @@ class LineCollection:
 
         # Create list of available line diagnostics
         self.available_diagrams = []
-        for diagram_id, diagram in self.line_ratios.diagrams.items():
+        for diagram_id, diagram in self._line_ratios.diagrams.items():
             # Create a set from the diagram line ids while also unpacking
             # any comma separated lines
             diagram_line_ids = set()
@@ -459,7 +459,7 @@ class LineCollection:
         # defined in the line_ratios module...
         if isinstance(ratio_id, str):
             # Check if ratio_id exists
-            if ratio_id not in self.line_ratios.available_ratios:
+            if ratio_id not in self._line_ratios.available_ratios:
                 raise exceptions.UnrecognisedOption(
                     f"ratio_id not recognised ({ratio_id})"
                 )
@@ -471,7 +471,7 @@ class LineCollection:
                     f"this ratio ({ratio_id})"
                 )
 
-            line1, line2 = self.line_ratios.ratios[ratio_id]
+            line1, line2 = self._line_ratios.ratios[ratio_id]
 
         # Otherwise interpret as a list
         elif isinstance(ratio_id, list):
@@ -496,7 +496,7 @@ class LineCollection:
         # defined in the line_ratios module...
         if isinstance(diagram_id, str):
             # check if ratio_id exists
-            if diagram_id not in self.line_ratios.available_diagrams:
+            if diagram_id not in self._line_ratios.available_diagrams:
                 raise exceptions.UnrecognisedOption(
                     f"diagram_id not recognised ({diagram_id})"
                 )
@@ -508,7 +508,7 @@ class LineCollection:
                     f"this diagram ({diagram_id})"
                 )
 
-            ab, cd = self.line_ratios.diagrams[diagram_id]
+            ab, cd = self._line_ratios.diagrams[diagram_id]
 
         # Otherwise interpret as a list
         elif isinstance(diagram_id, list):
