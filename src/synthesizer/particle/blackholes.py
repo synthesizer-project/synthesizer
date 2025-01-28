@@ -672,7 +672,7 @@ class BlackHoles(Particles, BlackholesComponent):
         self,
         grid,
         spectra_name,
-        fesc=0.0,
+        fesc=None,
         mask=None,
         lam_mask=None,
         verbose=False,

@@ -470,7 +470,7 @@ class Stars(StarsComponent):
         young=None,
         mask=None,
         lam_mask=None,
-        fesc=0.0,
+        fesc=None,
         **kwargs,
     ):
         """
