@@ -954,6 +954,116 @@ class Stars(StarsComponent):
 
         return fig, ax
 
+    def get_sfh(self):
+        """
+        Get the star formation history of the stellar population.
+
+        Returns:
+            unyt_array:
+                The star formation history of the stellar population.
+        """
+        return self.sf_hist
+
+    def plot_sfh(
+        self,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the star formation history of the stellar population.
+
+        Args:
+            xlimits (tuple)
+                The limits of the x-axis.
+            ylimits (tuple)
+                The limits of the y-axis.
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(self.log10ages, self.sf_hist, where="mid", color="blue")
+        ax.fill_between(
+            self.log10ages,
+            self.sf_hist,
+            step="mid",
+            color="blue",
+            alpha=0.5,
+        )
+
+        ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_ylabel(r"SFH / M$_\odot$")
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    def get_metal_dist(self):
+        """
+        Get the metallicity distribution of the stellar population.
+
+        Returns:
+            unyt_array:
+                The metallicity distribution of the stellar population.
+        """
+        return self.metal_dist
+
+    def plot_metal_dist(
+        self,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the metallicity distribution of the stellar population.
+
+        Args:
+            xlimits (tuple)
+                The limits of the x-axis.
+            ylimits (tuple)
+                The limits of the y-axis.
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(self.metallicities, self.metal_dist, where="mid", color="red")
+        ax.fill_between(
+            self.metallicities,
+            self.metal_dist,
+            step="mid",
+            color="red",
+            alpha=0.5,
+        )
+
+        ax.set_xlabel(r"$Z$")
+        ax.set_ylabel(r"Z_D / M$_\odot$")
+
+        # Apply limits if provided
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
     def _prepare_sed_args(self, *args, **kwargs):
         """Prepare arguments for SED generation."""
         raise exceptions.NotImplementedError(
