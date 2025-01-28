@@ -52,7 +52,7 @@ part_sfzh = part_stars.get_sfzh(
     log10ages=grid.log10age,
     metallicities=grid.metallicity,
     grid_assignment_method="cic",
-)
+).sfzh
 
 # Plot the SFZH
 part_stars.plot_sfzh()
