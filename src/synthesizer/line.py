@@ -604,6 +604,13 @@ class LineCollection:
             LineCollection
                 A new LineCollection object containing the blended lines.
         """
+        # Ensure the bins are sorted and actually have a length
+        wavelength_bins = np.sort(wavelength_bins)
+        if len(wavelength_bins) < 2:
+            raise exceptions.InconsistentArguments(
+                "Wavelength bins must have a length of at least 2"
+            )
+
         # Sort wavelengths into the bins getting the indices in each bin
         bin_inds = np.digitize(self.wavelengths, wavelength_bins)
 
