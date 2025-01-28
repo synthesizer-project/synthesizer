@@ -942,7 +942,7 @@ class Stars(StarsComponent):
 
         # Set labels
         ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
-        ax.set_ylabel(r"$\log_{10}Z$")
+        ax.set_ylabel(r"$Z$")
 
         # Set the limits so all axes line up
         ax.set_ylim(self.metallicities[0], self.metallicities[-1])

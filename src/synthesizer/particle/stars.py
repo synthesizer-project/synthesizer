@@ -21,6 +21,7 @@ Example usages:
 
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Hz, Mpc, Msun, Myr, angstrom, c, erg, km, s, yr
 
@@ -2012,10 +2013,10 @@ class Stars(Particles, StarsComponent):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or their uppercase equivalents (CIC, NGP).
-                Defaults to cic. (particle only)
+                Defaults to cic.
             nthreads (int)
                 The number of threads to use in the computation. If set to -1
-                all available threads will be used. (particle only)
+                all available threads will be used.
 
         Returns:
             numpy.ndarray:
@@ -2069,7 +2070,6 @@ class Stars(Particles, StarsComponent):
     def _prepare_sfh_args(
         self,
         log10ages,
-        metallicities,
         grid_assignment_method,
         nthreads,
     ):
@@ -2092,10 +2092,160 @@ class Stars(Particles, StarsComponent):
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(log10ages, dtype=np.float64),
-            np.ascontiguousarray(metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(len(part_mass))
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_props,
+            part_props,
+            part_mass,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+            nthreads,
+        )
+
+    def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
+        """
+        Generate the SFH of these stars in terms of mass.
+
+        The SFH is calculated by summing the mass of the particles in each age
+        bin defined by the input log10ages.
+
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFH.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or their uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
+
+        Returns:
+            numpy.ndarray:
+                Numpy array of containing the SFH.
+        """
+        # Import parametric stars here to avoid circular imports
+        from synthesizer.extensions.sfzh import compute_sfzh
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sfh_args(
+            log10ages,
+            grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
+        )
+
+        return compute_sfzh(*args)
+
+    def plot_sfh(
+        self,
+        log10ages,
+        nthreads=0,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the SFH in terms of mass.
+
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFH.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
+            xlimits (tuple)
+                The limits of the x-axis. If not set, the limits are set to the
+                minimum and maximum of the log10ages.
+            ylimits (tuple)
+                The limits of the y-axis. If not set, the limits are set to the
+                minimum and maximum of the SFH.
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        # Compute the SFH
+        sfh = self.get_sfh(log10ages, nthreads=nthreads)
+
+        # Plot the SFH as a step function
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(log10ages, sfh, where="mid", color="blue")
+
+        ax.fill_between(log10ages, sfh, step="mid", alpha=0.5, color="blue")
+        ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_ylabel(r"SFH / M$_\odot$")
+
+        # Apply any limits we have
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    def _prepare_metal_dist_args(
+        self,
+        metallicities,
+        grid_assignment_method,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for metalicity computation with the C functions.
+
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(metallicities, dtype=np.float64),
+        ]
+        part_props = [
             np.ascontiguousarray(self.metallicities, dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(
@@ -2129,29 +2279,99 @@ class Stars(Particles, StarsComponent):
             nthreads,
         )
 
-    def get_sfh(self, log10ages):
+    def get_metal_dist(
+        self,
+        metallicities,
+        grid_assignment_method="cic",
+        nthreads=0,
+    ):
         """
-        Generate the SFH of these stars.
-
-        The SFH is calculated by summing the mass of the particles in each age
-        bin defined by the input log10ages.
+        Generate the metallicity distribution of these stars in terms of mass.
 
         Args:
-            log10ages (array-like, float)
-                The log10 ages of the desired SFH.
+            metallicities (array-like, float)
+                The metallicity bins of the desired metallicity distribution.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or their uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
 
         Returns:
             numpy.ndarray:
                 Numpy array of containing the SFH.
         """
-        # Ensure we have the SFZH
-        if self.sfzh is None:
-            raise exceptions.MissingAttribute(
-                "The SFZH has not been calculated. Run get_sfzh() first."
-            )
+        # Import parametric stars here to avoid circular imports
+        from synthesizer.extensions.sfzh import compute_sfzh
 
-        # Get the SFH
-        return self.sfzh.get_sfh(log10ages)
+        # Prepare the arguments for the C function.
+        args = self._prepare_metal_dist_args(
+            metallicities,
+            grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
+        )
+
+        return compute_sfzh(*args)
+
+    def plot_metal_dist(
+        self,
+        metallicities,
+        nthreads=0,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the metallicity distribution in terms of mass.
+
+        Args:
+            metallicities (array-like, float)
+                The metallicity bins of the desired metallicity distribution.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
+            xlimits (tuple)
+                The limits of the x-axis. If not set, the limits are set to the
+                minimum and maximum of the log10ages.
+            ylimits (tuple)
+                The limits of the y-axis. If not set, the limits are set to the
+                minimum and maximum of the SFH.
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        # Compute the SFH
+        metal_dist = self.get_metal_dist(metallicities, nthreads=nthreads)
+
+        # Plot the SFH as a step function
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(metallicities, metal_dist, where="mid", color="blue")
+
+        ax.fill_between(
+            metallicities, metal_dist, step="mid", alpha=0.5, color="blue"
+        )
+        ax.set_xlabel(r"$Z$")
+        ax.set_ylabel(r"Z_D / M$_\odot$")
+
+        # Apply any limits we have
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+
+        if show:
+            plt.show()
+
+        return fig, ax
 
     @deprecated(
         message="is now just a wrapper "
