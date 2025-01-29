@@ -53,6 +53,7 @@ default_units = {
     "lam": Angstrom,
     "obslam": Angstrom,
     "wavelength": Angstrom,
+    "wavelengths": Angstrom,
     "vacuum_wavelength": Angstrom,
     "original_lam": Angstrom,
     "lam_min": Angstrom,
@@ -184,6 +185,8 @@ class Units(metaclass=UnitSingleton):
             Observer frame wavelength unit.
         wavelength (unyt.unit_object.Unit)
             Alias for rest frame wavelength unit.
+        wavelengths (unyt.unit_object.Unit)
+            Alias for rest frame wavelength unit.
 
         nu (unyt.unit_object.Unit)
             Rest frame frequency unit.
@@ -295,6 +298,7 @@ class Units(metaclass=UnitSingleton):
         # vacuum rest frame wavelengths alias
         self.vacuum_wavelength = Angstrom
         self.wavelength = Angstrom  # rest frame wavelengths alias
+        self.wavelengths = Angstrom  # rest frame wavelengths alias
         self.original_lam = Angstrom  # SVO filter wavelengths
         self.lam_min = Angstrom  # filter minimum wavelength
         self.lam_max = Angstrom  # filter maximum wavelength
