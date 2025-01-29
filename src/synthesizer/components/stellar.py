@@ -39,6 +39,7 @@ class StarsComponent(Component):
         self,
         ages,
         metallicities,
+        _star_type,
         **kwargs,
     ):
         """
@@ -57,6 +58,11 @@ class StarsComponent(Component):
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
         self.metallicities = metallicities
+
+        # The type of stars object (parametric or particle). This is useful for
+        # determining the type of stars object without relying on isinstance
+        # and possible circular imports.
+        self._star_type = _star_type
 
     @property
     def log10ages(self):
