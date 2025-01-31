@@ -20,7 +20,19 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
-from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s
+from unyt import (
+    Hz,
+    angstrom,
+    c,
+    cm,
+    erg,
+    eV,
+    h,
+    pc,
+    s,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
@@ -308,20 +320,30 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
+        # If we have units make sure they are ok and then strip them
+        if isinstance(scaling, (unyt_array, unyt_quantity)):
+            if not self.lnu.units.is_compatible(scaling.units):
+                raise exceptions.InconsistentMultiplication(
+                    f"Incompatible units {self.lnu.units} and {scaling.units}"
+                )
+            else:
+                scaling = scaling.to(self.lnu.units)
+                scaling = scaling.value
+
         # Handle a scalar scaling factor
         if np.isscalar(scaling) and not inplace:
-            return Sed(self.lam, lnu=scaling * self.lnu)
-        elif np.isscalar(scaling) and inplace:  # pragma: no cover
-            self.lnu *= scaling
+            return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
+        elif np.isscalar(scaling) and inplace:
+            self._lnu *= scaling
             return self
 
         # Handle an single element array scaling factor
         elif len(scaling) == 1:
             scaling = np.asscalar(scaling)
             if not inplace:
-                return Sed(self.lam, lnu=scaling * self.lnu)
+                return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
             else:
-                self.lnu *= scaling
+                self._lnu *= scaling
                 return self
 
         # Handle a multi-element array scaling factor as long as it matches
@@ -335,9 +357,11 @@ class Sed:
                 scaling, axis=expand_axes
             )
             if not inplace:
-                return Sed(self.lam, lnu=new_scaling * self.lnu)
+                return Sed(
+                    self.lam, lnu=new_scaling * self._lnu * self.lnu.units
+                )
             else:
-                self.lnu *= new_scaling
+                self._lnu *= new_scaling
                 return self
 
         # If the scaling array is the same shape as the lnu array then we can
@@ -347,13 +371,13 @@ class Sed:
             and scaling.shape == self.shape
             and not inplace
         ):
-            return Sed(self.lam, lnu=scaling * self.lnu)
+            return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
         elif (
             isinstance(scaling, np.ndarray)
             and scaling.shape == self.shape
             and inplace
         ):
-            self.lnu *= scaling
+            self._lnu *= scaling
             return self
 
         # Otherwise, we've been handed a bad scaling factor
