@@ -1368,13 +1368,6 @@ class Template:
 
         # Compute the scaling based on normalisation
         scaling = bolometric_luminosity.value
-        print(
-            scaling,
-            np.isscalar(bolometric_luminosity),
-            np.isscalar(scaling),
-            type(scaling),
-            scaling.shape,
-        )
 
         # Handle the dimensions of the bolometric luminosity, or handle it as ]
         # a scalar
