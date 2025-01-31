@@ -312,7 +312,7 @@ class Sed:
         if np.isscalar(scaling) and not inplace:
             return Sed(self.lam, lnu=scaling * self.lnu)
         elif np.isscalar(scaling) and inplace:  # pragma: no cover
-            self._lnu *= scaling
+            self.lnu *= scaling
             return self
 
         # Handle an single element array scaling factor
@@ -321,7 +321,7 @@ class Sed:
             if not inplace:
                 return Sed(self.lam, lnu=scaling * self.lnu)
             else:
-                self._lnu *= scaling
+                self.lnu *= scaling
                 return self
 
         # Handle a multi-element array scaling factor as long as it matches
@@ -337,7 +337,7 @@ class Sed:
             if not inplace:
                 return Sed(self.lam, lnu=new_scaling * self.lnu)
             else:
-                self._lnu *= new_scaling
+                self.lnu *= new_scaling
                 return self
 
         # If the scaling array is the same shape as the lnu array then we can
@@ -353,7 +353,7 @@ class Sed:
             and scaling.shape == self.shape
             and inplace
         ):
-            self._lnu *= scaling
+            self.lnu *= scaling
             return self
 
         # Otherwise, we've been handed a bad scaling factor
