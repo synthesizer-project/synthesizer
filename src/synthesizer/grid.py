@@ -1336,12 +1336,14 @@ class Template:
             sed = sed.get_resampled_sed(new_lam=unify_with_grid.lam)
 
         # Attach the template now we've done the interpolation (if needed)
+        self._sed = sed
         self.lnu = sed.lnu
         self.lam = sed.lam
 
         # Normalise, just in case
         self.normalisation = sed._bolometric_luminosity
-        self.lnu /= self.normalisation
+        self._sed._lnu /= self.normalisation
+        self._lnu /= self.normalisation
 
         # Set the escape fraction
         self.fesc = fesc
@@ -1366,9 +1368,17 @@ class Template:
 
         # Compute the scaling based on normalisation
         scaling = bolometric_luminosity.value
+        print(
+            scaling,
+            np.isscalar(bolometric_luminosity),
+            np.isscalar(scaling),
+            type(scaling),
+            scaling.shape,
+        )
 
-        # Handle the dimensions of the bolometric luminosity
-        if bolometric_luminosity.shape[0] == 1:
+        # Handle the dimensions of the bolometric luminosity, or handle it as ]
+        # a scalar
+        if len(scaling.shape) == 0 or bolometric_luminosity.shape[0] == 1:
             sed = Sed(
                 self.lam,
                 scaling * self.lnu * (1 - self.fesc),
