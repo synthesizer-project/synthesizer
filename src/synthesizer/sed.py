@@ -289,8 +289,84 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
+    def scale(self, scaling, inplace=False):
+        """
+        Scale the lnu of the Sed object.
+
+        Note: only acts on the rest frame spectra. To get the
+        scaled fnu get_fnu must be called on the newly scaled
+        Sed object.
+
+        Args:
+            scaling (float)
+                The scaling to apply to lnu.
+            inplace (bool)
+                If True, the Sed object is modified in place. If False, a new
+                Sed object is returned with the scaled lnu.
+
+        Returns:
+            Sed
+                A new instance of Sed with scaled lnu.
+        """
+        # Handle a scalar scaling factor
+        if np.isscalar(scaling) and not inplace:
+            return Sed(self.lam, lnu=scaling * self.lnu)
+        elif np.isscalar(scaling) and inplace:  # pragma: no cover
+            self._lnu *= scaling
+            return self
+
+        # Handle an single element array scaling factor
+        elif len(scaling) == 1:
+            scaling = np.asscalar(scaling)
+            if not inplace:
+                return Sed(self.lam, lnu=scaling * self.lnu)
+            else:
+                self._lnu *= scaling
+                return self
+
+        # Handle a multi-element array scaling factor as long as it matches
+        # the shape of the lnu array up to the dimensions of the scaling array
+        elif isinstance(scaling, np.ndarray) and len(scaling.shape) < len(
+            self.shape
+        ):
+            # We need to expand the scaling array to match the lnu array
+            expand_axes = tuple(range(len(scaling.shape), len(self.shape)))
+            new_scaling = np.ones(self.shape) * np.expand_dims(
+                scaling, axis=expand_axes
+            )
+            if not inplace:
+                return Sed(self.lam, lnu=new_scaling * self.lnu)
+            else:
+                self._lnu *= new_scaling
+                return self
+
+        # If the scaling array is the same shape as the lnu array then we can
+        # just multiply them together
+        elif (
+            isinstance(scaling, np.ndarray)
+            and scaling.shape == self.shape
+            and not inplace
+        ):
+            return Sed(self.lam, lnu=scaling * self.lnu)
+        elif (
+            isinstance(scaling, np.ndarray)
+            and scaling.shape == self.shape
+            and inplace
+        ):
+            self._lnu *= scaling
+            return self
+
+        # Otherwise, we've been handed a bad scaling factor
+        else:
+            raise exceptions.InconsistentMultiplication(
+                f"Incompatible scaling factor {scaling} with type "
+                f"{type(scaling)}"
+            )
+
     def __mul__(self, scaling):
         """
+        Scale the lnu of the Sed object.
+
         Overide multiplication operator to allow lnu to be scaled.
         This only works scaling * x.
 
@@ -306,11 +382,12 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-
-        return Sed(self.lam, lnu=scaling * self.lnu)
+        return self.scale(scaling)
 
     def __rmul__(self, scaling):
         """
+        Scale the lnu of the Sed object.
+
         As above but for x * scaling.
 
         Note: only acts on the rest frame spectra. To get the
@@ -325,8 +402,7 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-
-        return Sed(self._lam, lnu=scaling * self.lnu)
+        return self.scale(scaling)
 
     def __str__(self):
         """
