@@ -87,16 +87,16 @@ stars = sample_sfzh(
     param_stars.log10ages,
     param_stars.log10metallicities,
     nstars,
-    coordinates=coords * Mpc,
+    coordinates=coords,
     current_masses=np.full(nstars, 10**8.7 / nstars) * Msun,
-    smoothing_lengths=smls * Mpc,
+    smoothing_lengths=smls,
     redshift=1,
 )
 
 # Now make the gas
 
 # Generate some random coordinates
-coords = CoordinateGenerator.generate_3D_gaussian(ngas)
+coords = CoordinateGenerator.generate_3D_gaussian(ngas) * Mpc
 
 # Calculate the smoothing lengths
 smls = calculate_smoothing_lengths(coords)
@@ -104,8 +104,8 @@ smls = calculate_smoothing_lengths(coords)
 gas = Gas(
     masses=np.random.uniform(10**6, 10**6.5, ngas) * Msun,
     metallicities=np.random.uniform(0.01, 0.05, ngas),
-    coordinates=coords * Mpc,
-    smoothing_lengths=smls * Mpc,
+    coordinates=coords,
+    smoothing_lengths=smls,
     dust_to_metal_ratio=0.2,
 )
 
