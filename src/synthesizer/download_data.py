@@ -268,7 +268,7 @@ def download():
         "--camels-data",
         "-c",
         action="store_true",
-        help="Download the CAMELS dataset",
+        help="Download the CAMELS TNG dataset for testing",
     )
 
     # Add a flag to go ham and download everything
