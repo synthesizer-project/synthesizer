@@ -1047,7 +1047,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     @property
     def vel_shift(self):
         """Get the velocity shift flag."""
-        return self._use_vel_shift
+        if hasattr(self, "_use_vel_shift"):
+            return self._use_vel_shift
+        else:
+            return False
 
     def set_vel_shift(self, vel_shift, set_all=False):
         """
