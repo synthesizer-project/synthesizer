@@ -83,10 +83,11 @@ class StarsComponent(Component):
         self.abundances = abundances
 
         # Ensure abundances don't exceed 1
-        tot_abundance = 0
+        tot_abundance = 0  # this works even if abundances is an array...
         for key in self.abundances:
             tot_abundance += self.abundances[key]
-        if tot_abundance > 1:
+        print(tot_abundance)
+        if np.any(tot_abundance > 1):
             raise exceptions.InconsistentArguments(
                 f"Abundances cannot exceed 1: "
                 f"{[f'{key}: {val}' for key, val in self.abundances.items()]}"
@@ -140,7 +141,6 @@ class StarsComponent(Component):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
         """
-
         if young is not None:
             if isinstance(young, (unyt_quantity)):
                 young = young.to("Myr")
