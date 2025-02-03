@@ -46,13 +46,13 @@ AVAILABLE_FILES = {
     },
     "camels_snap.hdf5": {
         "file": "camels_snap.hdf5",
-        "id": None,
-        "rlkey": None,
+        "id": "c44wvkjm5pqsxpsl54oq0",
+        "rlkey": "j14smjen4osffhlyif1kz00bu",
     },
     "camels_subhalo.hdf5": {
         "file": "camels_subhalo.hdf5",
-        "id": None,
-        "rlkey": None,
+        "id": "srjaltgac4e2tsrxmxrdb",
+        "rlkey": "ov0icvv7znw9ybfr31h133jiq",
     },
 }
 
