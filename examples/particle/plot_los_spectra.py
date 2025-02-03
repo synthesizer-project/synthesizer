@@ -74,7 +74,7 @@ nstars = 1000
 ngas = 1000
 
 # Generate some random coordinates
-coords = CoordinateGenerator.generate_3D_gaussian(nstars)
+coords = CoordinateGenerator.generate_3D_gaussian(nstars) * Mpc
 
 # Calculate smoothing lengths
 smls = calculate_smoothing_lengths(coords)
