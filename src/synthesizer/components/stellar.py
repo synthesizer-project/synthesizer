@@ -86,7 +86,6 @@ class StarsComponent(Component):
         tot_abundance = 0  # this works even if abundances is an array...
         for key in self.abundances:
             tot_abundance += self.abundances[key]
-        print(tot_abundance)
         if np.any(tot_abundance > 1):
             raise exceptions.InconsistentArguments(
                 f"Abundances cannot exceed 1: "
