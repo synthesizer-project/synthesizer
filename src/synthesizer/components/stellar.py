@@ -80,7 +80,7 @@ class StarsComponent(Component):
         self._star_type = _star_type
 
         # Set the abundances dictionary
-        self.abundances = abundances
+        self.abundances = abundances if abundances is not None else {}
 
         # Ensure abundances don't exceed 1
         tot_abundance = 0  # this works even if abundances is an array...

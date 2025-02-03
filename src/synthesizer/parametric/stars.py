@@ -97,7 +97,7 @@ class Stars(StarsComponent):
         sfzh=None,
         sf_hist=None,
         metal_dist=None,
-        abundances={},
+        abundances=None,
         **kwargs,
     ):
         """
@@ -679,8 +679,11 @@ class Stars(StarsComponent):
         Args:
             other_stars (parametric.Stars)
                 The other instance of Stars to add to this one.
-        """
 
+        Returns:
+            parametric.Stars
+                A new instance of Stars with the SFZH grid of both summed.
+        """
         if np.all(self.log10ages == other_stars.log10ages) and np.all(
             self.metallicities == other_stars.metallicities
         ):
@@ -691,10 +694,25 @@ class Stars(StarsComponent):
                 "SFZH must be the same shape"
             )
 
-        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+        # Combine the abundances
+        new_abundances = {}
+        for key in self.abundances:
+            new_abundances[key] = (
+                self.abundances[key] + other_stars.abundances[key]
+            )
+            new_abundances[key] /= 2
+
+        return Stars(
+            self.log10ages,
+            self.metallicities,
+            sfzh=new_sfzh,
+            abundances=new_abundances,
+        )
 
     def __radd__(self, other_stars):
         """
+        Add two Stars instances together.
+
         Overloads "reflected" addition to allow two Stars instances to be added
         together when in reverse order, i.e. second_stars + self.
 
@@ -703,19 +721,12 @@ class Stars(StarsComponent):
         Args:
             other_stars (parametric.Stars)
                 The other instance of Stars to add to this one.
+
+        Returns:
+            parametric.Stars
+                A new instance of Stars with the SFZH grid of both summed.
         """
-
-        if np.all(self.log10ages == other_stars.log10ages) and np.all(
-            self.metallicities == other_stars.metallicities
-        ):
-            new_sfzh = self.sfzh + other_stars.sfzh
-
-        else:
-            raise exceptions.InconsistentAddition(
-                "SFZH must be the same shape"
-            )
-
-        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+        return self.__add__(other_stars)
 
     @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):

@@ -129,7 +129,7 @@ class Stars(Particles, StarsComponent):
         softening_lengths=None,
         centre=None,
         metallicity_floor=1e-5,
-        abundances={},
+        abundances=None,
         **kwargs,
     ):
         """
@@ -182,6 +182,8 @@ class Stars(Particles, StarsComponent):
                 "The `s_oxygen` and `s_hydrogen` arguments are deprecated. "
                 "Please use the `abundances` dictionary instead."
             )
+            if abundances is None:
+                abundances = {}
             if s_oxygen is not None:
                 abundances["O"] = s_oxygen
             if s_hydrogen is not None:
@@ -1098,6 +1100,12 @@ class Stars(Particles, StarsComponent):
                 initial_mass=self.initial_masses[_pmask],
             )
 
+            # Its easier to handle the abundances separately
+            for key, value in self.abundances.items():
+                grid_abundance = np.zeros_like(stars[i].sfzh)
+                grid_abundance[stars[i].sfzh > 0] = value[_pmask]
+                stars[i].abundances[key] = grid_abundance
+
         if len(stars) > 1:
             # Combine the individual parametric forms for each particle
             stars = sum(stars[1:], stars[0])
@@ -1124,6 +1132,10 @@ class Stars(Particles, StarsComponent):
             grid.metallicity[grid_indexes[:, 1]],
             redshift=self.redshift,
             masses=np.zeros(np.sum(stars.sfzh > 0)) * Msun,
+            abundances={
+                key: stars.abundances[key][stars.sfzh > 0]
+                for key in stars.abundances.keys()
+            },
         )
 
         # Save the old stars privately
@@ -1135,6 +1147,10 @@ class Stars(Particles, StarsComponent):
             current_masses=(
                 self.masses[pmask] if self.masses is not None else None
             ),
+            abundances={
+                key: self.abundances[key][pmask]
+                for key in self.abundances.keys()
+            },
         )
 
         self._remove_stars(pmask)

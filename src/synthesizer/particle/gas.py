@@ -99,7 +99,7 @@ class Gas(Particles):
         centre=None,
         metallicity_floor=1e-5,
         tau_v=None,
-        abundances={},
+        abundances=None,
         **kwargs,
     ):
         """
@@ -169,7 +169,7 @@ class Gas(Particles):
         self.smoothing_lengths = smoothing_lengths
 
         # Attach any abundances we've been passed
-        self.abundances = abundances
+        self.abundances = abundances if abundances is not None else {}
 
         # Ensure abundances don't exceed 1
         tot_abundance = 0
