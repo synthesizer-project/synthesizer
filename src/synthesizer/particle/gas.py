@@ -49,6 +49,11 @@ class Gas(Particles):
         smoothing_lengths (array-like, float)
             The smoothing lengths (describing the sph kernel) of each gas
             particle in simulation length units.
+        abundances (dict)
+            A dictionary of abundances for each element in the gas particles.
+            The keys are the element symbols and the values are the abundances
+            of that element in the gas particles (0-1 where 1 is 100% of the
+            gas is composed of that element).
     """
 
     # Define the allowed attributes
@@ -94,6 +99,7 @@ class Gas(Particles):
         centre=None,
         metallicity_floor=1e-5,
         tau_v=None,
+        abundances={},
         **kwargs,
     ):
         """
@@ -130,10 +136,14 @@ class Gas(Particles):
                 for baryons). This is used to avoid log(0) errors.
             tau_v (float)
                 The dust optical depth in the V band.
+            abundances (dict)
+                A dictionary of abundances for each element in the gas
+                particles. The keys are the element symbols and the values are
+                the abundances of that element in the gas particles (0-1
+                where 1 is 100% of the gas is composed of that element).
             **kwargs
                 Extra optional properties to set on the gas object.
         """
-
         # Instantiate parent
         Particles.__init__(
             self,
@@ -157,6 +167,19 @@ class Gas(Particles):
 
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
+
+        # Attach any abundances we've been passed
+        self.abundances = abundances
+
+        # Ensure abundances don't exceed 1
+        tot_abundance = 0
+        for key in self.abundances:
+            tot_abundance += self.abundances[key]
+        if tot_abundance > 1:
+            raise exceptions.InconsistentArguments(
+                f"Abundances cannot exceed 1: "
+                f"{[f'{key}: {val}' for key, val in self.abundances.items()]}"
+            )
 
         # None metallicity warning already captured when loading gas
         if (

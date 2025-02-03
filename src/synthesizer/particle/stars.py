@@ -71,10 +71,11 @@ class Stars(Particles, StarsComponent):
         smoothing_lengths (array-like, float)
             The smoothing lengths (describing the sph kernel) of each stellar
             particle in simulation length units.
-        s_oxygen (array-like, float)
-            fractional oxygen abundance.
-        s_hydrogen (array-like, float)
-            fractional hydrogen abundance.
+        abundances (dict)
+            A dictionary of abundances for each element in the star particles.
+            The keys are the element symbols and the values are the abundances
+            of that element in the star particles (0-1 where 1 is 100% of the
+            star is composed of that element).
         imf_hmass_slope (float)
             The slope of high mass end of the initial mass function (WIP).
         nstars (int)
@@ -135,6 +136,7 @@ class Stars(Particles, StarsComponent):
         softening_lengths=None,
         centre=None,
         metallicity_floor=1e-5,
+        abundances={},
         **kwargs,
     ):
         """
@@ -165,10 +167,6 @@ class Stars(Particles, StarsComponent):
             smoothing_lengths (array-like, float)
                 The smoothing lengths (describing the sph kernel) of each
                 stellar particle in simulation length units.
-            s_oxygen (array-like, float)
-                The fractional oxygen abundance.
-            s_hydrogen (array-like, float)
-                The fractional hydrogen abundance.
             softening_lengths (float)
                 The gravitational softening lengths of each stellar
                 particle in simulation units
@@ -177,6 +175,11 @@ class Stars(Particles, StarsComponent):
                 a number of way (e.g. centre of mass)
             metallicity_floor (float)
                 The minimum metallicity allowed in the simulation.
+            abundances (dict)
+                A dictionary of abundances for each element in the star
+                particles. The keys are the element symbols and the values are
+                the abundances of that element in the star particles (0-1
+                where 1 is 100% of the star is composed of that element).
             **kwargs
                 Additional keyword arguments to be set as attributes.
         """
@@ -251,9 +254,27 @@ class Stars(Particles, StarsComponent):
         # SPS grids)
         self.alpha_enhancement = alpha_enhancement
 
-        # Set the fractional abundance of elements
-        self.s_oxygen = s_oxygen
-        self.s_hydrogen = s_hydrogen
+        # Set the abundances dictionary
+        self.abundances = abundances
+
+        # Warn if the user has given the deprecated abundances
+        if s_oxygen is not None or s_hydrogen is not None:
+            deprecated(
+                "The `s_oxygen` and `s_hydrogen` arguments are deprecated. "
+                "Please use the `abundances` dictionary instead."
+            )
+            self.abundances["O"] = s_oxygen
+            self.abundances["H"] = s_hydrogen
+
+        # Ensure abundances don't exceed 1
+        tot_abundance = 0
+        for key in self.abundances:
+            tot_abundance += self.abundances[key]
+        if tot_abundance > 1:
+            raise exceptions.InconsistentArguments(
+                f"Abundances cannot exceed 1: "
+                f"{[f'{key}: {val}' for key, val in self.abundances.items()]}"
+            )
 
         # Set up IMF properties (updated later)
         self.imf_hmass_slope = None  # slope of the imf
