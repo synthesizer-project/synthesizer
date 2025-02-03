@@ -7,7 +7,7 @@ from unyt import unyt_array
 
 def calculate_smoothing_lengths(
     coordinates: unyt_array,
-    kernel_gamma: np.float32,
+    kernel_gamma: np.float32 = 1.4,
     neighbours: int = 32,
     speedup_fac: int = 2,
     dimension: int = 3,
@@ -25,8 +25,8 @@ def calculate_smoothing_lengths(
     Args:
         coordinates
             The coordinates to calculate the smoothing lengths for.
-        kernel_gamma
-            THe kernel gamma of the kernel being used.
+        kernel_gamma (optional)
+            The kernel gamma of the kernel being used. (default: 1.4)
         neighbours (optional)
             The number of neighbours to encompass.
         speedup_fac (optional)
