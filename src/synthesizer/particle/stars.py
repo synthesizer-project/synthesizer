@@ -408,8 +408,6 @@ class Stars(Particles, StarsComponent):
         smoothing_lengths = combine_arrays(
             self.smoothing_lengths, other.smoothing_lengths
         )
-        s_oxygen = combine_arrays(self.s_oxygen, other.s_oxygen)
-        s_hydrogen = combine_arrays(self.s_hydrogen, other.s_hydrogen)
 
         # Handle tau_v which can either be arrays or single values that need
         # to be converted to arrays
@@ -498,6 +496,21 @@ class Stars(Particles, StarsComponent):
                 )
         centre = self.centre
 
+        # Make sure we have the same abundance entries
+        if self.abundances.keys() != other.abundances.keys():
+            raise exceptions.InconsistentAddition(
+                "Cannot add Stars objects with different abundances. "
+                f"{list(self.abundances.keys())} "
+                f"!= {list(other.abundances.keys())}"
+            )
+
+        # Combine the abundances
+        abundances = {}
+        for key in self.abundances.keys():
+            abundances[key] = combine_arrays(
+                self.abundances[key], other.abundances[key]
+            )
+
         # Store everything we've done in a dictionary
         kwargs = {
             "initial_masses": initial_masses,
@@ -510,11 +523,10 @@ class Stars(Particles, StarsComponent):
             "velocities": velocities,
             "current_masses": current_masses,
             "smoothing_lengths": smoothing_lengths,
-            "s_oxygen": s_oxygen,
-            "s_hydrogen": s_hydrogen,
             "softening_lengths": softening_lengths,
             "centre": centre,
             "metallicity_floor": metallicity_floor,
+            "abundances": abundances,
         }
 
         # Handle the extra keyword arguments
@@ -973,10 +985,6 @@ class Stars(Particles, StarsComponent):
             self.velocities = self.velocities[~pmask]
         if self.current_masses is not None:
             self.current_masses = self.current_masses[~pmask]
-        if self.s_oxygen is not None:
-            self.s_oxygen = self.s_oxygen[~pmask]
-        if self.s_hydrogen is not None:
-            self.s_hydrogen = self.s_hydrogen[~pmask]
 
         if self.redshift is not None:
             if isinstance(self.redshift, np.ndarray):
@@ -987,6 +995,11 @@ class Stars(Particles, StarsComponent):
 
         self.nparticles = len(self.initial_masses)
         self.nstars = self.nparticles
+
+        # Handle the abundances
+        for key, value in self.abundances.items():
+            if isinstance(value, np.ndarray):
+                self.abundances[key] = value[~pmask]
 
         # Check the arguments we've been given
         self._check_star_args()
