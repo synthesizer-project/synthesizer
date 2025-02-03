@@ -9,8 +9,6 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-
-
 Synthesizer is a python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
 
 Read the documentation [here](https://flaresimulations.github.io/synthesizer/).
@@ -25,8 +23,8 @@ To install, enter the `synthesizer` directory and install with pip.
 
     cd synthesizer
     pip install .
-    
-We also provide optional dependency sets for development (``dev``), testing (``test``), and building the documentation (``docs``) should you ever needed them. To install all dependancies simply run the following (or delete as appropriate to get a specific subset):
+
+We also provide optional dependency sets for development (`dev`), testing (`test`), and building the documentation (`docs`) should you ever needed them. To install all dependancies simply run the following (or delete as appropriate to get a specific subset):
 
     pip install .[dev,test,docs]
 
@@ -41,7 +39,16 @@ If you wish to run the examples, or need some data for development purposes, we 
 ```bash
 synthesizer-download --test-grids --dust-grid -d tests/test_grid
 ```
+
 This command will store the SPS, AGN, and dust grids in the `tests` directory at the root of the repo; all examples expect this data to reside in this location.
+
+You will also want to download the preprocessed CAMELS Illutris-TNG data,
+
+```bash
+synthesizer-download --camels-data -d tests/data/
+```
+
+this is a very small set of galaxies taken from the CAMELS suite of simulations. We use this in some particle based examples.
 
 ## Contributing
 
