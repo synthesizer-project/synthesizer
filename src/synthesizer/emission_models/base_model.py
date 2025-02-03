@@ -2132,10 +2132,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         if covering_fraction is not None:
             if isinstance(covering_fraction, dict):
                 for label, value in covering_fraction.items():
-                    emission_model._models[label]._covering_fraction = value
+                    emission_model._models[label]._fesc = 1 - value
             else:
                 for model in emission_model._models.values():
-                    model._covering_fraction = covering_fraction
+                    model._fesc = 1 - covering_fraction
 
         # If we have masks to apply, apply them
         if mask is not None:
