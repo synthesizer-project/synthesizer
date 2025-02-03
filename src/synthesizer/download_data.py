@@ -44,6 +44,16 @@ AVAILABLE_FILES = {
         "id": "jidw4cgtf95x3gjvw4hj6",
         "rlkey": "z7sbb7z5253dt90ootr5hm5jv",
     },
+    "camels_snap.hdf5": {
+        "file": "camels_snap.hdf5",
+        "id": None,
+        "rlkey": None,
+    },
+    "camels_subhalo.hdf5": {
+        "file": "camels_subhalo.hdf5",
+        "id": None,
+        "rlkey": None,
+    },
 }
 
 
@@ -206,23 +216,16 @@ def download_dust_grid(destination):
     _download("MW3.1.hdf5", destination)
 
 
-def download_camels_data(snap, lh, destination):
+def download_camels_data(destination):
     """
-    Download a CAMELs dataset.
+    Download the CAMELS data.
 
     Args:
-        snap (str)
-            The snapshot tag to download.
-        lh (str)
-            The LH variant tag of the sim to download.
         destination (str)
             The path to the destination directory.
     """
-    # Convert lh
-    lh = str(lh)
-    raise exceptions.UnimplementedFunctionality(
-        "CAMELS data is not yet available for download."
-    )
+    _download("camels_snap.hdf5", destination)
+    _download("camels_subhalo.hdf5", destination)
 
 
 def download():
@@ -260,27 +263,12 @@ def download():
         help="Download the dust grid for the Drain & Li (2007) model",
     )
 
-    # Add the flag for camels data (this requires related arguments to define
-    # exactly which dataset to download)
+    # Add the flag for processed camels data
     parser.add_argument(
         "--camels-data",
         "-c",
         action="store_true",
         help="Download the CAMELS dataset",
-    )
-
-    # Add the CAMELs arguments
-    parser.add_argument(
-        "--camels-snap",
-        type=str,
-        help="Which snapshot should be downloaded? (Default: 031)",
-        default="031",
-    )
-    parser.add_argument(
-        "--camels-lh",
-        type=int,
-        help="Which LH variant should be downloaded? (Default: 1)",
-        default=1,
     )
 
     # Add a flag to go ham and download everything
@@ -316,7 +304,7 @@ def download():
     if everything:
         download_test_grids(dest)
         download_dust_grid(dest)
-        download_camels_data(args.camels_snap, args.camels_lh, dest)
+        download_camels_data(dest)
         return
 
     # Test data?
@@ -334,7 +322,7 @@ def download():
 
     # Camels data?
     if camels:
-        download_camels_data(args.camels_snap, args.camels_lh, dest)
+        download_camels_data(dest)
 
 
 if __name__ == "__main__":
