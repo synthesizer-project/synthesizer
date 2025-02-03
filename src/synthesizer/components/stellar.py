@@ -29,6 +29,11 @@ class StarsComponent(Component):
         metallicities (Quantity)
             The metallicity of each stellar particle/bin
             (particle/parametric).
+        abundances (dict)
+            A dictionary of the abundances of each element in the stars.
+            The keys are the element symbols and the values are the
+            abundances of each element in the stars (0-1 where 1 is 100%
+            of the stars is composed of that element).
     """
 
     # Define quantities
@@ -40,6 +45,7 @@ class StarsComponent(Component):
         ages,
         metallicities,
         _star_type,
+        abundances,
         **kwargs,
     ):
         """
@@ -51,6 +57,15 @@ class StarsComponent(Component):
             metallicities (array-like, float)
                 The metallicity of each stellar particle/bin
                 (particle/parametric).
+            _star_type (str)
+                The type of stars object (parametric or particle).
+                This is useful for determining the type of stars object
+                without relying on isinstance and possible circular imports.
+            abundances (dict)
+                The abundances of each element in the stars.
+                The keys are the element symbols and the values are the
+                abundances of each element in the stars (0-1 where 1 is 100%
+                of the stars is composed of that element).
         """
         # Initialise the parent class
         Component.__init__(self, "Stars", **kwargs)
@@ -63,6 +78,19 @@ class StarsComponent(Component):
         # determining the type of stars object without relying on isinstance
         # and possible circular imports.
         self._star_type = _star_type
+
+        # Set the abundances dictionary
+        self.abundances = abundances
+
+        # Ensure abundances don't exceed 1
+        tot_abundance = 0
+        for key in self.abundances:
+            tot_abundance += self.abundances[key]
+        if tot_abundance > 1:
+            raise exceptions.InconsistentArguments(
+                f"Abundances cannot exceed 1: "
+                f"{[f'{key}: {val}' for key, val in self.abundances.items()]}"
+            )
 
     @property
     def log10ages(self):

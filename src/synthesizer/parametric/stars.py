@@ -97,6 +97,7 @@ class Stars(StarsComponent):
         sfzh=None,
         sf_hist=None,
         metal_dist=None,
+        abundances={},
         **kwargs,
     ):
         """
@@ -142,6 +143,11 @@ class Stars(StarsComponent):
                     - An instance of one of the child classes of ZH. This
                       will be used to calculate an array describing the
                       metallicity distribution.
+            abundances (dict)
+                The abundances of each element in the stars.
+                The keys are the element symbols and the values are the
+                abundances of each element in the stars (0-1 where 1 is 100%
+                of the stars is composed of that element).
         """
         # Instantiate the parent
         StarsComponent.__init__(
@@ -149,6 +155,7 @@ class Stars(StarsComponent):
             10**log10ages * yr,
             metallicities,
             _star_type="parametric",
+            abundances=abundances,
             **kwargs,
         )
 

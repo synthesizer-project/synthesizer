@@ -71,11 +71,6 @@ class Stars(Particles, StarsComponent):
         smoothing_lengths (array-like, float)
             The smoothing lengths (describing the sph kernel) of each stellar
             particle in simulation length units.
-        abundances (dict)
-            A dictionary of abundances for each element in the star particles.
-            The keys are the element symbols and the values are the abundances
-            of that element in the star particles (0-1 where 1 is 100% of the
-            star is composed of that element).
         imf_hmass_slope (float)
             The slope of high mass end of the initial mass function (WIP).
         nstars (int)
@@ -181,6 +176,17 @@ class Stars(Particles, StarsComponent):
             **kwargs
                 Additional keyword arguments to be set as attributes.
         """
+        # Warn if the user has given the deprecated abundances
+        if s_oxygen is not None or s_hydrogen is not None:
+            deprecation(
+                "The `s_oxygen` and `s_hydrogen` arguments are deprecated. "
+                "Please use the `abundances` dictionary instead."
+            )
+            if s_oxygen is not None:
+                abundances["O"] = s_oxygen
+            if s_hydrogen is not None:
+                abundances["H"] = s_hydrogen
+
         # Instantiate parents
         Particles.__init__(
             self,
@@ -200,6 +206,7 @@ class Stars(Particles, StarsComponent):
             ages,
             metallicities,
             _star_type="particle",
+            abundances=abundances,
             **kwargs,
         )
 
@@ -251,30 +258,6 @@ class Stars(Particles, StarsComponent):
         # Set the alpha enhancement [alpha/Fe] (only used for >2 dimensional
         # SPS grids)
         self.alpha_enhancement = alpha_enhancement
-
-        # Set the abundances dictionary
-        self.abundances = abundances
-
-        # Warn if the user has given the deprecated abundances
-        if s_oxygen is not None or s_hydrogen is not None:
-            deprecation(
-                "The `s_oxygen` and `s_hydrogen` arguments are deprecated. "
-                "Please use the `abundances` dictionary instead."
-            )
-            if s_oxygen is not None:
-                self.abundances["O"] = s_oxygen
-            if s_hydrogen is not None:
-                self.abundances["H"] = s_hydrogen
-
-        # Ensure abundances don't exceed 1
-        tot_abundance = 0
-        for key in self.abundances:
-            tot_abundance += self.abundances[key]
-        if tot_abundance > 1:
-            raise exceptions.InconsistentArguments(
-                f"Abundances cannot exceed 1: "
-                f"{[f'{key}: {val}' for key, val in self.abundances.items()]}"
-            )
 
         # Set up IMF properties (updated later)
         self.imf_hmass_slope = None  # slope of the imf
