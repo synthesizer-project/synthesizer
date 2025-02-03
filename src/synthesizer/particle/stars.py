@@ -35,7 +35,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.util_funcs import combine_arrays
-from synthesizer.warnings import deprecated, warn
+from synthesizer.warnings import deprecated, deprecation, warn
 
 
 class Stars(Particles, StarsComponent):
@@ -92,8 +92,6 @@ class Stars(Particles, StarsComponent):
         "log10metallicities",
         "resampled",
         "velocities",
-        "s_oxygen",
-        "s_hydrogen",
         "nstars",
         "tau_v",
         "_coordinates",
@@ -259,12 +257,14 @@ class Stars(Particles, StarsComponent):
 
         # Warn if the user has given the deprecated abundances
         if s_oxygen is not None or s_hydrogen is not None:
-            deprecated(
+            deprecation(
                 "The `s_oxygen` and `s_hydrogen` arguments are deprecated. "
                 "Please use the `abundances` dictionary instead."
             )
-            self.abundances["O"] = s_oxygen
-            self.abundances["H"] = s_hydrogen
+            if s_oxygen is not None:
+                self.abundances["O"] = s_oxygen
+            if s_hydrogen is not None:
+                self.abundances["H"] = s_hydrogen
 
         # Ensure abundances don't exceed 1
         tot_abundance = 0
@@ -355,16 +355,25 @@ class Stars(Particles, StarsComponent):
                 If any arguments are incompatible or not as expected an error
                 is thrown.
         """
-
         # Ensure all arrays are the expected length
         for key in self.attrs:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
                     raise exceptions.InconsistentArguments(
-                        "Inconsistent stellar array sizes! (nparticles=%d, "
-                        "%s=%d)" % (self.nparticles, key, attr.shape[0])
+                        "Inconsistent stellar array sizes! "
+                        f"(nparticles={self.nparticles}, "
+                        f"{key}={attr.shape[0]})"
                     )
+            if isinstance(attr, dict):
+                for k, v in attr.items():
+                    if isinstance(v, np.ndarray):
+                        if v.shape[0] != self.nparticles:
+                            raise exceptions.InconsistentArguments(
+                                "Inconsistent stellar array sizes! "
+                                f"(nparticles={self.nparticles}, "
+                                f"{key}={v.shape[0]})"
+                            )
 
     def __str__(self):
         """
