@@ -8,7 +8,7 @@ from unyt import unyt_array
 def calculate_smoothing_lengths(
     coordinates: unyt_array,
     kernel_gamma: np.float32 = 1.4,
-    neighbours: int = 32,
+    num_neighbours: int = 32,
     speedup_fac: int = 2,
     dimension: int = 3,
     boxsize: unyt_array = None,
@@ -27,7 +27,7 @@ def calculate_smoothing_lengths(
             The coordinates to calculate the smoothing lengths for.
         kernel_gamma (optional)
             The kernel gamma of the kernel being used. (default: 1.4)
-        neighbours (optional)
+        num_neighbours (optional)
             The number of neighbours to encompass.
         speedup_fac (optional)
             A parameter that neighbours is divided by to provide a speed-up
@@ -64,7 +64,7 @@ def calculate_smoothing_lengths(
     smoothing_lengths[-1] = -0.1
 
     # Include speedup_fac stuff here:
-    neighbours_search: int = neighbours // speedup_fac
+    neighbours_search: int = num_neighbours // speedup_fac
     hsml_correction_fac_speedup: float = (speedup_fac) ** (1 / dimension)
 
     # We create a lot of data doing this, so we want to do it in small chunks
