@@ -2204,7 +2204,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     emission_model._models[label].set_vel_shift(value)
             else:
                 for model in emission_model._models.values():
-                    model.set_vel_shift(vel_shift)
+                    if model._is_extracting:
+                        model.set_vel_shift(vel_shift)
 
     def _get_spectra(
         self,
