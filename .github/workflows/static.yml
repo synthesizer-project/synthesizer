@@ -38,7 +38,7 @@ jobs:
           sudo apt install pandoc
       - name: Download test data
         run: |
-          synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
+          synthesizer-download --test-grids -d tests/test_grid/ --dust-grid --camels-data
       - name: Sphinx Build
         run: |
           cd docs
@@ -51,7 +51,7 @@ jobs:
         with:
           name: github-pages
           path: docs/build/html/
-          
+
   deploy:
     environment:
       name: github-pages

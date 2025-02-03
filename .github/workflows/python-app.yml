@@ -46,7 +46,7 @@ jobs:
       - name: Download test data
         run: |
           # Download test grid data
-          synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
+          synthesizer-download --test-grids -d tests/test_grid/ --dust-grid --camels-data
       - name: Test with pytest
         run: |
           pytest
