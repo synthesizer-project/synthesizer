@@ -2,9 +2,12 @@
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import unyt_array
+from unyt import Mpc, unyt_array
+
+from synthesizer.units import accepts
 
 
+@accepts(coordinates=Mpc, boxsize=Mpc)
 def calculate_smoothing_lengths(
     coordinates: unyt_array,
     kernel_gamma: np.float32 = 1.4,
