@@ -338,8 +338,8 @@ class Sed:
             return self
 
         # Handle an single element array scaling factor
-        elif len(scaling) == 1:
-            scaling = np.asscalar(scaling)
+        elif scaling.size == 1:
+            scaling = scaling.item()
             if not inplace:
                 return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
             else:
