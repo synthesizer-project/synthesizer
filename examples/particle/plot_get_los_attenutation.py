@@ -76,7 +76,7 @@ coords = (
 )
 
 # Calculate the smoothing lengths
-smls = calculate_smoothing_lengths(coords, num_neighbors=56) * Mpc
+smls = calculate_smoothing_lengths(coords, num_neighbors=56)
 
 # Sample the SFZH, producing a Stars object
 # we will also pass some keyword arguments for attributes
@@ -106,7 +106,7 @@ coords = (
 )
 
 # Calculate the smoothing lengths
-smls = calculate_smoothing_lengths(coords, num_neighbors=56) * Mpc
+smls = calculate_smoothing_lengths(coords, num_neighbors=56)
 
 gas = Gas(
     masses=np.random.uniform(10**6, 10**6.5, ngas) * Msun,

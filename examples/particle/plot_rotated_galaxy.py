@@ -63,7 +63,7 @@ metallicities = np.random.rand(n_disk + n_bulge) * 0.02
 initial_masses = masses.copy()
 redshift = 0.0
 centre = np.array([0.0, 0.0, 0.0]) * kpc
-smoothing_lengths = calculate_smoothing_lengths(coords) * kpc
+smoothing_lengths = calculate_smoothing_lengths(coords)
 
 # We'll start by simply using some stars
 stars = Stars(
@@ -135,7 +135,7 @@ gas = Gas(
     redshift=redshift,
     centre=centre,
     dust_to_metal_ratio=0.3,
-    smoothing_lengths=calculate_smoothing_lengths(gas_coords) * kpc,
+    smoothing_lengths=calculate_smoothing_lengths(gas_coords),
 )
 
 # Make the galaxy
