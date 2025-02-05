@@ -1,12 +1,10 @@
 """A module for dynamically returning attributes with and without units.
 
-The Units class below acts as a container of unit definitions for various
-attributes spread throughout Synthesizer.
+The Units class below acts as a container for the unit system.
 
-The Quantity is the object that defines all attributes with attached units. Its
-a helper class which enables the optional return of units. The Quantity
-is a descriptor which is defined in the class body with the unit category
-passed as an argument.
+The Quantity is a descriptor object which uses the Units class to attach units
+to attributes of a class. The Quantity descriptor can be used to attach units
+to class attributes.
 
 Example defintion:
 
@@ -77,8 +75,7 @@ def _load_and_convert_unit_categories() -> dict:
     return converted
 
 
-# Get the default units system we have on file (this can be modified by the
-# user.
+# Get the default units system (this can be modified by the user).
 # NOTE: This module-level variable will be initialized only once on import
 UNIT_CATEGORIES = _load_and_convert_unit_categories()
 
@@ -166,12 +163,10 @@ default_units = DefaultUnits()
 
 class UnitSingleton(type):
     """
-    A metaclass used to ensure singleton behaviour of Units.
+    A metaclass used to ensure singleton behaviour for the Units class.
 
-    i.e. there can only ever be a single instance of a class in a namespace.
-
-    Adapted from:
-    https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
+    A singleton design pattern is used to ensure that only one instance of the
+    class can exist at any one time.
     """
 
     # Define a private dictionary to store instances of UnitSingleton
@@ -179,7 +174,9 @@ class UnitSingleton(type):
 
     def __call__(cls, new_units=None, force=False):
         """
-        When a new instance is made (calling class), this method is called.
+        Make an instance of the child class or return the original.
+
+        When a new instance is made, this method is called.
 
         Unless forced to redefine Units (highly inadvisable), the original
         instance is returned giving it a new reference to the original
@@ -193,7 +190,6 @@ class UnitSingleton(type):
                 A new instance of Units if one does not exist (or a new one
                 is forced), or the first instance of Units if one does exist.
         """
-
         # Are we forcing an update?... I hope not
         if force:
             cls._instances[cls] = super(UnitSingleton, cls).__call__(
@@ -376,8 +372,10 @@ class Units(metaclass=UnitSingleton):
 
 class Quantity:
     """
+    A decriptor class controlling dynamicly associated attribute units.
+
     Provides the ability to associate attribute values on an object with unyt
-    units defined in the global unit system held in (Units).
+    units defined in the global unit system (Units).
 
     Attributes:
         unit (unyt.unit_object.Unit)
@@ -412,6 +410,8 @@ class Quantity:
 
     def __set_name__(self, owner, name):
         """
+        Store the name of the class variable when it is assigned a Quantity.
+
         When a class variable is assigned a Quantity() this method is called
         extracting the name of the class variable, assigning it to attributes
         for use when returning values with or without units.
@@ -425,9 +425,15 @@ class Quantity:
 
     def __get__(self, obj, type=None):
         """
+        Return the value of the attribute with units.
+
         When referencing an attribute with its public_name this method is
         called. It handles the returning of the values stored in the
         private_name variable with units.
+
+        The value is stored under the private_name variable on the instance
+        of the class. If we instead used the private name directly we would
+        bypass the Quantity descriptor and return the value without units.
 
         If the value is None then None is returned regardless.
 
@@ -446,9 +452,11 @@ class Quantity:
 
     def __set__(self, obj, value):
         """
-        When setting a Quantity variable this method is called, firstly hiding
-        the private name that stores the value array itself and secondily
-        applying any necessary unit conversions.
+        Set the value of the attribute with units.
+
+        When setting a Quantity variable this method is called, firstly the
+        value is converted to the expected units. Once converted the value is
+        stored on the instance of the class under the private_name variable.
 
         Args:
             obj (arbitrary)
@@ -457,7 +465,6 @@ class Quantity:
             value (array-like/float/int)
                 The value to store in the attribute.
         """
-
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
