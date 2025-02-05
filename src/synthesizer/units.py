@@ -39,7 +39,6 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import exceptions
-from synthesizer.utils import TableFormatter
 from synthesizer.warnings import warn
 
 # Define the path to your YAML file
@@ -85,17 +84,60 @@ UNIT_CATEGORIES = _load_and_convert_unit_categories()
 
 
 class DefaultUnits:
+    """
+    The DefaultUnits class is a container for the default unit system.
+
+    This class is used to store the default unit system for Synthesizer. It
+    contains all the unit categories defined in the default unit system.
+
+    Attributes:
+        ... (unyt.unit_object.Unit)
+            The unit for each category defined in the default unit system.
+    """
+
     def __init__(self):
+        """
+        Initialise the default unit system.
+
+        This will extract all the unit categories from the previously loaded
+        YAML file and attach them as attributes to the DefaultUnits object.
+        """
         for key, unit in UNIT_CATEGORIES.items():
             setattr(self, key, unit)
 
     def __getitem__(self, name):
+        """Get a unit from the default unit system."""
         if hasattr(self, name):
             return getattr(self, name)
         raise KeyError(f"Unit category {name} not found.")
 
     def __setitem__(self, name, value):
+        """Set a unit in the default unit system."""
         setattr(self, name, value)
+
+    def items(self):
+        """Return the items of the default unit system."""
+        return UNIT_CATEGORIES.items()
+
+    def keys(self):
+        """Return the keys of the default unit system."""
+        return UNIT_CATEGORIES.keys()
+
+    def values(self):
+        """Return the values of the default unit system."""
+        return UNIT_CATEGORIES.values()
+
+    def __iter__(self):
+        """Iterate over the default unit system."""
+        return iter(UNIT_CATEGORIES)
+
+    def __len__(self):
+        """Return the length of the default unit system."""
+        return len(UNIT_CATEGORIES)
+
+    def __type__(self):
+        """Return the type of the default unit system."""
+        return type(UNIT_CATEGORIES)
 
     def __str__(self):
         """
@@ -105,10 +147,17 @@ class DefaultUnits:
             table (str)
                 A string representation of the LineCollection object.
         """
+        # Local import to avoid cyclic imports
+        from synthesizer.utils import TableFormatter
+
         # Intialise the table formatter
         formatter = TableFormatter(self)
 
-        return formatter.get_table("Default Units")
+        return (
+            formatter.get_table("Default Units")
+            .replace("Attribute", "Category ")
+            .replace("Value", "Unit ")
+        )
 
 
 # Instantiate the default unit system
@@ -410,16 +459,20 @@ class Units(metaclass=UnitSingleton):
                 setattr(self, key, units[key])
 
     def __str__(self):
-        """Enable printing of the current unit system."""
-        out_str = "Unit System: \n"
-        for key in default_units:
-            out_str += (
-                "%s: ".ljust(22 - len(key)) % key
-                + getattr(self, key).__str__()
-                + "\n"
-            )
+        """
+        Return a string representation of the default unit system.
 
-        return out_str
+        Returns:
+            table (str)
+                A string representation of the LineCollection object.
+        """
+        # Local import to avoid cyclic imports
+        from synthesizer.utils import TableFormatter
+
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Unit System")
 
 
 class Quantity:
