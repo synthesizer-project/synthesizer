@@ -238,100 +238,9 @@ class Units(metaclass=UnitSingleton):
     dangerous and should be avoided.
 
     Attributes:
-        lam (unyt.unit_object.Unit)
-            Rest frame wavelength unit.
-        obslam (unyt.unit_object.Unit)
-            Observer frame wavelength unit.
-        wavelength (unyt.unit_object.Unit)
-            Alias for rest frame wavelength unit.
-        wavelengths (unyt.unit_object.Unit)
-            Alias for rest frame wavelength unit.
-
-        nu (unyt.unit_object.Unit)
-            Rest frame frequency unit.
-        obsnu (unyt.unit_object.Unit)
-            Observer frame frequency unit.
-        nuz (unyt.unit_object.Unit)
-            Observer frame frequency unit.
-
-        luminosity (unyt.unit_object.Unit)
-            Luminosity unit.
-        lnu (unyt.unit_object.Unit)
-            Rest frame spectral luminosity density (in terms of frequency)
-            unit.
-        llam (unyt.unit_object.Unit)
-            Rest frame spectral luminosity density (in terms of wavelength)
-            unit.
-        continuum (unyt.unit_object.Unit)
-            Continuum level of an emission line unit.
-
-        fnu (unyt.unit_object.Unit)
-            Spectral flux density (in terms of frequency) unit.
-        flam (unyt.unit_object.Unit)
-            Spectral flux density (in terms of wavelength) unit.
-        flux (unyt.unit_object.Unit)
-            "Rest frame" Spectral flux density (at 10 pc) unit.
-
-        photo_lnu (unyt.unit_object.Unit)
-            Rest frame photometry unit.
-        photo_fnu (unyt.unit_object.Unit)
-            Observer frame photometry unit.
-
-        ew (unyt.unit_object.Unit)
-            Equivalent width unit.
-
-        coordinates (unyt.unit_object.Unit)
-            Particle coordinate unit.
-        centre (unyt.unit_object.Unit)
-            Galaxy/particle distribution centre unit.
-        radii (unyt.unit_object.Unit)
-            Particle radii unit.
-        smoothing_lengths (unyt.unit_object.Unit)
-            Particle smoothing length unit.
-        softening_length (unyt.unit_object.Unit)
-            Particle gravitational softening length unit.
-
-        velocities (unyt.unit_object.Unit)
-            Particle velocity unit.
-
-        masses (unyt.unit_object.Unit)
-            Particle masses unit.
-        initial_masses (unyt.unit_object.Unit)
-            Stellar particle initial mass unit.
-        initial_mass (unyt.unit_object.Unit)
-            Stellar population initial mass unit.
-        current_masses (unyt.unit_object.Unit)
-            Stellar particle current mass unit.
-        dust_masses (unyt.unit_object.Unit)
-            Gas particle dust masses unit.
-
-        ages (unyt.unit_object.Unit)
-            Stellar particle age unit.
-
-        accretion_rate (unyt.unit_object.Unit)
-            Black hole accretion rate unit.
-        bolometric_luminosity (unyt.unit_object.Unit)
-            Bolometric luminositiy unit.
-        bolometric_luminosities (unyt.unit_object.Unit)
-            Bolometric luminositiy unit.
-        bb_temperature (unyt.unit_object.Unit)
-            Black hole big bump temperature unit.
-        bb_temperatures (unyt.unit_object.Unit)
-            Black hole big bump temperature unit.
-        inclination (unyt.unit_object.Unit)
-            Black hole inclination unit.
-        inclinations (unyt.unit_object.Unit)
-            Black hole inclination unit.
-
-        resolution (unyt.unit_object.Unit)
-            Image resolution unit.
-        fov (unyt.unit_object.Unit)
-            Field of View unit.
-        orig_resolution (unyt.unit_object.Unit)
-            Original resolution (for resampling) unit.
-
-        softening_lengths (unyt.unit_object.Unit)
-            Particle gravitational softening length unit.
+        ... (unyt.unit_object.Unit)
+            The unit for each category defined in the default unit system or
+            any modifications made by the user.
     """
 
     def __init__(self, units=None, force=False):
@@ -357,106 +266,39 @@ class Units(metaclass=UnitSingleton):
             force (bool)
                 A flag for whether to force an update of the Units object.
         """
+        # Define a dictionary to hold the unit system. We'll use this if we
+        # need to dump the current unit system to the default units yaml file
+        self._units = {}
+
         # First off we need to attach the default unit system
         # to the Units object
         for key, unit in default_units.items():
             setattr(self, key, unit)
+            self._units[key] = unit
 
-        # # Wavelengths
-        # self.lam = Angstrom  # rest frame wavelengths
-        # self.obslam = Angstrom  # observer frame wavelengths
-        # # vacuum rest frame wavelengths alias
-        # self.vacuum_wavelength = Angstrom
-        # self.wavelength = Angstrom  # rest frame wavelengths alias
-        # self.wavelengths = Angstrom  # rest frame wavelengths alias
-        # self.original_lam = Angstrom  # SVO filter wavelengths
-        # self.lam_min = Angstrom  # filter minimum wavelength
-        # self.lam_max = Angstrom  # filter maximum wavelength
-        # self.lam_eff = Angstrom  # filter effective wavelength
-        # self.lam_fwhm = Angstrom  # filter FWHM
-        # self.mean_lams = Angstrom  # filter collection mean wavelenghts
-        # self.pivot_lams = Angstrom  # filter collection pivot wavelengths
-        #
-        # # Frequencies
-        # self.nu = Hz  # rest frame frequencies
-        # self.nuz = Hz  # rest frame frequencies
-        # self.obsnu = Hz  # observer frame frequencies
-        # self.original_nu = Hz  # SVO filter wavelengths
-        #
-        # # Luminosities
-        # self.luminosity = erg / s  # luminosity
-        # self.luminosities = erg / s
-        # self.bolometric_luminosity = erg / s
-        # self.bolometric_luminosities = erg / s
-        # self.eddington_luminosity = erg / s
-        # self.eddington_luminosities = erg / s
-        # self.lnu = erg / s / Hz  # spectral luminosity density
-        # self.llam = erg / s / Angstrom  # spectral luminosity density
-        # self.flam = erg / s / Angstrom / cm**2  # spectral flux density
-        # self.continuum = erg / s / Hz  # continuum level of an emission line
-        #
-        # # Fluxes
-        # self.fnu = nJy  # rest frame flux
-        # self.flux = erg / s / cm**2  # rest frame "flux" at 10 pc
-        #
-        # # Photometry
-        # self.photo_lnu = erg / s / Hz  # rest frame photometry
-        # self.photo_fnu = erg / s / cm**2 / Hz  # observer frame photometry
-        #
-        # # Equivalent width
-        # self.equivalent_width = Angstrom
-        #
-        # # Spatial quantities
-        # self.coordinates = Mpc
-        # self.centre = Mpc
-        # self.radii = Mpc
-        # self.smoothing_lengths = Mpc
-        # self.softening_length = Mpc
-        #
-        # # Velocities
-        # self.velocities = km / s
-        #
-        # # Masses
-        # self.mass = Msun.in_base("galactic")
-        # self.masses = Msun.in_base("galactic")
-        # self.initial_masses = Msun.in_base(
-        #     "galactic"
-        # )  # initial mass of stellar particles
-        # self.initial_mass = Msun.in_base(
-        #     "galactic"
-        # )  # initial mass of stellar population
-        # self.current_masses = Msun.in_base(
-        #     "galactic"
-        # )  # current mass of stellar particles
-        # self.dust_masses = Msun.in_base(
-        #     "galactic"
-        # )  # current dust mass of gas particles
-        #
-        # # Time quantities
-        # self.ages = yr  # Stellar ages
-        #
-        # # Black holes quantities
-        # self.accretion_rate = Msun.in_base("galactic") / yr
-        # self.accretion_rates = Msun.in_base("galactic") / yr
-        # self.bb_temperature = K
-        # self.bb_temperatures = K
-        # self.inclination = deg
-        # self.inclinations = deg
-        #
-        # # Imaging quantities
-        # self.resolution = Mpc
-        # self.fov = Mpc
-        # self.orig_resolution = Mpc
-        #
-        # # Gravitational softening lengths
-        # self.softening_lengths = Mpc
-        #
         # Do we have any modifications to the default unit system
         if units is not None:
             print("Redefining unit system:")
+
+            # Loop over new units
             for key in units:
                 print("%s:" % key, units[key])
+
+                # If we are modifying an existing unit makes sure it is
+                # compatible with the default unit system (we can't do this
+                # for new units as we don't know what they are but other
+                # errors down stream will soon alert the user to their mistake)
+                if hasattr(self, key):
+                    if getattr(self, key).is_equivalent(units[key]):
+                        raise exceptions.IncorrectUnits(
+                            f"Unit {units[key]} for {key} is not "
+                            "compatible with the expected units "
+                            f"of {getattr(self, key)}."
+                        )
+
+                # Set the new unit
                 setattr(self, key, units[key])
+                self._units[key] = units[key]
 
     def __str__(self):
         """
@@ -477,6 +319,59 @@ class Units(metaclass=UnitSingleton):
             .replace("Attribute", "Category ")
             .replace("Value", "Unit ")
         )
+
+    def overwrite_defaults_yaml(self):
+        """
+        Permenantly overwrite the default unit system with the current one.
+
+        This method is used to overwrite the default unit system with the
+        current one. This is to be used when the user wants to permenantly
+        modify the default unit system with the current one.
+        """
+        #
+        # If we haven't already made a copy of the original default units
+        # yaml file then do so now
+        original_path = os.path.join(
+            os.path.dirname(__file__), "original_units.yml"
+        )
+        original_units = {}
+        original_units["UnitCategories"] = UNIT_CATEGORIES
+        if not os.path.exists(original_path):
+            with open(original_path, "w") as f:
+                yaml.dump(original_units, f)
+
+        # Write the current unit system to the default units yaml file
+        new_units = {}
+        new_units["UnitCategories"] = self._units
+        with open(FILE_PATH, "w") as f:
+            yaml.dump(new_units, f)
+
+    def reset_defaults_yaml(self):
+        """
+        Reset the default unit system to the original one.
+
+        This will overwrite the default_units.yml file with the
+        original_units.yml file.
+        """
+        # Check the original units file exists
+        original_path = os.path.join(
+            os.path.dirname(__file__), "original_units.yml"
+        )
+        if not os.path.exists(original_path):
+            raise FileNotFoundError("Original units file not found.")
+
+        # Copy the original units file to the default units file
+        with open(original_path, "r") as f:
+            original_units = yaml.safe_load(f)
+        with open(FILE_PATH, "w") as f:
+            yaml.dump(original_units, f)
+
+        # Reload the default unit system
+        global UNIT_CATEGORIES
+        UNIT_CATEGORIES = _load_and_convert_unit_categories()
+
+        # Reset the Units object
+        self.__init__(force=True)
 
 
 class Quantity:
