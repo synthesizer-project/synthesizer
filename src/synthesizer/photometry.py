@@ -84,7 +84,7 @@ class PhotometryCollection:
         photometry = unyt_array(photometry, units=photometry[0].units)
 
         # Get the dimensions of a flux for testing
-        flux_dimensions = default_units["photo_fnu"].units.dimensions
+        flux_dimensions = default_units["flux"].units.dimensions
 
         # Check if the photometry is flux or luminosity
         if photometry[0].units.dimensions == flux_dimensions:
