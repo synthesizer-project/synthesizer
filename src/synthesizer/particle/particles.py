@@ -51,12 +51,12 @@ class Particles:
     """
 
     # Define class level Quantity attributes
-    coordinates = Quantity()
-    velocities = Quantity()
-    masses = Quantity()
-    softening_lengths = Quantity()
-    centre = Quantity()
-    radii = Quantity()
+    coordinates = Quantity("spatial")
+    velocities = Quantity("velocity")
+    masses = Quantity("mass")
+    softening_lengths = Quantity("spatial")
+    centre = Quantity("spatial")
+    radii = Quantity("spatial")
 
     @accepts(
         coordinates=Mpc,

@@ -66,8 +66,8 @@ class Gas(Particles):
     ]
 
     # Define class level Quantity attributes
-    smoothing_lengths = Quantity()
-    dust_masses = Quantity()
+    smoothing_lengths = Quantity("spatial")
+    dust_masses = Quantity("mass")
 
     @accepts(
         masses=Msun.in_base("galactic"),

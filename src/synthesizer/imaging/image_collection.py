@@ -80,9 +80,9 @@ class ImageCollection:
     """
 
     # Define quantities
-    resolution = Quantity()
-    fov = Quantity()
-    orig_resolution = Quantity()
+    resolution = Quantity("spatial")
+    fov = Quantity("spatial")
+    orig_resolution = Quantity("spatial")
 
     def __init__(
         self,

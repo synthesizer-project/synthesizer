@@ -101,9 +101,9 @@ class FilterCollection:
     """
 
     # Define Quantitys
-    lam = Quantity()
-    mean_lams = Quantity()
-    pivot_lams = Quantity()
+    lam = Quantity("wavelength")
+    mean_lams = Quantity("wavelength")
+    pivot_lams = Quantity("wavelength")
 
     accepts(new_lam=angstrom)
 
@@ -1207,14 +1207,14 @@ class Filter:
     """
 
     # Define Quantitys
-    lam_min = Quantity()
-    lam_max = Quantity()
-    lam_eff = Quantity()
-    lam_fwhm = Quantity()
-    lam = Quantity()
-    nu = Quantity()
-    original_lam = Quantity()
-    original_nu = Quantity()
+    lam_min = Quantity("wavelength")
+    lam_max = Quantity("wavelength")
+    lam_eff = Quantity("wavelength")
+    lam_fwhm = Quantity("wavelength")
+    lam = Quantity("wavelength")
+    nu = Quantity("frequency")
+    original_lam = Quantity("wavelength")
+    original_nu = Quantity("frequency")
 
     @accepts(
         lam_min=angstrom,
