@@ -199,9 +199,9 @@ class UnitSingleton(type):
         # Print a warning if an instance exists and arguments have been passed
         elif cls in cls._instances and new_units is not None:
             warn(
-                "Units are already set. \nAny modified units will "
-                "not take effect. \nUnits should be configured before "
-                "running anything else... \nbut you could (and "
+                "Units are already set. Any modified units will "
+                "not take effect. Units should be configured before "
+                "running anything else... but you could (and "
                 "shouldn't) force it: Units(new_units_dict, force=True)."
             )
 
@@ -285,7 +285,7 @@ class Units(metaclass=UnitSingleton):
                 # for new units as we don't know what they are but other
                 # errors down stream will soon alert the user to their mistake)
                 if hasattr(self, key):
-                    if getattr(self, key).is_equivalent(units[key]):
+                    if getattr(self, key).dimensions == units[key]:
                         raise exceptions.IncorrectUnits(
                             f"Unit {units[key]} for {key} is not "
                             "compatible with the expected units "
@@ -316,6 +316,28 @@ class Units(metaclass=UnitSingleton):
             .replace("Value", "Unit ")
         )
 
+    def _preserve_orig_units(self):
+        """
+        Write out the original unit system to a yaml file.
+
+        This makes sure we can always reverse the unit system back to the
+        original state.
+        """
+        # Get the original units file path
+        original_path = os.path.join(
+            os.path.dirname(__file__), "original_units.yml"
+        )
+
+        # If the original file already exists then we don't need to do anything
+        if os.path.exists(original_path):
+            return
+
+        # Make a copy of the original units file
+        with open(FILE_PATH, "r") as f:
+            original_units = yaml.safe_load(f)
+        with open(original_path, "w") as f:
+            yaml.dump(original_units, f)
+
     def overwrite_defaults_yaml(self):
         """
         Permenantly overwrite the default unit system with the current one.
@@ -324,23 +346,21 @@ class Units(metaclass=UnitSingleton):
         current one. This is to be used when the user wants to permenantly
         modify the default unit system with the current one.
         """
-        #
         # If we haven't already made a copy of the original default units
         # yaml file then do so now
-        original_path = os.path.join(
-            os.path.dirname(__file__), "original_units.yml"
-        )
-        original_units = {}
-        original_units["UnitCategories"] = UNIT_CATEGORIES
-        if not os.path.exists(original_path):
-            with open(original_path, "w") as f:
-                yaml.dump(original_units, f)
+        self._preserve_orig_units()
+
+        # Contstruct the dictionary to write out
+        new_units = {}
+        new_units["UnitCategories"] = {}
+        for key, unit in self._units.items():
+            new_units["UnitCategories"][key] = {"unit": str(unit)}
 
         # Write the current unit system to the default units yaml file
-        new_units = {}
-        new_units["UnitCategories"] = self._units
         with open(FILE_PATH, "w") as f:
             yaml.dump(new_units, f)
+
+        print(f"Default unit system has been updated at {FILE_PATH}.")
 
     def reset_defaults_yaml(self):
         """
@@ -368,6 +388,8 @@ class Units(metaclass=UnitSingleton):
 
         # Reset the Units object
         self.__init__(force=True)
+
+        print(f"Default unit system has been reset to {FILE_PATH}.")
 
 
 class Quantity:
