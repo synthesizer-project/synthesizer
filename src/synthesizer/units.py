@@ -472,7 +472,11 @@ class Units(metaclass=UnitSingleton):
         # Intialise the table formatter
         formatter = TableFormatter(self)
 
-        return formatter.get_table("Unit System")
+        return (
+            formatter.get_table("Unit System")
+            .replace("Attribute", "Category ")
+            .replace("Value", "Unit ")
+        )
 
 
 class Quantity:
