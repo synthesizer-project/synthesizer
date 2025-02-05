@@ -24,14 +24,17 @@ Example usage:
 
 """
 
+import os
 from functools import wraps
 
+import yaml
 from unyt import (
     Angstrom,
     Hz,
     K,
     Mpc,
     Msun,
+    Unit,
     cm,
     deg,
     dimensionless,
@@ -48,61 +51,49 @@ from unyt.exceptions import UnitConversionError
 from synthesizer import exceptions
 from synthesizer.warnings import warn
 
-# Define an importable dictionary with the default unit system
-default_units = {
-    "lam": Angstrom,
-    "obslam": Angstrom,
-    "wavelength": Angstrom,
-    "wavelengths": Angstrom,
-    "vacuum_wavelength": Angstrom,
-    "original_lam": Angstrom,
-    "lam_min": Angstrom,
-    "lam_max": Angstrom,
-    "lam_eff": Angstrom,
-    "lam_fwhm": Angstrom,
-    "mean_lams": Angstrom,
-    "pivot_lams": Angstrom,
-    "nu": Hz,
-    "obsnu": Hz,
-    "nuz": Hz,
-    "original_nu": Hz,
-    "luminosity": erg / s,
-    "luminosities": erg / s,
-    "bolometric_luminosity": erg / s,
-    "bolometric_luminosities": erg / s,
-    "lnu": erg / s / Hz,
-    "llam": erg / s / Angstrom,
-    "continuum": erg / s / Hz,
-    "flux": erg / s / cm**2,
-    "fnu": nJy,
-    "flam": erg / s / Angstrom / cm**2,
-    "equivalent_width": Angstrom,
-    "coordinates": Mpc,
-    "radii": Mpc,
-    "smoothing_lengths": Mpc,
-    "softening_length": Mpc,
-    "velocities": km / s,
-    "mass": Msun.in_base("galactic"),
-    "masses": Msun.in_base("galactic"),
-    "initial_masses": Msun.in_base("galactic"),
-    "initial_mass": Msun.in_base("galactic"),
-    "current_masses": Msun.in_base("galactic"),
-    "dust_masses": Msun.in_base("galactic"),
-    "ages": yr,
-    "accretion_rate": Msun.in_base("galactic") / yr,
-    "accretion_rates": Msun.in_base("galactic") / yr,
-    "bb_temperature": K,
-    "bb_temperatures": K,
-    "inclination": deg,
-    "inclinations": deg,
-    "resolution": Mpc,
-    "fov": Mpc,
-    "orig_resolution": Mpc,
-    "centre": Mpc,
-    "photo_lnu": erg / s / Hz,
-    "photo_fnu": erg / s / cm**2 / Hz,
-    "softening_lengths": Mpc,
-}
+# Define the path to your YAML file
+FILE_PATH = os.path.join(os.path.dirname(__file__), "default_units.yaml")
+
+
+def _load_and_convert_unit_categories() -> dict:
+    """
+    Load the default unit system from a YAML file.
+
+    This loads all the strings stored in the YAML file and converts them into
+    unyt Unit objects.
+
+    One thing to note is this process will treat Msun as a first class unit not
+    a compound unit in the galactic base system. This is because unyt does not
+    support compound units in the base system, but means we don't need to
+    worry about converting between the two base systems.
+
+    Returns:
+        dict
+            A dictionary of unyt Unit objects
+    """
+    # Load the yaml file
+    data: dict
+    with open(FILE_PATH, "r") as f:
+        data = yaml.safe_load(f)
+
+    # Extract the unit categories dictionary
+    unit_categories: dict = data["UnitCategories"]
+
+    # Convert the string units to unyt Unit objects
+    converted: dict = {
+        key: Unit(value["unit"]) for key, value in unit_categories.items()
+    }
+
+    return converted
+
+
+# Get the default units system we have on file (this can be modified by the
+# user.
+# NOTE: This module-level variable will be initialized only once on import
+UNIT_CATEGORIES = _load_and_convert_unit_categories()
+
+# Add a friendly alias for the default unit system for nice imports
+default_units = UNIT_CATEGORIES
 
 
 class UnitSingleton(type):
@@ -282,7 +273,15 @@ class Units(metaclass=UnitSingleton):
         Args:
             units (dict)
                 A dictionary containing any modifications to the default unit
-                system. This dictionary must be of the form:
+                system. This can either modify the unit categories
+                defined in the default unit system, e.g.:
+
+                    units = {"wavelength": microns,
+                             "smoothing_lengths": kpc,
+                             "lam": m}
+
+                Or, if desired, individual attributes can be modified
+                explicitly, e.g.:
 
                     units = {"coordinates": kpc,
                              "smoothing_lengths": kpc,
@@ -290,7 +289,10 @@ class Units(metaclass=UnitSingleton):
             force (bool)
                 A flag for whether to force an update of the Units object.
         """
-        # First define all possible units with their defaults
+        # First off we need to attach the default unit system
+        # to the Units object
+        for key, unit in default_units.items():
+            setattr(self, key, unit)
 
         # Wavelengths
         self.lam = Angstrom  # rest frame wavelengths

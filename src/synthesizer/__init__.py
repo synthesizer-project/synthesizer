@@ -1,4 +1,8 @@
-# Import the various utils submodules to make them available at the top level
+# Import the unit module, this will load the default unit
+# system from the yaml file and cache the units module to ensure it isn't
+# read again
+import synthesizer.units
+
 # Import the various extensions submodules to make them available
 # at the top level
 from synthesizer.extensions.openmp_check import check_openmp
