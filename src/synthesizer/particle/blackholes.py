@@ -83,7 +83,7 @@ class BlackHoles(Particles, BlackholesComponent):
     ]
 
     # Define quantities
-    smoothing_lengths = Quantity()
+    smoothing_lengths = Quantity("spatial")
 
     @accepts(
         masses=Msun.in_base("galactic"),

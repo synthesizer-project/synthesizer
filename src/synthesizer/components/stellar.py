@@ -32,7 +32,7 @@ class StarsComponent(Component):
     """
 
     # Define quantities
-    ages = Quantity()
+    ages = Quantity("cosmic_time")
 
     @accepts(ages=Myr)
     def __init__(

@@ -45,8 +45,8 @@ class PhotometryCollection:
     """
 
     # Define quantities (there has to be one for rest and observer frame)
-    photo_lnu = Quantity()
-    photo_fnu = Quantity()
+    photo_lnu = Quantity("luminosity_density_frequency")
+    photo_fnu = Quantity("flux_density_frequency")
 
     def __init__(self, filters, **kwargs):
         """

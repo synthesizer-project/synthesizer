@@ -101,7 +101,7 @@ class Grid:
     """
 
     # Define Quantities
-    lam = Quantity()
+    lam = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
     def __init__(
@@ -1299,8 +1299,8 @@ class Template:
     """
 
     # Define Quantities
-    lam = Quantity()
-    lnu = Quantity()
+    lam = Quantity("wavelength")
+    lnu = Quantity("luminosity_density_frequency")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(
