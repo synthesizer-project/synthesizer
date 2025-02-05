@@ -4,13 +4,15 @@ The Units class below acts as a container of unit definitions for various
 attributes spread throughout Synthesizer.
 
 The Quantity is the object that defines all attributes with attached units. Its
-a helper class which enables the optional return of units.
+a helper class which enables the optional return of units. The Quantity
+is a descriptor which is defined in the class body with the unit category
+passed as an argument.
 
 Example defintion:
 
     class Foo:
 
-        bar = Quantity()
+        bar = Quantity("spatial")
 
         def __init__(self, bar):
             self.bar = bar
@@ -29,30 +31,19 @@ from functools import wraps
 
 import yaml
 from unyt import (
-    Angstrom,
-    Hz,
-    K,
-    Mpc,
-    Msun,
     Unit,
-    cm,
-    deg,
     dimensionless,
-    erg,
-    km,
-    nJy,
-    s,
     unyt_array,
     unyt_quantity,
-    yr,
 )
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import exceptions
+from synthesizer.utils import TableFormatter
 from synthesizer.warnings import warn
 
 # Define the path to your YAML file
-FILE_PATH = os.path.join(os.path.dirname(__file__), "default_units.yaml")
+FILE_PATH = os.path.join(os.path.dirname(__file__), "default_units.yml")
 
 
 def _load_and_convert_unit_categories() -> dict:
@@ -92,8 +83,36 @@ def _load_and_convert_unit_categories() -> dict:
 # NOTE: This module-level variable will be initialized only once on import
 UNIT_CATEGORIES = _load_and_convert_unit_categories()
 
-# Add a friendly alias for the default unit system for nice imports
-default_units = UNIT_CATEGORIES
+
+class DefaultUnits:
+    def __init__(self):
+        for key, unit in UNIT_CATEGORIES.items():
+            setattr(self, key, unit)
+
+    def __getitem__(self, name):
+        if hasattr(self, name):
+            return getattr(self, name)
+        raise KeyError(f"Unit category {name} not found.")
+
+    def __setitem__(self, name, value):
+        setattr(self, name, value)
+
+    def __str__(self):
+        """
+        Return a string representation of the default unit system.
+
+        Returns:
+            table (str)
+                A string representation of the LineCollection object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Default Units")
+
+
+# Instantiate the default unit system
+default_units = DefaultUnits()
 
 
 class UnitSingleton(type):
@@ -294,95 +313,95 @@ class Units(metaclass=UnitSingleton):
         for key, unit in default_units.items():
             setattr(self, key, unit)
 
-        # Wavelengths
-        self.lam = Angstrom  # rest frame wavelengths
-        self.obslam = Angstrom  # observer frame wavelengths
-        # vacuum rest frame wavelengths alias
-        self.vacuum_wavelength = Angstrom
-        self.wavelength = Angstrom  # rest frame wavelengths alias
-        self.wavelengths = Angstrom  # rest frame wavelengths alias
-        self.original_lam = Angstrom  # SVO filter wavelengths
-        self.lam_min = Angstrom  # filter minimum wavelength
-        self.lam_max = Angstrom  # filter maximum wavelength
-        self.lam_eff = Angstrom  # filter effective wavelength
-        self.lam_fwhm = Angstrom  # filter FWHM
-        self.mean_lams = Angstrom  # filter collection mean wavelenghts
-        self.pivot_lams = Angstrom  # filter collection pivot wavelengths
-
-        # Frequencies
-        self.nu = Hz  # rest frame frequencies
-        self.nuz = Hz  # rest frame frequencies
-        self.obsnu = Hz  # observer frame frequencies
-        self.original_nu = Hz  # SVO filter wavelengths
-
-        # Luminosities
-        self.luminosity = erg / s  # luminosity
-        self.luminosities = erg / s
-        self.bolometric_luminosity = erg / s
-        self.bolometric_luminosities = erg / s
-        self.eddington_luminosity = erg / s
-        self.eddington_luminosities = erg / s
-        self.lnu = erg / s / Hz  # spectral luminosity density
-        self.llam = erg / s / Angstrom  # spectral luminosity density
-        self.flam = erg / s / Angstrom / cm**2  # spectral flux density
-        self.continuum = erg / s / Hz  # continuum level of an emission line
-
-        # Fluxes
-        self.fnu = nJy  # rest frame flux
-        self.flux = erg / s / cm**2  # rest frame "flux" at 10 pc
-
-        # Photometry
-        self.photo_lnu = erg / s / Hz  # rest frame photometry
-        self.photo_fnu = erg / s / cm**2 / Hz  # observer frame photometry
-
-        # Equivalent width
-        self.equivalent_width = Angstrom
-
-        # Spatial quantities
-        self.coordinates = Mpc
-        self.centre = Mpc
-        self.radii = Mpc
-        self.smoothing_lengths = Mpc
-        self.softening_length = Mpc
-
-        # Velocities
-        self.velocities = km / s
-
-        # Masses
-        self.mass = Msun.in_base("galactic")
-        self.masses = Msun.in_base("galactic")
-        self.initial_masses = Msun.in_base(
-            "galactic"
-        )  # initial mass of stellar particles
-        self.initial_mass = Msun.in_base(
-            "galactic"
-        )  # initial mass of stellar population
-        self.current_masses = Msun.in_base(
-            "galactic"
-        )  # current mass of stellar particles
-        self.dust_masses = Msun.in_base(
-            "galactic"
-        )  # current dust mass of gas particles
-
-        # Time quantities
-        self.ages = yr  # Stellar ages
-
-        # Black holes quantities
-        self.accretion_rate = Msun.in_base("galactic") / yr
-        self.accretion_rates = Msun.in_base("galactic") / yr
-        self.bb_temperature = K
-        self.bb_temperatures = K
-        self.inclination = deg
-        self.inclinations = deg
-
-        # Imaging quantities
-        self.resolution = Mpc
-        self.fov = Mpc
-        self.orig_resolution = Mpc
-
-        # Gravitational softening lengths
-        self.softening_lengths = Mpc
-
+        # # Wavelengths
+        # self.lam = Angstrom  # rest frame wavelengths
+        # self.obslam = Angstrom  # observer frame wavelengths
+        # # vacuum rest frame wavelengths alias
+        # self.vacuum_wavelength = Angstrom
+        # self.wavelength = Angstrom  # rest frame wavelengths alias
+        # self.wavelengths = Angstrom  # rest frame wavelengths alias
+        # self.original_lam = Angstrom  # SVO filter wavelengths
+        # self.lam_min = Angstrom  # filter minimum wavelength
+        # self.lam_max = Angstrom  # filter maximum wavelength
+        # self.lam_eff = Angstrom  # filter effective wavelength
+        # self.lam_fwhm = Angstrom  # filter FWHM
+        # self.mean_lams = Angstrom  # filter collection mean wavelenghts
+        # self.pivot_lams = Angstrom  # filter collection pivot wavelengths
+        #
+        # # Frequencies
+        # self.nu = Hz  # rest frame frequencies
+        # self.nuz = Hz  # rest frame frequencies
+        # self.obsnu = Hz  # observer frame frequencies
+        # self.original_nu = Hz  # SVO filter wavelengths
+        #
+        # # Luminosities
+        # self.luminosity = erg / s  # luminosity
+        # self.luminosities = erg / s
+        # self.bolometric_luminosity = erg / s
+        # self.bolometric_luminosities = erg / s
+        # self.eddington_luminosity = erg / s
+        # self.eddington_luminosities = erg / s
+        # self.lnu = erg / s / Hz  # spectral luminosity density
+        # self.llam = erg / s / Angstrom  # spectral luminosity density
+        # self.flam = erg / s / Angstrom / cm**2  # spectral flux density
+        # self.continuum = erg / s / Hz  # continuum level of an emission line
+        #
+        # # Fluxes
+        # self.fnu = nJy  # rest frame flux
+        # self.flux = erg / s / cm**2  # rest frame "flux" at 10 pc
+        #
+        # # Photometry
+        # self.photo_lnu = erg / s / Hz  # rest frame photometry
+        # self.photo_fnu = erg / s / cm**2 / Hz  # observer frame photometry
+        #
+        # # Equivalent width
+        # self.equivalent_width = Angstrom
+        #
+        # # Spatial quantities
+        # self.coordinates = Mpc
+        # self.centre = Mpc
+        # self.radii = Mpc
+        # self.smoothing_lengths = Mpc
+        # self.softening_length = Mpc
+        #
+        # # Velocities
+        # self.velocities = km / s
+        #
+        # # Masses
+        # self.mass = Msun.in_base("galactic")
+        # self.masses = Msun.in_base("galactic")
+        # self.initial_masses = Msun.in_base(
+        #     "galactic"
+        # )  # initial mass of stellar particles
+        # self.initial_mass = Msun.in_base(
+        #     "galactic"
+        # )  # initial mass of stellar population
+        # self.current_masses = Msun.in_base(
+        #     "galactic"
+        # )  # current mass of stellar particles
+        # self.dust_masses = Msun.in_base(
+        #     "galactic"
+        # )  # current dust mass of gas particles
+        #
+        # # Time quantities
+        # self.ages = yr  # Stellar ages
+        #
+        # # Black holes quantities
+        # self.accretion_rate = Msun.in_base("galactic") / yr
+        # self.accretion_rates = Msun.in_base("galactic") / yr
+        # self.bb_temperature = K
+        # self.bb_temperatures = K
+        # self.inclination = deg
+        # self.inclinations = deg
+        #
+        # # Imaging quantities
+        # self.resolution = Mpc
+        # self.fov = Mpc
+        # self.orig_resolution = Mpc
+        #
+        # # Gravitational softening lengths
+        # self.softening_lengths = Mpc
+        #
         # Do we have any modifications to the default unit system
         if units is not None:
             print("Redefining unit system:")
@@ -409,8 +428,8 @@ class Quantity:
     units defined in the global unit system held in (Units).
 
     Attributes:
-        units (Units)
-            The global unit system.
+        unit (unyt.unit_object.Unit)
+            The unit for this Quantity from the global unit system.
         public_name (str)
             The name of the class variable containing Quantity. Used the user
             wants values with a unit returned.
@@ -420,16 +439,24 @@ class Quantity:
             unit returned.
     """
 
-    def __init__(self):
+    def __init__(self, category):
         """
-        Initialise the Quantity. This gets the unit system and then perfroms
-        any necessary conversions if handed a unyt_array/unyt_quantity. If a n
-        ormal array is passed it assumes this is already in the appropriate
-        units.
-        """
+        Initialise the Quantity.
 
-        # Attach the unit system
-        self.units = Units()
+        This will extract the unit from the global unit system based on the
+        passed category. Note that this unit can be overriden if the user
+        specified a unit override for the attribute associated with this
+        Quantity.
+
+        Args:
+            category (str)
+                The category of the attribute. This is used to get the unit
+                from the global unit system.
+        """
+        # Get the unit based on the category passed at initialisation. This
+        # can be overriden in __set_name__ if the user set a specific unit for
+        # the attribute associated with this Quantity.
+        self.unit = getattr(Units(), category)
 
     def __set_name__(self, owner, name):
         """
@@ -439,6 +466,10 @@ class Quantity:
         """
         self.public_name = name
         self.private_name = "_" + name
+
+        # Do we have a unit override for this attribute?
+        if hasattr(Units(), name):
+            self.unit = getattr(Units(), name)
 
     def __get__(self, obj, type=None):
         """
@@ -453,14 +484,13 @@ class Quantity:
                 The value with units attached or None if value is None.
         """
         value = getattr(obj, self.private_name)
-        unit = getattr(self.units, self.public_name)
 
         # If we have an uninitialised attribute avoid the multiplying NoneType
         # error and just return None
         if value is None:
             return None
 
-        return value * unit
+        return value * self.unit
 
     def __set__(self, obj, value):
         """
@@ -479,11 +509,8 @@ class Quantity:
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
-            if (
-                value.units != getattr(self.units, self.public_name)
-                and value.units != dimensionless
-            ):
-                value = value.to(getattr(self.units, self.public_name)).value
+            if value.units != self.unit and value.units != dimensionless:
+                value = value.to(self.unit).value
             else:
                 value = value.value
 
