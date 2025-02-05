@@ -1,0 +1,60 @@
+UnitCategories:
+  # Spatial lengths and positions
+  spatial:
+    unit: Mpc
+
+  # Mass
+  mass:
+    unit: Msun
+
+  # Time (e.g. ages)
+  time:
+    unit: yr
+
+  # Velocities (e.g. km/s)
+  velocity:
+    unit: "km/s"
+
+  # Temperature (e.g. blackbody temperature)
+  temperature:
+    unit: K
+
+  # Angles (e.g. inclinations)
+  angle:
+    unit: deg
+
+  # Wavelengths
+  wavelength:
+    unit: Angstrom
+
+  # Frequencies
+  frequency:
+    unit: Hz
+
+  # Total luminosity (energy per unit time)
+  luminosity:
+    unit: "erg / s"
+
+  # Luminosity per unit frequency
+  luminosity_density_frequency:
+    unit: "erg / s / Hz"
+
+  # Luminosity per unit wavelength
+  luminosity_density_wavelength:
+    unit: "erg / s / Angstrom"
+
+  # Flux (energy per unit time per area)
+  flux:
+    unit: "erg / s / cm**2"
+
+  # Flux density per unit frequency (e.g. nJy, photo_fnu)
+  flux_density_frequency:
+    unit: nJy
+
+  # Flux density per unit wavelength
+  flux_density_wavelength:
+    unit: "erg / s / Angstrom / cm**2"
+
+  # Mass per unit time
+  mass_rate:
+    unit: "Msun/yr"
