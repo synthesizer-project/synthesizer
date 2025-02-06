@@ -57,7 +57,7 @@ class AttenuationLaw(Transformer):
         self.description = description
 
         # Call the parent constructor
-        Transformer.__init__(self, required_params=("lam", "tau_v"))
+        Transformer.__init__(self, required_params=("tau_v"))
 
     def get_tau(self, *args):
         """Compute the optical depth."""
@@ -105,7 +105,7 @@ class AttenuationLaw(Transformer):
 
         return np.exp(-exponent)
 
-    def _transform(self, emission, emitter, model):
+    def _transform(self, emission, emitter, model, mask):
         """
         Apply the dust attenuation to the emission.
 
@@ -121,11 +121,12 @@ class AttenuationLaw(Transformer):
         # Extract the required parameters
         params = self._extract_params(model, emission, emitter)
 
-        # Compute the transmission
-        transmission = self.get_transmission(params["tau_v"], params["lam"])
-
         # Apply the transmission to the emission
-        return emission * transmission
+        return emission.apply_attenuation(
+            tau_v=params["tau_v"],
+            dust_curve=self,
+            mask=mask,
+        )
 
     @accepts(lam=angstrom)
     def plot_attenuation(
