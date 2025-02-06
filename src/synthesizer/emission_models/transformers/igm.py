@@ -94,6 +94,33 @@ class IGMBase(Transformer):
 
         return fig, ax
 
+    def _transform(self, emission, emitter, model):
+        """
+        Apply the IGM to either a Line or Sed object.
+
+        Args:
+            emission (Line/Sed): The emission to transform.
+            emitter (Stars/Gas/BlackHole/Galaxy): The object emitting the
+                emission.
+            model (EmissionModel): The emission model generating the emission.
+
+        Returns:
+            Line/Sed: The transformed emission.
+        """
+        # Extract the required parameters
+        params = self._extract_params(model, emission, emitter)
+
+        # Compute the transmission
+        transmission = self.get_transmission(
+            params["redshift"],
+            params["obslam"],
+        )
+
+        # Apply the transmission to the emission (here we can use the
+        # overloaded multiplication operator regardless of the type of
+        # emission object)
+        return emission * transmission
+
 
 class Inoue14(IGMBase):
     r"""
