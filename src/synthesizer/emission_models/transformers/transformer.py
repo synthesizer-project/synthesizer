@@ -11,7 +11,7 @@ required methods.
 
 from abc import ABC, abstractmethod
 
-from sythesizer import exceptions
+from synthesizer import exceptions
 
 
 class Transformer(ABC):
