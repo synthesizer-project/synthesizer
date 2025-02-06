@@ -774,6 +774,16 @@ class Line:
         """Return the equivalent width."""
         return self.luminosity / self.continuum_llam
 
+    @property
+    def lam(self):
+        """Return the wavelength in units of angstrom."""
+        return self.wavelength
+
+    @property
+    def _lam(self):
+        """Return the wavelength in units of angstrom."""
+        return self._wavelength
+
     @accepts(
         wavelength=angstrom,
         luminosity=erg / s,
