@@ -16,7 +16,17 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom, Hz, angstrom, cm, erg, pc, s
+from unyt import (
+    Angstrom,
+    Hz,
+    angstrom,
+    cm,
+    erg,
+    pc,
+    s,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
@@ -784,6 +794,10 @@ class Line:
         """Return the wavelength in units of angstrom."""
         return self._wavelength
 
+    def shape(self):
+        """Return the shape of the line."""
+        return self.luminosity.shape
+
     @accepts(
         wavelength=angstrom,
         luminosity=erg / s,
@@ -1038,3 +1052,148 @@ class Line:
             luminosity=att_lum,
             continuum=att_cont,
         )
+
+    def scale(self, scaling, inplace=False):
+        """
+        Scale the line by a given factor.
+
+        Note: this will only scale the rest frame continuum and luminosity.
+        To get the scaled flux get_flux must be called on the new Line object.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the line.
+            inplace (bool)
+                If True the Line object will be scaled in place, otherwise a
+                new Line object will be returned.
+        """
+        # If we have units make sure they are ok and then strip them
+        if isinstance(scaling, (unyt_array, unyt_quantity)):
+            # Check if we have compatible units with the continuum
+            if self.continuum.units.is_compatible(scaling.units):
+                scaling_cont = scaling.to(self.continuum.units).value
+                scaling_lum = (
+                    (scaling * self.nu).to(self.luminosity.units).value
+                )
+            elif self.luminosity.units.is_compatible(scaling.units):
+                scaling_lum = scaling.to(self.luminosity.units).value
+                scaling_cont = (
+                    (scaling / self.nu).to(self.continuum.units).value
+                )
+            else:
+                raise exceptions.InconsistentMultiplication(
+                    f"{scaling.units} is neither compatible with the "
+                    f"continuum ({self.continuum.units}) nor the "
+                    f"luminosity ({self.luminosity.units})"
+                )
+        else:
+            # Ok, dimensionless scaling is easier
+            scaling_cont = scaling
+            scaling_lum = scaling
+
+        # Handle a scalar scaling factor
+        if np.isscalar(scaling_lum) and not inplace:
+            return Line(
+                line_id=self.id,
+                wavelength=self.wavelength,
+                luminosity=scaling_lum * self.luminosity,
+                continuum=scaling_cont * self.continuum,
+            )
+        elif np.isscalar(scaling) and inplace:
+            self._luminosity *= scaling_lum
+            self._continuum *= scaling_cont
+            return self
+
+        # Handle an single element array scaling factor
+        elif scaling_lum.size == 1:
+            scaling_lum = scaling_lum.item()
+            scaling_cont = scaling_cont.item()
+            if not inplace:
+                return Line(
+                    line_id=self.id,
+                    wavelength=self.wavelength,
+                    luminosity=scaling_lum * self.luminosity,
+                    continuum=scaling_cont * self.continuum,
+                )
+            else:
+                self._luminosity *= scaling_lum
+                self._continuum *= scaling_cont
+                return self
+
+        # Handle a multi-element array scaling factor as long as it matches
+        # the shape of the lnu array up to the dimensions of the scaling array
+        elif isinstance(scaling_lum, np.ndarray) and len(
+            scaling_lum.shape
+        ) < len(self.shape):
+            # We need to expand the scaling array to match the lnu array
+            expand_axes = tuple(range(len(scaling_lum.shape), len(self.shape)))
+            new_scaling_lum = np.ones(self.shape) * np.expand_dims(
+                scaling_lum, axis=expand_axes
+            )
+            new_scaling_cont = np.ones(self.shape) * np.expand_dims(
+                scaling_cont, axis=expand_axes
+            )
+            if not inplace:
+                return Line(
+                    line_id=self.id,
+                    wavelength=self.wavelength,
+                    luminosity=new_scaling_lum * self.luminosity,
+                    continuum=new_scaling_cont * self.continuum,
+                )
+            else:
+                self._luminosity *= new_scaling_lum
+                self._continuum *= new_scaling_cont
+                return self
+
+        # If the scaling array is the same shape as the lnu array then we can
+        # just multiply them together
+        elif (
+            isinstance(scaling_lum, np.ndarray)
+            and scaling_lum.shape == self.shape
+            and not inplace
+        ):
+            return Line(
+                line_id=self.id,
+                wavelength=self.wavelength,
+                luminosity=scaling_lum * self.luminosity,
+                continuum=scaling_cont * self.continuum,
+            )
+        elif (
+            isinstance(scaling_lum, np.ndarray)
+            and scaling_lum.shape == self.shape
+            and inplace
+        ):
+            self._luminosity *= scaling_lum
+            self._continuum *= scaling_cont
+            return self
+
+        # Otherwise, we've been handed a bad scaling factor
+        else:
+            raise exceptions.InconsistentMultiplication(
+                f"Incompatible scaling factor {scaling} with type "
+                f"{type(scaling)}"
+            )
+
+    def __mul__(self, scaling):
+        """
+        Scale the line by a given factor.
+
+        Overloads * operator to allow direct scaling of Line objects.
+
+        Returns
+            (Line)
+                New instance of Line containing the scaled line.
+        """
+        return self.scale(scaling)
+
+    def __rmul__(self, scaling):
+        """
+        Scale the line by a given factor.
+
+        Overloads * operator to allow direct scaling of Line objects.
+
+        Returns
+            (Line)
+                New instance of Line containing the scaled line.
+        """
+        return self.scale(scaling)
