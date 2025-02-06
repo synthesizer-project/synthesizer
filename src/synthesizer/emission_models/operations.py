@@ -711,14 +711,23 @@ class Generation:
             )
 
 
-class DustAttenuation:
+class Transformation:
     """
-    A class to define the dust attenuation of spectra.
+    A class to define the transformation of an emission.
+
+    A transformation can include attenuation of the spectra by an extinction
+    curve, or it can involve any scaling of the emission.
+
+    A Transformer is needed to apply the transformation to the emission. This
+    class must inherit from the Transformer base class (defined in
+    emission_models/transformers/transformer.py) and must define the
+    get_transformation method. This method should return an array the size
+    of the input that can multiply the emission.
 
     Attributes:
-        dust_curve (emission_models.attenuation.*):
+        transformer (emission_models.transformer):
             The dust curve to apply.
-        apply_dust_to (EmissionModel):
+        apply_to (EmissionModel):
             The model to apply the dust curve to.
         tau_v (float/ndarray/str/tuple):
             The optical depth to apply. Can be a float, ndarray, or a string
