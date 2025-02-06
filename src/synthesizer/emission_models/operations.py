@@ -32,7 +32,7 @@ class Extraction:
             The escape fraction.
     """
 
-    def __init__(self, grid, extract, fesc, lam_mask):
+    def __init__(self, grid, extract, lam_mask):
         """
         Initialise the extraction model.
 
@@ -41,8 +41,6 @@ class Extraction:
                 The grid to extract from.
             extract (str):
                 The key for the spectra to extract.
-            fesc (float):
-                The escape fraction.
             lam_mask (ndarray):
                 The wavelength mask to apply to the spectra.
         """
@@ -52,8 +50,12 @@ class Extraction:
         # What base key will we be extracting?
         self._extract = extract
 
-        # Attach the escape fraction
-        self._fesc = fesc
+        # Attach the escape fraction if we have a fixed one (if not we
+        # will need to extract it from the emitter)
+        if "fesc" in self.fixed_parameters:
+            self._fesc = self.fixed_parameters["fesc"]
+        else:
+            self._fesc = None
 
         # Attach the wavelength mask
         self._lam_mask = lam_mask
@@ -348,7 +350,6 @@ class Extraction:
         summary.append("Extraction model:")
         summary.append(f"  Grid: {self._grid.grid_name}")
         summary.append(f"  Extract key: {self._extract}")
-        summary.append(f"  Escape fraction: {self._fesc}")
 
         return summary
 
@@ -735,7 +736,7 @@ class Transformation:
             these.
     """
 
-    def __init__(self, dust_curve, apply_dust_to, tau_v):
+    def __init__(self, dust_curve, apply_dust_to):
         """
         Initialise the dust attenuation model.
 
@@ -744,10 +745,6 @@ class Transformation:
                 The dust curve to apply.
             apply_dust_to (EmissionModel):
                 The model to apply the dust curve to.
-            tau_v (float/ndarray/str/tuple):
-                The optical depth to apply. Can be a float, ndarray, or a
-                string to a component attribute. Can also be a tuple combining
-                any of these.
         """
         # Attach the dust curve
         self._dust_curve = dust_curve
@@ -755,12 +752,16 @@ class Transformation:
         # Attach the model to apply the dust curve to
         self._apply_dust_to = apply_dust_to
 
-        # Attach the optical depth/s
-        self._tau_v = (
-            tau_v
-            if isinstance(tau_v, (tuple, list)) or tau_v is None
-            else [tau_v]
-        )
+        # Attach the optical depth/s if we have a fixed one (if not we
+        # will need to extract it from the emitter)
+        if "tau_v" in self.fixed_parameters:
+            self._tau_v = self.fixed_parameters["tau_v"]
+        else:
+            self._tau_v = None
+
+        # Ensure tau_v is a list
+        if not isinstance(self._tau_v, list) and self._tau_v is not None:
+            self._tau_v = [self._tau_v]
 
     def _dust_attenuate_spectra(
         self,
@@ -954,7 +955,6 @@ class Transformation:
         summary.append("Dust attenuation model:")
         summary.append(f"  Dust curve: {self._dust_curve}")
         summary.append(f"  Apply dust to: {self._apply_dust_to.label}")
-        summary.append(f"  Optical depth (tau_v): {self._tau_v}")
 
         return summary
 
