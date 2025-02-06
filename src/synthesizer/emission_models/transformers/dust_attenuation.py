@@ -57,7 +57,7 @@ class AttenuationLaw(Transformer):
         self.description = description
 
         # Call the parent constructor
-        Transformer.__init__(self, required_params=("lam",))
+        Transformer.__init__(self, required_params=("lam", "tau_v"))
 
     def get_tau(self, *args):
         """Compute the optical depth."""

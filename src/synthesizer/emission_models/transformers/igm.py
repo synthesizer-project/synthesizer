@@ -32,6 +32,9 @@ class IGMBase(Transformer):
         """Initialize the IGMBase class."""
         self.name = name
 
+        # Initialize the base class
+        Transformer.__init__(self, required_params=("redshift", "obslam"))
+
     def get_transmission(self, redshift, lam_obs):
         """
         Compute the IGM transmission.

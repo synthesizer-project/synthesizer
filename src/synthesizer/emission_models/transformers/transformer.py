@@ -52,7 +52,22 @@ class Transformer(ABC):
 
     @abstractmethod
     def _transform(self, emission, emitter, model, *args, **kwargs):
-        """Transform the emission in some way.
+        """
+        Transform the emission in some way.
+
+        This method must look for the required parameters in
+        model.fixed_parameters, on the emission, and on the emitter (in
+        that order of importance). If should then apply the transformation
+        using whatever methods are required using the parameters found.
+
+        For example, get_transmission on a dust attenuation transformer would
+        require the optical depth (tau_v) and the wavelength grid. The former
+        of these could be found as an override on the model, or as an
+        attribute on the emitter. The wavelength grid will instead be found
+        on the emission object itself. These are then passed to the
+        get_transmission method which returns the transmission curve. This
+        method should then apply the transmission curve to the emission,
+        producing a new emission object which is returned.
 
         Args:
             emission (Line/Sed)
