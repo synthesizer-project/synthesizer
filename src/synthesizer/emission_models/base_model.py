@@ -50,16 +50,16 @@ from unyt import kpc, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.emission_models.operations import (
     Combination,
-    DustAttenuation,
     Extraction,
     Generation,
+    Transformation,
 )
 from synthesizer.line import LineCollection
 from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import warn
 
 
-class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
+class EmissionModel(Extraction, Generation, Transformation, Combination):
     """
     A class to define the construction of a spectra from a grid.
 
@@ -112,10 +112,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             The model to apply the dust curve to.
         dust_curve (emission_models.attenuation.*):
             The dust curve to apply.
-        tau_v (float/ndarray/str/tuple):
-            The optical depth to apply. Can be a float, ndarray, or a string
-            to a component attribute. Can also be a tuple combining any of
-            these.
         generator (EmissionModel):
             The emission generation model. This must define a get_spectra
             method.
@@ -131,8 +127,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             The threshold for the mask.
         mask_op (str):
             The operation to apply. Can be "<", ">", "<=", ">=", "==", or "!=".
-        fesc (float):
-            The escape fraction.
         lam_mask (ndarray):
             The mask to apply to the wavelength array.
         scale_by (list):
@@ -164,23 +158,20 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         combine=None,
         apply_dust_to=None,
         dust_curve=None,
-        tau_v=None,
         generator=None,
         lum_intrinsic_model=None,
         lum_attenuated_model=None,
         mask_attr=None,
         mask_thresh=None,
         mask_op=None,
-        fesc=0.0,
         lam_mask=None,
         related_models=None,
         emitter=None,
-        fixed_parameters={},
         scale_by=None,
         post_processing=(),
         save=True,
         per_particle=False,
-        **kwargs,
+        **fixed_parameters,
     ):
         """
         Initialise the emission model.
@@ -211,10 +202,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 The model to apply the dust curve to.
             dust_curve (emission_models.attenuation.*):
                 The dust curve to apply.
-            tau_v (float/ndarray/str/tuple):
-                The optical depth to apply. Can be a float, ndarray, or a
-                string to a component attribute. Can also be a tuple combining
-                any of these.
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
@@ -231,8 +218,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             mask_op (str):
                 The operation to apply. Can be "<", ">", "<=", ">=", "==",
                 or "!=".
-            fesc (float):
-                The escape fraction.
             lam_mask (ndarray):
                 The mask to apply to the wavelength array.
             related_models (set/list/EmissionModel):
@@ -243,10 +228,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitter (str):
                 The emitter this emission model acts on. Default is
                 "stellar".
-            fixed_parameters (dict):
-                A dictionary of component attributes/parameters which should be
-                fixed and thus ignore the value of the component attribute.
-                This should take the form {<parameter_name>: <value>}.
             scale_by (str/list/tuple/EmissionModel):
                 Either a component attribute to scale the resultant spectra by,
                 a spectra key to scale by (based on the bolometric luminosity).
@@ -269,9 +250,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 be "per particle". If True, the spectra and lines will be
                 stored per particle. Integrated spectra are made automatically
                 by summing the per particle spectra. Default is False.
-            **kwargs:
-                Any additional keyword arguments to store. These can be used
-                to store additional information needed by the model.
+            fixed_parameters (dict):
+                A dictionary of component attributes/parameters which should be
+                fixed and thus ignore the value of the component attribute.
+                This should take the form {<parameter_name>: <value>}.
         """
         # What is the key for the spectra that will be produced?
         self.label = label
@@ -283,11 +265,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             self.lam = generator.lam
         else:
             self.lam = None
-
-        # Store any extra kwargs this can either be used to store additional
-        # information needed by the model
-        for key, value in kwargs.items():
-            setattr(self, key, value)
 
         # Store any fixed parameters
         self.fixed_parameters = fixed_parameters
@@ -311,7 +288,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             combine=combine,
             dust_curve=dust_curve,
             apply_dust_to=apply_dust_to,
-            tau_v=tau_v,
             generator=generator,
             lum_intrinsic_model=lum_intrinsic_model,
             lum_attenuated_model=lum_attenuated_model,
@@ -326,11 +302,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             combine=combine,
             apply_dust_to=apply_dust_to,
             dust_curve=dust_curve,
-            tau_v=tau_v,
             generator=generator,
             lum_intrinsic_model=lum_intrinsic_model,
             lum_attenuated_model=lum_attenuated_model,
-            fesc=fesc,
             lam_mask=lam_mask,
         )
 
@@ -385,11 +359,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         combine,
         apply_dust_to,
         dust_curve,
-        tau_v,
         generator,
         lum_intrinsic_model,
         lum_attenuated_model,
-        fesc,
         lam_mask,
     ):
         """
@@ -406,10 +378,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 The model to apply the dust curve to.
             dust_curve (emission_models.attenuation.*):
                 The dust curve to apply.
-            tau_v (float/ndarray/str/tuple):
-                The optical depth to apply. Can be a float, ndarray, or a
-                string to a component attribute. Can also be a tuple combining
-                any of these.
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
@@ -419,18 +387,16 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             lum_attenuated_model (EmissionModel):
                 The attenuated model to use deriving the dust
                 luminosity when computing dust emission.
-            fesc (float):
-                The escape fraction.
             lam_mask (ndarray):
                 The mask to apply to the wavelength array.
         """
         # Which operation are we doing?
         if self._is_extracting:
-            Extraction.__init__(self, grid, extract, fesc, lam_mask)
+            Extraction.__init__(self, grid, extract, lam_mask)
         elif self._is_combining:
             Combination.__init__(self, combine)
-        elif self._is_dust_attenuating:
-            DustAttenuation.__init__(self, dust_curve, apply_dust_to, tau_v)
+        elif self._is_transforming:
+            Transformation.__init__(self, dust_curve, apply_dust_to)
         elif self._is_dust_emitting:
             Generation.__init__(
                 self, generator, lum_intrinsic_model, lum_attenuated_model
@@ -449,7 +415,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 f"(combine={combine})\n"
                 "\tFor dust attenuation: "
                 f"(dust_curve={dust_curve} "
-                f"apply_dust_to={apply_dust_to} tau_v={tau_v})\n"
+                f"apply_dust_to={apply_dust_to})\n"
                 "\tFor generation "
                 f"(generator={generator}, "
                 f"lum_intrinsic_model={lum_intrinsic_model}, "
@@ -462,7 +428,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 [
                     self._is_extracting,
                     self._is_combining,
-                    self._is_dust_attenuating,
+                    self._is_transforming,
                     self._is_dust_emitting,
                     self._is_generating,
                 ]
@@ -474,7 +440,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 f"spectra in one model (label={self.label}). (Attempting to: "
                 f"extract: {self._is_extracting}, "
                 f"combine: {self._is_combining}, "
-                f"dust_attenuate: {self._is_dust_attenuating}, "
+                f"dust_attenuate: {self._is_transforming}, "
                 f"dust_emission: {self._is_dust_emitting})\n"
                 "Currently have:\n"
                 "\tFor extraction: grid=("
@@ -483,7 +449,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 f"(combine={combine})\n"
                 "\tFor dust attenuation: "
                 f"(dust_curve={dust_curve} "
-                f"apply_dust_to={apply_dust_to} tau_v={tau_v})\n"
+                f"apply_dust_to={apply_dust_to})\n"
                 "\tFor generation "
                 f"(generator={generator}, "
                 f"lum_intrinsic_model={lum_intrinsic_model}, "
@@ -495,17 +461,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             raise exceptions.InconsistentArguments(
                 "Must specify a grid to extract from."
             )
-        if self._is_dust_attenuating and dust_curve is None:
+        if self._is_transforming and dust_curve is None:
             raise exceptions.InconsistentArguments(
                 "Must specify a dust curve to apply."
             )
-        if self._is_dust_attenuating and apply_dust_to is None:
+        if self._is_transforming and apply_dust_to is None:
             raise exceptions.InconsistentArguments(
                 "Must specify where to apply the dust curve."
-            )
-        if self._is_dust_attenuating and tau_v is None:
-            raise exceptions.InconsistentArguments(
-                "Must specify an optical depth to apply."
             )
 
         # Ensure the grid contains any keys we want to extract
@@ -557,7 +519,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             return self._extract_summary()
         elif self._is_combining:
             return self._combine_summary()
-        elif self._is_dust_attenuating:
+        elif self._is_transforming:
             return self._attenuate_summary()
         elif self._is_dust_emitting:
             return self._generate_summary()
@@ -664,7 +626,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         combine=None,
         dust_curve=None,
         apply_dust_to=None,
-        tau_v=None,
         generator=None,
         lum_attenuated_model=None,
         lum_intrinsic_model=None,
@@ -673,10 +634,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Define flags for what we're doing
         self._is_extracting = extract is not None and grid is not None
         self._is_combining = combine is not None and len(combine) > 0
-        self._is_dust_attenuating = (
-            dust_curve is not None
-            or apply_dust_to is not None
-            or tau_v is not None
+        self._is_transforming = (
+            dust_curve is not None or apply_dust_to is not None
         )
         self._is_dust_emitting = (
             generator is not None
@@ -712,7 +671,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             self._extract_keys[model.label] = model.extract
 
         # If we are applying a dust curve, store the key
-        if model._is_dust_attenuating:
+        if model._is_transforming:
             self._dust_attenuation[model.label] = (
                 model.apply_dust_to,
                 model.dust_curve,
@@ -915,7 +874,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """
         # Set the properties
         if not set_all:
-            if self._is_dust_attenuating:
+            if self._is_transforming:
                 if dust_curve is not None:
                     self._set_attr("dust_curve", dust_curve)
                 if apply_dust_to is not None:
@@ -932,7 +891,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
         else:
             for model in self._models.values():
-                if self._is_dust_attenuating:
+                if self._is_transforming:
                     model.set_dust_props(
                         dust_curve=dust_curve,
                         apply_dust_to=apply_dust_to,
@@ -1452,7 +1411,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             self.extract_to_hdf5(group)
         elif self._is_combining:
             self.combine_to_hdf5(group)
-        elif self._is_dust_attenuating:
+        elif self._is_transforming:
             self.attenuate_to_hdf5(group)
         elif self._is_dust_emitting:
             self.generate_to_hdf5(group)
@@ -1559,7 +1518,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             levels[model.label] = max(levels.get(model.label, level), level)
 
             # Define the links
-            if model._is_dust_attenuating:
+            if model._is_transforming:
                 links.setdefault(label, []).append(
                     (model.apply_dust_to.label, "--")
                 )
@@ -2353,7 +2312,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     print(f"Error in {this_model.label}!")
                     raise e
 
-            elif this_model._is_dust_attenuating:
+            elif this_model._is_transforming:
                 try:
                     spectra, particle_spectra = self._dust_attenuate_spectra(
                         this_model,
@@ -2659,7 +2618,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     print(f"Error in {this_model.label}!")
                     raise e
 
-            elif this_model._is_dust_attenuating:
+            elif this_model._is_transforming:
                 try:
                     lines, particle_lines = self._dust_attenuate_lines(
                         line_ids,
@@ -2913,7 +2872,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     print(f"Error in {this_model.label}!")
                     raise e
 
-            elif this_model._is_dust_attenuating:
+            elif this_model._is_transforming:
                 try:
                     images = self._attenuate_images(
                         instrument,
