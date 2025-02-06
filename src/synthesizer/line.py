@@ -651,6 +651,37 @@ class LineCollection:
 
         return LineCollection(new_lines)
 
+    def scale(self, scaling):
+        """
+        Scale all lines in the collection by a factor.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the lines.
+        """
+        for line in self.lines.values():
+            self.lines[line.id] = line * scaling
+
+    def __mul__(self, scaling):
+        """
+        Scale all lines in the collection by a factor.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the lines.
+        """
+        self.scale(scaling)
+
+    def __rmul__(self, scaling):
+        """
+        Scale all lines in the collection by a factor.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the lines.
+        """
+        self.scale(scaling)
+
 
 class Line:
     """
