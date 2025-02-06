@@ -25,6 +25,7 @@ Example usage:
 """
 
 import os
+import shutil
 from functools import wraps
 
 import yaml
@@ -333,10 +334,9 @@ class Units(metaclass=UnitSingleton):
             return
 
         # Make a copy of the original units file
-        with open(FILE_PATH, "r") as f:
-            original_units = yaml.safe_load(f)
-        with open(original_path, "w") as f:
-            yaml.dump(original_units, f)
+        shutil.copy(FILE_PATH, original_path)
+
+        print(f"Original unit system has been preserved at {original_path}.")
 
     def overwrite_defaults_yaml(self):
         """
@@ -377,14 +377,18 @@ class Units(metaclass=UnitSingleton):
             raise FileNotFoundError("Original units file not found.")
 
         # Copy the original units file to the default units file
-        with open(original_path, "r") as f:
-            original_units = yaml.safe_load(f)
-        with open(FILE_PATH, "w") as f:
-            yaml.dump(original_units, f)
+        shutil.copy(original_path, FILE_PATH)
+
+        # Remove the original units file since we don't need it anymore
+        os.remove(original_path)
 
         # Reload the default unit system
         global UNIT_CATEGORIES
         UNIT_CATEGORIES = _load_and_convert_unit_categories()
+
+        # Remove all units from the Units object
+        for key in self._units:
+            delattr(self, key)
 
         # Reset the Units object
         self.__init__(force=True)
