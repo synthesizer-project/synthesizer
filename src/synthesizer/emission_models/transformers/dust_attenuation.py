@@ -105,6 +105,28 @@ class AttenuationLaw(Transformer):
 
         return np.exp(-exponent)
 
+    def _transform(self, emission, emitter, model):
+        """
+        Apply the dust attenuation to the emission.
+
+        Args:
+            emission (Line/Sed): The emission to transform.
+            emitter (Stars/Gas/BlackHole/Galaxy): The object emitting the
+                emission.
+            model (EmissionModel): The emission model generating the emission.
+
+        Returns:
+            Line/Sed: The transformed emission.
+        """
+        # Extract the required parameters
+        params = self._extract_params(model, emission, emitter)
+
+        # Compute the transmission
+        transmission = self.get_transmission(params["tau_v"], params["lam"])
+
+        # Apply the transmission to the emission
+        return emission * transmission
+
     @accepts(lam=angstrom)
     def plot_attenuation(
         self,
