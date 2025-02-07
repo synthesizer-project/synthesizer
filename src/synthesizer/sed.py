@@ -1320,7 +1320,13 @@ class Sed:
             sed.obslam = sed.lam * (1.0 + self.redshift)
             sed.obsnu = sed.nu / (1.0 + self.redshift)
             sed.fnu = (
-                spectres(sed._obslam, self._obslam, self._fnu) * self.fnu.units
+                spectres(
+                    sed._obslam,
+                    self._obslam,
+                    self._fnu,
+                    fill=0.0,
+                )
+                * self.fnu.units
             )
             sed.redshift = self.redshift
 

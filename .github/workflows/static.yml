@@ -39,6 +39,7 @@ jobs:
       - name: Download test data
         run: |
           synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
+          synthesizer-download -d tests/data --camels-data
       - name: Sphinx Build
         run: |
           cd docs
@@ -51,7 +52,7 @@ jobs:
         with:
           name: github-pages
           path: docs/build/html/
-          
+
   deploy:
     environment:
       name: github-pages

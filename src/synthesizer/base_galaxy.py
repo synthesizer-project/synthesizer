@@ -791,7 +791,7 @@ class BaseGalaxy:
         fesc=None,
         covering_fraction=None,
         mask=None,
-        vel_shift=False,
+        vel_shift=None,
         verbose=True,
         **kwargs,
     ):
