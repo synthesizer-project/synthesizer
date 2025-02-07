@@ -313,7 +313,7 @@ class PacmanEmission(StellarEmissionModel):
             label="attenuated",
             tau_v=self._tau_v,
             dust_curve=self._dust_curve,
-            apply_dust_to=self.reprocessed,
+            apply_to=self.reprocessed,
             emitter="stellar",
             **kwargs,
         )
@@ -325,7 +325,7 @@ class PacmanEmission(StellarEmissionModel):
                 label="emergent",
                 tau_v=self._tau_v,
                 dust_curve=self._dust_curve,
-                apply_dust_to=self.reprocessed,
+                apply_to=self.reprocessed,
                 emitter="stellar",
                 **kwargs,
             )
@@ -402,7 +402,7 @@ class PacmanEmission(StellarEmissionModel):
                     label="emergent" if label is None else label,
                     tau_v=self._tau_v,
                     dust_curve=self._dust_curve,
-                    apply_dust_to=self.intrinsic,
+                    apply_to=self.intrinsic,
                     related_models=related_models,
                     **kwargs,
                 )
@@ -1007,7 +1007,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             label="young_attenuated_nebular",
             tau_v=self.tau_v_birth,
             dust_curve=self._dust_curve_birth,
-            apply_dust_to=self.young_reprocessed,
+            apply_to=self.young_reprocessed,
             emitter="stellar",
             **kwargs,
         )
@@ -1015,7 +1015,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             label="young_attenuated_ism",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
-            apply_dust_to=self.young_reprocessed,
+            apply_to=self.young_reprocessed,
             emitter="stellar",
             **kwargs,
         )
@@ -1023,7 +1023,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             label="young_attenuated",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
-            apply_dust_to=young_attenuated_nebular,
+            apply_to=young_attenuated_nebular,
             emitter="stellar",
             **kwargs,
         )
@@ -1031,7 +1031,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             label="old_attenuated",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
-            apply_dust_to=self.old_reprocessed,
+            apply_to=self.old_reprocessed,
             emitter="stellar",
             **kwargs,
         )
@@ -1056,7 +1056,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 label="young_emergent",
                 tau_v=self.tau_v_ism,
                 dust_curve=self._dust_curve_ism,
-                apply_dust_to=self.young_attenuated_nebular,
+                apply_to=self.young_attenuated_nebular,
                 emitter="stellar",
                 **kwargs,
             )
@@ -1064,7 +1064,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 label="old_emergent",
                 tau_v=self.tau_v_ism,
                 dust_curve=self._dust_curve_ism,
-                apply_dust_to=self.old_intrinsic,
+                apply_to=self.old_intrinsic,
                 emitter="stellar",
                 **kwargs,
             )
@@ -1224,7 +1224,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                     label="young_emergent",
                     tau_v=self.tau_v_ism,
                     dust_curve=self._dust_curve_ism,
-                    apply_dust_to=self.young_intrinsic,
+                    apply_to=self.young_intrinsic,
                     emitter="stellar",
                     **kwargs,
                 )
@@ -1232,7 +1232,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                     label="old_emergent",
                     tau_v=self.tau_v_ism,
                     dust_curve=self._dust_curve_ism,
-                    apply_dust_to=self.old_intrinsic,
+                    apply_to=self.old_intrinsic,
                     emitter="stellar",
                     **kwargs,
                 )
