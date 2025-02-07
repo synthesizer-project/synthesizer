@@ -12,6 +12,7 @@ required methods.
 from abc import ABC, abstractmethod
 
 from synthesizer import exceptions
+from synthesizer.emission_models.utils import get_params
 
 
 class Transformer(ABC):
@@ -111,26 +112,19 @@ class Transformer(ABC):
             dict
                 A dictionary containing the required parameters.
         """
-        # Loop over the required parameters
-        params = {}
-        for param in self._required_params:
-            # Check the model's fixed parameters first
-            if param in model.fixed_parameters:
-                params[param] = model.fixed_parameters[param]
+        # Extract the parameters (Missing parameters will return None)
+        params = get_params(self._required_params, model, emission, emitter)
 
-            # Check the emission next
-            elif hasattr(emission, param):
-                params[param] = getattr(emission, param)
-
-            # Finally check the emitter
-            elif hasattr(emitter, param):
-                params[param] = getattr(emitter, param)
-
-            # If the parameter is missing raise an exception
-            else:
-                raise exceptions.MissingAttribute(
-                    f"{param} can't be found on the model, emission, "
-                    f"or emitter (required by {self.__class__.__name__})"
-                )
+        # Check if any of the required parameters are missing
+        missing_params = [
+            param for param, value in params.items() if value is None
+        ]
+        if len(missing_params) > 0:
+            raise exceptions.MissingAttribute(
+                f"{', '.join([f'"{s}"' for s in missing_params])} can't be "
+                "found on the EmissionModel, emission (Sed/LineCollection), "
+                f"or emitter (Stars/BlackHoles/Galaxy) "
+                f"(required by {self.__class__.__name__})"
+            )
 
         return params
