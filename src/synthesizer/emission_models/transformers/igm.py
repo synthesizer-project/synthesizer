@@ -94,7 +94,7 @@ class IGMBase(Transformer):
 
         return fig, ax
 
-    def _transform(self, emission, emitter, model):
+    def _transform(self, emission, emitter, model, mask=None):
         """
         Apply the IGM to either a Line or Sed object.
 
@@ -115,6 +115,14 @@ class IGMBase(Transformer):
             params["redshift"],
             params["obslam"],
         )
+
+        # Masking is not supported for IGM absorption (it also doesn't really
+        # make sense to mask the IGM absorption)
+        if mask is not None:
+            raise UnimplementedFunctionality(
+                "Masking is not supported for IGM absorption. "
+                "Are you sure you meant to do this?"
+            )
 
         # Apply the transmission to the emission (here we can use the
         # overloaded multiplication operator regardless of the type of
