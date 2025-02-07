@@ -120,8 +120,9 @@ class Transformer(ABC):
             param for param, value in params.items() if value is None
         ]
         if len(missing_params) > 0:
+            missing_strs = [f"'{s}'" for s in missing_params]
             raise exceptions.MissingAttribute(
-                f"{', '.join([f'"{s}"' for s in missing_params])} can't be "
+                f"{', '.join(missing_strs)} can't be "
                 "found on the EmissionModel, emission (Sed/LineCollection), "
                 f"or emitter (Stars/BlackHoles/Galaxy) "
                 f"(required by {self.__class__.__name__})"
