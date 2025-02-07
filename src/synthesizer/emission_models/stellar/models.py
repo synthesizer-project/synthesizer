@@ -506,7 +506,7 @@ class EmergentEmission(StellarEmissionModel):
     Attributes:
         grid (synthesizer.grid.Grid): The grid object to extract from.
         dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
-        apply_dust_to (EmissionModel): The emission model to apply the dust to.
+        apply_to (EmissionModel): The emission model to apply the dust to.
         tau_v (float): The optical depth of the dust.
         fesc (float): The escape fraction of the emission.
         label (str): The label for this emission model.
@@ -516,7 +516,7 @@ class EmergentEmission(StellarEmissionModel):
         self,
         grid,
         dust_curve=None,
-        apply_dust_to=None,
+        apply_to=None,
         tau_v=None,
         fesc=0.0,
         label="emergent",
@@ -530,7 +530,7 @@ class EmergentEmission(StellarEmissionModel):
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
-            apply_dust_to (EmissionModel): The model to apply the dust to.
+            apply_to (EmissionModel): The model to apply the dust to.
             tau_v (float): The optical depth of the dust.
             fesc (float): The escape fraction of the emission.
             label (str): The label for this emission model.
@@ -544,7 +544,7 @@ class EmergentEmission(StellarEmissionModel):
             attenuated = AttenuatedEmission(
                 grid=grid,
                 dust_curve=dust_curve,
-                apply_dust_to=apply_dust_to,
+                apply_to=apply_to,
                 tau_v=tau_v,
                 emitter="stellar",
                 **kwargs,
@@ -626,7 +626,7 @@ class TotalEmission(StellarEmissionModel):
         attenuated = AttenuatedEmission(
             grid=grid,
             dust_curve=dust_curve,
-            apply_dust_to=reprocessed,
+            apply_to=reprocessed,
             tau_v=tau_v,
             emitter="stellar",
             **kwargs,

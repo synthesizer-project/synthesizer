@@ -83,7 +83,7 @@ class AttenuatedEmission(EmissionModel):
 
     Attributes:
         dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
-        apply_dust_to (EmissionModel): The emission model to apply the dust to.
+        apply_to (EmissionModel): The emission model to apply the dust to.
         tau_v (float): The optical depth of the dust.
         label (str): The label for this emission model.
     """
@@ -91,7 +91,7 @@ class AttenuatedEmission(EmissionModel):
     def __init__(
         self,
         dust_curve,
-        apply_dust_to,
+        apply_to,
         tau_v,
         emitter,
         label="attenuated",
@@ -103,7 +103,7 @@ class AttenuatedEmission(EmissionModel):
 
         Args:
             dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
-            apply_dust_to (EmissionModel): The model to apply the dust to.
+            apply_to (EmissionModel): The model to apply the dust to.
             tau_v (float): The optical depth of the dust.
             emitter (string): The emitter this model is associated with.
             label (str): The label for this emission model.
@@ -114,7 +114,7 @@ class AttenuatedEmission(EmissionModel):
             grid=grid,
             label=label,
             dust_curve=dust_curve,
-            apply_dust_to=apply_dust_to,
+            apply_to=apply_to,
             tau_v=tau_v,
             emitter=emitter,
             **kwargs,
