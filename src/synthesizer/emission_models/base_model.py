@@ -2263,7 +2263,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(
-            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+            emission_model,
+            dust_curves,
+            tau_v,
+            fesc,
+            covering_fraction,
+            mask,
         )
 
         # Make a spectra dictionary if we haven't got one yet
@@ -2358,7 +2363,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Are we doing a transformation?
             elif this_model._is_transforming:
                 try:
-                    spectra, particle_spectra = self._transform_emission(
+                    spectra, particle_spectra = this_model._transform_emission(
                         this_model,
                         spectra,
                         particle_spectra,
