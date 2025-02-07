@@ -42,13 +42,13 @@ synthesizer-download --test-grids --dust-grid -d tests/test_grid
 
 This command will store the SPS, AGN, and dust grids in the `tests` directory at the root of the repo; all examples expect this data to reside in this location.
 
-You will also want to download the preprocessed CAMELS Illutris-TNG data,
+You will also want to download the preprocessed CAMELS Illustris-TNG data,
 
 ```bash
 synthesizer-download --camels-data -d tests/data/
 ```
 
-this is a very small set of galaxies taken from the CAMELS suite of simulations. We use this in some particle based examples.
+this is a very small set of galaxies taken from the [CAMELS suite](https://camels.readthedocs.io/en/latest/) of simulations. We use this in some particle based examples.
 
 ## Contributing
 
