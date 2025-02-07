@@ -44,6 +44,7 @@ class Component(ABC):
     def __init__(
         self,
         component_type,
+        fesc=0.0,
         **kwargs,
     ):
         """
@@ -71,6 +72,9 @@ class Component(ABC):
         # Define the dictionaries to hold the images
         self.images_lnu = {}
         self.images_fnu = {}
+
+        # Attach a default escape fraction
+        self.fesc = fesc
 
         # Set any of the extra attribute provided as kwargs
         for key, val in kwargs.items():
