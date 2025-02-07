@@ -32,7 +32,7 @@ class Extraction:
             The escape fraction.
     """
 
-    def __init__(self, grid, extract, fesc, lam_mask):
+    def __init__(self, grid, extract, fesc, lam_mask, vel_shift):
         """
         Initialise the extraction model.
 
@@ -45,6 +45,9 @@ class Extraction:
                 The escape fraction.
             lam_mask (ndarray):
                 The wavelength mask to apply to the spectra.
+            vel_shift (bool):
+                Should the emission take into account the velocity shift due
+                to peculiar velocities? (Particle Only!)
         """
         # Attach the grid
         self._grid = grid
@@ -58,13 +61,16 @@ class Extraction:
         # Attach the wavelength mask
         self._lam_mask = lam_mask
 
+        # Should the emission take into account the velocity shift due to
+        # peculiar velocities? (Particle Only!)
+        self._use_vel_shift = vel_shift
+
     def _extract_spectra(
         self,
         emission_model,
         emitters,
         spectra,
         particle_spectra,
-        vel_shift,
         verbose,
         **kwargs,
     ):
@@ -80,8 +86,6 @@ class Extraction:
                 The dictionary to store the extracted spectra in.
             particle_spectra (dict):
                 The dictionary to store the extracted particle spectra in.
-            vel_shift (bool):
-                Flags whether to apply doppler shift to the spectra
             verbose (bool):
                 Are we talking?
             kwargs (dict):
@@ -126,6 +130,7 @@ class Extraction:
                 generator_func = emitter.generate_lnu
 
             # Get this base spectra
+            print(f"Extracting {label} from {spectra_key}:", self.vel_shift)
             sed = Sed(
                 emission_model.lam,
                 generator_func(
@@ -135,7 +140,7 @@ class Extraction:
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
-                    vel_shift=vel_shift,
+                    vel_shift=self.vel_shift,
                     lam_mask=this_model._lam_mask,
                     verbose=verbose,
                     **kwargs,
@@ -349,6 +354,7 @@ class Extraction:
         summary.append(f"  Grid: {self._grid.grid_name}")
         summary.append(f"  Extract key: {self._extract}")
         summary.append(f"  Escape fraction: {self._fesc}")
+        summary.append(f"  Use velocity shift: {self._use_vel_shift}")
 
         return summary
 
