@@ -155,6 +155,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             "per particle". If True, the spectra and lines will be stored per
             particle. Integrated spectra are made automatically by summing the
             per particle spectra. Default is False.
+        vel_shift (bool):
+            A flag for whether the emission produced by this model should take
+            into account the velocity shift due to peculiar velocities.
+            Only applicable to particle based emitters. Default is False.
     """
 
     # Define quantities
@@ -183,6 +187,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         post_processing=(),
         save=True,
         per_particle=False,
+        vel_shift=False,
         **fixed_parameters,
     ):
         """
@@ -271,6 +276,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 be "per particle". If True, the spectra and lines will be
                 stored per particle. Integrated spectra are made automatically
                 by summing the per particle spectra. Default is False.
+            vel_shift (bool):
+                A flag for whether the emission produced by this model should
+                take into account the velocity shift due to peculiar
+                velocities. Default is False.
             fixed_parameters (dict):
                 Any extra keyword arguments will be treated as fixed parameters
                 and stored in a dictionary. When the model looks to extract
@@ -336,6 +345,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             lum_intrinsic_model=lum_intrinsic_model,
             lum_attenuated_model=lum_attenuated_model,
             lam_mask=lam_mask,
+            vel_shift=vel_shift,
         )
 
         # Containers for children and parents
@@ -393,6 +403,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         lum_intrinsic_model,
         lum_attenuated_model,
         lam_mask,
+        vel_shift,
     ):
         """
         Initialise the correct parent operation.
@@ -420,10 +431,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 luminosity when computing dust emission.
             lam_mask (ndarray):
                 The mask to apply to the wavelength array.
+            vel_shift (bool):
+                A flag for whether the emission produced by this model should
+                take into account the velocity shift due to peculiar
+                velocities. Particle emitters only.
         """
         # Which operation are we doing?
         if self._is_extracting:
-            Extraction.__init__(self, grid, extract, lam_mask)
+            Extraction.__init__(self, grid, extract, lam_mask, vel_shift)
         elif self._is_combining:
             Combination.__init__(self, combine)
         elif self._is_transforming:
@@ -1052,6 +1067,32 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Unpack the model now we're done
         self.unpack_model()
+
+    @property
+    def vel_shift(self):
+        """Get the velocity shift flag."""
+        if hasattr(self, "_use_vel_shift"):
+            return self._use_vel_shift
+        else:
+            return False
+
+    def set_vel_shift(self, vel_shift, set_all=False):
+        """
+        Set whether we should apply velocity shifts to the spectra.
+
+        Only applicable to particle emitters.
+
+        Args:
+            vel_shift (bool):
+                Whether to set the velocity shift flag.
+            set_all (bool):
+                Whether to set the emitter on all models.
+        """
+        if not set_all:
+            self._use_vel_shift = vel_shift
+        else:
+            for model in self._models.values():
+                model.set_vel_shift(vel_shift)
 
     @property
     def lum_intrinsic_model(self):
@@ -2020,7 +2061,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return fig, ax
 
     def _apply_overrides(
-        self, emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+        self,
+        emission_model,
+        dust_curves,
+        tau_v,
+        fesc,
+        covering_fraction,
+        mask,
+        vel_shift,
     ):
         """
         Apply overrides to an emission model copy.
@@ -2087,6 +2135,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     - A dictionary of the form:
                       {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
                       to add a specific mask to a particular model.
+            vel_shift (dict/bool):
+                Overide the models flag for using peculiar velocities to apply
+                doppler shift to the generated spectra. Only applicable for
+                particle spectra. Can be a boolean to apply to all models or a
+                dictionary of the form:
+                    {<label>: bool}
+                to apply to specific models.
         """
         # If we have dust curves to apply, apply them
         if dust_curves is not None:
@@ -2125,19 +2180,27 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if covering_fraction is not None:
             if isinstance(covering_fraction, dict):
                 for label, value in covering_fraction.items():
-                    emission_model._models[label].fixed_parameters[
-                        "covering_fraction"
-                    ] = value
+                    emission_model._models[label].fixed_parameters["fesc"] = (
+                        1 - value
+                    )
             else:
                 for model in emission_model._models.values():
-                    model.fixed_parameters["covering_fraction"] = (
-                        covering_fraction
-                    )
+                    model.fixed_parameters["fesc"] = 1 - covering_fraction
 
         # If we have masks to apply, apply them
         if mask is not None:
             for label, mask in mask.items():
                 emission_model[label].add_mask(**mask)
+
+        # If we have velocity shifts to apply, apply them
+        if vel_shift is not None:
+            if isinstance(vel_shift, dict):
+                for label, value in vel_shift.items():
+                    emission_model._models[label].set_vel_shift(value)
+            else:
+                for model in emission_model._models.values():
+                    if model._is_extracting:
+                        model.set_vel_shift(vel_shift)
 
     def _get_spectra(
         self,
@@ -2147,7 +2210,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         fesc=None,
         covering_fraction=None,
         mask=None,
-        vel_shift=False,
+        vel_shift=None,
         verbose=True,
         spectra=None,
         particle_spectra=None,
@@ -2227,7 +2290,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A dictionary of particle spectra to add to. This is used for
                 recursive calls to this function.
             vel_shift (bool)
-                Flags whether to apply doppler shift to the spectrum.
+                Overide the models flag for using peculiar velocities to apply
+                doppler shift to the generated spectra. Only applicable for
+                particle spectra.
             _is_related (bool)
                 Are we generating related model spectra? If so we don't want
                 to apply any post processing functions or delete any spectra,
@@ -2269,6 +2334,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             fesc,
             covering_fraction,
             mask,
+            vel_shift,
         )
 
         # Make a spectra dictionary if we haven't got one yet
@@ -2292,7 +2358,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emitters,
             spectra,
             particle_spectra,
-            vel_shift=vel_shift,
             verbose=verbose,
             nthreads=nthreads,
         )
@@ -2578,7 +2643,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(
-            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+            emission_model,
+            dust_curves,
+            tau_v,
+            fesc,
+            covering_fraction,
+            mask,
+            None,
         )
 
         # If we haven't got a lines dictionary yet we'll make one

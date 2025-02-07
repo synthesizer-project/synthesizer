@@ -15,6 +15,7 @@ in plots etc.
 
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 from unyt import (
     Angstrom,
@@ -32,7 +33,7 @@ from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
-from synthesizer.warnings import deprecation
+from synthesizer.warnings import deprecation, warn
 
 
 def get_line_id(id):
@@ -579,6 +580,102 @@ class LineCollection:
         """
         for line in self.lines.values():
             line.get_flux(cosmo, z, igm)
+
+    def plot_lines(
+        self, subset=None, figsize=(8, 6), show=False, xlimits=(), ylimits=()
+    ):
+        """
+        Plot the lines in the LineCollection.
+
+        Args:
+            show (bool)
+                Whether to show the plot.
+            xlimits (tuple)
+                The x-axis limits. Must be a length 2 tuple.
+                Defaults to (), in which case the default limits are used.
+            ylimits (tuple)
+                The y-axis limits. Must be a length 2 tuple.
+                Defaults to (), in which case the default limits are used.
+
+        Returns:
+            fig (matplotlib.figure.Figure)
+                The figure object.
+            ax (matplotlib.axes.Axes)
+                The axis object.
+        """
+        # Are we doing all lines?
+        if subset is None:
+            subset = self.line_ids
+
+        # Collect luminosities and wavelengths
+        luminosities = np.array(
+            [
+                line._luminosity
+                for line in self.lines.values()
+                if line.id in subset
+            ]
+        )
+        wavelengths = np.array(
+            [
+                line.wavelength
+                for line in self.lines.values()
+                if line.id in subset
+            ]
+        )
+
+        # Remove 0s and nans
+        mask = np.logical_and(luminosities > 0, ~np.isnan(luminosities))
+        luminosities = luminosities[mask]
+        wavelengths = wavelengths[mask]
+
+        # Warn the user if we removed anything
+        if np.sum(~mask) > 0:
+            warn(
+                f"Removed {np.sum(~mask)} lines with zero or NaN luminosities"
+            )
+
+        # Set up the plot
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.semilogy()
+
+        # Plot vertical lines
+        ax.vlines(
+            x=wavelengths,
+            ymin=min(luminosities) / 10,
+            ymax=luminosities,
+            color="C0",
+        )
+
+        # If we haven't been given a lower lim, set it to the minimum
+        if len(xlimits) == 0:
+            xlimits = (min(wavelengths) - 100, max(wavelengths) + 100)
+        if len(ylimits) == 0:
+            ylimits = (min(luminosities) / 10, max(luminosities) * 10)
+        elif ylimits[0] is None:
+            ylimits = list(ylimits)
+            ylimits[0] = min(luminosities) / 10
+
+        # Optionally label each line at the tip
+        # (assuming self.line_ids is in the same order)
+        for x, y, label in zip(wavelengths, luminosities, self.line_ids):
+            # On a log scale, you might want a small offset (e.g., y*1.05)
+            ax.text(x, y, label, rotation=45, ha="left", va="bottom")
+
+        # Set the x-axis to be in Angstroms
+        ax.set_xlabel(r"$ \lambda / \AA$")
+        ax.set_ylabel("$L / $erg s$^{-1}$")
+
+        # Apply limits if requested
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+
+        # Show the plot if requested
+        if show:
+            plt.show()
+
+        return fig, ax
 
     @accepts(wavelength_bins=angstrom)
     def get_blended_lines(self, wavelength_bins):

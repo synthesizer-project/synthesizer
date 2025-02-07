@@ -37,7 +37,6 @@ def scale_by_incident_isotropic(emission, emitters, model):
         emitters (dict): The emitters used to generate the emission.
         model (UnifiedAGN): The Unified AGN model.
     """
-
     # Handle lines and spectra differently
     if isinstance(emission[list(emission.keys())[0]], Sed):
         # Scale the spectra
