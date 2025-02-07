@@ -15,7 +15,8 @@ import numpy as np
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.exceptions import UnimplementedFunctionality
 
-from . import __file__ as filepath
+# Define the path to the data files
+filepath = os.path.abspath(__file__)
 
 __all__ = ["Inoue14", "Madau96"]
 
