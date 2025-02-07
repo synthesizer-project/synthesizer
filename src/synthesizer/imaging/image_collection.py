@@ -936,7 +936,10 @@ class ImageCollection:
         if vmax is None:
             vmax = np.max(self.rgb_img)
 
-        # Normalise the image.
+        # Clip the image to the normalisation range
+        self.rgb_img = np.clip(self.rgb_img, vmin, vmax)
+
+        # Normalise the image to the range 0-1
         rgb_img = (self.rgb_img - vmin) / (vmax - vmin)
 
         fig = plt.figure()
