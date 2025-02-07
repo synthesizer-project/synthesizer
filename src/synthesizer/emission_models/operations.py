@@ -726,63 +726,52 @@ class Transformation:
     of the input that can multiply the emission.
 
     Attributes:
-        transformer (emission_models.transformer):
-            The dust curve to apply.
+        transformer (Transformer):
+            The transformer to apply to the emission.
         apply_to (EmissionModel):
-            The model to apply the dust curve to.
-        tau_v (float/ndarray/str/tuple):
-            The optical depth to apply. Can be a float, ndarray, or a string
-            to a component attribute. Can also be a tuple combining any of
-            these.
+            The model to apply the transformer to.
     """
 
-    def __init__(self, dust_curve, apply_dust_to):
+    def __init__(self, transformer, apply_to):
         """
         Initialise the dust attenuation model.
 
         Args:
-            dust_curve (emission_models.attenuation.*):
-                The dust curve to apply.
-            apply_dust_to (EmissionModel):
-                The model to apply the dust curve to.
+            transformer (Transformer):
+                The model defining the transformation.
+            apply_to (EmissionModel):
+                The model to apply the transformation to.
         """
-        # Attach the dust curve
-        self._dust_curve = dust_curve
+        # Attach the transformer
+        self._transformer = transformer
 
-        # Attach the model to apply the dust curve to
-        self._apply_dust_to = apply_dust_to
+        # Attach the model to apply the transformer to
+        self._apply_to = apply_to
 
-        # Attach the optical depth/s if we have a fixed one (if not we
-        # will need to extract it from the emitter)
-        if "tau_v" in self.fixed_parameters:
-            self._tau_v = self.fixed_parameters["tau_v"]
-        else:
-            self._tau_v = None
-
-        # Ensure tau_v is a list
-        if not isinstance(self._tau_v, list) and self._tau_v is not None:
-            self._tau_v = [self._tau_v]
-
-    def _dust_attenuate_spectra(
+    def _transform_emission(
         self,
         this_model,
-        spectra,
-        particle_spectra,
+        emissions,
+        particle_emissions,
         emitter,
         this_mask,
     ):
         """
-        Dust attenuate the extracted spectra.
+        Transform an emission.
+
+        This can act on either an Sed or a LineCollection using dependency
+        injection, i.e. the appropriate transform will be applied based
+        on what is passed into it.
 
         Args:
             this_model (EmissionModel):
-                The model defining the dust attenuation.
-            spectra (dict):
-                The dictionary of spectra.
-            particle_spectra (dict):
-                The dictionary of particle spectra.
+                The model defining the transformation.
+            emissions (dict):
+                The dictionary of emissions (Sed/LineCollection).
+            particle_emissions (dict):
+                The dictionary of particle emissions (Sed/LineCollection).
             emitter (Stars/BlackHoles):
-                The emitter to dust attenuate the spectra for.
+                The emitter to transform the spectra for.
             this_mask (dict):
                 The mask to apply to the spectra.
 
@@ -790,102 +779,30 @@ class Transformation:
             dict:
                 The dictionary of spectra.
         """
-        # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the emitter
-        tau_v = 0
-        for tv in this_model.tau_v:
-            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
-
         # Get the spectra to apply dust to
         if this_model.per_particle:
-            apply_dust_to = particle_spectra[this_model.apply_dust_to.label]
+            apply_to = particle_emissions[this_model.apply_to.label]
         else:
-            apply_dust_to = spectra[this_model.apply_dust_to.label]
+            apply_to = emissions[this_model.apply_to.label]
 
-        # Otherwise, we are applying a dust curve (there's no
-        # alternative)
-        sed = apply_dust_to.apply_attenuation(
-            tau_v,
-            dust_curve=this_model.dust_curve,
-            mask=this_mask,
+        # Apply the transform to the spectra
+        emission = self._transformer._transform(
+            apply_to,
+            emitter,
+            this_model,
+            this_mask,
         )
 
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
-            particle_spectra[this_model.label] = sed
-            spectra[this_model.label] = sed.sum()
+            particle_emissions[this_model.label] = emission
+            emissions[this_model.label] = emission.sum()
         else:
-            spectra[this_model.label] = sed
+            emissions[this_model.label] = emission
 
-        return spectra, particle_spectra
+        return emissions, particle_emissions
 
-    def _dust_attenuate_lines(
-        self,
-        line_ids,
-        this_model,
-        lines,
-        particle_lines,
-        emitter,
-        this_mask,
-    ):
-        """
-        Dust attenuate the extracted lines.
-
-        Args:
-            line_ids (list):
-                The line ids to extract.
-            this_model (EmissionModel):
-                The model defining the dust attenuation.
-            lines (dict):
-                The dictionary of lines.
-            particle_lines (dict):
-                The dictionary of particle lines.
-            emitter (Stars/BlackHoles):
-                The emitter to dust attenuate the lines for.
-            this_mask (dict):
-                The mask to apply to the lines.
-
-        Returns:
-            dict:
-                The dictionary of lines.
-        """
-        # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the emitter
-        tau_v = 0
-        for tv in this_model.tau_v:
-            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
-
-        # Get the lines to apply dust to
-        if this_model.per_particle:
-            apply_dust_to = particle_lines[this_model.apply_dust_to.label]
-        else:
-            apply_dust_to = lines[this_model.apply_dust_to.label]
-
-        # Create dictionary to hold the dust attenuated lines
-        out_lines = {}
-
-        # Loop over the line ids
-        for line_id in line_ids:
-            # Otherwise, we are applying a dust curve (there's no
-            # alternative)
-            out_lines[line_id] = apply_dust_to[line_id].apply_attenuation(
-                tau_v,
-                dust_curve=this_model.dust_curve,
-                mask=this_mask,
-            )
-
-        # Store the lines in the right place (integrating if we need to)
-        if this_model.per_particle:
-            particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = {
-                line_id: line.sum() for line_id, line in out_lines.items()
-            }
-        else:
-            lines[this_model.label] = out_lines
-
-        return lines, particle_lines
-
-    def _attenuate_images(
+    def _transform_images(
         self,
         instrument,
         fov,
@@ -899,7 +816,7 @@ class Transformation:
         nthreads,
     ):
         """
-        Create an image for an attenuation key.
+        Create an image for a transformation model.
 
         Args:
             instrument (Instrument):
@@ -946,31 +863,28 @@ class Transformation:
 
         return images
 
-    def _attenuate_summary(self):
-        """Return a summary of a dust attenuation model."""
+    def _transform_summary(self):
+        """Return a summary of a transformation model."""
         # Create a list to hold the summary
         summary = []
 
         # Populate the list with the summary information
-        summary.append("Dust attenuation model:")
-        summary.append(f"  Dust curve: {self._dust_curve}")
-        summary.append(f"  Apply dust to: {self._apply_dust_to.label}")
+        summary.append("Transformer model:")
+        summary.append(f"  Transformer: {type(self._transformer)}")
+        summary.append(f"  Apply to: {self._apply_to.label}")
 
         return summary
 
-    def attenuate_to_hdf5(self, group):
-        """Save the dust attenuation model to an HDF5 group."""
+    def transformation_to_hdf5(self, group):
+        """Save the transformation model to an HDF5 group."""
         # Flag it's dust attenuation
-        group.attrs["type"] = "dust_attenuation"
+        group.attrs["type"] = "transformation"
 
         # Save the dust curve
-        group.attrs["dust_curve"] = str(type(self._dust_curve))
+        group.attrs["transformer"] = str(type(self._transformer))
 
         # Save the model to apply the dust curve to
-        group.attrs["apply_dust_to"] = self._apply_dust_to.label
-
-        # Save the optical depth
-        group.attrs["tau_v"] = self._tau_v
+        group.attrs["apply_to"] = self._apply_to.label
 
 
 class Combination:
