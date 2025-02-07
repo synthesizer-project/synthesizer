@@ -244,7 +244,7 @@ class Component(ABC):
         tau_v=None,
         fesc=None,
         mask=None,
-        vel_shift=False,
+        vel_shift=None,
         verbose=True,
         **kwargs,
     ):
