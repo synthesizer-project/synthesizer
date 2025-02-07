@@ -15,27 +15,11 @@ galaxy.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial import cKDTree
 from unyt import Msun, Myr, degree, km, kpc, s
 
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import CoordinateGenerator, Galaxy, Gas, Stars
-
-
-def calculate_smoothing_lengths(positions, num_neighbors=56):
-    """Calculate the SPH smoothing lengths for a set of coordinates."""
-    tree = cKDTree(positions)
-    distances, _ = tree.query(positions, k=num_neighbors + 1)
-
-    # The k-th nearest neighbor distance (k = num_neighbors)
-    kth_distances = distances[:, num_neighbors]
-
-    # Set the smoothing length to the k-th nearest neighbor
-    # distance divided by 2.0
-    smoothing_lengths = kth_distances / 2.0
-
-    return smoothing_lengths
-
+from synthesizer.particle.utils import calculate_smoothing_lengths
 
 # Set the seed
 np.random.seed(42)
@@ -79,7 +63,7 @@ metallicities = np.random.rand(n_disk + n_bulge) * 0.02
 initial_masses = masses.copy()
 redshift = 0.0
 centre = np.array([0.0, 0.0, 0.0]) * kpc
-smoothing_lengths = calculate_smoothing_lengths(coords) * kpc
+smoothing_lengths = calculate_smoothing_lengths(coords)
 
 # We'll start by simply using some stars
 stars = Stars(
@@ -151,7 +135,7 @@ gas = Gas(
     redshift=redshift,
     centre=centre,
     dust_to_metal_ratio=0.3,
-    smoothing_lengths=calculate_smoothing_lengths(gas_coords) * kpc,
+    smoothing_lengths=calculate_smoothing_lengths(gas_coords),
 )
 
 # Make the galaxy
