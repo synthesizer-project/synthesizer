@@ -682,6 +682,44 @@ class LineCollection:
         """
         self.scale(scaling)
 
+    def apply_attenuation(
+        self,
+        tau_v,
+        dust_curve,
+        mask=None,
+    ):
+        """
+        Apply attenuation to all lines in the collection.
+
+        Args:
+            tau_v (float/array-like, float)
+                The V-band optical depth for every star particle.
+            dust_curve (synthesizer.emission_models.attenuation.*)
+                An instance of one of the dust attenuation models. (defined in
+                synthesizer/emission_models.transformers.dust_attenuation.py)
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                spectra will be ignored when applying the attenuation. Only
+                applicable for multidimensional lines.
+
+        Returns:
+            LineCollection
+                A new LineCollection object containing the attenuated lines.
+        """
+        # Set up a dictionary to hold the attenuated lines
+        new_lines = {}
+
+        # Loop the lines and apply the attenuation
+        for line in self.lines.values():
+            new_lines[line.id] = line.apply_attenuation(
+                tau_v,
+                dust_curve,
+                mask,
+            )
+
+        # Return a new LineCollection object
+        return LineCollection(new_lines)
+
 
 class Line:
     """
