@@ -11,6 +11,7 @@ import numpy as np
 from unyt import Hz, erg, s
 
 from synthesizer import exceptions
+from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
@@ -28,8 +29,6 @@ class Extraction:
             The grid to extract from.
         extract (str):
             The key for the spectra to extract.
-        fesc (float):
-            The escape fraction.
     """
 
     def __init__(self, grid, extract, lam_mask):
@@ -49,13 +48,6 @@ class Extraction:
 
         # What base key will we be extracting?
         self._extract = extract
-
-        # Attach the escape fraction if we have a fixed one (if not we
-        # will need to extract it from the emitter)
-        if "fesc" in self.fixed_parameters:
-            self._fesc = self.fixed_parameters["fesc"]
-        else:
-            self._fesc = None
 
         # Attach the wavelength mask
         self._lam_mask = lam_mask
@@ -133,9 +125,7 @@ class Extraction:
                 generator_func(
                     this_model.grid,
                     spectra_key,
-                    fesc=getattr(emitter, this_model.fesc)
-                    if isinstance(this_model.fesc, str)
-                    else this_model.fesc,
+                    fesc=get_param("fesc", self, None, emitter),
                     mask=this_mask,
                     vel_shift=vel_shift,
                     lam_mask=this_model._lam_mask,
@@ -744,6 +734,7 @@ class Transformation:
         """
         # Attach the transformer
         self._transformer = transformer
+        print(type(self._transformer), self.label)
 
         # Attach the model to apply the transformer to
         self._apply_to = apply_to
@@ -786,7 +777,7 @@ class Transformation:
             apply_to = emissions[this_model.apply_to.label]
 
         # Apply the transform to the spectra
-        emission = self._transformer._transform(
+        emission = self.transformer._transform(
             apply_to,
             emitter,
             this_model,
@@ -870,7 +861,7 @@ class Transformation:
 
         # Populate the list with the summary information
         summary.append("Transformer model:")
-        summary.append(f"  Transformer: {type(self._transformer)}")
+        summary.append(f"  Transformer: {type(self.transformer)}")
         summary.append(f"  Apply to: {self._apply_to.label}")
 
         return summary
