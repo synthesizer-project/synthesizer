@@ -124,7 +124,6 @@ class Extraction:
                 generator_func = emitter.generate_lnu
 
             # Get this base spectra
-            print(f"Extracting {label} from {spectra_key}:", self.vel_shift)
             sed = Sed(
                 emission_model.lam,
                 generator_func(
@@ -738,7 +737,6 @@ class Transformation:
         """
         # Attach the transformer
         self._transformer = transformer
-        print(type(self._transformer), self.label)
 
         # Attach the model to apply the transformer to
         self._apply_to = apply_to
