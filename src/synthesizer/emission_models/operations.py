@@ -361,9 +361,6 @@ class Extraction:
         # Save the extract key
         group.attrs["extract"] = self._extract
 
-        # Save the escape fraction
-        group.attrs["fesc"] = self._fesc if self._fesc is not None else "None"
-
 
 class Generation:
     """
