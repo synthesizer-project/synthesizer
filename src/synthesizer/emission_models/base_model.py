@@ -2740,8 +2740,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             elif this_model._is_transforming:
                 try:
-                    lines, particle_lines = self._transform_emission(
-                        line_ids,
+                    lines, particle_lines = this_model._transform_emission(
                         this_model,
                         lines,
                         particle_lines,

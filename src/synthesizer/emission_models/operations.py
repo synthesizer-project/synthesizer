@@ -235,9 +235,7 @@ class Extraction:
                     grid=this_model.grid,
                     line_id=line_id,
                     line_type=this_model.extract,
-                    fesc=getattr(emitter, this_model.fesc)
-                    if isinstance(this_model.fesc, str)
-                    else this_model.fesc,
+                    fesc=get_param("fesc", self, None, emitter),
                     mask=this_mask,
                     verbose=verbose,
                     **kwargs,
