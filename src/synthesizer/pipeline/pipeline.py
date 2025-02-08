@@ -345,7 +345,7 @@ class Pipeline:
             [
                 m
                 for m in self.emission_model._models.values()
-                if m._is_dust_attenuating
+                if m._is_transforming
             ]
         )
         ngen_models = len(
