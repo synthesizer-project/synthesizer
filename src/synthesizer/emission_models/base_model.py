@@ -2994,7 +2994,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             elif this_model._is_transforming:
                 try:
-                    images = self._attenuate_images(
+                    images = self._transform_images(
                         instrument,
                         fov,
                         this_model,
