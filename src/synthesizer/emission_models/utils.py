@@ -42,20 +42,21 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
     value = None
 
     # Check the model's fixed parameters first
-    if param in model.fixed_parameters:
+    if model is not None and param in model.fixed_parameters:
         value = model.fixed_parameters[param]
 
     # Check the emission next
-    elif hasattr(emission, param):
+    elif emission is not None and hasattr(emission, param):
         value = getattr(emission, param)
 
     # Finally check the emitter
-    elif hasattr(emitter, param):
+    elif emitter is not None and hasattr(emitter, param):
         value = getattr(emitter, param)
 
-    # Do we need to recursively look for the parameter?
-    if isinstance(value, str):
-        return get_param(value, model, emission, emitter, default=default)
+    # Do we need to recursively look for the parameter? (We know we're only
+    # looking on the emitter at this point)
+    if value is not None and isinstance(value, str):
+        return get_param(value, None, None, emitter, default=default)
     elif value is not None:
         return value
 
