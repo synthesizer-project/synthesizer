@@ -16,7 +16,7 @@ from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
 )
-from synthesizer.line import Line
+from synthesizer.line import Line, LineCollection
 from synthesizer.sed import Sed
 
 
@@ -243,12 +243,15 @@ class Extraction:
 
             # Store the lines in the right place (integrating if we need to)
             if this_model.per_particle:
-                particle_lines[label] = out_lines
-                lines[label] = {
-                    line_id: line.sum() for line_id, line in out_lines.items()
-                }
+                particle_lines[label] = LineCollection(out_lines)
+                lines[label] = LineCollection(
+                    {
+                        line_id: line.sum()
+                        for line_id, line in out_lines.items()
+                    }
+                )
             else:
-                lines[label] = out_lines
+                lines[label] = LineCollection(out_lines)
 
             # Replace any fixed parameters
             for prop in prev_properties:
@@ -597,12 +600,12 @@ class Generation:
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
-            particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = {
-                line_id: line.sum() for line_id, line in out_lines.items()
-            }
+            particle_lines[this_model.label] = LineCollection(out_lines)
+            lines[this_model.label] = LineCollection(
+                {line_id: line.sum() for line_id, line in out_lines.items()}
+            )
         else:
-            lines[this_model.label] = out_lines
+            lines[this_model.label] = LineCollection(out_lines)
 
         return lines, particle_lines
 
@@ -1030,12 +1033,12 @@ class Combination:
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
-            particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = {
-                line_id: line.sum() for line_id, line in out_lines.items()
-            }
+            particle_lines[this_model.label] = LineCollection(out_lines)
+            lines[this_model.label] = LineCollection(
+                {line_id: line.sum() for line_id, line in out_lines.items()}
+            )
         else:
-            lines[this_model.label] = out_lines
+            lines[this_model.label] = LineCollection(out_lines)
 
         return lines, particle_lines
 
