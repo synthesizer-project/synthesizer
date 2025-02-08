@@ -97,6 +97,7 @@ class Stars(StarsComponent):
         sfzh=None,
         sf_hist=None,
         metal_dist=None,
+        fesc=None,
         **kwargs,
     ):
         """
@@ -142,6 +143,8 @@ class Stars(StarsComponent):
                     - An instance of one of the child classes of ZH. This
                       will be used to calculate an array describing the
                       metallicity distribution.
+            fesc (float)
+                The escape fraction of incident radiation from the stars.
         """
         # Instantiate the parent
         StarsComponent.__init__(
@@ -149,6 +152,7 @@ class Stars(StarsComponent):
             10**log10ages * yr,
             metallicities,
             _star_type="parametric",
+            fesc=fesc,
             **kwargs,
         )
 

@@ -39,12 +39,16 @@ class Component(ABC):
             A dictionary to hold the images in luminosity units.
         images_fnu (dict)
             A dictionary to hold the images in flux units
+        fesc (float)
+            The escape fraction of the component.
+        escf (float)
+            The fraction of photons that escape the component.
     """
 
     def __init__(
         self,
         component_type,
-        fesc=0.0,
+        fesc,
         **kwargs,
     ):
         """
@@ -53,6 +57,8 @@ class Component(ABC):
         Args:
             component_type (str)
                 The type of component, either "Stars" or "BlackHole".
+            fesc (float)
+                The escape fraction of the component.
             **kwargs
                 Any additional keyword arguments to attach to the Component.
         """
@@ -74,7 +80,8 @@ class Component(ABC):
         self.images_fnu = {}
 
         # Attach a default escape fraction
-        self.fesc = fesc
+        self.fesc = fesc if fesc is not None else 0.0
+        self.escf = 1 - self.fesc
 
         # Set any of the extra attribute provided as kwargs
         for key, val in kwargs.items():

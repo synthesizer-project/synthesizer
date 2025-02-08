@@ -135,6 +135,7 @@ class Stars(Particles, StarsComponent):
         softening_lengths=None,
         centre=None,
         metallicity_floor=1e-5,
+        fesc=None,
         **kwargs,
     ):
         """
@@ -177,6 +178,8 @@ class Stars(Particles, StarsComponent):
                 a number of way (e.g. centre of mass)
             metallicity_floor (float)
                 The minimum metallicity allowed in the simulation.
+            fesc (array-like, float)
+                The escape fraction of each stellar particle.
             **kwargs
                 Additional keyword arguments to be set as attributes.
         """
@@ -199,6 +202,7 @@ class Stars(Particles, StarsComponent):
             ages,
             metallicities,
             _star_type="particle",
+            fesc=fesc,
             **kwargs,
         )
 
