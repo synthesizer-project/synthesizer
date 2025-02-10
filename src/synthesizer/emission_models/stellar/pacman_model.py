@@ -103,7 +103,6 @@ class PacmanEmission(StellarEmissionModel):
 
     Attributes:
         grid (synthesizer.grid.Grid): The grid object
-        tau_v (float): The V-band optical depth
         dust_curve (synthesizer.dust.DustCurve): The dust curve
         dust_emission (synthesizer.dust.EmissionModel): The dust emission
         fesc (float): The escape fraction
@@ -113,7 +112,6 @@ class PacmanEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
-        tau_v,
         dust_curve=PowerLaw(),
         dust_emission=None,
         fesc=0.0,
@@ -145,7 +143,6 @@ class PacmanEmission(StellarEmissionModel):
         self._grid = grid
 
         # Attach the dust properties
-        self._tau_v = tau_v
         self._dust_curve = dust_curve
 
         # Attach the dust emission properties
@@ -311,7 +308,6 @@ class PacmanEmission(StellarEmissionModel):
     def _make_attenuated(self, **kwargs):
         return AttenuatedEmission(
             label="attenuated",
-            tau_v=self._tau_v,
             dust_curve=self._dust_curve,
             apply_to=self.reprocessed,
             emitter="stellar",
@@ -323,7 +319,6 @@ class PacmanEmission(StellarEmissionModel):
         if self._fesc == 0.0:
             return AttenuatedEmission(
                 label="emergent",
-                tau_v=self._tau_v,
                 dust_curve=self._dust_curve,
                 apply_to=self.reprocessed,
                 emitter="stellar",
@@ -400,7 +395,6 @@ class PacmanEmission(StellarEmissionModel):
                     self,
                     grid=self._grid,
                     label="emergent" if label is None else label,
-                    tau_v=self._tau_v,
                     dust_curve=self._dust_curve,
                     apply_to=self.intrinsic,
                     related_models=related_models,
@@ -537,10 +531,10 @@ class BimodalPacmanEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
-        tau_v_ism,
-        tau_v_birth,
         dust_curve_ism,
         dust_curve_birth,
+        tau_v_ism="tau_v_ism",
+        tau_v_birth="tau_v_birth",
         age_pivot=7 * dimensionless,
         dust_emission_ism=None,
         dust_emission_birth=None,
@@ -1430,7 +1424,6 @@ class ScreenEmission(PacmanEmission):
 
     Attributes:
         grid (synthesizer.grid.Grid): The grid object.
-        tau_v (float): The V-band optical depth.
         dust_curve (synthesizer.dust.DustCurve): The dust curve.
         dust_emission (synthesizer.dust.EmissionModel): The dust emission
             model.
@@ -1439,7 +1432,6 @@ class ScreenEmission(PacmanEmission):
     def __init__(
         self,
         grid,
-        tau_v,
         dust_curve,
         dust_emission=None,
         label=None,
@@ -1450,7 +1442,6 @@ class ScreenEmission(PacmanEmission):
 
         Args:
             grid (synthesizer.grid.Grid): The grid object.
-            tau_v (float): The V-band optical depth.
             dust_curve (synthesizer.dust.DustCurve): The dust curve.
             dust_emission (synthesizer.dust.EmissionModel): The dust emission
                 model.
@@ -1463,7 +1454,6 @@ class ScreenEmission(PacmanEmission):
         PacmanEmission.__init__(
             self,
             grid,
-            tau_v,
             dust_curve,
             dust_emission,
             fesc=0.0,
