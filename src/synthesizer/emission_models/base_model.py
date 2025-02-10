@@ -958,11 +958,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A dust curve instance to apply.
             apply_to (EmissionModel):
                 The model to apply the dust curve to.
-            tau_v (float/ndarray/str/tuple):
-                The optical depth to apply. Can be a float, ndarray, or a
-                string to a component attribute. Can also be a tuple combining
-                any of these. If a tuple then the eventual tau_v will be the
-                product of all contributors.
             set_all (bool):
                 Whether to set the properties on all models.
         """
