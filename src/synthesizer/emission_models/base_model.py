@@ -56,7 +56,7 @@ from synthesizer.emission_models.operations import (
 )
 from synthesizer.line import LineCollection
 from synthesizer.units import Quantity, accepts
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecation, warn
 
 
 class EmissionModel(Extraction, Generation, Transformation, Combination):
@@ -311,6 +311,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # If we have been given a mask, add it
         self._init_masks(mask_attr, mask_thresh, mask_op)
+
+        # Temporarily handle old apply_dust_to argument
+        if "apply_dust_to" in fixed_parameters:
+            deprecation(
+                "The apply_dust_to argument has been deprecated. "
+                "Please use the apply_to argument instead."
+            )
+            apply_to = fixed_parameters.pop("apply_dust_to")
 
         # Get operation flags
         self._get_operation_flags(
