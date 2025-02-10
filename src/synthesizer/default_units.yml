@@ -7,8 +7,8 @@ UnitCategories:
   mass:
     unit: Msun
 
-  # Cosmic time (e.g. ages)
-  cosmic_time:
+  # Time (e.g. ages)
+  time:
     unit: yr
 
   # Velocities (e.g. km/s)
