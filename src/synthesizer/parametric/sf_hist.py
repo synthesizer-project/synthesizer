@@ -770,6 +770,7 @@ class DenseBasis(Common):
                 " dense_basis support by running `pip install "
                 ".[dense_basis]`"
             )
+
         # Convert the dense basis tuple arguments to sfh in mass fraction units
         tempsfh, temptime = db.tuple_to_sfh(
             self.db_tuple, self.redshift, interpolator=interpolator, vb=False
