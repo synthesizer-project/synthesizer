@@ -16,50 +16,53 @@ Example Usage:
 """
 
 import argparse
+import os
 
 import requests
+import yaml
 from tqdm import tqdm
 
 from synthesizer import exceptions
 
-# Define all the available files and their information
-AVAILABLE_FILES = {
-    "test_grid.hdf5": {
-        "file": "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
-        "id": "ywu3dy73cdezohvytyb9k",
-        "rlkey": "05agbbdrmxytsc2x1x2jgh3xk",
-    },
-    "test_grid_agn-blr.hdf5": {
-        "file": "agnsed-limited_cloudy-c23.01-blr.hdf5",
-        "id": "r7pbdvbvujypgx8ady6bl",
-        "rlkey": "4tdscxnoaepvog8skil15ehgk",
-    },
-    "test_grid_agn-nlr.hdf5": {
-        "file": "agnsed-limited_cloudy-c23.01-nlr.hdf5",
-        "id": "7h971875rkkmkxvmgdqnn",
-        "rlkey": "e6oyr8l9gyqlz3i2nlko7pne6",
-    },
-    "MW3.1.hdf5": {
-        "file": "MW3.1.hdf5",
-        "id": "jidw4cgtf95x3gjvw4hj6",
-        "rlkey": "z7sbb7z5253dt90ootr5hm5jv",
-    },
-    "camels_snap.hdf5": {
-        "file": "camels_snap.hdf5",
-        "id": "c44wvkjm5pqsxpsl54oq0",
-        "rlkey": "j14smjen4osffhlyif1kz00bu",
-    },
-    "camels_subhalo.hdf5": {
-        "file": "camels_subhalo.hdf5",
-        "id": "srjaltgac4e2tsrxmxrdb",
-        "rlkey": "ov0icvv7znw9ybfr31h133jiq",
-    },
-}
+# Define the location of this file
+THIS_DIR = "/".join(os.path.abspath(__file__).split("/")[:-1])
 
 
-def _download_from_xcs_host(filename, save_dir):
+def load_test_data_links():
+    """Load the test data links from the yaml file."""
+    with open(f"{THIS_DIR}/_data_ids.yml", "r") as f:
+        data = yaml.safe_load(f)
+
+    return data["TestData"]
+
+
+def load_dust_data_links():
+    """Load the dust data links from the yaml file."""
+    with open(f"{THIS_DIR}/_data_ids.yml", "r") as f:
+        data = yaml.safe_load(f)
+
+    return data["DustData"]
+
+
+# Get the dicts contain the locations of the test and dust data
+TEST_FILES = load_test_data_links()
+DUST_FILES = load_dust_data_links()
+
+# Combine everything into a nice single dict
+AVAILABLE_FILES = {**TEST_FILES, **DUST_FILES}
+
+
+def _download(
+    filename,
+    save_dir,
+):
     """
-    Download the file from the XCS server.
+    Download the file from the data server.
+
+    We extract the link for the file and its name on the server from the
+    AVAILABLE_FILES dictionary.
+
+    We are now using Box
 
     Args:
         filename (str)
@@ -67,59 +70,11 @@ def _download_from_xcs_host(filename, save_dir):
         save_dir (str)
             The directory in which to save the file.
     """
-    # Define the base URL
-    xcs_url = (
-        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
-    )
-
-    # Define the full URL
-    url = xcs_url + AVAILABLE_FILES[filename]["file"]
-
-    # Define the save path
-    save_path = f"{save_dir}/{filename}"
-
-    # Download the file
-    response = requests.get(url, stream=True, timeout=10)
-
-    # Ensure the request was successful
-    if response.status_code != 200:
-        raise exceptions.DownloadError(
-            f"Failed to download {url}. Status code: {response.status_code}"
-        )
-
-    # Sizes in bytes.
-    total_size = int(response.headers.get("content-length", 0))
-    block_size = 1024
-
-    # Stream the file to disk with a nice progress bar.
-    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
-        with open(save_path, "wb") as f:
-            for chunk in response.iter_content(block_size):
-                progress_bar.update(len(chunk))
-                f.write(chunk)
-
-
-def _download_from_dropbox(filename, save_dir):
-    """
-    Download the file from the Dropbox server.
-
-    Args:
-        filename (str)
-            The name of the file to download.
-        save_dir (str)
-            The directory in which to save the file.
-    """
-    # Define the base URL
-    dropbox_url = "https://www.dropbox.com/scl/fi/"
-
     # Unpack the file details for extraction
     file_details = AVAILABLE_FILES[filename]
 
-    # Define the full URL
-    url = (
-        f"{dropbox_url}/{file_details['id']}/{file_details['file']}"
-        f"?rlkey={file_details['rlkey']}&dl=1"
-    )
+    # Unpack the url
+    url = file_details["direct_link"]
 
     # Define the save path
     save_path = f"{save_dir}/{filename}"
@@ -143,23 +98,6 @@ def _download_from_dropbox(filename, save_dir):
             for chunk in response.iter_content(block_size):
                 progress_bar.update(len(chunk))
                 f.write(chunk)
-
-
-def _download(
-    filename,
-    save_dir,
-):
-    """
-    Download the file at the given URL to the given path.
-
-    Args:
-        filename (str)
-            The name of the file to download.
-        save_dir (str)
-            The directory in which to save the file.
-    """
-    # Download from the dropbox
-    _download_from_dropbox(filename, save_dir)
 
 
 def download_test_grids(destination):
@@ -213,7 +151,7 @@ def download_dust_grid(destination):
             The path to the destination directory.
     """
     # Download the dust grid
-    _download("MW3.1.hdf5", destination)
+    _download("draine_li_dust_emission_grid.hdf5", destination)
 
 
 def download_camels_data(destination):
