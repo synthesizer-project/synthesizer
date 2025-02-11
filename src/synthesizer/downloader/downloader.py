@@ -151,7 +151,7 @@ def download_dust_grid(destination):
             The path to the destination directory.
     """
     # Download the dust grid
-    _download("draine_li_dust_emission_grid.hdf5", destination)
+    _download("draine_li_dust_emission_grid_MW_3p1.hdf5", destination)
 
 
 def download_camels_data(destination):
