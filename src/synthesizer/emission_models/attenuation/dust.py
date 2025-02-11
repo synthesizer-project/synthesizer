@@ -553,17 +553,20 @@ class GrainsWD01(AttenuationLaw):
         """
 
         lam_lims = np.logspace(2, 8, 10000) * angstrom
+        lam_v = 5500 * angstrom  # V-band wavelength
         func = interpolate.interp1d(
             lam_lims,
             self.emodel(lam_lims.to_astropy()),
             kind=interp,
             fill_value="extrapolate",
         )
-        out = func(lam) / func(5500 * angstrom)
-        if np.sum(lam > lam_lims[-1]) > 0:
+        out = func(lam) / func(lam_v)
+
+        if np.isscalar(lam):
+            if lam > lam_lims[-1]:
+                out = func(lam_lims[-1])
+        elif np.sum(lam > lam_lims[-1]) > 0:
             out[(lam > lam_lims[-1])] = func(lam_lims[-1])
-        elif lam > lam_lims[-1]:
-            out = func(lam_lims[-1])
 
         return out
 
