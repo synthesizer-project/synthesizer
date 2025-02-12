@@ -35,8 +35,8 @@ from pathos.multiprocessing import ProcessingPool as Pool
 from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
-from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments import Instrument, InstrumentCollection
+from synthesizer.instruments.filters import FilterCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
@@ -149,7 +149,7 @@ class Pipeline:
             emission_model (EmissionModel): The emission model to use for the
                 pipeline.
             instruments (Instrument, InstrumentCollection): Either a singular
-                Instrument object, or an InstrumentCollection containing 
+                Instrument object, or an InstrumentCollection containing
                 multiple Instrument objects.
             nthreads (int): The number of threads to use for shared memory
                 parallelism. Default is 1.
