@@ -93,7 +93,6 @@ dependencies = [
   "tqdm",
   "requests",
   "pathos",
-  "dense_basis@git+https://github.com/kartheikiyer/dense_basis",
   "statsmodels",
 ]
 
@@ -136,6 +135,13 @@ illustris = [
     "illustris_python @ git+https://github.com/illustristng/illustris_python.git@master",
 ]
 
+# Optional dependency for using dense_basis (note that we 
+# currently have to use the main branch since the PyPi version 
+# hasn't been updated with a fix we required)
+dense_basis = [
+  "dense_basis@git+https://github.com/kartheikiyer/dense_basis",
+]
+
 
 # Project urls
 [project.urls]
@@ -146,7 +152,7 @@ illustris = [
 
 # Entry points
 [project.scripts]
-synthesizer-download="synthesizer.download_data:download"
+synthesizer-download="synthesizer.downloader.downloader:download"
 
 # Package data
 [tool.setuptools.package-data]

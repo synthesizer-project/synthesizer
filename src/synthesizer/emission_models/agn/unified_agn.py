@@ -23,6 +23,7 @@ Example usage::
 import numpy as np
 from unyt import deg
 
+from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.sed import Sed
 
@@ -36,7 +37,6 @@ def scale_by_incident_isotropic(emission, emitters, model):
         emitters (dict): The emitters used to generate the emission.
         model (UnifiedAGN): The Unified AGN model.
     """
-
     # Handle lines and spectra differently
     if isinstance(emission[list(emission.keys())[0]], Sed):
         # Scale the spectra
@@ -157,6 +157,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
+        # Ensure the sum of covering fractions is less than 1
+        if covering_fraction_nlr + covering_fraction_blr > 1:
+            raise exceptions.InconsistentArguments(
+                "The sum of the covering fractions must be less than 1."
+            )
+
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,

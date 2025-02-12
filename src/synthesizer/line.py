@@ -15,13 +15,15 @@ in plots etc.
 
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Angstrom, Hz, angstrom, cm, erg, pc, s
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.units import Quantity, accepts
-from synthesizer.warnings import deprecation
+from synthesizer.utils import TableFormatter
+from synthesizer.warnings import deprecation, warn
 
 
 def get_line_id(id):
@@ -248,6 +250,9 @@ class LineCollection:
             A list of available line diagrams.
     """
 
+    # Define quantities
+    wavelengths = Quantity()
+
     def __init__(self, lines):
         """
         Initialise LineCollection.
@@ -288,11 +293,11 @@ class LineCollection:
         self.wavelengths = self.wavelengths[sorted_arguments]
 
         # Include line ratio and diagram definitions
-        self.line_ratios = line_ratios
+        self._line_ratios = line_ratios
 
         # Create list of available line ratios
         self.available_ratios = []
-        for ratio_id, ratio in self.line_ratios.ratios.items():
+        for ratio_id, ratio in self._line_ratios.ratios.items():
             # Create a set from the ratio line ids while also unpacking
             # any comma separated lines
             ratio_line_ids = set()
@@ -305,7 +310,7 @@ class LineCollection:
 
         # Create list of available line diagnostics
         self.available_diagrams = []
-        for diagram_id, diagram in self.line_ratios.diagrams.items():
+        for diagram_id, diagram in self._line_ratios.diagrams.items():
             # Create a set from the diagram line ids while also unpacking
             # any comma separated lines
             diagram_line_ids = set()
@@ -357,33 +362,6 @@ class LineCollection:
 
         return LineCollection(my_lines)
 
-    def __str__(self):
-        """
-        Function to print a basic summary of the LineCollection object.
-
-        Returns a string containing the id, wavelength, luminosity,
-        equivalent width, and flux if generated.
-
-        Returns:
-            summary (str)
-                Summary string containing the total mass formed and
-                lists of the available SEDs, lines, and images.
-        """
-
-        # Set up string for printing
-        summary = ""
-
-        # Add the content of the summary to the string to be printed
-        summary += "-" * 10 + "\n"
-        summary += "LINE COLLECTION\n"
-        summary += f"number of lines: {len(self.line_ids)}\n"
-        summary += f"lines: {self.line_ids}\n"
-        summary += f"available ratios: {self.available_ratios}\n"
-        summary += f"available diagrams: {self.available_diagrams}\n"
-        summary += "-" * 10
-
-        return summary
-
     def __iter__(self):
         """
         Overload iteration to allow simple looping over Line objects,
@@ -407,6 +385,23 @@ class LineCollection:
 
             # Return the filter
             return self.lines[self.line_ids[self._current_ind - 1]]
+
+    def __len__(self):
+        """Return the number of lines in the collection."""
+        return self.nlines
+
+    def __str__(self):
+        """
+        Return a string representation of the LineCollection object.
+
+        Returns:
+            table (str)
+                A string representation of the LineCollection object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("LineCollection")
 
     def sum(self):
         """
@@ -465,7 +460,7 @@ class LineCollection:
         # defined in the line_ratios module...
         if isinstance(ratio_id, str):
             # Check if ratio_id exists
-            if ratio_id not in self.line_ratios.available_ratios:
+            if ratio_id not in self._line_ratios.available_ratios:
                 raise exceptions.UnrecognisedOption(
                     f"ratio_id not recognised ({ratio_id})"
                 )
@@ -477,7 +472,7 @@ class LineCollection:
                     f"this ratio ({ratio_id})"
                 )
 
-            line1, line2 = self.line_ratios.ratios[ratio_id]
+            line1, line2 = self._line_ratios.ratios[ratio_id]
 
         # Otherwise interpret as a list
         elif isinstance(ratio_id, list):
@@ -502,7 +497,7 @@ class LineCollection:
         # defined in the line_ratios module...
         if isinstance(diagram_id, str):
             # check if ratio_id exists
-            if diagram_id not in self.line_ratios.available_diagrams:
+            if diagram_id not in self._line_ratios.available_diagrams:
                 raise exceptions.UnrecognisedOption(
                     f"diagram_id not recognised ({diagram_id})"
                 )
@@ -514,7 +509,7 @@ class LineCollection:
                     f"this diagram ({diagram_id})"
                 )
 
-            ab, cd = self.line_ratios.diagrams[diagram_id]
+            ab, cd = self._line_ratios.diagrams[diagram_id]
 
         # Otherwise interpret as a list
         elif isinstance(diagram_id, list):
@@ -575,6 +570,173 @@ class LineCollection:
         """
         for line in self.lines.values():
             line.get_flux(cosmo, z, igm)
+
+    def plot_lines(
+        self, subset=None, figsize=(8, 6), show=False, xlimits=(), ylimits=()
+    ):
+        """
+        Plot the lines in the LineCollection.
+
+        Args:
+            show (bool)
+                Whether to show the plot.
+            xlimits (tuple)
+                The x-axis limits. Must be a length 2 tuple.
+                Defaults to (), in which case the default limits are used.
+            ylimits (tuple)
+                The y-axis limits. Must be a length 2 tuple.
+                Defaults to (), in which case the default limits are used.
+
+        Returns:
+            fig (matplotlib.figure.Figure)
+                The figure object.
+            ax (matplotlib.axes.Axes)
+                The axis object.
+        """
+        # Are we doing all lines?
+        if subset is None:
+            subset = self.line_ids
+
+        # Collect luminosities and wavelengths
+        luminosities = np.array(
+            [
+                line._luminosity
+                for line in self.lines.values()
+                if line.id in subset
+            ]
+        )
+        wavelengths = np.array(
+            [
+                line.wavelength
+                for line in self.lines.values()
+                if line.id in subset
+            ]
+        )
+
+        # Remove 0s and nans
+        mask = np.logical_and(luminosities > 0, ~np.isnan(luminosities))
+        luminosities = luminosities[mask]
+        wavelengths = wavelengths[mask]
+
+        # Warn the user if we removed anything
+        if np.sum(~mask) > 0:
+            warn(
+                f"Removed {np.sum(~mask)} lines with zero or NaN luminosities"
+            )
+
+        # Set up the plot
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.semilogy()
+
+        # Plot vertical lines
+        ax.vlines(
+            x=wavelengths,
+            ymin=min(luminosities) / 10,
+            ymax=luminosities,
+            color="C0",
+        )
+
+        # If we haven't been given a lower lim, set it to the minimum
+        if len(xlimits) == 0:
+            xlimits = (min(wavelengths) - 100, max(wavelengths) + 100)
+        if len(ylimits) == 0:
+            ylimits = (min(luminosities) / 10, max(luminosities) * 10)
+        elif ylimits[0] is None:
+            ylimits = list(ylimits)
+            ylimits[0] = min(luminosities) / 10
+
+        # Optionally label each line at the tip
+        # (assuming self.line_ids is in the same order)
+        for x, y, label in zip(wavelengths, luminosities, self.line_ids):
+            # On a log scale, you might want a small offset (e.g., y*1.05)
+            ax.text(x, y, label, rotation=45, ha="left", va="bottom")
+
+        # Set the x-axis to be in Angstroms
+        ax.set_xlabel(r"$ \lambda / \AA$")
+        ax.set_ylabel("$L / $erg s$^{-1}$")
+
+        # Apply limits if requested
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+
+        # Show the plot if requested
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    @accepts(wavelength_bins=angstrom)
+    def get_blended_lines(self, wavelength_bins):
+        """
+        Blend lines separated by less than the provided wavelength resolution.
+
+        We use a set of wavelength bins to enable the user to control exactly
+        which lines are blended together. This also enables an array to be
+        used emulating an instrument resolution.
+
+        A simple resolution would lead to ambiguity in situations where A and
+        B are blended, and B and C are blended, but A and C are not.
+
+        Args:
+            wavelength_bins (unyt_array)
+                The wavelength bin edges into which the lines will be blended.
+                Any lines outside the range of the bins will be ignored.
+
+        Returns:
+            LineCollection
+                A new LineCollection object containing the blended lines.
+        """
+        # Ensure the bins are sorted and actually have a length
+        wavelength_bins = np.sort(wavelength_bins)
+        if len(wavelength_bins) < 2:
+            raise exceptions.InconsistentArguments(
+                "Wavelength bins must have a length of at least 2"
+            )
+
+        # Sort wavelengths into the bins getting the indices in each bin
+        bin_inds = np.digitize(self.wavelengths, wavelength_bins)
+
+        # Create a dictionary to hold the blended lines
+        blended_lines = np.empty(len(wavelength_bins), dtype=object)
+
+        # Initialise the array of blended lines to None
+        for i in range(blended_lines.size):
+            blended_lines[i] = None
+
+        # Loop bin indices and combine the lines into the blended_lines array
+        for i, bin_ind in enumerate(bin_inds):
+            # If the bin index is 0 or the length of the bins then it lay
+            # outside the range of the bins
+            if bin_ind == 0 or bin_ind == len(wavelength_bins):
+                continue
+
+            # Ok, now we can handle the off by 1 error that digitize gives us
+            bin_ind -= 1
+
+            # Get the line id
+            line_id = self.line_ids[i]
+
+            # Get the line itself
+            line = self.lines[line_id]
+
+            # If the bin is empty, just store the line
+            if blended_lines[bin_ind] is None:
+                blended_lines[bin_ind] = line
+
+            # Otherwise, combine the line with the existing line
+            else:
+                blended_lines[bin_ind] = blended_lines[bin_ind] + line
+
+        # Convert the array of lines to a dictionary ready to make a new
+        # LineCollection
+        new_lines = {}
+        for line in blended_lines:
+            if line is not None:
+                new_lines[line.id] = line
+
+        return LineCollection(new_lines)
 
 
 class Line:
@@ -763,52 +925,16 @@ class Line:
 
     def __str__(self):
         """
-        Return a basic summary of the Line object.
-
-        Returns a string containing the id, wavelength, luminosity,
-        equivalent width, and flux if generated.
+        Return a string representation of the LineCollection object.
 
         Returns:
-            summary (str)
-                Summary string containing the total mass formed and
-                lists of the available SEDs, lines, and images.
+            table (str)
+                A string representation of the LineCollection object.
         """
-        # Set up string for printing
-        pstr = ""
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += f"SUMMARY OF {self.id}" + "\n"
-        pstr += f"wavelength: {self.wavelength:.1f}" + "\n"
-        if isinstance(self.luminosity, np.ndarray):
-            mean_lum = np.mean(self._luminosity)
-            pstr += f"Npart: {self.luminosity.size}\n"
-            pstr += (
-                f"<log10(luminosity/{self.luminosity.units})>: "
-                f"{np.log10(mean_lum):.2f}\n"
-            )
-            mean_eq = np.mean(self.equivalent_width)
-            pstr += f"<equivalent width>: {mean_eq:.0f}" + "\n"
-            mean_flux = np.mean(self.flux) if self.flux is not None else None
-            pstr += (
-                f"<log10(flux/{self.flux.units}): {np.log10(mean_flux):.2f}"
-                if self.flux is not None
-                else ""
-            )
-        else:
-            pstr += (
-                f"log10(luminosity/{self.luminosity.units}): "
-                f"{np.log10(self.luminosity):.2f}\n"
-            )
-            pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
-            pstr += (
-                f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
-                if self.flux is not None
-                else ""
-            )
-        pstr += "-" * 10
-
-        return pstr
+        return formatter.get_table("Line")
 
     def __add__(self, second_line):
         """
