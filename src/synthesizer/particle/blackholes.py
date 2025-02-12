@@ -124,6 +124,7 @@ class BlackHoles(Particles, BlackholesComponent):
         velocity_dispersion_nlr=500 * km / s,
         theta_torus=10 * deg,
         tau_v=None,
+        fesc=None,
         **kwargs,
     ):
         """
@@ -176,6 +177,8 @@ class BlackHoles(Particles, BlackholesComponent):
                 The angle of the torus.
             tau_v (array-like, float)
                 The optical depth of the dust model.
+            fesc (array-like, float)
+                The escape fraction of the black hole emission.
             kwargs (dict)
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
@@ -205,6 +208,7 @@ class BlackHoles(Particles, BlackholesComponent):
         )
         BlackholesComponent.__init__(
             self,
+            fesc=fesc,
             mass=masses,
             accretion_rate=accretion_rates,
             epsilon=epsilons,

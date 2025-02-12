@@ -69,6 +69,7 @@ class BlackHole(BlackholesComponent):
         covering_fraction_nlr=0.1,
         velocity_dispersion_nlr=500 * km / s,
         theta_torus=10 * deg,
+        fesc=None,
         **kwargs,
     ):
         """
@@ -116,6 +117,9 @@ class BlackHole(BlackholesComponent):
                 The velocity dispersion of the narrow line region.
             theta_torus (array-like, float)
                 The angle of the torus.
+            fesc (array-like, float)
+                The escape fraction of the black hole. If None then the
+                escape fraction is set to 0.0.
             kwargs (dict)
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
@@ -123,6 +127,7 @@ class BlackHole(BlackholesComponent):
         # Initialise base class
         BlackholesComponent.__init__(
             self,
+            fesc=fesc,
             bolometric_luminosity=bolometric_luminosity,
             mass=mass,
             accretion_rate=accretion_rate,

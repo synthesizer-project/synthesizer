@@ -7,7 +7,7 @@ only contains common attributes and methods to reduce boilerplate.
 from unyt import Mpc
 
 from synthesizer import exceptions
-from synthesizer.emission_models.attenuation.igm import Inoue14
+from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.instruments import Instrument
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.units import accepts
