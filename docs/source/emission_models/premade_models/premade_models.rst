@@ -4,7 +4,7 @@ Premade Models
 Although it is possible to define your own custom model (see `custom models <../custom_models.ipynb>`_), most use cases will require a common set of emission models with a common set of properties.
 To avoid users having to redefine common models every time, we provide some pre--made models which can be used "out of the box", or as a foundation for constructing more complex models.
 
-These pre--made models can be imported directly from the ``emission_models`` submodule, which also defines several lists detailing all available models.
+These pre-made models can be imported directly from the ``emission_models`` submodule, which also defines several lists detailing all available models.
 
 
 .. code-block:: python

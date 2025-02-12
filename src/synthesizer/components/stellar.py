@@ -40,6 +40,7 @@ class StarsComponent(Component):
         ages,
         metallicities,
         _star_type,
+        fesc,
         **kwargs,
     ):
         """
@@ -51,9 +52,15 @@ class StarsComponent(Component):
             metallicities (array-like, float)
                 The metallicity of each stellar particle/bin
                 (particle/parametric).
+            _star_type (str)
+                The type of stars object (parametric or particle).
+                This is useful for determining the type of stars object
+                without relying on isinstance and possible circular imports.
+            fesc (float)
+                The escape fraction of incident radiation.
         """
         # Initialise the parent class
-        Component.__init__(self, "Stars", **kwargs)
+        Component.__init__(self, "Stars", fesc, **kwargs)
 
         # The common stellar attributes between particle and parametric stars
         self.ages = ages

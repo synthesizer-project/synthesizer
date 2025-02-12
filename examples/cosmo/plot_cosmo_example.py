@@ -190,7 +190,7 @@ attenuated = AttenuatedEmission(
     grid=grid,
     emitter="stellar",
     dust_curve=PowerLaw(slope=-1),
-    apply_dust_to=reprocessed,
+    apply_to=reprocessed,
     tau_v=0.33,
     component="stellar",  # we can point models at different components
 )

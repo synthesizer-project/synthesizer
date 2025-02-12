@@ -96,6 +96,7 @@ class BlackholesComponent(Component):
     )
     def __init__(
         self,
+        fesc,
         mass=None,
         accretion_rate=None,
         epsilon=0.1,
@@ -165,7 +166,7 @@ class BlackholesComponent(Component):
                 kwargs.
         """
         # Initialise the parent class
-        Component.__init__(self, "BlackHoles", **kwargs)
+        Component.__init__(self, "BlackHoles", fesc, **kwargs)
 
         # Save the black hole properties
         self.mass = mass

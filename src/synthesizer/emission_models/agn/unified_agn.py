@@ -231,7 +231,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=grid,
             label="disc_incident_isotropic",
             extract="incident",
-            fixed_parameters={"cosine_inclination": 0.5},
+            cosine_inclination=0.5,
             **kwargs,
         )
 
@@ -337,7 +337,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="nlr",
             extract="nebular",
             fesc=1 - covering_fraction_nlr,
-            fixed_parameters={"cosine_inclination": 0.5},
+            cosine_inclination=0.5,
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
@@ -345,10 +345,10 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="blr",
             extract="nebular",
             fesc=1 - covering_fraction_blr,
-            fixed_parameters={"cosine_inclination": 0.5},
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            cosine_inclination=0.5,
             **kwargs,
         )
         return nlr, blr

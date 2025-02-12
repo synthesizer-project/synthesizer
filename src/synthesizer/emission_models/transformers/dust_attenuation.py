@@ -24,6 +24,7 @@ from scipy import interpolate
 from unyt import angstrom, um
 
 from synthesizer import exceptions
+from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.units import accepts
 
 this_dir, this_filename = os.path.split(__file__)
@@ -31,7 +32,7 @@ this_dir, this_filename = os.path.split(__file__)
 __all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLi08"]
 
 
-class AttenuationLaw:
+class AttenuationLaw(Transformer):
     """
     The base class for all attenuation laws.
 
@@ -54,6 +55,9 @@ class AttenuationLaw:
         """
         # Store the description of the model.
         self.description = description
+
+        # Call the parent constructor
+        Transformer.__init__(self, required_params=("tau_v",))
 
     def get_tau(self, *args):
         """Compute the optical depth."""
@@ -100,6 +104,29 @@ class AttenuationLaw:
                 exponent = tau_v[:, None] * tau_x_v
 
         return np.exp(-exponent)
+
+    def _transform(self, emission, emitter, model, mask):
+        """
+        Apply the dust attenuation to the emission.
+
+        Args:
+            emission (Line/Sed): The emission to transform.
+            emitter (Stars/Gas/BlackHole/Galaxy): The object emitting the
+                emission.
+            model (EmissionModel): The emission model generating the emission.
+
+        Returns:
+            Line/Sed: The transformed emission.
+        """
+        # Extract the required parameters
+        params = self._extract_params(model, emission, emitter)
+
+        # Apply the transmission to the emission
+        return emission.apply_attenuation(
+            tau_v=params["tau_v"],
+            dust_curve=self,
+            mask=mask,
+        )
 
     @accepts(lam=angstrom)
     def plot_attenuation(
@@ -551,7 +578,6 @@ class GrainsWD01(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-
         lam_lims = np.logspace(2, 8, 10000) * angstrom
         lam_v = 5500 * angstrom  # V-band wavelength
         func = interpolate.interp1d(

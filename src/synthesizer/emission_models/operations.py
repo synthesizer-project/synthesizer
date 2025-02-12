@@ -11,11 +11,12 @@ import numpy as np
 from unyt import Hz, erg, s
 
 from synthesizer import exceptions
+from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
 )
-from synthesizer.line import Line
+from synthesizer.line import Line, LineCollection
 from synthesizer.sed import Sed
 
 
@@ -28,11 +29,9 @@ class Extraction:
             The grid to extract from.
         extract (str):
             The key for the spectra to extract.
-        fesc (float):
-            The escape fraction.
     """
 
-    def __init__(self, grid, extract, fesc, lam_mask, vel_shift):
+    def __init__(self, grid, extract, lam_mask, vel_shift):
         """
         Initialise the extraction model.
 
@@ -41,8 +40,6 @@ class Extraction:
                 The grid to extract from.
             extract (str):
                 The key for the spectra to extract.
-            fesc (float):
-                The escape fraction.
             lam_mask (ndarray):
                 The wavelength mask to apply to the spectra.
             vel_shift (bool):
@@ -54,9 +51,6 @@ class Extraction:
 
         # What base key will we be extracting?
         self._extract = extract
-
-        # Attach the escape fraction
-        self._fesc = fesc
 
         # Attach the wavelength mask
         self._lam_mask = lam_mask
@@ -130,15 +124,12 @@ class Extraction:
                 generator_func = emitter.generate_lnu
 
             # Get this base spectra
-            print(f"Extracting {label} from {spectra_key}:", self.vel_shift)
             sed = Sed(
                 emission_model.lam,
                 generator_func(
                     this_model.grid,
                     spectra_key,
-                    fesc=getattr(emitter, this_model.fesc)
-                    if isinstance(this_model.fesc, str)
-                    else this_model.fesc,
+                    fesc=get_param("fesc", self, None, emitter),
                     mask=this_mask,
                     vel_shift=self.vel_shift,
                     lam_mask=this_model._lam_mask,
@@ -243,9 +234,7 @@ class Extraction:
                     grid=this_model.grid,
                     line_id=line_id,
                     line_type=this_model.extract,
-                    fesc=getattr(emitter, this_model.fesc)
-                    if isinstance(this_model.fesc, str)
-                    else this_model.fesc,
+                    fesc=get_param("fesc", self, None, emitter),
                     mask=this_mask,
                     verbose=verbose,
                     **kwargs,
@@ -253,12 +242,15 @@ class Extraction:
 
             # Store the lines in the right place (integrating if we need to)
             if this_model.per_particle:
-                particle_lines[label] = out_lines
-                lines[label] = {
-                    line_id: line.sum() for line_id, line in out_lines.items()
-                }
+                particle_lines[label] = LineCollection(out_lines)
+                lines[label] = LineCollection(
+                    {
+                        line_id: line.sum()
+                        for line_id, line in out_lines.items()
+                    }
+                )
             else:
-                lines[label] = out_lines
+                lines[label] = LineCollection(out_lines)
 
             # Replace any fixed parameters
             for prop in prev_properties:
@@ -353,7 +345,6 @@ class Extraction:
         summary.append("Extraction model:")
         summary.append(f"  Grid: {self._grid.grid_name}")
         summary.append(f"  Extract key: {self._extract}")
-        summary.append(f"  Escape fraction: {self._fesc}")
         summary.append(f"  Use velocity shift: {self._use_vel_shift}")
 
         return summary
@@ -368,9 +359,6 @@ class Extraction:
 
         # Save the extract key
         group.attrs["extract"] = self._extract
-
-        # Save the escape fraction
-        group.attrs["fesc"] = self._fesc if self._fesc is not None else "None"
 
 
 class Generation:
@@ -608,12 +596,12 @@ class Generation:
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
-            particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = {
-                line_id: line.sum() for line_id, line in out_lines.items()
-            }
+            particle_lines[this_model.label] = LineCollection(out_lines)
+            lines[this_model.label] = LineCollection(
+                {line_id: line.sum() for line_id, line in out_lines.items()}
+            )
         else:
-            lines[this_model.label] = out_lines
+            lines[this_model.label] = LineCollection(out_lines)
 
         return lines, particle_lines
 
@@ -717,68 +705,66 @@ class Generation:
             )
 
 
-class DustAttenuation:
+class Transformation:
     """
-    A class to define the dust attenuation of spectra.
+    A class to define the transformation of an emission.
+
+    A transformation can include attenuation of the spectra by an extinction
+    curve, or it can involve any scaling of the emission.
+
+    A Transformer is needed to apply the transformation to the emission. This
+    class must inherit from the Transformer base class (defined in
+    emission_models/transformers/transformer.py) and must define the
+    get_transformation method. This method should return an array the size
+    of the input that can multiply the emission.
 
     Attributes:
-        dust_curve (emission_models.attenuation.*):
-            The dust curve to apply.
-        apply_dust_to (EmissionModel):
-            The model to apply the dust curve to.
-        tau_v (float/ndarray/str/tuple):
-            The optical depth to apply. Can be a float, ndarray, or a string
-            to a component attribute. Can also be a tuple combining any of
-            these.
+        transformer (Transformer):
+            The transformer to apply to the emission.
+        apply_to (EmissionModel):
+            The model to apply the transformer to.
     """
 
-    def __init__(self, dust_curve, apply_dust_to, tau_v):
+    def __init__(self, transformer, apply_to):
         """
         Initialise the dust attenuation model.
 
         Args:
-            dust_curve (emission_models.attenuation.*):
-                The dust curve to apply.
-            apply_dust_to (EmissionModel):
-                The model to apply the dust curve to.
-            tau_v (float/ndarray/str/tuple):
-                The optical depth to apply. Can be a float, ndarray, or a
-                string to a component attribute. Can also be a tuple combining
-                any of these.
+            transformer (Transformer):
+                The model defining the transformation.
+            apply_to (EmissionModel):
+                The model to apply the transformation to.
         """
-        # Attach the dust curve
-        self._dust_curve = dust_curve
+        # Attach the transformer
+        self._transformer = transformer
 
-        # Attach the model to apply the dust curve to
-        self._apply_dust_to = apply_dust_to
+        # Attach the model to apply the transformer to
+        self._apply_to = apply_to
 
-        # Attach the optical depth/s
-        self._tau_v = (
-            tau_v
-            if isinstance(tau_v, (tuple, list)) or tau_v is None
-            else [tau_v]
-        )
-
-    def _dust_attenuate_spectra(
+    def _transform_emission(
         self,
         this_model,
-        spectra,
-        particle_spectra,
+        emissions,
+        particle_emissions,
         emitter,
         this_mask,
     ):
         """
-        Dust attenuate the extracted spectra.
+        Transform an emission.
+
+        This can act on either an Sed or a LineCollection using dependency
+        injection, i.e. the appropriate transform will be applied based
+        on what is passed into it.
 
         Args:
             this_model (EmissionModel):
-                The model defining the dust attenuation.
-            spectra (dict):
-                The dictionary of spectra.
-            particle_spectra (dict):
-                The dictionary of particle spectra.
+                The model defining the transformation.
+            emissions (dict):
+                The dictionary of emissions (Sed/LineCollection).
+            particle_emissions (dict):
+                The dictionary of particle emissions (Sed/LineCollection).
             emitter (Stars/BlackHoles):
-                The emitter to dust attenuate the spectra for.
+                The emitter to transform the spectra for.
             this_mask (dict):
                 The mask to apply to the spectra.
 
@@ -786,102 +772,30 @@ class DustAttenuation:
             dict:
                 The dictionary of spectra.
         """
-        # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the emitter
-        tau_v = 0
-        for tv in this_model.tau_v:
-            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
-
         # Get the spectra to apply dust to
         if this_model.per_particle:
-            apply_dust_to = particle_spectra[this_model.apply_dust_to.label]
+            apply_to = particle_emissions[this_model.apply_to.label]
         else:
-            apply_dust_to = spectra[this_model.apply_dust_to.label]
+            apply_to = emissions[this_model.apply_to.label]
 
-        # Otherwise, we are applying a dust curve (there's no
-        # alternative)
-        sed = apply_dust_to.apply_attenuation(
-            tau_v,
-            dust_curve=this_model.dust_curve,
-            mask=this_mask,
+        # Apply the transform to the spectra
+        emission = self.transformer._transform(
+            apply_to,
+            emitter,
+            this_model,
+            this_mask,
         )
 
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
-            particle_spectra[this_model.label] = sed
-            spectra[this_model.label] = sed.sum()
+            particle_emissions[this_model.label] = emission
+            emissions[this_model.label] = emission.sum()
         else:
-            spectra[this_model.label] = sed
+            emissions[this_model.label] = emission
 
-        return spectra, particle_spectra
+        return emissions, particle_emissions
 
-    def _dust_attenuate_lines(
-        self,
-        line_ids,
-        this_model,
-        lines,
-        particle_lines,
-        emitter,
-        this_mask,
-    ):
-        """
-        Dust attenuate the extracted lines.
-
-        Args:
-            line_ids (list):
-                The line ids to extract.
-            this_model (EmissionModel):
-                The model defining the dust attenuation.
-            lines (dict):
-                The dictionary of lines.
-            particle_lines (dict):
-                The dictionary of particle lines.
-            emitter (Stars/BlackHoles):
-                The emitter to dust attenuate the lines for.
-            this_mask (dict):
-                The mask to apply to the lines.
-
-        Returns:
-            dict:
-                The dictionary of lines.
-        """
-        # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the emitter
-        tau_v = 0
-        for tv in this_model.tau_v:
-            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
-
-        # Get the lines to apply dust to
-        if this_model.per_particle:
-            apply_dust_to = particle_lines[this_model.apply_dust_to.label]
-        else:
-            apply_dust_to = lines[this_model.apply_dust_to.label]
-
-        # Create dictionary to hold the dust attenuated lines
-        out_lines = {}
-
-        # Loop over the line ids
-        for line_id in line_ids:
-            # Otherwise, we are applying a dust curve (there's no
-            # alternative)
-            out_lines[line_id] = apply_dust_to[line_id].apply_attenuation(
-                tau_v,
-                dust_curve=this_model.dust_curve,
-                mask=this_mask,
-            )
-
-        # Store the lines in the right place (integrating if we need to)
-        if this_model.per_particle:
-            particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = {
-                line_id: line.sum() for line_id, line in out_lines.items()
-            }
-        else:
-            lines[this_model.label] = out_lines
-
-        return lines, particle_lines
-
-    def _attenuate_images(
+    def _transform_images(
         self,
         instrument,
         fov,
@@ -895,7 +809,7 @@ class DustAttenuation:
         nthreads,
     ):
         """
-        Create an image for an attenuation key.
+        Create an image for a transformation model.
 
         Args:
             instrument (Instrument):
@@ -942,32 +856,28 @@ class DustAttenuation:
 
         return images
 
-    def _attenuate_summary(self):
-        """Return a summary of a dust attenuation model."""
+    def _transform_summary(self):
+        """Return a summary of a transformation model."""
         # Create a list to hold the summary
         summary = []
 
         # Populate the list with the summary information
-        summary.append("Dust attenuation model:")
-        summary.append(f"  Dust curve: {self._dust_curve}")
-        summary.append(f"  Apply dust to: {self._apply_dust_to.label}")
-        summary.append(f"  Optical depth (tau_v): {self._tau_v}")
+        summary.append("Transformer model:")
+        summary.append(f"  Transformer: {type(self.transformer)}")
+        summary.append(f"  Apply to: {self._apply_to.label}")
 
         return summary
 
-    def attenuate_to_hdf5(self, group):
-        """Save the dust attenuation model to an HDF5 group."""
+    def transformation_to_hdf5(self, group):
+        """Save the transformation model to an HDF5 group."""
         # Flag it's dust attenuation
-        group.attrs["type"] = "dust_attenuation"
+        group.attrs["type"] = "transformation"
 
         # Save the dust curve
-        group.attrs["dust_curve"] = str(type(self._dust_curve))
+        group.attrs["transformer"] = str(type(self._transformer))
 
         # Save the model to apply the dust curve to
-        group.attrs["apply_dust_to"] = self._apply_dust_to.label
-
-        # Save the optical depth
-        group.attrs["tau_v"] = self._tau_v
+        group.attrs["apply_to"] = self._apply_to.label
 
 
 class Combination:
@@ -1118,12 +1028,12 @@ class Combination:
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
-            particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = {
-                line_id: line.sum() for line_id, line in out_lines.items()
-            }
+            particle_lines[this_model.label] = LineCollection(out_lines)
+            lines[this_model.label] = LineCollection(
+                {line_id: line.sum() for line_id, line in out_lines.items()}
+            )
         else:
-            lines[this_model.label] = out_lines
+            lines[this_model.label] = LineCollection(out_lines)
 
         return lines, particle_lines
 
