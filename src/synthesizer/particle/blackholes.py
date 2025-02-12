@@ -16,14 +16,29 @@ Example usages:
 import os
 
 import numpy as np
-from unyt import Hz, angstrom, cm, deg, erg, km, rad, s, unyt_array
+from unyt import (
+    Hz,
+    Mpc,
+    Msun,
+    angstrom,
+    c,
+    cm,
+    deg,
+    erg,
+    km,
+    rad,
+    s,
+    unyt_array,
+    yr,
+)
 
 from synthesizer import exceptions
-from synthesizer.components import BlackholesComponent
+from synthesizer.components.blackhole import BlackholesComponent
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
-from synthesizer.units import Quantity
-from synthesizer.utils import TableFormatter, value_to_array
+from synthesizer.units import Quantity, accepts
+from synthesizer.utils import value_to_array
 from synthesizer.warnings import deprecated, warn
 
 
@@ -70,6 +85,21 @@ class BlackHoles(Particles, BlackholesComponent):
     # Define quantities
     smoothing_lengths = Quantity()
 
+    @accepts(
+        masses=Msun.in_base("galactic"),
+        accretion_rates=Msun.in_base("galactic") / yr,
+        inclinations=deg,
+        coordinates=Mpc,
+        velocities=km / s,
+        softening_length=Mpc,
+        smoothing_lengths=Mpc,
+        centre=Mpc,
+        hydrogen_density_blr=1 / cm**3,
+        hydrogen_density_nlr=1 / cm**3,
+        velocity_dispersion_blr=km / s,
+        velocity_dispersion_nlr=km / s,
+        theta_torus=deg,
+    )
     def __init__(
         self,
         masses,
@@ -81,7 +111,7 @@ class BlackHoles(Particles, BlackholesComponent):
         redshift=None,
         coordinates=None,
         velocities=None,
-        softening_length=None,
+        softening_lengths=None,
         smoothing_lengths=None,
         centre=None,
         ionisation_parameter_blr=0.1,
@@ -167,7 +197,7 @@ class BlackHoles(Particles, BlackholesComponent):
             velocities=velocities,
             masses=masses,
             redshift=redshift,
-            softening_length=softening_length,
+            softening_lengths=softening_lengths,
             nparticles=masses.size,
             centre=centre,
             tau_v=tau_v,
@@ -244,19 +274,6 @@ class BlackHoles(Particles, BlackholesComponent):
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
 
-    def __str__(self):
-        """
-        Return a string representation of the particle object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Black Holes")
-
     def calculate_random_inclination(self):
         """
         Calculate random inclinations to blackholes.
@@ -275,11 +292,12 @@ class BlackHoles(Particles, BlackholesComponent):
         spectra_type,
         mask,
         grid_assignment_method,
+        lam_mask,
         nthreads,
+        vel_shift,
     ):
         """
-        A method to prepare the arguments for SED computation with the C
-        functions.
+        Prepare the arguments for the C extension to compute SEDs.
 
         Args:
             grid (Grid)
@@ -297,6 +315,9 @@ class BlackHoles(Particles, BlackholesComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             nthreads (int)
                 The number of threads to use for the computation. If -1 then
                 all available threads are used.
@@ -311,14 +332,19 @@ class BlackHoles(Particles, BlackholesComponent):
         elif "blr" in grid.grid_name:
             line_region = "blr"
         else:
-            raise exceptions.InconsistentArguments(
-                "Grid used for blackholes does not appear to be for"
-                " a line region (nlr or blr)."
-            )
+            # this is a generic disc grid so no line_region
+            line_region = None
 
         # Handle the case where mask is None
         if mask is None:
             mask = np.ones(self.nbh, dtype=bool)
+
+        # If lam_mask is None then we want all wavelengths
+        if lam_mask is None:
+            lam_mask = np.ones(
+                grid.spectra[spectra_type].shape[-1],
+                dtype=bool,
+            )
 
         # Set up the inputs to the C function.
         grid_props = [
@@ -382,17 +408,50 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        mass = np.ones(npart, dtype=np.float64)
+        # Handle the velocities (and make sure we have velocities if a shift
+        # has been requested)
+        if self.velocities is not None:
+            part_vels = np.ascontiguousarray(
+                self._velocities[mask],
+                dtype=np.float64,
+            )
+            vel_units = self.velocities.units
+        elif vel_shift and self.velocities is None:
+            raise exceptions.InconsistentArguments(
+                "Velocity shifted spectra requested but no "
+                "black hole velocities provided."
+            )
+        else:
+            # We aren't doing a shift so just pass a dummy array and units
+            part_vels = np.ascontiguousarray(
+                np.zeros((np.sum(mask), 3)),
+                dtype=np.float64,
+            )
+            vel_units = km / s
+
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+        nlam = np.int32(np.sum(lam_mask))
 
         # Get the grid spctra
         grid_spectra = np.ascontiguousarray(
             grid.spectra[spectra_type],
             dtype=np.float64,
+        )
+
+        # Get the grid wavelengths
+        grid_lam = np.ascontiguousarray(
+            grid._lam,
+            dtype=np.float64,
+        )
+
+        # Apply the wavelength mask
+        grid_spectra = np.ascontiguousarray(
+            grid_spectra[..., lam_mask],
+            np.float64,
         )
 
         # Get the grid dimensions after slicing what we need
@@ -413,19 +472,39 @@ class BlackHoles(Particles, BlackholesComponent):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        return (
-            grid_spectra,
-            grid_props,
-            props,
-            mass,
-            fesc,
-            grid_dims,
-            len(grid_props),
-            np.int32(npart),
-            nlam,
-            grid_assignment_method,
-            nthreads,
-        )
+        # Return the right arguments for the situation (either with all the
+        # extra velocity information or without)
+        if vel_shift:
+            return (
+                grid_spectra,
+                grid_lam,
+                grid_props,
+                props,
+                bol_lum,
+                fesc,
+                part_vels,
+                grid_dims,
+                len(grid_props),
+                np.int32(npart),
+                nlam,
+                grid_assignment_method,
+                nthreads,
+                c.to(vel_units).value,
+            )
+        else:
+            return (
+                grid_spectra,
+                grid_props,
+                props,
+                bol_lum,
+                fesc,
+                grid_dims,
+                len(grid_props),
+                np.int32(npart),
+                nlam,
+                grid_assignment_method,
+                nthreads,
+            )
 
     def _prepare_line_args(
         self,
@@ -541,9 +620,9 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        part_mass = np.ones(npart, dtype=np.float64)
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -580,7 +659,7 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_continuum,
             grid_props,
             part_props,
-            part_mass,
+            bol_lum,
             fesc,
             grid_dims,
             len(grid_props),
@@ -593,11 +672,13 @@ class BlackHoles(Particles, BlackholesComponent):
         self,
         grid,
         spectra_name,
-        fesc=0.0,
+        fesc=None,
         mask=None,
+        lam_mask=None,
         verbose=False,
         grid_assignment_method="cic",
         nthreads=0,
+        vel_shift=False,
     ):
         """
         Generate per particle rest frame spectra for a given key.
@@ -614,6 +695,9 @@ class BlackHoles(Particles, BlackholesComponent):
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -624,7 +708,11 @@ class BlackHoles(Particles, BlackholesComponent):
             nthreads (int)
                 The number of threads to use for the computation. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Should the spectra be velocity shifted?
         """
+        start = tic()
+
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
@@ -635,7 +723,15 @@ class BlackHoles(Particles, BlackholesComponent):
         if self.nbh == 0:
             return np.zeros((self.nbh, len(grid.lam)))
 
-        from ..extensions.particle_spectra import compute_particle_seds
+        # Handle the case where the masks are None
+        if mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+        if lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
+
+        # Handle malformed masks
+        if mask.size != self.nbh:
+            mask = np.ones(self.nbh, dtype=bool)
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -645,18 +741,43 @@ class BlackHoles(Particles, BlackholesComponent):
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
+            vel_shift=vel_shift,
+            lam_mask=lam_mask,
         )
 
-        # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args)
+        toc("Preparing C args", start)
+
+        # Get the integrated spectra in grid units (erg / s / Hz) using the
+        # appropriate method
+        if vel_shift:
+            from synthesizer.extensions.particle_spectra import (
+                compute_part_seds_with_vel_shift,
+            )
+
+            masked_spec = compute_part_seds_with_vel_shift(*args)
+        else:
+            from synthesizer.extensions.particle_spectra import (
+                compute_particle_seds,
+            )
+
+            masked_spec = compute_particle_seds(*args)
+
+        start = tic()
 
         # If there's no mask we're done
-        if mask is None:
+        if mask is None and lam_mask is None:
             return masked_spec
+        elif mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+        elif lam_mask is None:
+            lam_mask = np.ones(len(grid.lam), dtype=bool)
 
         # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nbh, masked_spec.shape[-1]))
-        spec[mask] = masked_spec
+        spec = np.zeros((self.nbh, grid.lam.size))
+        spec[np.ix_(mask, lam_mask)] = masked_spec
+
+        toc("Masking spectra and adding contribution", start)
+
         return spec
 
     def generate_particle_line(
@@ -718,7 +839,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have no black holes return zeros
         if self.nbh == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -734,7 +855,7 @@ class BlackHoles(Particles, BlackholesComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -795,7 +916,7 @@ class BlackHoles(Particles, BlackholesComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     @deprecated(
         message="is now just a wrapper "
@@ -808,6 +929,7 @@ class BlackHoles(Particles, BlackholesComponent):
         tau_v=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=None,
         verbose=True,
         **kwargs,
     ):
@@ -870,10 +992,12 @@ class BlackHoles(Particles, BlackholesComponent):
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
         emission_model.set_per_particle(previous_per_part)
+
         return spectra
 
     @deprecated(

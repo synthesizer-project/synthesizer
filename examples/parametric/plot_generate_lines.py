@@ -6,7 +6,7 @@ In this example we're going to generate emission line predictions for a
 parametric galaxy.
 """
 
-from unyt import Myr
+from unyt import Msun, Myr
 
 import synthesizer.line_ratios as line_ratios
 from synthesizer.emission_models import AttenuatedEmission, IncidentEmission
@@ -41,7 +41,7 @@ if __name__ == "__main__":
         grid.metallicity,
         sf_hist=sfh,
         metal_dist=metal_dist,
-        initial_mass=10**8.5,
+        initial_mass=10**8.5 * Msun,
     )
 
     # Create the Galaxy object

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from unyt import Msun, yr
 
 from synthesizer.emission_models import TransmittedEmission
 from synthesizer.grid import Grid
@@ -30,7 +31,7 @@ stars = ParametricStars(
     grid.metallicity,
     sf_hist=1e7,
     metal_dist=0.01,
-    initial_mass=1,
+    initial_mass=1 * Msun,
 )
 
 # Plot the SFZH
@@ -41,16 +42,20 @@ sed = stars.get_spectra(model)
 
 # Create the particle stars object
 part_stars = ParticleStars(
-    initial_masses=np.array([1.0]),
-    ages=np.array([1e7]),
+    initial_masses=np.array([1.0]) * Msun,
+    ages=np.array([1e7]) * yr,
     metallicities=np.array([0.01]),
 )
 
 # Calculate the particle SFZH grid (equivalent to grid weights)
-part_sfzh = part_stars.get_sfzh(grid, grid_assignment_method="cic")
+part_sfzh = part_stars.get_sfzh(
+    log10ages=grid.log10age,
+    metallicities=grid.metallicity,
+    grid_assignment_method="cic",
+).sfzh
 
 # Plot the SFZH
-part_stars.plot_sfzh(grid, grid_assignment_method="cic")
+part_stars.plot_sfzh()
 
 # Create the figure and axes for the comparison
 fig, ax = plt.subplots()

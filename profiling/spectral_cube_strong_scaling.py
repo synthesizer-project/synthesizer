@@ -15,7 +15,6 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck15 as cosmo
-from scipy.spatial import cKDTree
 from unyt import Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
@@ -26,28 +25,14 @@ from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.particle.stars import sample_sfhz
+from synthesizer.particle.stars import sample_sfzh
+from synthesizer.particle.utils import calculate_smoothing_lengths
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
 np.random.seed(42)
-
-
-def calculate_smoothing_lengths(positions, num_neighbors=56):
-    """Calculate the SPH smoothing lengths for a set of coordinates."""
-    tree = cKDTree(positions)
-    distances, _ = tree.query(positions, k=num_neighbors + 1)
-
-    # The k-th nearest neighbor distance (k = num_neighbors)
-    kth_distances = distances[:, num_neighbors]
-
-    # Set the smoothing length to the k-th nearest neighbor
-    # distance divided by 2.0
-    smoothing_lengths = kth_distances / 2.0
-
-    return smoothing_lengths
 
 
 def cube_strong_scaling(
@@ -101,7 +86,7 @@ def cube_strong_scaling(
     # Sample the SFZH, producing a Stars object
     # we will also pass some keyword arguments for attributes
     # we will need for imaging
-    stars = sample_sfhz(
+    stars = sample_sfzh(
         param_stars.sfzh,
         param_stars.log10ages,
         param_stars.log10metallicities,

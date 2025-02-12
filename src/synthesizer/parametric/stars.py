@@ -15,15 +15,15 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
+from scipy.interpolate import RegularGridInterpolator
+from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
-from synthesizer.components import StarsComponent
+from synthesizer.components.stellar import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.units import Quantity
-from synthesizer.utils import TableFormatter, has_units
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
 
@@ -39,16 +39,11 @@ class Stars(StarsComponent):
     stellar population.
 
     Attributes:
-        log10ages (array-like, float)
-            The array of log10(ages) defining the age axis of the SFZH.
         ages (array-like, float)
             The array of ages defining the age axis of the SFZH.
         metallicities (array-like, float)
             The array of metallicitities defining the metallicity axies of
             the SFZH.
-        log10metallicities (array-like, float)
-            The array of log10(metallicitities) defining the metallicity axes
-            of the SFZH.
         initial_mass (unyt_quantity/float)
             The total initial stellar mass.
         morphology (morphology.* e.g. Sersic2D)
@@ -92,15 +87,17 @@ class Stars(StarsComponent):
     # Define quantities
     initial_mass = Quantity()
 
+    @accepts(initial_mass=Msun.in_base("galactic"))
     def __init__(
         self,
         log10ages,
         metallicities,
-        initial_mass=1.0,
+        initial_mass=None,
         morphology=None,
         sfzh=None,
         sf_hist=None,
         metal_dist=None,
+        **kwargs,
     ):
         """
         Initialise the parametric stellar population.
@@ -121,7 +118,8 @@ class Stars(StarsComponent):
                 The array of metallicitities defining the metallicity axies of
                 the SFZH.
             initial_mass (unyt_quantity/float)
-                The total initial stellar mass.
+                The total initial stellar mass. If provided the SFZH grid will
+                be rescaled to obey this total mass.
             morphology (morphology.* e.g. Sersic2D)
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
@@ -145,20 +143,23 @@ class Stars(StarsComponent):
                       will be used to calculate an array describing the
                       metallicity distribution.
         """
-
         # Instantiate the parent
-        StarsComponent.__init__(self, 10**log10ages, metallicities)
+        StarsComponent.__init__(
+            self,
+            10**log10ages * yr,
+            metallicities,
+            _star_type="parametric",
+            **kwargs,
+        )
 
-        # Set the age grid properties
-        self.log10ages = log10ages
+        # Set the age grid lims
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
 
-        # Set the metallicity grid properties
+        # Set the metallicity grid lims
         self.metallicities_lims = [
             self.metallicities[0],
             self.metallicities[-1],
         ]
-        self.log10metallicities = np.log10(metallicities)
         self.log10metallicities_lims = [
             self.log10metallicities[0],
             self.log10metallicities[-1],
@@ -221,6 +222,19 @@ class Stars(StarsComponent):
             # Store the SFZH grid
             self.sfzh = sfzh
 
+            # It's somewhat nonsensical to have both an SFZH grid and
+            # set the initial mass, but if the user has lets rescale the SFZH
+            # to obey their initial mass request
+            if self.initial_mass is not None:
+                # Normalise the SFZH grid
+                self.sfzh /= np.sum(self.sfzh)
+
+                # ... and multiply it by the initial mass of stars
+                self.sfzh *= self._initial_mass
+            else:
+                # Otherwise calculate the total initial mass
+                self._initial_mass = np.sum(self.sfzh)
+
             # Project the SFZH to get the 1D SFH
             self.sf_hist = np.sum(self.sfzh, axis=1)
 
@@ -239,13 +253,18 @@ class Stars(StarsComponent):
 
         # Check if metallicities are uniformly binned in log10metallicity or
         # linear metallicity or not at all (e.g. BPASS)
-        if len(set(self.metallicities[:-1] - self.metallicities[1:])) == 1:
+        if (
+            len(np.unique(self.metallicities[:-1] - self.metallicities[1:]))
+            == 1
+        ):
             # Regular linearly
             self.metallicity_grid_type = "Z"
 
         elif (
             len(
-                set(self.log10metallicities[:-1] - self.log10metallicities[1:])
+                np.unique(
+                    self.log10metallicities[:-1] - self.log10metallicities[1:]
+                )
             )
             == 1
         ):
@@ -258,7 +277,7 @@ class Stars(StarsComponent):
 
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """
-        Computes the SFZH for all possible combinations of input.
+        Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
         the SFH and ZH arrays are computed first.
@@ -271,6 +290,8 @@ class Stars(StarsComponent):
                 A metallicity at which to compute an instantaneous ZH, i.e. all
                 stellar populating a single ZH bin.
         """
+        # Hide imports to avoid cyclic imports
+        from synthesizer.particle import Stars as ParticleStars
 
         # If no units assume unit system
         if instant_sf is not None and not isinstance(
@@ -278,31 +299,54 @@ class Stars(StarsComponent):
         ):
             instant_sf *= self.ages.units
 
-        # Handle the instantaneous SFH case
-        if instant_sf is not None:
-            # Create SFH array
-            self.sf_hist = np.zeros(self.ages.size)
-
-            # Get the bin
-            ia = (np.abs(self.ages - instant_sf)).argmin()
-            self.sf_hist[ia] = self.initial_mass
-
         # A delta function for metallicity is a special case
         # equivalent to instant_metallicity = metal_dist_func.metallicity
         if self.metal_dist_func is not None:
             if self.metal_dist_func.name == "DeltaConstant":
                 instant_metallicity = self.metal_dist_func.get_metallicity()
 
-        # Handle the instantaneous ZH case
-        if instant_metallicity is not None:
-            # Create SFH array
-            self.metal_dist = np.zeros(self.metallicities.size)
+        # If both are instantaneous then we can do the whole SFZH in one go
+        if instant_sf is not None and instant_metallicity is not None:
+            inst_stars = ParticleStars(
+                initial_masses=np.array([self._initial_mass]) * Msun,
+                ages=np.array([instant_sf.to("yr").value]) * yr,
+                metallicities=np.array([instant_metallicity]),
+            )
 
-            # Get the bin
-            imetal = (
-                np.abs(self.metallicities - instant_metallicity)
-            ).argmin()
-            self.metal_dist[imetal] = self.initial_mass
+            # Compute the SFZH grid
+            self.sfzh = inst_stars.get_sfzh(
+                self.log10ages,
+                self.metallicities,
+                grid_assignment_method="cic",
+            ).sfzh
+
+            # Compute the SFH and ZH arrays
+            self.sf_hist = np.sum(self.sfzh, axis=1)
+            self.metal_dist = np.sum(self.sfzh, axis=0)
+
+            return
+
+        # Handle the instantaneous SFH case
+        elif instant_sf is not None and instant_metallicity is None:
+            inst_stars = ParticleStars(
+                initial_masses=np.array([self._initial_mass]) * Msun,
+                ages=np.array([instant_sf.to("yr").value]) * yr,
+                metallicities=np.array([0]),  # this is a dummy value
+            )
+
+            # Create SFH array
+            self.sf_hist = inst_stars.get_sfh(self.log10ages)
+
+        # Handle the instantaneous ZH case
+        elif instant_metallicity is not None and instant_sf is None:
+            inst_stars = ParticleStars(
+                initial_masses=np.array([self._initial_mass]) * Msun,
+                ages=np.array([0]) * yr,  # this is a dummy value
+                metallicities=np.array([instant_metallicity]),
+            )
+
+            # Create metal distribution array
+            self.metal_dist = inst_stars.get_metal_dist(self.metallicities)
 
         # Calculate SFH from function if necessary
         if self.sf_hist_func is not None and self.sf_hist is None:
@@ -363,11 +407,15 @@ class Stars(StarsComponent):
         # Finally, calculate the SFZH grid based on the above calculations
         self.sfzh = self.sf_hist[:, np.newaxis] * self.metal_dist
 
-        # Normalise the SFZH grid
-        self.sfzh /= np.sum(self.sfzh)
+        # Normalise the SFZH grid if needs be
+        if self.initial_mass is not None:
+            self.sfzh /= np.sum(self.sfzh)
 
-        # ... and multiply it by the initial mass of stars
-        self.sfzh *= self._initial_mass
+            # ... and multiply it by the initial mass of stars
+            self.sfzh *= self._initial_mass
+        else:
+            # Otherwise calculate the total initial mass
+            self.initial_mass = np.sum(self.sfzh) * Msun
 
     def get_mask(self, attr, thresh, op, mask=None):
         """
@@ -448,6 +496,7 @@ class Stars(StarsComponent):
         old=None,
         young=None,
         mask=None,
+        lam_mask=None,
         fesc=0.0,
         **kwargs,
     ):
@@ -473,6 +522,15 @@ class Stars(StarsComponent):
                 Are we extracting only young stars? If so only SFZH bins with
                 log10(Ages) <= young will be included in the spectra. Defaults
                 to False.
+            mask (array):
+                An array to mask the SFZH grid. This can be used to mask
+                specific SFZH bins.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
+            fesc (float)
+                The Lyman continuum escape fraction, the fraction of
+                ionising photons that entirely escape.
 
         Returns:
             The Stars's integrated rest frame spectra in erg / s / Hz.
@@ -491,14 +549,29 @@ class Stars(StarsComponent):
             elif young is not None:
                 mask = self.get_mask("log10ages", young, "<=", mask=mask)
 
+        if fesc is None:
+            fesc = 0.0
+
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
+        # Get the grid spectra (including any wavelength mask)
+        if lam_mask is not None:
+            grid_spectra = grid.spectra[spectra_name][..., lam_mask]
+        else:
+            grid_spectra = grid.spectra[spectra_name]
+
         # Compute the spectra
         spectra = (1 - fesc) * np.sum(
-            grid.spectra[spectra_name][mask] * sfzh[mask],
+            grid_spectra[mask] * sfzh[mask],
             axis=0,
         )
+
+        # Apply the wavelength mask if provided
+        if lam_mask is not None:
+            out_spec = np.zeros(grid.lam.size)
+            out_spec[lam_mask] = spectra
+            spectra = out_spec
 
         return spectra
 
@@ -568,7 +641,7 @@ class Stars(StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def calculate_median_age(self):
         """
@@ -587,19 +660,6 @@ class Stars(StarsComponent):
         Calculate the mean metallicity of the stellar population.
         """
         return weighted_mean(self.metallicities, self.metal_dist)
-
-    def __str__(self):
-        """
-        Return a string representation of the stars object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Stars")
 
     def __add__(self, other_stars):
         """
@@ -650,6 +710,7 @@ class Stars(StarsComponent):
 
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
+    @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a luminosity in a
@@ -679,10 +740,6 @@ class Stars(StarsComponent):
                 "corresponding spectra method?"
             )
 
-        # Check we have units
-        if not has_units(lum):
-            raise exceptions.MissingUnits("lum must be given with unyt units")
-
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
         current_lum = (
@@ -705,6 +762,7 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
+    @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a flux in a
@@ -732,12 +790,6 @@ class Stars(StarsComponent):
                 f"The requested spectra type ({spectra_type}) does not exist"
                 " in this stellar population. Have you called the "
                 "corresponding spectra method?"
-            )
-
-        # Check we have units
-        if not has_units(flux):
-            raise exceptions.IncorrectUnits(
-                "lum must be given with unyt units"
             )
 
         # Get the sed object
@@ -771,7 +823,74 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
-    def plot_sfzh(self, show=True):
+    def get_sfzh(
+        self,
+        log10ages,
+        metallicities,
+        grid_assignment_method="cic",
+        nthreads=0,
+    ):
+        """
+        Generate the binned SFZH history of this stellar component.
+
+        In the parametric case this will resample the existing SFZH onto the
+        desired grid. For a particle based component the binned SFZH is
+        calculated by binning the particles onto the desired grid defined by
+        the input log10ages and metallicities.
+
+
+        For a particle based galaxy the binned SFZH produced by this method
+        is equivalent to the weights used to extract spectra from the grid.
+
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or their uppercase equivalents (CIC, NGP).
+                Defaults to cic. (particle only)
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. (particle only)
+
+        Returns:
+            numpy.ndarray:
+                Numpy array of containing the SFZH.
+        """
+        # Prepare an interpolator based on the existing SFZH
+        interp = RegularGridInterpolator(
+            (self.log10ages, self.metallicities),
+            self.sfzh,
+            bounds_error=False,
+            fill_value=0.0,
+        )
+
+        # Build a mesh containing the new grid points
+        age_mesh, metal_mesh = np.meshgrid(
+            log10ages, metallicities, indexing="ij"
+        )
+
+        # Interpolate the SFZH onto the new grid
+        points = np.column_stack([age_mesh.ravel(), metal_mesh.ravel()])
+        new_values = interp(points)  # shape is (N,)
+
+        # Reshape interpolated values onto the new grid shape
+        new_sfzh = new_values.reshape(len(log10ages), len(metallicities))
+
+        return Stars(
+            log10ages,
+            metallicities,
+            sfzh=new_sfzh,
+            initial_mass=self.initial_mass,
+        )
+
+    def plot_sfzh(
+        self,
+        show=True,
+    ):
         """
         Plot the binned SZFH.
 
@@ -785,7 +904,6 @@ class Stars(StarsComponent):
             ax
                 The Axes object containing the plotted data.
         """
-
         # Create the figure and extra axes for histograms
         fig, ax, haxx, haxy = single_histxy()
 
@@ -798,45 +916,163 @@ class Stars(StarsComponent):
         )
 
         # Add binned Z to right of the plot
+        metal_dist = np.sum(self.sfzh, axis=0)
         haxy.fill_betweenx(
             self.log10metallicities,
-            self.metal_dist / np.max(self.metal_dist),
+            metal_dist / np.max(metal_dist),
             step="mid",
             color="k",
             alpha=0.3,
         )
 
         # Add binned SF_HIST to top of the plot
+        sf_hist = np.sum(self.sfzh, axis=1)
         haxx.fill_between(
             self.log10ages,
-            self.sf_hist / np.max(self.sf_hist),
+            sf_hist / np.max(sf_hist),
             step="mid",
             color="k",
             alpha=0.3,
         )
 
-        # Add SFR to top of the plot
-        if self.sf_hist_func:
-            x = np.linspace(*self.log10ages_lims, 1000)
-            y = self.sf_hist_func.get_sfr(10**x)
-            haxx.plot(x, y / np.max(y))
-
         # Set plot limits
         haxy.set_xlim([0.0, 1.2])
-        haxy.set_ylim(*self.log10metallicities_lims)
+        haxy.set_ylim(self.log10metallicities[0], self.log10metallicities[-1])
         haxx.set_ylim([0.0, 1.2])
-        haxx.set_xlim(self.log10ages_lims)
+        haxx.set_xlim(self.log10ages[0], self.log10ages[-1])
 
         # Set labels
         ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
-        ax.set_ylabel(r"$\log_{10}Z$")
+        ax.set_ylabel(r"$Z$")
 
         # Set the limits so all axes line up
-        ax.set_ylim(*self.log10metallicities_lims)
-        ax.set_xlim(*self.log10ages_lims)
+        ax.set_ylim(self.log10metallicities[0], self.log10metallicities[-1])
+        ax.set_xlim(self.log10ages[0], self.log10ages[-1])
 
         # Shall we show it?
         if show:
             plt.show()
 
         return fig, ax
+
+    def get_sfh(self):
+        """
+        Get the star formation history of the stellar population.
+
+        Returns:
+            unyt_array:
+                The star formation history of the stellar population.
+        """
+        return self.sf_hist
+
+    def plot_sfh(
+        self,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the star formation history of the stellar population.
+
+        Args:
+            xlimits (tuple)
+                The limits of the x-axis.
+            ylimits (tuple)
+                The limits of the y-axis.
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(self.log10ages, self.sf_hist, where="mid", color="blue")
+        ax.fill_between(
+            self.log10ages,
+            self.sf_hist,
+            step="mid",
+            color="blue",
+            alpha=0.5,
+        )
+
+        ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_ylabel(r"SFH / M$_\odot$")
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    def get_metal_dist(self):
+        """
+        Get the metallicity distribution of the stellar population.
+
+        Returns:
+            unyt_array:
+                The metallicity distribution of the stellar population.
+        """
+        return self.metal_dist
+
+    def plot_metal_dist(
+        self,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the metallicity distribution of the stellar population.
+
+        Args:
+            xlimits (tuple)
+                The limits of the x-axis.
+            ylimits (tuple)
+                The limits of the y-axis.
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(self.metallicities, self.metal_dist, where="mid", color="red")
+        ax.fill_between(
+            self.metallicities,
+            self.metal_dist,
+            step="mid",
+            color="red",
+            alpha=0.5,
+        )
+
+        ax.set_xlabel(r"$Z$")
+        ax.set_ylabel(r"Z_D / M$_\odot$")
+
+        # Apply limits if provided
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    def _prepare_sed_args(self, *args, **kwargs):
+        """Prepare arguments for SED generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )
+
+    def _prepare_line_args(self, *args, **kwargs):
+        """Prepare arguments for line generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )

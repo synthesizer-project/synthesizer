@@ -304,7 +304,26 @@ class ImageCollection:
                 The image corresponding to the filter code.
         """
         # Perform the look up
-        return self.imgs[filter_code]
+        if filter_code in self.imgs:
+            return self.imgs[filter_code]
+
+        # We may be being asked for all the images for an observatory, e.g.
+        # "JWST", in which case we should return a new ImageCollection with
+        # just those images.
+        out = ImageCollection(resolution=self.resolution, npix=self.npix)
+        for f in self.imgs:
+            if filter_code in f:
+                out.imgs[f.replace(filter_code + "/", "")] = self.imgs[f]
+                out.filter_codes.append(f)
+
+        # if we have any images, return the new ImageCollection
+        if len(out) > 0:
+            return out
+
+        # We don't have any images, raise an error
+        raise KeyError(
+            f"Filter code {filter_code} not found in ImageCollection"
+        )
 
     def keys(self):
         """Enable dict.keys() behaviour."""
@@ -917,7 +936,10 @@ class ImageCollection:
         if vmax is None:
             vmax = np.max(self.rgb_img)
 
-        # Normalise the image.
+        # Clip the image to the normalisation range
+        self.rgb_img = np.clip(self.rgb_img, vmin, vmax)
+
+        # Normalise the image to the range 0-1
         rgb_img = (self.rgb_img - vmin) / (vmax - vmin)
 
         fig = plt.figure()
@@ -929,3 +951,135 @@ class ImageCollection:
             plt.show()
 
         return fig, ax, rgb_img
+
+
+def _generate_image_collection_generic(
+    instrument,
+    fov,
+    img_type,
+    do_flux,
+    per_particle,
+    kernel,
+    kernel_threshold,
+    nthreads,
+    label,
+    emitter,
+):
+    """
+    Generate an image collection for a generic emitter.
+
+    This function can be used to avoid repeating image generation code in
+    wrappers elsewhere in the code. It'll produce an image collection based
+    on the input photometry.
+
+    Particle based imaging can either be hist or smoothed, while parametric
+    imaging can only be smoothed.
+
+    Args:
+        instrument (Instrument)
+            The instrument to create the images for.
+        fov (unyt_quantity/tuple, unyt_quantity)
+            The width of the image.
+        img_type (str)
+            The type of image to create. Options are "hist" or "smoothed".
+        do_flux (bool)
+            Whether to create a flux image or a luminosity image.
+        per_particle (bool)
+            Whether to create an image per particle or not.
+        kernel (str)
+            The array describing the kernel. This is dervied from the
+            kernel_functions module. (Only applicable to particle imaging)
+        kernel_threshold (float)
+            The threshold for the kernel. Particles with a kernel value
+            below this threshold are included in the image. (Only
+            applicable to particle imaging)
+        nthreads (int)
+            The number of threads to use when smoothing the image. This
+            only applies to particle imaging.
+        label (str)
+            The label of the photometry to use.
+        emitter (Stars/BlackHoles/BlackHole)
+            The emitter object to create the images for.
+
+    Returns:
+        ImageCollection
+            An image collection object containing the images.
+    """
+    # Get the appropriate photometry (particle/integrated and
+    # flux/luminosity)
+    try:
+        if do_flux:
+            photometry = (
+                emitter.particle_photo_fnu[label]
+                if per_particle
+                else emitter.photo_fnu[label]
+            )
+        else:
+            photometry = (
+                emitter.particle_photo_lnu[label]
+                if per_particle
+                else emitter.photo_lnu[label]
+            )
+    except KeyError:
+        # Ok we are missing the photometry
+        raise exceptions.MissingSpectraType(
+            f"Can't make an image for {label} without the photometry. "
+            "Did you not save the spectra or produce the photometry?"
+        )
+
+    # Select only the photometry for this instrument
+    if instrument.filters is not None:
+        photometry = photometry.select(*instrument.filters.filter_codes)
+
+    # If the emitter is a particle BlackHoles object we can only make a hist
+    # image
+    if getattr(emitter, "name", None) == "Black Holes":
+        img_type = "hist"
+
+    # Instantiate the Image colection ready to make the image.
+    imgs = ImageCollection(resolution=instrument.resolution, fov=fov)
+
+    # Make the image handling the different types of image creation
+    if img_type == "hist":
+        # Compute the image (this method is only applicable to
+        # particle components)
+        imgs.get_imgs_hist(
+            photometry=photometry,
+            coordinates=emitter.centered_coordinates,
+        )
+
+    elif img_type == "smoothed":
+        # Compute the image
+        imgs.get_imgs_smoothed(
+            photometry=photometry,
+            nthreads=nthreads,
+            # Following args only applicable for particle components,
+            # They'll automatically be None otherwise
+            coordinates=getattr(
+                emitter,
+                "centered_coordinates",
+                None,
+            ),
+            smoothing_lengths=getattr(
+                emitter,
+                "smoothing_lengths",
+                None,
+            ),
+            kernel=kernel,
+            kernel_threshold=(kernel_threshold),
+            # Following args are only applicable for parametric
+            # components, they'll automatically be None otherwise
+            density_grid=emitter.morphology.get_density_grid(
+                instrument.resolution, imgs.npix
+            )
+            if hasattr(emitter, "morphology")
+            else None,
+        )
+
+    else:
+        raise exceptions.UnknownImageType(
+            f"Unknown img_type {img_type}. (Options are 'hist' or "
+            "'smoothed')"
+        )
+
+    return imgs

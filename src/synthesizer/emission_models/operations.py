@@ -12,6 +12,9 @@ from unyt import Hz, erg, s
 
 from synthesizer import exceptions
 from synthesizer.grid import Template
+from synthesizer.imaging.image_collection import (
+    _generate_image_collection_generic,
+)
 from synthesizer.line import Line
 from synthesizer.sed import Sed
 
@@ -29,7 +32,7 @@ class Extraction:
             The escape fraction.
     """
 
-    def __init__(self, grid, extract, fesc):
+    def __init__(self, grid, extract, fesc, lam_mask, vel_shift):
         """
         Initialise the extraction model.
 
@@ -40,6 +43,11 @@ class Extraction:
                 The key for the spectra to extract.
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The wavelength mask to apply to the spectra.
+            vel_shift (bool):
+                Should the emission take into account the velocity shift due
+                to peculiar velocities? (Particle Only!)
         """
         # Attach the grid
         self._grid = grid
@@ -49,6 +57,13 @@ class Extraction:
 
         # Attach the escape fraction
         self._fesc = fesc
+
+        # Attach the wavelength mask
+        self._lam_mask = lam_mask
+
+        # Should the emission take into account the velocity shift due to
+        # peculiar velocities? (Particle Only!)
+        self._use_vel_shift = vel_shift
 
     def _extract_spectra(
         self,
@@ -97,7 +112,7 @@ class Extraction:
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
-            # Do we have to define a mask?
+            # Do we have to define a property mask?
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
@@ -115,6 +130,7 @@ class Extraction:
                 generator_func = emitter.generate_lnu
 
             # Get this base spectra
+            print(f"Extracting {label} from {spectra_key}:", self.vel_shift)
             sed = Sed(
                 emission_model.lam,
                 generator_func(
@@ -124,6 +140,8 @@ class Extraction:
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
+                    vel_shift=self.vel_shift,
+                    lam_mask=this_model._lam_mask,
                     verbose=verbose,
                     **kwargs,
                 )
@@ -248,6 +266,84 @@ class Extraction:
 
         return lines, particle_lines
 
+    def _extract_images(
+        self,
+        instrument,
+        fov,
+        img_type,
+        do_flux,
+        emitters,
+        images,
+        kernel,
+        kernel_threshold,
+        nthreads,
+        limit_to,
+    ):
+        """
+        Create images for all the extraction keys.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use when generating images.
+            fov (float):
+                The field of view of the images.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitters (dict):
+                The emitters to generate the images for.
+            images (dict):
+                The dictionary to store the images in.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+            limit_to (str):
+                Limit the images to a specific model.
+
+        Returns:
+            dict:
+                The dictionary of image collections.
+        """
+        # Loop over the extraction keys
+        for label in self._extract_keys.keys():
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label != limit_to:
+                continue
+
+            # Also skip any models we didn't save
+            if not self._models[label].save:
+                continue
+
+            # Get the model
+            this_model = self._models[label]
+
+            # Get the emitter
+            emitter = emitters[this_model.emitter]
+
+            # Store the resulting image collection
+            try:
+                images[label] = _generate_image_collection_generic(
+                    instrument,
+                    fov,
+                    img_type,
+                    do_flux,
+                    this_model.per_particle,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                    label,
+                    emitter,
+                )
+            except Exception as e:
+                print(f"Failed to generate image for {label}: {e}")
+                raise e
+
+        return images
+
     def _extract_summary(self):
         """Return a summary of an extraction model."""
         # Create a list to hold the summary
@@ -258,8 +354,23 @@ class Extraction:
         summary.append(f"  Grid: {self._grid.grid_name}")
         summary.append(f"  Extract key: {self._extract}")
         summary.append(f"  Escape fraction: {self._fesc}")
+        summary.append(f"  Use velocity shift: {self._use_vel_shift}")
 
         return summary
+
+    def extract_to_hdf5(self, group):
+        """Save the extraction model to an HDF5 group."""
+        # Flag it's extraction
+        group.attrs["type"] = "extraction"
+
+        # Save the grid
+        group.attrs["grid"] = self._grid.grid_name
+
+        # Save the extract key
+        group.attrs["extract"] = self._extract
+
+        # Save the escape fraction
+        group.attrs["fesc"] = self._fesc if self._fesc is not None else "None"
 
 
 class Generation:
@@ -342,10 +453,14 @@ class Generation:
         # If we have an empty emitter we can just return zeros (only applicable
         # when nparticles exists in the emitter)
         if getattr(emitter, "nparticles", 1) == 0:
-            spectra[this_model.label] = Sed(lam, np.zeros(lam.size))
+            spectra[this_model.label] = Sed(
+                lam,
+                np.zeros(lam.size) * erg / s / Hz,
+            )
             if per_particle:
                 particle_spectra[this_model.label] = Sed(
-                    lam, np.zeros((emitter.nparticles, lam.size))
+                    lam,
+                    np.zeros((emitter.nparticles, lam.size)) * erg / s / Hz,
                 )
             return spectra, particle_spectra
 
@@ -487,7 +602,7 @@ class Generation:
             out_lines[line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
-                luminosity=0 * erg / s,
+                luminosity=0.0 * erg / s,
                 continuum=cont,
             )
 
@@ -501,6 +616,65 @@ class Generation:
             lines[this_model.label] = out_lines
 
         return lines, particle_lines
+
+    def _generate_images(
+        self,
+        instrument,
+        fov,
+        this_model,
+        img_type,
+        do_flux,
+        emitter,
+        images,
+        kernel,
+        kernel_threshold,
+        nthreads,
+    ):
+        """
+        Create an image for a generation key.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use when generating images.
+            fov (float):
+                The field of view of the images.
+            this_model (EmissionModel):
+                The model to generate the images for.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitter (dict):
+                The emitter to generate the images for.
+            images (dict):
+                The dictionary to store the images in.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+
+        Returns:
+            dict:
+                The dictionary of image collections now containing the
+                generated images.
+        """
+        # Store the resulting image collection
+        images[this_model.label] = _generate_image_collection_generic(
+            instrument,
+            fov,
+            img_type,
+            do_flux,
+            this_model.per_particle,
+            kernel,
+            kernel_threshold,
+            nthreads,
+            this_model.label,
+            emitter,
+        )
+
+        return images
 
     def _generate_summary(self):
         """Return a summary of a generation model."""
@@ -523,6 +697,24 @@ class Generation:
             summary.append(f"  Scale by: {self._lum_intrinsic_model.label}")
 
         return summary
+
+    def generate_to_hdf5(self, group):
+        """Save the generation model to an HDF5 group."""
+        # Flag it's generation
+        group.attrs["type"] = "generation"
+
+        # Save the generator
+        group.attrs["generator"] = str(type(self._generator))
+
+        # Save the dust luminosity models
+        if self._lum_intrinsic_model is not None:
+            group.attrs["lum_intrinsic_model"] = (
+                self._lum_intrinsic_model.label
+            )
+        if self._lum_attenuated_model is not None:
+            group.attrs["lum_attenuated_model"] = (
+                self._lum_attenuated_model.label
+            )
 
 
 class DustAttenuation:
@@ -689,6 +881,67 @@ class DustAttenuation:
 
         return lines, particle_lines
 
+    def _attenuate_images(
+        self,
+        instrument,
+        fov,
+        this_model,
+        img_type,
+        do_flux,
+        emitter,
+        images,
+        kernel,
+        kernel_threshold,
+        nthreads,
+    ):
+        """
+        Create an image for an attenuation key.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use when generating images.
+            fov (float):
+                The field of view of the images.
+            this_model (EmissionModel):
+                The model to generate the images for.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitter (dict):
+                The emitter to generate the images for.
+            images (dict):
+                The dictionary to store the images in.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+            instrument (Instrument):
+                The instrument to use when generating images.
+
+        Returns:
+            dict:
+                The dictionary of image collections now containing the
+                generated images.
+        """
+        # Store the resulting image collection
+        images[this_model.label] = _generate_image_collection_generic(
+            instrument,
+            fov,
+            img_type,
+            do_flux,
+            this_model.per_particle,
+            kernel,
+            kernel_threshold,
+            nthreads,
+            this_model.label,
+            emitter,
+        )
+
+        return images
+
     def _attenuate_summary(self):
         """Return a summary of a dust attenuation model."""
         # Create a list to hold the summary
@@ -701,6 +954,20 @@ class DustAttenuation:
         summary.append(f"  Optical depth (tau_v): {self._tau_v}")
 
         return summary
+
+    def attenuate_to_hdf5(self, group):
+        """Save the dust attenuation model to an HDF5 group."""
+        # Flag it's dust attenuation
+        group.attrs["type"] = "dust_attenuation"
+
+        # Save the dust curve
+        group.attrs["dust_curve"] = str(type(self._dust_curve))
+
+        # Save the model to apply the dust curve to
+        group.attrs["apply_dust_to"] = self._apply_dust_to.label
+
+        # Save the optical depth
+        group.attrs["tau_v"] = self._tau_v
 
 
 class Combination:
@@ -860,6 +1127,94 @@ class Combination:
 
         return lines, particle_lines
 
+    def _combine_images(
+        self,
+        images,
+        this_model,
+        instrument,
+        fov,
+        img_type,
+        do_flux,
+        emitters,
+        kernel,
+        kernel_threshold,
+        nthreads,
+    ):
+        """
+        Combine the images by addition.
+
+        Args:
+            images (dict):
+                The dictionary of image collections.
+            this_model (EmissionModel):
+                The model defining the combination.
+            instrument (Instrument):
+                The instrument to use when generating images.
+            fov (float):
+                The field of view of the images.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitters (dict):
+                The emitters to generate the images for.
+            kernel (str):
+                The kernel to use when generating images.
+            kernel_threshold (float):
+                The threshold to use when generating images.
+            nthreads (int):
+                The number of threads to use when generating images.
+        """
+        # Check we saved the models we are combining
+        missing = [
+            model.label
+            for model in this_model.combine
+            if model.label not in images
+        ]
+
+        # Ok, we don't have the models so we have no choice but to generate
+        # the image directly from the spectra
+        if len(missing) > 0 and this_model.emitter != "galaxy":
+            images[this_model.label] = _generate_image_collection_generic(
+                instrument,
+                fov,
+                img_type,
+                do_flux,
+                this_model.per_particle,
+                kernel,
+                kernel_threshold,
+                nthreads,
+                this_model.label,
+                emitters[this_model.emitter],
+            )
+            return images
+
+        elif len(missing) > 0 and this_model.emitter == "galaxy":
+            raise exceptions.MissingImage(
+                "Can't generate galaxy level images without saving the "
+                f"spectra from the component models ({', '.join(missing)})."
+            )
+
+        # Get the image for each model we are combining
+        combine_labels = []
+        combine_images = []
+        for model in this_model.combine:
+            combine_labels.append(model.label)
+            combine_images.append(images[model.label])
+
+        # Get the first image to add to
+        out_image = combine_images[0]
+
+        # Combine the images
+        # Again, we have a problem if any don't exist
+        for img in combine_images[1:]:
+            out_image += img
+
+        # Store the image
+        images[this_model.label] = out_image
+
+        return images
+
     def _combine_summary(self):
         """Return a summary of a combination model."""
         # Create a list to hold the summary
@@ -873,3 +1228,11 @@ class Combination:
         )
 
         return summary
+
+    def combine_to_hdf5(self, group):
+        """Save the combination model to an HDF5 group."""
+        # Flag it's combination
+        group.attrs["type"] = "combination"
+
+        # Save the models to combine
+        group.attrs["combine"] = [model.label for model in self._combine]
