@@ -14,3 +14,9 @@ To download the test grid, ``cd`` into the root synthesizer directory and run th
 
     cd synthesizer
     synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
+
+You'll also want to download some test data if you want to run any particle based examples. We provided some preprocessed TNG data from CAMELS. To download it run 
+
+.. code-block:: bash
+
+    synthesizer-download --camels-data -d tests/data/

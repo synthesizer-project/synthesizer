@@ -19,7 +19,7 @@ grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir, read_lines=True)
 
 # define grid point
-grid_point = grid.get_grid_point((6.5, 0.01))
+grid_point = grid.get_grid_point(log10ages=6.5, metallicity=0.01)
 
 # get an Sed
 sed = grid.get_spectra(grid_point, spectra_id="linecont")

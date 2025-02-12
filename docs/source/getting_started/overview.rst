@@ -61,7 +61,7 @@ The generation of spectra in synthesizer is handled through *Emission Models*.
 An emission model is a set of standardised procedures for generating spectra from a ``Galaxy`` or a component.
 These often take one of four forms: extraction, combinations, generation, and attenuation.
 Further details are provided in the 
-`Emission Models <../emission_models/emission_model.ipynb>`_ section.
+`Emission Models <../emission_models/emission_models.rst>`_ section.
 
 Observables
 ***********

@@ -10,8 +10,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial import cKDTree
-from unyt import Myr
+from unyt import Mpc, Msun, Myr
 
 from synthesizer.emission_models import TotalEmission
 from synthesizer.emission_models.attenuation import PowerLaw
@@ -22,25 +21,11 @@ from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.particle.stars import sample_sfhz
+from synthesizer.particle.stars import sample_sfzh
+from synthesizer.particle.utils import calculate_smoothing_lengths
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
-
-
-def calculate_smoothing_lengths(positions, num_neighbors=56):
-    """Calculate the SPH smoothing lengths for a set of coordinates."""
-    tree = cKDTree(positions)
-    distances, _ = tree.query(positions, k=num_neighbors + 1)
-
-    # The k-th nearest neighbor distance (k = num_neighbors)
-    kth_distances = distances[:, num_neighbors]
-
-    # Set the smoothing length to the k-th nearest neighbor
-    # distance divided by 2.0
-    smoothing_lengths = kth_distances / 2.0
-
-    return smoothing_lengths
 
 
 # Set the seed
@@ -75,7 +60,7 @@ sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
 
 # Generate the star formation metallicity history
-mass = 10**10
+mass = 10**10 * Msun
 param_stars = ParametricStars(
     log10ages,
     metallicities,
@@ -89,7 +74,7 @@ nstars = 1000
 ngas = 1000
 
 # Generate some random coordinates
-coords = CoordinateGenerator.generate_3D_gaussian(nstars)
+coords = CoordinateGenerator.generate_3D_gaussian(nstars) * Mpc
 
 # Calculate smoothing lengths
 smls = calculate_smoothing_lengths(coords)
@@ -97,13 +82,13 @@ smls = calculate_smoothing_lengths(coords)
 # Sample the SFZH, producing a Stars object
 # we will also pass some keyword arguments for attributes
 # we will need for imaging
-stars = sample_sfhz(
+stars = sample_sfzh(
     param_stars.sfzh,
     param_stars.log10ages,
     param_stars.log10metallicities,
     nstars,
     coordinates=coords,
-    current_masses=np.full(nstars, 10**8.7 / nstars),
+    current_masses=np.full(nstars, 10**8.7 / nstars) * Msun,
     smoothing_lengths=smls,
     redshift=1,
 )
@@ -111,13 +96,13 @@ stars = sample_sfhz(
 # Now make the gas
 
 # Generate some random coordinates
-coords = CoordinateGenerator.generate_3D_gaussian(ngas)
+coords = CoordinateGenerator.generate_3D_gaussian(ngas) * Mpc
 
 # Calculate the smoothing lengths
 smls = calculate_smoothing_lengths(coords)
 
 gas = Gas(
-    masses=np.random.uniform(10**6, 10**6.5, ngas),
+    masses=np.random.uniform(10**6, 10**6.5, ngas) * Msun,
     metallicities=np.random.uniform(0.01, 0.05, ngas),
     coordinates=coords,
     smoothing_lengths=smls,

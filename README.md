@@ -1,12 +1,13 @@
 # Synthesizer
 
+<img src="docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
+
 [![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/flaresimulations/synthesizer/actions)
-[![Documentation Status](https://github.com/flaresimulations/synthesizer/actions/workflows/publish_docs.yml/badge.svg)](https://flaresimulations.github.io/synthesizer/)
+[![Documentation Status](https://github.com/flaresimulations/synthesizer/actions/workflows/static.yml/badge.svg)](https://flaresimulations.github.io/synthesizer/)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-
 
 Synthesizer is a python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
 
@@ -22,14 +23,32 @@ To install, enter the `synthesizer` directory and install with pip.
 
     cd synthesizer
     pip install .
-    
-We also provide optional dependency sets for development (``dev``), testing (``test``), and building the documentation (``docs``) should you ever needed them. To install all dependancies simply run the following (or delete as appropriate to get a specific subset):
+
+We also provide optional dependency sets for development (`dev`), testing (`test`), and building the documentation (`docs`) should you ever needed them. To install all dependancies simply run the following (or delete as appropriate to get a specific subset):
 
     pip install .[dev,test,docs]
 
 Make sure you stay up to date with the latest versions through git:
 
     git pull origin main
+
+### Getting test data
+
+If you wish to run the examples, or need some data for development purposes, we provide [test data](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo,
+
+```bash
+synthesizer-download --test-grids --dust-grid -d tests/test_grid
+```
+
+This command will store the SPS, AGN, and dust grids in the `tests` directory at the root of the repo; all examples expect this data to reside in this location.
+
+You will also want to download the preprocessed CAMELS Illustris-TNG data,
+
+```bash
+synthesizer-download --camels-data -d tests/data/
+```
+
+this is a very small set of galaxies taken from the [CAMELS suite](https://camels.readthedocs.io/en/latest/) of simulations. We use this in some particle based examples.
 
 ## Contributing
 

@@ -4,9 +4,13 @@ The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
+from unyt import Mpc
+
 from synthesizer import exceptions
 from synthesizer.emission_models.attenuation.igm import Inoue14
+from synthesizer.instruments import Instrument
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.warnings import deprecated, deprecation
 
@@ -31,6 +35,7 @@ class BaseGalaxy:
             The BlackHole/s object holding information about the black hole/s.
     """
 
+    @accepts(centre=Mpc)
     def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
         """
         Instantiate the base Galaxy class.
@@ -57,12 +62,17 @@ class BaseGalaxy:
             **kwargs
                 Any additional attributes to attach to the galaxy object.
         """
-        # Add some place holder attributes which are overloaded on the children
+        # Container for the spectra and lines
         self.spectra = {}
+        self.lines = {}
 
         # Initialise the photometry dictionaries
         self.photo_lnu = {}
         self.photo_fnu = {}
+
+        # Intialise the image dictionaries
+        self.images_lnu = {}
+        self.images_fnu = {}
 
         # Attach the components
         self.stars = stars
@@ -285,7 +295,7 @@ class BaseGalaxy:
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -296,6 +306,9 @@ class BaseGalaxy:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             PhotometryCollection
@@ -304,27 +317,37 @@ class BaseGalaxy:
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_lnu(filters, verbose)
+            self.stars.get_photo_lnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_lnu(filters, verbose)
+                self.stars.get_particle_photo_lnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_lnu(filters, verbose)
+            self.black_holes.get_photo_lnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_lnu(filters, verbose)
+                self.black_holes.get_particle_photo_lnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
     @deprecated(
@@ -352,7 +375,7 @@ class BaseGalaxy:
         """
         return self.get_photo_lnu(filters, verbose)
 
-    def get_photo_fnu(self, filters, verbose=True):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -363,6 +386,9 @@ class BaseGalaxy:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             PhotometryCollection
@@ -371,27 +397,37 @@ class BaseGalaxy:
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_fnu(filters, verbose)
+            self.stars.get_photo_fnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_fnu(filters, verbose)
+                self.stars.get_particle_photo_fnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_fnu(filters, verbose)
+            self.black_holes.get_photo_fnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_fnu(filters, verbose)
+                self.black_holes.get_particle_photo_fnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
     @deprecated(
@@ -755,6 +791,7 @@ class BaseGalaxy:
         fesc=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=None,
         verbose=True,
         **kwargs,
     ):
@@ -814,6 +851,7 @@ class BaseGalaxy:
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
@@ -851,7 +889,18 @@ class BaseGalaxy:
                         f"emission model. ({model.emitter})"
                     )
 
-        return self.spectra[emission_model.label]
+        # Return the spectra at the root from the right place
+        if emission_model.emitter == "galaxy":
+            return self.spectra[emission_model.label]
+        elif emission_model.emitter == "stellar":
+            return self.stars.spectra[emission_model.label]
+        elif emission_model.emitter == "blackhole":
+            return self.black_holes.spectra[emission_model.label]
+        else:
+            raise KeyError(
+                "Unknown emitter in emission model. "
+                f"({emission_model.emitter})"
+            )
 
     def get_lines(
         self,
@@ -961,7 +1010,322 @@ class BaseGalaxy:
                         f"emission model. ({model.emitter})"
                     )
 
-        return self.lines[emission_model.label]
+        # Return the lines at the root from the right place
+        if emission_model.emitter == "galaxy":
+            return self.lines[emission_model.label]
+        elif emission_model.emitter == "stellar":
+            return self.stars.lines[emission_model.label]
+        elif emission_model.emitter == "blackhole":
+            return self.black_holes.lines[emission_model.label]
+        else:
+            raise KeyError(
+                "Unknown emitter in emission model. "
+                f"({emission_model.emitter})"
+            )
+
+    def get_images_luminosity(
+        self,
+        resolution,
+        fov,
+        emission_model,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+        instrument=None,
+    ):
+        """
+        Make an ImageCollection from luminosities.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary photometry is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the images_lnu attribute. The image
+        collection at the root of the emission model will also be returned.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            emission_model (EmissionModel)
+                The emission model to use to generate the images.
+            img_type : str
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            stellar_photometry (string)
+                The stellar spectra key from which to extract photometry
+                to use for the image.
+            blackhole_photometry (string)
+                The black hole spectra key from which to extract photometry
+                to use for the image.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+            limit_to (str)
+                Optionally pass a single model label to limit image generation
+                to only that model.
+            instrument (Instrument)
+                The instrument to use for the image. This can be None but if
+                not it will be used to limit the included filters and label
+                the images by instrument.
+
+        Returns:
+            Image : array-like
+                A 2D array containing the image.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric galaxy
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed images."
+            )
+
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
+
+        # Get the images
+        images = emission_model._get_images(
+            instrument=instrument,
+            fov=fov,
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=False,
+        )
+
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
+
+        # Unpack the images to the right component
+        for model in emission_model._models.values():
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label != limit_to:
+                continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the image to the right component
+            if model.emitter == "galaxy":
+                if instrument_name is not None:
+                    self.images_lnu.setdefault(instrument_name, {})
+                    self.images_lnu[instrument_name][model.label] = images[
+                        model.label
+                    ]
+                else:
+                    self.images_lnu[model.label] = images[model.label]
+            elif model.emitter == "stellar":
+                if instrument_name is not None:
+                    self.stars.images_lnu.setdefault(instrument_name, {})
+                    self.stars.images_lnu[instrument_name][model.label] = (
+                        images[model.label]
+                    )
+                else:
+                    self.stars.images_lnu[model.label] = images[model.label]
+            elif model.emitter == "blackhole":
+                if instrument_name is not None:
+                    self.black_holes.images_lnu.setdefault(instrument_name, {})
+                    self.black_holes.images_lnu[instrument_name][
+                        model.label
+                    ] = images[model.label]
+                else:
+                    self.black_holes.images_lnu[model.label] = images[
+                        model.label
+                    ]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
+
+        # Return the image at the root of the emission model
+        return images[emission_model.label]
+
+    def get_images_flux(
+        self,
+        resolution,
+        fov,
+        emission_model,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+        instrument=None,
+    ):
+        """
+        Make an ImageCollection from fluxes.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary photometry is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the images_fnu attribute. The image
+        collection at the root of the emission model will also be returned.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            emission_model (EmissionModel)
+                The emission model to use to generate the images.
+            img_type : str
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+            limit_to (str)
+                Optionally pass a single model label to limit image generation
+                to only that model.
+            instrument (Instrument)
+                The instrument to use for the image. This can be None but if
+                not it will be used to limit the included filters and label
+                the images by instrument.
+
+        Returns:
+            Image : array-like
+                A 2D array containing the image.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric galaxy
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed images."
+            )
+
+        # If we haven't got an instrument create one
+        if instrument is None:
+            instrument = Instrument("place-holder", resolution=resolution)
+
+        # Get the images
+        images = emission_model._get_images(
+            instrument=instrument,
+            fov=fov,
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=True,
+        )
+
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
+
+        # Unpack the images to the right component
+        for model in emission_model._models.values():
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label != limit_to:
+                continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the image to the right component
+            if model.emitter == "galaxy":
+                if instrument_name is not None:
+                    self.images_fnu.setdefault(instrument_name, {})
+                    self.images_fnu[instrument_name][model.label] = images[
+                        model.label
+                    ]
+                else:
+                    self.images_fnu[model.label] = images[model.label]
+            elif model.emitter == "stellar":
+                if instrument_name is not None:
+                    self.stars.images_fnu.setdefault(instrument_name, {})
+                    self.stars.images_fnu[instrument_name][model.label] = (
+                        images[model.label]
+                    )
+                else:
+                    self.stars.images_fnu[model.label] = images[model.label]
+            elif model.emitter == "blackhole":
+                if instrument_name is not None:
+                    self.black_holes.images_fnu.setdefault(instrument_name, {})
+                    self.black_holes.images_fnu[instrument_name][
+                        model.label
+                    ] = images[model.label]
+                else:
+                    self.black_holes.images_fnu[model.label] = images[
+                        model.label
+                    ]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return images[limit_to]
+
+        # Return the image at the root of the emission model
+        return images[emission_model.label]
 
     def clear_all_spectra(self):
         """

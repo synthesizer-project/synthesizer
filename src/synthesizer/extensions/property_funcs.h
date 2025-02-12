@@ -45,6 +45,9 @@ struct grid {
 
   /* The continuum array. */
   double *continuum;
+
+  /* Wavelength */
+  double *lam;
 };
 
 /* A struct to hold particle properties. */
@@ -61,6 +64,9 @@ struct particles {
 
   /* Escape fractions. */
   double *fesc;
+
+  /* Velocities for redshift */
+  double *velocities;
 };
 
 /* Prototypes */
@@ -72,7 +78,8 @@ double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,
-                                     const int ndim, const int nlam);
+                                     PyArrayObject *np_lam, const int ndim,
+                                     const int nlam);
 struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    PyArrayObject *np_ndims,
                                    PyArrayObject *np_grid_lines,
@@ -80,6 +87,7 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    const int ndim, const int nlam);
 struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_part_mass,
+                                  PyArrayObject *np_velocities,
                                   PyArrayObject *np_fesc, const int npart,
                                   const int ndim);
 

@@ -6,7 +6,7 @@ An example of how to do image addition and testing error functionality.
 """
 
 import numpy as np
-from unyt import Myr, kpc
+from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.exceptions import InconsistentAddition
@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     # Define the parameters of the star formation and metal enrichment
     # histories
-    stellar_mass = 1e10
+    stellar_mass = 1e10 * Msun
     stars = Stars(
         grid.log10age,
         grid.metallicity,

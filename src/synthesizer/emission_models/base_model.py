@@ -45,7 +45,7 @@ import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import unyt_quantity
+from unyt import kpc, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.operations import (
@@ -55,7 +55,7 @@ from synthesizer.emission_models.operations import (
     Generation,
 )
 from synthesizer.line import LineCollection
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import warn
 
 
@@ -133,6 +133,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             The operation to apply. Can be "<", ">", "<=", ">=", "==", or "!=".
         fesc (float):
             The escape fraction.
+        lam_mask (ndarray):
+            The mask to apply to the wavelength array.
         scale_by (list):
             A list of attributes to scale the spectra by.
         post_processing (list):
@@ -149,6 +151,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             "per particle". If True, the spectra and lines will be stored per
             particle. Integrated spectra are made automatically by summing the
             per particle spectra. Default is False.
+        vel_shift (bool):
+            A flag for whether the emission produced by this model should take
+            into account the velocity shift due to peculiar velocities.
+            Only applicable to particle based emitters. Default is False.
     """
 
     # Define quantities
@@ -169,7 +175,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask_attr=None,
         mask_thresh=None,
         mask_op=None,
-        fesc=None,
+        fesc=0.0,
+        lam_mask=None,
         related_models=None,
         emitter=None,
         fixed_parameters={},
@@ -177,6 +184,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         post_processing=(),
         save=True,
         per_particle=False,
+        vel_shift=False,
         **kwargs,
     ):
         """
@@ -230,6 +238,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 or "!=".
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The mask to apply to the wavelength array.
             related_models (set/list/EmissionModel):
                 A set of related models to this model. A related model is a
                 model that is connected somewhere within the model tree but is
@@ -264,6 +274,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 be "per particle". If True, the spectra and lines will be
                 stored per particle. Integrated spectra are made automatically
                 by summing the per particle spectra. Default is False.
+            vel_shift (bool):
+                A flag for whether the emission produced by this model should
+                take into account the velocity shift due to peculiar
+                velocities. Default is False.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
@@ -326,6 +340,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             lum_intrinsic_model=lum_intrinsic_model,
             lum_attenuated_model=lum_attenuated_model,
             fesc=fesc,
+            lam_mask=lam_mask,
+            vel_shift=vel_shift,
         )
 
         # Containers for children and parents
@@ -384,6 +400,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         lum_intrinsic_model,
         lum_attenuated_model,
         fesc,
+        lam_mask,
+        vel_shift,
     ):
         """
         Initialise the correct parent operation.
@@ -414,10 +432,16 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 luminosity when computing dust emission.
             fesc (float):
                 The escape fraction.
+            lam_mask (ndarray):
+                The mask to apply to the wavelength array.
+            vel_shift (bool):
+                A flag for whether the emission produced by this model should
+                take into account the velocity shift due to peculiar
+                velocities. Particle emitters only.
         """
         # Which operation are we doing?
         if self._is_extracting:
-            Extraction.__init__(self, grid, extract, fesc)
+            Extraction.__init__(self, grid, extract, fesc, lam_mask, vel_shift)
         elif self._is_combining:
             Combination.__init__(self, combine)
         elif self._is_dust_attenuating:
@@ -627,6 +651,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         parts[-1] += "|"
 
         return "|\n|".join(parts)
+
+    def items(self):
+        """Return the items in the model."""
+        return self._models.items()
 
     def __getitem__(self, label):
         """
@@ -1015,6 +1043,32 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Unpack the model now we're done
         self.unpack_model()
+
+    @property
+    def vel_shift(self):
+        """Get the velocity shift flag."""
+        if hasattr(self, "_use_vel_shift"):
+            return self._use_vel_shift
+        else:
+            return False
+
+    def set_vel_shift(self, vel_shift, set_all=False):
+        """
+        Set whether we should apply velocity shifts to the spectra.
+
+        Only applicable to particle emitters.
+
+        Args:
+            vel_shift (bool):
+                Whether to set the velocity shift flag.
+            set_all (bool):
+                Whether to set the emitter on all models.
+        """
+        if not set_all:
+            self._use_vel_shift = vel_shift
+        else:
+            for model in self._models.values():
+                model.set_vel_shift(vel_shift)
 
     @property
     def lum_intrinsic_model(self):
@@ -1424,6 +1478,62 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 The parameters to fix.
         """
         self.fixed_parameters.update(kwargs)
+
+    def to_hdf5(self, group):
+        """
+        Save the model to an HDF5 group.
+
+        Args:
+            group (h5py.Group):
+                The group to save the model to.
+        """
+        # First off call the operation to save operation specific attributes
+        # to the group
+        if self._is_extracting:
+            self.extract_to_hdf5(group)
+        elif self._is_combining:
+            self.combine_to_hdf5(group)
+        elif self._is_dust_attenuating:
+            self.attenuate_to_hdf5(group)
+        elif self._is_dust_emitting:
+            self.generate_to_hdf5(group)
+        elif self._is_generating:
+            self.generate_to_hdf5(group)
+
+        # Save the model attributes
+        group.attrs["label"] = self.label
+        group.attrs["emitter"] = self.emitter
+        group.attrs["per_particle"] = self.per_particle
+        group.attrs["save"] = self.save
+        group.attrs["fesc"] = self.fesc if self.fesc is not None else 0.0
+        group.attrs["scale_by"] = self.scale_by
+        group.attrs["post_processing"] = (
+            [func.__name__ for func in self.post_processing]
+            if len(self._post_processing) > 0
+            else "None"
+        )
+
+        # Save the masks
+        if len(self.masks) > 0:
+            masks = group.create_group("Masks")
+            for ind, mask in enumerate(self.masks):
+                mask_group = masks.create_group(f"mask_{ind}")
+                mask_group.attrs["attr"] = mask["attr"]
+                mask_group.attrs["op"] = mask["op"]
+                mask_group.attrs["thresh"] = mask["thresh"]
+
+        # Save the fixed parameters
+        if len(self.fixed_parameters) > 0:
+            fixed_parameters = group.create_group("FixedParameters")
+            for key, value in self.fixed_parameters.items():
+                fixed_parameters.attrs[key] = value
+
+        # Save the children
+        if len(self._children) > 0:
+            group.create_dataset(
+                "Children",
+                data=[child.label.encode("utf-8") for child in self._children],
+            )
 
     def _get_tree_levels(self, root):
         """
@@ -1960,7 +2070,14 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         return fig, ax
 
     def _apply_overrides(
-        self, emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+        self,
+        emission_model,
+        dust_curves,
+        tau_v,
+        fesc,
+        covering_fraction,
+        mask,
+        vel_shift,
     ):
         """
         Apply overrides to an emission model copy.
@@ -2027,6 +2144,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     - A dictionary of the form:
                       {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
                       to add a specific mask to a particular model.
+            vel_shift (dict/bool):
+                Overide the models flag for using peculiar velocities to apply
+                doppler shift to the generated spectra. Only applicable for
+                particle spectra. Can be a boolean to apply to all models or a
+                dictionary of the form:
+                    {<label>: bool}
+                to apply to specific models.
         """
         # If we have dust curves to apply, apply them
         if dust_curves is not None:
@@ -2063,15 +2187,25 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         if covering_fraction is not None:
             if isinstance(covering_fraction, dict):
                 for label, value in covering_fraction.items():
-                    emission_model._models[label]._covering_fraction = value
+                    emission_model._models[label]._fesc = 1 - value
             else:
                 for model in emission_model._models.values():
-                    model._covering_fraction = covering_fraction
+                    model._fesc = 1 - covering_fraction
 
         # If we have masks to apply, apply them
         if mask is not None:
             for label, mask in mask.items():
                 emission_model[label].add_mask(**mask)
+
+        # If we have velocity shifts to apply, apply them
+        if vel_shift is not None:
+            if isinstance(vel_shift, dict):
+                for label, value in vel_shift.items():
+                    emission_model._models[label].set_vel_shift(value)
+            else:
+                for model in emission_model._models.values():
+                    if model._is_extracting:
+                        model.set_vel_shift(vel_shift)
 
     def _get_spectra(
         self,
@@ -2081,6 +2215,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fesc=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=None,
         verbose=True,
         spectra=None,
         particle_spectra=None,
@@ -2158,6 +2293,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             particle_spectra (dict)
                 A dictionary of particle spectra to add to. This is used for
                 recursive calls to this function.
+            vel_shift (bool)
+                Overide the models flag for using peculiar velocities to apply
+                doppler shift to the generated spectra. Only applicable for
+                particle spectra.
             _is_related (bool)
                 Are we generating related model spectra? If so we don't want
                 to apply any post processing functions or delete any spectra,
@@ -2190,7 +2329,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(
-            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+            emission_model,
+            dust_curves,
+            tau_v,
+            fesc,
+            covering_fraction,
+            mask,
+            vel_shift,
         )
 
         # Make a spectra dictionary if we haven't got one yet
@@ -2214,7 +2359,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters,
             spectra,
             particle_spectra,
-            verbose,
+            verbose=verbose,
             **kwargs,
         )
 
@@ -2237,6 +2382,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         tau_v=tau_v,
                         fesc=fesc,
                         mask=mask,
+                        vel_shift=vel_shift,
                         verbose=verbose,
                         spectra=spectra,
                         particle_spectra=particle_spectra,
@@ -2347,17 +2493,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     # Compute the scaling
                     if this_model.per_particle:
                         scaling = (
-                            particle_spectra[
-                                scaler
-                            ].measure_bolometric_luminosity()
-                            / particle_spectra[
-                                label
-                            ].measure_bolometric_luminosity()
+                            particle_spectra[scaler].bolometric_luminosity
+                            / particle_spectra[label].bolometric_luminosity
                         ).value
                     else:
                         scaling = (
-                            spectra[scaler].measure_bolometric_luminosity()
-                            / spectra[label].measure_bolometric_luminosity()
+                            spectra[scaler].bolometric_luminosity
+                            / spectra[label].bolometric_luminosity
                         ).value
 
                     # Scale the spectra (handling 1D and 2D cases)
@@ -2396,7 +2538,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emitters,
         dust_curves=None,
         tau_v=None,
-        fesc=None,
+        fesc=0.0,
         covering_fraction=None,
         mask=None,
         verbose=True,
@@ -2500,7 +2642,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(
-            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+            emission_model,
+            dust_curves,
+            tau_v,
+            fesc,
+            covering_fraction,
+            mask,
+            None,
         )
 
         # If we haven't got a lines dictionary yet we'll make one
@@ -2674,6 +2822,212 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         del particle_lines[model.label]
 
         return lines, particle_lines
+
+    @accepts(resolution=kpc, fov=kpc)
+    def _get_images(
+        self,
+        instrument,
+        fov,
+        emitters,
+        img_type="smoothed",
+        images=None,
+        _is_related=False,
+        limit_to=None,
+        do_flux=False,
+        kernel=None,
+        kernel_threshold=1.0,
+        nthreads=1,
+        **kwargs,
+    ):
+        """
+        Generate images as described by the emission model.
+
+        This will create images for all models in the emission model which
+        have been saved in the passed dictionary of photometry, unless
+        limit_to is set to a specific model, in which case only that model
+        will have images generated (including any models required for that
+        passed model, e.g. a combination of AGN and Stellar spectra).
+
+        Note that unlike spectra or line creation, images are always either
+        generated from existing photometry or combined from existing images
+        further down in the tree.
+
+        Args:
+            instrument (Instrument)
+                The instrument to use for the image generation.
+            fov (float):
+                The field of view of the image in angular units (e.g. arcsec,
+                arcmin, deg).
+            emitters (Stars/BlackHoles):
+                The emitters to generate the lines for in the form of a
+                dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
+            verbose (bool)
+                Are we talking?
+            images (dict)
+                A dictionary of images to add to. This is used for recursive
+                calls to this function.
+            _is_related (bool)
+                Are we generating related model lines? If so we don't want
+                to apply any post processing functions or delete any lines,
+                this will be done outside the recursive call.
+            limit_to (str)
+                If not None, defines a specifical model to limit the image
+                generation to. Otherwise, all models with saved spectra will
+                have images generated.
+            do_flux (bool)
+                If True, the images will be generated from fluxes, if False
+                they will be generated from luminosities.
+            kernel (str)
+                The convolution kernel to use for the image generation. If
+                None, no convolution will be applied.
+            kernel_threshold (float)
+                The threshold for the convolution kernel.
+            nthreads (int)
+                The number of threads to use for the image generation.
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                A dictionary of ImageCollections which can be attached to the
+                appropriate images attribute of the component.
+        """
+        # We don't want to modify the original emission model with any
+        # modifications made here so we'll make a copy of it (this is a
+        # shallow copy so very cheap and doesn't copy any pointed to objects
+        # only their reference)
+        emission_model = copy.copy(self)
+
+        # If we haven't got an images dictionary yet we'll make one
+        if images is None:
+            images = {}
+
+        # Get all the images at the extraction leaves of the tree
+        images.update(
+            self._extract_images(
+                instrument,
+                fov,
+                img_type,
+                do_flux,
+                emitters,
+                images,
+                kernel,
+                kernel_threshold,
+                nthreads,
+                limit_to,
+            )
+        )
+
+        # Loop through the models from bottom to top order creating the
+        # images as we go
+        for label in emission_model._bottom_to_top:
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label != limit_to:
+                continue
+
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # Get the images for the related models that don't appear in the
+            # main tree
+            for related_model in this_model.related_models:
+                if related_model.label not in images:
+                    images.update(
+                        related_model._get_images(
+                            instrument,
+                            fov,
+                            emitters,
+                            img_type,
+                            images,
+                            _is_related=True,
+                            limit_to=limit_to,
+                            do_flux=do_flux,
+                            kernel=kernel,
+                            kernel_threshold=kernel_threshold,
+                            nthreads=nthreads,
+                            **kwargs,
+                        )
+                    )
+
+            # Skip if we didn't save this model
+            if not this_model.save:
+                continue
+
+            # Skip models for a different emitters
+            if (
+                this_model.emitter not in emitters
+                and this_model.emitter != "galaxy"
+            ):
+                continue
+
+            # Check we haven't already made this image
+            if label in images:
+                continue
+
+            # Get the emitter
+            emitter = (
+                emitters[this_model.emitter]
+                if this_model.emitter != "galaxy"
+                else None
+            )
+
+            # Call the appropriate method to generate the image for this model
+            if this_model._is_combining:
+                try:
+                    images = self._combine_images(
+                        images,
+                        this_model,
+                        instrument,
+                        fov,
+                        img_type,
+                        do_flux,
+                        emitters,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
+
+            elif this_model._is_dust_attenuating:
+                try:
+                    images = self._attenuate_images(
+                        instrument,
+                        fov,
+                        this_model,
+                        img_type,
+                        do_flux,
+                        emitter,
+                        images,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
+
+            elif this_model._is_dust_emitting or this_model._is_generating:
+                try:
+                    images = self._generate_images(
+                        instrument,
+                        fov,
+                        this_model,
+                        img_type,
+                        do_flux,
+                        emitter,
+                        images,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
+
+        return images
 
 
 class StellarEmissionModel(EmissionModel):

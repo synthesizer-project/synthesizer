@@ -26,7 +26,10 @@ norm = mpl.colors.Normalize(vmin=5.0, vmax=11.0)
 
 def plot_spectra_age(grid, target_Z, spec_name="incident"):
     # get closest metallicity grid point
-    grid_point = grid.get_grid_point((grid.log10age[0], target_Z))
+    grid_point = grid.get_grid_point(
+        log10ages=grid.log10age[0],
+        metallicity=target_Z,
+    )
     # metallicity grid point
     iZ = grid_point[1]
 

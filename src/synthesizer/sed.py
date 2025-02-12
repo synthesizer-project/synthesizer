@@ -10,7 +10,7 @@ Example usage:
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
     sed.apply_attenutation(tau_v=0.7)
-    sed.get_photo_fnu(filters)
+    sed.get_photo_fnu(filters, nthreads=4)
 """
 
 import re
@@ -20,21 +20,32 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
-from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s
+from unyt import (
+    Hz,
+    angstrom,
+    c,
+    cm,
+    erg,
+    eV,
+    h,
+    pc,
+    s,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import (
     TableFormatter,
-    has_units,
     rebin_1d,
     wavelength_to_rgba,
 )
 from synthesizer.utils.integrate import integrate_last_axis
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class Sed:
@@ -75,8 +86,8 @@ class Sed:
     fnu = Quantity()
     obsnu = Quantity()
     obslam = Quantity()
-    bolometric_luminosity = Quantity()
 
+    @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(self, lam, lnu=None, description=None):
         """
         Initialise a new spectral energy distribution object.
@@ -91,12 +102,6 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
-        # Ensure we have units
-        if not has_units(lam):
-            raise exceptions.MissingUnits("lam must have units.")
-        if lnu is not None and not has_units(lnu):
-            raise exceptions.MissingUnits("lnu must have units.")
-
         start = tic()
 
         # Set the description
@@ -114,9 +119,6 @@ class Sed:
             self.lnu = np.zeros(self.lam.shape)
         else:
             self.lnu = lnu
-
-        # Prepare for bolometric luminosity calculation
-        self.bolometric_luminosity = None
 
         # Redshift of the SED
         self.redshift = 0
@@ -299,8 +301,96 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
+    def scale(self, scaling, inplace=False):
+        """
+        Scale the lnu of the Sed object.
+
+        Note: only acts on the rest frame spectra. To get the
+        scaled fnu get_fnu must be called on the newly scaled
+        Sed object.
+
+        Args:
+            scaling (float)
+                The scaling to apply to lnu.
+            inplace (bool)
+                If True, the Sed object is modified in place. If False, a new
+                Sed object is returned with the scaled lnu.
+
+        Returns:
+            Sed
+                A new instance of Sed with scaled lnu.
+        """
+        # If we have units make sure they are ok and then strip them
+        if isinstance(scaling, (unyt_array, unyt_quantity)):
+            if not self.lnu.units.is_compatible(scaling.units):
+                raise exceptions.InconsistentMultiplication(
+                    f"Incompatible units {self.lnu.units} and {scaling.units}"
+                )
+            else:
+                scaling = scaling.to(self.lnu.units)
+                scaling = scaling.value
+
+        # Handle a scalar scaling factor
+        if np.isscalar(scaling) and not inplace:
+            return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
+        elif np.isscalar(scaling) and inplace:
+            self._lnu *= scaling
+            return self
+
+        # Handle an single element array scaling factor
+        elif scaling.size == 1:
+            scaling = scaling.item()
+            if not inplace:
+                return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
+            else:
+                self._lnu *= scaling
+                return self
+
+        # Handle a multi-element array scaling factor as long as it matches
+        # the shape of the lnu array up to the dimensions of the scaling array
+        elif isinstance(scaling, np.ndarray) and len(scaling.shape) < len(
+            self.shape
+        ):
+            # We need to expand the scaling array to match the lnu array
+            expand_axes = tuple(range(len(scaling.shape), len(self.shape)))
+            new_scaling = np.ones(self.shape) * np.expand_dims(
+                scaling, axis=expand_axes
+            )
+            if not inplace:
+                return Sed(
+                    self.lam, lnu=new_scaling * self._lnu * self.lnu.units
+                )
+            else:
+                self._lnu *= new_scaling
+                return self
+
+        # If the scaling array is the same shape as the lnu array then we can
+        # just multiply them together
+        elif (
+            isinstance(scaling, np.ndarray)
+            and scaling.shape == self.shape
+            and not inplace
+        ):
+            return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
+        elif (
+            isinstance(scaling, np.ndarray)
+            and scaling.shape == self.shape
+            and inplace
+        ):
+            self._lnu *= scaling
+            return self
+
+        # Otherwise, we've been handed a bad scaling factor
+        else:
+            raise exceptions.InconsistentMultiplication(
+                f"Incompatible scaling factor {scaling} with type "
+                f"{type(scaling)}"
+            )
+
     def __mul__(self, scaling):
         """
+        Scale the lnu of the Sed object.
+
         Overide multiplication operator to allow lnu to be scaled.
         This only works scaling * x.
 
@@ -316,11 +406,12 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-
-        return Sed(self.lam, lnu=scaling * self.lnu)
+        return self.scale(scaling)
 
     def __rmul__(self, scaling):
         """
+        Scale the lnu of the Sed object.
+
         As above but for x * scaling.
 
         Note: only acts on the rest frame spectra. To get the
@@ -335,8 +426,7 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-
-        return Sed(self._lam, lnu=scaling * self.lnu)
+        return self.scale(scaling)
 
     def __str__(self):
         """
@@ -418,6 +508,28 @@ class Sed:
         return self.lam
 
     @property
+    def frequency(self):
+        """
+        Alias to nu (frequency array).
+
+        Returns
+            frequency (unyt_array)
+                The frequency array.
+        """
+        return self.nu
+
+    @property
+    def energy(self):
+        """
+        Get the wavelengths in terms of photon energies in eV.
+
+        Returns
+            energy (unyt_array)
+                The energy coordinate.
+        """
+        return (h * c / self.lam).to(eV)
+
+    @property
     def ndim(self):
         """
         Get the dimensions of the spectra array.
@@ -439,6 +551,48 @@ class Sed:
         """
         return self.lnu.shape
 
+    @property
+    def bolometric_luminosity(self):
+        """
+        Return the bolometric luminosity of the SED with units.
+
+        This will integrate the SED using the trapezium method over the
+        final axis (which is always the wavelength axis) for an arbitrary
+        number of dimensions.
+
+        Returns:
+            bolometric_luminosity (unyt_array)
+                The bolometric luminosity.
+        """
+        # Calculate the bolometric luminosity using the trapezium rule.
+        # NOTE: the integration is done "backwards" when integrating over
+        # frequency. It's faster to just multiply by -1 than to reverse the
+        # array.
+        integral = -integrate_last_axis(
+            self._nu,
+            self._lnu,
+            method="trapz",
+        )
+
+        # Return the bolometric luminosity with units
+        return integral * self.lnu.units * self.nu.units
+
+    @property
+    def _bolometric_luminosity(self):
+        """
+        Return the bolometric luminosity of the SED without units.
+
+        This will integrate the SED using the trapezium method over the
+        final axis (which is always the wavelength axis) for an arbitrary
+        number of dimensions.
+
+        Returns:
+            bolometric_luminosity (float)
+                The bolometric luminosity.
+        """
+        return self.bolometric_luminosity.value
+
+    @accepts(nu=Hz)
     def get_lnu_at_nu(self, nu, kind=False):
         """
         Return lnu with units at a provided frequency using 1d interpolation.
@@ -458,6 +612,7 @@ class Sed:
         """
         return interp1d(self._nu, self._lnu, kind=kind)(nu) * self.lnu.units
 
+    @accepts(lam=angstrom)
     def get_lnu_at_lam(self, lam, kind=False):
         """
         Return lnu at a provided wavelength.
@@ -477,6 +632,11 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
+    @deprecated(
+        message=(
+            "Deprecated in favour of bolometric_luminosity propery method"
+        )
+    )
     def measure_bolometric_luminosity(
         self, integration_method="trapz", nthreads=1
     ):
@@ -503,11 +663,8 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        start = tic()
 
-        # Don't duplicate the calculation if we already have it
-        if self.bolometric_luminosity is not None:
-            return self.bolometric_luminosity
+        start = tic()
 
         # Calculate the bolometric luminosity
         # NOTE: the integration is done "backwards" when integrating over
@@ -521,11 +678,9 @@ class Sed:
         )
         toc("Calculating bolometric luminosity", start)
 
-        # Assign the integral to the bolometric luminosity
-        self.bolometric_luminosity = integral * self.lnu.units * self.nu.units
+        return integral * self.lnu.units * self.nu.units
 
-        return self.bolometric_luminosity
-
+    @accepts(window=angstrom)
     def measure_window_luminosity(
         self, window, integration_method="trapz", nthreads=1
     ):
@@ -571,6 +726,7 @@ class Sed:
 
         return luminosity
 
+    @accepts(window=angstrom)
     def measure_window_lnu(
         self, window, integration_method="trapz", nthreads=1
     ):
@@ -608,11 +764,15 @@ class Sed:
                     np.array(
                         [
                             np.sum(_lnu * transmission) / np.sum(transmission)
-                            for _lnu in self._lnu
+                            for _lnu in self._lnu.reshape(
+                                -1, self._lnu.shape[-1]
+                            )
                         ]
                     )
                     * self.lnu.units
                 )
+
+                lnu = lnu.reshape(self._lnu.shape[:-1])
 
             else:
                 lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
@@ -639,6 +799,7 @@ class Sed:
 
         return lnu.to(self.lnu.units)
 
+    @accepts(blue=angstrom, red=angstrom)
     def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
         """
         Measure a spectral break (e.g. the Balmer break) using two windows.
@@ -755,8 +916,12 @@ class Sed:
             integration_method=integration_method,
         )
 
+    @accepts(window=angstrom)
     def measure_beta(
-        self, window=(1250.0, 3000.0), nthreads=1, integration_method="trapz"
+        self,
+        window=(1250.0 * angstrom, 3000.0 * angstrom),
+        nthreads=1,
+        integration_method="trapz",
     ):
         """
         Measure the UV continuum slope (beta).
@@ -796,9 +961,11 @@ class Sed:
                             np.log10(self._lam[s]), np.log10(_lnu[..., s])
                         )[0]
                         - 2.0
-                        for _lnu in self.lnu
+                        for _lnu in self.lnu.reshape(-1, self.lnu.shape[-1])
                     ]
                 )
+
+                beta = beta.reshape(self.lnu.shape[:-1])
 
             else:
                 beta = (
@@ -842,10 +1009,12 @@ class Sed:
 
     def get_fnu0(self):
         """
-        Calculate a dummy observed frame spectral energy distribution.
-        Useful when you want rest-frame quantities.
+        Calculate the rest frame spectral flux density.
 
         Uses a standard distance of 10 pcs.
+
+        This will also populate the observed wavelength and frequency arrays
+        which in this case are the same as the emitted arrays.
 
         Returns:
             fnu (ndarray)
@@ -863,6 +1032,9 @@ class Sed:
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
+
+        This will also populate the observed wavelength and frequency arrays
+        with the observer frame values.
 
         NOTE: if a redshift of 0 is passed the flux return will be calculated
         assuming a distance of 10 pc omitting IGM since at this distance
@@ -902,42 +1074,36 @@ class Sed:
         self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
-        if igm:
+        if igm is not None:
             self._fnu *= igm().get_transmission(z, self._obslam)
 
         return self.fnu
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband luminosities using a FilterCollection object
+        Calculate broadband luminosities using a FilterCollection object.
 
         Args:
             filters (filters.FilterCollection)
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
-
         # Intialise result dictionary
         photo_lnu = {}
 
         # Loop over filters
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Apply the filter transmission curve and store the resulting
             # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu)
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
             photo_lnu[f.filter_code] = bb_lum * self.lnu.units
 
         # Create the photometry collection and store it in the object
@@ -945,21 +1111,23 @@ class Sed:
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband fluxes using a FilterCollection object
+        Calculate broadband fluxes using a FilterCollection object.
 
         Args:
             filters (object)
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             (dict)
                 A dictionary of fluxes in each filter in filters.
         """
-
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             return ValueError(
@@ -975,16 +1143,12 @@ class Sed:
 
         # Loop over filters in filter collection
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
+            bb_flux = f.apply_filter(
+                self._fnu,
+                nu=self._obsnu,
+                nthreads=nthreads,
+            )
             photo_fnu[f.filter_code] = bb_flux * self.fnu.units
 
         # Create the photometry collection and store it in the object
@@ -1019,6 +1183,7 @@ class Sed:
 
         return 2.5 * np.log10(self.photo_fnu[f2] / self.photo_fnu[f1])
 
+    @accepts(feature=angstrom, blue=angstrom, red=angstrom)
     def measure_index(self, feature, blue, red):
         """
         Measure an absorption feature index.
@@ -1155,7 +1320,13 @@ class Sed:
             sed.obslam = sed.lam * (1.0 + self.redshift)
             sed.obsnu = sed.nu / (1.0 + self.redshift)
             sed.fnu = (
-                spectres(sed._obslam, self._obslam, self._fnu) * self.fnu.units
+                spectres(
+                    sed._obslam,
+                    self._obslam,
+                    self._fnu,
+                    fill=0.0,
+                )
+                * self.fnu.units
             )
             sed.redshift = self.redshift
 
@@ -1223,7 +1394,7 @@ class Sed:
                 )
 
         # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, self._lam)
+        transmission = dust_curve.get_transmission(tau_v, self.lam)
 
         # Get a copy of the rest frame spectra, we need to avoid
         # modifying the original
@@ -1240,6 +1411,7 @@ class Sed:
 
         return Sed(self.lam, lnu=spectra * self.lnu.units)
 
+    @accepts(ionisation_energy=eV)
     def calculate_ionising_photon_production_rate(
         self, ionisation_energy=13.6 * eV, limit=100, nthreads=1
     ):
@@ -1272,18 +1444,27 @@ class Sed:
         x = self._lam
         y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).value
 
-        # Get value of luminosity at ionisation wavelength
-        ionisation_y = np.interp(
-            ionisation_wavelength.to(angstrom).value, x, y
-        )
-
         # Restrict arrays to ionisation regime
         x = x[ionisation_mask]
-        y = y[ionisation_mask]
+        if len(y.shape) == 1:
+            y = y[ionisation_mask]
+        else:
+            y = y[..., ionisation_mask]
 
-        # Add ionisation wavelength and luminosity values
-        x = np.append(x, ionisation_wavelength.to(angstrom).value)
-        y = np.append(y, ionisation_y)
+        # Add a final data point at the ionising energy to ensure full
+        # coverage.
+        x0 = ionisation_wavelength.to(angstrom).value
+        if len(y.shape) == 1:
+            y0 = np.interp(x0, x, y)
+            y = np.append(y, y0)
+        else:
+            y0 = np.apply_along_axis(
+                lambda y_: np.interp(x0, x, y_), axis=-1, arr=y
+            )
+            y0 = np.expand_dims(y0, -1)
+            y = np.append(y, y0, axis=-1)
+
+        x = np.append(x, x0)
 
         ion_photon_prod_rate = integrate_last_axis(x, y, nthreads=nthreads) / s
 
@@ -1848,6 +2029,7 @@ def get_attenuation(intrinsic_sed, attenuated_sed):
     return -2.5 * np.log10(transmission)
 
 
+@accepts(lam=angstrom)
 def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
     """
     Calculate attenuation at a given wavelength
@@ -1865,11 +2047,6 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
         float/array-like, float
             The attenuation at the passed wavelength/s in magnitudes.
     """
-
-    # Enusre we have units
-    if not has_units(lam):
-        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
-
     # Ensure lam is in the same units as the sed
     if lam.units != intrinsic_sed.lam.units:
         lam = lam.to(intrinsic_sed.lam.units)

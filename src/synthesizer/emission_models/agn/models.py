@@ -13,6 +13,7 @@ Example usage:
 
 """
 
+from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 
 
@@ -92,7 +93,7 @@ class NLRTransmittedEmission(BlackHoleEmissionModel):
         self,
         grid,
         label="nlr_transmitted",
-        covering_fraction=0.1,
+        covering_fraction=None,
         **kwargs,
     ):
         """
@@ -133,7 +134,7 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
         self,
         grid,
         label="blr_transmitted",
-        covering_fraction=0.1,
+        covering_fraction=None,
         **kwargs,
     ):
         """
@@ -270,8 +271,8 @@ class DiscTransmittedEmission(BlackHoleEmissionModel):
         nlr_grid,
         blr_grid,
         label="disc_transmitted",
-        covering_fraction_blr=0.1,
-        covering_fraction_nlr=0.1,
+        covering_fraction_blr=None,
+        covering_fraction_nlr=None,
         **kwargs,
     ):
         """
@@ -287,6 +288,12 @@ class DiscTransmittedEmission(BlackHoleEmissionModel):
             **kwargs
 
         """
+        # Ensure the sum of covering fractions is less than 1
+        if covering_fraction_nlr + covering_fraction_blr > 1:
+            raise exceptions.InconsistentArguments(
+                "The sum of the covering fractions must be less than 1."
+            )
+
         # Create the child models
         nlr = NLRTransmittedEmission(
             grid=nlr_grid,
@@ -325,8 +332,8 @@ class DiscEscapedEmission(BlackHoleEmissionModel):
         self,
         grid,
         label="disc_escaped",
-        covering_fraction_nlr=0.1,
-        covering_fraction_blr=0.1,
+        covering_fraction_nlr=None,
+        covering_fraction_blr=None,
         **kwargs,
     ):
         """
@@ -345,6 +352,12 @@ class DiscEscapedEmission(BlackHoleEmissionModel):
                 fraction of the BLR). Default is 0.1.
             **kwargs
         """
+        # Ensure the sum of covering fractions is less than 1
+        if covering_fraction_nlr + covering_fraction_blr > 1:
+            raise exceptions.InconsistentArguments(
+                "The sum of the covering fractions must be less than 1."
+            )
+
         BlackHoleEmissionModel.__init__(
             self,
             grid=grid,
@@ -469,8 +482,8 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
         blr_grid,
         torus_emission_model,
         label="intrinsic",
-        covering_fraction_nlr=0.1,
-        covering_fraction_blr=0.1,
+        covering_fraction_nlr=None,
+        covering_fraction_blr=None,
         **kwargs,
     ):
         """
@@ -494,6 +507,12 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
             **kwargs
 
         """
+        # Ensure the sum of covering fractions is less than 1
+        if covering_fraction_nlr + covering_fraction_blr > 1:
+            raise exceptions.InconsistentArguments(
+                "The sum of the covering fractions must be less than 1."
+            )
+
         # Create the child models
         disc = DiscEmission(
             nlr_grid=nlr_grid,

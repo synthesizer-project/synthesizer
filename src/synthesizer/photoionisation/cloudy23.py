@@ -10,7 +10,7 @@ from unyt import angstrom, c, h, unyt_array
 
 from synthesizer.exceptions import (
     InconsistentArguments,
-    UnimplementedFunctionality,
+    UnrecognisedOption,
 )
 from synthesizer.photoionisation import calculate_Q_from_U
 from synthesizer.warnings import warn
@@ -159,6 +159,8 @@ def create_cloudy_input(
         "CMB": None,
         # include cosmic rays
         "cosmic_rays": None,
+        # include metals
+        "metals": True,
         # include dust grains
         "grains": None,
         # the geometry
@@ -200,13 +202,24 @@ def create_cloudy_input(
     if params["depletion_model"] is not None:
         # Define the chemical composition, here we use the depleted (gas-phase)
         # abundances and set "no grains".
-        for ele in ["He"] + abundances.metals:
-            cinput.append(
-                (
-                    f"element abundance {abundances.element_name[ele]} "
-                    f"{abundances.gas[ele]} no grains\n"
+        if params["metals"]:
+            for ele in ["He"] + abundances.metals:
+                cinput.append(
+                    (
+                        f"element abundance {abundances.element_name[ele]} "
+                        f"{abundances.total[ele]} no grains\n"
+                    )
                 )
-            )
+
+            # In this case it would be inconsistent to turn
+            # on grains, so don't.
+
+        else:
+            cinput.append("element abundance he -1")
+            for ele in abundances.metals:
+                cinput.append(
+                    (f"elements {abundances.element_name[ele]} off \n")
+                )
 
         """
         add graphite and silicate grains
@@ -232,9 +245,9 @@ def create_cloudy_input(
         grains approach is metals/element abundances do not talk
         to the grains command and hence there is issues with mass
         conservation (see cloudy documentation). To alleviate
-        this one needs to make the orion grain abundances
-        consistent with the depletion values. Assume 1 per cent of
-        C is in PAH's.
+        this one needs to make the orion or ism (in-built in cloudy)
+        grain abundances consistent with the depletion values. Assume
+        1 per cent of C is in PAH's.
 
         PAHs appear to exist mainly at the interface between the
         H+ region and the molecular clouds. Apparently PAHs are
@@ -281,11 +294,12 @@ def create_cloudy_input(
                 # this is incorrect since the abundance in the ISM is probably
                 # different.
                 elif params["grains"] == "ISM":
-                    reference_C_abund = -3.6259
-                    reference_Si_abund = -4.5547
+                    reference_C_abund = -3.5553
+                    reference_Si_abund = -4.4841
                 else:
-                    raise UnimplementedFunctionality(
-                        "Only Orion grains are currently implemented"
+                    raise UnrecognisedOption(
+                        "Only Orion and ISM grain types "
+                        "are available in cloudy"
                     )
 
                 PAH_abund = -4.446
@@ -316,15 +330,24 @@ def create_cloudy_input(
     else:
         warn("No depletion (or unrecognised depletion) specified")
 
-        for ele in ["He"] + abundances.metals:
-            cinput.append(
-                (
-                    f"element abundance {abundances.element_name[ele]} "
-                    f"{abundances.total[ele]}\n"
+        if params["metals"]:
+            for ele in ["He"] + abundances.metals:
+                cinput.append(
+                    (
+                        f"element abundance {abundances.element_name[ele]} "
+                        f"{abundances.total[ele]}\n"
+                    )
                 )
-            )
 
-        # In this case it would be inconsistent to turn on grains, so don't.
+            # In this case it would be inconsistent to turn on
+            # grains, so don't.
+
+        else:
+            cinput.append("element abundance he -1")
+            for ele in abundances.metals:
+                cinput.append(
+                    (f"elements {abundances.element_name[ele]} off \n")
+                )
 
     ionisation_parameter = params["ionisation_parameter"]
 

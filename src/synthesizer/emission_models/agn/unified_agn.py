@@ -23,6 +23,7 @@ Example usage::
 import numpy as np
 from unyt import deg
 
+from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.sed import Sed
 
@@ -38,12 +39,6 @@ def scale_by_incident_isotropic(emission, emitters, model):
     """
     # Handle lines and spectra differently
     if isinstance(emission[list(emission.keys())[0]], Sed):
-        # Get the isotropic bolometric luminosity
-        emission["disc_incident_isotropic"].measure_bolometric_luminosity()
-        isotropic_bolo_lum = emission[
-            "disc_incident_isotropic"
-        ]._bolometric_luminosity
-
         # Scale the spectra
         for key, spectra in emission.items():
             # Get the model
@@ -57,7 +52,7 @@ def scale_by_incident_isotropic(emission, emitters, model):
             emitter = emitters[this_model.emitter]
 
             # Get the scaling
-            scaling = emitter._bolometric_luminosity / isotropic_bolo_lum
+            scaling = emitter._bolometric_luminosity
 
             # Scale the spectra
             if spectra.ndim == 1 and scaling.ndim == 0:
@@ -73,8 +68,18 @@ def scale_by_incident_isotropic(emission, emitters, model):
                 spectra._lnu = spectra._lnu * np.expand_dims(scaling, axis=-1)
 
     else:
+        disc_bolometric_luminosity = (
+            emitters["blackhole"]
+            .spectra["disc_incident_isotropic"]
+            ._bolometric_luminosity
+        )
+        blackhole_bolometric_luminosity = emitters[
+            "blackhole"
+        ]._bolometric_luminosity
+        scaling = blackhole_bolometric_luminosity / disc_bolometric_luminosity
+
         # Loop over the different emissions
-        for key, emission in emission.items():
+        for key, line_collection in emission.items():
             # Get the model
             this_model = model[key]
 
@@ -85,14 +90,11 @@ def scale_by_incident_isotropic(emission, emitters, model):
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
+            # Get the scaling
+            scaling = emitter._bolometric_luminosity
+
             # Loop over the lines
-            for line_id, line in emission[key]:
-                # Get the continuum of the isotropic disc emission
-                isotropic_continuum = line._continuum
-
-                # Get the scaling
-                scaling = emitter._bolometric_luminosity / isotropic_continuum
-
+            for line in line_collection:
                 # Scale the line
                 line._luminosity *= scaling
                 line._continuum *= scaling
@@ -155,6 +157,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
+        # Ensure the sum of covering fractions is less than 1
+        if covering_fraction_nlr + covering_fraction_blr > 1:
+            raise exceptions.InconsistentArguments(
+                "The sum of the covering fractions must be less than 1."
+            )
+
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,
@@ -214,7 +222,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_incident_isotropic,
                 self.disc_incident,
             ),
-            post_processing=(scale_by_incident_isotropic,),
             **kwargs,
         )
 

@@ -8,12 +8,14 @@ Example usage:
 
 import numpy as np
 import unyt.physical_constants as const
-from unyt import Hz, erg, pc, s, unyt_array, unyt_quantity
+from unyt import Hz, K, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.units import accepts
 from synthesizer.warnings import warn
 
 
+@accepts(frequency=Hz, temperature=K)
 def planck(frequency, temperature):
     """
     Compute the planck distribution for a given frequency and temperature.
@@ -30,20 +32,6 @@ def planck(frequency, temperature):
     Returns:
         unyt_quantity: Spectral luminosity density in erg/s/Hz.
     """
-    # Ensure we have unyt quantities
-    if not has_units(frequency):
-        raise exceptions.InconsistentArguments(
-            "Frequency must have units (e.g. Hz) to calculate Planck's law."
-        )
-    if not has_units(temperature):
-        raise exceptions.InconsistentArguments(
-            "Temperature must have units (e.g. K) to calculate Planck's law."
-        )
-
-    # Ensure frequency is in Hz and temperature is in K
-    frequency = frequency.to("Hz")
-    temperature = temperature.to("K")
-
     # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
     exponent = (const.h * frequency) / (const.kb * temperature)
     spectral_radiance = (2 * const.h * frequency**3) / (
@@ -56,27 +44,6 @@ def planck(frequency, temperature):
 
     # Convert the result to erg/s/Hz and return
     return lnu.to(erg / s / Hz)
-
-
-def has_units(x):
-    """
-    Check whether the passed variable has units.
-
-    This will check the argument is a unyt_quanity or unyt_array.
-
-    Args:
-        x (generic variable)
-            The variables to check.
-
-    Returns:
-        bool
-            True if the variable has units, False otherwise.
-    """
-    # Do the check
-    if isinstance(x, (unyt_array, unyt_quantity)):
-        return True
-
-    return False
 
 
 def rebin_1d(arr, resample_factor, func=np.sum):
@@ -324,3 +291,98 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
         rgba.append(wavelength_to_rgba(wavelength, gamma=gamma))
 
     return rgba
+
+
+def combine_arrays(arr1, arr2):
+    """
+    Combine two arrays into a single array.
+
+    This function is a helper used to combine two arrays of the same length
+    into a single array while abstracting some checks and handling improper
+    combinations.
+
+    If both arrays are None then None is returned. If one array is None and
+    the other is not then None is returned along with a warning.
+
+    Args:
+        arr1 (array-like)
+            The first array to combine.
+        arr2 (array-like)
+            The second array to combine.
+
+    Returns:
+        array-like
+            The combined array.
+    """
+    # Are both arrays None?
+    if arr1 is None and arr2 is None:
+        return None
+
+    # If one is None and the other is not then return None
+    elif arr1 is None or arr2 is None:
+        warn("One of the arrays is None, one is not. Returning None.")
+        return None
+
+    # Ensure both arrays aren't 0 dimensional
+    elif arr1.ndim == 0 or arr2.ndim == 0:
+        return None
+
+    # If both are not None then combine them
+    else:
+        return np.concatenate([arr1, arr2])
+
+
+def pluralize(word: str) -> str:
+    """Pluralize a singular word.
+
+    Args:
+        word (str): The word to pluralize.
+
+    Returns:
+        str: The pluralized word.
+    """
+    if (
+        word.endswith("s")
+        or word.endswith("x")
+        or word.endswith("z")
+        or word.endswith("sh")
+        or word.endswith("ch")
+    ):
+        return word + "es"
+    elif word.endswith("y") and word[-2] not in "aeiou":
+        return word[:-1] + "ies"
+    elif word.endswith("f"):
+        return word[:-1] + "ves"
+    elif word.endswith("fe"):
+        return word[:-2] + "ves"
+    elif word.endswith("o") and word[-2] not in "aeiou":
+        return word + "es"
+    else:
+        return word + "s"
+
+
+def depluralize(word: str) -> str:
+    """
+    Convert a plural word to its singular form based on simple rules.
+
+    Args:
+        word (str): The word to depluralize.
+
+    Returns:
+        str: The depluralized word.
+    """
+
+    if word.endswith("ies") and len(word) > 3:  # babies -> baby
+        return word[:-3] + "y"
+    elif word.endswith("ves"):  # leaves -> leaf, knives -> knife
+        return word[:-3] + "f"
+    elif word.endswith("oes"):  # heroes -> hero, potatoes -> potato
+        return word[:-2]
+    elif word.endswith(
+        ("ches", "shes", "xes", "sses")
+    ):  # boxes -> box, churches -> church
+        return word[:-2]
+    elif word.endswith("s") and len(word) > 2:  # general case: cats -> cat
+        return word[:-1]
+
+    return word  # Return unchanged if no rule applies

@@ -31,7 +31,7 @@ from unyt import (
     K,
     Lsun,
     Msun,
-    accepts,
+    angstrom,
     c,
     erg,
     h,
@@ -41,14 +41,12 @@ from unyt import (
     unyt_array,
     unyt_quantity,
 )
-from unyt.dimensions import mass as mass_dim
-from unyt.dimensions import temperature as temperature_dim
 
 from synthesizer import exceptions
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
+from synthesizer.units import accepts
 from synthesizer.utils import planck
-from synthesizer.utils.util_funcs import has_units
 from synthesizer.warnings import warn
 
 
@@ -67,6 +65,7 @@ class EmissionBase:
     temperature: Optional[Union[unyt_quantity, float]]
     cmb_factor: float
 
+    @accepts(temperature=K)
     def __init__(
         self,
         temperature: Optional[Union[unyt_quantity, float]] = None,
@@ -95,6 +94,8 @@ class EmissionBase:
             " Instead use one to child models (Blackbody, Greybody, Casey12)."
         )
 
+    accepts(lam=angstrom)
+
     def get_spectra(
         self,
         lam,
@@ -121,10 +122,6 @@ class EmissionBase:
         # the dust spectra to the bolometric luminosity of the input spectra
         # and then add the input spectra to the dust spectra
         elif intrinsic_sed is not None and attenuated_sed is not None:
-            # Measure bolometric luminosities
-            intrinsic_sed.measure_bolometric_luminosity()
-            attenuated_sed.measure_bolometric_luminosity()
-
             # Calculate the bolometric dust luminosity as the difference
             # between the intrinsic and attenuated
             bolometric_luminosity = (
@@ -135,7 +132,6 @@ class EmissionBase:
         # If we only have the intrinsic SED, we can just scale the emission
         elif intrinsic_sed is not None:
             # Measure bolometric luminosity
-            intrinsic_sed.measure_bolometric_luminosity()
             bolometric_luminosity = intrinsic_sed.bolometric_luminosity
 
         else:
@@ -162,6 +158,7 @@ class EmissionBase:
         # Create new Sed object containing dust emission spectra
         return Sed(lam, lnu=lnu)
 
+    @accepts(lam=angstrom)
     def _get_spectra(self, lam: unyt_array) -> Sed:
         """
         Return the normalised lnu for the provided wavelength grid.
@@ -174,22 +171,13 @@ class EmissionBase:
             lnu (unyt_array)
                 The spectral luminosity density.
         """
-        # Ensure we have units
-        if not has_units(lam):
-            raise exceptions.InconsistentArguments(
-                "Wavelength must be a given with units. "
-                f"(type(lam)={type(lam)})"
-            )
-
         # Get frequencies
         nu = (c / lam).to(Hz)
 
         sed = Sed(lam=lam, lnu=self._lnu(nu))
 
         # Normalise the spectrum
-        sed._lnu /= np.expand_dims(
-            sed.measure_bolometric_luminosity().value, axis=-1
-        )
+        sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
 
         # Apply heating due to CMB, if applicable
         sed._lnu *= self.cmb_factor
@@ -244,7 +232,7 @@ class Blackbody(EmissionBase):
     cmb_heating: bool
     redshift: float
 
-    @accepts(temperature=temperature_dim)
+    @accepts(temperature=K)
     def __init__(
         self,
         temperature: unyt_quantity,
@@ -278,6 +266,7 @@ class Blackbody(EmissionBase):
         else:
             self.temperature_z = temperature
 
+    @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array) -> unyt_array:
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
@@ -291,18 +280,6 @@ class Blackbody(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
-        # Ensure we have units on nu
-        if not has_units(nu):
-            raise exceptions.InconsistentArguments(
-                f"Frequency must be a given with units. (type(nu)={type(nu)})"
-            )
-
-        # Ensure we have the correct units on nu
-        if nu.units != Hz:
-            raise exceptions.InconsistentArguments(
-                "Frequency must be given in Hz."
-            )
-
         return planck(nu, self.temperature)
 
 
@@ -324,7 +301,7 @@ class Greybody(EmissionBase):
     cmb_heating: bool
     redshift: float
 
-    @accepts(temperature=temperature_dim)
+    @accepts(temperature=K)
     def __init__(
         self,
         temperature: unyt_quantity,
@@ -357,6 +334,7 @@ class Greybody(EmissionBase):
 
         self.emissivity = emissivity
 
+    @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array) -> unyt_array:
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
@@ -371,18 +349,6 @@ class Greybody(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
-        # Ensure we have units on nu
-        if not has_units(nu):
-            raise exceptions.InconsistentArguments(
-                f"Frequency must be a given with units. (type(nu)={type(nu)})"
-            )
-
-        # Ensure we have the correct units on nu
-        if nu.units != Hz:
-            raise exceptions.InconsistentArguments(
-                "Frequency must be given in Hz."
-            )
-
         return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
 
 
@@ -419,7 +385,7 @@ class Casey12(EmissionBase):
     cmb_heating: bool
     redshift: float
 
-    @accepts(temperature=temperature_dim)
+    @accepts(temperature=K, lam_0=angstrom)
     def __init__(
         self,
         temperature: unyt_quantity,
@@ -489,6 +455,7 @@ class Casey12(EmissionBase):
             / (np.exp(h * c / (self.lam_c * kb * self.temperature)) - 1)
         )
 
+    @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array) -> Union[NDArray[np.float64], unyt_array]:
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
@@ -503,11 +470,6 @@ class Casey12(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
-        # Ensure we have units
-        if not has_units(nu):
-            raise exceptions.MissingUnits(
-                f"Frequency must be a given with units. (type(nu)={type(nu)})"
-            )
 
         # Define a function to calcualate the power-law component.
         def _power_law(lam: unyt_array) -> float:
@@ -606,7 +568,7 @@ class IR_templates:
     p0: float
     verbose: bool
 
-    @accepts(mdust=mass_dim)
+    @accepts(mdust=Msun.in_base("galactic"))
     def __init__(
         self,
         grid: Grid,
@@ -727,6 +689,7 @@ class IR_templates:
         self.umin_id = umin_id
         self.alpha_id = alpha_id
 
+    @accepts(lam=angstrom)
     def get_spectra(
         self,
         lam,
@@ -762,20 +725,14 @@ class IR_templates:
                 # Calculate the bolometric dust luminosity as the difference
                 # between the intrinsic and attenuated
                 ldust = (
-                    intrinsic_sed.measure_bolometric_luminosity()
-                    - attenuated_sed.measure_bolometric_luminosity()
+                    intrinsic_sed.bolometric_luminosity
+                    - attenuated_sed.bolometric_luminosity
                 )
                 self.ldust = ldust.to("Lsun")
             self.dl07()
         else:
             raise exceptions.UnimplementedFunctionality(
                 f"{self.template} not a valid model!"
-            )
-
-        # Ensure wavelengths have units
-        if not has_units(lam):
-            raise exceptions.MissingUnits(
-                "Wavelength must be a given with units."
             )
 
         # Interpret the dust spectra for the given

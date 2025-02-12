@@ -10,7 +10,7 @@ Example for generating a rest-frame physical scale image. This example will:
 """
 
 import matplotlib.pyplot as plt
-from unyt import Myr, kpc
+from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import ReprocessedEmission
 from synthesizer.filters import UVJ
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         grid.metallicity,
         sf_hist=sfh,
         metal_dist=metal_dist,
-        initial_mass=10**9,
+        initial_mass=10**9 * Msun,
         morphology=morph,
     )
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     filters = UVJ()
 
     # Get photometry
-    galaxy.stars.spectra["reprocessed"].get_photo_lnu(filters)
+    galaxy.stars.get_photo_lnu(filters)
 
     # Define geometry of the images
     resolution = 0.01 * kpc  # resolution in kpc
@@ -88,8 +88,8 @@ if __name__ == "__main__":
     # We can also do the same with a helper function on the galaxy object
     img = galaxy.get_images_luminosity(
         resolution=resolution,
-        stellar_photometry="reprocessed",
         fov=fov,
+        emission_model=model,
     )
 
     # and... print an ASCII representation

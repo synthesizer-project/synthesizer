@@ -24,7 +24,7 @@ from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
-from synthesizer.sed import Sed
+from synthesizer.sed import Sed, plot_spectra
 
 # Get the grid
 grid_dir = "../../tests/test_grid"
@@ -111,7 +111,7 @@ combined_incident = StellarEmissionModel(
     label="incident",
     combine=(young_incident, old_incident),
 )
-spec = g.stars.get_spectra(combined_incident)
+combined_spec = g.stars.get_spectra(combined_incident)
 
 # Once again we can plot them all
 g.stars.plot_spectra(show=True)
@@ -126,27 +126,23 @@ g.stars.plot_spectra(show=True)
 #
 # To mitigate this, we provide a method for smoothing the recent star
 # formation history of a particle galaxy by replacing each young star
-# particle with a parametric SFH. An example is provided [here](../sed.ipynb).
+# particle with a parametric SFH.
 #
-# This functionality can be enabled by setting the argument `parametric_
-# young_stars` on any `get_spectra_*` methods. This should be set to the
-# age at which you wish to smooth the SFH. The default form of the SFH is
-# constant, but this can also be modified by providing a parametric SFH
-# object to the `parametric_sfh` argument.
-parametric_spec = g.stars.get_spectra(
-    incident, parametric_young_stars=500 * Myr
+# This by calling parametric_young_stars on the Stars object. This method
+# will replace the young star particles with particles sampled from a
+# parametric SFH. The method requires the age below which to replace the
+# particles, the parametric SFH to use, and the grid to use for the
+# parametric SFH.
+g.stars.parametric_young_stars(
+    age=500 * Myr,
+    parametric_sfh="constant",
+    grid=grid,
 )
-
-plt.loglog(spec.lam, spec.lnu + spec.lnu, label="Particle")
-plt.loglog(
-    parametric_spec.lam, parametric_spec.lnu, label="Parametric + Particle"
+parametric_spec = g.stars.get_spectra(incident)
+plot_spectra(
+    {"Particle": spec, "Parametric + Particle": parametric_spec},
+    show=True,
 )
-plt.legend()
-plt.xlabel("$\\lambda \\,/\\, \\AA$")
-plt.ylabel("$L_{\\nu} \\,/\\, \\mathrm{erg \\; s^{-1} \\; Hz^{-1}}$")
-plt.ylim(10**22.0, 10**29.0)
-plt.xlim(10**2.0, 10**5.2)
-plt.show()
 
 
 # ## Nebular emission
