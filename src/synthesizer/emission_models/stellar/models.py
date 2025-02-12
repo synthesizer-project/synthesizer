@@ -394,12 +394,6 @@ class IntrinsicEmission(StellarEmissionModel):
             reprocessed (EmissionModel): The reprocessed model to use, if None
                 then one will be created.
         """
-        # Ensure what we've been asked for makes sense
-        if fesc == 0.0:
-            raise ValueError(
-                "Intrinsic emission model requires an escape fraction > 0.0"
-            )
-
         # Make an escaped model if we need one
         if escaped is None:
             escaped = EscapedEmission(
