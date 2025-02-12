@@ -104,9 +104,9 @@ class Stars(Particles, StarsComponent):
     ]
 
     # Define class level Quantity attributes
-    initial_masses = Quantity()
-    current_masses = Quantity()
-    smoothing_lengths = Quantity()
+    initial_masses = Quantity("mass")
+    current_masses = Quantity("mass")
+    smoothing_lengths = Quantity("spatial")
 
     @accepts(
         initial_masses=Msun.in_base("galactic"),

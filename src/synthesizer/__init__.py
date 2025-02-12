@@ -1,4 +1,3 @@
-# Import the various utils submodules to make them available at the top level
 # Import the various extensions submodules to make them available
 # at the top level
 from synthesizer.extensions.openmp_check import check_openmp

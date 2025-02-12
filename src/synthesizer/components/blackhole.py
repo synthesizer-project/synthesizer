@@ -75,12 +75,12 @@ class BlackholesComponent(Component):
     """
 
     # Define class level Quantity attributes
-    accretion_rate = Quantity()
-    inclination = Quantity()
-    bolometric_luminosity = Quantity()
-    eddington_luminosity = Quantity()
-    bb_temperature = Quantity()
-    mass = Quantity()
+    accretion_rate = Quantity("mass_rate")
+    inclination = Quantity("angle")
+    bolometric_luminosity = Quantity("luminosity")
+    eddington_luminosity = Quantity("luminosity")
+    bb_temperature = Quantity("temperature")
+    mass = Quantity("mass")
 
     @accepts(
         mass=Msun.in_base("galactic"),
