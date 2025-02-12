@@ -152,7 +152,7 @@ dense_basis = [
 
 # Entry points
 [project.scripts]
-synthesizer-download="synthesizer.download_data:download"
+synthesizer-download="synthesizer.downloader.downloader:download"
 
 # Package data
 [tool.setuptools.package-data]
