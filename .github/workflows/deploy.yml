@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: pypi-deployment
     # Grant the job permission to request an OIDC token
     permissions:
       contents: read
