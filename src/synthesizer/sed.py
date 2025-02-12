@@ -80,12 +80,12 @@ class Sed:
     """
 
     # Define Quantities, for details see units.py
-    lam = Quantity()
-    nu = Quantity()
-    lnu = Quantity()
-    fnu = Quantity()
-    obsnu = Quantity()
-    obslam = Quantity()
+    lam = Quantity("wavelength")
+    nu = Quantity("frequency")
+    lnu = Quantity("luminosity_density_frequency")
+    fnu = Quantity("flux_density_frequency")
+    obsnu = Quantity("frequency")
+    obslam = Quantity("wavelength")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(self, lam, lnu=None, description=None):
