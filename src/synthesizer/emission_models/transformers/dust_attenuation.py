@@ -578,7 +578,6 @@ class GrainsWD01(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-
         lam_lims = np.logspace(2, 8, 10000) * angstrom
         lam_v = 5500 * angstrom  # V-band wavelength
         func = interpolate.interp1d(
