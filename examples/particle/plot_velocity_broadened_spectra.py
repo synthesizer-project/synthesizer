@@ -29,8 +29,8 @@ grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
-# Define the model
-model = NebularEmission(grid)
+# Define the model with velocity shift
+model = NebularEmission(grid, vel_shift=True)
 
 # Create galaxy object
 galaxy = load_CAMELS_IllustrisTNG(
@@ -45,10 +45,9 @@ galaxy.stars.velocities = (
     np.random.normal(100, 500, galaxy.stars.coordinates.shape) * km / s
 )
 
-# Get the spectra (this will automatically use the tau_vs we just calculated
-# since the emission model has tau_v="tau_v")
+# Get the spectra
 start_with_shift = time.time()
-galaxy.stars.get_spectra(model, vel_shift=True)
+galaxy.stars.get_spectra(model)
 print(
     "Time to get spectra with velocity shift: "
     f"{time.time() - start_with_shift}"
@@ -60,7 +59,10 @@ with_shift = galaxy.stars.spectra["nebular"]
 # Clear the spectra
 galaxy.clear_all_emissions()
 
-# Get the spectra without the velocity broadening
+# Get the spectra without the velocity broadening (we could use the
+# set_vel_shift method on an EmissionModel to turn off the velocity shift
+# but here we demonstrate how to do it with the get_spectra method's
+# overides)
 start_without_shift = time.time()
 galaxy.stars.get_spectra(model, vel_shift=False)
 print(
