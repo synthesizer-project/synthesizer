@@ -52,8 +52,8 @@ class Image:
     """
 
     # Define quantities
-    resolution = Quantity()
-    fov = Quantity()
+    resolution = Quantity("spatial")
+    fov = Quantity("spatial")
 
     def __init__(
         self,

@@ -29,15 +29,6 @@ from synthesizer import exceptions
 from synthesizer.utils.stats import weighted_mean, weighted_median
 from synthesizer.warnings import warn
 
-# This import is in quarantine because it insists on printing
-# "Starting dense_basis" to the console on import! It can stay here until
-# a PR is raised to fix this.
-original_stdout = sys.stdout
-sys.stdout = io.StringIO()
-import dense_basis as db
-
-sys.stdout = original_stdout
-
 # Define a list of the available parametrisations
 parametrisations = (
     "Constant",
@@ -750,7 +741,7 @@ class DenseBasis(Common):
         self, interpolator="gp_george", min_age=5, max_age=10.3
     ):
         """
-        Convert dense basis representation to a binned SFH
+        Convert dense basis representation to a binned SFH.
 
         Args:
             interpolator (string)
@@ -762,6 +753,24 @@ class DenseBasis(Common):
             max_age (float)
                 maximum age of SFH grid
         """
+        # Attempt to import dense_basis, if missing they need to
+        # install the optional dependency
+        try:
+            # This import is in quarantine because it insists on printing
+            # "Starting dense_basis" to the console on import! It can stay here
+            # until a PR is raised to fix this.
+            original_stdout = sys.stdout
+            sys.stdout = io.StringIO()
+            import dense_basis as db
+
+            sys.stdout = original_stdout
+        except ImportError:
+            raise exceptions.UnmetDependency(
+                "dense_basis not found. Please install Synthesizer with "
+                " dense_basis support by running `pip install "
+                ".[dense_basis]`"
+            )
+
         # Convert the dense basis tuple arguments to sfh in mass fraction units
         tempsfh, temptime = db.tuple_to_sfh(
             self.db_tuple, self.redshift, interpolator=interpolator, vb=False

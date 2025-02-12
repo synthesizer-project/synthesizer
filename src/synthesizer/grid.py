@@ -101,7 +101,7 @@ class Grid:
     """
 
     # Define Quantities
-    lam = Quantity()
+    lam = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
     def __init__(
@@ -171,6 +171,11 @@ class Grid:
         self._axes_units = {}
         self._get_axes()
 
+        # Read in the metadata
+        self._weight_var = None
+        self._model_metadata = {}
+        self._get_grid_metadata()
+
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
 
@@ -214,6 +219,20 @@ class Grid:
         self.grid_filename = (
             f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
         )
+
+    def _get_grid_metadata(self):
+        """Unpack the grids metadata into the Grid."""
+        # Open the file
+        with h5py.File(self.grid_filename, "r") as hf:
+            # What component variable do we need to weight by for the
+            # emission in the grid?
+            self._weight_var = hf.attrs.get("WeightVariable", None)
+
+            # Loop over the Model metadata stored in the Model group
+            # and store it in the Grid object
+            if "Model" in hf:
+                for key, value in hf["Model"].attrs.items():
+                    self._model_metadata[key] = value
 
     def __getattr__(self, name):
         """
@@ -409,9 +428,11 @@ class Grid:
 
             # Old name for backwards compatibility (DEPRECATED)
             if "log10Q" in hf.keys():
-                self.log10Q = {}
+                self.log10_specific_ionising_lum = {}
                 for ion in hf["log10Q"].keys():
-                    self.log10Q[ion] = hf["log10Q"][ion][:]
+                    self.log10_specific_ionising_lum[ion] = hf["log10Q"][ion][
+                        :
+                    ]
 
     def _get_spectra_grid(self, spectra_to_read):
         """
@@ -1063,10 +1084,7 @@ class Grid:
         y = np.arange(len(self.metallicity))
 
         # Select grid for specific ion
-        if hasattr(self, "log10_specific_ionising_lum"):
-            log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
-        else:
-            log10_specific_ionising_lum = self.log10Q[ion]
+        log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
 
         # Truncate grid if max age provided
         if max_log10age is not None:
@@ -1299,8 +1317,8 @@ class Template:
     """
 
     # Define Quantities
-    lam = Quantity()
-    lnu = Quantity()
+    lam = Quantity("wavelength")
+    lnu = Quantity("luminosity_density_frequency")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(

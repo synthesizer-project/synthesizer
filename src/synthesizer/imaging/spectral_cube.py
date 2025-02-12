@@ -74,9 +74,9 @@ class SpectralCube:
     """
 
     # Define quantities
-    lam = Quantity()
-    resolution = Quantity()
-    fov = Quantity()
+    lam = Quantity("wavelength")
+    resolution = Quantity("spatial")
+    fov = Quantity("spatial")
 
     def __init__(
         self,

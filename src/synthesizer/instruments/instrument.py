@@ -70,8 +70,8 @@ class Instrument:
     """
 
     # Define quantities
-    resoluton = Quantity()
-    lam = Quantity()
+    resoluton = Quantity("spatial")
+    lam = Quantity("wavelength")
 
     @accepts(resolution=kpc, lam=angstrom)
     def __init__(
