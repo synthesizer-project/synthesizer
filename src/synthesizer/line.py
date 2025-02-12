@@ -261,7 +261,7 @@ class LineCollection:
     """
 
     # Define quantities
-    wavelengths = Quantity()
+    wavelengths = Quantity("wavelength")
 
     def __init__(self, lines):
         """
@@ -852,12 +852,12 @@ class Line:
     """
 
     # Define quantities
-    wavelength = Quantity()
-    vacuum_wavelength = Quantity()
-    continuum = Quantity()
-    luminosity = Quantity()
-    flux = Quantity()
-    obslam = Quantity()
+    wavelength = Quantity("wavelength")
+    vacuum_wavelength = Quantity("wavelength")
+    obslam = Quantity("wavelength")
+    continuum = Quantity("luminosity_density_frequency")
+    luminosity = Quantity("luminosity")
+    flux = Quantity("flux")
 
     @accepts(
         wavelength=angstrom,

@@ -85,7 +85,7 @@ class Stars(StarsComponent):
     """
 
     # Define quantities
-    initial_mass = Quantity()
+    initial_mass = Quantity("mass")
 
     @accepts(initial_mass=Msun.in_base("galactic"))
     def __init__(
