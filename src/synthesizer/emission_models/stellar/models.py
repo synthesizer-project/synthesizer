@@ -211,7 +211,7 @@ class EscapedEmission(StellarEmissionModel):
         self,
         grid,
         label="escaped",
-        fesc="escf",
+        fesc=0.0,
         **kwargs,
     ):
         """
@@ -228,7 +228,7 @@ class EscapedEmission(StellarEmissionModel):
             grid=grid,
             label=label,
             extract="transmitted",
-            fesc=(1 - fesc) if isinstance(fesc, float) else fesc,
+            fesc=(1 - fesc),
             **kwargs,
         )
 
