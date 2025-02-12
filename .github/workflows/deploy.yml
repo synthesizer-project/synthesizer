@@ -27,6 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install build setuptools-scm
+          pip install twine
 
       - name: Build source distribution (sdist only)
         run: python -m build --sdist
