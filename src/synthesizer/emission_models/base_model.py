@@ -162,7 +162,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
     """
 
     # Define quantities
-    lam = Quantity()
+    lam = Quantity("wavelength")
 
     def __init__(
         self,
