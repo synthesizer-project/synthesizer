@@ -23,7 +23,21 @@ To define them only while running ``pip install`` simply included them before th
 
 .. code-block:: bash
 
-    WITH_OPENMP=1 ATOMIC_TIMINGS=1 pip install .
+    WITH_OPENMP=1 ATOMIC_TIMINGS=1 pip install cosmos-synthesizer
+
+These options can be used both when installing from source and from PyPI, e.g.
+
+.. code-block:: bash
+
+    WITH_OPENMP=1 pip install cosmos-synthesizer
+
+and 
+
+.. code-block:: bash
+
+    ENABLE_DEBUGGING_CHECKS=1 pip install .
+
+Will both work as expected.
 
 Changing Compiler Flags
 ^^^^^^^^^^^^^^^^^^^^^^^
