@@ -24,7 +24,7 @@ To install, enter the `synthesizer` directory and install with pip.
     cd synthesizer
     pip install .
 
-We also provide optional dependency sets for development (`dev`), testing (`test`), and building the documentation (`docs`) should you ever needed them. To install all dependancies simply run the following (or delete as appropriate to get a specific subset):
+We also provide optional dependency sets for development (`dev`), testing (`test`), and building the documentation (`docs`):
 
     pip install .[dev,test,docs]
 
@@ -32,23 +32,15 @@ Make sure you stay up to date with the latest versions through git:
 
     git pull origin main
 
-### Getting test data
+### Test data
 
-If you wish to run the examples, or need some data for development purposes, we provide [test data](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo,
-
-```bash
-synthesizer-download --test-grids --dust-grid -d tests/test_grid
-```
-
-This command will store the SPS, AGN, and dust grids in the `tests` directory at the root of the repo; all examples expect this data to reside in this location.
-
-You will also want to download the preprocessed CAMELS Illustris-TNG data,
+If you wish to run the examples, or need data for development purposes, we provide [test data](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo,
 
 ```bash
-synthesizer-download --camels-data -d tests/data/
+synthesizer-download --test-grids --dust-grid --camels-data -d tests/test_grid
 ```
 
-this is a very small set of galaxies taken from the [CAMELS suite](https://camels.readthedocs.io/en/latest/) of simulations. We use this in some particle based examples.
+This command will store test data in the `tests` directory at the root of the repo; all examples expect this data to reside in this location.
 
 ## Contributing
 
