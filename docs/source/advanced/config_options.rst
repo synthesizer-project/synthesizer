@@ -62,5 +62,21 @@ For debugging specifically you should also compile with debugging symbols and no
 
 However, the lack of optimisation with the inclusion of debugging checks, while necessary to debug, will slow the code down extensively.
 
+Configuration Options and ``pip``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When reinstalling from pip and changing configuration options it's important to uninstall the previous version first and to ignore any cached versions of the package. This is because the installation needs to recompile the C extensions from source. 
+
+For instance, to reinstall with OpenMP support:
+
+.. code-block:: bash
+
+    pip uninstall cosmos-synthesizer
+    WITH_OPENMP=1 pip install --no-cache-dir cosmos-synthesizer
+
+When installing from source, the package will always be recompiled from source and thus the configuration options will be applied.
+
+
+
 
 
