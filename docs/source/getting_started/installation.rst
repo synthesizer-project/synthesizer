@@ -1,7 +1,7 @@
 Installation
 ************
 
-This guide will walk you through creating an environment to isolate Synthesizer's dependencies and installing the package itself. Note that while a new environment is not required its highly recommended.
+This guide will walk you through creating an isolated environment and installing the package.
 
 If you instead want to set up a new installation for development see the installation instructions in the `contributing guidelines <../../CONTRIBUTING.md>'_.
 
