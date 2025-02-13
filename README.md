@@ -1,6 +1,6 @@
 # Synthesizer
 
-<img src="docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
+<img src="https://raw.githubusercontent.com/flaresimulations/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
 
 [![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/flaresimulations/synthesizer/actions)
 [![Documentation Status](https://github.com/flaresimulations/synthesizer/actions/workflows/static.yml/badge.svg)](https://flaresimulations.github.io/synthesizer/)
@@ -8,39 +8,34 @@
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![PyPI version](https://img.shields.io/pypi/v/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
 
-Synthesizer is a python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
+<!--
+This will also display the number of downloads but lets hide for now...
+[![Downloads](https://img.shields.io/pypi/dm/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
+-->
+
+Synthesizer is a Python package for generating synthetic astrophysical observables. It's been built from its foundations to be modular, flexible and fast.
 
 Read the documentation [here](https://flaresimulations.github.io/synthesizer/).
 
 ## Getting Started
 
-First clone the latest version of `synthesizer`
-
-    git clone https://github.com/flaresimulations/synthesizer.git
-
-To install, enter the `synthesizer` directory and install with pip.
-
-    cd synthesizer
-    pip install .
-
-We also provide optional dependency sets for development (`dev`), testing (`test`), and building the documentation (`docs`):
-
-    pip install .[dev,test,docs]
-
-Make sure you stay up to date with the latest versions through git:
-
-    git pull origin main
-
-### Test data
-
-If you wish to run the examples, or need data for development purposes, we provide [test data](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo,
+In its simplest form Synthesizer's latest stable release can be installed directly using pip,
 
 ```bash
-synthesizer-download --test-grids --dust-grid --camels-data -d tests/test_grid
+pip install cosmos-synthesizer
 ```
 
-This command will store test data in the `tests` directory at the root of the repo; all examples expect this data to reside in this location.
+For further information on installation, please refer to the [installation documentation](https://flaresimulations.github.io/synthesizer/getting_started/installation.html).
+
+Various configuration options can also be set when installing Synthesizer. For more details on setting these see [the configuraiton option documentation](https://flaresimulations.github.io/synthesizer/advanced/config_options.html).
+
+## Getting Grids
+
+To use Synthesizer you may need a grid of theoretical spectra. Premade grids can be downloaded from the [grids data server](https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&e=1&dl=0).
+
+Note that you can also create your own grids using (or adapting) the [`grid-generation` repo](https://github.com/synthesizer-project/grid-generation) if we have not already produced the grid you want.
 
 ## Contributing
 
