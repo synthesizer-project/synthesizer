@@ -127,6 +127,12 @@ eagle = [
     "schwimmbad",
 ]
 
+# Optional dependency for using dense_basis
+dense_basis = [
+  "dense_basis",
+]
+
+
 # Project urls
 [project.urls]
 "Homepage" = "https://github.com/flaresimulations/synthesizer"
