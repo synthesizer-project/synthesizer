@@ -15,14 +15,14 @@ The GitHub workflow will automatically run [Ruff](https://github.com/astral-sh/r
 
 ## Settting up your development environment
 
-To begin developing in Synthesizer you'll first want to set up a new environment (at least its highly recommended you do).
+To begin developing in Synthesizer first set up a new environment.
 
 ```bash
 python3 -m venv synth-dev-env
 source synth-dev-env/bin/activate
 ```
 
-One you have set up and activated this environment you can clone the repo and install it in editable mode with the extra development dependencies. To do so simply run:
+You can then clone the repo and install it in editable mode with the extra development dependencies.
 
 ```bash
 git clone https://github.com/flaresimulations/synthesizer.git
@@ -34,7 +34,7 @@ Note: if you are planning to build the docs locally you'll also need to include 
 
 ### Test data
 
-To run existing examples or docs and add new ones, you'll need some test data to act on. We provide [test data](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo to get all the data you will need to get started.
+To run existing examples or docs and add new ones, you'll need test data, provided [here](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo.
 
 ```bash
 synthesizer-download --test-grids --dust-grid -d tests/test_grid
