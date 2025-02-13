@@ -15,27 +15,27 @@ This will also display the number of downloads but lets hide for now...
 [![Downloads](https://img.shields.io/pypi/dm/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
 -->
 
-Synthesizer is a Python package for generating synthetic astrophysical observables. It's been built from its foundations to be modular, flexible and fast.
+Synthesizer is a Python package for generating synthetic astrophysical observables. It is modular, flexible, extensible and fast.
 
 Read the documentation [here](https://flaresimulations.github.io/synthesizer/).
 
 ## Getting Started
 
-In its simplest form Synthesizer's latest stable release can be installed directly using pip,
+The latest stable release of Synthesizer can be installed directly using pip,
 
 ```bash
 pip install cosmos-synthesizer
 ```
 
-For further information on installation, please refer to the [installation documentation](https://flaresimulations.github.io/synthesizer/getting_started/installation.html).
+Please refer to the [installation documentation](https://flaresimulations.github.io/synthesizer/getting_started/installation.html) for further information. 
 
-Various configuration options can also be set when installing Synthesizer. For more details on setting these see [the configuraiton option documentation](https://flaresimulations.github.io/synthesizer/advanced/config_options.html).
+Various configuration options can also be set at installation (see [here](https://flaresimulations.github.io/synthesizer/advanced/config_options.html)).
 
 ## Getting Grids
 
-To use Synthesizer you may need a grid of theoretical spectra. Premade grids can be downloaded from the [grids data server](https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&e=1&dl=0).
+In most use cases you will need a grid of theoretical spectra. Premade grids can be downloaded from the [grids data server](https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&e=1&dl=0).
 
-Note that you can also create your own grids using (or adapting) the [`grid-generation` repo](https://github.com/synthesizer-project/grid-generation) if we have not already produced the grid you want.
+Note that you can also create your own grids using (or adapting) the [`grid-generation` repo](https://github.com/synthesizer-project/grid-generation).
 
 ## Contributing
 
