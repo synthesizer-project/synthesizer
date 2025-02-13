@@ -35,8 +35,9 @@ jobs:
           # is not set up properly and depends on numpy and cython, the former
           # we depend on, the latter we need to install)
           pip install cython
-          WITH_OPENMP=1 pip install .[bluetides,eagle,dense_basis]
+          WITH_OPENMP=1 pip install .[bluetides,eagle]
           pip install "illustris_python @ git+https://github.com/illustristng/illustris_python.git@master"
+          pip install "dense_basis@git+https://github.com/kartheikiyer/dense_basis"
           # Output the compilation report so it can be viewed in an action log
           cat build_synth.log
       - uses: astral-sh/ruff-action@v1 # Lint with Ruff
