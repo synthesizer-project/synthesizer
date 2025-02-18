@@ -871,6 +871,8 @@ class Grid:
         """
         Identify the nearest grid point for a tuple of values.
 
+        Any axes not specified will be returned as a full slice.
+
         Args:
             **kwargs (dict)
                 Pairs of axis names and values for the desired grid point,
@@ -880,12 +882,66 @@ class Grid:
             tuple
                 A tuple of integers specifying the closest grid point.
         """
-        return tuple(
-            [
-                self.get_nearest_index(value, getattr(self, axis))
-                for axis, value in kwargs.items()
-            ]
-        )
+        # Create a list we will return
+        indices = []
+
+        # Loop over axes and get the nearest index for each
+        for axis in self.axes:
+            # Get plural, singular and log10 versions of the axis name
+            plural_axis = pluralize(axis)
+            singular_axis = depluralize(axis)
+            log10_axis = f"log10{axis}"
+            log10_plural_axis = f"log10{plural_axis}"
+            log10_singular_axis = f"log10{singular_axis}"
+            if axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(axis), getattr(self, axis)
+                    )
+                )
+            elif plural_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(plural_axis), getattr(self, plural_axis)
+                    )
+                )
+            elif singular_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(singular_axis), getattr(self, singular_axis)
+                    )
+                )
+            elif log10_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(log10_axis), getattr(self, axis)
+                    )
+                )
+            elif log10_plural_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(log10_plural_axis),
+                        getattr(self, plural_axis),
+                    )
+                )
+            elif log10_singular_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(log10_singular_axis),
+                        getattr(self, singular_axis),
+                    )
+                )
+            else:
+                indices.append(slice(None))
+
+        # Warn the user is any kwargs weren't a grid axis
+        if len(kwargs) > 0:
+            warn(
+                "The following axes are not on the grid:"
+                f" {list(kwargs.keys())}"
+            )
+
+        return tuple(indices)
 
     def get_spectra(self, grid_point, spectra_id="incident"):
         """
