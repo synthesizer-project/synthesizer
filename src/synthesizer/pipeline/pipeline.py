@@ -707,13 +707,6 @@ class Pipeline:
                 "Call load_galaxies first."
             )
 
-        # def _get_spectra_threaded(g):
-        #     g.get_spectra(self.emission_model, nthreads=1)
-        #     return g
-
-        # with Pool(self.nthreads) as pool:
-        #     self.galaxies = pool.map(_get_spectra_threaded, self.galaxies)
-
         # Loop over the galaxies and get the spectra
         for g in self.galaxies:
             g.get_spectra(self.emission_model, nthreads=self.nthreads)
