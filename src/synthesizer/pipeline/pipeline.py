@@ -707,6 +707,13 @@ class Pipeline:
                 "Call load_galaxies first."
             )
 
+        # def _get_spectra_threaded(g):
+        #     g.get_spectra(self.emission_model, nthreads=1)
+        #     return g
+
+        # with Pool(self.nthreads) as pool:
+        #     self.galaxies = pool.map(_get_spectra_threaded, self.galaxies)
+
         # Loop over the galaxies and get the spectra
         for g in self.galaxies:
             g.get_spectra(self.emission_model, nthreads=self.nthreads)
@@ -1694,12 +1701,11 @@ class Pipeline:
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
-                "Cannot combine files before writing data! "
-                "Call write first."
+                "Cannot combine files before writing data! Call write first."
             )
 
         # Nothing to do if we're using collective I/O
-        if self.io_helper.collective_io:
+        if self.io_helper.is_collective:
             self._print("Using collective I/O, nothing to combine.")
             return
 
@@ -1728,12 +1734,11 @@ class Pipeline:
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
-                "Cannot combine files before writing data! "
-                "Call write first."
+                "Cannot combine files before writing data! Call write first."
             )
 
         # Nothing to do if we're using collective I/O
-        if self.io_helper.collective_io:
+        if self.io_helper.is_collective:
             self._print("Using collective I/O, nothing to combine.")
             return
 
