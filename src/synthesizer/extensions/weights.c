@@ -12,6 +12,7 @@
 #include <Python.h>
 
 /* Local includes */
+#include "property_funcs.h"
 #include "timers.h"
 #include "weights.h"
 
@@ -670,4 +671,119 @@ void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
 
 #endif
   toc("Nearest Grid Point weight loop", start_time);
+}
+
+/**
+ * @brief Compute the weight in each grid cell based on the particles.
+ *
+ * @param grid: The Grid object.
+ * @param parts: The object containing the particle properties.
+ * @param method: The method to use for assigning weights.
+ * @param nthreads: The number of threads to use.
+ *
+ * @return The weights in each grid cell.
+ */
+PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
+
+  double start_time = tic();
+  double setup_start = tic();
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  PyObject *grid, *parts;
+  PyArrayObject *np_mask;
+  char *method;
+  char *weight_var;
+  int nthreads;
+
+  if (!PyArg_ParseTuple(args, "OOOssi", &grid, &parts, &np_mask, &weight_var,
+                        &method, &nthreads))
+    return NULL;
+
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_grid_struct_from_obj(grid);
+  if (grid_props == NULL) {
+    return NULL;
+  }
+
+  /* Extract the particle struct. */
+  struct particles *part_props =
+      get_part_struct_from_obj(parts, grid, weight_var);
+  if (part_props == NULL) {
+    return NULL;
+  }
+
+  /* Allocate the sfzh array to output. */
+  double *grid_weights = calloc(grid_props->size, sizeof(double));
+  if (grid_weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
+    return NULL;
+  }
+
+  /* Get the mask. */
+  int *mask = extract_data_bool_as_int(np_mask, "mask");
+
+  toc("Extracting Python data", setup_start);
+
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
+                    nthreads);
+  } else if (strcmp(method, "ngp") == 0) {
+    weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
+                    nthreads);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method.");
+    return NULL;
+  }
+
+  /* Check we got the output. (Any error messages will already be set) */
+  if (grid_weights == NULL) {
+    return NULL;
+  }
+
+  /* Reconstruct the python array to return. */
+  npy_intp np_dims[grid_props->ndim];
+  for (int idim = 0; idim < grid_props->ndim; idim++) {
+    np_dims[idim] = grid_props->dims[idim];
+  }
+
+  PyArrayObject *out_weights = (PyArrayObject *)PyArray_SimpleNewFromData(
+      grid_props->ndim, np_dims, NPY_FLOAT64, grid_weights);
+
+  /* Clean up memory! */
+  free(part_props);
+  free(grid_props);
+
+  toc("Computing SFZH", start_time);
+
+  return Py_BuildValue("N", out_weights);
+}
+
+/* Below is all the gubbins needed to make the module importable in Python. */
+static PyMethodDef WeightMethods[] = {
+    {"compute_grid_weights", (PyCFunction)compute_grid_weights, METH_VARARGS,
+     "Method for calculating the weights on a grid."},
+    {NULL, NULL, 0, NULL}};
+
+/* Make this importable. */
+static struct PyModuleDef moduledef = {
+    PyModuleDef_HEAD_INIT,
+    "compute_weights",                                    /* m_name */
+    "A module to calculating particle weigths on a grid", /* m_doc */
+    -1,                                                   /* m_size */
+    WeightMethods,                                        /* m_methods */
+    NULL,                                                 /* m_reload */
+    NULL,                                                 /* m_traverse */
+    NULL,                                                 /* m_clear */
+    NULL,                                                 /* m_free */
+};
+
+PyMODINIT_FUNC PyInit_weights(void) {
+  PyObject *m = PyModule_Create(&moduledef);
+  import_array();
+  return m;
 }
