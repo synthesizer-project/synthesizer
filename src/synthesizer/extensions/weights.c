@@ -8,8 +8,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* We need the below because numpy triggers warnings which are errors
+ * when we compiled with RUTHLESS. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+
 /* Python includes */
 #include <Python.h>
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include <numpy/arrayobject.h>
+#include <numpy/ndarrayobject.h>
+#include <numpy/ndarraytypes.h>
+
+#pragma GCC diagnostic pop
 
 /* Local includes */
 #include "property_funcs.h"
