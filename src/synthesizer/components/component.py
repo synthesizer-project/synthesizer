@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 from synthesizer import exceptions
 from synthesizer.instruments import Instrument
 from synthesizer.sed import plot_spectra
+from synthesizer.utils import depluralize, pluralize
 from synthesizer.warnings import deprecated, deprecation
 
 
@@ -83,6 +84,42 @@ class Component(ABC):
         # Set any of the extra attribute provided as kwargs
         for key, val in kwargs.items():
             setattr(self, key, val)
+
+    def __getattr__(self, name):
+        """
+        Return an attribute handling arbitrary attributes names.
+
+        This essentially just handles plural and singular attribute names.
+        Hopefully this won't be needed in the future.
+
+        Args:
+            name (str)
+                The name of the attribute to get.
+
+        Returns:
+            Any
+                The attribute value.
+        """
+        # First up, do we just have the attribute and it isn't an axis?
+        if name in self.__dict__:
+            return self.__dict__[name]
+
+        # Now, do some silly pluralisation checks to handle old naming
+        # conventions. We do this now so everything works, we can grumble
+        # about it later
+        plural_name = pluralize(name)
+        singular_name = depluralize(name)
+
+        # Try and find the attribute
+        if plural_name in self.__dict__:
+            return self.__dict__[plural_name]
+        elif singular_name in self.__dict__:
+            return self.__dict__[singular_name]
+
+        # If we get here, we don't have the attribute
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
 
     @property
     def photo_fluxes(self):
