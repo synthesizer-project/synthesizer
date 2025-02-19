@@ -6,6 +6,7 @@ directly instantiated.
 """
 
 import copy
+import os
 
 import numpy as np
 from numpy.random import multivariate_normal
@@ -309,6 +310,96 @@ class Particles:
             new_mask = np.logical_and(new_mask, mask)
 
         return new_mask
+
+    def _prepare_weight_args(
+        self,
+        grid,
+        grid_assignment_method,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for weight computation with the C functions.
+
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.metallicities, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(len(part_mass))
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_props,
+            part_props,
+            part_mass,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+            nthreads,
+        )
+
+    def _get_grid_weights(
+        self,
+        grid,
+        grid_assignment_method="cic",
+        mask=None,
+        nthreads=0,
+    ) -> np.ndarray:
+        """
+        Calculate the weights for each grid cell.
+
+        This will use a C extension to calculate the weights for each
+        grid cell based on the particles in the Stars object.
+
+
+        """
+        # Import parametric stars here to avoid circular imports
+        from synthesizer.extensions.weights import compute_grid_weights
+
+        return compute_grid_weights(
+            *self._prepare_weight_args(
+                grid,
+                grid_assignment_method,
+                nthreads,
+            )
+        )
 
     def integrate_particle_spectra(self):
         """
