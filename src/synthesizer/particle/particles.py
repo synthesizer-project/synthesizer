@@ -149,6 +149,12 @@ class Particles:
         # Attach the name of the particle type
         self.name = name
 
+        # Initialise a dictionary to hold any of the weighting grids
+        # derived from the particle distribution. Storing these (per grid)
+        # will reduce any redundant calculations when using the same grid
+        # for multiple calculations.
+        self._grid_weights = {}
+
     @property
     def particle_photo_fluxes(self):
         """
