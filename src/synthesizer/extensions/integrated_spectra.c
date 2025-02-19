@@ -258,7 +258,6 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
 
   /* Clean up memory! */
-  free(grid_weights);
   free(grid_props);
 
   /* Reconstruct the python array to return. */
