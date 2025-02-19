@@ -739,7 +739,12 @@ class Grid:
     @property
     def ndim(self):
         """Return the number of dimensions in the grid."""
-        return len(self.shape)
+        return len(self.shape) - 1
+
+    @property
+    def ngrid_points(self):
+        """Return the total number of grid points (excluding wavelengths)."""
+        return np.prod(self.shape[:-1])
 
     def _get_spectra_ids_from_file(self):
         """
