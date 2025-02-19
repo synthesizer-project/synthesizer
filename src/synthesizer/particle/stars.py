@@ -279,6 +279,12 @@ class Stars(Particles, StarsComponent):
         # parametric galaxy
         self.sfzh = None
 
+        # We also want to keep track of any weights grids that have been
+        # computed so they can be reused. These are the grids of weights
+        # that map onto the SPS grid but since we could have multiple grids
+        # we store them in a dictionary with grid names as keys.
+        self._weights_grids = {}
+
     def get_sfr(self, timescale=10 * Myr):
         """
         Return the star formation rate of the stellar particles.
