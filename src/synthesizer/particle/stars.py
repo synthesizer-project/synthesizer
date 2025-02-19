@@ -1207,6 +1207,7 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
             vel_shift=vel_shift,
             lam_mask=lam_mask,
+            integrated=True,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -1808,6 +1809,7 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
             vel_shift=vel_shift,
             lam_mask=lam_mask,
+            integrated=False,
         )
         toc("Preparing C args", start)
 
