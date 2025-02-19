@@ -344,6 +344,7 @@ class BlackholesComponent(Component):
             nthreads=nthreads,
             vel_shift=vel_shift,
             lam_mask=lam_mask,
+            integrated=True,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
