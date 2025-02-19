@@ -69,8 +69,11 @@ struct particles {
    * an Sed from a Grid. */
   double *weight;
 
-  /* Escape fractions. */
+  /* Escape fractions, used when multiple escape fractions are passed. */
   double *fesc;
+
+  /* Escape fraction, used when a single escape fraction is passed. */
+  double _fesc;
 
   /* Velocities for redshift */
   double *velocities;
