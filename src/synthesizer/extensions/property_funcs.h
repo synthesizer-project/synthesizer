@@ -56,11 +56,18 @@ struct particles {
   /* An array of pointers holding the properties along each axis. */
   double **props;
 
+  /* Convinience counter for the number of properties. */
+  int nprops;
+
   /* The number of particles. */
   int npart;
 
   /* The particle mass array. */
   double *mass;
+
+  /* The weight of the particle to be sorted into the grid when computing
+   * an Sed from a Grid. */
+  double *weight;
 
   /* Escape fractions. */
   double *fesc;
@@ -73,6 +80,7 @@ struct particles {
 void *synth_malloc(size_t n, char *msg);
 double *extract_data_double(PyArrayObject *np_arr, char *name);
 int *extract_data_int(PyArrayObject *np_arr, char *name);
+int *extract_data_bool_as_int(PyArrayObject *np_arr, char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
@@ -90,5 +98,8 @@ struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_velocities,
                                   PyArrayObject *np_fesc, const int npart,
                                   const int ndim);
+struct particles *get_part_struct_from_obj(PyObject *parts, PyObject *grid,
+                                           const char *weight_var);
+struct grid *get_grid_struct_from_obj(PyObject *py_grid);
 
 #endif // PROPERTY_FUNCS_H_
