@@ -68,6 +68,57 @@ int *extract_data_int(PyArrayObject *np_arr, char *name) {
 }
 
 /**
+ * @brief Extract int data from a NumPy array of booleans.
+ *
+ * This function converts a NumPy array of booleans to a newly allocated C array
+ * of integers. Each element in the boolean array is converted to an integer: 1
+ * if True, 0 if False.
+ *
+ * @param np_arr The NumPy array of booleans to convert.
+ * @param name   The name of the NumPy array (used in error messages).
+ *
+ * @return int*  A pointer to the newly allocated integer array, or NULL on
+ * error.
+ */
+int *extract_data_bool_as_int(PyArrayObject *np_arr, char *name) {
+  // Check that the input array is not NULL.
+  if (!np_arr) {
+    PyErr_Format(PyExc_ValueError, "Null numpy array passed to %s", name);
+    return NULL;
+  }
+
+  // Verify that the array's data type is boolean.
+  if (PyArray_TYPE(np_arr) != NPY_BOOL) {
+    PyErr_Format(PyExc_TypeError, "%s must be a NumPy array of booleans", name);
+    return NULL;
+  }
+
+  // Get the total number of elements in the array.
+  npy_intp size = PyArray_SIZE(np_arr);
+
+  // Allocate memory for the resulting integer array.
+  int *data_int = malloc(size * sizeof(int));
+  if (data_int == NULL) {
+    char error_msg[100];
+    snprintf(error_msg, sizeof(error_msg), "Failed to allocate memory for %s",
+             name);
+    PyErr_SetString(PyExc_MemoryError, error_msg);
+    return NULL;
+  }
+
+  // Get a pointer to the boolean data in the NumPy array.
+  npy_bool *data_bool = (npy_bool *)PyArray_DATA(np_arr);
+
+  // Convert each boolean value to an integer (1 for true, 0 for false).
+  for (npy_intp i = 0; i < size; i++) {
+    data_int[i] = data_bool[i] ? 1 : 0;
+  }
+
+  // Return the newly allocated integer array.
+  return data_int;
+}
+
+/**
  * @brief Extract the grid properties from a tuple of numpy arrays.
  *
  * @param grid_tuple: A tuple of numpy arrays containing the grid properties.
@@ -378,4 +429,353 @@ struct particles *get_part_struct(PyObject *part_tuple,
   }
 
   return particles;
+}
+
+/**
+ * @brief Retrieve a double pointer from a NumPy array attribute.
+ *
+ * This function obtains an attribute from the specified Python object and
+ * checks whether it is either a NumPy array of doubles or None. If the
+ * attribute exists and is a NumPy array of type NPY_DOUBLE, the function
+ * returns the underlying data pointer (borrowed). If the attribute exists but
+ * is set to None, the function returns NULL. In all error cases (e.g., wrong
+ * type), NULL is returned and an appropriate Python exception is set.
+ *
+ * Note: Since the data pointer is borrowed, ensure that the owner of the NumPy
+ * array (the Python object) remains alive for the duration of the pointer's
+ * usage.
+ *
+ * @param obj  The Python object from which to extract the attribute.
+ * @param attr The name of the attribute.
+ *
+ * @return double* The pointer to the underlying array data, or NULL if the
+ * attribute is None or an error occurs.
+ */
+static inline double *get_numpy_attr_double(PyObject *obj, const char *attr) {
+  /* Get the attribute from the Python object */
+  PyObject *tmp = PyObject_GetAttrString(obj, attr);
+  if (!tmp) {
+    /* If PyObject_GetAttrString returned NULL, ensure a clear error message */
+    PyErr_Format(PyExc_AttributeError,
+                 "The attribute '%s' does not exist on the provided object.",
+                 attr);
+    return NULL;
+  }
+
+  /* If the attribute exists but is explicitly set to None, return NULL */
+  if (tmp == Py_None) {
+    Py_DECREF(tmp);
+    return NULL;
+  }
+
+  /* Check that the attribute is a NumPy array of doubles */
+  if (!PyArray_Check(tmp) || PyArray_TYPE((PyArrayObject *)tmp) != NPY_DOUBLE) {
+    PyErr_Format(PyExc_TypeError, "%s must be a NumPy array of doubles or None",
+                 attr);
+    Py_DECREF(tmp);
+    return NULL;
+  }
+
+  /* Extract the underlying data pointer using the provided helper function */
+  double *data = extract_data_double((PyArrayObject *)tmp, (char *)attr);
+
+  /* Decrement the temporary reference; the actual array remains owned by obj */
+  Py_DECREF(tmp);
+
+  return data;
+}
+
+/**
+ * @brief Retrieve a interger pointer from a NumPy array attribute.
+ *
+ * This function obtains an attribute from the specified Python object and
+ * checks whether it is either a NumPy array of integers or None. If the
+ * attribute exists and is a NumPy array of type NPY_INT, the function
+ * returns the underlying data pointer (borrowed). If the attribute exists but
+ * is set to None, the function returns NULL. In all error cases (e.g., wrong
+ * type), NULL is returned and an appropriate Python exception is set.
+ *
+ * Note: Since the data pointer is borrowed, ensure that the owner of the NumPy
+ * array (the Python object) remains alive for the duration of the pointer's
+ * usage.
+ *
+ * @param obj  The Python object from which to extract the attribute.
+ * @param attr The name of the attribute.
+ *
+ * @return int* The pointer to the underlying array data, or NULL if the
+ * attribute is None or an error occurs.
+ */
+static inline int *get_numpy_attr_int(PyObject *obj, const char *attr) {
+  /* Get the attribute from the Python object */
+  PyObject *tmp = PyObject_GetAttrString(obj, attr);
+  if (!tmp) {
+    /* If PyObject_GetAttrString returned NULL, ensure a clear error message */
+    PyErr_Format(PyExc_AttributeError,
+                 "The attribute '%s' does not exist on the provided object.",
+                 attr);
+    return NULL;
+  }
+
+  /* If the attribute exists but is explicitly set to None, return NULL */
+  if (tmp == Py_None) {
+    Py_DECREF(tmp);
+    return NULL;
+  }
+
+  /* Check that the attribute is a NumPy array of integers */
+  if (!PyArray_Check(tmp) || PyArray_TYPE((PyArrayObject *)tmp) != NPY_INT) {
+    PyErr_Format(PyExc_TypeError,
+                 "%s must be a NumPy array of integers or None", attr);
+    Py_DECREF(tmp);
+    return NULL;
+  }
+
+  /* Extract the underlying data pointer using the provided helper function */
+  int *data = extract_data_int((PyArrayObject *)tmp, (char *)attr);
+
+  /* Decrement the temporary reference; the actual array remains owned by obj */
+  Py_DECREF(tmp);
+
+  return data;
+}
+
+/**
+ * @brief Extract the particle properties from the Python objects.
+ *
+ * This function borrows pointers to the underlying NumPy array data.
+ * It assumes:
+ *  - The "parts" object has attributes "nparticles", "masses", "fesc",
+ * "velocities", and a weight attribute specified by weight_var. Each attribute
+ * must be a NumPy array of doubles.
+ *  - The "grid" object has an attribute "axes" which is a list of strings.
+ *    For each axis name, the "parts" object has a corresponding attribute (a
+ * NumPy array of doubles).
+ *
+ * Since no data is copied, you must ensure that the Python objects stay alive.
+ *
+ * @param parts: The Python object containing particle properties.
+ * @param grid:  The Python grid object containing the axes attribute.
+ * @param weight_var: The name of the weight attribute.
+ *
+ * @return struct particles*: A pointer to the particles struct, or NULL on
+ * error.
+ */
+struct particles *get_part_struct_from_obj(PyObject *parts, PyObject *grid,
+                                           const char *weight_var) {
+
+  /* Allocate the particles struct. */
+  struct particles *particles = calloc(1, sizeof(struct particles));
+  if (!particles) {
+    PyErr_NoMemory();
+    return NULL;
+  }
+
+  /* Get the number of particles from parts.nparticles */
+  PyObject *nparticles_obj = PyObject_GetAttrString(parts, "nparticles");
+  if (!nparticles_obj)
+    goto error;
+  int npart = (int)PyLong_AsLong(nparticles_obj);
+  if (PyErr_Occurred())
+    goto error;
+  particles->npart = npart;
+  Py_DECREF(nparticles_obj);
+
+  /* Borrow pointers for masses, weight, fesc, and velocities using the inline
+   * function. */
+  particles->mass = get_numpy_attr_double(parts, "masses");
+  particles->weight = get_numpy_attr_double(parts, weight_var);
+  particles->fesc = get_numpy_attr_double(parts, "fesc");
+  particles->velocities = get_numpy_attr_double(parts, "velocities");
+
+  /* Did an error occur? */
+  if (PyErr_Occurred())
+    goto error;
+
+  /* Extract grid axes (a list of strings) from grid.axes */
+  {
+    PyObject *grid_axes = PyObject_GetAttrString(grid, "axes");
+    if (!grid_axes || !PyList_Check(grid_axes)) {
+      PyErr_SetString(PyExc_TypeError, "grid.axes must be a list");
+      Py_XDECREF(grid_axes);
+      goto error;
+    }
+    Py_ssize_t num_axes = PyList_Size(grid_axes);
+    particles->nprops = (int)num_axes;
+
+    /* Allocate the array of property pointers. */
+    particles->props = calloc(num_axes, sizeof(double *));
+    if (!particles->props) {
+      Py_DECREF(grid_axes);
+      PyErr_NoMemory();
+      goto error;
+    }
+
+    /* Loop over each axis name, extract the corresponding property, and borrow
+     * its data pointer. */
+    for (Py_ssize_t i = 0; i < num_axes; i++) {
+      PyObject *axis_obj = PyList_GetItem(grid_axes, i);
+      if (!PyUnicode_Check(axis_obj)) {
+        PyErr_SetString(PyExc_TypeError, "Each grid axis must be a string");
+        Py_DECREF(grid_axes);
+        goto error;
+      }
+      const char *axis_name = PyUnicode_AsUTF8(axis_obj);
+      if (!axis_name) {
+        Py_DECREF(grid_axes);
+        goto error;
+      }
+      double *prop_data = get_numpy_attr_double(parts, axis_name);
+      if (!prop_data) {
+        Py_DECREF(grid_axes);
+        goto error;
+      }
+      particles->props[i] = prop_data;
+    }
+    Py_DECREF(grid_axes);
+  }
+
+  return particles;
+
+error:
+  if (particles) {
+    if (particles->props)
+      free(particles->props);
+    free(particles);
+  }
+  return NULL;
+}
+
+/**
+ * @brief Extract the grid properties from the Python objects.
+ *
+ * This function borrows pointers to the underlying NumPy array data.
+ * It assumes:
+ * - The "grid" object has attributes "ndim", "nlam", "shape", "ngrid_points",
+ *   and "axes". The "shape" attribute must be a tuple of integers, and the
+ *   "axes" attribute must be a list of strings.
+ * - For each axis name in "axes", the "grid" object has a corresponding
+ *   attribute (a NumPy array of doubles).
+ *
+ * Since no data is copied, you must ensure that the Python objects stay alive.
+ *
+ * @param py_grid: The Python object containing the grid properties.
+ *
+ * @return struct grid*: A pointer to the grid struct, or NULL on error.
+ */
+struct grid *get_grid_struct_from_obj(PyObject *py_grid) {
+
+  /* Allocate the grid struct. */
+  struct grid *grid_struct = calloc(1, sizeof(struct grid));
+  if (!grid_struct) {
+    PyErr_NoMemory();
+    return NULL;
+  }
+
+  /* Get the number of dimensions from grid.ndim */
+  PyObject *ndim_obj = PyObject_GetAttrString(py_grid, "ndim");
+  if (!ndim_obj)
+    goto error;
+  grid_struct->ndim = (int)PyLong_AsLong(ndim_obj);
+  if (PyErr_Occurred())
+    goto error;
+  Py_DECREF(ndim_obj);
+
+  /* Get the number of wavelength elements from grid.nlam */
+  PyObject *nlam_obj = PyObject_GetAttrString(py_grid, "nlam");
+  if (!nlam_obj)
+    goto error;
+  grid_struct->nlam = (int)PyLong_AsLong(nlam_obj);
+  if (PyErr_Occurred())
+    goto error;
+  Py_DECREF(nlam_obj);
+
+  /* Extract the grid dimensions from grid.shape, and convert the
+   * tuple to a C array */
+  PyObject *shape_obj = PyObject_GetAttrString(py_grid, "shape");
+  if (!shape_obj)
+    goto error;
+  if (!PyTuple_Check(shape_obj)) {
+    PyErr_SetString(PyExc_TypeError, "grid.shape must be a tuple");
+    Py_DECREF(shape_obj);
+    goto error;
+  }
+  Py_ssize_t num_dims = PyTuple_Size(shape_obj);
+  grid_struct->dims = calloc(num_dims, sizeof(int));
+  if (!grid_struct->dims) {
+    Py_DECREF(shape_obj);
+    PyErr_NoMemory();
+    goto error;
+  }
+  for (Py_ssize_t i = 0; i < num_dims; i++) {
+    PyObject *dim_obj = PyTuple_GetItem(shape_obj, i);
+    if (!dim_obj) {
+      Py_DECREF(shape_obj);
+      goto error;
+    }
+    grid_struct->dims[i] = (int)PyLong_AsLong(dim_obj);
+    if (PyErr_Occurred()) {
+      Py_DECREF(shape_obj);
+      goto error;
+    }
+  }
+
+  /* Get the number of grid cells from the ngrid_points attribute */
+  PyObject *ngrid_obj = PyObject_GetAttrString(py_grid, "ngrid_points");
+  if (!ngrid_obj)
+    goto error;
+  grid_struct->size = (int)PyLong_AsLong(ngrid_obj);
+  if (PyErr_Occurred())
+    goto error;
+
+  /* Extract grid axes (a list of strings) from grid.axes */
+  {
+    PyObject *grid_axes = PyObject_GetAttrString(py_grid, "axes");
+    if (!grid_axes || !PyList_Check(grid_axes)) {
+      PyErr_SetString(PyExc_TypeError, "grid.axes must be a list");
+      Py_XDECREF(grid_axes);
+      goto error;
+    }
+
+    /* Allocate the array of property pointers. */
+    grid_struct->props = calloc(grid_struct->ndim, sizeof(double *));
+    if (!grid_struct->props) {
+      Py_DECREF(grid_axes);
+      PyErr_NoMemory();
+      goto error;
+    }
+
+    /* Loop over each axis name, extract the corresponding property, and borrow
+     * its data pointer. */
+    for (Py_ssize_t i = 0; i < grid_struct->ndim; i++) {
+      PyObject *axis_obj = PyList_GetItem(grid_axes, i);
+      if (!PyUnicode_Check(axis_obj)) {
+        PyErr_SetString(PyExc_TypeError, "Each grid axis must be a string");
+        Py_DECREF(grid_axes);
+        goto error;
+      }
+      const char *axis_name = PyUnicode_AsUTF8(axis_obj);
+      if (!axis_name) {
+        Py_DECREF(grid_axes);
+        goto error;
+      }
+      double *prop_data = get_numpy_attr_double(py_grid, axis_name);
+      if (!prop_data) {
+        Py_DECREF(grid_axes);
+        goto error;
+      }
+      grid_struct->props[i] = prop_data;
+    }
+    Py_DECREF(grid_axes);
+  }
+
+  /* TODO: spectra and lines are missing */
+  return grid_struct;
+
+error:
+  if (grid_struct) {
+    if (grid_struct->props)
+      free(grid_struct->props);
+    free(grid_struct);
+  }
+  return NULL;
 }
