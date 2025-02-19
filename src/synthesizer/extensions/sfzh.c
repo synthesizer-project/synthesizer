@@ -21,10 +21,8 @@
 #include "weights.h"
 
 /**
- * @brief Computes an integrated SED for a collection of particles.
+ * @brief Computes the SFZH from a collection of particles.
  *
- * @param np_grid_spectra: The SPS spectra array.
- * o
  * @param grid_tuple: The tuple containing arrays of grid axis properties.
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
@@ -33,6 +31,10 @@
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
+ * @param method: The method to use for grid assignment.
+ * @param nthreads: The number of threads to use.
+ *
+ * @return The SFZH.
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
