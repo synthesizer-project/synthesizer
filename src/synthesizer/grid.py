@@ -731,6 +731,16 @@ class Grid:
         """Return whether the Grid has lines."""
         return len(self.line_lums) > 0
 
+    @property
+    def nlam(self):
+        """Return the number of wavelengths in the grid."""
+        return self.lam.size
+
+    @property
+    def ndim(self):
+        """Return the number of dimensions in the grid."""
+        return len(self.shape)
+
     def _get_spectra_ids_from_file(self):
         """
         Get a list of the spectra available in a grid file.
