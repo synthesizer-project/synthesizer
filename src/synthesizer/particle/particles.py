@@ -379,7 +379,6 @@ class Particles:
         self,
         grid,
         grid_assignment_method="cic",
-        mask=None,
         nthreads=0,
     ) -> np.ndarray:
         """
