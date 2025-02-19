@@ -4,8 +4,21 @@
  *****************************************************************************/
 
 /* C headers. */
-#include <Python.h>
 #include <string.h>
+
+/* We need the below because numpy triggers warnings which are errors
+ * when we compiled with RUTHLESS. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+
+/* Python includes */
+#include <Python.h>
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include <numpy/arrayobject.h>
+#include <numpy/ndarrayobject.h>
+#include <numpy/ndarraytypes.h>
+
+#pragma GCC diagnostic pop
 
 /* Header */
 #include "property_funcs.h"
@@ -452,8 +465,26 @@ struct particles *get_part_struct(PyObject *part_tuple,
  * attribute is None or an error occurs.
  */
 static inline double *get_numpy_attr_double(PyObject *obj, const char *attr) {
+
+  /* This is a horrid hack but we may have to live with it. The
+   * operations below demand that numpy has been initialised so that symbols
+   * can be resolved. This is fine everywhere else because we are defining
+   * modules where we can call import_array() in the module init function.
+   * However, here we are defining functions that are called from anywhere
+   * and so we need to make sure that numpy is initialised. */
+  import_array();
+
   /* Get the attribute from the Python object */
   PyObject *tmp = PyObject_GetAttrString(obj, attr);
+
+  /* If it did not exist check whether a private version does. */
+  if (tmp == NULL) {
+    char private_attr[100];
+    snprintf(private_attr, sizeof(private_attr), "_%s", attr);
+    tmp = PyObject_GetAttrString(obj, private_attr);
+  }
+
+  /* If we still don't have it then we have a problem. */
   if (!tmp) {
     /* If PyObject_GetAttrString returned NULL, ensure a clear error message */
     PyErr_Format(PyExc_AttributeError,
@@ -468,8 +499,14 @@ static inline double *get_numpy_attr_double(PyObject *obj, const char *attr) {
     return NULL;
   }
 
+  /* Have we got a numpy array? */
+  if (!PyArray_Check(tmp)) {
+    Py_DECREF(tmp);
+    return NULL;
+  }
+
   /* Check that the attribute is a NumPy array of doubles */
-  if (!PyArray_Check(tmp) || PyArray_TYPE((PyArrayObject *)tmp) != NPY_DOUBLE) {
+  if (PyArray_TYPE((PyArrayObject *)tmp) != NPY_DOUBLE) {
     PyErr_Format(PyExc_TypeError, "%s must be a NumPy array of doubles or None",
                  attr);
     Py_DECREF(tmp);
@@ -586,6 +623,17 @@ struct particles *get_part_struct_from_obj(PyObject *parts, PyObject *grid,
   particles->weight = get_numpy_attr_double(parts, weight_var);
   particles->fesc = get_numpy_attr_double(parts, "fesc");
   particles->velocities = get_numpy_attr_double(parts, "velocities");
+
+  /* Some attributes are special cases where they could also be singular
+   * floats rather than arrays. */
+  if (particles->fesc == NULL) {
+    double fesc = PyFloat_AsDouble(PyObject_GetAttrString(parts, "fesc"));
+    if (PyErr_Occurred())
+      goto error;
+    particles->_fesc = fesc;
+  } else {
+    particles->_fesc = 0.0;
+  }
 
   /* Did an error occur? */
   if (PyErr_Occurred())
