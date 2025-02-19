@@ -2313,6 +2313,7 @@ class Stars(Particles, StarsComponent):
             grid,
             self,
             mask,
+            "initial_masses",
             grid_assignment_method,
             nthreads,
         )
