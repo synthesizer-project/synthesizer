@@ -82,12 +82,15 @@ static double *get_spectra_serial(struct grid *grid_props,
 static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
                                int nthreads) {
 
-  /* Set up array to hold the SED itself. */
-  double *spectra = calloc(grid_props->nlam, sizeof(double));
-  if (spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
+  double *spectra = NULL;
+  int err =
+      posix_memalign((void **)&spectra, 64, grid_props->nlam * sizeof(double));
+  if (err != 0 || spectra == NULL) {
+    PyErr_SetString(PyExc_ValueError,
+                    "Failed to allocate aligned memory for spectra.");
     return NULL;
   }
+  bzero(spectra, grid_props->nlam * sizeof(double));
 
 #pragma omp parallel num_threads(nthreads)
   {
