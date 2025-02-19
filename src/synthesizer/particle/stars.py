@@ -575,7 +575,7 @@ class Stars(Particles, StarsComponent):
 
         return Stars(**kwargs)
 
-    def _prepare_sed_args(
+    def _prepare_part_sed_args(
         self,
         grid,
         fesc,
@@ -584,10 +584,11 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method,
         lam_mask,
         nthreads,
-        vel_shift,
     ):
         """
         Prepare the arguments for SED computation with the C functions.
+
+        This prepares the arguments for the per particle calculation.
 
         Args:
             grid (Grid)
@@ -611,9 +612,128 @@ class Stars(Particles, StarsComponent):
             nthreads (int)
                 The number of threads to use in the C extension. If -1 then
                 all available threads are used.
-            vel_shift (bool)
-                Flags whether to apply doppler shift to the spectra. Defaults
-                to False.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Make a dummy mask if none has been passed
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
+        # If lam_mask is None then we want all wavelengths
+        if lam_mask is None:
+            lam_mask = np.ones(
+                grid.spectra[spectra_type].shape[-1],
+                dtype=bool,
+            )
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
+            np.ascontiguousarray(
+                self.log10metallicities[mask], dtype=np.float64
+            ),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses[mask],
+            dtype=np.float64,
+        )
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(np.sum(mask))
+
+        # Make sure we get the wavelength index of the grid array
+        nlam = np.int32(np.sum(lam_mask))
+
+        # Slice the spectral grids and pad them with copies of the edges.
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type],
+            np.float64,
+        )
+
+        # Apply the wavelength mask
+        grid_spectra = np.ascontiguousarray(
+            grid_spectra[..., lam_mask],
+            np.float64,
+        )
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+        grid_dims[ind + 1] = nlam
+
+        # If fesc isn't an array make it one
+        if not isinstance(fesc, np.ndarray):
+            fesc = np.ascontiguousarray(np.full(npart, fesc))
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_spectra,
+            grid_props,
+            part_props,
+            part_mass,
+            fesc,
+            grid_dims,
+            len(grid_props),
+            npart,
+            nlam,
+            grid_assignment_method,
+            nthreads,
+        )
+
+    def _prepare_vel_shift_sed_args(
+        self,
+        grid,
+        fesc,
+        spectra_type,
+        mask,
+        grid_assignment_method,
+        lam_mask,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for SED computation with the C functions.
+
+        This prepares the arguments for the per particle calculation with
+        velocity shifts (the same set of arguments if required when getting
+        integrated spectra since the velocity shifts are applied on a particle
+        by particle basis).
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             tuple
@@ -648,20 +768,17 @@ class Stars(Particles, StarsComponent):
 
         # Handle the velocities (and make sure we have velocities if a shift
         # has been requested)
-        if self.velocities is not None and vel_shift:
+        if self.velocities is not None:
             part_vels = np.ascontiguousarray(
                 self._velocities[mask],
                 dtype=np.float64,
             )
             vel_units = self.velocities.units
-        elif vel_shift and self.velocities is None:
+        else:
             raise exceptions.InconsistentArguments(
                 "Velocity shifted spectra requested but no "
                 "star velocities provided."
             )
-        else:
-            part_vels = None
-            vel_units = None
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -682,13 +799,10 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the grid wavelength arrays (and needed for velocity shifts)
-        if vel_shift:
-            grid_lam = np.ascontiguousarray(
-                grid._lam[lam_mask],
-                np.float64,
-            )
-        else:
-            grid_lam = None
+        grid_lam = np.ascontiguousarray(
+            grid._lam[lam_mask],
+            np.float64,
+        )
 
         # Get the grid dimensions after slicing what we need
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
@@ -708,37 +822,215 @@ class Stars(Particles, StarsComponent):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        # Return the right arguments for the situation (either with all the
-        # extra velocity information or without)
-        if vel_shift:
-            return (
-                grid_spectra,
-                grid_lam,
-                grid_props,
-                part_props,
-                part_mass,
-                fesc,
-                part_vels,
-                grid_dims,
-                len(grid_props),
-                npart,
-                nlam,
+        return (
+            grid_spectra,
+            grid_lam,
+            grid_props,
+            part_props,
+            part_mass,
+            fesc,
+            part_vels,
+            grid_dims,
+            len(grid_props),
+            npart,
+            nlam,
+            grid_assignment_method,
+            nthreads,
+            c.to(vel_units).value,
+        )
+
+    def _prepare_integrated_sed_args(
+        self,
+        grid,
+        fesc,
+        spectra_type,
+        mask,
+        grid_assignment_method,
+        lam_mask,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for SED computation with the C functions.
+
+        This prepares the arguments for the integrated SED calculation. The
+        difference here is that we don't need to repeat the weight
+        calculation if it has already been done.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Get the grid weights (if these were calculate before we can
+        # reuse them but if we have a mask then we can't)
+        if grid.grid_name in self._weights_grids and mask is None:
+            grid_weights = self._weights_grids[grid.grid_name]
+        else:
+            grid_weights = self._get_grid_weights(
+                grid,
                 grid_assignment_method,
+                mask,
                 nthreads,
-                c.to(vel_units).value,
+            )
+
+            # Store the weights for reuse (only applicable if we don't
+            # have a mask)
+            if mask is None:
+                self._weights_grids[grid.grid_name] = grid_weights
+
+        # Make a dummy mask if none has been passed
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
+        # If lam_mask is None then we want all wavelengths
+        if lam_mask is None:
+            lam_mask = np.ones(
+                grid.spectra[spectra_type].shape[-1],
+                dtype=bool,
+            )
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
+        ]
+
+        # Make sure we get the wavelength index of the grid array
+        nlam = np.int32(np.sum(lam_mask))
+
+        # Slice the spectral grids and pad them with copies of the edges.
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type],
+            np.float64,
+        )
+
+        # Apply the wavelength mask
+        grid_spectra = np.ascontiguousarray(
+            grid_spectra[..., lam_mask],
+            np.float64,
+        )
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+        grid_dims[ind + 1] = nlam
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_spectra,
+            grid_weights,
+            grid_props,
+            grid_dims,
+            len(grid_props),
+            nlam,
+            nthreads,
+        )
+
+    def _prepare_sed_args(
+        self,
+        grid,
+        fesc,
+        spectra_type,
+        mask,
+        grid_assignment_method,
+        lam_mask,
+        nthreads,
+        vel_shift,
+        integrated,
+    ):
+        """
+        Prepare the arguments for SED computation with the C functions.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            lam_mask (array, bool)
+                A mask to apply to the wavelength array of the grid. This
+                allows for the extraction of specific wavelength ranges.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
+            vel_shift (bool)
+                Flags whether to apply doppler shift to the spectra. Defaults
+                to False.
+            integrated (bool)
+                Flags whether we are calculating an integrated spectra.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Use the correct function based on the arguments
+        if integrated:
+            return self._prepare_integrated_sed_args(
+                grid,
+                fesc,
+                spectra_type,
+                mask,
+                grid_assignment_method,
+                lam_mask,
+                nthreads,
+            )
+        elif vel_shift:
+            return self._prepare_vel_shift_sed_args(
+                grid,
+                fesc,
+                spectra_type,
+                mask,
+                grid_assignment_method,
+                lam_mask,
+                nthreads,
             )
         else:
-            return (
-                grid_spectra,
-                grid_props,
-                part_props,
-                part_mass,
+            return self._prepare_part_sed_args(
+                grid,
                 fesc,
-                grid_dims,
-                len(grid_props),
-                npart,
-                nlam,
+                spectra_type,
+                mask,
                 grid_assignment_method,
+                lam_mask,
                 nthreads,
             )
 
@@ -921,6 +1213,7 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
             vel_shift=vel_shift,
             lam_mask=lam_mask,
+            integrated=True,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -1994,6 +2287,32 @@ class Stars(Particles, StarsComponent):
             grid_dims,
             len(grid_props),
             npart,
+            grid_assignment_method,
+            nthreads,
+        )
+
+    def _get_grid_weights(
+        self,
+        grid,
+        grid_assignment_method="cic",
+        mask=None,
+        nthreads=0,
+    ) -> np.ndarray:
+        """
+        Calculate the weights for each grid cell.
+
+        This will use a C extension to calculate the weights for each
+        grid cell based on the particles in the Stars object.
+
+
+        """
+        # Import parametric stars here to avoid circular imports
+        from synthesizer.extensions.weights import compute_grid_weights
+
+        return compute_grid_weights(
+            grid,
+            self,
+            mask,
             grid_assignment_method,
             nthreads,
         )
