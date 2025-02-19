@@ -885,18 +885,13 @@ class Stars(Particles, StarsComponent):
             grid_weights = self._get_grid_weights(
                 grid,
                 grid_assignment_method,
-                mask,
                 nthreads,
             )
 
             # Store the weights for reuse (only applicable if we don't
             # have a mask)
             if mask is None:
-                self._weights_grids[grid.grid_name] = grid_weights
-
-        # Make a dummy mask if none has been passed
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
+                self._grid_weights[grid.grid_name] = grid_weights
 
         # If lam_mask is None then we want all wavelengths
         if lam_mask is None:
@@ -997,7 +992,7 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Use the correct function based on the arguments
-        if integrated:
+        if integrated and not vel_shift:
             return self._prepare_integrated_sed_args(
                 grid,
                 fesc,
@@ -1168,23 +1163,6 @@ class Stars(Particles, StarsComponent):
                     f" have metallicities > {grid.metallicity[-1]}"
                 )
 
-        # Get particle age masks
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
-
-        age_mask = self._get_masks(young, old)
-
-        # Ensure and warn that the masking hasn't removed everything
-        if np.sum(mask) == 0:
-            warn("`mask` has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        if np.sum(age_mask) == 0:
-            warn("Age mask has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        mask = mask & age_mask
-
         if aperture is not None:
             # Get aperture mask
             aperture_mask = self._aperture_mask(aperture_radius=aperture)
@@ -1195,14 +1173,19 @@ class Stars(Particles, StarsComponent):
 
                 return np.zeros(len(grid.lam))
         else:
-            aperture_mask = np.ones(self.nparticles, dtype=bool)
+            aperture_mask = None
+
+        if mask is not None and aperture_mask is not None:
+            mask = mask & aperture_mask
+        elif mask is None and aperture_mask is not None:
+            mask = aperture_mask
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
-            mask=mask & aperture_mask,
+            mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
             vel_shift=vel_shift,
