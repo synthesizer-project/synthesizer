@@ -22,8 +22,13 @@ Example usage::
 import numpy as np
 from unyt import Angstrom
 
+from synthesizer import exceptions
 from synthesizer.emission_models.base_model import StellarEmissionModel
 from synthesizer.emission_models.models import AttenuatedEmission, DustEmission
+from synthesizer.emission_models.transformers import (
+    EscapedFraction,
+    EscapeFraction,
+)
 
 
 class IncidentEmission(StellarEmissionModel):
@@ -48,7 +53,6 @@ class IncidentEmission(StellarEmissionModel):
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission.
         """
         StellarEmissionModel.__init__(
             self,
@@ -73,15 +77,13 @@ class NebularLineEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object to extract from.
         label (str): The label for this emission model.
         extract (str): The key to extract from the grid.
-        fesc (float): The escape fraction of the emission.
     """
 
     def __init__(
         self,
         grid,
         label="nebular_line",
-        fesc=0.0,
-        fesc_ly_alpha=1.0,
+        fesc_ly_alpha="fesc_lyman_alpha",
         **kwargs,
     ):
         """
@@ -90,70 +92,65 @@ class NebularLineEmission(StellarEmissionModel):
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
         """
-        if fesc_ly_alpha < 1.0:
-            # Get the lyman alpha wavelength elements and create a mask for
-            # the line
-            lyman_alpha_ind = np.argmin(np.abs(grid.lam - 1216.0 * Angstrom))
-            lyman_alpha_mask = np.zeros(len(grid.lam), dtype=bool)
-            lyman_alpha_mask[lyman_alpha_ind] = True
+        # Get the lyman alpha wavelength elements and create a mask for
+        # the line
+        lyman_alpha_ind = np.argmin(np.abs(grid.lam - 1216.0 * Angstrom))
+        lyman_alpha_mask = np.zeros(len(grid.lam), dtype=bool)
+        lyman_alpha_mask[lyman_alpha_ind] = True
 
-            # Since the spectra may have been resampled, we may have split the
-            # lyman-alpha line into two. Therefore, we need to mask the
-            # surrounding elements as well.
-            if lyman_alpha_ind > 0:
-                lyman_alpha_mask[lyman_alpha_ind - 1] = True
-            if lyman_alpha_ind < len(grid.lam) - 1:
-                lyman_alpha_mask[lyman_alpha_ind + 1] = True
+        # Since the spectra may have been resampled, we may have split the
+        # lyman-alpha line into two. Therefore, we need to mask the
+        # surrounding elements as well.
+        if lyman_alpha_ind > 0:
+            lyman_alpha_mask[lyman_alpha_ind - 1] = True
+        if lyman_alpha_ind < len(grid.lam) - 1:
+            lyman_alpha_mask[lyman_alpha_ind + 1] = True
 
-            # Create the child models
-            linecont_no_lyman = StellarEmissionModel(
-                grid=grid,
-                label=label + "_no_lyman",
-                extract="linecont",
-                fesc=fesc,
-                lam_mask=~lyman_alpha_mask,
-                save=False,
-                **kwargs,
+        # For lyman-alpha, we reduce the overall luminosity by fesc,
+        # then the remaining luminosity by fesc_ly_alpha
+        lyman_alpha_no_fesc = StellarEmissionModel(
+            label=label + "_no_fesc",
+            extract="linecont",
+            grid=grid,
+            save=False,
+            **kwargs,
+        )
+
+        # We can't define fesc and fesc_lyman_alpha in the same model if
+        # the user tried tell them they can't
+        if "fesc" in kwargs:
+            raise exceptions.InconsistentArguments(
+                "Cannot define fesc and fesc_lyman_alpha in the same model. "
+                "Please use another Transformation on NebularLineEmission "
+                "to apply your fesc."
             )
 
-            # For lyman-alpha, we reduce the overall luminosity by fesc,
-            # then the remaining luminosity by fesc_ly_alpha
-            lyman_alpha = StellarEmissionModel(
-                label=label + "_lyman_alpha",
-                extract="linecont",
-                grid=grid,
-                fesc=(1 - (1 - fesc) * fesc_ly_alpha),
-                lam_mask=lyman_alpha_mask,
-                save=False,
-                **kwargs,
-            )
-
-            # Instantiate the combination model
-            StellarEmissionModel.__init__(
-                self,
-                label=label,
-                combine=(linecont_no_lyman, lyman_alpha),
-                **kwargs,
-            )
-        else:
-            StellarEmissionModel.__init__(
-                self,
-                grid=grid,
-                label=label,
-                extract="linecont",
-                fesc=fesc,
-                **kwargs,
-            )
+        # Instantiate the combination model
+        StellarEmissionModel.__init__(
+            self,
+            label=label,
+            apply_to=lyman_alpha_no_fesc,
+            transformer=EscapedFraction(),
+            fesc=fesc_ly_alpha,
+            lam_mask=lyman_alpha_mask,
+            **kwargs,
+        )
 
 
 class TransmittedEmission(StellarEmissionModel):
     """
     An emission model that extracts the transmitted radiation field.
 
-    This defines an extraction of key "transmitted" from a SPS grid.
+    This defines 3 models when fesc > 0.0:
+      - An extraction of the key "transmitted" from a SPS grid.
+      - A transformed emission, for the transmitted radiation field accounting
+        for the escape fraction.
+      - A transformed emission, for the escaped radiation field accounting for
+        the escape fraction.
+
+    If fesc = 0.0 then there will only be the extraction model.
 
     This is a child of the EmissionModel class for a full description of the
     parameters see the EmissionModel class.
@@ -165,70 +162,40 @@ class TransmittedEmission(StellarEmissionModel):
         fesc (float): The escape fraction of the emission.
     """
 
-    def __init__(self, grid, label="transmitted", fesc=0.0, **kwargs):
+    def __init__(self, grid, label="transmitted", fesc="fesc", **kwargs):
         """
         Initialise the TransmittedEmission object.
 
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission.
         """
-        StellarEmissionModel.__init__(
-            self,
+        # Define the transmitted extraction model
+        full_transmitted = StellarEmissionModel(
             grid=grid,
-            label=label,
+            label="full_" + label,
             extract="transmitted",
+            **kwargs,
+        )
+
+        # Get the escaped emission
+        escaped = StellarEmissionModel(
+            label="escaped",
+            grid=grid,
+            apply_to=full_transmitted,
+            transformer=EscapedFraction(),
             fesc=fesc,
             **kwargs,
         )
 
-
-class EscapedEmission(StellarEmissionModel):
-    """
-    An emission model that extracts the escaped radiation field.
-
-    This defines an extraction of key "escaped" from a SPS grid.
-
-    This is a child of the EmissionModel class for a full description of the
-    parameters see the EmissionModel class.
-
-    Note: The escaped model is the "mirror" to the transmitted model. What
-    is transmitted is not escaped and vice versa. Therefore
-    EscapedEmission.fesc = 1 - TransmittedEmission.fesc. This will be
-    checked to be true at the time of spectra generation.
-
-    Attributes:
-        grid (synthesizer.grid.Grid): The grid object to extract from.
-        label (str): The label for this emission model.
-        extract (str): The key to extract from the grid.
-        fesc (float): The escape fraction of the emission. Note that this will
-                        be set to 1 - fesc during generation, i.e. it is the
-                        fraction that does not escape that should be passed.
-    """
-
-    def __init__(
-        self,
-        grid,
-        label="escaped",
-        fesc=0.0,
-        **kwargs,
-    ):
-        """
-        Initialise the EscapedEmission object.
-
-        Args:
-            grid (synthesizer.grid.Grid): The grid object to extract from.
-            label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission. (Note that,
-                          1-fesc will be used during generation).
-        """
+        # Get the transmitted emission (accounting for fesc)
         StellarEmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
-            extract="transmitted",
-            fesc=(1 - fesc),
+            apply_to=full_transmitted,
+            transformer=EscapeFraction(),
+            fesc=fesc,
+            related_models=(escaped,),
             **kwargs,
         )
 
@@ -246,14 +213,12 @@ class NebularContinuumEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object to extract from.
         label (str): The label for this emission model.
         extract (str): The key to extract from the grid.
-        fesc (float): The escape fraction of the emission.
     """
 
     def __init__(
         self,
         grid,
         label="nebular_continuum",
-        fesc=0.0,
         **kwargs,
     ):
         """
@@ -262,14 +227,12 @@ class NebularContinuumEmission(StellarEmissionModel):
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission.
         """
         StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
             extract="nebular_continuum",
-            fesc=fesc,
             **kwargs,
         )
 
@@ -288,15 +251,13 @@ class NebularEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object to extract from.
         label (str): The label for this emission model.
         combine (list): The emission models to combine.
-        fesc (float): The escape fraction of the emission.
     """
 
     def __init__(
         self,
         grid,
         label="nebular",
-        fesc=0.0,
-        fesc_ly_alpha=1.0,
+        fesc_ly_alpha="fesc_lyman_alpha",
         nebular_line=None,
         nebular_continuum=None,
         **kwargs,
@@ -307,7 +268,6 @@ class NebularEmission(StellarEmissionModel):
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission.
             feac_ly_alpha (float): The escape fraction of Lyman-alpha.
             nebular_line (EmissionModel): The nebular line model to use, if
                 None then one will be created. Only used if
@@ -318,105 +278,25 @@ class NebularEmission(StellarEmissionModel):
         """
         # If we have a Lyman-alpha escape fraction then calculate the
         # updated line emission and combine with the nebular continuum.
-        if fesc_ly_alpha < 1.0:
-            # Make a nebular line model if we need one
-            if nebular_line is None:
-                nebular_line = NebularLineEmission(
-                    grid=grid,
-                    fesc_ly_alpha=fesc_ly_alpha,
-                    fesc=fesc,
-                    **kwargs,
-                )
-
-            # Make a nebular continuum model if we need one
-            if nebular_continuum is None:
-                nebular_continuum = NebularContinuumEmission(
-                    grid=grid,
-                    fesc=fesc,
-                    **kwargs,
-                )
-
-            StellarEmissionModel.__init__(
-                self,
-                label=label,
-                combine=(nebular_line, nebular_continuum),
-                **kwargs,
-            )
-
-        else:
-            # Otherwise, we just get the nebular emission directly
-            # from the grid
-            StellarEmissionModel.__init__(
-                self,
+        # Make a nebular line model if we need one
+        if nebular_line is None:
+            nebular_line = NebularLineEmission(
                 grid=grid,
-                label=label,
-                extract="nebular",
-                fesc=fesc,
-                **kwargs,
-            )
-
-
-class IntrinsicEmission(StellarEmissionModel):
-    """
-    An emission model that defines the intrinsic emission.
-
-    This defines a combination of the reprocessed and escaped emission.
-
-    This is a child of the EmissionModel class for a full description of the
-    parameters see the EmissionModel class.
-
-    Attributes:
-        grid (synthesizer.grid.Grid): The grid object to extract from.
-        label (str): The label for this emission model.
-        combine (list): The emission models to combine.
-        fesc (float): The escape fraction of the emission.
-    """
-
-    def __init__(
-        self,
-        grid,
-        fesc,
-        label="intrinsic",
-        fesc_ly_alpha=1.0,
-        escaped=None,
-        reprocessed=None,
-        **kwargs,
-    ):
-        """
-        Initialise the IntrinsicEmission object.
-
-        Args:
-            grid (synthesizer.grid.Grid): The grid object to extract from.
-            label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission.
-            escaped (EmissionModel): The escaped model to use, if None then one
-                will be created.
-            reprocessed (EmissionModel): The reprocessed model to use, if None
-                then one will be created.
-        """
-        # Make an escaped model if we need one
-        if escaped is None:
-            escaped = EscapedEmission(
-                grid=grid,
-                fesc=fesc,
-                **kwargs,
-            )
-
-        # Make a reprocessed model if we need one
-        if reprocessed is None:
-            reprocessed = ReprocessedEmission(
-                grid=grid,
-                fesc=fesc,
                 fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
+            )
+
+        # Make a nebular continuum model if we need one
+        if nebular_continuum is None:
+            nebular_continuum = NebularContinuumEmission(
+                grid=grid,
                 **kwargs,
             )
 
         StellarEmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
-            combine=(escaped, reprocessed),
-            fesc=fesc,
+            combine=(nebular_line, nebular_continuum),
             **kwargs,
         )
 
@@ -434,15 +314,14 @@ class ReprocessedEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object to extract from.
         label (str): The label for this emission model.
         combine (list): The emission models to combine.
-        fesc (float): The escape fraction of the emission.
     """
 
     def __init__(
         self,
         grid,
         label="reprocessed",
-        fesc=0.0,
-        fesc_ly_alpha=1.0,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_lyman_alpha",
         nebular=None,
         transmitted=None,
         **kwargs,
@@ -453,7 +332,6 @@ class ReprocessedEmission(StellarEmissionModel):
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
-            fesc (float): The escape fraction of the emission.
             nebular (EmissionModel): The nebular model to use, if None then one
                 will be created.
             transmitted (EmissionModel): The transmitted model to use, if None
@@ -463,7 +341,6 @@ class ReprocessedEmission(StellarEmissionModel):
         if nebular is None:
             nebular = NebularEmission(
                 grid=grid,
-                fesc=fesc,
                 fesc_ly_alpha=fesc_ly_alpha,
                 **kwargs,
             )
@@ -481,7 +358,57 @@ class ReprocessedEmission(StellarEmissionModel):
             grid=grid,
             label=label,
             combine=(nebular, transmitted),
-            fesc=fesc,
+            **kwargs,
+        )
+
+
+class IntrinsicEmission(StellarEmissionModel):
+    """
+    An emission model that defines the intrinsic emission.
+
+    This defines a combination of the reprocessed and escaped emission.
+
+    This is a child of the EmissionModel class for a full description of the
+    parameters see the EmissionModel class.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object to extract from.
+        label (str): The label for this emission model.
+        combine (list): The emission models to combine.
+    """
+
+    def __init__(
+        self,
+        grid,
+        label="intrinsic",
+        fesc_ly_alpha="fesc_lyman_alpha",
+        reprocessed=None,
+        **kwargs,
+    ):
+        """
+        Initialise the IntrinsicEmission object.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            label (str): The label for this emission model.
+            escaped (EmissionModel): The escaped model to use, if None then one
+                will be created.
+            reprocessed (EmissionModel): The reprocessed model to use, if None
+                then one will be created.
+        """
+        # Make a reprocessed model if we need one
+        if reprocessed is None:
+            reprocessed = ReprocessedEmission(
+                grid=grid,
+                fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
+            )
+
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(reprocessed["escaped"], reprocessed),
             **kwargs,
         )
 
@@ -500,7 +427,6 @@ class EmergentEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object to extract from.
         dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
         apply_to (EmissionModel): The emission model to apply the dust to.
-        fesc (float): The escape fraction of the emission.
         label (str): The label for this emission model.
     """
 
@@ -509,7 +435,8 @@ class EmergentEmission(StellarEmissionModel):
         grid,
         dust_curve=None,
         apply_to=None,
-        fesc=0.0,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_lyman_alpha",
         label="emergent",
         attenuated=None,
         escaped=None,
@@ -529,6 +456,15 @@ class EmergentEmission(StellarEmissionModel):
             escaped (EmissionModel): The escaped model to use, if None then one
                 will be created.
         """
+        # If apply_to is None then we need to make a model to apply to
+        if apply_to is None and attenuated is None:
+            apply_to = ReprocessedEmission(
+                grid=grid,
+                fesc=fesc,
+                feac_ly_alpha=fesc_ly_alpha,
+                **kwargs,
+            )
+
         # Make an attenuated model if we need one
         if attenuated is None:
             attenuated = AttenuatedEmission(
@@ -539,9 +475,9 @@ class EmergentEmission(StellarEmissionModel):
                 **kwargs,
             )
 
-        # Make an escaped model if we need one
+        # Do we have an escaped model?
         if escaped is None:
-            escaped = EscapedEmission(grid=grid, fesc=fesc, **kwargs)
+            escaped = attenuated["escaped"]
 
         StellarEmissionModel.__init__(
             self,
@@ -578,8 +514,8 @@ class TotalEmission(StellarEmissionModel):
         dust_curve,
         dust_emission_model=None,
         label="total",
-        fesc=0.0,
-        fesc_ly_alpha=1.0,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_lyman_alpha",
         **kwargs,
     ):
         """
@@ -594,10 +530,8 @@ class TotalEmission(StellarEmissionModel):
             fesc (float): The escape fraction of the emission.
         """
         # Set up models we need to link
-        escaped = EscapedEmission(grid=grid, fesc=fesc, **kwargs)
         nebular = NebularEmission(
             grid=grid,
-            fesc=fesc,
             fesc_ly_alpha=fesc_ly_alpha,
             **kwargs,
         )
@@ -616,12 +550,12 @@ class TotalEmission(StellarEmissionModel):
             emitter="stellar",
             **kwargs,
         )
+        escaped = transmitted["escaped"]
 
         # If a dust emission model has been passed then we need combine
         if dust_emission_model is not None:
             emergent = EmergentEmission(
                 grid=grid,
-                fesc=fesc,
                 attenuated=attenuated,
                 escaped=escaped,
                 **kwargs,
@@ -643,7 +577,6 @@ class TotalEmission(StellarEmissionModel):
                     emergent,
                     dust_emission,
                 ),
-                fesc=fesc,
                 **kwargs,
             )
         else:
@@ -653,6 +586,5 @@ class TotalEmission(StellarEmissionModel):
                 grid=grid,
                 label=label,
                 combine=(attenuated, escaped),
-                fesc=fesc,
                 **kwargs,
             )
