@@ -2360,12 +2360,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         start_overrides = tic()
         self._apply_overrides(
             emission_model,
-            dust_curves,
-            tau_v,
-            fesc,
-            covering_fraction,
-            mask,
-            vel_shift,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            vel_shift=vel_shift,
         )
         toc("Applying model overrides", start_overrides)
 
