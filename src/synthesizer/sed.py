@@ -301,7 +301,7 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
-    def scale(self, scaling, inplace=False):
+    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
         """
         Scale the lnu of the Sed object.
 
@@ -315,6 +315,12 @@ class Sed:
             inplace (bool)
                 If True, the Sed object is modified in place. If False, a new
                 Sed object is returned with the scaled lnu.
+            mask (array-like, bool)
+                A mask for the lnu array to apply the scaling to. This must
+                be the same shape as the lnu array excluding the wavelength
+                axis.
+            lam_mask (array-like, bool)
+                A mask for the wavelength array to apply the scaling to.
 
         Returns:
             Sed
@@ -330,21 +336,28 @@ class Sed:
                 scaling = scaling.to(self.lnu.units)
                 scaling = scaling.value
 
+        # Unpack the array's we'll need during scaling
+        lnu = self._lnu.copy()
+        units = self.lnu.units
+
+        # If we have a wavelength mask apply it now
+        if lam_mask is not None:
+            lnu = lnu[..., lam_mask]
+
         # Handle a scalar scaling factor
-        if np.isscalar(scaling) and not inplace:
-            return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
-        elif np.isscalar(scaling) and inplace:
-            self._lnu *= scaling
-            return self
+        if np.isscalar(scaling):
+            if mask is not None:
+                lnu[mask] *= scaling
+            else:
+                lnu *= scaling
 
         # Handle an single element array scaling factor
         elif scaling.size == 1:
             scaling = scaling.item()
-            if not inplace:
-                return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
+            if mask is not None:
+                lnu[mask] *= scaling
             else:
-                self._lnu *= scaling
-                return self
+                lnu *= scaling
 
         # Handle a multi-element array scaling factor as long as it matches
         # the shape of the lnu array up to the dimensions of the scaling array
@@ -356,36 +369,43 @@ class Sed:
             new_scaling = np.ones(self.shape) * np.expand_dims(
                 scaling, axis=expand_axes
             )
-            if not inplace:
-                return Sed(
-                    self.lam, lnu=new_scaling * self._lnu * self.lnu.units
-                )
+
+            # Apply the scaling
+            if mask is not None:
+                lnu[mask] *= new_scaling[mask]
             else:
-                self._lnu *= new_scaling
-                return self
+                lnu *= new_scaling
 
         # If the scaling array is the same shape as the lnu array then we can
         # just multiply them together
-        elif (
-            isinstance(scaling, np.ndarray)
-            and scaling.shape == self.shape
-            and not inplace
-        ):
-            return Sed(self.lam, lnu=scaling * self._lnu * self.lnu.units)
-        elif (
-            isinstance(scaling, np.ndarray)
-            and scaling.shape == self.shape
-            and inplace
-        ):
-            self._lnu *= scaling
-            return self
+        elif isinstance(scaling, np.ndarray) and scaling.shape == self.shape:
+            if mask is not None:
+                lnu[mask] *= scaling[..., mask]
+            else:
+                lnu *= scaling
 
         # Otherwise, we've been handed a bad scaling factor
         else:
-            raise exceptions.InconsistentMultiplication(
-                f"Incompatible scaling factor {scaling} with type "
-                f"{type(scaling)}"
-            )
+            out_str = f"Incompatible scaling factor with type {type(scaling)} "
+            if hasattr(scaling, "shape"):
+                out_str += f"and shape {scaling.shape}"
+            else:
+                out_str += f"and value {scaling}"
+            raise exceptions.InconsistentMultiplication(out_str)
+
+        # Now complete the calculation if we need to
+        if lam_mask is not None:
+            new_lnu = np.zeros(self.shape) * units
+            new_lnu[..., lam_mask] = lnu
+        else:
+            new_lnu = lnu
+
+        # If we scaled then we can return the scaled Sed
+        if not inplace:
+            return Sed(self.lam, lnu=new_lnu * units)
+
+        self._lnu = new_lnu
+        return self
 
     def __mul__(self, scaling):
         """
