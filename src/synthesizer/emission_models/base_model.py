@@ -54,6 +54,7 @@ from synthesizer.emission_models.operations import (
     Generation,
     Transformation,
 )
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import LineCollection
 from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import deprecation, warn
@@ -2341,7 +2342,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
         # only their reference)
+        copy_start = tic()
         emission_model = copy.copy(self)
+        toc("Copying emission model", copy_start)
 
         # Before we do anything, check that we have the emitters we need
         for model in emission_model._models.values():
@@ -2354,6 +2357,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Apply any overides we have
+        start_overrides = tic()
         self._apply_overrides(
             emission_model,
             dust_curves,
@@ -2363,6 +2367,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             mask,
             vel_shift,
         )
+        toc("Applying model overrides", start_overrides)
 
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
@@ -2380,6 +2385,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
         # Perform all extractions
+        extract_start = tic()
         spectra, particle_spectra = self._extract_spectra(
             emission_model,
             emitters,
@@ -2388,6 +2394,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             verbose=verbose,
             nthreads=nthreads,
         )
+        toc("Extracting spectra (Operation)", extract_start)
 
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra

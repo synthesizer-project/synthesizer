@@ -143,6 +143,7 @@ class Sed:
             sed (object, Sed)
                 Summed 1D SED.
         """
+        start = tic()
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
@@ -162,6 +163,8 @@ class Sed:
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
+
+            toc("Summing Sed", start)
 
             return new_sed
         else:
