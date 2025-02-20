@@ -172,7 +172,6 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
   /* Convert out. */
@@ -233,7 +232,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
       int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
       /* Store the weight. */
-      out_arr[flat_ind] += frac * mass * (1.0 - fesc[p]);
+      out_arr[flat_ind] += frac * mass;
     }
   }
 }
@@ -285,7 +284,6 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
 #pragma omp parallel num_threads(nthreads)
@@ -352,7 +350,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
         int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
         /* Store the weight. */
-        local_out[flat_ind] += frac * mass * (1.0 - fesc[p]);
+        local_out[flat_ind] += frac * mass;
       }
     }
   }
@@ -503,7 +501,6 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
   /* Convert out. */
@@ -525,7 +522,7 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
     int flat_ind = get_flat_index(part_indices, dims, ndim);
 
     /* Store the weight. */
-    out_arr[flat_ind] += mass * (1.0 - fesc[p]);
+    out_arr[flat_ind] += mass;
   }
 }
 
@@ -575,7 +572,6 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
 #pragma omp parallel num_threads(nthreads)
@@ -604,7 +600,7 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
       int flat_ind = get_flat_index(part_indices, dims, ndim);
 
       /* Store the weight. */
-      local_out[flat_ind] += mass * (1.0 - fesc[p]);
+      local_out[flat_ind] += mass;
     }
   }
 
