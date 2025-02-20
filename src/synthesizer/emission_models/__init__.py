@@ -28,7 +28,6 @@ from synthesizer.emission_models.models import (
 from synthesizer.emission_models.stellar import STELLAR_MODELS
 from synthesizer.emission_models.stellar.models import (
     EmergentEmission,
-    EscapedEmission,
     IncidentEmission,
     IntrinsicEmission,
     NebularContinuumEmission,
