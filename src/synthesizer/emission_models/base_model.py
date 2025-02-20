@@ -2678,12 +2678,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Apply any overides we have
         self._apply_overrides(
             emission_model,
-            dust_curves,
-            tau_v,
-            fesc,
-            covering_fraction,
-            mask,
-            None,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            vel_shift=None,
         )
 
         # If we haven't got a lines dictionary yet we'll make one

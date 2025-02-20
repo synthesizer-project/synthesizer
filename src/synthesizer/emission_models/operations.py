@@ -775,8 +775,8 @@ class Transformation:
             apply_to,
             emitter,
             this_model,
-            this_mask,
-            self.lam_mask,
+            this_mask if this_model.per_particle else None,
+            this_model.lam_mask,
         )
 
         # Store the spectra in the right place (integrating if we need to)

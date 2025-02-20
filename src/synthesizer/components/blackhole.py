@@ -273,7 +273,6 @@ class BlackholesComponent(Component):
         self,
         grid,
         spectra_name,
-        fesc=None,
         mask=None,
         lam_mask=None,
         verbose=False,
@@ -289,9 +288,6 @@ class BlackholesComponent(Component):
                 An instance of a blackhole emission model.
             grid (obj):
                 Spectral grid object.
-            fesc (float):
-                Fraction of emission that escapes unattenuated from
-                the birth cloud (defaults to 0.0).
             spectra_name (string)
                 The name of the target spectra inside the grid file
                 (e.g. "incident", "transmitted", "nebular").
@@ -337,7 +333,6 @@ class BlackholesComponent(Component):
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
-            fesc=fesc,
             spectra_type=spectra_name,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
@@ -372,7 +367,6 @@ class BlackholesComponent(Component):
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -395,10 +389,6 @@ class BlackholesComponent(Component):
             line_type (str)
                 The type of line to extract from the grid. Must match the
                 spectra/line type in the grid file.
-            fesc (float/array-like, float)
-                Fraction of AGN emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -472,7 +462,6 @@ class BlackholesComponent(Component):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,
