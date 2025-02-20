@@ -1381,7 +1381,6 @@ class Template:
         self,
         lam,
         lnu,
-        fesc=0.0,
         unify_with_grid=None,
         **kwargs,
     ):
@@ -1393,8 +1392,6 @@ class Template:
                 Wavelength array.
             lnu (array)
                 Luminosity array.
-            fesc (float)
-                The escape fraction of the AGN.
             unify_with_grid (Grid)
                 A grid object to unify the template with. This will ensure
                 the template has the same wavelength array as the grid.
@@ -1418,9 +1415,6 @@ class Template:
         self.normalisation = sed._bolometric_luminosity
         self._sed._lnu /= self.normalisation
         self._lnu /= self.normalisation
-
-        # Set the escape fraction
-        self.fesc = fesc
 
     @accepts(bolometric_luminosity=erg / s)
     def get_spectra(self, bolometric_luminosity):
