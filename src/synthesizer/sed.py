@@ -395,14 +395,14 @@ class Sed:
 
         # Now complete the calculation if we need to
         if lam_mask is not None:
-            new_lnu = np.zeros(self.shape) * units
+            new_lnu = self.lnu.copy()
             new_lnu[..., lam_mask] = lnu
         else:
-            new_lnu = lnu
+            new_lnu = lnu * units
 
         # If we scaled then we can return the scaled Sed
         if not inplace:
-            return Sed(self.lam, lnu=new_lnu * units)
+            return Sed(self.lam, lnu=new_lnu)
 
         self._lnu = new_lnu
         return self
