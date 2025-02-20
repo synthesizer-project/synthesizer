@@ -239,6 +239,7 @@ def int_spectra_strong_scaling(
             label=key,
             linestyle=linestyles[key],
             linewidth=3 if key == "Total" else 1,
+            zorder=1 if key == "Total" else 3,
         )
 
     ax_main.set_ylabel("Time (s)")
@@ -257,6 +258,7 @@ def int_spectra_strong_scaling(
             label=key,
             linestyle=linestyles[key],
             linewidth=3 if key == "Total" else 1,
+            zorder=1 if key == "Total" else 3,
         )
 
     # PLot a 1-1 line
