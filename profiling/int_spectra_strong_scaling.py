@@ -14,8 +14,9 @@ import time
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Myr
+from unyt import Msun, Myr
 
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -41,6 +42,8 @@ def int_spectra_strong_scaling(
     grid_dir = "../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
+    model = IncidentEmission(grid, fesc=0.0)
+
     # Define the grid (normally this would be defined by an SPS grid)
     log10ages = np.arange(6.0, 10.5, 0.1)
     metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
@@ -48,7 +51,7 @@ def int_spectra_strong_scaling(
     sfh = SFH.Constant(100 * Myr)  # constant star formation
 
     # Generate the star formation metallicity history
-    mass = 10**10
+    mass = 10**10 * Msun.in_base("galactic")
     param_stars = ParametricStars(
         log10ages,
         metallicities,
@@ -63,14 +66,15 @@ def int_spectra_strong_scaling(
         param_stars.log10ages,
         param_stars.log10metallicities,
         nstars,
-        current_masses=np.full(nstars, 10**8.7 / nstars),
+        current_masses=np.full(nstars, 10**8.7 / nstars)
+        * Msun.in_base("galactic"),
         redshift=1,
     )
 
     # Get spectra in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial serial spectra calculation")
-    stars.get_spectra_incident(grid, nthreads=1, grid_assignment_method=gam)
+    stars.get_spectra(model, nthreads=1, grid_assignment_method=gam)
     print()
 
     # Step 1: Save original stdout file descriptor and redirect
@@ -90,8 +94,8 @@ def int_spectra_strong_scaling(
             print(f"=== Testing with {nthreads} threads ===")
             for i in range(average_over):
                 spec_start = time.time()
-                stars.get_spectra_incident(
-                    grid, nthreads=nthreads, grid_assignment_method=gam
+                stars.get_spectra(
+                    model, nthreads=nthreads, grid_assignment_method=gam
                 )
                 execution_time = time.time() - spec_start
 
@@ -111,8 +115,8 @@ def int_spectra_strong_scaling(
                 print(f"=== Testing with {max_threads} threads ===")
                 for i in range(average_over):
                     spec_start = time.time()
-                    stars.get_spectra_incident(
-                        grid,
+                    stars.get_spectra(
+                        model,
                         nthreads=max_threads,
                         grid_assignment_method=gam,
                     )
