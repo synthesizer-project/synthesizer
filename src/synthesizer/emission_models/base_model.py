@@ -312,6 +312,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # If we have been given a mask, add it
         self._init_masks(mask_attr, mask_thresh, mask_op)
 
+        # Initialise the lam mask
+        self._lam_mask = lam_mask
+
         # Temporarily handle old apply_dust_to argument
         if "apply_dust_to" in fixed_parameters:
             deprecation(
@@ -352,7 +355,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             generator=generator,
             lum_intrinsic_model=lum_intrinsic_model,
             lum_attenuated_model=lum_attenuated_model,
-            lam_mask=lam_mask,
             vel_shift=vel_shift,
         )
 
@@ -410,7 +412,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         generator,
         lum_intrinsic_model,
         lum_attenuated_model,
-        lam_mask,
         vel_shift,
     ):
         """
@@ -437,8 +438,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             lum_attenuated_model (EmissionModel):
                 The attenuated model to use deriving the dust
                 luminosity when computing dust emission.
-            lam_mask (ndarray):
-                The mask to apply to the wavelength array.
             vel_shift (bool):
                 A flag for whether the emission produced by this model should
                 take into account the velocity shift due to peculiar
@@ -446,7 +445,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         # Which operation are we doing?
         if self._is_extracting:
-            Extraction.__init__(self, grid, extract, lam_mask, vel_shift)
+            Extraction.__init__(self, grid, extract, vel_shift)
         elif self._is_combining:
             Combination.__init__(self, combine)
         elif self._is_transforming:
@@ -1288,6 +1287,31 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Now set the given spectra to save
         for arg in args:
             self[arg].set_save(True)
+
+    @property
+    def lam_mask(self):
+        """Get the wavelength mask."""
+        return getattr(self, "_lam_mask", None)
+
+    def set_lam_mask(self, lam_mask, set_all=False):
+        """
+        Set the wavelength mask.
+
+        Args:
+            lam_mask (array_like):
+                The wavelength mask to apply.
+            set_all (bool):
+                Whether to set the wavelength mask on all models.
+        """
+        # Set the wavelength mask
+        if not set_all:
+            self._lam_mask = lam_mask
+        else:
+            for model in self._models.values():
+                model.set_lam_mask(lam_mask)
+
+        # Unpack the model now we're done
+        self.unpack_model()
 
     def add_mask(self, attr, op, thresh, set_all=False):
         """
