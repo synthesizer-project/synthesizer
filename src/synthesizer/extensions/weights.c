@@ -190,25 +190,6 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   /* Convert out. */
   double *out_arr = (double *)out;
 
-  /* Allocate a single contiguous block of memory for all threads. */
-  double *out_data = calloc(nthreads * out_size, sizeof(double));
-  if (out_data == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return;
-  }
-
-  /* Allocate pointers to each thread's portion of the output array. */
-  double **out_per_thread = malloc(nthreads * sizeof(double *));
-  if (out_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    free(out_data);
-    return;
-  }
-  for (int i = 0; i < nthreads; i++) {
-    out_per_thread[i] = out_data + i * out_size;
-  }
-
   /* Unpack the grid properties. */
   int *dims = grid->dims;
   int ndim = grid->ndim;
@@ -230,18 +211,35 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 #pragma omp parallel num_threads(nthreads)
   {
 
+    /* First lets slice up the particles between the threads. */
+    int npart_per_thread = (npart + nthreads - 1) / nthreads;
+
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Get a local pointer to the thread weights. */
-    double *local_out = out_per_thread[tid];
+    /* Get the start and end particle indices for this thread. */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
+    }
 
-    /* Loop over particles. */
-#pragma omp for
-    for (int p = 0; p < npart; p++) {
+    /* Get local pointers to the particle properties. */
+    double *local_part_masses = part_masses + start;
+    double *local_fesc = fesc + start;
+
+    /* Allocate a local output array. */
+    double *local_out_arr = calloc(out_size, sizeof(double));
+    if (local_out_arr == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for output.");
+    }
+
+    /* Parallel loop with atomic updates. */
+    for (int p = 0; p < end - start; p++) {
 
       /* Get this particle's mass. */
-      const double mass = part_masses[p];
+      const double mass = local_part_masses[p];
 
       /* Setup the index and mass fraction arrays. */
       int part_indices[ndim];
@@ -283,29 +281,21 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
         int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
         /* Store the weight. */
-        local_out[flat_ind] += frac * mass * (1.0 - fesc[p]);
+        local_out_arr[flat_ind] += frac * mass * (1.0 - local_fesc[p]);
       }
     }
-  }
 
-  /* Hierarchical reduction */
-  for (int step = 1; step < nthreads; step *= 2) {
-    for (int tid = 0; tid < nthreads; tid += 2 * step) {
-      if (tid + step < nthreads) {
-#pragma omp parallel for num_threads(nthreads)
-        for (int i = 0; i < out_size; i++) {
-          out_per_thread[tid][i] += out_per_thread[tid + step][i];
-        }
+    /* Update the global output array */
+#pragma omp critical
+    {
+      for (int i = 0; i < out_size; i++) {
+        out_arr[i] += local_out_arr[i];
       }
     }
+
+    /* Clean up. */
+    free(local_out_arr);
   }
-
-  /* Copy the final reduced result to spectra */
-  memcpy(out_arr, out_per_thread[0], out_size * sizeof(double));
-
-  /* Free the allocated memory. */
-  free(out_per_thread);
-  free(out_data);
 }
 #endif
 
@@ -479,25 +469,6 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   /* Convert out. */
   double *out_arr = (double *)out;
 
-  /* Allocate a single contiguous block of memory for all threads. */
-  double *out_data = calloc(nthreads * out_size, sizeof(double));
-  if (out_data == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return;
-  }
-
-  /* Allocate pointers to each thread's portion of the output array. */
-  double **out_per_thread = malloc(nthreads * sizeof(double *));
-  if (out_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    free(out_data);
-    return;
-  }
-  for (int i = 0; i < nthreads; i++) {
-    out_per_thread[i] = out_data + i * out_size;
-  }
-
   /* Unpack the grid properties. */
   int *dims = grid->dims;
   int ndim = grid->ndim;
@@ -512,51 +483,59 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
 #pragma omp parallel num_threads(nthreads)
   {
 
+    /* First lets slice up the particles between the threads. */
+    int npart_per_thread = (npart + nthreads - 1) / nthreads;
+
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Get a local pointer to the thread weights. */
-    double *local_out = out_per_thread[tid];
+    /* Get the start and end particle indices for this thread. */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
+    }
 
-    /* Loop over particles. */
-#pragma omp for
-    for (int p = 0; p < npart; p++) {
+    /* Get local pointers to the particle properties. */
+    double *local_part_masses = part_masses + start;
+    double *local_fesc = fesc + start;
 
-      /* Get this particle's mass. */
-      const double mass = part_masses[p];
+    /* Allocate a local output array. */
+    double *local_out_arr = calloc(out_size, sizeof(double));
+    if (local_out_arr == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for output.");
+    }
 
-      /* Setup the index array. */
-      int part_indices[ndim];
+    /* Parallel loop with atomic updates. */
+    for (int p = 0; p < end - start; p++) {
 
       /* Get the grid indices for the particle */
-      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+      int part_indices[ndim];
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props,
+                        p + start);
 
       /* Unravel the indices. */
       int flat_ind = get_flat_index(part_indices, dims, ndim);
 
-      /* Store the weight. */
-      local_out[flat_ind] += mass * (1.0 - fesc[p]);
-    }
-  }
+      /* Calculate this particles contribution to the grid cell. */
+      double contribution = local_part_masses[p] * (1.0 - local_fesc[p]);
 
-  /* Hierarchical reduction */
-  for (int step = 1; step < nthreads; step *= 2) {
-    for (int tid = 0; tid < nthreads; tid += 2 * step) {
-      if (tid + step < nthreads) {
-#pragma omp parallel for num_threads(nthreads)
-        for (int i = 0; i < out_size; i++) {
-          out_per_thread[tid][i] += out_per_thread[tid + step][i];
-        }
+      /* Update the shared output array atomically */
+      local_out_arr[flat_ind] += contribution;
+    }
+
+    /* Update the global output array */
+#pragma omp critical
+    {
+      for (int i = 0; i < out_size; i++) {
+        out_arr[i] += local_out_arr[i];
       }
     }
+
+    /* Clean up. */
+    free(local_out_arr);
   }
-
-  /* Copy the final reduced result to spectra */
-  memcpy(out_arr, out_per_thread[0], out_size * sizeof(double));
-
-  /* Free the allocated memory. */
-  free(out_per_thread);
-  free(out_data);
 }
 #endif
 
