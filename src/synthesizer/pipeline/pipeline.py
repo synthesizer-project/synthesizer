@@ -1694,12 +1694,11 @@ class Pipeline:
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
-                "Cannot combine files before writing data! "
-                "Call write first."
+                "Cannot combine files before writing data! Call write first."
             )
 
         # Nothing to do if we're using collective I/O
-        if self.io_helper.collective_io:
+        if self.io_helper.is_collective:
             self._print("Using collective I/O, nothing to combine.")
             return
 
@@ -1728,12 +1727,11 @@ class Pipeline:
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
-                "Cannot combine files before writing data! "
-                "Call write first."
+                "Cannot combine files before writing data! Call write first."
             )
 
         # Nothing to do if we're using collective I/O
-        if self.io_helper.collective_io:
+        if self.io_helper.is_collective:
             self._print("Using collective I/O, nothing to combine.")
             return
 
