@@ -613,22 +613,21 @@ class Stars(Particles, StarsComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
+        arg_start = tic()
         # Make a dummy mask if none has been passed
         if mask is None:
+            mask_start = tic()
             mask = np.ones(self.nparticles, dtype=bool)
-
-        # If lam_mask is None then we want all wavelengths
-        if lam_mask is None:
-            lam_mask = np.ones(
-                grid.spectra[spectra_type].shape[-1],
-                dtype=bool,
-            )
+            toc("Creating mask", mask_start)
 
         # Set up the inputs to the C function.
+        grid_start = tic()
         grid_props = [
             np.ascontiguousarray(grid.log10ages, dtype=np.float64),
             np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
+        toc("Preparing grid properties", grid_start)
+        part_start = tic()
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
             np.ascontiguousarray(
@@ -660,39 +659,49 @@ class Stars(Particles, StarsComponent):
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
 
+        toc("Preparing particle properties", part_start)
+
         # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(np.sum(lam_mask))
+        nlam = (
+            np.int32(np.sum(lam_mask))
+            if lam_mask is not None
+            else grid.spectra[spectra_type].shape[-1]
+        )
 
         # Slice the spectral grids and pad them with copies of the edges.
-        grid_spectra = np.ascontiguousarray(
-            grid.spectra[spectra_type],
-            np.float64,
-        )
+        spec_start = tic()
+        grid_spectra = grid.spectra[spectra_type]
 
         # Apply the wavelength mask
-        grid_spectra = np.ascontiguousarray(
-            grid_spectra[..., lam_mask],
-            np.float64,
-        )
+        if lam_mask is not None:
+            grid_spectra = np.ascontiguousarray(
+                grid_spectra[..., lam_mask],
+                np.float64,
+            )
+        toc("Preparing grid spectra", spec_start)
 
         # Get the grid wavelength arrays (and needed for velocity shifts)
         if vel_shift:
             grid_lam = np.ascontiguousarray(
                 grid._lam[lam_mask],
-                np.float64,
+                np.float32,
             )
         else:
             grid_lam = None
 
         # Get the grid dimensions after slicing what we need
+        dim_start = tic()
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
         grid_dims[ind + 1] = nlam
+        toc("Preparing grid dimensions", dim_start)
 
         # If fesc isn't an array make it one
         if not isinstance(fesc, np.ndarray):
+            fesc_start = tic()
             fesc = np.ascontiguousarray(np.full(npart, fesc))
+            toc("Preparing fesc", fesc_start)
 
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
@@ -700,7 +709,11 @@ class Stars(Particles, StarsComponent):
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
+            thread_start = tic()
             nthreads = os.cpu_count()
+            toc("Setting nthreads", thread_start)
+
+        toc("Preparing SED arguments", arg_start)
 
         # Return the right arguments for the situation (either with all the
         # extra velocity information or without)
@@ -934,9 +947,11 @@ class Stars(Particles, StarsComponent):
         # If we had a wavelength mask we need to make sure we return a spectra
         # compatible with the original wavelength array.
         if lam_mask is not None:
+            lam_mask_start = tic()
             out_spec = np.zeros(len(grid.lam))
             out_spec[lam_mask] = spec
             spec = out_spec
+            toc("Applying wavelength mask", lam_mask_start)
 
         return spec
 
