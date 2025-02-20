@@ -682,10 +682,13 @@ class Stars(Particles, StarsComponent):
 
         # Get the grid wavelength arrays (and needed for velocity shifts)
         if vel_shift:
-            grid_lam = np.ascontiguousarray(
-                grid._lam[lam_mask],
-                np.float32,
-            )
+            if lam_mask is not None:
+                grid_lam = np.ascontiguousarray(
+                    grid._lam[lam_mask],
+                    np.float32,
+                )
+            else:
+                grid_lam = grid._lam[lam_mask]
         else:
             grid_lam = None
 
