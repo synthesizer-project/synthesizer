@@ -98,6 +98,7 @@ class Stars(StarsComponent):
         sf_hist=None,
         metal_dist=None,
         fesc=None,
+        fesc_lyman_alpha=None,
         **kwargs,
     ):
         """
@@ -153,6 +154,7 @@ class Stars(StarsComponent):
             metallicities,
             _star_type="parametric",
             fesc=fesc,
+            fesc_lyman_alpha=fesc_lyman_alpha,
             **kwargs,
         )
 
