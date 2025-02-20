@@ -425,6 +425,15 @@ class LineCollection:
 
         return LineCollection(summed_lines)
 
+    def shape(self):
+        """
+        Return the shape of the lines.
+
+        Note, the shape in this context is the shape of a single line. This
+        will change in a future update to the way we store lines.
+        """
+        return self.lines[self.line_ids[0]].shape()
+
     def _get_ratio(self, line1, line2):
         """
         Measure (and return) a line ratio.
@@ -748,16 +757,22 @@ class LineCollection:
 
         return LineCollection(new_lines)
 
-    def scale(self, scaling):
+    def scale(self, scaling, mask=None, lam_mask=None):
         """
         Scale all lines in the collection by a factor.
 
         Args:
             scaling (float)
                 The factor by which to scale the lines.
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                values will not be scaled.
+            lam_mask (array-like, bool)
+                This mask must be None, it is here for consistency with
+                the Sed method.
         """
         for line in self.lines.values():
-            self.lines[line.id] = line * scaling
+            self.lines[line.id] = line.scale(scaling, mask)
 
     def __mul__(self, scaling):
         """
@@ -1219,7 +1234,7 @@ class Line:
             continuum=att_cont,
         )
 
-    def scale(self, scaling, inplace=False):
+    def scale(self, scaling, inplace=False, mask=None):
         """
         Scale the line by a given factor.
 
@@ -1232,6 +1247,10 @@ class Line:
             inplace (bool)
                 If True the Line object will be scaled in place, otherwise a
                 new Line object will be returned.
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                spectra will not be scaled. Only applicable for
+                multidimensional lines.
         """
         # If we have units make sure they are ok and then strip them
         if isinstance(scaling, (unyt_array, unyt_quantity)):
@@ -1257,34 +1276,29 @@ class Line:
             scaling_cont = scaling
             scaling_lum = scaling
 
+        # Unpack the arrays we'll need during the scaling
+        lum = self.luminosity
+        cont = self.continuum
+
         # Handle a scalar scaling factor
-        if np.isscalar(scaling_lum) and not inplace:
-            return Line(
-                line_id=self.id,
-                wavelength=self.wavelength,
-                luminosity=scaling_lum * self.luminosity,
-                continuum=scaling_cont * self.continuum,
-            )
-        elif np.isscalar(scaling) and inplace:
-            self._luminosity *= scaling_lum
-            self._continuum *= scaling_cont
-            return self
+        if np.isscalar(scaling_lum):
+            if mask is None:
+                lum *= scaling_lum
+                cont *= scaling_cont
+            else:
+                lum[mask] *= scaling_lum
+                cont[mask] *= scaling_cont
 
         # Handle an single element array scaling factor
         elif scaling_lum.size == 1:
             scaling_lum = scaling_lum.item()
             scaling_cont = scaling_cont.item()
-            if not inplace:
-                return Line(
-                    line_id=self.id,
-                    wavelength=self.wavelength,
-                    luminosity=scaling_lum * self.luminosity,
-                    continuum=scaling_cont * self.continuum,
-                )
+            if mask is None:
+                lum *= scaling_lum
+                cont *= scaling_cont
             else:
-                self._luminosity *= scaling_lum
-                self._continuum *= scaling_cont
-                return self
+                lum[mask] *= scaling_lum
+                cont[mask] *= scaling_cont
 
         # Handle a multi-element array scaling factor as long as it matches
         # the shape of the lnu array up to the dimensions of the scaling array
@@ -1299,46 +1313,51 @@ class Line:
             new_scaling_cont = np.ones(self.shape) * np.expand_dims(
                 scaling_cont, axis=expand_axes
             )
-            if not inplace:
-                return Line(
-                    line_id=self.id,
-                    wavelength=self.wavelength,
-                    luminosity=new_scaling_lum * self.luminosity,
-                    continuum=new_scaling_cont * self.continuum,
-                )
+
+            # Now we can multiply the arrays together
+            if mask is None:
+                lum *= new_scaling_lum
+                cont *= new_scaling_cont
             else:
-                self._luminosity *= new_scaling_lum
-                self._continuum *= new_scaling_cont
-                return self
+                lum[mask] *= new_scaling_lum[mask]
+                cont[mask] *= new_scaling_cont[mask]
 
         # If the scaling array is the same shape as the lnu array then we can
         # just multiply them together
         elif (
             isinstance(scaling_lum, np.ndarray)
             and scaling_lum.shape == self.shape
-            and not inplace
         ):
-            return Line(
-                line_id=self.id,
-                wavelength=self.wavelength,
-                luminosity=scaling_lum * self.luminosity,
-                continuum=scaling_cont * self.continuum,
-            )
-        elif (
-            isinstance(scaling_lum, np.ndarray)
-            and scaling_lum.shape == self.shape
-            and inplace
-        ):
-            self._luminosity *= scaling_lum
-            self._continuum *= scaling_cont
-            return self
+            if mask is None:
+                lum *= scaling_lum
+                cont *= scaling_cont
+            else:
+                lum[mask] *= scaling_lum[mask]
+                cont[mask] *= scaling_cont[mask]
 
         # Otherwise, we've been handed a bad scaling factor
         else:
-            raise exceptions.InconsistentMultiplication(
-                f"Incompatible scaling factor {scaling} with type "
-                f"{type(scaling)}"
+            out_str = f"Incompatible scaling factor with type {type(scaling)} "
+            if hasattr(scaling, "shape"):
+                out_str += f"and shape {scaling.shape}"
+            else:
+                out_str += f"and value {scaling}"
+            raise exceptions.InconsistentMultiplication(out_str)
+
+        # If we aren't doing this inplace then return a new Line object
+        if not inplace:
+            return Line(
+                line_id=self.id,
+                wavelength=self.wavelength,
+                luminosity=lum * self.luminosity.units,
+                continuum=cont * self.continuum.units,
             )
+
+        # Otherwise, we need to update the Line inplace
+        self._luminosity = lum
+        self._continuum = cont
+
+        return self
 
     def __mul__(self, scaling):
         """
