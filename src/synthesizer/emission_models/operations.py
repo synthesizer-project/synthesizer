@@ -39,8 +39,6 @@ class Extraction:
                 The grid to extract from.
             extract (str):
                 The key for the spectra to extract.
-            lam_mask (ndarray):
-                The wavelength mask to apply to the spectra.
             vel_shift (bool):
                 Should the emission take into account the velocity shift due
                 to peculiar velocities? (Particle Only!)
@@ -126,7 +124,7 @@ class Extraction:
                     this_model.grid,
                     spectra_key,
                     mask=this_mask,
-                    vel_shift=self.vel_shift,
+                    vel_shift=this_model.vel_shift,
                     lam_mask=this_model._lam_mask,
                     verbose=verbose,
                     **kwargs,
