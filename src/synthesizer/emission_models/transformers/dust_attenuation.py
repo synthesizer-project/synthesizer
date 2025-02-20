@@ -105,7 +105,7 @@ class AttenuationLaw(Transformer):
 
         return np.exp(-exponent)
 
-    def _transform(self, emission, emitter, model, mask):
+    def _transform(self, emission, emitter, model, mask, lam_mask):
         """
         Apply the dust attenuation to the emission.
 
@@ -114,12 +114,22 @@ class AttenuationLaw(Transformer):
             emitter (Stars/Gas/BlackHole/Galaxy): The object emitting the
                 emission.
             model (EmissionModel): The emission model generating the emission.
+            mask (np.ndarray): The mask to apply to the emission.
+            lam_mask (np.ndarray): We must define this parameter in the
+                transformer method, but it is not used in this case. If not
+                None an error will be raised.
 
         Returns:
             Line/Sed: The transformed emission.
         """
         # Extract the required parameters
         params = self._extract_params(model, emission, emitter)
+
+        # Ensure we aren't trying to use a wavelength mask
+        if lam_mask is not None:
+            raise exceptions.UnimplementedFunctionality(
+                "Wavelength mask currently not supported in dust attenuation."
+            )
 
         # Apply the transmission to the emission
         return emission.apply_attenuation(

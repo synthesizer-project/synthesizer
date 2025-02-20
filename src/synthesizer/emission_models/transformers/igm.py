@@ -95,7 +95,7 @@ class IGMBase(Transformer):
 
         return fig, ax
 
-    def _transform(self, emission, emitter, model, mask=None):
+    def _transform(self, emission, emitter, model, mask=None, lam_mask=None):
         """
         Apply the IGM to either a Line or Sed object.
 
@@ -104,6 +104,9 @@ class IGMBase(Transformer):
             emitter (Stars/Gas/BlackHole/Galaxy): The object emitting the
                 emission.
             model (EmissionModel): The emission model generating the emission.
+            mask (np.ndarray): The mask to apply to the emission.
+            lam_mask (np.ndarray): The wavelength mask to apply to the
+                emission.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -128,7 +131,7 @@ class IGMBase(Transformer):
         # Apply the transmission to the emission (here we can use the
         # overloaded multiplication operator regardless of the type of
         # emission object)
-        return emission * transmission
+        return emission.scale(transmission, lam_mask=lam_mask, mask=mask)
 
 
 class Inoue14(IGMBase):
