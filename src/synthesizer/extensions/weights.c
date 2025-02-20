@@ -21,73 +21,6 @@
 #endif
 
 /**
- * @brief Compute an ndimensional index from a flat index.
- *
- * @param flat_ind: The flattened index to unravel.
- * @param ndim: The number of dimensions for the unraveled index.
- * @param dims: The size of each dimension.
- * @param indices: The output N-dimensional indices.
- */
-void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
-                           int *indices) {
-
-  /* Loop over indices calculating each one. */
-  for (int i = ndim - 1; i > -1; i--) {
-    indices[i] = flat_ind % dims[i];
-    flat_ind /= dims[i];
-  }
-}
-
-/**
- * @brief Compute a flat grid index based on the grid dimensions.
- *
- * @param multi_index: An array of N-dimensional indices.
- * @param dims: The length of each dimension.
- * @param ndim: The number of dimensions.
- */
-int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
-    index += stride * multi_index[i];
-    stride *= dims[i];
-  }
-
-  return index;
-}
-
-/**
- * @brief Performs a binary search for the index of an array corresponding to
- * a value.
- *
- * @param low: The initial low index (probably beginning of array).
- * @param high: The initial high index (probably size of array).
- * @param arr: The array to search in.
- * @param val: The value to search for.
- */
-int binary_search(int low, int high, const double *arr, const double val) {
-
-  /* While we don't have a pair of adjacent indices. */
-  int diff = high - low;
-  while (diff > 1) {
-
-    /* Define the midpoint. */
-    int mid = low + (int)floor(diff / 2);
-
-    /* Where is the midpoint relative to the value? */
-    if (val >= arr[mid]) {
-      low = mid;
-    } else {
-      high = mid;
-    }
-
-    /* Compute the new range. */
-    diff = high - low;
-  }
-
-  return high;
-}
-
-/**
  * @brief Get the grid indices of a particle based on it's properties.
  *
  * This will also calculate the fractions of the particle's mass in each grid
@@ -175,6 +108,13 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   double *fesc = parts->fesc;
   int npart = parts->npart;
 
+  /* Set the sub cell constants we'll use below. */
+  const int num_sub_cells = 1 << ndim; // 2^ndim
+  int sub_dims[ndim];
+  for (int i = 0; i < ndim; i++) {
+    sub_dims[i] = 2;
+  }
+
   /* Convert out. */
   double *out_arr = (double *)out;
 
@@ -192,17 +132,9 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
                           part_props, p);
 
-    /* To combine fractions we will need an array of dimensions for the
-     * subset. These are always two in size, one for the low and one for high
-     * grid point. */
-    int sub_dims[ndim];
-    for (int idim = 0; idim < ndim; idim++) {
-      sub_dims[idim] = 2;
-    }
-
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
-    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    for (int icell = 0; icell < num_sub_cells; icell++) {
 
       /* Set up some index arrays we'll need. */
       int subset_ind[ndim];
@@ -288,6 +220,13 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   double *fesc = parts->fesc;
   int npart = parts->npart;
 
+  /* Set the sub cell constants we'll use below. */
+  const int num_sub_cells = 1 << ndim; // 2^ndim
+  int sub_dims[ndim];
+  for (int i = 0; i < ndim; i++) {
+    sub_dims[i] = 2;
+  }
+
 #pragma omp parallel num_threads(nthreads)
   {
 
@@ -312,17 +251,9 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
       get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
                             part_props, p);
 
-      /* To combine fractions we will need an array of dimensions for the
-       * subset. These are always two in size, one for the low and one for high
-       * grid point. */
-      int sub_dims[ndim];
-      for (int idim = 0; idim < ndim; idim++) {
-        sub_dims[idim] = 2;
-      }
-
       /* Now loop over this collection of cells collecting and setting their
        * weights. */
-      for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+      for (int icell = 0; icell < num_sub_cells; icell++) {
 
         /* Set up some index arrays we'll need. */
         int subset_ind[ndim];
