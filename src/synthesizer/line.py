@@ -757,7 +757,7 @@ class LineCollection:
 
         return LineCollection(new_lines)
 
-    def scale(self, scaling, mask=None, lam_mask=None):
+    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
         """
         Scale all lines in the collection by a factor.
 
@@ -771,8 +771,20 @@ class LineCollection:
                 This mask must be None, it is here for consistency with
                 the Sed method.
         """
+        # Are we doing this inplace?
+        if inplace:
+            for line in self.lines.values():
+                line.scale(scaling, inplace=True, mask=mask)
+            return self
+
+        # Otherwise, create a dictionary to hold the scaled lines
+        new_lines = {}
+
+        # Get the scaled lines
         for line in self.lines.values():
-            self.lines[line.id] = line.scale(scaling, mask)
+            new_lines[line.id] = line.scale(scaling, inplace=False, mask=mask)
+
+        return LineCollection(new_lines)
 
     def __mul__(self, scaling):
         """
@@ -1277,8 +1289,8 @@ class Line:
             scaling_lum = scaling
 
         # Unpack the arrays we'll need during the scaling
-        lum = self.luminosity
-        cont = self.continuum
+        lum = self._luminosity
+        cont = self._continuum
 
         # Handle a scalar scaling factor
         if np.isscalar(scaling_lum):

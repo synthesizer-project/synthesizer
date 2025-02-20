@@ -48,10 +48,15 @@ class EscapeFraction(Transformer):
         # Extract the required parameters
         params = self._extract_params(model, emission, emitter)
 
-        # Ensure the mask matches the shape of the emission
-        if mask is not None and mask.shape != emission.shape:
+        # Ensure the mask is compatible with the emission
+        if (
+            mask is not None
+            and mask.shape != emission.shape[: len(mask.shape)]
+        ):
             raise exceptions.InconsistentMultiplication(
-                "Mask shape must match emission shape."
+                "Mask shape must match emission shape "
+                f"(mask.shape: {mask.shape}, "
+                f"emission.shape: {emission.shape})."
             )
 
         return emission.scale(
@@ -105,10 +110,15 @@ class EscapedFraction(Transformer):
         # Extract the required parameters
         params = self._extract_params(model, emission, emitter)
 
-        # Ensure the mask matches the shape of the emission
-        if mask is not None and mask.shape != emission.shape:
+        # Ensure the mask is compatible with the emission
+        if (
+            mask is not None
+            and mask.shape != emission.shape[: len(mask.shape)]
+        ):
             raise exceptions.InconsistentMultiplication(
-                "Mask shape must match emission shape."
+                "Mask shape must match emission shape "
+                f"(mask.shape: {mask.shape}, "
+                f"emission.shape: {emission.shape})."
             )
 
         return emission.scale(

@@ -466,7 +466,7 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiisi", &np_grid_lines, &np_grid_continuum,
+  if (!PyArg_ParseTuple(args, "OOOOOOiisi", &np_grid_lines, &np_grid_continuum,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
                         &ndim, &npart, &method, &nthreads))
     return NULL;

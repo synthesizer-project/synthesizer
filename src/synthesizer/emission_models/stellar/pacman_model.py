@@ -88,17 +88,14 @@ class PacmanEmission(StellarEmissionModel):
         - intrinsic: the intrinsic emission (when grid.reprocessed is False
             this is the same as the incident emission).
         - attenuated: the intrinsic emission attenuated by dust.
+        - escaped: the incident emission that completely escapes the ISM.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission.
 
     if grid.reprocessed is True:
         - transmitted: the stellar emission transmitted through the ISM.
         - nebular: the stellar emisison from nebulae.
         - reprocessed: the stellar emission reprocessed by the ISM.
-
-    if fesc > 0.0:
-        - escaped: the incident emission that completely escapes the ISM.
-        - emergent: the emission which emerges from the stellar population,
-            including any escaped emission.
-
 
     if dust_emission is not None:
         - dust_emission: the emission from dust.
@@ -411,8 +408,6 @@ class BimodalPacmanEmission(StellarEmissionModel):
             old population.
         - reprocessed: the stellar emission reprocessed by the ISM for the
             combined population.
-
-    if fesc > 0.0:
         - young_escaped: the incident emission that completely escapes the ISM
             for the young population.
         - old_escaped: the incident emission that completely escapes the ISM
