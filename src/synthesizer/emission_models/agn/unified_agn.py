@@ -20,86 +20,10 @@ Example usage::
 
 """
 
-import numpy as np
 from unyt import deg
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
-from synthesizer.sed import Sed
-
-
-def scale_by_incident_isotropic(emission, emitters, model):
-    """
-    Scale the emission by the incident isotropic disc model.
-
-    Args:
-        emission (dict, Sed/LineCollection): The emission to scale.
-        emitters (dict): The emitters used to generate the emission.
-        model (UnifiedAGN): The Unified AGN model.
-    """
-    # Handle lines and spectra differently
-    if isinstance(emission[list(emission.keys())[0]], Sed):
-        # Scale the spectra
-        for key, spectra in emission.items():
-            # Get the model
-            this_model = model[key]
-
-            # Skip the emitter if it's not a black hole
-            if this_model.emitter not in "blackhole":
-                continue
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Get the scaling
-            scaling = emitter._bolometric_luminosity
-
-            # Scale the spectra
-            if spectra.ndim == 1 and scaling.ndim == 0:
-                spectra._lnu = scaling * spectra._lnu
-            elif spectra.ndim == 1 and scaling.ndim == 1:
-                # If we have integrated spectra and per particle scaling
-                # we need to sum the bolometric luminosity
-                scaling = np.sum(scaling)
-                spectra._lnu = scaling * spectra._lnu
-            else:
-                # Otherwise we have multidimensional spectra and need to
-                # broadcast the scaling
-                spectra._lnu = spectra._lnu * np.expand_dims(scaling, axis=-1)
-
-    else:
-        disc_bolometric_luminosity = (
-            emitters["blackhole"]
-            .spectra["disc_incident_isotropic"]
-            ._bolometric_luminosity
-        )
-        blackhole_bolometric_luminosity = emitters[
-            "blackhole"
-        ]._bolometric_luminosity
-        scaling = blackhole_bolometric_luminosity / disc_bolometric_luminosity
-
-        # Loop over the different emissions
-        for key, line_collection in emission.items():
-            # Get the model
-            this_model = model[key]
-
-            # Skip the emitter if it's not a black hole
-            if this_model.emitter not in "blackhole":
-                continue
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Get the scaling
-            scaling = emitter._bolometric_luminosity
-
-            # Loop over the lines
-            for line in line_collection:
-                # Scale the line
-                line._luminosity *= scaling
-                line._continuum *= scaling
-
-    return emission
 
 
 class UnifiedAGN(BlackHoleEmissionModel):
