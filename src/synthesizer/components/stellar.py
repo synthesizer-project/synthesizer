@@ -75,7 +75,9 @@ class StarsComponent(Component):
         self._star_type = _star_type
 
         # Attach the Lyman Alpha escape fraction
-        self.fesc_ly_alpha = fesc_ly_alpha if fesc_ly_alpha else 1.0
+        self.fesc_ly_alpha = (
+            fesc_ly_alpha if fesc_ly_alpha is not None else 1.0
+        )
 
     @property
     def log10ages(self):

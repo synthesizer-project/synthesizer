@@ -128,7 +128,7 @@ class EscapedFraction(Transformer):
 
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
-        Transformer.__init__(self, required_params=("fesc",))
+        Transformer.__init__(self, required_params=fesc_attrs)
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """
