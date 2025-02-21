@@ -12,10 +12,10 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, rad, s
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import deprecation
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.warnings import deprecation
 
 
 class Particles:
