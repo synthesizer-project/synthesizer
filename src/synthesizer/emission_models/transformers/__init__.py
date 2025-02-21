@@ -8,14 +8,18 @@ from synthesizer.emission_models.transformers.dust_attenuation import (
     PowerLaw,
 )
 from synthesizer.emission_models.transformers.escape_fraction import (
+    CoveringFraction,
     EscapedFraction,
     EscapeFraction,
+    EscapingFraction,
 )
 from synthesizer.emission_models.transformers.igm import Inoue14, Madau96
 
 __all__ = [
     "EscapeFraction",
     "EscapedFraction",
+    "CoveringFraction",
+    "EscapingFraction",
     "Madau96",
     "Inoue14",
 ]
