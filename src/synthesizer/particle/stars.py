@@ -2246,6 +2246,7 @@ class Stars(Particles, StarsComponent):
 
         return compute_grid_weights(
             grid,
+            None,
             self,
             mask,
             "initial_masses",
