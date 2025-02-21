@@ -739,21 +739,22 @@ class Stars(Particles, StarsComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
-        arg_start = tic()
         # Make a dummy mask if none has been passed
         if mask is None:
-            mask_start = tic()
             mask = np.ones(self.nparticles, dtype=bool)
-            toc("Creating mask", mask_start)
+
+        # If lam_mask is None then we want all wavelengths
+        if lam_mask is None:
+            lam_mask = np.ones(
+                grid.spectra[spectra_type].shape[-1],
+                dtype=bool,
+            )
 
         # Set up the inputs to the C function.
-        grid_start = tic()
         grid_props = [
             np.ascontiguousarray(grid.log10ages, dtype=np.float64),
             np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
-        toc("Preparing grid properties", grid_start)
-        part_start = tic()
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
             np.ascontiguousarray(
@@ -782,49 +783,36 @@ class Stars(Particles, StarsComponent):
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
 
-        toc("Preparing particle properties", part_start)
-
         # Make sure we get the wavelength index of the grid array
-        nlam = (
-            np.int32(np.sum(lam_mask))
-            if lam_mask is not None
-            else grid.spectra[spectra_type].shape[-1]
-        )
+        nlam = np.int32(np.sum(lam_mask))
 
         # Slice the spectral grids and pad them with copies of the edges.
-        spec_start = tic()
-        grid_spectra = grid.spectra[spectra_type]
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type],
+            np.float64,
+        )
 
         # Apply the wavelength mask
-        if lam_mask is not None:
-            grid_spectra = np.ascontiguousarray(
-                grid_spectra[..., lam_mask],
-                np.float64,
-            )
-        toc("Preparing grid spectra", spec_start)
+        grid_spectra = np.ascontiguousarray(
+            grid_spectra[..., lam_mask],
+            np.float64,
+        )
 
         # Get the grid wavelength arrays (and needed for velocity shifts)
-        if lam_mask is not None:
-            grid_lam = np.ascontiguousarray(
-                grid._lam[lam_mask],
-                np.float32,
-            )
-        else:
-            grid_lam = grid._lam
+        grid_lam = np.ascontiguousarray(
+            grid._lam[lam_mask],
+            np.float64,
+        )
 
         # Get the grid dimensions after slicing what we need
-        dim_start = tic()
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
         grid_dims[ind + 1] = nlam
-        toc("Preparing grid dimensions", dim_start)
 
         # If fesc isn't an array make it one
         if not isinstance(fesc, np.ndarray):
-            fesc_start = tic()
             fesc = np.ascontiguousarray(np.full(npart, fesc))
-            toc("Preparing fesc", fesc_start)
 
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
@@ -832,11 +820,7 @@ class Stars(Particles, StarsComponent):
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
-            thread_start = tic()
             nthreads = os.cpu_count()
-            toc("Setting nthreads", thread_start)
-
-        toc("Preparing SED arguments", arg_start)
 
         return (
             grid_spectra,
@@ -901,24 +885,19 @@ class Stars(Particles, StarsComponent):
         """
         # Get the grid weights (if these were calculate before we can
         # reuse them but if we have a mask then we can't)
-        if grid.grid_name in self._weights_grids and mask is None:
-            grid_weights = self._weights_grids[grid.grid_name]
+        if grid.grid_name in self._grid_weights and mask is None:
+            grid_weights = self._grid_weights[grid.grid_name]
         else:
             grid_weights = self._get_grid_weights(
                 grid,
                 grid_assignment_method,
-                mask,
                 nthreads,
             )
 
             # Store the weights for reuse (only applicable if we don't
             # have a mask)
             if mask is None:
-                self._weights_grids[grid.grid_name] = grid_weights
-
-        # Make a dummy mask if none has been passed
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
+                self._grid_weights[grid.grid_name] = grid_weights
 
         # If lam_mask is None then we want all wavelengths
         if lam_mask is None:
@@ -1019,7 +998,7 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Use the correct function based on the arguments
-        if integrated:
+        if integrated and not vel_shift:
             return self._prepare_integrated_sed_args(
                 grid,
                 fesc,
@@ -1190,23 +1169,6 @@ class Stars(Particles, StarsComponent):
                     f" have metallicities > {grid.metallicity[-1]}"
                 )
 
-        # Get particle age masks
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
-
-        age_mask = self._get_masks(young, old)
-
-        # Ensure and warn that the masking hasn't removed everything
-        if np.sum(mask) == 0:
-            warn("`mask` has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        if np.sum(age_mask) == 0:
-            warn("Age mask has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        mask = mask & age_mask
-
         if aperture is not None:
             # Get aperture mask
             aperture_mask = self._aperture_mask(aperture_radius=aperture)
@@ -1217,14 +1179,19 @@ class Stars(Particles, StarsComponent):
 
                 return np.zeros(len(grid.lam))
         else:
-            aperture_mask = np.ones(self.nparticles, dtype=bool)
+            aperture_mask = None
+
+        if mask is not None and aperture_mask is not None:
+            mask = mask & aperture_mask
+        elif mask is None and aperture_mask is not None:
+            mask = aperture_mask
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
-            mask=mask & aperture_mask,
+            mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
             vel_shift=vel_shift,
@@ -1833,6 +1800,7 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
             vel_shift=vel_shift,
             lam_mask=lam_mask,
+            integrated=False,
         )
         toc("Preparing C args", start)
 
