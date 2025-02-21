@@ -140,7 +140,7 @@ class Stars(Particles, StarsComponent):
         centre=None,
         metallicity_floor=1e-5,
         fesc=None,
-        fesc_lyman_alpha=None,
+        fesc_ly_alpha=None,
         **kwargs,
     ):
         """
@@ -210,7 +210,7 @@ class Stars(Particles, StarsComponent):
             metallicities,
             _star_type="particle",
             fesc=fesc,
-            fesc_lyman_alpha=fesc_lyman_alpha,
+            fesc_ly_alpha=fesc_ly_alpha,
             **kwargs,
         )
 
