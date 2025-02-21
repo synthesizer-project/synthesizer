@@ -2244,6 +2244,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_spectra=None,
         _is_related=False,
         nthreads=1,
+        grid_assignment_method="cic",
         **fixed_parameters,
     ):
         """
@@ -2327,6 +2328,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 this will be done outside the recursive call.
             nthreads (int)
                 The number of threads to use when generating the spectra.
+            grid_assignment_method (str)
+                The method to use when assigning particles to the grid. Options
+                are "cic" (cloud in cell) or "ngp" (nearest grid point).
             fixed_parameters (dict)
                 A dictionary of fixed parameters to apply to the model. Each
                 of these will be applied to the model before generating the
@@ -2342,9 +2346,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
         # only their reference)
-        copy_start = tic()
         emission_model = copy.copy(self)
-        toc("Copying emission model", copy_start)
 
         # Before we do anything, check that we have the emitters we need
         for model in emission_model._models.values():
@@ -2394,6 +2396,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             particle_spectra,
             verbose=verbose,
             nthreads=nthreads,
+            grid_assignment_method=grid_assignment_method,
         )
         toc("Extracting spectra (Operation)", extract_start)
 
