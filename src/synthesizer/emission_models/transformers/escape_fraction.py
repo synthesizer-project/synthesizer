@@ -68,7 +68,7 @@ class EscapeFraction(Transformer):
             )
 
         # Combine the escape fractions
-        fesc = sum([params[attr] for attr in self.required_params])
+        fesc = sum([params[attr] for attr in self._required_params])
 
         return emission.scale(
             1 - fesc,
@@ -141,7 +141,7 @@ class EscapedFraction(Transformer):
             )
 
         # Combine the escape fractions
-        fesc = sum([params[attr] for attr in self.required_params])
+        fesc = sum([params[attr] for attr in self._required_params])
 
         return emission.scale(
             fesc,

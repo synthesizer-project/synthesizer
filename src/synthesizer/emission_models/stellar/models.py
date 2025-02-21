@@ -83,7 +83,7 @@ class NebularLineEmission(StellarEmissionModel):
         self,
         grid,
         label="nebular_line",
-        fesc_ly_alpha="fesc_lyman_alpha",
+        fesc_ly_alpha="fesc_ly_alpha",
         **kwargs,
     ):
         """
@@ -118,11 +118,11 @@ class NebularLineEmission(StellarEmissionModel):
             **kwargs,
         )
 
-        # We can't define fesc and fesc_lyman_alpha in the same model if
+        # We can't define fesc and fesc_ly_alpha in the same model if
         # the user tried tell them they can't
         if "fesc" in kwargs:
             raise exceptions.InconsistentArguments(
-                "Cannot define fesc and fesc_lyman_alpha in the same model. "
+                "Cannot define fesc and fesc_ly_alpha in the same model. "
                 "Please use another Transformation on NebularLineEmission "
                 "to apply your fesc."
             )
@@ -132,8 +132,8 @@ class NebularLineEmission(StellarEmissionModel):
             self,
             label=label,
             apply_to=lyman_alpha_no_fesc,
-            transformer=EscapedFraction(),
-            fesc=fesc_ly_alpha,
+            transformer=EscapedFraction(fesc_attrs=("fesc_ly_alpha",)),
+            fesc_ly_alpha=fesc_ly_alpha,
             lam_mask=lyman_alpha_mask,
             **kwargs,
         )
@@ -257,7 +257,7 @@ class NebularEmission(StellarEmissionModel):
         self,
         grid,
         label="nebular",
-        fesc_ly_alpha="fesc_lyman_alpha",
+        fesc_ly_alpha="fesc_ly_alpha",
         nebular_line=None,
         nebular_continuum=None,
         **kwargs,
@@ -321,7 +321,7 @@ class ReprocessedEmission(StellarEmissionModel):
         grid,
         label="reprocessed",
         fesc="fesc",
-        fesc_ly_alpha="fesc_lyman_alpha",
+        fesc_ly_alpha="fesc_ly_alpha",
         nebular=None,
         transmitted=None,
         **kwargs,
@@ -381,7 +381,7 @@ class IntrinsicEmission(StellarEmissionModel):
         self,
         grid,
         label="intrinsic",
-        fesc_ly_alpha="fesc_lyman_alpha",
+        fesc_ly_alpha="fesc_ly_alpha",
         reprocessed=None,
         **kwargs,
     ):
@@ -436,7 +436,7 @@ class EmergentEmission(StellarEmissionModel):
         dust_curve=None,
         apply_to=None,
         fesc="fesc",
-        fesc_ly_alpha="fesc_lyman_alpha",
+        fesc_ly_alpha="fesc_ly_alpha",
         label="emergent",
         attenuated=None,
         escaped=None,
@@ -515,7 +515,7 @@ class TotalEmission(StellarEmissionModel):
         dust_emission_model=None,
         label="total",
         fesc="fesc",
-        fesc_ly_alpha="fesc_lyman_alpha",
+        fesc_ly_alpha="fesc_ly_alpha",
         **kwargs,
     ):
         """
