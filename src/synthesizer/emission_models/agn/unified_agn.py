@@ -22,11 +22,10 @@ Example usage::
 
 from unyt import deg
 
-from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.emission_models.transformers import (
-    EscapedFraction,
-    EscapeFraction,
+    CoveringFraction,
+    EscapingFraction,
 )
 
 
@@ -86,12 +85,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
-        # Ensure the sum of covering fractions is less than 1
-        if covering_fraction_nlr + covering_fraction_blr > 1:
-            raise exceptions.InconsistentArguments(
-                "The sum of the covering fractions must be less than 1."
-            )
-
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,
@@ -178,7 +171,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         disc_escaped = BlackHoleEmissionModel(
             label="disc_escaped",
-            transformer=EscapeFraction(),
+            transformer=EscapingFraction(
+                covering_attrs=(
+                    "covering_fraction_nlr",
+                    "covering_fraction_blr",
+                )
+            ),
             apply_to=model,
             fesc=covered_fraction,
             **kwargs,
@@ -208,7 +206,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
         nlr = BlackHoleEmissionModel(
             label="disc_transmitted_nlr",
             apply_to=full_nlr,
-            transformer=EscapedFraction(),
+            transformer=CoveringFraction(
+                covering_attr=("covering_fraction_nlr")
+            ),
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
@@ -227,7 +227,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
         blr = BlackHoleEmissionModel(
             label="disc_transmitted_blr",
             apply_to=full_blr,
-            transformer=EscapedFraction(),
+            transformer=CoveringFraction(
+                covering_attr=("covering_fraction_blr")
+            ),
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
@@ -284,14 +286,18 @@ class UnifiedAGN(BlackHoleEmissionModel):
         nlr = BlackHoleEmissionModel(
             label="nlr",
             apply_to=full_nlr,
-            transformer=EscapedFraction(),
+            transformer=CoveringFraction(
+                covering_attr=("covering_fraction_nlr")
+            ),
             fesc=covering_fraction_nlr,
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
             label="blr",
             apply_to=full_blr,
-            transformer=EscapedFraction(),
+            transformer=CoveringFraction(
+                covering_attr=("covering_fraction_blr")
+            ),
             fesc=covering_fraction_blr,
             **kwargs,
         )
