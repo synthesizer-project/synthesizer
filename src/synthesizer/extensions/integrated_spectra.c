@@ -16,7 +16,6 @@
 
 /* Local includes */
 #include "macros.h"
-#include "property_funcs.h"
 #include "timers.h"
 #include "weights.h"
 
@@ -201,13 +200,13 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyArrayObject *np_grid_spectra;
+  PyArrayObject *np_grid_spectra, *np_grid_weights;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisi", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads))
+  if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &np_grid_weights,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
+                        &ndim, &npart, &nlam, &method, &nthreads))
     return NULL;
 
   /* Extract the grid struct. */
