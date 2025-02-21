@@ -82,43 +82,38 @@ static double *get_spectra_serial(struct grid *grid_props,
 static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
                                int nthreads) {
 
-  /* Set up array to hold the SED itself. */
-  double *spectra = calloc(grid_props->nlam, sizeof(double));
-  if (spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
-    return NULL;
-  }
-
-  /* Allocate a continuous chunk of data for each thread to use. */
-  double *out_data = calloc(nthreads * grid_props->nlam, sizeof(double));
-  if (out_data == NULL) {
+  double *spectra = NULL;
+  int err =
+      posix_memalign((void **)&spectra, 64, grid_props->nlam * sizeof(double));
+  if (err != 0 || spectra == NULL) {
     PyErr_SetString(PyExc_ValueError,
-                    "Failed to allocate memory for thread spectra.");
+                    "Failed to allocate aligned memory for spectra.");
     return NULL;
   }
-
-  /* Allocate thread spectra. */
-  double **thread_spectra = malloc(nthreads * sizeof(double *));
-  if (thread_spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Failed to allocate memory for thread spectra.");
-    return NULL;
-  }
-  for (int t = 0; t < nthreads; t++) {
-    thread_spectra[t] = out_data + t * grid_props->nlam;
-  }
+  bzero(spectra, grid_props->nlam * sizeof(double));
 
 #pragma omp parallel num_threads(nthreads)
   {
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Get a local pointer to this threads spectra. */
-    double *local_spectra = thread_spectra[tid];
+    /* We will give each thread a chunk of the spectra to work on. */
 
-#pragma omp for
+    /* How many wavelength elements should each thread get? */
+    int nlam_per_thread = (grid_props->nlam + nthreads - 1) / nthreads;
+
+    /* Calculate the start and end indices for this thread. */
+    int start = tid * nlam_per_thread;
+    int end = start + nlam_per_thread;
+    if (end >= grid_props->nlam) {
+      end = grid_props->nlam;
+    }
+
     /* Loop over wavelengths. */
-    for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
+    for (int ilam = 0; ilam < end - start; ilam++) {
+
+      /* Temporary value to hold the the spectra for this wavelength. */
+      double this_element = 0.0;
 
       /* Loop over grid cells. */
       for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
@@ -140,29 +135,13 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
 
         /* Add the contribution to this wavelength. */
         /* fesc is already included in the weight */
-        local_spectra[ilam] += grid_props->spectra[spectra_ind + ilam] * weight;
+        this_element +=
+            grid_props->spectra[spectra_ind + start + ilam] * weight;
       }
+
+      spectra[start + ilam] = this_element;
     }
   }
-
-  /* Hierarchical reduction */
-  for (int step = 1; step < nthreads; step *= 2) {
-    for (int tid = 0; tid < nthreads; tid += 2 * step) {
-      if (tid + step < nthreads) {
-#pragma omp parallel for num_threads(nthreads)
-        for (int i = 0; i < grid_props->nlam; i++) {
-          thread_spectra[tid][i] += thread_spectra[tid + step][i];
-        }
-      }
-    }
-  }
-
-  /* Copy the final reduced result to spectra */
-  memcpy(spectra, thread_spectra[0], grid_props->nlam * sizeof(double));
-
-  /* Clean up. */
-  free(out_data);
-  free(thread_spectra);
 
   return spectra;
 }

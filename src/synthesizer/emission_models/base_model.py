@@ -54,6 +54,7 @@ from synthesizer.emission_models.operations import (
     Generation,
     Transformation,
 )
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import LineCollection
 from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import deprecation, warn
@@ -2219,6 +2220,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_spectra=None,
         _is_related=False,
         nthreads=1,
+        grid_assignment_method="cic",
         **fixed_parameters,
     ):
         """
@@ -2302,6 +2304,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 this will be done outside the recursive call.
             nthreads (int)
                 The number of threads to use when generating the spectra.
+            grid_assignment_method (str)
+                The method to use when assigning particles to the grid. Options
+                are "cic" (cloud in cell) or "ngp" (nearest grid point).
             fixed_parameters (dict)
                 A dictionary of fixed parameters to apply to the model. Each
                 of these will be applied to the model before generating the
@@ -2330,6 +2335,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Apply any overides we have
+        start_overrides = tic()
         self._apply_overrides(
             emission_model,
             dust_curves,
@@ -2339,6 +2345,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             mask,
             vel_shift,
         )
+        toc("Applying model overrides", start_overrides)
 
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
@@ -2356,6 +2363,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
         # Perform all extractions
+        extract_start = tic()
         spectra, particle_spectra = self._extract_spectra(
             emission_model,
             emitters,
@@ -2363,7 +2371,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             particle_spectra,
             verbose=verbose,
             nthreads=nthreads,
+            grid_assignment_method=grid_assignment_method,
         )
+        toc("Extracting spectra (Operation)", extract_start)
 
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
