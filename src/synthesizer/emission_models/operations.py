@@ -66,7 +66,8 @@ class Extraction:
         spectra,
         particle_spectra,
         verbose,
-        **kwargs,
+        nthreads,
+        grid_assignment_method,
     ):
         """
         Extract spectra from the grid.
@@ -82,9 +83,12 @@ class Extraction:
                 The dictionary to store the extracted particle spectra in.
             verbose (bool):
                 Are we talking?
-            kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
+            nthreads (int):
+                The number of threads to use when generating spectra.
+            grid_assignment_method (str):
+                The method to use when assigning particles to the grid.
+                Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
+                grid point).
 
         Returns:
             dict:
@@ -134,7 +138,8 @@ class Extraction:
                     vel_shift=self.vel_shift,
                     lam_mask=this_model._lam_mask,
                     verbose=verbose,
-                    **kwargs,
+                    nthreads=nthreads,
+                    grid_assignment_method=grid_assignment_method,
                 )
                 * erg
                 / s
