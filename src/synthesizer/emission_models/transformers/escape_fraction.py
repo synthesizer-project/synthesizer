@@ -70,6 +70,12 @@ class EscapeFraction(Transformer):
         # Combine the escape fractions
         fesc = sum([params[attr] for attr in self._required_params])
 
+        # Ensure the escape fraction is between 0 and 1
+        if not 0 <= fesc <= 1:
+            raise exceptions.InvalidEscapeFraction(
+                f"Escape fraction must be between 0 and 1 (got {fesc})."
+            )
+
         return emission.scale(
             1 - fesc,
             mask=mask,
@@ -143,6 +149,12 @@ class EscapedFraction(Transformer):
         # Combine the escape fractions
         fesc = sum([params[attr] for attr in self._required_params])
 
+        # Ensure the escape fraction is between 0 and 1
+        if not 0 <= fesc <= 1:
+            raise exceptions.InvalidEscapeFraction(
+                f"Escape fraction must be between 0 and 1 (got {fesc})."
+            )
+
         return emission.scale(
             fesc,
             mask=mask,
@@ -150,12 +162,7 @@ class EscapedFraction(Transformer):
         )
 
 
-# Define aliases for the AGN covering fraction transformers. These are just
-# the same as the escape fraction transformers but with the default attributes
-# set to the covering fraction attributes.
-
-
-class CoveringFraction(EscapedFraction):
+class CoveringFraction(Transformer):
     """
     A transformer that applies a covering fraction to an emission.
 
@@ -187,10 +194,58 @@ class CoveringFraction(EscapedFraction):
         """
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
-        EscapeFraction.__init__(self, fesc_attrs=covering_attrs)
+        Transformer.__init__(self, required_params=covering_attrs)
+
+    def _transform(self, emission, emitter, model, mask, lam_mask):
+        """
+        Apply the escape fraction to the emission.
+
+        Args:
+            emission (Line/Sed):
+                The emission to transform.
+            emitter (Stars/Gas/BlackHole/Galaxy):
+                The object emitting the emission.
+            model (EmissionModel):
+                The emission model generating the emission.
+            mask (np.ndarray):
+                The mask to apply to the emission.
+            lam_mask (np.ndarray):
+                The wavelength mask to apply to the emission.
+
+        Returns:
+            Line/Sed: The transformed emission.
+        """
+        # Extract the required parameters
+        params = self._extract_params(model, emission, emitter)
+
+        # Ensure the mask is compatible with the emission
+        if (
+            mask is not None
+            and mask.shape != emission.shape[: len(mask.shape)]
+        ):
+            raise exceptions.InconsistentMultiplication(
+                "Mask shape must match emission shape "
+                f"(mask.shape: {mask.shape}, "
+                f"emission.shape: {emission.shape})."
+            )
+
+        # Combine the escape fractions
+        fcov = sum([params[attr] for attr in self._required_params])
+
+        # Ensure the escape fraction is between 0 and 1
+        if not 0 <= fcov <= 1:
+            raise exceptions.InvalidEscapeFraction(
+                f"Covering fraction must be between 0 and 1 (got {fcov})."
+            )
+
+        return emission.scale(
+            fcov,
+            mask=mask,
+            lam_mask=lam_mask,
+        )
 
 
-class EscapingFraction(EscapeFraction):
+class EscapingFraction(Transformer):
     """
     A transformer that applies a covering fraction to an emission.
 
@@ -222,4 +277,52 @@ class EscapingFraction(EscapeFraction):
         """
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
-        EscapeFraction.__init__(self, fesc_attrs=covering_attrs)
+        Transformer.__init__(self, required_params=covering_attrs)
+
+    def _transform(self, emission, emitter, model, mask, lam_mask):
+        """
+        Apply the escape fraction to the emission.
+
+        Args:
+            emission (Line/Sed):
+                The emission to transform.
+            emitter (Stars/Gas/BlackHole/Galaxy):
+                The object emitting the emission.
+            model (EmissionModel):
+                The emission model generating the emission.
+            mask (np.ndarray):
+                The mask to apply to the emission.
+            lam_mask (np.ndarray):
+                The wavelength mask to apply to the emission.
+
+        Returns:
+            Line/Sed: The transformed emission.
+        """
+        # Extract the required parameters
+        params = self._extract_params(model, emission, emitter)
+
+        # Ensure the mask is compatible with the emission
+        if (
+            mask is not None
+            and mask.shape != emission.shape[: len(mask.shape)]
+        ):
+            raise exceptions.InconsistentMultiplication(
+                "Mask shape must match emission shape "
+                f"(mask.shape: {mask.shape}, "
+                f"emission.shape: {emission.shape})."
+            )
+
+        # Combine the escape fractions
+        fcov = sum([params[attr] for attr in self._required_params])
+
+        # Ensure the escape fraction is between 0 and 1
+        if not 0 <= fcov <= 1:
+            raise exceptions.InvalidEscapeFraction(
+                f"Covering fraction must be between 0 and 1 (got {fcov})."
+            )
+
+        return emission.scale(
+            1 - fcov,
+            mask=mask,
+            lam_mask=lam_mask,
+        )
