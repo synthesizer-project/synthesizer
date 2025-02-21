@@ -568,7 +568,7 @@ static inline int *get_numpy_attr_int(PyObject *obj, const char *attr) {
  *
  * This function borrows pointers to the underlying NumPy array data.
  * It assumes:
- *  - The "parts" object has attributes "nparticles", "masses", "fesc",
+ *  - The "parts" object has attributes "nparticles", "masses",
  * "velocities", and a weight attribute specified by weight_var. Each attribute
  * must be a NumPy array of doubles.
  *  - The "grid" object has an attribute "axes" which is a list of strings.
@@ -585,7 +585,8 @@ static inline int *get_numpy_attr_int(PyObject *obj, const char *attr) {
  * error.
  */
 struct particles *get_part_struct_from_obj(PyObject *parts, PyObject *grid,
-                                           const char *weight_var) {
+                                           const char *weight_var,
+                                           PyObject *model) {
 
   /* Allocate the particles struct. */
   struct particles *particles = calloc(1, sizeof(struct particles));
@@ -604,23 +605,11 @@ struct particles *get_part_struct_from_obj(PyObject *parts, PyObject *grid,
   particles->npart = npart;
   Py_DECREF(nparticles_obj);
 
-  /* Borrow pointers for masses, weight, fesc, and velocities using the inline
+  /* Borrow pointers for masses, weight, and velocities using the inline
    * function. */
   particles->mass = get_numpy_attr_double(parts, "masses");
   particles->weight = get_numpy_attr_double(parts, weight_var);
-  particles->fesc = get_numpy_attr_double(parts, "fesc");
   particles->velocities = get_numpy_attr_double(parts, "velocities");
-
-  /* Some attributes are special cases where they could also be singular
-   * floats rather than arrays. */
-  if (particles->fesc == NULL) {
-    double fesc = PyFloat_AsDouble(PyObject_GetAttrString(parts, "fesc"));
-    if (PyErr_Occurred())
-      goto error;
-    particles->_fesc = fesc;
-  } else {
-    particles->_fesc = 0.0;
-  }
 
   /* Did an error occur? */
   if (PyErr_Occurred())
