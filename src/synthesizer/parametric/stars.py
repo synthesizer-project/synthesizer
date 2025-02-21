@@ -98,6 +98,7 @@ class Stars(StarsComponent):
         sf_hist=None,
         metal_dist=None,
         fesc=None,
+        fesc_ly_alpha=None,
         **kwargs,
     ):
         """
@@ -153,6 +154,7 @@ class Stars(StarsComponent):
             metallicities,
             _star_type="parametric",
             fesc=fesc,
+            fesc_ly_alpha=fesc_ly_alpha,
             **kwargs,
         )
 
@@ -501,7 +503,6 @@ class Stars(StarsComponent):
         young=None,
         mask=None,
         lam_mask=None,
-        fesc=0.0,
         **kwargs,
     ):
         """
@@ -532,9 +533,6 @@ class Stars(StarsComponent):
             lam_mask (array, bool)
                 A mask to apply to the wavelength array of the grid. This
                 allows for the extraction of specific wavelength ranges.
-            fesc (float)
-                The Lyman continuum escape fraction, the fraction of
-                ionising photons that entirely escape.
 
         Returns:
             The Stars's integrated rest frame spectra in erg / s / Hz.
@@ -553,9 +551,6 @@ class Stars(StarsComponent):
             elif young is not None:
                 mask = self.get_mask("log10ages", young, "<=", mask=mask)
 
-        if fesc is None:
-            fesc = 0.0
-
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
@@ -566,7 +561,7 @@ class Stars(StarsComponent):
             grid_spectra = grid.spectra[spectra_name]
 
         # Compute the spectra
-        spectra = (1 - fesc) * np.sum(
+        spectra = np.sum(
             grid_spectra[mask] * sfzh[mask],
             axis=0,
         )
@@ -579,7 +574,13 @@ class Stars(StarsComponent):
 
         return spectra
 
-    def generate_line(self, grid, line_id, line_type, fesc, **kwargs):
+    def generate_line(
+        self,
+        grid,
+        line_id,
+        line_type,
+        **kwargs,
+    ):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
@@ -595,9 +596,6 @@ class Stars(StarsComponent):
                 comma (e.g. 'OIII4363,OIII4959').
             line_type (str):
                 The type of line to extract. This must match a key in the Grid.
-            fesc (float):
-                The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped.
 
         Returns:
             Line
@@ -622,12 +620,12 @@ class Stars(StarsComponent):
             lam = grid.line_lams[line_id_] * angstrom
 
             # Line luminosity erg/s
-            lum = (1 - fesc) * np.sum(
+            lum = np.sum(
                 grid.line_lums[line_type][line_id_] * self.sfzh, axis=(0, 1)
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            cont = (1 - fesc) * np.sum(
+            cont = np.sum(
                 grid.line_conts[line_type][line_id_] * self.sfzh, axis=(0, 1)
             )
 

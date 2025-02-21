@@ -203,7 +203,6 @@ class BlackHole(BlackholesComponent):
     def _prepare_sed_args(
         self,
         grid,
-        fesc,
         spectra_type,
         grid_assignment_method,
         nthreads,
@@ -216,8 +215,6 @@ class BlackHole(BlackholesComponent):
         Args:
             grid (Grid)
                 The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
@@ -343,7 +340,6 @@ class BlackHole(BlackholesComponent):
             grid_props,
             props,
             bol_lum,
-            np.array([fesc]),
             grid_dims,
             len(grid_props),
             np.int32(1),
