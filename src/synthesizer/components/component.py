@@ -254,6 +254,8 @@ class Component(ABC):
         mask=None,
         vel_shift=None,
         verbose=True,
+        nthreads=1,
+        grid_assignment_method="cic",
         **kwargs,
     ):
         """
@@ -299,6 +301,12 @@ class Component(ABC):
                 Flags whether to apply doppler shift to the spectra.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the tree search. If -1, all
+                available threads will be used.
+            grid_assignment_method (str)
+                The method to use for assigning particles to the grid. Options
+                are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -320,6 +328,8 @@ class Component(ABC):
             mask=mask,
             vel_shift=vel_shift,
             verbose=verbose,
+            nthreads=nthreads,
+            grid_assignment_method=grid_assignment_method,
             **kwargs,
         )
 
