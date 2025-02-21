@@ -104,7 +104,7 @@ class PipelineIO:
         if self.is_collective:
             self.is_collective = False
             warn(
-                "Collective I/O is not currently locks up. "
+                "Collective I/O currently locks up. "
                 "Writing a file per rank instead. "
                 "Feel free to contribute a fix!"
             )
