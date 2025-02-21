@@ -129,7 +129,7 @@ class NLRTransmittedEmission(BlackHoleEmissionModel):
             apply_to=full_nlr_transmitted,
             fesc=covering_fraction,
             transformer=CoveringFraction(
-                covering_attrs=("covering_fraction_nlr")
+                covering_attrs=("covering_fraction_nlr",)
             ),
             **kwargs,
         )
@@ -181,7 +181,7 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
             apply_to=full_blr_transmitted,
             fesc=covering_fraction,
             transformer=CoveringFraction(
-                covering_attrs=("covering_fraction_blr")
+                covering_attrs=("covering_fraction_blr",)
             )
             ** kwargs,
         )

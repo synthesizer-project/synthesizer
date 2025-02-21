@@ -2,6 +2,7 @@
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
+from synthesizer.warnings import warn
 
 
 class EscapeFraction(Transformer):
@@ -30,6 +31,14 @@ class EscapeFraction(Transformer):
                 fraction. If multiple are passed these will be added
                 toegether. Default is ("fesc",).
         """
+        # Ensure we have been given a list of escape attributes
+        if not isinstance(fesc_attrs, (list, tuple)):
+            fesc_attrs = (fesc_attrs,)
+            warn(
+                "The escape attributes must be a list or tuple. Wrapping "
+                "the given value in a tuple."
+            )
+
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
         Transformer.__init__(self, required_params=fesc_attrs)
@@ -109,6 +118,14 @@ class EscapedFraction(Transformer):
                 fraction. If multiple are passed these will be added
                 together. Default is ("fesc",).
         """
+        # Ensure we have been given a list of escape attributes
+        if not isinstance(fesc_attrs, (list, tuple)):
+            fesc_attrs = (fesc_attrs,)
+            warn(
+                "The escape attributes must be a list or tuple. Wrapping "
+                "the given value in a tuple."
+            )
+
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
         Transformer.__init__(self, required_params=("fesc",))
@@ -192,6 +209,14 @@ class CoveringFraction(Transformer):
                 fraction. If multiple are passed these will be added
                 together. We pass no default here since there is ambiguity.
         """
+        # Ensure we have been given a list of covering attributes
+        if not isinstance(covering_attrs, (list, tuple)):
+            covering_attrs = (covering_attrs,)
+            warn(
+                "The covering attributes must be a list or tuple. Wrapping "
+                "the given value in a tuple."
+            )
+
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
         Transformer.__init__(self, required_params=covering_attrs)
@@ -275,6 +300,14 @@ class EscapingFraction(Transformer):
                 fraction. If multiple are passed these will be added
                 together. We pass no default here since there is ambiguity.
         """
+        # Ensure we have been given a list of covering attributes
+        if not isinstance(covering_attrs, (list, tuple)):
+            covering_attrs = (covering_attrs,)
+            warn(
+                "The covering attributes must be a list or tuple. Wrapping "
+                "the given value in a tuple."
+            )
+
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
         Transformer.__init__(self, required_params=covering_attrs)
