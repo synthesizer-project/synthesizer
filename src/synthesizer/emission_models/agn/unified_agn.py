@@ -20,86 +20,13 @@ Example usage::
 
 """
 
-import numpy as np
 from unyt import deg
 
-from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
-from synthesizer.sed import Sed
-
-
-def scale_by_incident_isotropic(emission, emitters, model):
-    """
-    Scale the emission by the incident isotropic disc model.
-
-    Args:
-        emission (dict, Sed/LineCollection): The emission to scale.
-        emitters (dict): The emitters used to generate the emission.
-        model (UnifiedAGN): The Unified AGN model.
-    """
-    # Handle lines and spectra differently
-    if isinstance(emission[list(emission.keys())[0]], Sed):
-        # Scale the spectra
-        for key, spectra in emission.items():
-            # Get the model
-            this_model = model[key]
-
-            # Skip the emitter if it's not a black hole
-            if this_model.emitter not in "blackhole":
-                continue
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Get the scaling
-            scaling = emitter._bolometric_luminosity
-
-            # Scale the spectra
-            if spectra.ndim == 1 and scaling.ndim == 0:
-                spectra._lnu = scaling * spectra._lnu
-            elif spectra.ndim == 1 and scaling.ndim == 1:
-                # If we have integrated spectra and per particle scaling
-                # we need to sum the bolometric luminosity
-                scaling = np.sum(scaling)
-                spectra._lnu = scaling * spectra._lnu
-            else:
-                # Otherwise we have multidimensional spectra and need to
-                # broadcast the scaling
-                spectra._lnu = spectra._lnu * np.expand_dims(scaling, axis=-1)
-
-    else:
-        disc_bolometric_luminosity = (
-            emitters["blackhole"]
-            .spectra["disc_incident_isotropic"]
-            ._bolometric_luminosity
-        )
-        blackhole_bolometric_luminosity = emitters[
-            "blackhole"
-        ]._bolometric_luminosity
-        scaling = blackhole_bolometric_luminosity / disc_bolometric_luminosity
-
-        # Loop over the different emissions
-        for key, line_collection in emission.items():
-            # Get the model
-            this_model = model[key]
-
-            # Skip the emitter if it's not a black hole
-            if this_model.emitter not in "blackhole":
-                continue
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Get the scaling
-            scaling = emitter._bolometric_luminosity
-
-            # Loop over the lines
-            for line in line_collection:
-                # Scale the line
-                line._luminosity *= scaling
-                line._continuum *= scaling
-
-    return emission
+from synthesizer.emission_models.transformers import (
+    CoveringFraction,
+    EscapingFraction,
+)
 
 
 class UnifiedAGN(BlackHoleEmissionModel):
@@ -137,9 +64,10 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self,
         nlr_grid,
         blr_grid,
-        covering_fraction_nlr,
-        covering_fraction_blr,
         torus_emission_model,
+        covering_fraction_nlr="covering_fraction_nlr",
+        covering_fraction_blr="covering_fraction_blr",
+        covered_fraction="covered_fraction",
         label="intrinsic",
         **kwargs,
     ):
@@ -149,20 +77,14 @@ class UnifiedAGN(BlackHoleEmissionModel):
         Args:
             nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
             blr_grid (synthesizer.grid.Grid): The grid for the BLR.
-            covering_fraction_nlr (float): The covering fraction of the NLR.
-            covering_fraction_blr (float): The covering fraction of the BLR.
             torus_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use for the torus.
+            covering_fraction_nlr (float): The covering fraction of the NLR.
+            covering_fraction_blr (float): The covering fraction of the BLR.
             label (str): The label for the model.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
-        # Ensure the sum of covering fractions is less than 1
-        if covering_fraction_nlr + covering_fraction_blr > 1:
-            raise exceptions.InconsistentArguments(
-                "The sum of the covering fractions must be less than 1."
-            )
-
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,
@@ -170,7 +92,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
         )
 
         # Get the incident model accounting for the geometry but unmasked
-        self.disc_incident = self._make_disc_incident(nlr_grid, **kwargs)
+        self.disc_incident, self.disc_escaped = self._make_disc_incident(
+            nlr_grid,
+            covered_fraction,
+            **kwargs,
+        )
 
         # Get the transmitted disc emission models
         (
@@ -180,14 +106,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         ) = self._make_disc_transmitted(
             nlr_grid,
             blr_grid,
-            covering_fraction_nlr,
-            covering_fraction_blr,
-            **kwargs,
-        )
-
-        # Get the escaped disc emission model
-        self.disc_escaped = self._make_disc_escaped(
-            nlr_grid,
             covering_fraction_nlr,
             covering_fraction_blr,
             **kwargs,
@@ -237,7 +155,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         return model
 
-    def _make_disc_incident(self, grid, **kwargs):
+    def _make_disc_incident(
+        self,
+        grid,
+        covered_fraction,
+        **kwargs,
+    ):
         """Make the disc spectra."""
         model = BlackHoleEmissionModel(
             grid=grid,
@@ -246,7 +169,20 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        return model
+        disc_escaped = BlackHoleEmissionModel(
+            label="disc_escaped",
+            transformer=EscapingFraction(
+                covering_attrs=(
+                    "covering_fraction_nlr",
+                    "covering_fraction_blr",
+                )
+            ),
+            apply_to=model,
+            fesc=covered_fraction,
+            **kwargs,
+        )
+
+        return model, disc_escaped
 
     def _make_disc_transmitted(
         self,
@@ -258,24 +194,46 @@ class UnifiedAGN(BlackHoleEmissionModel):
     ):
         """Make the disc transmitted spectra."""
         # Make the line regions
-        nlr = BlackHoleEmissionModel(
+        full_nlr = BlackHoleEmissionModel(
             grid=nlr_grid,
-            label="disc_transmitted_nlr",
+            label="full_disc_transmitted_nlr",
             extract="transmitted",
-            fesc=1 - covering_fraction_nlr,
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            **kwargs,
+        )
+        nlr = BlackHoleEmissionModel(
+            label="disc_transmitted_nlr",
+            apply_to=full_nlr,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_nlr",)
+            ),
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            fesc=covering_fraction_nlr,
+            **kwargs,
+        )
+        full_blr = BlackHoleEmissionModel(
+            grid=blr_grid,
+            label="full_disc_transmitted_blr",
+            extract="transmitted",
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
-            grid=blr_grid,
             label="disc_transmitted_blr",
-            extract="transmitted",
-            fesc=1 - covering_fraction_blr,
+            apply_to=full_blr,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_blr",)
+            ),
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            fesc=covering_fraction_blr,
             **kwargs,
         )
 
@@ -287,32 +245,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         )
 
         return nlr, blr, model
-
-    def _make_disc_escaped(
-        self,
-        grid,
-        covering_fraction_nlr,
-        covering_fraction_blr,
-        **kwargs,
-    ):
-        """
-        Make the disc escaped spectra.
-
-        This model is the mirror of the transmitted with the reverse of the
-        covering fraction being applied to the disc incident model.
-        """
-        model = BlackHoleEmissionModel(
-            grid=grid,
-            label="disc_escaped",
-            extract="incident",
-            fesc=(covering_fraction_nlr + covering_fraction_blr),
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
-            **kwargs,
-        )
-
-        return model
 
     def _make_disc(self, **kwargs):
         """Make the disc spectra."""
@@ -332,23 +264,41 @@ class UnifiedAGN(BlackHoleEmissionModel):
     ):
         """Make the line regions."""
         # Make the line regions with fixed inclination
-        nlr = BlackHoleEmissionModel(
+        full_nlr = BlackHoleEmissionModel(
             grid=nlr_grid,
-            label="nlr",
+            label="full_reprocessed_nlr",
             extract="nebular",
-            fesc=1 - covering_fraction_nlr,
             cosine_inclination=0.5,
             **kwargs,
         )
-        blr = BlackHoleEmissionModel(
+        full_blr = BlackHoleEmissionModel(
             grid=blr_grid,
-            label="blr",
+            label="full_reprocessed_blr",
             extract="nebular",
-            fesc=1 - covering_fraction_blr,
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
             cosine_inclination=0.5,
+            **kwargs,
+        )
+
+        # Applying covering fractions
+        nlr = BlackHoleEmissionModel(
+            label="nlr",
+            apply_to=full_nlr,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_nlr",)
+            ),
+            fesc=covering_fraction_nlr,
+            **kwargs,
+        )
+        blr = BlackHoleEmissionModel(
+            label="blr",
+            apply_to=full_blr,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_blr",)
+            ),
+            fesc=covering_fraction_blr,
             **kwargs,
         )
         return nlr, blr

@@ -61,7 +61,6 @@ static double *get_spectra_serial(struct grid *grid_props,
           get_flat_index(unraveled_ind, grid_props->dims, grid_props->ndim + 1);
 
       /* Add the contribution to this wavelength. */
-      /* fesc is already included in the weight */
       spectra[ilam] += grid_props->spectra[spectra_ind + ilam] * weight;
     }
   }
@@ -134,7 +133,6 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
                                          grid_props->ndim + 1);
 
         /* Add the contribution to this wavelength. */
-        /* fesc is already included in the weight */
         this_element +=
             grid_props->spectra[spectra_ind + start + ilam] * weight;
       }
@@ -187,7 +185,6 @@ static double *get_spectra(struct grid *grid_props, double *grid_weights,
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
- * @param fesc: The escape fraction.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
@@ -202,13 +199,15 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int ndim, nlam, nthreads;
-  PyObject *grid_tuple;
-  PyArrayObject *np_grid_spectra, *np_grid_weights;
-  PyArrayObject *np_ndims;
+  int ndim, npart, nlam, nthreads;
+  PyObject *grid_tuple, *part_tuple;
+  PyArrayObject *np_grid_spectra;
+  PyArrayObject *np_part_mass, *np_ndims;
+  char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiii", &np_grid_spectra, &np_grid_weights,
-                        &grid_tuple, &np_ndims, &ndim, &nlam, &nthreads))
+  if (!PyArg_ParseTuple(args, "OOOOOiiisi", &np_grid_spectra, &grid_tuple,
+                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
+                        &nlam, &method, &nthreads))
     return NULL;
 
   /* Extract the grid struct. */

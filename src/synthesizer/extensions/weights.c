@@ -117,7 +117,6 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
   /* Set the sub cell constants we'll use below. */
@@ -177,7 +176,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
       int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
       /* Store the weight. */
-      out_arr[flat_ind] += frac * mass * (1.0 - fesc[p]);
+      out_arr[flat_ind] += frac * mass;
     }
   }
 }
@@ -210,7 +209,6 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
   /* Set the sub cell constants we'll use below. */
@@ -238,7 +236,6 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
     /* Get local pointers to the particle properties. */
     double *local_part_masses = part_masses + start;
-    double *local_fesc = fesc + start;
 
     /* Allocate a local output array. */
     double *local_out_arr = calloc(out_size, sizeof(double));
@@ -293,7 +290,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
         int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
         /* Store the weight. */
-        local_out_arr[flat_ind] += frac * mass * (1.0 - local_fesc[p]);
+        local_out_arr[flat_ind] += frac * mass;
       }
     }
 
@@ -436,7 +433,6 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
   /* Convert out. */
@@ -458,7 +454,7 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
     int flat_ind = get_flat_index(part_indices, dims, ndim);
 
     /* Store the weight. */
-    out_arr[flat_ind] += mass * (1.0 - fesc[p]);
+    out_arr[flat_ind] += mass;
   }
 }
 
@@ -489,7 +485,6 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
 #pragma omp parallel num_threads(nthreads)
@@ -510,7 +505,6 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
 
     /* Get local pointers to the particle properties. */
     double *local_part_masses = part_masses + start;
-    double *local_fesc = fesc + start;
 
     /* Allocate a local output array. */
     double *local_out_arr = calloc(out_size, sizeof(double));
@@ -531,7 +525,7 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
       int flat_ind = get_flat_index(part_indices, dims, ndim);
 
       /* Calculate this particles contribution to the grid cell. */
-      double contribution = local_part_masses[p] * (1.0 - local_fesc[p]);
+      double contribution = local_part_masses[p];
 
       /* Update the shared output array atomically */
       local_out_arr[flat_ind] += contribution;
