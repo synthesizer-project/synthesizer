@@ -5,7 +5,7 @@ import time
 import numpy as np
 
 
-def test_velocity_shift(random_part_stars, nebular_emission_model):
+def test_velocity_shift_applys(random_part_stars, nebular_emission_model):
     """Test the velocity shift of particle spectra."""
     # Compute the spectra with and without velocity shift
     with_shift_spec = random_part_stars.get_spectra(
@@ -23,6 +23,25 @@ def test_velocity_shift(random_part_stars, nebular_emission_model):
 
     # Ensure that the spectra are different
     assert not np.allclose(with_shift_spec._lnu, without_shift_spec._lnu)
+
+
+def test_velocity_shift_conservation(
+    random_part_stars, nebular_emission_model
+):
+    """Test the velocity shift of particle spectra."""
+    # Compute the spectra with and without velocity shift
+    with_shift_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        vel_shift=True,
+    )
+    without_shift_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        vel_shift=False,
+    )
+
+    # Get and print a seed for reproducibility
+    seed = int(time.time())
+    np.random.seed(seed)
 
     # Ensure that the overall flux is conserved, since we know it won't
     # be exactly the same at the edges due to the boundaries of the wavelength
