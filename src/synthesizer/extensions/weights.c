@@ -607,15 +607,18 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  PyObject *grid, *parts;
+  PyObject *grid, *parts, *model;
   PyArrayObject *np_mask;
   char *method;
   char *weight_var;
   int nthreads;
 
-  if (!PyArg_ParseTuple(args, "OOOssi", &grid, &parts, &np_mask, &weight_var,
-                        &method, &nthreads))
+  if (!PyArg_ParseTuple(args, "OOOOssi", &grid, &model, &parts, &np_mask,
+                        &weight_var, &method, &nthreads))
     return NULL;
+
+  /* Convert all PyNone objects to NULL. */
+  convert_none_to_null(4, &grid, &model, &parts, &np_mask);
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_grid_struct_from_obj(grid);
@@ -625,7 +628,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props =
-      get_part_struct_from_obj(parts, grid, weight_var);
+      get_part_struct_from_obj(parts, grid, weight_var, model);
   if (part_props == NULL) {
     return NULL;
   }
