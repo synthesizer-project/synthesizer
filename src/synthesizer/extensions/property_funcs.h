@@ -82,38 +82,47 @@ struct particles {
  *
  * @param param   The name of the attribute to look for.
  * @param obj     The PyObject to search (may be NULL).
- * @param out_size Pointer to a npy_intp that will be set to the number of
- * elements in the array if found.
  *
- * @return A newly allocated C array of doubles (copied from the NumPy array)
- *         or NULL if the attribute isn’t found or isn’t a NumPy array of
- * doubles. The caller is responsible for freeing the returned memory.
+ * @return A pointer to the data in the NumPy array, or NULL if not found.
  */
-static double *get_numpy_array_from_pyobject(const char *param, PyObject *obj,
-                                             npy_intp *out_size) {
-  if (obj && PyObject_HasAttrString(obj, param)) {
+static inline double *get_numpy_array_from_pyobject(const char *param,
+                                                    PyObject *obj) {
+
+  /* The data pointer. */
+  double *data = NULL;
+
+  /* Check if the object is not NULL and has the attribute. */
+  if (obj != NULL && PyObject_HasAttrString(obj, param)) {
+
+    /* Get the attribute. */
     PyObject *attr = PyObject_GetAttrString(obj, param);
+
+    /* Check if the attribute is a NumPy array of doubles. */
     if (attr && PyArray_Check(attr)) {
+
+      /* Cast the attribute to a NumPy array object. */
       PyArrayObject *array = (PyArrayObject *)attr;
-      // Ensure the array is of type double.
-      if (PyArray_TYPE(array) == NPY_DOUBLE) {
-        // For simplicity we assume a 1-D array.
-        if (PyArray_NDIM(array) == 1) {
-          *out_size = PyArray_SIZE(array);
-          double *data_ptr = (double *)PyArray_DATA(array);
-          // Allocate a new C array and copy the data.
-          double *result = malloc((*out_size) * sizeof(double));
-          if (result != NULL) {
-            memcpy(result, data_ptr, (*out_size) * sizeof(double));
-          }
-          Py_DECREF(attr);
-          return result;
-        }
+
+      /* Ensure the array is of type double. */
+      if (PyArray_TYPE(array) != NPY_DOUBLE) {
+        PyErr_Format(PyExc_TypeError,
+                     "Attribute '%s' must be a NumPy array of doubles.", param);
+        Py_DECREF(attr);
+        return NULL;
       }
+
+      /* Extract a pointer to the data. */
+      data = (double *)PyArray_DATA(array);
+
+    } else {
+      PyErr_Format(PyExc_TypeError,
+                   "Attribute '%s' must be a NumPy array of doubles.", param);
+      Py_DECREF(attr);
+      return NULL;
     }
-    Py_XDECREF(attr);
+    Py_DECREF(attr);
   }
-  return NULL;
+  return data;
 }
 
 /**
@@ -131,27 +140,35 @@ static double *get_numpy_array_from_pyobject(const char *param, PyObject *obj,
  * @param out_size  A pointer to a npy_intp that will receive the number of
  * elements.
  *
- * @return A newly allocated C array of doubles containing the parameter’s data,
- *         or NULL if not found. The caller is responsible for freeing the
- * memory.
+ * @return A pointer to the data in the NumPy array, or NULL if not found.
  */
-double *get_param_array(const char *param, PyObject *model, PyObject *emission,
-                        PyObject *emitter, npy_intp *out_size) {
+double *get_param_double_array(const char *param, PyObject *model,
+                               PyObject *emission, PyObject *emitter) {
   double *result = NULL;
-  *out_size = 0;
 
-  // Priority 1: check the model.
-  result = get_numpy_array_from_pyobject(param, model, out_size);
-  if (result != NULL)
-    return result;
+  /* Priority 1: check the model. */
+  if (model != NULL) {
+    result = get_numpy_array_from_pyobject(param, model);
+    if (result != NULL)
+      return result;
+  }
 
-  // Priority 2: check the emission.
-  result = get_numpy_array_from_pyobject(param, emission, out_size);
-  if (result != NULL)
-    return result;
+  /* Priority 2: check the emission. */
+  else if (emission != NULL) {
+    result = get_numpy_array_from_pyobject(param, emission);
+    if (result != NULL)
+      return result;
+  }
 
-  // Priority 3: check the emitter.
-  result = get_numpy_array_from_pyobject(param, emitter, out_size);
+  /* Priority 3: check the emitter. */
+  else if (emitter != NULL) {
+    result = get_numpy_array_from_pyobject(param, emitter);
+  }
+
+  else {
+    PyErr_Format(PyExc_TypeError, "No object found for parameter '%s'.", param);
+    return NULL;
+  }
   return result;
 }
 
@@ -199,7 +216,8 @@ struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_velocities, const int npart,
                                   const int ndim);
 struct particles *get_part_struct_from_obj(PyObject *parts, PyObject *grid,
-                                           const char *weight_var);
+                                           const char *weight_var,
+                                           PyObject *model);
 struct grid *get_grid_struct_from_obj(PyObject *py_grid);
 
 #endif // PROPERTY_FUNCS_H_
