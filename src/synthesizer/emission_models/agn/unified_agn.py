@@ -207,7 +207,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="disc_transmitted_nlr",
             apply_to=full_nlr,
             transformer=CoveringFraction(
-                covering_attr=("covering_fraction_nlr")
+                covering_attrs=("covering_fraction_nlr")
             ),
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
@@ -228,7 +228,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="disc_transmitted_blr",
             apply_to=full_blr,
             transformer=CoveringFraction(
-                covering_attr=("covering_fraction_blr")
+                covering_attrs=("covering_fraction_blr")
             ),
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
@@ -287,7 +287,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="nlr",
             apply_to=full_nlr,
             transformer=CoveringFraction(
-                covering_attr=("covering_fraction_nlr")
+                covering_attrs=("covering_fraction_nlr")
             ),
             fesc=covering_fraction_nlr,
             **kwargs,
@@ -296,7 +296,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="blr",
             apply_to=full_blr,
             transformer=CoveringFraction(
-                covering_attr=("covering_fraction_blr")
+                covering_attrs=("covering_fraction_blr")
             ),
             fesc=covering_fraction_blr,
             **kwargs,
