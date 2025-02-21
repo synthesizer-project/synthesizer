@@ -162,7 +162,14 @@ class TransmittedEmission(StellarEmissionModel):
         fesc (float): The escape fraction of the emission.
     """
 
-    def __init__(self, grid, label="transmitted", fesc="fesc", **kwargs):
+    def __init__(
+        self,
+        grid,
+        label="transmitted",
+        fesc="fesc",
+        related_models=(),
+        **kwargs,
+    ):
         """
         Initialise the TransmittedEmission object.
 
@@ -188,6 +195,9 @@ class TransmittedEmission(StellarEmissionModel):
             **kwargs,
         )
 
+        # Combine any extra related_models
+        related_models = (escaped,) + tuple(related_models)
+
         # Get the transmitted emission (accounting for fesc)
         StellarEmissionModel.__init__(
             self,
@@ -195,7 +205,7 @@ class TransmittedEmission(StellarEmissionModel):
             apply_to=full_transmitted,
             transformer=EscapeFraction(),
             fesc=fesc,
-            related_models=(escaped,),
+            related_models=related_models,
             **kwargs,
         )
 
