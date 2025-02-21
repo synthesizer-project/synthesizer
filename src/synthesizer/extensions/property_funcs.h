@@ -69,12 +69,6 @@ struct particles {
    * an Sed from a Grid. */
   double *weight;
 
-  /* Escape fractions, used when multiple escape fractions are passed. */
-  double *fesc;
-
-  /* Escape fraction, used when a single escape fraction is passed. */
-  double _fesc;
-
   /* Velocities for redshift */
   double *velocities;
 };
@@ -98,8 +92,7 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    const int ndim, const int nlam);
 struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_part_mass,
-                                  PyArrayObject *np_velocities,
-                                  PyArrayObject *np_fesc, const int npart,
+                                  PyArrayObject *np_velocities, const int npart,
                                   const int ndim);
 struct particles *get_part_struct_from_obj(PyObject *parts, PyObject *grid,
                                            const char *weight_var);

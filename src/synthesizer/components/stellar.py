@@ -29,6 +29,8 @@ class StarsComponent(Component):
         metallicities (Quantity)
             The metallicity of each stellar particle/bin
             (particle/parametric).
+        fesc_ly_alpha (float)
+            The escape fraction of the component for Lyman Alpha photons.
     """
 
     # Define quantities
@@ -41,6 +43,7 @@ class StarsComponent(Component):
         metallicities,
         _star_type,
         fesc,
+        fesc_ly_alpha=None,
         **kwargs,
     ):
         """
@@ -70,6 +73,11 @@ class StarsComponent(Component):
         # determining the type of stars object without relying on isinstance
         # and possible circular imports.
         self._star_type = _star_type
+
+        # Attach the Lyman Alpha escape fraction
+        self.fesc_ly_alpha = (
+            fesc_ly_alpha if fesc_ly_alpha is not None else 1.0
+        )
 
     @property
     def log10ages(self):

@@ -79,6 +79,10 @@ class Stars(Particles, StarsComponent):
             The slope of high mass end of the initial mass function (WIP).
         nstars (int)
             The number of stellar particles in the object.
+        fesc (array-like, float)
+            The escape fractions of each stellar particle (i.e. the fraction of
+            incident photons that escape the galaxy unreprocessed by the
+            interstellar medium).
     """
 
     # Define the allowed attributes
@@ -136,6 +140,7 @@ class Stars(Particles, StarsComponent):
         centre=None,
         metallicity_floor=1e-5,
         fesc=None,
+        fesc_ly_alpha=None,
         **kwargs,
     ):
         """
@@ -179,7 +184,9 @@ class Stars(Particles, StarsComponent):
             metallicity_floor (float)
                 The minimum metallicity allowed in the simulation.
             fesc (array-like, float)
-                The escape fraction of each stellar particle.
+                The escape fraction of each stellar particle, i.e. the
+                fraction of incident photons that escape the galaxy
+                unreprocessed by the interstellar medium.
             **kwargs
                 Additional keyword arguments to be set as attributes.
         """
@@ -203,6 +210,7 @@ class Stars(Particles, StarsComponent):
             metallicities,
             _star_type="particle",
             fesc=fesc,
+            fesc_ly_alpha=fesc_ly_alpha,
             **kwargs,
         )
 
@@ -578,7 +586,6 @@ class Stars(Particles, StarsComponent):
     def _prepare_part_sed_args(
         self,
         grid,
-        fesc,
         spectra_type,
         mask,
         grid_assignment_method,
@@ -593,8 +600,6 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (Grid)
                 The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
@@ -668,10 +673,6 @@ class Stars(Particles, StarsComponent):
             grid_dims[ind] = len(g)
         grid_dims[ind + 1] = nlam
 
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
@@ -685,7 +686,6 @@ class Stars(Particles, StarsComponent):
             grid_props,
             part_props,
             part_mass,
-            fesc,
             grid_dims,
             len(grid_props),
             npart,
@@ -697,7 +697,6 @@ class Stars(Particles, StarsComponent):
     def _prepare_vel_shift_sed_args(
         self,
         grid,
-        fesc,
         spectra_type,
         mask,
         grid_assignment_method,
@@ -715,8 +714,6 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (Grid)
                 The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
@@ -810,10 +807,6 @@ class Stars(Particles, StarsComponent):
             grid_dims[ind] = len(g)
         grid_dims[ind + 1] = nlam
 
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
@@ -828,7 +821,6 @@ class Stars(Particles, StarsComponent):
             grid_props,
             part_props,
             part_mass,
-            fesc,
             part_vels,
             grid_dims,
             len(grid_props),
@@ -842,7 +834,6 @@ class Stars(Particles, StarsComponent):
     def _prepare_integrated_sed_args(
         self,
         grid,
-        fesc,
         spectra_type,
         mask,
         grid_assignment_method,
@@ -859,8 +850,6 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (Grid)
                 The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
@@ -953,7 +942,6 @@ class Stars(Particles, StarsComponent):
     def _prepare_sed_args(
         self,
         grid,
-        fesc,
         spectra_type,
         mask,
         grid_assignment_method,
@@ -968,8 +956,6 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (Grid)
                 The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
@@ -1001,7 +987,6 @@ class Stars(Particles, StarsComponent):
         if integrated and not vel_shift:
             return self._prepare_integrated_sed_args(
                 grid,
-                fesc,
                 spectra_type,
                 mask,
                 grid_assignment_method,
@@ -1011,7 +996,6 @@ class Stars(Particles, StarsComponent):
         elif vel_shift:
             return self._prepare_vel_shift_sed_args(
                 grid,
-                fesc,
                 spectra_type,
                 mask,
                 grid_assignment_method,
@@ -1021,7 +1005,6 @@ class Stars(Particles, StarsComponent):
         else:
             return self._prepare_part_sed_args(
                 grid,
-                fesc,
                 spectra_type,
                 mask,
                 grid_assignment_method,
@@ -1033,7 +1016,6 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         spectra_name,
-        fesc=None,
         young=None,
         old=None,
         mask=None,
@@ -1055,10 +1037,6 @@ class Stars(Particles, StarsComponent):
                 The spectral grid object.
             spectra_name (string)
                 The name of the target spectra inside the grid file.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             young (bool/float)
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
@@ -1189,7 +1167,6 @@ class Stars(Particles, StarsComponent):
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
-            fesc=fesc,
             spectra_type=spectra_name,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
@@ -1423,7 +1400,6 @@ class Stars(Particles, StarsComponent):
         grid,
         line_id,
         line_type,
-        fesc,
         mask,
         grid_assignment_method,
         nthreads,
@@ -1439,10 +1415,6 @@ class Stars(Particles, StarsComponent):
             line_type (str)
                 The type of line to extract from the Grid. This must match a
                 type of spectra/lines stored in the Grid.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (bool)
                 A mask to be applied to the stars. Spectra will only be
                 computed and returned for stars with True in the mask.
@@ -1493,10 +1465,6 @@ class Stars(Particles, StarsComponent):
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
 
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
@@ -1511,7 +1479,6 @@ class Stars(Particles, StarsComponent):
             grid_props,
             part_props,
             part_mass,
-            fesc,
             grid_dims,
             len(grid_props),
             npart,
@@ -1524,7 +1491,6 @@ class Stars(Particles, StarsComponent):
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -1547,10 +1513,6 @@ class Stars(Particles, StarsComponent):
             line_type (str):
                 The type of line to extract from the Grid. This must match a
                 type of spectra/lines stored in the Grid.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -1623,7 +1585,6 @@ class Stars(Particles, StarsComponent):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,
@@ -1650,7 +1611,6 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         spectra_name,
-        fesc=None,
         verbose=False,
         do_grid_check=False,
         mask=None,
@@ -1668,10 +1628,6 @@ class Stars(Particles, StarsComponent):
                 The spectral grid object.
             spectra_name (string)
                 The name of the target spectra inside the grid file.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             verbose (bool)
                 Flag for verbose output. By default False.
             vel_shift (bool)
@@ -1793,7 +1749,6 @@ class Stars(Particles, StarsComponent):
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
-            fesc=fesc,
             spectra_type=spectra_name,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
@@ -1842,7 +1797,6 @@ class Stars(Particles, StarsComponent):
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -1866,10 +1820,6 @@ class Stars(Particles, StarsComponent):
             line_type (str):
                 The type of line to extract from the Grid. This must match a
                 type of spectra/lines stored in the Grid.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -1942,7 +1892,6 @@ class Stars(Particles, StarsComponent):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,

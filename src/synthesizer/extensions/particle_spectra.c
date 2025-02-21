@@ -56,7 +56,6 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   double *velocity = parts->velocities;
   int npart = parts->npart;
 
@@ -128,7 +127,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
       }
 
       /* Define the weight. */
-      double weight = frac * mass * (1.0 - fesc[p]);
+      double weight = frac * mass;
 
       /* Get the weight's index. */
       const int grid_ind = get_flat_index(frac_ind, dims, ndim);
@@ -192,7 +191,6 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
   /* Loop over particles. */
@@ -247,7 +245,7 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
       }
 
       /* Define the weight. */
-      double weight = frac * mass * (1.0 - fesc[p]);
+      double weight = frac * mass;
 
       /* Get the weight's index. */
       const int grid_ind = get_flat_index(frac_ind, dims, ndim);
@@ -299,7 +297,6 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
     /* Unpack the particles properties. */
     double *part_masses = parts->mass;
     double **part_props = parts->props;
-    double *fesc = parts->fesc;
     int npart = parts->npart;
 
     /* Get the thread id. */
@@ -373,7 +370,7 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
         }
 
         /* Define the weight. */
-        double weight = frac * mass * (1.0 - fesc[p]);
+        double weight = frac * mass;
 
         /* Get the weight's index. */
         const int grid_ind = get_flat_index(frac_ind, dims, ndim);
@@ -431,7 +428,6 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
     /* Unpack the particles properties. */
     double *part_masses = parts->mass;
     double **part_props = parts->props;
-    double *fesc = parts->fesc;
     double *velocity = parts->velocities;
     int npart = parts->npart;
 
@@ -522,7 +518,7 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
         }
 
         /* Define the weight. */
-        double weight = frac * mass * (1.0 - fesc[p]);
+        double weight = frac * mass;
 
         /* Get the weight's index. */
         const int grid_ind = get_flat_index(frac_ind, dims, ndim);
@@ -670,23 +666,19 @@ static void spectra_loop_ngp_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
     /* Get this particle's mass. */
-    const double mass = part_masses[p];
+    const double weight = part_masses[p];
 
     /* Setup the index array. */
     int part_indices[ndim];
 
     /* Get the grid indices for the particle */
     get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-    /* Define the weight. */
-    double weight = mass * (1.0 - fesc[p]);
 
     /* Get the weight's index. */
     const int grid_ind = get_flat_index(part_indices, dims, ndim);
@@ -731,7 +723,6 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   double *velocity = parts->velocities;
   int npart = parts->npart;
 
@@ -739,7 +730,7 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
   for (int p = 0; p < npart; p++) {
 
     /* Get this particle's mass, velocity and doppler shift. */
-    const double mass = part_masses[p];
+    const double weight = part_masses[p];
 
     /* Get the particle velocity and red/blue shift factor. */
     double vel = velocity[p];
@@ -762,9 +753,6 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
 
     /* Get the grid indices for the particle */
     get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-    /* Define the weight. */
-    double weight = mass * (1.0 - fesc[p]);
 
     /* Get the weight's index. */
     const int grid_ind = get_flat_index(part_indices, dims, ndim);
@@ -835,7 +823,6 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
     /* Unpack the particles properties. */
     double *part_masses = parts->mass;
     double **part_props = parts->props;
-    double *fesc = parts->fesc;
     int npart = parts->npart;
 
     /* Get the thread id. */
@@ -862,16 +849,13 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
     for (int p = start; p < end; p++) {
 
       /* Get this particle's mass. */
-      const double mass = part_masses[p];
+      const double weight = part_masses[p];
 
       /* Setup the index array. */
       int part_indices[ndim];
 
       /* Get the grid indices for the particle */
       get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-      /* Define the weight. */
-      double weight = mass * (1.0 - fesc[p]);
 
       /* Get the weight's index. */
       const int grid_ind = get_flat_index(part_indices, dims, ndim);
@@ -926,7 +910,6 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
     /* Unpack the particles properties. */
     double *part_masses = parts->mass;
     double **part_props = parts->props;
-    double *fesc = parts->fesc;
     double *velocity = parts->velocities;
     int npart = parts->npart;
 
@@ -954,7 +937,7 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
     for (int p = start; p < end; p++) {
 
       /* Get this particle's mass, velocity and doppler shift contribution. */
-      const double mass = part_masses[p];
+      const double weight = part_masses[p];
 
       /* Get the particle velocity and red/blue shift factor. */
       double vel = velocity[p];
@@ -977,9 +960,6 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
 
       /* Get the grid indices for the particle */
       get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-      /* Define the weight. */
-      double weight = mass * (1.0 - fesc[p]);
 
       /* Get the weight's index. */
       const int grid_ind = get_flat_index(part_indices, dims, ndim);
@@ -1112,7 +1092,6 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
- * @param fesc: The escape fraction.
  * @param np_velocities: The velocities array.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
@@ -1134,13 +1113,12 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
-  PyArrayObject *np_fesc;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
-                        &npart, &nlam, &method, &nthreads)) {
+  if (!PyArg_ParseTuple(args, "OOOOOiiisi", &np_grid_spectra, &grid_tuple,
+                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
+                        &nlam, &method, &nthreads)) {
     return NULL;
   }
 
@@ -1153,7 +1131,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_fesc, npart, ndim);
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
@@ -1210,7 +1188,6 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
- * @param fesc: The escape fraction.
  * @param np_velocities: The velocities array.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
@@ -1234,15 +1211,14 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyObject *py_vel_shift;
   PyObject *py_c;
   PyArrayObject *np_grid_spectra, *np_lam;
-  PyArrayObject *np_fesc;
   PyArrayObject *np_velocities;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOOiiisiO", &np_grid_spectra, &np_lam,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
-                        &np_velocities, &np_ndims, &ndim, &npart, &nlam,
-                        &method, &nthreads, &py_c)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiO", &np_grid_spectra, &np_lam,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_velocities,
+                        &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
+                        &py_c)) {
     return NULL;
   }
 
@@ -1254,8 +1230,8 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   }
 
   /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, np_velocities, np_fesc, npart, ndim);
+  struct particles *part_props =
+      get_part_struct(part_tuple, np_part_mass, np_velocities, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }

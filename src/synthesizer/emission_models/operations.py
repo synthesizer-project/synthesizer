@@ -11,7 +11,6 @@ import numpy as np
 from unyt import Hz, erg, s
 
 from synthesizer import exceptions
-from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
@@ -31,7 +30,7 @@ class Extraction:
             The key for the spectra to extract.
     """
 
-    def __init__(self, grid, extract, lam_mask, vel_shift):
+    def __init__(self, grid, extract, vel_shift):
         """
         Initialise the extraction model.
 
@@ -40,8 +39,6 @@ class Extraction:
                 The grid to extract from.
             extract (str):
                 The key for the spectra to extract.
-            lam_mask (ndarray):
-                The wavelength mask to apply to the spectra.
             vel_shift (bool):
                 Should the emission take into account the velocity shift due
                 to peculiar velocities? (Particle Only!)
@@ -51,9 +48,6 @@ class Extraction:
 
         # What base key will we be extracting?
         self._extract = extract
-
-        # Attach the wavelength mask
-        self._lam_mask = lam_mask
 
         # Should the emission take into account the velocity shift due to
         # peculiar velocities? (Particle Only!)
@@ -133,9 +127,8 @@ class Extraction:
                 generator_func(
                     this_model.grid,
                     spectra_key,
-                    fesc=get_param("fesc", self, None, emitter),
                     mask=this_mask,
-                    vel_shift=self.vel_shift,
+                    vel_shift=this_model.vel_shift,
                     lam_mask=this_model._lam_mask,
                     verbose=verbose,
                     nthreads=nthreads,
@@ -239,7 +232,6 @@ class Extraction:
                     grid=this_model.grid,
                     line_id=line_id,
                     line_type=this_model.extract,
-                    fesc=get_param("fesc", self, None, emitter),
                     mask=this_mask,
                     verbose=verbose,
                     **kwargs,
@@ -788,7 +780,8 @@ class Transformation:
             apply_to,
             emitter,
             this_model,
-            this_mask,
+            this_mask if this_model.per_particle else None,
+            this_model.lam_mask,
         )
 
         # Store the spectra in the right place (integrating if we need to)

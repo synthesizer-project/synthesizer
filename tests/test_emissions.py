@@ -2,7 +2,10 @@
 
 import numpy as np
 
-from synthesizer.emission_models import IncidentEmission, NebularEmission
+from synthesizer.emission_models import (
+    NebularEmission,
+    TransmittedEmission,
+)
 
 
 def test_nebular_emissions(test_grid, particle_stars_A):
@@ -52,18 +55,20 @@ def test_nebular_emissions(test_grid, particle_stars_A):
     assert np.sum(particle_stars_A.spectra["nebular"]._lnu) > np.sum(neb_spec)
 
 
-def test_escape_fraction(incident_emission_model, particle_stars_A, test_grid):
+def test_escape_fraction(
+    transmitted_emission_model, particle_stars_A, test_grid
+):
     """Test the escape fraction is applied correctly."""
     # Get the spectra with the escape fraction set to 0.1
-    particle_stars_A.get_spectra(incident_emission_model, fesc=0.1)
-    spectra_with_escape = particle_stars_A.spectra["incident"]._lnu
+    particle_stars_A.get_spectra(transmitted_emission_model, fesc=0.1)
+    spectra_with_escape = particle_stars_A.spectra["transmitted"]._lnu
 
     # Clear the spectra
     particle_stars_A.clear_all_emissions()
 
     # Get the spectra with the escape fraction set to 0
-    particle_stars_A.get_spectra(incident_emission_model, fesc=0.0)
-    spectra_without_escape = particle_stars_A.spectra["incident"]._lnu
+    particle_stars_A.get_spectra(transmitted_emission_model, fesc=0.0)
+    spectra_without_escape = particle_stars_A.spectra["transmitted"]._lnu
 
     # Ensure the escape fraction is applied correctly
     assert not np.allclose(spectra_with_escape, spectra_without_escape), (
@@ -75,21 +80,21 @@ def test_escape_fraction(incident_emission_model, particle_stars_A, test_grid):
         "set via a get_spectra call."
     )
 
-    # Do the same check but for incident emission models with fesc set on
+    # Do the same check but for transmitted emission models with fesc set on
     # them
-    model_with_escape = IncidentEmission(grid=test_grid, fesc=0.1)
-    model_without_escape = IncidentEmission(grid=test_grid, fesc=0.0)
+    model_with_escape = TransmittedEmission(grid=test_grid, fesc=0.1)
+    model_without_escape = TransmittedEmission(grid=test_grid, fesc=0.0)
 
     # Get the spectra with the escape fraction set to 0.1
     particle_stars_A.get_spectra(model_with_escape)
-    spectra_with_escape = particle_stars_A.spectra["incident"]._lnu
+    spectra_with_escape = particle_stars_A.spectra["transmitted"]._lnu
 
     # Clear the spectra
     particle_stars_A.clear_all_emissions()
 
     # Get the spectra with the escape fraction set to 0
     particle_stars_A.get_spectra(model_without_escape)
-    spectra_without_escape = particle_stars_A.spectra["incident"]._lnu
+    spectra_without_escape = particle_stars_A.spectra["transmitted"]._lnu
 
     # And test...
     assert not np.allclose(spectra_with_escape, spectra_without_escape), (

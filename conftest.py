@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 from unyt import Mpc, Msun, Myr, km, s
 
-from synthesizer.emission_models import IncidentEmission, NebularEmission
+from synthesizer.emission_models import (
+    IncidentEmission,
+    NebularEmission,
+    TransmittedEmission,
+)
 from synthesizer.grid import Grid
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
@@ -28,6 +32,14 @@ def incident_emission_model():
     # First need a grid to pass to the IncidentEmission object
     grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
     return IncidentEmission(grid=grid)
+
+
+@pytest.fixture
+def transmitted_emission_model():
+    """Return a TransmittedEmission object."""
+    # First need a grid to pass to the IncidentEmission object
+    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+    return TransmittedEmission(grid=grid)
 
 
 @pytest.fixture

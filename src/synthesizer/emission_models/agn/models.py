@@ -13,8 +13,11 @@ Example usage:
 
 """
 
-from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
+from synthesizer.emission_models.transformers import (
+    CoveringFraction,
+    EscapingFraction,
+)
 
 
 class NLRIncidentEmission(BlackHoleEmissionModel):
@@ -93,7 +96,7 @@ class NLRTransmittedEmission(BlackHoleEmissionModel):
         self,
         grid,
         label="nlr_transmitted",
-        covering_fraction=None,
+        covering_fraction="covering_fraction",
         **kwargs,
     ):
         """
@@ -106,16 +109,27 @@ class NLRTransmittedEmission(BlackHoleEmissionModel):
                 The label for the model.
             covering_fraction (float)
                 The covering fraction of the NLR (Effectively the escape
-                fraction of the NLR). Default is 0.1.
+                fraction of the NLR). Default is to read "covering_fraction"
+                from the blackhole.
             **kwargs
 
         """
+        # First get the full NLR trasmitted emission
+        full_nlr_transmitted = BlackHoleEmissionModel(
+            grid=grid,
+            label=f"full_{label}",
+            extract="transmitted",
+            **kwargs,
+        )
+
         BlackHoleEmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
+            apply_to=full_nlr_transmitted,
             fesc=covering_fraction,
-            extract="transmitted",
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_nlr",)
+            ),
             **kwargs,
         )
 
@@ -134,7 +148,7 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
         self,
         grid,
         label="blr_transmitted",
-        covering_fraction=None,
+        covering_fraction="covering_fraction",
         **kwargs,
     ):
         """
@@ -147,16 +161,27 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
                 The label for the model.
             covering_fraction (float)
                 The covering fraction of the BLR (Effectively the escape
-                fraction of the BLR). Default is 0.1.
+                fraction of the BLR). Default is to read "covering_fraction"
+                from the blackhole.
             **kwargs
 
         """
+        # First get the full BLR trasmitted emission
+        full_blr_transmitted = BlackHoleEmissionModel(
+            grid=grid,
+            label=f"full_{label}",
+            extract="transmitted",
+            **kwargs,
+        )
+
         BlackHoleEmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
+            apply_to=full_blr_transmitted,
             fesc=covering_fraction,
-            extract="transmitted",
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_blr",)
+            ),
             **kwargs,
         )
 
@@ -288,12 +313,6 @@ class DiscTransmittedEmission(BlackHoleEmissionModel):
             **kwargs
 
         """
-        # Ensure the sum of covering fractions is less than 1
-        if covering_fraction_nlr + covering_fraction_blr > 1:
-            raise exceptions.InconsistentArguments(
-                "The sum of the covering fractions must be less than 1."
-            )
-
         # Create the child models
         nlr = NLRTransmittedEmission(
             grid=nlr_grid,
@@ -352,18 +371,24 @@ class DiscEscapedEmission(BlackHoleEmissionModel):
                 fraction of the BLR). Default is 0.1.
             **kwargs
         """
-        # Ensure the sum of covering fractions is less than 1
-        if covering_fraction_nlr + covering_fraction_blr > 1:
-            raise exceptions.InconsistentArguments(
-                "The sum of the covering fractions must be less than 1."
-            )
+        dic_incident = DiscIncidentEmission(
+            grid=grid,
+            label="disc_incident",
+            **kwargs,
+        )
 
         BlackHoleEmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
-            extract="incident",
-            fesc=1 - covering_fraction_nlr - covering_fraction_blr,
+            apply_to=dic_incident,
+            transformer=EscapingFraction(
+                covering_attrs=(
+                    "covering_fraction_nlr",
+                    "covering_fraction_blr",
+                )
+            ),
+            covering_fraction_nlr=covering_fraction_nlr,
+            covering_fraction_blr=covering_fraction_blr,
             **kwargs,
         )
 
@@ -378,7 +403,15 @@ class DiscEmission(BlackHoleEmissionModel):
     description of the parameters see the BlackHoleEmissionModel class.
     """
 
-    def __init__(self, nlr_grid, blr_grid, label="disc", **kwargs):
+    def __init__(
+        self,
+        nlr_grid,
+        blr_grid,
+        covering_fraction_nlr,
+        covering_fraction_blr,
+        label="disc",
+        **kwargs,
+    ):
         """
         Initialise the DiscEmission model.
 
@@ -397,11 +430,15 @@ class DiscEmission(BlackHoleEmissionModel):
             nlr_grid=nlr_grid,
             blr_grid=blr_grid,
             label="disc_transmitted",
+            covering_fraction_blr=covering_fraction_blr,
+            covering_fraction_nlr=covering_fraction_nlr,
             **kwargs,
         )
         escaped = DiscEscapedEmission(
             grid=nlr_grid,
             label="disc_escaped",
+            covering_fraction_blr=covering_fraction_blr,
+            covering_fraction_nlr=covering_fraction_nlr,
             **kwargs,
         )
 
@@ -507,12 +544,6 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
             **kwargs
 
         """
-        # Ensure the sum of covering fractions is less than 1
-        if covering_fraction_nlr + covering_fraction_blr > 1:
-            raise exceptions.InconsistentArguments(
-                "The sum of the covering fractions must be less than 1."
-            )
-
         # Create the child models
         disc = DiscEmission(
             nlr_grid=nlr_grid,
@@ -526,6 +557,7 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
             torus_emission_model=torus_emission_model,
             grid=nlr_grid,
             label="torus",
+            disc_incident=disc["disc_incident"],
             **kwargs,
         )
 
