@@ -175,19 +175,19 @@ class CoveringFraction(EscapedFraction):
     must match the shape of 1D fesc arrays.
     """
 
-    def __init__(self, fesc_attrs):
+    def __init__(self, covering_attrs):
         """
         Initialise the covering fraction transformer.
 
         Args:
-            fesc_attrs (tuple, optional):
+            covering_attrs (tuple, optional):
                 The attributes to extract from the model to use as the escape
                 fraction. If multiple are passed these will be added
                 together. We pass no default here since there is ambiguity.
         """
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
-        EscapeFraction.__init__(self, fesc_attrs=fesc_attrs)
+        EscapeFraction.__init__(self, fesc_attrs=covering_attrs)
 
 
 class EscapingFraction(EscapeFraction):
@@ -210,16 +210,16 @@ class EscapingFraction(EscapeFraction):
     must match the shape of 1D fesc arrays.
     """
 
-    def __init__(self, fesc_attrs):
+    def __init__(self, covering_attrs):
         """
         Initialise the covering fraction transformer.
 
         Args:
-            fesc_attrs (tuple, optional):
+            covering_attrs (tuple, optional):
                 The attributes to extract from the model to use as the escape
                 fraction. If multiple are passed these will be added
                 together. We pass no default here since there is ambiguity.
         """
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
-        EscapeFraction.__init__(self, fesc_attrs=fesc_attrs)
+        EscapeFraction.__init__(self, fesc_attrs=covering_attrs)
