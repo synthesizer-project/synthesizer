@@ -13,7 +13,6 @@ Example usage:
 
 """
 
-from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.emission_models.transformers import (
     CoveringFraction,
@@ -182,8 +181,8 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
             fesc=covering_fraction,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_blr",)
-            )
-            ** kwargs,
+            ),
+            **kwargs,
         )
 
 
@@ -380,9 +379,10 @@ class DiscEscapedEmission(BlackHoleEmissionModel):
 
         BlackHoleEmissionModel.__init__(
             self,
+            label=label,
             apply_to=dic_incident,
             transformer=EscapingFraction(
-                escaping_attrs=(
+                covering_attrs=(
                     "covering_fraction_nlr",
                     "covering_fraction_blr",
                 )
@@ -544,12 +544,6 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
             **kwargs
 
         """
-        # Ensure the sum of covering fractions is less than 1
-        if covering_fraction_nlr + covering_fraction_blr > 1:
-            raise exceptions.InconsistentArguments(
-                "The sum of the covering fractions must be less than 1."
-            )
-
         # Create the child models
         disc = DiscEmission(
             nlr_grid=nlr_grid,
@@ -563,6 +557,7 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
             torus_emission_model=torus_emission_model,
             grid=nlr_grid,
             label="torus",
+            disc_incident=disc["disc_incident"],
             **kwargs,
         )
 
