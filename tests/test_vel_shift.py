@@ -33,10 +33,12 @@ def test_velocity_shift_conservation(
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         vel_shift=True,
+        grid_assignment_method="cic",
     )
     without_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         vel_shift=False,
+        grid_assignment_method="cic",
     )
 
     # Get and print a seed for reproducibility
