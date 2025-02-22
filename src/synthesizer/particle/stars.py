@@ -777,9 +777,7 @@ class Stars(Particles, StarsComponent):
 
         # Make sure we get the wavelength index of the grid array
         nlam = (
-            np.int32(np.sum(lam_mask))
-            if lam_mask is not None
-            else grid.spectra[spectra_type].shape[-1]
+            np.int32(np.sum(lam_mask)) if lam_mask is not None else grid.nlam
         )
 
         # Slice the spectral grids and pad them with copies of the edges.
@@ -798,7 +796,7 @@ class Stars(Particles, StarsComponent):
         if lam_mask is not None:
             grid_lam = np.ascontiguousarray(
                 grid._lam[lam_mask],
-                np.float32,
+                np.float64,
             )
         else:
             grid_lam = grid._lam
