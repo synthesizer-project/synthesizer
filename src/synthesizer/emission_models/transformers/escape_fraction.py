@@ -1,13 +1,43 @@
-"""A submodule contatining the escape fraction transformers."""
+"""A submodule contatining the escape fraction transformers.
+
+This module contains transformers that apply escape fractions to an emission.
+This can be thought of as an attenuation law with a single value, reducing the
+emission by a constant factor.
+
+There are two flavours of this transformer, one for escaped and reprocessed
+emission. This one contains the ProcessedFraction and EscapedFraction, the
+former will return the processed emission, i.e. the emission that does not
+escape and is reprocessed by the reprocessing medium. The latter will return
+the escaped emission, i.e. the emission that escapes and does not get
+reprocessed by the reprocessing medium.
+
+The second flavour contains the CoveringFraction and EscapingFraction
+originally implemented for AGN and their line regions. The CoveringFraction
+will return the emission which is "covered" by the line region and transmitted
+through it (thus becoming reprocessed by it). The EscapingFraction will
+return the emission which is not covered by the line region and escapes
+without being reprocessed.
+
+Example usage:
+
+    model = EmissionModel(
+        apply_to=nebular,
+        transformer=ProcessedFraction(fesc_attrs=("fesc",)),
+        ...
+    )
+"""
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
 
 
-class EscapeFraction(Transformer):
+class ProcessedFraction(Transformer):
     """
-    A transformer that applies an escape fraction to an emission.
+    A transformer that applies an escape fraction to get processed emission.
+
+    This will return the processed emission, i,e. the emission that does not
+    escape and is reprocessed by the reprocessing medium.
 
     This can be thought of as an attenuation law with a single value, reducing
     the emission by a constant factor.
@@ -23,7 +53,7 @@ class EscapeFraction(Transformer):
 
     def __init__(self, fesc_attrs=("fesc",)):
         """
-        Initialise the escape fraction transformer.
+        Initialise the processed fraction transformer.
 
         Args:
             fesc_attrs (tuple, optional):
@@ -81,7 +111,7 @@ class EscapeFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fesc <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
 
@@ -95,6 +125,9 @@ class EscapeFraction(Transformer):
 class EscapedFraction(Transformer):
     """
     A transformer that applies an escaped fraction to an emission.
+
+    This will return the escaped emission, i.e. the emission that escapes and
+    does not get reprocessed by the reprocessing medium.
 
     This can be thought of as an attenuation law with a single value, reducing
     the emission by a constant factor.
@@ -168,7 +201,7 @@ class EscapedFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fesc <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
 
@@ -259,7 +292,7 @@ class CoveringFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fcov <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
 
@@ -275,7 +308,7 @@ class EscapingFraction(Transformer):
     A transformer that applies a covering fraction to an emission.
 
     This is an alias for the AGN covering fraction which is effectively the
-    EscapeFraction transformer (i.e. it transforms disc emission to get the
+    ProcessedFraction transformer (i.e. it transforms disc emission to get the
     emisison not covered by a line region).
 
     This can be thought of as an attenuation law with a single value, reducing
@@ -350,7 +383,7 @@ class EscapingFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fcov <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
 
