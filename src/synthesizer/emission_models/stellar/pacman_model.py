@@ -69,7 +69,7 @@ from synthesizer.emission_models.stellar.models import (
 )
 from synthesizer.emission_models.transformers import (
     EscapedFraction,
-    EscapeFraction,
+    ProcessedFraction,
 )
 
 
@@ -663,14 +663,14 @@ class BimodalPacmanEmission(StellarEmissionModel):
         young_transmitted = StellarEmissionModel(
             label="young_transmitted",
             apply_to=full_young_transmitted,
-            transformer=EscapeFraction(),
+            transformer=ProcessedFraction(),
             fesc=self._fesc,
             **kwargs,
         )
         old_transmitted = StellarEmissionModel(
             label="old_transmitted",
             apply_to=full_old_transmitted,
-            transformer=EscapeFraction(),
+            transformer=ProcessedFraction(),
             fesc=self._fesc,
             **kwargs,
         )
