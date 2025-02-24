@@ -169,6 +169,7 @@ def test_reusing_weights_ngp(nebular_emission_model, random_part_stars):
     ), "The grid weights are not stored."
 
     # Compute the spectra the second time which will reuse the weights
+    random_part_stars.clear_all_emissions()
     second_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         grid_assignment_method="ngp",
@@ -199,6 +200,7 @@ def test_reusing_weights_cic(nebular_emission_model, random_part_stars):
     ), "The grid weights are not stored."
 
     # Compute the spectra the second time which will reuse the weights
+    random_part_stars.clear_all_emissions()
     second_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         grid_assignment_method="cic",
