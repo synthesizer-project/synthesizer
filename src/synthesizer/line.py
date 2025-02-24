@@ -31,9 +31,9 @@ from unyt import (
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
-from synthesizer.warnings import deprecation, warn
 
 
 def get_line_id(id):

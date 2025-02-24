@@ -38,7 +38,7 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import exceptions
-from synthesizer.warnings import warn
+from synthesizer.synth_warnings import warn
 
 # Define the path to your YAML file
 FILE_PATH = os.path.join(os.path.dirname(__file__), "default_units.yml")

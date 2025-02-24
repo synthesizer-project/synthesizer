@@ -109,7 +109,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   int npart = parts->npart;
 
   /* Set the sub cell constants we'll use below. */
-  const int num_sub_cells = 1 << ndim; // 2^ndim
+  const int num_sub_cells = 1 << ndim; /* 2^ndim */
   int sub_dims[ndim];
   for (int i = 0; i < ndim; i++) {
     sub_dims[i] = 2;
@@ -247,7 +247,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
       /* Get the grid indices and cell fractions for the particle. */
       get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                            part_props, p);
+                            part_props, p + start);
 
       /* Now loop over this collection of cells collecting and setting their
        * weights. */

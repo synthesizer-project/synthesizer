@@ -11,8 +11,8 @@ import unyt.physical_constants as const
 from unyt import Hz, K, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
-from synthesizer.warnings import warn
 
 
 @accepts(frequency=Hz, temperature=K)

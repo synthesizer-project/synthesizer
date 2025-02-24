@@ -13,7 +13,7 @@ from synthesizer.exceptions import (
     UnrecognisedOption,
 )
 from synthesizer.photoionisation import calculate_Q_from_U
-from synthesizer.warnings import warn
+from synthesizer.synth_warnings import warn
 
 
 class ShapeCommands:

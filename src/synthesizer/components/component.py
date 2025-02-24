@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from synthesizer import exceptions
 from synthesizer.instruments import Instrument
 from synthesizer.sed import plot_spectra
-from synthesizer.warnings import deprecated, deprecation
+from synthesizer.synth_warnings import deprecated, deprecation
 
 
 class Component(ABC):
