@@ -292,7 +292,6 @@ class BlackHoles(Particles, BlackholesComponent):
     def _prepare_sed_args(
         self,
         grid,
-        fesc,
         spectra_type,
         mask,
         grid_assignment_method,
@@ -306,8 +305,6 @@ class BlackHoles(Particles, BlackholesComponent):
         Args:
             grid (Grid)
                 The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
@@ -464,10 +461,6 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_dims[ind] = len(g)
         grid_dims[ind + 1] = nlam
 
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         props = tuple(props)
@@ -485,7 +478,6 @@ class BlackHoles(Particles, BlackholesComponent):
                 grid_props,
                 props,
                 bol_lum,
-                fesc,
                 part_vels,
                 grid_dims,
                 len(grid_props),
@@ -501,7 +493,6 @@ class BlackHoles(Particles, BlackholesComponent):
                 grid_props,
                 props,
                 bol_lum,
-                fesc,
                 grid_dims,
                 len(grid_props),
                 np.int32(npart),
@@ -515,7 +506,6 @@ class BlackHoles(Particles, BlackholesComponent):
         grid,
         line_id,
         line_type,
-        fesc,
         mask,
         grid_assignment_method,
         nthreads,
@@ -531,10 +521,6 @@ class BlackHoles(Particles, BlackholesComponent):
             line_type (str)
                 The type of line to extract from the grid. Must match the
                 spectra/line type in the grid file.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (bool)
                 A mask to be applied to the stars. Spectra will only be
                 computed and returned for stars with True in the mask.
@@ -646,10 +632,6 @@ class BlackHoles(Particles, BlackholesComponent):
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
 
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         part_props = tuple(props)
@@ -664,7 +646,6 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_props,
             part_props,
             bol_lum,
-            fesc,
             grid_dims,
             len(grid_props),
             npart,
@@ -676,7 +657,6 @@ class BlackHoles(Particles, BlackholesComponent):
         self,
         grid,
         spectra_name,
-        fesc=None,
         mask=None,
         lam_mask=None,
         verbose=False,
@@ -693,9 +673,6 @@ class BlackHoles(Particles, BlackholesComponent):
             spectra_name (string)
                 The name of the target spectra inside the grid file
                 (e.g. "incident", "transmitted", "nebular").
-            fesc (float):
-                Fraction of emission that escapes unattenuated from
-                the birth cloud (defaults to 0.0).
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
@@ -740,7 +717,6 @@ class BlackHoles(Particles, BlackholesComponent):
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
-            fesc=fesc,
             spectra_type=spectra_name,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
@@ -789,7 +765,6 @@ class BlackHoles(Particles, BlackholesComponent):
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -813,10 +788,6 @@ class BlackHoles(Particles, BlackholesComponent):
             line_type (str)
                 The type of line to extract from the grid. Must match the
                 spectra/line type in the grid file.
-            fesc (float/array-like, float)
-                Fraction of blackhole emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -889,7 +860,6 @@ class BlackHoles(Particles, BlackholesComponent):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,

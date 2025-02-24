@@ -318,15 +318,13 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
  * @param part_tuple: A tuple of numpy arrays containing the particle
  * properties.
  * @param np_part_mass: The particle masses.
- * @param np_fesc: The escape fractions.
  * @param npart: The number of particles.
  *
  * @return struct particles*: A pointer to the particles struct.
  */
 struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_part_mass,
-                                  PyArrayObject *np_velocities,
-                                  PyArrayObject *np_fesc, const int npart,
+                                  PyArrayObject *np_velocities, const int npart,
                                   const int ndim) {
 
   /* Initialise the particles struct. */
@@ -356,17 +354,6 @@ struct particles *get_part_struct(PyObject *part_tuple,
     if (particles->velocities == NULL) {
       return NULL;
     }
-  }
-
-  /* Extract a pointer to the fesc array. */
-  if (np_fesc != NULL) {
-    particles->fesc = extract_data_double(np_fesc, "fesc");
-    if (particles->fesc == NULL) {
-      return NULL;
-    }
-  } else {
-    /* If we have no fesc we need an array of zeros. */
-    particles->fesc = calloc(npart, sizeof(double));
   }
 
   /* Extract the particle properties from the tuple of numpy arrays. */
