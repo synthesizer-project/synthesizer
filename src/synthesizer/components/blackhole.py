@@ -351,7 +351,18 @@ class BlackholesComponent(Component):
         else:
             from ..extensions.integrated_spectra import compute_integrated_sed
 
-            spec = compute_integrated_sed(*args)
+            spec, grid_weights = compute_integrated_sed(*args)
+
+            # If we have no mask then lets store the grid weights in case
+            # we can make use of them later
+            if (
+                mask is None
+                and grid.grid_name
+                not in self._grid_weights[grid_assignment_method.lower()]
+            ):
+                self._grid_weights[grid_assignment_method.lower()][
+                    grid.grid_name
+                ] = grid_weights
 
         # If we had a wavelength mask we need to make sure we return a spectra
         # compatible with the original wavelength array.
