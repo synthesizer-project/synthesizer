@@ -1,4 +1,31 @@
-"""A submodule contatining the escape fraction transformers."""
+"""A submodule contatining the escape fraction transformers.
+
+This module contains transformers that apply escape fractions to an emission.
+This can be thought of as an attenuation law with a single value, reducing the
+emission by a constant factor.
+
+There are two flavours of this transformer, one for escaped and reprocessed
+emission. This one contains the ProcessedFraction and EscapedFraction, the
+former will return the processed emission, i.e. the emission that does not
+escape and is reprocessed by the reprocessing medium. The latter will return
+the escaped emission, i.e. the emission that escapes and does not get
+reprocessed by the reprocessing medium.
+
+The second flavour contains the CoveringFraction and EscapingFraction
+originally implemented for AGN and their line regions. The CoveringFraction
+will return the emission which is "covered" by the line region and transmitted
+through it (thus becoming reprocessed by it). The EscapingFraction will
+return the emission which is not covered by the line region and escapes
+without being reprocessed.
+
+Example usage:
+
+    model = EmissionModel(
+        apply_to=nebular,
+        transformer=ProcessedFraction(fesc_attrs=("fesc",)),
+        ...
+    )
+"""
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
