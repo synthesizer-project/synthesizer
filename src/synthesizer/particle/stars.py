@@ -957,10 +957,6 @@ class Stars(Particles, StarsComponent):
                 and grid.grid_name
                 not in self._grid_weights[grid_assignment_method.lower()]
             ):
-                print(
-                    f"Storing grid weights for {grid.grid_name} "
-                    f"with {grid_assignment_method} method"
-                )
                 self._grid_weights[grid_assignment_method.lower()][
                     grid.grid_name
                 ] = grid_weights
