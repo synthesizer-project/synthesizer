@@ -78,7 +78,6 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
                 coordinates=coods[b:e, :] * Mpc,
                 current_masses=masses[b:e] * Msun,
                 smoothing_lengths=s_hsml[b:e] * Mpc,
-                
             )
         else:
             galaxies[i].load_stars(
