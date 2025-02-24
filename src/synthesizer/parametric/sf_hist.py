@@ -26,8 +26,8 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from unyt import yr
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import warn
 from synthesizer.utils.stats import weighted_mean, weighted_median
-from synthesizer.warnings import warn
 
 # Define a list of the available parametrisations
 parametrisations = (

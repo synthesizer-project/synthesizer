@@ -32,9 +32,9 @@ from unyt import Hz, angstrom, c, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.integrate import integrate_last_axis
-from synthesizer.warnings import warn
 
 
 @accepts(new_lam=angstrom)

@@ -38,6 +38,7 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import (
     TableFormatter,
@@ -45,7 +46,6 @@ from synthesizer.utils import (
     wavelength_to_rgba,
 )
 from synthesizer.utils.integrate import integrate_last_axis
-from synthesizer.warnings import deprecated, warn
 
 
 class Sed:

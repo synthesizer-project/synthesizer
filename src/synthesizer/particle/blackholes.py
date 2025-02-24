@@ -37,9 +37,9 @@ from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import value_to_array
-from synthesizer.warnings import deprecated, warn
 
 
 class BlackHoles(Particles, BlackholesComponent):

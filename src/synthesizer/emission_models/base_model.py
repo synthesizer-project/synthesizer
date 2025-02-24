@@ -56,8 +56,8 @@ from synthesizer.emission_models.operations import (
 )
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import LineCollection
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.warnings import deprecation, warn
 
 
 class EmissionModel(Extraction, Generation, Transformation, Combination):
