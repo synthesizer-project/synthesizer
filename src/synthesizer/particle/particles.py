@@ -48,6 +48,11 @@ class Particles:
             The V band optical depth.
         radii (array-like, float)
             The radii of the particles.
+        _grid_weights (dict, array-like, float)
+            Weights for each particle sorted onto a grid. This dictionary takes
+            the form of {<method>: {grid_name: weights}} where weights is an
+            array of the same shape as the grid containg the particles sorted
+            onto the grid.
     """
 
     # Define class level Quantity attributes
@@ -148,6 +153,9 @@ class Particles:
 
         # Attach the name of the particle type
         self.name = name
+
+        # A container for any grid weights we already computed
+        self._grid_weights = {"cic": {}, "ngp": {}}
 
     @property
     def particle_photo_fluxes(self):
