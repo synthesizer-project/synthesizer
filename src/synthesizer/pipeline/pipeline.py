@@ -41,8 +41,8 @@ from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
 )
+from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
-from synthesizer.warnings import warn
 
 
 class Pipeline:

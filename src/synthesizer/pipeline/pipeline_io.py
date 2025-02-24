@@ -25,7 +25,7 @@ from synthesizer.pipeline.pipeline_utils import (
     get_dataset_properties,
     unify_dict_structure_across_ranks,
 )
-from synthesizer.warnings import warn
+from synthesizer.synth_warnings import warn
 
 
 class PipelineIO:
