@@ -201,13 +201,13 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyArrayObject *np_grid_spectra;
+  PyArrayObject *np_grid_spectra, *np_grid_weights;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisi", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiO", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads))
+                        &nlam, &method, &nthreads, &np_grid_weights))
     return NULL;
 
   /* Extract the grid struct. */
@@ -225,26 +225,33 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
 
   /* Allocate the grid weights. */
-  double *grid_weights = calloc(grid_props->size, sizeof(double));
-  if (grid_weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Could not allocate memory for grid weights.");
-    return NULL;
+  double *grid_weights = NULL;
+  if (np_grid_weights == Py_None) {
+    grid_weights = calloc(grid_props->size, sizeof(double));
+    if (grid_weights == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Could not allocate memory for grid weights.");
+      return NULL;
+    }
+  } else {
+    grid_weights = (double *)PyArray_DATA(np_grid_weights);
   }
 
   toc("Extracting Python data", setup_start);
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
-                    nthreads);
-  } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
-                    nthreads);
-  } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
-    return NULL;
+  if (np_grid_weights == Py_None) {
+    if (strcmp(method, "cic") == 0) {
+      weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
+                      nthreads);
+    } else if (strcmp(method, "ngp") == 0) {
+      weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
+                      nthreads);
+    } else {
+      PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+      return NULL;
+    }
   }
 
   /* Check we got the weights sucessfully. (Any error messages will already be
@@ -260,21 +267,26 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Clean up memory! */
-  free(grid_weights);
-  free(part_props);
-  free(grid_props);
-
   /* Reconstruct the python array to return. */
   npy_intp np_dims[1] = {
       nlam,
   };
+  npy_intp np_dims_weights[grid_props->ndim];
+  for (int i = 0; i < grid_props->ndim; i++) {
+    np_dims_weights[i] = grid_props->dims[i];
+  }
   PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
       1, np_dims, NPY_FLOAT64, spectra);
+  PyArrayObject *out_grid_weights = (PyArrayObject *)PyArray_SimpleNewFromData(
+      grid_props->ndim, np_dims_weights, NPY_FLOAT64, grid_weights);
+
+  /* Clean up memory! */
+  free(part_props);
+  free(grid_props);
 
   toc("Compute integrated SED", start_time);
 
-  return Py_BuildValue("N", out_spectra);
+  return Py_BuildValue("NN", out_spectra, out_grid_weights);
 }
 
 static PyMethodDef SedMethods[] = {
