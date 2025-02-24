@@ -84,6 +84,9 @@ class Component(ABC):
         for key, val in kwargs.items():
             setattr(self, key, val)
 
+        # A container for any grid weights we already computed
+        self._grid_weights = {"cic": {}, "ngp": {}}
+
     @property
     def photo_fluxes(self):
         """
