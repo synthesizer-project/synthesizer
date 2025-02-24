@@ -27,7 +27,7 @@ from synthesizer.emission_models.base_model import StellarEmissionModel
 from synthesizer.emission_models.models import AttenuatedEmission, DustEmission
 from synthesizer.emission_models.transformers import (
     EscapedFraction,
-    EscapeFraction,
+    ProcessedFraction,
 )
 
 
@@ -203,7 +203,7 @@ class TransmittedEmission(StellarEmissionModel):
             self,
             label=label,
             apply_to=full_transmitted,
-            transformer=EscapeFraction(),
+            transformer=ProcessedFraction(),
             fesc=fesc,
             related_models=related_models,
             **kwargs,

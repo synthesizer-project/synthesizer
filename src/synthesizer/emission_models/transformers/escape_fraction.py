@@ -5,7 +5,7 @@ from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
 
 
-class EscapeFraction(Transformer):
+class ProcessedFraction(Transformer):
     """
     A transformer that applies an escape fraction to an emission.
 
@@ -81,7 +81,7 @@ class EscapeFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fesc <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
 
@@ -168,7 +168,7 @@ class EscapedFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fesc <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
 
@@ -259,7 +259,7 @@ class CoveringFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fcov <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
 
@@ -275,7 +275,7 @@ class EscapingFraction(Transformer):
     A transformer that applies a covering fraction to an emission.
 
     This is an alias for the AGN covering fraction which is effectively the
-    EscapeFraction transformer (i.e. it transforms disc emission to get the
+    ProcessedFraction transformer (i.e. it transforms disc emission to get the
     emisison not covered by a line region).
 
     This can be thought of as an attenuation law with a single value, reducing
@@ -350,7 +350,7 @@ class EscapingFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fcov <= 1:
-            raise exceptions.InvalidEscapeFraction(
+            raise exceptions.InvalidProcessedFraction(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
 
