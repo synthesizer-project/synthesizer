@@ -30,6 +30,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
     with h5py.File(master_file, "r") as hf:
         slens = hf[f"{region}/{tag}/Galaxy/S_Length"][:]
         glens = hf[f"{region}/{tag}/Galaxy/G_Length"][:]
+        cop=(hf["39/005_z010p000/Galaxy/COP"][:]) #loading COP
 
         ages = hf[f"{region}/{tag}/Particle/S_Age"][:]  # Gyr
         coods = (
@@ -66,7 +67,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
     for i, (b, e) in enumerate(zip(begin, end)):
         # Create the individual galaxy objects
         galaxies[i] = Galaxy(redshift=zed)
-
+        galaxies[i].centre = np.array([cop[0][i],cop[1][i],cop[2][i]])* scale_factor * Mpc
         if read_abundances:
             galaxies[i].load_stars(
                 imasses[b:e] * Msun,
@@ -77,6 +78,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
                 coordinates=coods[b:e, :] * Mpc,
                 current_masses=masses[b:e] * Msun,
                 smoothing_lengths=s_hsml[b:e] * Mpc,
+                
             )
         else:
             galaxies[i].load_stars(
@@ -86,6 +88,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
                 coordinates=coods[b:e, :] * Mpc,
                 current_masses=masses[b:e] * Msun,
                 smoothing_lengths=s_hsml[b:e] * Mpc,
+                centre=
             )
 
     # Get the gas particle begin / end indices
