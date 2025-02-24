@@ -154,9 +154,6 @@ class Particles:
         # Attach the name of the particle type
         self.name = name
 
-        # A container for any grid weights we already computed
-        self._grid_weights = {"cic": {}, "ngp": {}}
-
     @property
     def particle_photo_fluxes(self):
         """
