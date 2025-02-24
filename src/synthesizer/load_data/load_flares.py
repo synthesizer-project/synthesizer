@@ -30,7 +30,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
     with h5py.File(master_file, "r") as hf:
         slens = hf[f"{region}/{tag}/Galaxy/S_Length"][:]
         glens = hf[f"{region}/{tag}/Galaxy/G_Length"][:]
-        cop=(hf[f"{region}/{tag}/Galaxy/COP"][:]) #loading COP
+        cop = hf[f"{region}/{tag}/Galaxy/COP"][:] #loading COP
 
         ages = hf[f"{region}/{tag}/Particle/S_Age"][:]  # Gyr
         coods = (
