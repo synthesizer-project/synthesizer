@@ -298,6 +298,7 @@ class BlackHoles(Particles, BlackholesComponent):
         lam_mask,
         nthreads,
         vel_shift,
+        integrated,
     ):
         """
         Prepare the arguments for the C extension to compute SEDs.
@@ -322,6 +323,11 @@ class BlackHoles(Particles, BlackholesComponent):
             nthreads (int)
                 The number of threads to use for the computation. If -1 then
                 all available threads are used.
+            vel_shift (bool)
+                Should the spectra be velocity shifted?
+            integrated (bool)
+                Whether to return the integrated spectra or per particle
+                spectra.
 
         Returns:
             tuple
@@ -486,6 +492,23 @@ class BlackHoles(Particles, BlackholesComponent):
                 grid_assignment_method,
                 nthreads,
                 c.to(vel_units).value,
+            )
+        elif integrated:
+            return (
+                grid_spectra,
+                grid_props,
+                props,
+                bol_lum,
+                grid_dims,
+                len(grid_props),
+                npart,
+                nlam,
+                grid_assignment_method,
+                nthreads,
+                self._grid_weights[grid_assignment_method].get(
+                    grid.grid_name,
+                    None,
+                ),
             )
         else:
             return (
