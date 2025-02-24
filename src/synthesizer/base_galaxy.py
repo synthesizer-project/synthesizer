@@ -10,9 +10,9 @@ from synthesizer import exceptions
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.instruments import Instrument
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
-from synthesizer.warnings import deprecated, deprecation
 
 
 class BaseGalaxy:
