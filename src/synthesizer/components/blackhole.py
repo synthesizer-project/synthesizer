@@ -11,9 +11,9 @@ from unyt import Hz, Msun, angstrom, c, cm, deg, erg, km, s, yr
 from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.line import Line
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
-from synthesizer.warnings import warn
 
 
 class BlackholesComponent(Component):

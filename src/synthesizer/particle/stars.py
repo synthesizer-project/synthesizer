@@ -32,10 +32,10 @@ from synthesizer.line import Line
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.util_funcs import combine_arrays
-from synthesizer.warnings import deprecated, warn
 
 
 class Stars(Particles, StarsComponent):

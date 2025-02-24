@@ -39,10 +39,10 @@ from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.warnings import warn
 
 from . import __file__ as filepath
 
