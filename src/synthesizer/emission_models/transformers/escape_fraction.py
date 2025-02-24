@@ -2,7 +2,7 @@
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
-from synthesizer.warnings import warn
+from synthesizer.synth_warnings import warn
 
 
 class EscapeFraction(Transformer):
