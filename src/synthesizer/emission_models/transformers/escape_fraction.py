@@ -7,7 +7,10 @@ from synthesizer.synth_warnings import warn
 
 class ProcessedFraction(Transformer):
     """
-    A transformer that applies an escape fraction to an emission.
+    A transformer that applies an escape fraction to get processed emission.
+
+    This will return the processed emission, i,e. the emission that does not
+    escape and is reprocessed by the reprocessing medium.
 
     This can be thought of as an attenuation law with a single value, reducing
     the emission by a constant factor.
@@ -23,7 +26,7 @@ class ProcessedFraction(Transformer):
 
     def __init__(self, fesc_attrs=("fesc",)):
         """
-        Initialise the escape fraction transformer.
+        Initialise the processed fraction transformer.
 
         Args:
             fesc_attrs (tuple, optional):
@@ -95,6 +98,9 @@ class ProcessedFraction(Transformer):
 class EscapedFraction(Transformer):
     """
     A transformer that applies an escaped fraction to an emission.
+
+    This will return the escaped emission, i.e. the emission that escapes and
+    does not get reprocessed by the reprocessing medium.
 
     This can be thought of as an attenuation law with a single value, reducing
     the emission by a constant factor.
