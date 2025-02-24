@@ -7,20 +7,21 @@ import numpy as np
 
 def test_velocity_shift_applys_cic(random_part_stars, nebular_emission_model):
     """Test the velocity shift of particle spectra."""
-    random_part_stars.clear_all_emissions()
-    random_part_stars._grid_weights = {}
-
     # Compute the spectra with and without velocity shift
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         vel_shift=True,
         grid_assignment_method="cic",
     )
+    with_shift_spec = random_part_stars.spectra["nebular_line"]
+    random_part_stars.clear_all_emissions()
     without_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         vel_shift=False,
         grid_assignment_method="cic",
     )
+    without_shift_spec = random_part_stars.spectra["nebular_line"]
+    random_part_stars.clear_all_emissions()
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
@@ -35,20 +36,21 @@ def test_velocity_shift_conservation_cic(
     nebular_emission_model,
 ):
     """Test the velocity shift of particle spectra."""
-    random_part_stars.clear_all_emissions()
-    random_part_stars._grid_weights = {}
-
     # Compute the spectra with and without velocity shift
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         vel_shift=True,
         grid_assignment_method="cic",
     )
+    with_shift_spec = random_part_stars.spectra["nebular_line"]
+    random_part_stars.clear_all_emissions()
     without_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         vel_shift=False,
         grid_assignment_method="cic",
     )
+    without_shift_spec = random_part_stars.spectra["nebular_line"]
+    random_part_stars.clear_all_emissions()
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
@@ -74,9 +76,6 @@ def test_velocity_shift_conservation_cic(
 
 def test_velocity_shift_applys_ngp(random_part_stars, nebular_emission_model):
     """Test the velocity shift of particle spectra."""
-    random_part_stars.clear_all_emissions()
-    random_part_stars._grid_weights = {}
-
     # Compute the spectra with and without velocity shift
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
@@ -101,9 +100,6 @@ def test_velocity_shift_conservation_ngp(
     random_part_stars, nebular_emission_model
 ):
     """Test the velocity shift of particle spectra."""
-    random_part_stars.clear_all_emissions()
-    random_part_stars._grid_weights = {}
-
     # Compute the spectra with and without velocity shift
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
