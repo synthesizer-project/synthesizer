@@ -10,13 +10,13 @@ from synthesizer.emission_models.transformers.dust_attenuation import (
 from synthesizer.emission_models.transformers.escape_fraction import (
     CoveringFraction,
     EscapedFraction,
-    EscapeFraction,
+    ProcessedFraction,
     EscapingFraction,
 )
 from synthesizer.emission_models.transformers.igm import Inoue14, Madau96
 
 __all__ = [
-    "EscapeFraction",
+    "ProcessedFraction",
     "EscapedFraction",
     "CoveringFraction",
     "EscapingFraction",
