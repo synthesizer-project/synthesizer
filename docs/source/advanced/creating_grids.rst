@@ -3,7 +3,7 @@ Creating Grids
 
 Advanced users can create their own `synthesizer grids <../grids/grids>`_. These can be intrinsic grids of stellar emission, generated from stellar population synthesis models, or grids post-processed through photoionisation codes such as `cloudy <https://trac.nublado.org>`_.
 
-The code for creating custom grids is contained in a separate repository, `synthesizer-grids <https://github.com/flaresimulations/synthesizer-grids>`_.
+The code for creating custom grids is contained in a separate repository, `grid-generation <https://github.com/synthesizer-project/grid-generation>`_.
 You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. CLOUDY, python-FSPS). 
 
 Grids should follow the naming convention where possible, see :ref:`grid-naming`.
@@ -16,7 +16,7 @@ Running your own SPS grids
 
 Here we will show how to create an incident grid using synthesizer. These incident grids are often used as inputs to photoionisation codes like Cloudy, but are also useful in their own right for understanding the intrinsic properties of stellar populations.
 
-Firstly, choose the grid you want to create, e.g. BC03, maraston05, or FSPS, and find the corresponding python script to install it within the `synthesizer-grids` repository.
+Firstly, choose the grid you want to create, e.g. BC03, maraston05, or FSPS, and find the corresponding python script to install it within the `grid-generation` repository.
 To create the grid, you need to specify where you want to place the raw data files from the model (`input_dir`), and where you would like the grid file to be created (`grid_dir`), e.g.
 
 .. code-block:: bash
@@ -52,7 +52,7 @@ To create input files with varying parameter values, we can do something like th
    python create_cloudy_input_grid.py -grid_dir /home/dir/data/synthesizer_data/grids -cloudy_dir /home/dir/data/synthesizer_data/cloudy -incident_grid maraston11_kroupa -cloudy_params c23.01-sps -cloudy_params_addition test_suite/ionisation_parameter -machine sciama -verbose True 
 
 
-Then, using the method of your choice, you can run the created input files through Cloudy. Within `synthesizer-grids` are example scripts showing how to run these using different HPC systems.
+Then, using the method of your choice, you can run the created input files through Cloudy. Within `grid-generation` are example scripts showing how to run these using different HPC systems.
 
 Once these have been run through Cloudy, we can use the outputs from Cloudy to create a new grid, containing the post-processed spectra and line emission:
 

@@ -35,7 +35,7 @@ To install the latest unstable version from source, clone the repository and ins
 
 .. code-block:: bash
 
-    git clone https://github.com/flaresimulations/synthesizer.git
+    git clone https://github.com/synthesizer-project/synthesizer.git
     cd synthesizer
     pip install .
 

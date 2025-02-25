@@ -5,10 +5,6 @@ hydrodynamical simulations suite.
 The EAGLE hdf5 data loading scripts have been taken from
 the `eagle_io` package (https://github.com/flaresimulations/eagle_IO/).
 This has been to make the call as self-contained as possible.
-
-The functions here used in
-https://github.com/flaresimulations/synthesizer-pipeline
-
 """
 
 import glob

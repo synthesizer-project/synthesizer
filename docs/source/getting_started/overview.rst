@@ -17,7 +17,7 @@ For example, one could have a grid that has been post-processed through a photoi
 Different grids can also be swapped in and out to assess the impact of different modelling choices; for example, one might wish to understand the impact of different SPS models on the integrated stellar emission.
 
 We provide a number of `pre-computed grids <../grids/grids.rst>`_ for stellar and AGN emission that will be sufficient for most use cases.
-Advanced users can also generate their own grids, using the ``synthesizer-grids`` package (see `here <../advanced/creating_grids.rst>`_).
+Advanced users can also generate their own grids, using the ``grid-generation`` package (see `here <../advanced/creating_grids.rst>`_).
 
 
 Particle vs Parametric

@@ -65,7 +65,7 @@ A more complex IMF, for example with two power-laws (2.0, 2.35) separated at 1 M
 
     bpl-0.1,1.0,100-2.0,2.35
 
-If an IMF you need is missing, please let us know by raising a feature request through an `issue <https://github.com/flaresimulations/synthesizer/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=>`_.
+If an IMF you need is missing, please let us know by raising a feature request through an `issue <https://github.com/synthesizer-project/synthesizer/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=>`_.
 
 
 Photoionisation modelling
@@ -236,7 +236,7 @@ Creating your own grids
 =======================
 
 For advanced users, synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY.
-We provide scripts for doing this in the `synthesizer-grids` repository.
+We provide scripts for doing this in the `grid-generation` repository.
 Details are provided `here <../advanced/creating_grids>`_.
 You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. `CLOUDY`, `python-FSPS`).
 Please reach out to us if you have questions about the pre-computed grids or grid creation.
