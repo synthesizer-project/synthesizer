@@ -586,6 +586,7 @@ class Stars(Particles, StarsComponent):
         lam_mask,
         nthreads,
         vel_shift,
+        integrated,
     ):
         """
         Prepare the arguments for SED computation with the C functions.
@@ -734,6 +735,23 @@ class Stars(Particles, StarsComponent):
                 grid_assignment_method,
                 nthreads,
                 c.to(vel_units).value,
+            )
+        elif integrated:
+            return (
+                grid_spectra,
+                grid_props,
+                part_props,
+                part_mass,
+                grid_dims,
+                len(grid_props),
+                npart,
+                nlam,
+                grid_assignment_method,
+                nthreads,
+                self._grid_weights[grid_assignment_method].get(
+                    grid.grid_name,
+                    None,
+                ),
             )
         else:
             return (
@@ -884,23 +902,6 @@ class Stars(Particles, StarsComponent):
                     f" have metallicities > {grid.metallicity[-1]}"
                 )
 
-        # Get particle age masks
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
-
-        age_mask = self._get_masks(young, old)
-
-        # Ensure and warn that the masking hasn't removed everything
-        if np.sum(mask) == 0:
-            warn("`mask` has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        if np.sum(age_mask) == 0:
-            warn("Age mask has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        mask = mask & age_mask
-
         if aperture is not None:
             # Get aperture mask
             aperture_mask = self._aperture_mask(aperture_radius=aperture)
@@ -911,17 +912,28 @@ class Stars(Particles, StarsComponent):
 
                 return np.zeros(len(grid.lam))
         else:
-            aperture_mask = np.ones(self.nparticles, dtype=bool)
+            aperture_mask = None
+
+        if mask is not None and aperture_mask is not None:
+            mask = mask & aperture_mask
+        elif aperture_mask is not None:
+            mask = aperture_mask
+
+        # Ensure and warn that the masking hasn't removed everything
+        if mask is not None and np.sum(mask) == 0:
+            warn("`mask` has filtered out all particles")
+            return np.zeros(len(grid.lam))
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
             grid,
             spectra_type=spectra_name,
-            mask=mask & aperture_mask,
+            mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
             vel_shift=vel_shift,
             lam_mask=lam_mask,
+            integrated=True,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -936,7 +948,18 @@ class Stars(Particles, StarsComponent):
                 compute_integrated_sed,
             )
 
-            spec = compute_integrated_sed(*args)
+            spec, grid_weights = compute_integrated_sed(*args)
+
+            # If we have no mask then lets store the grid weights in case
+            # we can make use of them later
+            if (
+                mask is None
+                and grid.grid_name
+                not in self._grid_weights[grid_assignment_method.lower()]
+            ):
+                self._grid_weights[grid_assignment_method.lower()][
+                    grid.grid_name
+                ] = grid_weights
 
         # If we had a wavelength mask we need to make sure we return a spectra
         # compatible with the original wavelength array.
@@ -1503,6 +1526,7 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
             vel_shift=vel_shift,
             lam_mask=lam_mask,
+            integrated=False,
         )
         toc("Preparing C args", start)
 

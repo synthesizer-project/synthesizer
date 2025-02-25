@@ -149,3 +149,65 @@ def test_threaded_generation_cic_integrated(
     assert np.allclose(
         serial_spec._lnu, threaded_spec._lnu
     ), "The serial and threaded spectra are not the same."
+
+
+def test_reusing_weights_ngp(nebular_emission_model, random_part_stars):
+    """Test reusing weights to calculate another spectra for the same grid."""
+
+    # Compute the spectra the first time
+    first_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="ngp",
+    )
+
+    # Ensure we have the weights
+    assert hasattr(
+        random_part_stars, "_grid_weights"
+    ), "The grid weights are not stored."
+    assert (
+        "test_grid" in random_part_stars._grid_weights["ngp"]
+    ), "The grid weights are not stored."
+
+    # Compute the spectra the second time which will reuse the weights
+    random_part_stars.clear_all_emissions()
+    second_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="ngp",
+    )
+
+    # Ensure that the integrated spectra are different
+    assert np.allclose(
+        first_spec._lnu,
+        second_spec._lnu,
+    ), "The first and second spectra are not the same."
+
+
+def test_reusing_weights_cic(nebular_emission_model, random_part_stars):
+    """Test reusing weights to calculate another spectra for the same grid."""
+
+    # Compute the spectra the first time
+    first_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="cic",
+    )
+
+    # Ensure we have the weights
+    assert hasattr(
+        random_part_stars, "_grid_weights"
+    ), "The grid weights are not stored."
+    assert (
+        "test_grid" in random_part_stars._grid_weights["cic"]
+    ), "The grid weights are not stored."
+
+    # Compute the spectra the second time which will reuse the weights
+    random_part_stars.clear_all_emissions()
+    second_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="cic",
+    )
+
+    # Ensure that the integrated spectra are different
+    assert np.allclose(
+        first_spec._lnu,
+        second_spec._lnu,
+    ), "The first and second spectra are not the same."

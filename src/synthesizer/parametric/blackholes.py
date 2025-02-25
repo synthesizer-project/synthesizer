@@ -229,6 +229,8 @@ class BlackHole(BlackholesComponent):
             lam_mask (array, bool)
                 A mask to apply to the wavelength array of the grid. This
                 allows for the extraction of specific wavelength ranges.
+            integrated (bool)
+                Whether to return the integrated SED or the SED per particle.
             kwargs (dict)
                 Any other arguments. Mainly unused and here for consistency
                 with particle version of this method which does have extra
@@ -346,6 +348,7 @@ class BlackHole(BlackholesComponent):
             nlam,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def _prepare_line_args(
