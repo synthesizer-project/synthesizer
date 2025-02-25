@@ -1389,3 +1389,18 @@ class BaseGalaxy:
 
         # Clear photometry
         self.clear_all_photometry()
+
+    def clear_weights(self):
+        """
+        Clear all cached grid weights.
+
+        This clears all grid weights calculated using different
+        methods from this base galaxy, and resets the
+        `_grid_weights` dictionary.
+        """
+        if self.stars is not None:
+            if hasattr(self.stars, "_grid_weights"):
+                self._grid_weights = {"cic": {}, "ngp": {}}
+        if self.black_holes is not None:
+            if hasattr(self.black_holes, "_grid_weights"):
+                self._grid_weights = {"cic": {}, "ngp": {}}
