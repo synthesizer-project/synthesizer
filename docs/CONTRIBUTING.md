@@ -25,7 +25,7 @@ source synth-dev-env/bin/activate
 You can then clone the repo and install it in editable mode with the extra development dependencies.
 
 ```bash
-git clone https://github.com/flaresimulations/synthesizer.git
+git clone https://github.com/synthesizer-project/synthesizer.git
 cd synthesizer
 pip install -e .[dev]
 ```
@@ -34,7 +34,7 @@ Note: if you are planning to build the docs locally you'll also need to include 
 
 ### Test data
 
-To run existing examples or docs and add new ones, you'll need test data, provided [here](https://flaresimulations.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo.
+To run existing examples or docs and add new ones, you'll need test data, provided [here](https://synthesizer-project.github.io/synthesizer/getting_started/downloading_grids.html#downloading-the-test-grid). This can be downloaded through the command line interface. Run the following at the root of the Synthesizer repo.
 
 ```bash
 synthesizer-download --test-grids --dust-grid -d tests/test_grid

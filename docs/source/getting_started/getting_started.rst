@@ -18,7 +18,7 @@ Getting Help
 
 For updates and general help with synthesizer we have a dedicated Slack page. Please email <christopher dot lovell at port dot ac dot uk> for a sign up link.
 
-If you wish to report an issue with synthesizer, please `raise an issue <https://github.com/flaresimulations/synthesizer/issues>`_ on github.
+If you wish to report an issue with synthesizer, please `raise an issue <https://github.com/synthesizer-project/synthesizer/issues>`_ on github.
 
 To be kept up to date on important updates, you can sign up to our mailing list using the form below.
 This list will only be used to notify users of major changes (including breaking changes) to the code, which will also be associated with point updates.

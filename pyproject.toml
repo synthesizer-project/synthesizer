@@ -131,10 +131,10 @@ eagle = [
 
 # Project urls
 [project.urls]
-"Homepage" = "https://github.com/flaresimulations/synthesizer"
-"Bug Reports" = "https://github.com/flaresimulations/synthesizer/issues"
-"Source" = "https://github.com/flaresimulations/synthesizer"
-"Documentation" = "https://flaresimulations.github.io/synthesizer/"
+"Homepage" = "https://github.com/synthesizer-project/synthesizer"
+"Bug Reports" = "https://github.com/synthesizer-project/synthesizer/issues"
+"Source" = "https://github.com/synthesizer-project/synthesizer"
+"Documentation" = "https://synthesizer-project.github.io/synthesizer/"
 
 # Entry points
 [project.scripts]

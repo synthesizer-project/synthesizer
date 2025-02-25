@@ -36,7 +36,7 @@ parametrisations = (
     "Exponential",
     "TruncatedExponential",
     "DecliningExponential",
-    "DelayedExponential" "LogNormal",
+    "DelayedExponentialLogNormal",
     "DoublePowerLaw",
     "DenseBasis",
 )
@@ -198,7 +198,7 @@ class Common:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 
@@ -245,9 +245,9 @@ class Common:
         for parameter_name, parameter_value in self.parameters.items():
             pstr += f"{parameter_name}: {parameter_value}" + "\n"
         pstr += (
-            f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+            f"median age: {self.calculate_median_age().to('Myr'):.2f}" + "\n"
         )
-        pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
+        pstr += f"mean age: {self.calculate_mean_age().to('Myr'):.2f}" + "\n"
         pstr += "-" * 10 + "\n"
 
         return pstr

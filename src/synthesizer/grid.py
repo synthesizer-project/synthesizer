@@ -6,7 +6,7 @@ object contains attributes and methods for interfacing with spectral and line
 grids.
 
 The grids themselves use a standardised HDF5 format which can be generated
-using the synthesizer-grids sister package.
+using the grid-generation sister package.
 
 Example usage:
 
