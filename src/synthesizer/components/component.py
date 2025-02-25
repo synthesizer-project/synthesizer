@@ -741,3 +741,14 @@ class Component(ABC):
         self.clear_all_spectra()
         self.clear_all_lines()
         self.clear_all_photometry()
+
+    def clear_weights(self):
+        """
+        Clear all cached grid weights from the component.
+
+        This clears all grid weights calculated using different
+        methods from this component, and resets the `_grid_weights`
+        dictionary.
+        """
+        if hasattr(self, "_grid_weights"):
+            self._grid_weights = {"cic": {}, "ngp": {}}
