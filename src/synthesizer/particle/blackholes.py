@@ -342,17 +342,6 @@ class BlackHoles(Particles, BlackholesComponent):
             # this is a generic disc grid so no line_region
             line_region = None
 
-        # Handle the case where mask is None
-        if mask is None:
-            mask = np.ones(self.nbh, dtype=bool)
-
-        # If lam_mask is None then we want all wavelengths
-        if lam_mask is None:
-            lam_mask = np.ones(
-                grid.spectra[spectra_type].shape[-1],
-                dtype=bool,
-            )
-
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
@@ -393,7 +382,7 @@ class BlackHoles(Particles, BlackholesComponent):
             props.append(prop)
 
         # Calculate npart from the mask
-        npart = np.sum(mask)
+        npart = self.nbh
 
         # Remove units from any unyt_arrays
         props = [
@@ -431,7 +420,7 @@ class BlackHoles(Particles, BlackholesComponent):
         else:
             # We aren't doing a shift so just pass a dummy array and units
             part_vels = np.ascontiguousarray(
-                np.zeros((np.sum(mask), 3)),
+                np.zeros((npart, 3)),
                 dtype=np.float64,
             )
             vel_units = km / s
@@ -441,7 +430,7 @@ class BlackHoles(Particles, BlackholesComponent):
         bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(np.sum(lam_mask))
+        nlam = grid.lam.size
 
         # Get the grid spctra
         grid_spectra = np.ascontiguousarray(
@@ -453,12 +442,6 @@ class BlackHoles(Particles, BlackholesComponent):
         grid_lam = np.ascontiguousarray(
             grid._lam,
             dtype=np.float64,
-        )
-
-        # Apply the wavelength mask
-        grid_spectra = np.ascontiguousarray(
-            grid_spectra[..., lam_mask],
-            np.float64,
         )
 
         # Get the grid dimensions after slicing what we need
@@ -492,6 +475,8 @@ class BlackHoles(Particles, BlackholesComponent):
                 grid_assignment_method,
                 nthreads,
                 c.to(vel_units).value,
+                mask,
+                lam_mask,
             )
         elif integrated:
             return (
@@ -524,6 +509,8 @@ class BlackHoles(Particles, BlackholesComponent):
                 nlam,
                 grid_assignment_method,
                 nthreads,
+                mask,
+                lam_mask,
             )
 
     def _prepare_line_args(

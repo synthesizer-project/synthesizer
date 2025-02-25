@@ -365,13 +365,6 @@ class BlackholesComponent(Component):
                     grid.grid_name
                 ] = grid_weights
 
-        # If we had a wavelength mask we need to make sure we return a spectra
-        # compatible with the original wavelength array.
-        if lam_mask is not None:
-            out_spec = np.zeros(len(grid.lam))
-            out_spec[lam_mask] = spec
-            spec = out_spec
-
         return spec
 
     def generate_line(

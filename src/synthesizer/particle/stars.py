@@ -1416,12 +1416,6 @@ class Stars(Particles, StarsComponent):
         if self.nstars == 0:
             return np.zeros((self.nstars, len(grid.lam)))
 
-        # Handle the case where the masks are None
-        if mask is None:
-            mask = np.ones(self.nstars, dtype=bool)
-        if lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
@@ -1486,7 +1480,7 @@ class Stars(Particles, StarsComponent):
                 )
 
         # Ensure and warn that the masking hasn't removed everything
-        if np.sum(mask) == 0:
+        if mask is not None and np.sum(mask) == 0:
             warn("Age mask has filtered out all particles")
 
             return np.zeros((self.nstars, len(grid.lam)))
@@ -1511,29 +1505,13 @@ class Stars(Particles, StarsComponent):
                 compute_part_seds_with_vel_shift,
             )
 
-            masked_spec = compute_part_seds_with_vel_shift(*args)
+            spec = compute_part_seds_with_vel_shift(*args)
         else:
             from synthesizer.extensions.particle_spectra import (
                 compute_particle_seds,
             )
 
-            masked_spec = compute_particle_seds(*args)
-
-        start = tic()
-
-        # If there's no mask we're done
-        if mask is None and lam_mask is None:
-            return masked_spec
-        elif mask is None:
-            mask = np.ones(self.nstars, dtype=bool)
-        elif lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
-        # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nstars, grid.lam.size))
-        spec[np.ix_(mask, lam_mask)] = masked_spec
-
-        toc("Masking spectra and adding contribution", start)
+            spec = compute_particle_seds(*args)
 
         return spec
 
