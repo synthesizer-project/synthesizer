@@ -717,7 +717,7 @@ class BlackHoles(Particles, BlackholesComponent):
             return np.zeros((self.nbh, len(grid.lam)))
 
         # Handle malformed masks
-        if mask.size != self.nbh:
+        if mask is not None and mask.size != self.nbh:
             mask = np.ones(self.nbh, dtype=bool)
 
         # Prepare the arguments for the C function.
