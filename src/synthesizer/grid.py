@@ -653,7 +653,9 @@ class Grid:
                 )
 
         with h5py.File(self.grid_filename, "r") as hf:
-            self.available_lines = list(hf["lines"]["id"][:])
+            self.available_lines = [
+                id.decode("utf-8") for id in hf["lines"]["id"][:]
+            ]
 
             # Read the line wavelengths
             lines_outside_lam = []
