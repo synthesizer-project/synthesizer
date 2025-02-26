@@ -477,20 +477,6 @@ class Grid:
             for spectra_id in self.available_spectra:
                 self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
-            # # THIS IS A HACK BECAUSE SW CHANGED THE AGN EMISSIONS WITHOUT
-            # # UPDATING THE TEST GRIDS AND ONLY HE HAS ACCESS TO THE DROPBOX.
-            # # THIS WILL BE REMOVED WHEN THE GRIDS ARE UPDATED.
-            # if "nlr" in self.grid_filename or "blr" in self.grid_filename:
-            #     for spectra_id in self.available_spectra:
-            #         # Normalise spectra by bolometric luminosity
-            #         sed = Sed(
-            #             self.lam, lnu=self.spectra[spectra_id] * erg / s / Hz
-            #         )
-            #         self.spectra[spectra_id] = (
-            #             self.spectra[spectra_id]
-            #             / sed.bolometric_luminosity[..., None]
-            #         )
-
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed:
@@ -508,7 +494,7 @@ class Grid:
             )
             self.available_spectra.append("nebular_continuum")
 
-    def _get_lines_grid(self, read_lines):
+    def _get_lines_grid_old(self, read_lines):
         """
         Get the lines grid from the HDF5 file.
 
@@ -639,6 +625,142 @@ class Grid:
                         for line in self.available_lines
                     }
 
+    def _get_lines_grid_new(self, read_lines):
+        """
+        Get the lines grid from the HDF5 file.
+
+        Args:
+            read_lines (bool/list)
+                Flag for whether to read all available lines or subset of
+                lines to read.
+        """
+        # Double check we actually have lines to read
+        if not self.lines_available:
+            if not self.reprocessed:
+                raise exceptions.GridError(
+                    "Grid hasn't been reprocessed with cloudy and has no "
+                    "lines. Either pass `read_lines=False` or load a grid "
+                    "which has been run through cloudy."
+                )
+
+            else:
+                raise exceptions.GridError(
+                    (
+                        "No lines available on this grid object. "
+                        "Either set `read_lines=False`, or load a grid "
+                        "containing line information"
+                    )
+                )
+
+        with h5py.File(self.grid_filename, "r") as hf:
+            self.available_lines = list(hf["lines"]["id"][:])
+
+            # Create an entry for each spectra type
+            for spectra in self.available_spectra:
+                self.line_lums[spectra] = {}
+                self.line_conts[spectra] = {}
+            self.line_lums["nebular_continuum"] = {}
+            self.line_conts["nebular_continuum"] = {}
+
+            # We read the lines themselves into "nebular" and "linecont"
+            # so make sure this exists
+            if (
+                "nebular" not in self.line_lums
+                or "linecont" not in self.line_lums
+            ):
+                raise exceptions.GridError(
+                    "No nebular or linecont spectra found. "
+                    "The nebular and linecont spectra is"
+                    " required for storing lines. Either you have explictly"
+                    " requested a subset of spectra without these, or "
+                    "something is wrong with the grid file."
+                )
+
+            # Read the line wavelengths
+            lines_outside_lam = []
+            for ind, line in enumerate(self.available_lines):
+                self.line_lams[line] = hf["lines"]["wavelength"][ind]
+
+                # Ensure this wavelength is within the wavelength array of the
+                # grid
+                if (
+                    self.line_lams[line] < self.lam[0]
+                    or self.line_lams[line] > self.lam[-1]
+                ):
+                    lines_outside_lam.append(line)
+
+            # If we have lines outside the wavelength range of the grid
+            # warn the user
+            if len(lines_outside_lam) > 0:
+                warn(
+                    "The following lines are outside the wavelength "
+                    f"range of the grid: {lines_outside_lam}"
+                )
+
+            # Read the lines into the nebular and linecont entries. The
+            # continuum for "linecont" is by definition 0 (we'll do all
+            # other continua below)
+            for ind, line in enumerate(self.available_lines):
+                self.line_lums["nebular"][line] = hf["lines"]["luminosity"][
+                    :, :, ind
+                ]
+                self.line_lums["linecont"][line] = hf["lines"]["luminosity"][
+                    :, :, ind
+                ]
+                self.line_conts["linecont"][line] = np.zeros(
+                    self.spectra["linecont"].shape[:-1]
+                )
+
+            # Now that we have read the line data itself we need to populate
+            # the other spectra entries. the line luminosities for all entries
+            # other than nebular are 0 but the continuums need to be sampled
+            # from the spectra.
+            for spectra in self.available_spectra:
+                # Define the extraction key
+                extract = spectra
+
+                # Create an interpolation function for this spectra
+                interp_func = interp1d(
+                    self._lam,
+                    self.spectra[extract],
+                    axis=-1,
+                    kind="linear",
+                    fill_value=0.0,
+                    bounds_error=False,
+                )
+
+                # Get the continuum luminosities by interpolating the to get
+                # the continuum at the line wavelengths (we use scipy here
+                # because spectres can't handle single value interpolation).
+                # The linecont continuum is explicitly 0 and set above.
+                if spectra != "linecont":
+                    self.line_conts[spectra] = {
+                        line: interp_func(self.line_lams[line])
+                        for line in self.available_lines
+                    }
+
+                # Set the line luminosities to 0 as long as they haven't
+                # already been set
+                if spectra != "nebular" and spectra != "linecont":
+                    self.line_lums[spectra] = {
+                        line: np.zeros(self.spectra[spectra].shape[:-1])
+                        for line in self.available_lines
+                    }
+
+    def _get_lines_grid(self, read_lines):
+        """
+        Get the lines grid from the HDF5 file.
+
+        Args:
+            read_lines (bool/list)
+                Flag for whether to read all available lines or subset of
+                lines to read.
+        """
+        if self.new_line_format:
+            self._get_lines_grid_new(read_lines)
+        else:
+            self._get_lines_grid_old(read_lines)
+
     def _prepare_lam_axis(
         self,
         new_lam,
@@ -697,9 +819,11 @@ class Grid:
         """
         if self._reprocessed is None:
             with h5py.File(self.grid_filename, "r") as hf:
-                self._reprocessed = (
+                old_grids = (
                     True if "cloudy_version" in hf.attrs.keys() else False
                 )
+                new_grid = True if "CloudyParams" in hf.keys() else False
+                self._reprocessed = old_grids or new_grid
 
         return self._reprocessed
 
@@ -720,6 +844,17 @@ class Grid:
                 self._lines_available = True if "lines" in hf.keys() else False
 
         return self._lines_available
+
+    @property
+    def new_line_format(self):
+        """Return whether the grid has the new line format."""
+        if not self.lines_available:
+            return False
+
+        # If the lines group has a luminosity dataset then we have the new
+        # format
+        with h5py.File(self.grid_filename, "r") as hf:
+            return "luminosity" in hf["lines"]
 
     @property
     def has_spectra(self):
