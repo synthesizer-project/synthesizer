@@ -5,7 +5,7 @@ TestData:
   # SPS test grid (derived from BPASS)
   test_grid.hdf5:
     file: bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5
-    direct_link: https://sussex.box.com/shared/static/ijvuzx2cfpcwojc5fre0p0tznpdclmka.hdf5
+    direct_link: https://sussex.box.com/shared/static/i96mlgqjaog94i7ugizhws5e2ypybrx3.hdf5
 
   # UnifiedAGN grids
   test_grid_agn-blr.hdf5:
