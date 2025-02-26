@@ -655,27 +655,6 @@ class Grid:
         with h5py.File(self.grid_filename, "r") as hf:
             self.available_lines = list(hf["lines"]["id"][:])
 
-            # Create an entry for each spectra type
-            for spectra in self.available_spectra:
-                self.line_lums[spectra] = {}
-                self.line_conts[spectra] = {}
-            self.line_lums["nebular_continuum"] = {}
-            self.line_conts["nebular_continuum"] = {}
-
-            # We read the lines themselves into "nebular" and "linecont"
-            # so make sure this exists
-            if (
-                "nebular" not in self.line_lums
-                or "linecont" not in self.line_lums
-            ):
-                raise exceptions.GridError(
-                    "No nebular or linecont spectra found. "
-                    "The nebular and linecont spectra is"
-                    " required for storing lines. Either you have explictly"
-                    " requested a subset of spectra without these, or "
-                    "something is wrong with the grid file."
-                )
-
             # Read the line wavelengths
             lines_outside_lam = []
             for ind, line in enumerate(self.available_lines):
@@ -697,19 +676,46 @@ class Grid:
                     f"range of the grid: {lines_outside_lam}"
                 )
 
-            # Read the lines into the nebular and linecont entries. The
-            # continuum for "linecont" is by definition 0 (we'll do all
-            # other continua below)
+            # Intialise keys we know we will have
+            self.line_lums.setdefault("nebular", {})
+            self.line_conts.setdefault("nebular", {})
+            self.line_lums.setdefault("linecont", {})
+            self.line_conts.setdefault("linecont", {})
+            self.line_lums.setdefault("nebular_continuum", {})
+            self.line_conts.setdefault("nebular_continuum", {})
+            self.line_lums.setdefault("transmitted", {})
+            self.line_conts.setdefault("transmitted", {})
+
+            # Read the lines and continua into the nebular and
+            # linecont entries.
             for ind, line in enumerate(self.available_lines):
                 self.line_lums["nebular"][line] = hf["lines"]["luminosity"][
                     :, :, ind
                 ]
+                self.line_conts["nebular"][line] = hf["lines"][
+                    "nebular_continuum"
+                ][:, :, ind]
+
                 self.line_lums["linecont"][line] = hf["lines"]["luminosity"][
                     :, :, ind
                 ]
                 self.line_conts["linecont"][line] = np.zeros(
-                    self.spectra["linecont"].shape[:-1]
+                    self.line_lums["nebular"][line].shape[:-1]
                 )
+
+                self.line_lums["nebular_continuum"][line] = np.zeros(
+                    self.line_lums["nebular"][line].shape[:-1]
+                )
+                self.line_conts["nebular_continuum"][line] = hf["lines"][
+                    "nebular_continuum"
+                ][:, :, ind]
+
+                self.line_lums["transmitted"][line] = np.zeros(
+                    self.line_lums["nebular"][line].shape[:-1]
+                )
+                self.line_conts["transmitted"][line] = hf["lines"][
+                    "transmitted_continuum"
+                ][:, :, ind]
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries. the line luminosities for all entries
@@ -718,6 +724,10 @@ class Grid:
             for spectra in self.available_spectra:
                 # Define the extraction key
                 extract = spectra
+
+                # Skip those we have already read
+                if extract in self.line_conts:
+                    continue
 
                 # Create an interpolation function for this spectra
                 interp_func = interp1d(
@@ -733,19 +743,17 @@ class Grid:
                 # the continuum at the line wavelengths (we use scipy here
                 # because spectres can't handle single value interpolation).
                 # The linecont continuum is explicitly 0 and set above.
-                if spectra != "linecont":
-                    self.line_conts[spectra] = {
-                        line: interp_func(self.line_lams[line])
-                        for line in self.available_lines
-                    }
+                self.line_conts[spectra] = {
+                    line: interp_func(self.line_lams[line])
+                    for line in self.available_lines
+                }
 
                 # Set the line luminosities to 0 as long as they haven't
                 # already been set
-                if spectra != "nebular" and spectra != "linecont":
-                    self.line_lums[spectra] = {
-                        line: np.zeros(self.spectra[spectra].shape[:-1])
-                        for line in self.available_lines
-                    }
+                self.line_lums[spectra] = {
+                    line: np.zeros(self.spectra[spectra].shape[:-1])
+                    for line in self.available_lines
+                }
 
     def _get_lines_grid(self, read_lines):
         """
