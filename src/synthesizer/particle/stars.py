@@ -620,11 +620,6 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         arg_start = tic()
-        # Make a dummy mask if none has been passed
-        if mask is None:
-            mask_start = tic()
-            mask = np.ones(self.nparticles, dtype=bool)
-            toc("Creating mask", mask_start)
 
         # Set up the inputs to the C function.
         grid_start = tic()
@@ -635,13 +630,11 @@ class Stars(Particles, StarsComponent):
         toc("Preparing grid properties", grid_start)
         part_start = tic()
         part_props = [
-            np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(
-                self.log10metallicities[mask], dtype=np.float64
-            ),
+            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(
-            self._initial_masses[mask],
+            self._initial_masses,
             dtype=np.float64,
         )
 
@@ -649,7 +642,7 @@ class Stars(Particles, StarsComponent):
         # has been requested)
         if self.velocities is not None and vel_shift:
             part_vels = np.ascontiguousarray(
-                self._velocities[mask],
+                self._velocities,
                 dtype=np.float64,
             )
             vel_units = self.velocities.units
@@ -663,38 +656,22 @@ class Stars(Particles, StarsComponent):
             vel_units = None
 
         # Make sure we set the number of particles to the size of the mask
-        npart = np.int32(np.sum(mask))
+        npart = self.nstars
 
         toc("Preparing particle properties", part_start)
 
         # Make sure we get the wavelength index of the grid array
-        nlam = (
-            np.int32(np.sum(lam_mask))
-            if lam_mask is not None
-            else grid.spectra[spectra_type].shape[-1]
-        )
+        nlam = grid.spectra[spectra_type].shape[-1]
 
         # Slice the spectral grids and pad them with copies of the edges.
         spec_start = tic()
         grid_spectra = grid.spectra[spectra_type]
 
-        # Apply the wavelength mask
-        if lam_mask is not None:
-            grid_spectra = np.ascontiguousarray(
-                grid_spectra[..., lam_mask],
-                np.float64,
-            )
         toc("Preparing grid spectra", spec_start)
 
         # Get the grid wavelength arrays (and needed for velocity shifts)
         if vel_shift:
-            if lam_mask is not None:
-                grid_lam = np.ascontiguousarray(
-                    grid._lam[lam_mask],
-                    np.float32,
-                )
-            else:
-                grid_lam = grid._lam[lam_mask]
+            grid_lam = grid._lam
         else:
             grid_lam = None
 
@@ -735,6 +712,8 @@ class Stars(Particles, StarsComponent):
                 grid_assignment_method,
                 nthreads,
                 c.to(vel_units).value,
+                mask,
+                lam_mask,
             )
         elif integrated:
             return (
@@ -752,6 +731,8 @@ class Stars(Particles, StarsComponent):
                     grid.grid_name,
                     None,
                 ),
+                mask,
+                lam_mask,
             )
         else:
             return (
@@ -765,6 +746,8 @@ class Stars(Particles, StarsComponent):
                 nlam,
                 grid_assignment_method,
                 nthreads,
+                mask,
+                lam_mask,
             )
 
     def generate_lnu(
@@ -960,15 +943,6 @@ class Stars(Particles, StarsComponent):
                 self._grid_weights[grid_assignment_method.lower()][
                     grid.grid_name
                 ] = grid_weights
-
-        # If we had a wavelength mask we need to make sure we return a spectra
-        # compatible with the original wavelength array.
-        if lam_mask is not None:
-            lam_mask_start = tic()
-            out_spec = np.zeros(len(grid.lam))
-            out_spec[lam_mask] = spec
-            spec = out_spec
-            toc("Applying wavelength mask", lam_mask_start)
 
         return spec
 
@@ -1442,12 +1416,6 @@ class Stars(Particles, StarsComponent):
         if self.nstars == 0:
             return np.zeros((self.nstars, len(grid.lam)))
 
-        # Handle the case where the masks are None
-        if mask is None:
-            mask = np.ones(self.nstars, dtype=bool)
-        if lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
@@ -1512,7 +1480,7 @@ class Stars(Particles, StarsComponent):
                 )
 
         # Ensure and warn that the masking hasn't removed everything
-        if np.sum(mask) == 0:
+        if mask is not None and np.sum(mask) == 0:
             warn("Age mask has filtered out all particles")
 
             return np.zeros((self.nstars, len(grid.lam)))
@@ -1537,29 +1505,13 @@ class Stars(Particles, StarsComponent):
                 compute_part_seds_with_vel_shift,
             )
 
-            masked_spec = compute_part_seds_with_vel_shift(*args)
+            spec = compute_part_seds_with_vel_shift(*args)
         else:
             from synthesizer.extensions.particle_spectra import (
                 compute_particle_seds,
             )
 
-            masked_spec = compute_particle_seds(*args)
-
-        start = tic()
-
-        # If there's no mask we're done
-        if mask is None and lam_mask is None:
-            return masked_spec
-        elif mask is None:
-            mask = np.ones(self.nstars, dtype=bool)
-        elif lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
-        # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nstars, grid.lam.size))
-        spec[np.ix_(mask, lam_mask)] = masked_spec
-
-        toc("Masking spectra and adding contribution", start)
+            spec = compute_particle_seds(*args)
 
         return spec
 
@@ -1995,6 +1947,7 @@ class Stars(Particles, StarsComponent):
             npart,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def get_sfzh(
@@ -2134,6 +2087,7 @@ class Stars(Particles, StarsComponent):
             npart,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
@@ -2286,6 +2240,7 @@ class Stars(Particles, StarsComponent):
             npart,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def get_metal_dist(
