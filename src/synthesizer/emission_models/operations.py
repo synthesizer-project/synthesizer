@@ -11,6 +11,9 @@ import numpy as np
 from unyt import Hz, erg, s
 
 from synthesizer import exceptions
+from synthesizer.emission_models.extractors.extractor import (
+    IntegratedParticleExtractor,
+)
 from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
@@ -118,26 +121,38 @@ class Extraction:
             # Get the generator function
             if this_model.per_particle:
                 generator_func = emitter.generate_particle_lnu
-            else:
-                generator_func = emitter.generate_lnu
-
-            # Get this base spectra
-            sed = Sed(
-                emission_model.lam,
-                generator_func(
-                    this_model.grid,
-                    spectra_key,
-                    mask=this_mask,
-                    vel_shift=this_model.vel_shift,
-                    lam_mask=this_model._lam_mask,
-                    verbose=verbose,
-                    nthreads=nthreads,
-                    grid_assignment_method=grid_assignment_method,
+                # Get this base spectra
+                sed = Sed(
+                    emission_model.lam,
+                    generator_func(
+                        this_model.grid,
+                        spectra_key,
+                        mask=this_mask,
+                        vel_shift=this_model.vel_shift,
+                        lam_mask=this_model._lam_mask,
+                        verbose=verbose,
+                        nthreads=nthreads,
+                        grid_assignment_method=grid_assignment_method,
+                    )
+                    * erg
+                    / s
+                    / Hz,
                 )
-                * erg
-                / s
-                / Hz,
-            )
+            else:
+                extractor = IntegratedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+
+                sed = extractor.generate_lnu(
+                    emitter,
+                    this_model,
+                    mask=this_mask,
+                    lam_mask=this_model._lam_mask,
+                    grid_assignment_method=grid_assignment_method,
+                    nthreads=nthreads,
+                    do_grid_check=False,
+                )
 
             # Store the spectra in the right place (integrating if we
             # need to)
