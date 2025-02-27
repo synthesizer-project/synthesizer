@@ -48,6 +48,9 @@ struct grid {
 
   /* Wavelength */
   double *lam;
+
+  /* The mask array denoting which wavelength elements should be included. */
+  npy_bool *lam_mask;
 };
 
 /* A struct to hold particle properties. */
@@ -64,18 +67,23 @@ struct particles {
 
   /* Velocities for redshift */
   double *velocities;
+
+  /* The mask array denoting which particles should be included. */
+  npy_bool *mask;
 };
 
 /* Prototypes */
 void *synth_malloc(size_t n, char *msg);
 double *extract_data_double(PyArrayObject *np_arr, char *name);
 int *extract_data_int(PyArrayObject *np_arr, char *name);
+npy_bool *extract_data_bool(PyArrayObject *np_arr, char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,
-                                     PyArrayObject *np_lam, const int ndim,
+                                     PyArrayObject *np_lam,
+                                     PyArrayObject *np_lam_mask, const int ndim,
                                      const int nlam);
 struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    PyArrayObject *np_ndims,
@@ -84,7 +92,8 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    const int ndim, const int nlam);
 struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_part_mass,
-                                  PyArrayObject *np_velocities, const int npart,
+                                  PyArrayObject *np_velocities,
+                                  PyArrayObject *np_mask, const int npart,
                                   const int ndim);
 
 #endif // PROPERTY_FUNCS_H_

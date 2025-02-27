@@ -192,7 +192,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, npart, ndim);
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, NULL, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }

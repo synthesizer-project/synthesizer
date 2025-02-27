@@ -58,9 +58,15 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
   double **part_props = parts->props;
   double *velocity = parts->velocities;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip masked particles. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass. */
     const double mass = part_masses[p];
@@ -145,6 +151,14 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
         int ilam_shifted = mapped_indices[ilam];
         double shifted_lambda = shifted_wavelengths[ilam];
 
+        /* Skip if this wavelength is masked. */
+        /* Note: we skip the shifted wavelength here because the mask is
+         * effectively saying "I want to ignore this wavelength in the
+         * output spectra". */
+        if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
+          continue;
+        }
+
         /* Compute the fraction of the shifted wavelength between the two
          * closest wavelength elements. */
         double frac_shifted = 0.0;
@@ -192,9 +206,15 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip masked particles. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass. */
     const double mass = part_masses[p];
@@ -259,6 +279,11 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
       /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
 
+        /* Skip if this wavelength is masked. */
+        if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
+          continue;
+        }
+
         /* Add the contribution to this wavelength. */
         spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
       }
@@ -298,6 +323,7 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
     double *part_masses = parts->mass;
     double **part_props = parts->props;
     int npart = parts->npart;
+    npy_bool *mask = parts->mask;
 
     /* Get the thread id. */
     int tid = omp_get_thread_num();
@@ -321,6 +347,11 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
 
     /* Loop over particles. */
     for (int p = start; p < end; p++) {
+
+      /* Skip masked particles. */
+      if (mask != NULL && !mask[p]) {
+        continue;
+      }
 
       /* Get this particle's mass. */
       const double mass = part_masses[p];
@@ -384,6 +415,11 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
         /* Add this grid cell's contribution to the spectra */
         for (int ilam = 0; ilam < nlam; ilam++) {
 
+          /* Skip if this wavelength is masked. */
+          if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
+            continue;
+          }
+
           /* Add the contribution to this wavelength. */
           spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
         }
@@ -430,6 +466,7 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
     double **part_props = parts->props;
     double *velocity = parts->velocities;
     int npart = parts->npart;
+    npy_bool *mask = parts->mask;
 
     /* Get the thread id. */
     int tid = omp_get_thread_num();
@@ -453,6 +490,11 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
 
     /* Loop over particles. */
     for (int p = start; p < end; p++) {
+
+      /* Skip masked particles. */
+      if (mask != NULL && !mask[p]) {
+        continue;
+      }
 
       /* Get this particle's mass. velocity and doppler shift. */
       const double mass = part_masses[p];
@@ -535,6 +577,14 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
           /* Get the shifted wavelength and index. */
           int ilam_shifted = mapped_indices[ilam];
           double shifted_lambda = shifted_wavelengths[ilam];
+
+          /* Skip if this wavelength is masked. */
+          /* Note: we skip the shifted wavelength here because the mask is
+           * effectively saying "I want to ignore this wavelength in the
+           * output spectra". */
+          if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
+            continue;
+          }
 
           /* Compute the fraction of the shifted wavelength between the two
            * closest wavelength elements. */
@@ -667,9 +717,15 @@ static void spectra_loop_ngp_serial(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip masked particles. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass. */
     const double weight = part_masses[p];
@@ -691,6 +747,11 @@ static void spectra_loop_ngp_serial(struct grid *grid, struct particles *parts,
 
     /* Add this grid cell's contribution to the spectra */
     for (int ilam = 0; ilam < nlam; ilam++) {
+
+      /* Skip if this wavelength is masked. */
+      if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
+        continue;
+      }
 
       /* Add the contribution to this wavelength. */
       spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
@@ -725,9 +786,15 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
   double **part_props = parts->props;
   double *velocity = parts->velocities;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip masked particles. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass, velocity and doppler shift. */
     const double weight = part_masses[p];
@@ -769,6 +836,14 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
       /* Get the shifted wavelength and index. */
       int ilam_shifted = mapped_indices[ilam];
       double shifted_lambda = shifted_wavelengths[ilam];
+
+      /* Skip if this wavelength is masked. */
+      /* Note: we skip the shifted wavelength here because the mask is
+       * effectively saying "I want to ignore this wavelength in the
+       * output spectra". */
+      if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
+        continue;
+      }
 
       /* Compute the fraction of the shifted wavelength between the two
        * closest wavelength elements. */
@@ -824,6 +899,7 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
     double *part_masses = parts->mass;
     double **part_props = parts->props;
     int npart = parts->npart;
+    npy_bool *mask = parts->mask;
 
     /* Get the thread id. */
     int tid = omp_get_thread_num();
@@ -848,6 +924,11 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
     /* Loop over particles. */
     for (int p = start; p < end; p++) {
 
+      /* Skip masked particles. */
+      if (mask != NULL && !mask[p]) {
+        continue;
+      }
+
       /* Get this particle's mass. */
       const double weight = part_masses[p];
 
@@ -868,6 +949,11 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
 
       /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
+
+        /* Skip if this wavelength is masked. */
+        if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
+          continue;
+        }
 
         /* Add the contribution to this wavelength. */
         spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
@@ -912,6 +998,7 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
     double **part_props = parts->props;
     double *velocity = parts->velocities;
     int npart = parts->npart;
+    npy_bool *mask = parts->mask;
 
     /* Get the thread id. */
     int tid = omp_get_thread_num();
@@ -935,6 +1022,11 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
 
     /* Loop over particles. */
     for (int p = start; p < end; p++) {
+
+      /* Skip masked particles. */
+      if (mask != NULL && !mask[p]) {
+        continue;
+      }
 
       /* Get this particle's mass, velocity and doppler shift contribution. */
       const double weight = part_masses[p];
@@ -976,6 +1068,14 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
         /* Get the shifted wavelength and index. */
         int ilam_shifted = mapped_indices[ilam];
         double shifted_lambda = shifted_wavelengths[ilam];
+
+        /* Skip if this wavelength is masked. */
+        /* Note: we skip the shifted wavelength here because the mask is
+         * effectively saying "I want to ignore this wavelength in the
+         * output spectra". */
+        if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
+          continue;
+        }
 
         /* Compute the fraction of the shifted wavelength between the two
          * closest wavelength elements. */
@@ -1114,24 +1214,26 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_part_mass, *np_ndims;
+  PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisi", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOO", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads)) {
+                        &nlam, &method, &nthreads, &np_mask, &np_lam_mask)) {
     return NULL;
   }
 
   /* Extract the grid struct. */
-  struct grid *grid_props = get_spectra_grid_struct(
-      grid_tuple, np_ndims, np_grid_spectra, /*np_lam*/ NULL, ndim, nlam);
+  struct grid *grid_props =
+      get_spectra_grid_struct(grid_tuple, np_ndims, np_grid_spectra,
+                              /*np_lam*/ NULL, np_lam_mask, ndim, nlam);
   if (grid_props == NULL) {
     return NULL;
   }
 
   /* Extract the particle struct. */
   struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, npart, ndim);
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
@@ -1213,25 +1315,26 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyArrayObject *np_grid_spectra, *np_lam;
   PyArrayObject *np_velocities;
   PyArrayObject *np_part_mass, *np_ndims;
+  PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiO", &np_grid_spectra, &np_lam,
+  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOO", &np_grid_spectra, &np_lam,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_velocities,
                         &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
-                        &py_c)) {
+                        &py_c, &np_mask, &np_lam_mask)) {
     return NULL;
   }
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
-      grid_tuple, np_ndims, np_grid_spectra, np_lam, ndim, nlam);
+      grid_tuple, np_ndims, np_grid_spectra, np_lam, np_lam_mask, ndim, nlam);
   if (grid_props == NULL) {
     return NULL;
   }
 
   /* Extract the particle struct. */
-  struct particles *part_props =
-      get_part_struct(part_tuple, np_part_mass, np_velocities, npart, ndim);
+  struct particles *part_props = get_part_struct(
+      part_tuple, np_part_mass, np_velocities, np_mask, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
