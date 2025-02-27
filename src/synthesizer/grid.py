@@ -702,18 +702,18 @@ class Grid:
                     :, :, ind
                 ]
                 self.line_conts["linecont"][line] = np.zeros(
-                    self.line_lums["nebular"][line].shape[:-1]
+                    self.line_lums["nebular"][line].shape
                 )
 
                 self.line_lums["nebular_continuum"][line] = np.zeros(
-                    self.line_lums["nebular"][line].shape[:-1]
+                    self.line_lums["nebular"][line].shape
                 )
                 self.line_conts["nebular_continuum"][line] = hf["lines"][
                     "nebular_continuum"
                 ][:, :, ind]
 
                 self.line_lums["transmitted"][line] = np.zeros(
-                    self.line_lums["nebular"][line].shape[:-1]
+                    self.line_lums["nebular"][line].shape
                 )
                 self.line_conts["transmitted"][line] = hf["lines"][
                     "transmitted_continuum"
