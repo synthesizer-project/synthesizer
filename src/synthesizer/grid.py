@@ -716,7 +716,7 @@ class Grid:
                     self.line_lums["nebular"][line].shape
                 )
                 self.line_conts["transmitted"][line] = hf["lines"][
-                    "transmitted_continuum"
+                    "transmitted"
                 ][:, :, ind]
 
             # Now that we have read the line data itself we need to populate
