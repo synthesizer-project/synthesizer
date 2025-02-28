@@ -8,6 +8,11 @@ from unyt import Hz, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
+from synthesizer.extensions.integrated_spectra import compute_integrated_sed
+from synthesizer.extensions.particle_spectra import (
+    compute_part_seds_with_vel_shift,
+    compute_particle_seds,
+)
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.sed import Sed
 from synthesizer.synth_warnings import warn
@@ -190,9 +195,13 @@ class IntegratedParticleExtractor(Extractor):
         """
         start = tic()
 
-        from synthesizer.extensions.integrated_spectra import (
-            compute_integrated_sed,
-        )
+        # Check we actually have to do the calculation
+        if emitter.nparticles == 0:
+            warn("Found emitter with no particles, returning empty Sed")
+            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+        elif mask is not None and np.sum(mask) == 0:
+            warn("A mask has filtered out all particles, returning empty Sed")
+            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
         # Get the attributes from the emitter
         extracted, weight = self.get_emitter_attrs(
@@ -273,9 +282,19 @@ class DopplerShiftedParticleExtractor(Extractor):
         """
         start = tic()
 
-        from synthesizer.extensions.particle_spectra import (
-            compute_part_seds_with_vel_shift,
-        )
+        # Check we actually have to do the calculation
+        if emitter.nparticles == 0:
+            warn("Found emitter with no particles, returning empty Sed")
+            return Sed(
+                model.lam,
+                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
+            )
+        elif mask is not None and np.sum(mask) == 0:
+            warn("A mask has filtered out all particles, returning empty Sed")
+            return Sed(
+                model.lam,
+                np.zeros(emitter.nparticles, self._grid_nlam) * erg / s / Hz,
+            )
 
         # Get the attributes from the emitter
         extracted, weight = self.get_emitter_attrs(
@@ -349,9 +368,13 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         """
         start = tic()
 
-        from synthesizer.extensions.particle_spectra import (
-            compute_part_seds_with_vel_shift,
-        )
+        # Check we actually have to do the calculation
+        if emitter.nparticles == 0:
+            warn("Found emitter with no particles, returning empty Sed")
+            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+        elif mask is not None and np.sum(mask) == 0:
+            warn("A mask has filtered out all particles, returning empty Sed")
+            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
         # Get the attributes from the emitter
         extracted, weight = self.get_emitter_attrs(
@@ -428,9 +451,19 @@ class ParticleExtractor(Extractor):
         """
         start = tic()
 
-        from synthesizer.extensions.particle_spectra import (
-            compute_particle_seds,
-        )
+        # Check we actually have to do the calculation
+        if emitter.nparticles == 0:
+            warn("Found emitter with no particles, returning empty Sed")
+            return Sed(
+                model.lam,
+                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
+            )
+        elif mask is not None and np.sum(mask) == 0:
+            warn("A mask has filtered out all particles, returning empty Sed")
+            return Sed(
+                model.lam,
+                np.zeros(emitter.nparticles, self._grid_nlam) * erg / s / Hz,
+            )
 
         # Get the attributes from the emitter
         extracted, weight = self.get_emitter_attrs(
