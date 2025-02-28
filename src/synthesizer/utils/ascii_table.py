@@ -118,9 +118,18 @@ class TableFormatter:
                 A list of tuples where each tuple contains the dictionary
                 key and the type of its value.
         """
-        return [
-            (key, type(value).__name__) for key, value in dictionary.items()
-        ]
+        # Set up output
+        out = []
+
+        # Loop over the dictionary and fill in the key value pair
+        for key, value in dictionary.items():
+            # If the value is not a string, float or int, just get the Type
+            if not isinstance(value, (str, float, int, bytes)):
+                value = type(value).__name__
+
+            out.append((key, value))
+
+        return out
 
     def format_list(self, lst):
         """
@@ -139,7 +148,7 @@ class TableFormatter:
         line = []
         for i, value in enumerate(lst):
             # If the value is not a string, float or int, just get the Type
-            if not isinstance(value, (str, float, int)):
+            if not isinstance(value, (str, float, int, bytes)):
                 value = type(value).__name__
 
             # Handle the first value
