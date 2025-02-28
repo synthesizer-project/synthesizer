@@ -249,13 +249,6 @@ class BlackHole(BlackholesComponent):
             # this is a generic disc grid so no line_region
             line_region = None
 
-        # If lam_mask is None then we want all wavelengths
-        if lam_mask is None:
-            lam_mask = np.ones(
-                grid.spectra[spectra_type].shape[-1],
-                dtype=bool,
-            )
-
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
@@ -309,18 +302,12 @@ class BlackHole(BlackholesComponent):
         bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(np.sum(lam_mask))
+        nlam = grid.lam.size
 
         # Get the grid spctra
         grid_spectra = np.ascontiguousarray(
             grid.spectra[spectra_type],
             dtype=np.float64,
-        )
-
-        # Apply the wavelength mask
-        grid_spectra = np.ascontiguousarray(
-            grid_spectra[..., lam_mask],
-            np.float64,
         )
 
         # Get the grid dimensions after slicing what we need
@@ -349,6 +336,8 @@ class BlackHole(BlackholesComponent):
             grid_assignment_method,
             nthreads,
             None,
+            None,
+            lam_mask,
         )
 
     def _prepare_line_args(

@@ -106,6 +106,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Set the sub cell constants we'll use below. */
   const int num_sub_cells = 1 << ndim; /* 2^ndim */
@@ -119,6 +120,11 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip if this particle is masked. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass. */
     const double mass = part_masses[p];
@@ -198,6 +204,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Set the sub cell constants we'll use below. */
   const int num_sub_cells = 1 << ndim; // 2^ndim
@@ -224,6 +231,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
     /* Get local pointers to the particle properties. */
     double *local_part_masses = part_masses + start;
+    int *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
     double *local_out_arr = calloc(out_size, sizeof(double));
@@ -234,6 +242,11 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
     /* Parallel loop with atomic updates. */
     for (int p = 0; p < end - start; p++) {
+
+      /* Skip if this particle is masked. */
+      if (local_mask != NULL && !local_mask[p]) {
+        continue;
+      }
 
       /* Get this particle's mass. */
       const double mass = local_part_masses[p];
@@ -422,12 +435,18 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Convert out. */
   double *out_arr = (double *)out;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip masked particles. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass. */
     const double mass = part_masses[p];
@@ -474,6 +493,7 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -493,6 +513,7 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
 
     /* Get local pointers to the particle properties. */
     double *local_part_masses = part_masses + start;
+    npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
     double *local_out_arr = calloc(out_size, sizeof(double));
@@ -503,6 +524,11 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
 
     /* Parallel loop with atomic updates. */
     for (int p = 0; p < end - start; p++) {
+
+      /* Skip masked particles. */
+      if (local_mask != NULL && !local_mask[p]) {
+        continue;
+      }
 
       /* Get the grid indices for the particle */
       int part_indices[ndim];
@@ -608,14 +634,14 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   /* Extract the grid struct. */
   struct grid *grid_props =
       get_spectra_grid_struct(grid_tuple, np_ndims, /*np_grid_spectra*/ NULL,
-                              /*np_lam*/ NULL, ndim, /*nlam*/ 1);
+                              /*np_lam*/ NULL, NULL, ndim, /*nlam*/ 1);
   if (grid_props == NULL) {
     return NULL;
   }
 
   /* Extract the particle struct. */
   struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, npart, ndim);
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, NULL, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
