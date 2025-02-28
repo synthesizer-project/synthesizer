@@ -134,7 +134,7 @@ class Extraction:
 
             # Get the appropriate extractor
             if this_model.per_particle and this_model.vel_shift:
-                extractor = IntegratedDopplerShiftedParticleExtractor(
+                extractor = DopplerShiftedParticleExtractor(
                     this_model.grid,
                     this_model.extract,
                 )
@@ -144,7 +144,7 @@ class Extraction:
                     this_model.extract,
                 )
             elif this_model.vel_shift:
-                extractor = DopplerShiftedParticleExtractor(
+                extractor = IntegratedDopplerShiftedParticleExtractor(
                     this_model.grid,
                     this_model.extract,
                 )

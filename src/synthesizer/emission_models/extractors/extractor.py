@@ -471,9 +471,7 @@ class ParticleExtractor(Extractor):
 
 
 class IntegratedParametricExtractor(Extractor):
-    """
-    A class to extract the integrated parametric emission from a particle.
-    """
+    """A class to extract the integrated parametric emission from a particle."""
 
     def generate_lnu(
         self,
