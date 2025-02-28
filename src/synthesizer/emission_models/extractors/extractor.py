@@ -252,9 +252,96 @@ class IntegratedParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
-    def generate_line(self, *args, **kwargs):
+    def generate_line(
+        self,
+        line_id,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        grid_assignment_method,
+        nthreads,
+        do_grid_check,
+    ):
         """Extract the line luminosities from the grid for the emitter."""
-        pass
+        start = tic()
+
+        # Check we actually have to do the calculation
+        if emitter.nparticles == 0:
+            warn("Found emitter with no particles, returning empty Line")
+            return Line(
+                combine_lines=[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=self._line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+        elif mask is not None and np.sum(mask) == 0:
+            warn("A mask has filtered out all particles, returning empty Line")
+            return Line(
+                combine_lines=[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=self._line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
+        # Get the attributes from the emitter
+        extracted, weight = self.get_emitter_attrs(
+            emitter,
+            model,
+            do_grid_check,
+        )
+
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        # Set up a list to hold each individual Line
+        lines = []
+
+        # Loop over the ids in this container
+        for line_id_ in line_id.split(","):
+            # Strip off any whitespace (can be left by split)
+            line_id_ = line_id_.strip()
+
+            # Get this line's wavelength
+            # TODO: The units here should be extracted from the grid but aren't
+            # yet stored.
+            lam = grid.line_lams[line_id_] * angstrom
+
+            # Get the luminosity and continuum
+            lum, cont = compute_integrated_line(
+                self._line_lum_grid[line_id_],
+                self._line_cont_grid[line_id_],
+                self._grid_axes,
+            )
+
+            # Append this lines values to the containers
+            lines.append(
+                Line(
+                    line_id=line_id_,
+                    wavelength=lam,
+                    luminosity=lum * erg / s,
+                    continuum=cont * erg / s / Hz,
+                )
+            )
+
+        toc("Generating integrated line", start)
+
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(combine_lines=lines)
 
 
 class DopplerShiftedParticleExtractor(Extractor):
