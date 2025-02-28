@@ -325,9 +325,7 @@ class DopplerShiftedParticleExtractor(Extractor):
 
 
 class IntegratedDopplerShiftedParticleExtractor(Extractor):
-    """
-    A class to extract the Doppler shifted emission from a particle.
-    """
+    """A class to extract the Doppler shifted emission from a particle."""
 
     def generate_lnu(
         self,
