@@ -2584,6 +2584,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         lines=None,
         particle_lines=None,
         _is_related=False,
+        nthreads=1,
+        grid_assignment_method="cic",
         **kwargs,
     ):
         """
@@ -2707,13 +2709,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Perform all extractions
         lines, particle_lines = self._extract_lines(
-            line_ids,
             emission_model,
             emitters,
             lines,
             particle_lines,
-            verbose,
-            **kwargs,
+            verbose=verbose,
+            nthreads=nthreads,
+            grid_assignment_method=grid_assignment_method,
         )
 
         # With all base lines extracted we can now loop from bottom to top
