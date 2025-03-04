@@ -224,7 +224,7 @@ class Grid:
         with h5py.File(self.grid_filename, "r") as hf:
             # What component variable do we need to weight by for the
             # emission in the grid?
-            self._weight_var = hf.attrs.get("weightvariable")
+            self._weight_var = hf.attrs.get("WeightVariable")
 
             # Loop over the Model metadata stored in the Model group
             # and store it in the Grid object
