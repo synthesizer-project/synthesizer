@@ -14,6 +14,7 @@ from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
 from synthesizer.extensions.timers import tic, toc
+from synthesizer.line import LineCollection
 from synthesizer.sed import Sed
 from synthesizer.synth_warnings import warn
 
@@ -254,7 +255,6 @@ class IntegratedParticleExtractor(Extractor):
 
     def generate_line(
         self,
-        line_id,
         emitter,
         model,
         mask,
@@ -269,29 +269,19 @@ class IntegratedParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Line")
-            return Line(
-                combine_lines=[
-                    Line(
-                        line_id=line_id_,
-                        wavelength=self._line_lams[line_id_] * angstrom,
-                        luminosity=np.zeros(self.nparticles) * erg / s,
-                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
-                    )
-                    for line_id_ in line_id.split(",")
-                ]
+            return LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=np.zeros(self._grid.nlines) * erg / s,
+                cont=np.zeros(self._grid.nlines) * erg / s / Hz,
             )
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Line")
-            return Line(
-                combine_lines=[
-                    Line(
-                        line_id=line_id_,
-                        wavelength=self._line_lams[line_id_] * angstrom,
-                        luminosity=np.zeros(self.nparticles) * erg / s,
-                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
-                    )
-                    for line_id_ in line_id.split(",")
-                ]
+            return LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=np.zeros(self._grid.nlines) * erg / s,
+                cont=np.zeros(self._grid.nlines) * erg / s / Hz,
             )
 
         # Get the attributes from the emitter
@@ -305,43 +295,69 @@ class IntegratedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        # Set up a list to hold each individual Line
-        lines = []
+        # Get the grid_weights if they exist and we don't have a mask
+        grid_weights = emitter._grid_weights.get(
+            grid_assignment_method.lower(), {}
+        ).get(self._grid.grid_name, None)
 
-        # Loop over the ids in this container
-        for line_id_ in line_id.split(","):
-            # Strip off any whitespace (can be left by split)
-            line_id_ = line_id_.strip()
+        # We need to modify the grid dims to account for the difference
+        # in the final axis between the spectra and line grids
+        grid_dims = np.array(self._grid_dims)
+        grid_dims[-1] = self._grid.nlines
 
-            # Get this line's wavelength
-            # TODO: The units here should be extracted from the grid but aren't
-            # yet stored.
-            lam = grid.line_lams[line_id_] * angstrom
+        # Compute the integrated line lum array
+        lum, grid_weights = compute_integrated_sed(
+            self._line_lum_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            grid_weights,
+            mask,
+            lam_mask,
+        )
 
-            # Get the luminosity and continuum
-            lum, cont = compute_integrated_line(
-                self._line_lum_grid[line_id_],
-                self._line_cont_grid[line_id_],
-                self._grid_axes,
-            )
+        # Compute the integrated continuum array
+        cont, _ = compute_integrated_sed(
+            self._line_cont_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            grid_weights,
+            mask,
+            lam_mask,
+        )
 
-            # Append this lines values to the containers
-            lines.append(
-                Line(
-                    line_id=line_id_,
-                    wavelength=lam,
-                    luminosity=lum * erg / s,
-                    continuum=cont * erg / s / Hz,
-                )
-            )
+        # If we have no mask then lets store the grid weights in case
+        # we can make use of them later
+        if (
+            mask is None
+            and self._grid.grid_name
+            not in emitter._grid_weights[grid_assignment_method.lower()]
+        ):
+            emitter._grid_weights[grid_assignment_method.lower()][
+                self._grid.grid_name
+            ] = grid_weights
 
         toc("Generating integrated line", start)
 
-        # Don't init another line if there was only 1 in the first place
-        if len(lines) == 1:
-            return lines[0]
-        else:
-            return Line(combine_lines=lines)
+        return LineCollection(
+            line_ids=self._grid.line_ids,
+            lam=self._line_lams,
+            lum=lum * erg / s,
+            cont=cont * erg / s / Hz,
+        )
 
 
 class DopplerShiftedParticleExtractor(Extractor):
@@ -426,8 +442,12 @@ class DopplerShiftedParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
-        pass
+        """Doppler shifted line luminosities make no sense."""
+        raise exceptions.UnimplementedFunctionality(
+            "Doppler shifted emission lines aren't implemented since they "
+            "have no width. To include the effects of velocity broadening"
+            " on line emissions, extract them from the spectra."
+        )
 
 
 class IntegratedDopplerShiftedParticleExtractor(Extractor):
@@ -509,8 +529,12 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
-        pass
+        """Doppler shifted line luminosities make no sense."""
+        raise exceptions.UnimplementedFunctionality(
+            "Doppler shifted emission lines aren't implemented since they "
+            "have no width. To include the effects of velocity broadening"
+            " on line emissions, extract them from the spectra."
+        )
 
 
 class ParticleExtractor(Extractor):
