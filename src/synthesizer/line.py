@@ -1227,7 +1227,7 @@ class LineCollection:
 
         # Create the arrays we'll need to store the blended lines
         blended_lines_counts = np.zeros(len(wavelength_bins) - 1, dtype=int)
-        blended_line_ids = [[] for _ in len(wavelength_bins) - 1]
+        blended_line_ids = [[] for _ in range(len(wavelength_bins) - 1)]
         blended_line_lams = np.zeros(len(wavelength_bins) - 1, dtype=float)
         blended_line_lums = np.zeros(new_shape, dtype=float)
         blended_line_conts = np.zeros(new_shape, dtype=float)
@@ -1244,15 +1244,25 @@ class LineCollection:
 
             # Added this lines contribution to the arrays
             blended_lines_counts[bin_ind] += 1
-            blended_line_ids[bin_ind] += self.line_ids[i]
-            blended_line_lams[bin_ind] += self.lam[i]
-            blended_line_lums[..., bin_ind] += self.luminosity[..., i]
-            blended_line_conts[..., bin_ind] += self.continuum[..., i]
+            blended_line_ids[bin_ind].append(self.line_ids[i])
+            blended_line_lams[bin_ind] += self._lam[i]
+            blended_line_lums[..., bin_ind] += self._luminosity[..., i]
+            blended_line_conts[..., bin_ind] += self._continuum[..., i]
+
+        # Now we need to clean up and concatenate the ids of the blended lines
+        # into comma separated strings
+        for i in range(len(wavelength_bins) - 1):
+            if blended_lines_counts[i] == 0:
+                blended_line_ids[i] = None
+                continue
+
+            # Combine the line ids into a single string
+            blended_line_ids[i] = ", ".join(blended_line_ids[i])
 
         # Remove any bins with no lines
         mask = blended_lines_counts > 0
         blended_lines_counts = blended_lines_counts[mask]
-        blended_line_ids = blended_line_ids[mask]
+        blended_line_ids = np.array(blended_line_ids)[mask]
         blended_line_lams = blended_line_lams[mask]
         blended_line_lums = blended_line_lums[..., mask]
         blended_line_conts = blended_line_conts[..., mask]
@@ -1260,14 +1270,11 @@ class LineCollection:
         # Convert the wavelengths into the means
         blended_line_lams /= blended_lines_counts
 
-        # Concatenate the line ids into comma separated strings
-        blended_line_ids = [",".join(lids) for lids in blended_line_ids]
-
         return LineCollection(
             line_ids=blended_line_ids,
-            lam=blended_line_lams,
-            lum=blended_line_lums,
-            cont=blended_line_conts,
+            lam=blended_line_lams * self.lam.units,
+            lum=blended_line_lums * self.luminosity.units,
+            cont=blended_line_conts * self.continuum.units,
         )
 
 
