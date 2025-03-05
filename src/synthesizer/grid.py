@@ -606,10 +606,12 @@ class Grid:
                 # Read the transmitted line luminosities and continuums (the
                 # emission transmitted through the birth cloud)
                 self.line_lums["transmitted"] = unyt_array(
-                    np.zeros(self.line_lums["nebular"].shape), lum_units
+                    np.zeros(self.line_lums["nebular"].shape),
+                    lum_units,
                 )
                 self.line_conts["transmitted"] = unyt_array(
-                    hf["lines"]["transmitted"][...], cont_units
+                    hf["lines"]["transmitted"][...],
+                    cont_units,
                 )
 
             # Now that we have read the line data itself we need to populate
