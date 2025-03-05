@@ -79,6 +79,9 @@ class LineCollection:
         # state, and the vacuum wavelength)
         self.line_ids = np.array(line_ids, dtype=str)
 
+        # How many lines do we have?
+        self.nlines = len(self.line_ids)
+
         # Set the line wavelengths
         self.lam = lam
 
@@ -114,6 +117,24 @@ class LineCollection:
         toc("Initialised LineCollection", start)
 
     @property
+    def id(self):
+        """
+        Return the line id.
+
+        This is an alias to be used when theres a single line id.
+
+        Returns:
+            line_ids (list)
+                A list of the line ids.
+        """
+        if self.nlines == 1:
+            return self.line_ids[0]
+
+        raise exceptions.UnimplementedFunctionality(
+            "id only applicable for a single line. Use line_ids instead."
+        )
+
+    @property
     def elements(self):
         """
         Return the elements of the lines.
@@ -127,11 +148,11 @@ class LineCollection:
             elements (list)
                 A list of the elements of the lines.
         """
-        return [
+        return list(
             lid.strip().split(" ")[0]
             for lids in self.line_ids
             for lid in lids.split(",")
-        ]
+        )
 
     @property
     def vacuum_wavelengths(self):
@@ -303,7 +324,7 @@ class LineCollection:
             self._current_ind += 1
 
             # Return the filter
-            return self.line_ids[self._current_ind - 1]
+            return self[self.line_ids[self._current_ind - 1]]
 
     def __len__(self):
         """Return the number of lines in the collection."""
@@ -414,13 +435,21 @@ class LineCollection:
             # Collect together the indices we'll need to extract
             inds = [self._line2index[li] for li in line_id]
 
-            # Return the subset of lines
-            return LineCollection(
+            # Get the subset of lines
+            new_line = LineCollection(
                 line_ids=self.line_ids[inds],
                 lam=self.lam[inds],
                 lum=self.luminosity[..., inds],
                 cont=self.continuum[..., inds],
             )
+
+            # Copy over the flux and observed wavelength if they exist
+            if self.flux is not None:
+                new_line.flux = self.flux[..., inds]
+                new_line.obs_continuum = self.obs_continuum[..., inds]
+                new_line.obslam = self.obslam[inds]
+
+            return new_line
 
         # Do we have a blended line?
         if isinstance(line_id, str) and "," in line_id:
@@ -431,27 +460,67 @@ class LineCollection:
             new_lam = self.lam[self._line2index[line_ids[0]]]
             new_lum = self.luminosity[..., self._line2index[line_ids[0]]]
             new_cont = self.continuum[..., self._line2index[line_ids[0]]]
+            new_flux = (
+                self.flux[..., self._line2index[line_ids[0]]]
+                if self.flux is not None
+                else None
+            )
+            new_obs_cont = (
+                self.obs_continuum[..., self._line2index[line_ids[0]]]
+                if self.obs_continuum is not None
+                else None
+            )
+            new_obslam = (
+                self.obslam[self._line2index[line_ids[0]]]
+                if self.obslam is not None
+                else None
+            )
             for li in line_ids[1:]:
                 new_lam += self.lam[self._line2index[li]]
                 new_lum += self.luminosity[..., self._line2index[li]]
                 new_cont += self.continuum[..., self._line2index[li]]
+                if self.flux is not None:
+                    new_flux += self.flux[..., self._line2index[li]]
+                    new_obs_cont += self.obs_continuum[
+                        ..., self._line2index[li]
+                    ]
+                    new_obslam += self.obslam[self._line2index[li]]
 
-            return LineCollection(
+            # Create the new line (converting the wavelength to the mean of the
+            # individual lines)
+            new_line = LineCollection(
                 line_ids=[line_id],
-                lam=new_lam,
+                lam=new_lam / len(line_ids),
                 lum=new_lum,
                 cont=new_cont,
             )
 
+            # Copy over the flux and observed wavelength if they exist
+            # (converting the wavelength to the mean of the individual lines)
+            if self.flux is not None:
+                new_line.flux = new_flux
+                new_line.obs_continuum = new_obs_cont
+                new_line.obslam = new_obslam / len(line_ids)
+
         # Do we have a single line?
         if isinstance(line_id, str):
             # Return the single line
-            return LineCollection(
+            new_line = LineCollection(
                 line_ids=[line_id],
                 lam=self.lam[self._line2index[line_id]],
                 lum=self.luminosity[..., self._line2index[line_id]],
                 cont=self.continuum[..., self._line2index[line_id]],
             )
+
+            # Copy over the flux and observed wavelength if they exist
+            if self.flux is not None:
+                new_line.flux = self.flux[..., self._line2index[line_id]]
+                new_line.obs_continuum = self.obs_continuum[
+                    ..., self._line2index[line_id]
+                ]
+                new_line.obslam = self.obslam[self._line2index[line_id]]
+
+            return new_line
 
         # Otherwise, raise an exception
         raise exceptions.UnrecognisedOption(
