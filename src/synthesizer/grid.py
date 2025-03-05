@@ -235,7 +235,7 @@ class Grid:
             # Attach all the root level attribtues to the grid object
             for k, v in hf.attrs.items():
                 # Skip the axes attribute as we've already read that
-                if k == "axes":
+                if k == "axes" or k == "WeightVariable":
                     continue
                 setattr(self, k, v)
 
