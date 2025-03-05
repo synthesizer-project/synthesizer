@@ -703,14 +703,14 @@ class Grid:
             # linecont entries.
             for ind, line in enumerate(self.available_lines):
                 self.line_lums["nebular"][line] = hf["lines"]["luminosity"][
-                    :, :, ind
+                    ..., ind
                 ]
                 self.line_conts["nebular"][line] = hf["lines"][
                     "nebular_continuum"
-                ][:, :, ind]
+                ][..., ind]
 
                 self.line_lums["linecont"][line] = hf["lines"]["luminosity"][
-                    :, :, ind
+                    ..., ind
                 ]
                 self.line_conts["linecont"][line] = np.zeros(
                     self.line_lums["nebular"][line].shape
@@ -721,14 +721,14 @@ class Grid:
                 )
                 self.line_conts["nebular_continuum"][line] = hf["lines"][
                     "nebular_continuum"
-                ][:, :, ind]
+                ][..., ind]
 
                 self.line_lums["transmitted"][line] = np.zeros(
                     self.line_lums["nebular"][line].shape
                 )
                 self.line_conts["transmitted"][line] = hf["lines"][
                     "transmitted"
-                ][:, :, ind]
+                ][..., ind]
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries. the line luminosities for all entries
