@@ -135,6 +135,32 @@ class LineCollection:
         )
 
     @property
+    def lum(self):
+        """
+        Return the luminosity of the lines.
+
+        This is an alias for the luminosity property.
+
+        Returns:
+            luminosity (unyt_array)
+                The luminosity of the lines.
+        """
+        return self.luminosity
+
+    @property
+    def cont(self):
+        """
+        Return the continuum of the lines.
+
+        This is an alias for the continuum property.
+
+        Returns:
+            continuum (unyt_array)
+                The continuum of the lines.
+        """
+        return self.continuum
+
+    @property
     def elements(self):
         """
         Return the elements of the lines.
@@ -265,7 +291,7 @@ class LineCollection:
             Tuple
                 The shape of self.lnu
         """
-        return self.lum.shape
+        return self.luminosity.shape
 
     @property
     def nlam(self):
