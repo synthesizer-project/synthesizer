@@ -368,6 +368,8 @@ class Particles:
         # Calculate the radii
         self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
 
+        return self.radii
+
     @accepts(aperture_radius=Mpc)
     def _aperture_mask(self, aperture_radius):
         """
