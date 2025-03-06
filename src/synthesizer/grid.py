@@ -577,7 +577,7 @@ class Grid:
                     lum_units,
                 )
                 self.line_conts["nebular"] = unyt_array(
-                    hf["lines"]["nebular_continuum"][...],
+                    np.zeros(self.line_lums["nebular"].shape),
                     cont_units,
                 )
 
@@ -648,8 +648,13 @@ class Grid:
                 # Set the line luminosities to 0 as long as they haven't
                 # already been set
                 self.line_lums[spectra] = unyt_array(
-                    np.zeros(self.spectra[spectra].shape[:-1]),
+                    np.zeros((*self.spectra[spectra].shape[:-1], self.nlines)),
                     lum_units,
+                )
+                print(
+                    extract,
+                    self.line_conts[spectra].shape,
+                    self.line_lums[spectra].shape,
                 )
 
     def _prepare_lam_axis(

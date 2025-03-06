@@ -273,22 +273,12 @@ class Extraction:
                     this_model.extract,
                 )
 
-            # Combine the lam_mask the requested lines to give the actual
-            # lam_mask we will pass to the extractor. First, with no lam_mask
-            # on the model we simply set the lam_mask to mask all the
-            # unrequested lines.
-            if this_model._lam_mask is None:
-                lam_mask = np.isin(extractor._grid.available_lines, line_ids)
+            # Get the lam_mask based on the line_ids that have been requested
+            lam_mask = np.isin(extractor._grid.available_lines, line_ids)
 
-            # Otherwise we combine the lam_mask with the requested lines
-            # to give the actual lam_mask we will pass to the extractor.
-            else:
-                # Get the mask for the requested lines
-                requested_lines = np.isin(
-                    extractor._grid.available_lines,
-                    line_ids,
-                )
-
+            # Now combine the model's lam_mask with the requested lines
+            # if it exists
+            if this_model._lam_mask is not None:
                 # Get the indices that would bin the lines into the
                 # spectra grid wavelength array
                 line_indices = np.digitize(
@@ -299,7 +289,7 @@ class Extraction:
                 # Remove any lines which are masked out in the lam_mask
                 for ind in line_indices:
                     if not this_model._lam_mask[ind]:
-                        requested_lines[ind] = False
+                        lam_mask[ind] = False
 
             out_lines = extractor.generate_line(
                 emitter,
@@ -633,7 +623,7 @@ class Generation:
             conts = np.zeros((0, len(lams))) * erg / s / Hz
 
             zeroed_lines = LineCollection(
-                line_ids=line_ids,
+                line_ids=prev_lines.line_ids,
                 lam=lams,
                 lum=lums,
                 cont=conts,
@@ -649,7 +639,7 @@ class Generation:
 
         # Compute the new line
         out_lines = LineCollection(
-            line_ids=line_ids,
+            line_ids=prev_lines.line_ids,
             lam=lams,
             lum=np.zeros_like(prev_lines.luminosity),
             cont=spectra.get_lnu_at_lam(lams),
@@ -1065,9 +1055,9 @@ class Combination:
             in_lines = lines
 
         # Loop over combination models adding the lines
-        out_lines = in_lines[this_model.combine[0].label][line_ids]
+        out_lines = in_lines[this_model.combine[0].label]
         for combine_model in this_model.combine[1:]:
-            out_lines += in_lines[combine_model.label][line_ids]
+            out_lines += in_lines[combine_model.label]
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:

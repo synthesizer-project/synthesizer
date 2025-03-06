@@ -55,7 +55,6 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.line import LineCollection
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 
@@ -2833,20 +2832,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Only convert to LineCollections, apply post processing and deletion
         # if we aren't in a recursive related model call
         if not _is_related:
-            # Finally, loop over everything we've created and convert the
-            # nested dictionaries to LineCollections
-            for label in lines:
-                # If we are in a related model we might have already done this
-                # conversion
-                if isinstance(lines[label], dict):
-                    lines[label] = LineCollection(lines[label])
-                if self._models[label].per_particle and isinstance(
-                    particle_lines[label], dict
-                ):
-                    particle_lines[label] = LineCollection(
-                        particle_lines[label]
-                    )
-
             # Apply any post processing functions
             for func in self._post_processing:
                 lines = func(lines, emitters, self)
@@ -2861,6 +2846,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     del lines[model.label]
                     if model.per_particle and model.label in particle_lines:
                         del particle_lines[model.label]
+
+            # Go through all line collections and remove any lines that are not
+            # in the line_ids list
+            for label, line_collection in lines.items():
+                lines[label] = line_collection[line_ids]
+                if label in particle_lines:
+                    particle_lines[label] = particle_lines[label][line_ids]
 
         return lines, particle_lines
 
