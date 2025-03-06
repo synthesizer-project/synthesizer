@@ -40,10 +40,10 @@ lnu = (np.zeros(len(sed.lam)) + 1) * erg / s / Hz
 lc = grid.get_lines(grid_point)
 
 for line in lc:
-    idx = (np.abs(sed.lam - line.wavelength)).argmin()
+    idx = (np.abs(sed.lam - line.lam)).argmin()
     dl = 0.5 * (sed.lam[idx + 1] - sed.lam[idx - 1])
-    n = c / line.wavelength
-    llnu = line.wavelength * (line.luminosity / n) / dl
+    n = c / line.lam
+    llnu = line.lam * (line.luminosity / n) / dl
     print(line.id, llnu)
     lnu[idx] += llnu.to("erg/s/Hz")
 
