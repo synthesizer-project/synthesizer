@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from unyt import Mpc, Msun, Myr, km, s
+from unyt import Mpc, Msun, Myr, km, kpc, s
 
 from synthesizer.emission_models import (
     IncidentEmission,
@@ -51,7 +51,7 @@ def particle_stars_A():
         metallicities=np.array([0.01, 0.02, 0.03]),
         redshift=1.0,
         tau_v=np.array([0.1, 0.2, 0.3]),
-        coordinates=np.random.rand(3, 3) * Mpc,
+        coordinates=np.random.rand(3, 3) * kpc,
         dummy_attr=1.0,
     )
 
