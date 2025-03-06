@@ -200,7 +200,6 @@ class Extraction:
         """
         # First step we need to extract each base lines
         for label in emission_model._extract_keys.keys():
-            print(lines)
             # Skip it if we happen to already have the lines
             if label in lines:
                 continue
@@ -565,7 +564,6 @@ class Generation:
                 "spectra must be generated first."
             )
 
-        print(lines)
         # Get the  previous line
         if (
             per_particle
