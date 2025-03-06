@@ -31,7 +31,7 @@ except ImportError:
         " `pip install .[eagle]`."
     )
 
-from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
+from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr, km, s
 
 from synthesizer.load_data.utils import lookup_age
 
@@ -1027,7 +1027,7 @@ def assign_galaxy_prop(
         smoothing_lengths=s_hsml[ok] * Mpc,
         s_oxygen=s_oxygen[ok],
         s_hydrogen=s_hydrogen[ok],
-        velocities=s_velocities[ok],
+        velocities=s_velocities[ok] * km / s,
         **s_kwargs,
     )
 
