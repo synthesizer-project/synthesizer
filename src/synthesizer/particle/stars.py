@@ -578,11 +578,15 @@ class Stars(Particles, StarsComponent):
 
     def _remove_stars(self, pmask):
         """
-        Update stars attribute arrays based on a mask, `pmask`.
-
+        Remove stars from the object's attribute arrays using a boolean mask.
+        
+        Filters out stars corresponding to True in the provided mask from all stellar
+        attributes (e.g. initial_masses, ages, metallicities, masses, coordinates, etc.).
+        After removal, the particle counts are updated and the integrity of the remaining
+        attributes is verified via a consistency check.
+        
         Args:
-            pmask (array-like, bool)
-                A boolean mask to remove stars from the object.
+            pmask (array-like of bool): Boolean mask where True indicates stars to remove.
         """
         # Remove the masked stars from this object
         self.initial_masses = self.initial_masses[~pmask]
@@ -872,36 +876,29 @@ class Stars(Particles, StarsComponent):
         verbose=False,
     ):
         """
-        Calculate rest frame line luminosity and continuum from an SPS Grid.
-
-        This is a flexible base method which extracts the rest frame line
-        luminosity of this stellar population from the SPS grid based on the
-        passed arguments.
-
+        Calculate the rest frame spectral line luminosity and continuum from an SPS grid.
+        
+        This function computes the line properties for the current stellar population using
+        the provided SPS grid and line parameters. A comma-separated string of line_ids is
+        used to specify one or more spectral lines. If no stars are present or if the provided
+        mask filters out all particles, the function returns a Line instance with zero-valued
+        luminosity and continuum.
+        
         Args:
-            grid (Grid):
-                A Grid object.
-            line_id (list/str):
-                A list of line_ids or a str denoting a single line.
-                Doublets can be specified as a nested list or using a
-                comma (e.g. 'OIII4363,OIII4959').
-            line_type (str):
-                The type of line to extract from the Grid. This must match a
-                type of spectra/lines stored in the Grid.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
+            grid (Grid): The SPS grid containing spectral line data.
+            line_id (str): A comma-separated string with one or more spectral line identifiers.
+            line_type (str): The category of spectral line to extract, as defined in the grid.
+            mask (array-like, optional): A boolean mask to filter stellar particles.
+            method (str, optional): Interpolation method ('cic' for cloud in cell or 'ngp' for nearest grid point).
+            nthreads (int, optional): Number of threads for parallel computation (-1 to use all).
+            verbose (bool, optional): Flag for enabling verbose output (currently not used).
+        
         Returns:
-            Line
-                An instance of Line contain this lines wavelenth, luminosity,
-                and continuum.
+            Line: An instance representing the computed spectral line properties, including wavelength,
+                  luminosity, and continuum. For multiple lines, a combined Line instance is returned.
+        
+        Raises:
+            InconsistentArguments: If `line_id` is not provided as a string.
         """
         from synthesizer.extensions.integrated_line import (
             compute_integrated_line,
@@ -993,37 +990,30 @@ class Stars(Particles, StarsComponent):
         verbose=False,
     ):
         """
-        Calculate rest frame line luminosity and continuum from an SPS Grid.
-
-        This is a flexible base method which extracts the rest frame line
-        luminosity of this stellar population from the SPS grid based on the
-        passed arguments and calculate the luminosity and continuum for
-        each individual particle.
-
+        Calculate the rest frame line luminosity and continuum for stellar particles.
+        
+        This method computes the line luminosity and continuum for each stellar particle by
+        interpolating the specified spectral line(s) from an SPS grid. It supports optional
+        particle masking and different interpolation methods. A warning is issued if a provided
+        mask excludes all particles, and an exception is raised if the line identifier is not a
+        string.
+        
         Args:
-            grid (Grid):
-                A Grid object.
-            line_id (list/str):
-                A list of line_ids or a str denoting a single line.
-                Doublets can be specified as a nested list or using a
-                comma (e.g. 'OIII4363,OIII4959').
-            line_type (str):
-                The type of line to extract from the Grid. This must match a
-                type of spectra/lines stored in the Grid.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
+            grid (Grid): An SPS grid containing spectral line information.
+            line_id (str): A comma-separated string of line identifiers.
+            line_type (str): The type of line to extract; must match a line type available in the grid.
+            mask (array-like, optional): Boolean array to select a subset of particles.
+            method (str, optional): Interpolation method; either "cic" (cloud in cell) or "ngp" (nearest grid point).
+            nthreads (int, optional): Number of threads to use; -1 utilizes all available threads.
+            verbose (bool, optional): If True, provides additional output during computation.
+        
         Returns:
-            Line
-                An instance of Line contain this lines wavelenth, luminosity,
-                and continuum.
+            Line: A Line object containing the line's wavelength, luminosity, and continuum.
+                  If multiple line identifiers are provided, a composite Line combining the individual
+                  lines is returned.
+        
+        Raises:
+            InconsistentArguments: If the provided line_id is not a string.
         """
         from synthesizer.extensions.particle_line import (
             compute_particle_line,

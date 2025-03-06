@@ -105,11 +105,12 @@ class Component(ABC):
     @property
     def photo_luminosities(self):
         """
-        Get the photometric luminosities.
-
+        Retrieves photometric luminosities (deprecated).
+        
+        This alias is deprecated and will be removed in version 1.0.0. Use the `photo_lnu` attribute instead.
+        
         Returns:
-            dict
-                The photometry luminosities.
+            dict: The photometric luminosity values.
         """
         deprecation(
             "The `photo_luminosities` attribute is deprecated. Use "
@@ -119,17 +120,44 @@ class Component(ABC):
 
     @abstractmethod
     def generate_line(self, *args, **kwargs):
-        """Generate the rest frame line emission for the component."""
+        """
+        Generate the rest-frame line emission for the component.
+        
+        This abstract method should be overridden by subclasses to compute the emission
+        line spectrum specific to the component. Additional positional and keyword 
+        arguments may be provided to support various emission model parameters.
+        """
         pass
 
     @abstractmethod
     def get_mask(self, attr, thresh, op, mask=None):
-        """Return a mask based on the attribute and threshold."""
+        """
+        Return a boolean mask for a component attribute based on a threshold.
+        
+        Evaluates the specified attribute using a given comparison operator and threshold,
+        returning a boolean mask that indicates where the condition is met. An optional mask
+        can be provided to limit the evaluation to a subset of data.
+        
+        Args:
+            attr: The name or key of the attribute to evaluate.
+            thresh: The threshold value used for comparison.
+            op: The comparison operator or callable to apply.
+            mask: Optional existing mask to restrict the evaluation.
+        
+        Returns:
+            A boolean mask that reflects where the attribute values satisfy the comparison.
+        """
         pass
 
     @abstractmethod
     def _prepare_line_args(self, *args, **kwargs):
-        """Prepare arguments for the line generation."""
+        """
+        Prepares input arguments for generating emission lines.
+        
+        This abstract method should be implemented by subclasses to format and
+        validate any positional and keyword arguments required for the emission
+        line generation process.
+        """
         pass
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):

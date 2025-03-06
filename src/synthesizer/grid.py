@@ -114,30 +114,20 @@ class Grid:
         lam_lims=(),
     ):
         """
-        Initialise the grid object.
-
-        This will open the grid file and extract the axes, spectra (if
-        requested), and lines (if requested) and any other relevant data.
-
+        Initializes a grid object from an HDF5 file.
+        
+        Constructs the full grid file path and loads axes data, metadata, ionizing luminosity, and
+        the spectra grid. Optionally, line data is read and the wavelength axis is prepared either
+        by interpolation onto a custom wavelength array or by truncation within specified limits.
+        
         Args:
-            grid_name (str)
-                The file name of the grid (if no extension is provided then
-                hdf5 is assumed).
-            grid_dir (str)
-                The file path to the directory containing the grid file.
-            spectra_to_read (list)
-                A list of spectra to read in. If None then all available
-                spectra will be read. Default is None.
-            read_lines (bool)
-                Should we read lines? If a list then a subset of lines will be
-                read.
-            new_lam (array-like, float)
-                An optional user defined wavelength array the spectra will be
-                interpolated onto, see Grid.interp_spectra.
-            lam_lims (tuple, float)
-                A tuple of the lower and upper wavelength limits to truncate
-                the grid to (i.e. (lower_lam, upper_lam)). If new_lam is
-                provided these limits will be ignored.
+            grid_name (str): File name of the grid; if no extension is provided, '.hdf5' is assumed.
+            grid_dir (str, optional): Directory containing the grid file.
+            spectra_to_read (list, optional): Specific spectra to load; if None, all available spectra are loaded.
+            read_lines (bool or list, optional): If True or a list, loads line data (all or a specified subset).
+            new_lam (array-like, optional): Custom wavelength array for interpolating the spectra.
+            lam_lims (tuple, optional): Lower and upper wavelength limits (lower_lam, upper_lam) to truncate the grid.
+                Ignored if new_lam is provided.
         """
         # Get the grid file path data
         self.grid_dir = ""
@@ -219,7 +209,14 @@ class Grid:
         )
 
     def _get_grid_metadata(self):
-        """Unpack the grids metadata into the Grid."""
+        """
+        Extracts metadata from the HDF5 grid file.
+        
+        Opens the file at `self.grid_filename` in read-only mode and retrieves key metadata:
+        - Stores the 'WeightVariable' attribute in `self._weight_var`.
+        - If present, collects attributes from the 'Model' group into `self._model_metadata`.
+        - Attaches all other root-level attributes (excluding 'axes' and 'WeightVariable') to the Grid object.
+        """
         # Open the file
         with h5py.File(self.grid_filename, "r") as hf:
             # What component variable do we need to weight by for the
@@ -241,11 +238,12 @@ class Grid:
 
     def __getattr__(self, name):
         """
-        Return an attribute handling arbitrary axis names.
-
-        This method allows for the dynamic extraction of axes with units,
-        either logged or not or using singular or plural axis names (to handle
-        legacy naming conventions).
+        Dynamically retrieve a grid axis using various naming conventions.
+        
+        This method intercepts attribute accesses not found directly in the instance and
+        attempts to resolve them as grid axis names. It supports pluralized, singular, and
+        logged forms of axis names, issuing deprecation warnings for legacy usages. An
+        AttributeError is raised if no matching axis is found.
         """
         # First up, do we just have the attribute and it isn't an axis?
         if name in self.__dict__:
@@ -384,7 +382,17 @@ class Grid:
         )
 
     def _get_axes(self):
-        """Get the grid axes from the HDF5 file."""
+        """
+        Extracts grid axes and metadata from the grid HDF5 file.
+        
+        Opens the grid file specified by self.grid_filename and retrieves the list of axes from
+        its attributes. For each axis, the function extracts numerical values and unit information,
+        storing them in internal attributes (self.axes, self._axes_values, and self._axes_units).
+        If the axis is flagged for logarithmic conversion via the 'log_on_read' attribute, the
+        base-10 logarithm of its values is computed and stored with a 'log10' prefix for extraction.
+        If an axis name already contains "log10", a GridError is raised since logged axes are no longer
+        supported due to ambiguous units. Finally, the total number of axes is recorded in self.naxes.
+        """
         # Get basic info of the grid
         with h5py.File(self.grid_filename, "r") as hf:
             # Get list of axes
@@ -638,12 +646,20 @@ class Grid:
 
     def _get_lines_grid_new(self, read_lines):
         """
-        Get the lines grid from the HDF5 file.
-
-        Args:
-            read_lines (bool/list)
-                Flag for whether to read all available lines or subset of
-                lines to read.
+        Extracts and organizes line data from the HDF5 grid file.
+        
+        This method reads line identifiers, wavelengths, luminosity, and continuum values,
+        categorizing them into nebular, line continuum, nebular continuum, and transmitted
+        components. It also interpolates continuum data for spectra that are not directly
+        included in the HDF5 file and issues a warning if any line wavelengths fall outside
+        the grid's wavelength range.
+        
+        Parameters:
+            read_lines (bool or list): Determines whether to load line data. If True, all
+                available lines are read; if a list, only the specified lines are processed.
+        
+        Raises:
+            GridError: If the grid lacks line data and has not been reprocessed with Cloudy.
         """
         # Double check we actually have lines to read
         if not self.lines_available:
@@ -988,7 +1004,15 @@ class Grid:
 
     @property
     def shape(self):
-        """Return the shape of the grid."""
+        """
+        Return the shape of the grid's primary spectral dataset.
+        
+        This function retrieves the dimensions of the underlying spectral data array
+        by selecting the first available spectrum.
+        
+        Returns:
+            tuple: A tuple representing the dimensions of the spectral grid.
+        """
         return self.spectra[self.available_spectra[0]].shape
 
     @property
@@ -1004,20 +1028,17 @@ class Grid:
     @staticmethod
     def get_nearest_index(value, array):
         """
-        Calculate the closest index in an array for a given value.
-
-        TODO: What is this doing here!?
-
+        Find the index of the element in an array that is closest to a given value.
+        
+        If the target value and the array elements have associated units, the value is first
+        converted to the array's units before computing the absolute differences.
+        
         Args:
-            value (float/unyt_quantity)
-                The target value.
-
-            array (np.ndarray/unyt_array)
-                The array to search.
-
+            value (float or unyt_quantity): The target value to match.
+            array (np.ndarray or unyt_array): The array to search.
+        
         Returns:
-            int
-                The index of the closet point in the grid (array)
+            int: The index of the element in the array with the minimum absolute difference.
         """
         # Handle units on both value and array
         # First do we need a conversion?

@@ -117,53 +117,36 @@ class BlackholesComponent(Component):
         **kwargs,
     ):
         """
-        Initialise the BlackholeComponent.
-
-        Where they're not provided missing quantities are automatically
-        calcualted. Not all parameters need to be set for every emission model.
-
+        Initialize a BlackholesComponent instance with properties for black hole emission models.
+        
+        Missing quantities are computed automatically when sufficient parameters are provided.
+        Do not supply both accretion_rate and bolometric_luminosity (or accretion_rate_eddington and
+        bolometric_luminosity) to avoid ambiguity.
+        
         Args:
-            mass (array-like, float)
-                The mass of each blackhole.
-            accretion_rate (array-like, float)
-                The accretion rate of each blackhole.
-            epsilon (array-like, float)
-                The radiative efficiency of the blackhole.
-            accretion_rate_eddington (array-like, float)
-                The accretion rate expressed as a fraction of the Eddington
-                accretion rate.
-            inclination (array-like, float)
-                The inclination of the blackhole disc.
-            spin (array-like, float)
-                The dimensionless spin of the blackhole.
-            bolometric_luminosity (array-like, float)
-                The bolometric luminosity of the blackhole.
-            metallicity (array-like, float)
-                The metallicity of the blackhole which is assumed for the line
-                emitting regions.
-            ionisation_parameter_blr (array-like, float)
-                The ionisation parameter of the broadline region.
-            hydrogen_density_blr (array-like, float)
-                The hydrogen density of the broad line region.
-            covering_fraction_blr (array-like, float)
-                The covering fraction of the broad line region (effectively
-                the escape fraction).
-            velocity_dispersion_blr (array-like, float)
-                The velocity dispersion of the broad line region.
-            ionisation_parameter_nlr (array-like, float)
-                The ionisation parameter of the narrow line region.
-            hydrogen_density_nlr (array-like, float)
-                The hydrogen density of the narrow line region.
-            covering_fraction_nlr (array-like, float)
-                The covering fraction of the narrow line region (effectively
-                the escape fraction).
-            velocity_dispersion_nlr (array-like, float)
-                The velocity dispersion of the narrow line region.
-            theta_torus (array-like, float)
-                The angle of the torus.
-            kwargs (dict)
-                Any other parameter for the emission models can be provided as
-                kwargs.
+            fesc: Escape fraction for the component.
+            mass: Masses of the black holes.
+            accretion_rate: Accretion rates of the black holes.
+            epsilon: Radiative efficiency of the black holes.
+            accretion_rate_eddington: Accretion rates expressed as fractions of the Eddington rate.
+            inclination: Inclination angles of the black hole discs.
+            spin: Dimensionless spins of the black holes.
+            bolometric_luminosity: Bolometric luminosities of the black holes.
+            metallicity: Metallicities for the line emitting regions.
+            ionisation_parameter_blr: Ionisation parameters for the broad line region.
+            hydrogen_density_blr: Hydrogen densities in the broad line region.
+            covering_fraction_blr: Covering fractions in the broad line region.
+            velocity_dispersion_blr: Velocity dispersions in the broad line region.
+            ionisation_parameter_nlr: Ionisation parameters for the narrow line region.
+            hydrogen_density_nlr: Hydrogen densities in the narrow line region.
+            covering_fraction_nlr: Covering fractions in the narrow line region.
+            velocity_dispersion_nlr: Velocity dispersions in the narrow line region.
+            theta_torus: Angles of the torus.
+            kwargs: Additional parameters for the emission models.
+        
+        Raises:
+            InconsistentArguments: If both accretion_rate and bolometric_luminosity are provided, or if
+                both accretion_rate_eddington and bolometric_luminosity are provided.
         """
         # Initialise the parent class
         Component.__init__(self, "BlackHoles", fesc, **kwargs)
@@ -280,36 +263,30 @@ class BlackholesComponent(Component):
         verbose=False,
     ):
         """
-        Calculate rest frame line luminosity and continuum from an AGN Grid.
-
-        This is a flexible base method which extracts the rest frame line
-        luminosity of this stellar population from the AGN grid based on the
-        passed arguments.
-
+        Calculate rest frame emission line properties from an AGN grid.
+        
+        This method computes the integrated emission line luminosity and continuum for the
+        current black hole component using grid-based interpolation. It accepts a comma-separated
+        string of emission line identifiers and returns a single Line object when one line is specified,
+        or a combined Line object when multiple lines are provided. If no particles are present, or if
+        a provided mask excludes all particles, the method returns a Line with zero luminosity and
+        continuum and issues a warning.
+        
         Args:
-            grid (Grid):
-                A Grid object.
-            line_id (list/str):
-                A list of line_ids or a str denoting a single line.
-                Doublets can be specified as a nested list or using a
-                comma (e.g. 'OIII4363,OIII4959').
-            line_type (str)
-                The type of line to extract from the grid. Must match the
-                spectra/line type in the grid file.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
+            grid: A Grid object containing AGN spectral data.
+            line_id (str): A comma-separated string of emission line identifiers.
+            line_type (str): The spectral line type to extract; must match an entry in the grid.
+            mask: Optional array to select a subset of particles.
+            method (str): The grid interpolation method ("cic" for cloud-in-cell or "ngp" for nearest grid point).
+            nthreads (int): Number of threads for computation (-1 uses all available threads).
+            verbose (bool): Flag to enable verbose output (currently not used).
+        
         Returns:
-            Line
-                An instance of Line contain this lines wavelenth, luminosity,
-                and continuum.
+            Line: A Line object encapsulating the wavelength, luminosity, and continuum. If multiple
+            lines are specified, the returned object combines individual lines.
+        
+        Raises:
+            InconsistentArguments: If 'line_id' is not provided as a comma-separated string.
         """
         from synthesizer.extensions.integrated_line import (
             compute_integrated_line,

@@ -66,14 +66,16 @@ class Extractor(ABC):
 
     def __init__(self, grid, extract):
         """
-        Initialize the Extractor object.
-
+        Initialize an Extractor instance with the given grid and emission type.
+        
+        This constructor sets up internal references required for emission extraction by obtaining
+        emitter attributes, grid axes values, and corresponding unit information from the provided grid.
+        It also assigns the spectra and line emission grids for the specified emission type, captures the
+        weight variable, grid dimensions, and establishes logging flags for emitter attributes.
+            
         Args:
-            grid (Grid)
-                The grid object from which to extract the emission.
-            extract (str)
-                The emission type to extract from the grid.
-
+            grid (Grid): The grid object containing emission data and extraction configuration.
+            extract (str): The emission type identifier used to select the appropriate spectra and line grids.
         """
         start = tic()
 
@@ -117,22 +119,22 @@ class Extractor(ABC):
 
     def get_emitter_attrs(self, emitter, model, do_grid_check):
         """
-        Get the attributes from the emitter.
-
+        Extracts emitter attributes and an associated weight variable.
+        
+        This method retrieves the specified parameters from the emitter using the provided emission
+        model. It converts any values with physical units to the expected grid units and ensures that
+        all parameters are formatted as arrays for downstream processing. If enabled, it also checks
+        that the extracted attributes lie within the valid grid limits.
+        
         Args:
-            emitter (Stars/BlackHoles/Gas):
-                The emitter object.
-            model (EmissionModel):
-                The emission model object.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
-
+            emitter: The emitter instance (e.g., star, black hole, or gas).
+            model: The emission model providing configuration details for the extraction.
+            do_grid_check (bool): If True, validates that the extracted attributes fall within the grid
+                boundaries, a process that may be computationally expensive.
+                
         Returns:
-            tuple
-                The extracted attributes and the weight variable.
+            tuple: A pair where the first element is a tuple containing the emitter's attributes as arrays,
+            and the second element is the weight variable.
         """
         start = tic()
 
@@ -174,16 +176,16 @@ class Extractor(ABC):
 
     def check_emitter_attrs(self, emitter, extracted_attrs):
         """
-        Compute the fraction of emitter attributes outside the grid axes.
-
-        This is by default not run but can be invoked via the do_grid_check
-        argument in the generate_lnu and generate_line methods.
-
+        Check whether emitter attributes lie outside the grid boundaries and issue a warning if so.
+        
+        This method computes the fraction of the emitter's attributes that fall outside the
+        predefined grid axes. It is invoked only when grid boundary checking is enabled
+        (via the do_grid_check argument in the generate_lnu and generate_line methods). If
+        any attributes are found out-of-bound, a warning is logged.
+            
         Args:
-            emitter (Stars/BlackHoles/Gas):
-                The emitter from which the attributes were extracted.
-            extracted_attrs (tuple):
-                The extracted attributes from the emitter.
+            emitter (Stars/BlackHoles/Gas): The emitter from which attributes are extracted.
+            extracted_attrs (tuple): Tuple of attribute arrays extracted from the emitter.
         """
         start = tic()
 
@@ -210,12 +212,29 @@ class Extractor(ABC):
 
     @abstractmethod
     def generate_lnu(self, *args, **kwargs):
-        """Extract the spectra from the grid for the emitter."""
+        """
+        Extracts the spectral luminosity from the grid for a given emitter.
+        
+        This method computes the emitter’s spectra by mapping its attributes onto a spectral
+        grid. It accepts additional positional and keyword arguments to configure the extraction
+        process (e.g., specifying the emission model, masks, grid assignment method, threading,
+        and grid validation options). Derived classes must override this method to implement the
+        specific logic for generating the spectral luminosity data.
+        
+        Returns:
+            The computed spectral luminosity, structured as appropriate for the extractor’s design.
+        """
         pass
 
     @abstractmethod
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
+        """
+        Extract the line luminosities from the grid for an emitter.
+        
+        This method is a stub and should be overridden by subclasses if line emission extraction
+        is supported. It accepts additional positional and keyword arguments to accommodate
+        model-specific parameters.
+        """
         pass
 
 
@@ -241,32 +260,26 @@ class IntegratedParticleExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the spectra from the grid for the emitter.
-
+        Extract integrated spectral emission from an emitter using a spectral grid.
+        
+        This function computes the integrated spectral energy distribution (SED)
+        by mapping emitter attributes onto a pre-defined spectral grid with a specified
+        grid assignment method ("cic" or "ngp"). If the emitter has no particles or if a
+        provided mask filters out all particles, a warning is issued and an empty SED is
+        returned. Multithreading is supported via the nthreads parameter, and grid weights
+        may be updated for later use when no mask is applied.
+        
         Args:
-            emitter (Stars/BlackHoles/Gas)
-                The emitter object from which to extract the emission.
-            model (EmissionModel)
-                The emission model defining the emission to extract.
-            mask (np.array)
-                A mask to apply to the particles.
-            lam_mask (np.array)
-                A mask to apply to the spectra's wavelength axis.
-            grid_assignment_method (str)
-                The method to assign particles to the grid. Either
-                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
-            nthreads (int)
-                The number of threads to use in the extraction. If -1 then
-                all available threads will be used.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
-
+            emitter (Stars/BlackHoles/Gas): The emitter object from which to extract emission.
+            model (EmissionModel): The emission model defining the spectral properties.
+            mask (np.array): Array mask to filter particles.
+            lam_mask (np.array): Array mask to filter the wavelength axis of the spectrum.
+            grid_assignment_method (str): Method for assigning particles to the grid, either "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+            nthreads (int): Number of threads for computation; if -1, all available threads are used.
+            do_grid_check (bool): Flag to perform an expensive check of emitter attributes against grid boundaries.
+        
         Returns:
-            Sed
-                The integrated spectra.
+            Sed: The integrated spectral energy distribution with flux densities in erg/s/Hz.
         """
         start = tic()
 
@@ -328,7 +341,14 @@ class IntegratedParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
+        """
+        Extracts line luminosities from the grid for the emitter.
+        
+        This method serves as a placeholder to be overridden by subclasses that
+        compute emission line properties. Implementations should use the spectral
+        grid and emitter attributes to derive the line luminosities, with additional
+        arguments available to customize the extraction process.
+        """
         pass
 
 
@@ -355,32 +375,40 @@ class DopplerShiftedParticleExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the per particle doppler shifted spectra from the grid.
-
-        Args:
-            emitter (Stars/BlackHoles/Gas)
-                The emitter object from which to extract the emission.
-            model (EmissionModel)
-                The emission model defining the emission to extract.
-            mask (np.array)
-                A mask to apply to the particles.
-            lam_mask (np.array)
-                A mask to apply to the spectra's wavelength axis.
-            grid_assignment_method (str)
-                The method to assign particles to the grid. Either
-                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
-            nthreads (int)
-                The number of threads to use in the extraction. If -1 then
-                all available threads will be used.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
-
+        Computes Doppler-shifted spectra for each emitter particle using grid data.
+        
+        This function extracts the Doppler-shifted spectral energy distributions for individual
+        particles by mapping their properties, including velocities, onto a precomputed grid.
+        Optional particle and wavelength masks filter the inputs, and particles are assigned to
+        grid cells using either "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point) methods.
+        If no particles are present or all particles are masked out, an empty Sed is returned.
+        An exception is raised if the emitter lacks velocity data needed for Doppler shifting.
+        
+        Parameters:
+            emitter:
+                An emitter object (e.g., a star, black hole, or gas instance) containing particle
+                properties and velocities.
+            model:
+                An emission model providing the wavelength grid and spectral properties.
+            mask (np.array):
+                A Boolean array to filter particles; only unmasked particles are processed.
+            lam_mask (np.array):
+                A Boolean array applied to the wavelength axis of the spectra.
+            grid_assignment_method (str):
+                The scheme used for assigning particles to grid cells ("cic" or "ngp"), case-insensitive.
+            nthreads (int):
+                The number of threads for parallel processing. If set to -1, all available threads are used.
+            do_grid_check (bool):
+                A flag indicating whether to verify that particle positions lie within the grid bounds,
+                a check that may be computationally expensive.
+        
         Returns:
-            Sed
-                The integrated spectra.
+            Sed:
+                An object encapsulating the wavelength grid and the computed Doppler-shifted spectra in erg/s/Hz.
+        
+        Raises:
+            InconsistentArguments:
+                If the emitter does not provide velocity data necessary for computing Doppler shifts.
         """
         start = tic()
 
@@ -441,7 +469,13 @@ class DopplerShiftedParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
+        """
+        Extracts the line luminosities for the emitter from the grid.
+        
+        This placeholder method should be overridden in subclasses to implement the
+        appropriate line emission extraction strategy. Additional positional and keyword
+        arguments may be provided to support various emitter configurations.
+        """
         pass
 
 
@@ -468,32 +502,28 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the integrated doppler shifted spectra from the grid.
-
+        Extract integrated Doppler-shifted spectra from the grid.
+        
+        This function computes the integrated emission spectrum by applying a velocity
+        shift to the emitter's spectra. It extracts necessary attributes, verifies that
+        velocity data is present, and computes the Doppler-shifted spectra using the grid.
+        If the emitter has no particles or the mask filters out all particles, a Sed with
+        zero flux is returned.
+        
         Args:
-            emitter (Stars/BlackHoles/Gas)
-                The emitter object from which to extract the emission.
-            model (EmissionModel)
-                The emission model defining the emission to extract.
-            mask (np.array)
-                A mask to apply to the particles.
-            lam_mask (np.array)
-                A mask to apply to the spectra's wavelength axis.
-            grid_assignment_method (str)
-                The method to assign particles to the grid. Either
-                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
-            nthreads (int)
-                The number of threads to use in the extraction. If -1 then
-                all available threads will be used.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
-
+            emitter (Stars/BlackHoles/Gas): The emitter object from which to extract emission.
+            model (EmissionModel): The emission model defining the emission.
+            mask (np.array): Mask to filter particles.
+            lam_mask (np.array): Mask to apply along the wavelength axis of the spectra.
+            grid_assignment_method (str): Method for assigning particles to the grid ("cic" or "ngp").
+            nthreads (int): Number of threads for extraction; -1 uses all available threads.
+            do_grid_check (bool): Whether to check for particles outside the grid.
+        
         Returns:
-            Sed
-                The integrated spectra.
+            Sed: The integrated spectrum obtained by summing Doppler-shifted spectra.
+        
+        Raises:
+            exceptions.InconsistentArguments: If velocity data is missing for Doppler shifting.
         """
         start = tic()
 
@@ -551,7 +581,13 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
+        """
+        Extract line luminosities from the grid for the emitter.
+        
+        This method serves as a placeholder to be overridden by subclasses. Implementations
+        should extract and return line luminosities based on the emitter's data and any additional
+        parameters provided via positional or keyword arguments.
+        """
         pass
 
 
@@ -574,32 +610,35 @@ class ParticleExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the per particle spectra from the grid.
-
+        Generate per-particle spectral energy distributions from the grid.
+        
+        This function computes the luminosity per unit frequency for each particle in the
+        emitter by mapping particle attributes onto a spectral grid using the specified
+        grid assignment method. If the emitter has no particles or if the particle mask
+        filters out all particles, an empty spectral energy distribution (SED) is returned.
+        
         Args:
-            emitter (Stars/BlackHoles/Gas)
-                The emitter object from which to extract the emission.
-            model (EmissionModel)
-                The emission model defining the emission to extract.
-            mask (np.array)
-                A mask to apply to the particles.
-            lam_mask (np.array)
-                A mask to apply to the spectra's wavelength axis.
-            grid_assignment_method (str)
-                The method to assign particles to the grid. Either
-                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
-            nthreads (int)
-                The number of threads to use in the extraction. If -1 then
-                all available threads will be used.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
-
+            emitter:
+                The emission source containing particle data.
+            model:
+                The emission model providing the wavelength grid.
+            mask (np.array):
+                A boolean mask applied to filter particles.
+            lam_mask (np.array):
+                A boolean mask applied along the wavelength axis.
+            grid_assignment_method (str):
+                The method to assign particles to the grid; either "cic" (Cloud-in-Cell) or
+                "ngp" (Nearest Grid Point).
+            nthreads (int):
+                The number of threads to use, where -1 indicates that all available threads
+                will be used.
+            do_grid_check (bool):
+                If True, verifies that particle attributes fall within grid bounds.
+        
         Returns:
-            Sed
-                The integrated spectra.
+            Sed:
+                A spectral energy distribution containing the per-particle spectra with
+                units of erg/s/Hz.
         """
         start = tic()
 
@@ -649,7 +688,13 @@ class ParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
+        """
+        Extracts line luminosities from the spectral grid.
+        
+        This method is intended to be overridden by subclasses to compute emission line
+        luminosities based on the grid configuration and emitter properties. Additional
+        positional and keyword arguments may be used for implementation-specific customization.
+        """
         pass
 
 
@@ -674,32 +719,26 @@ class IntegratedParametricExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the integrated spectra from the grid for a parametric emitter.
-
+        Compute the integrated spectral energy distribution (SED) for a parametric emitter.
+        
+        This method calculates the integrated SED by multiplying the emitter's star formation
+        history (sfzh) with the corresponding grid spectra and summing over the masked grid cells.
+        The output SED uses the wavelength array from the emission model. Note that the parameters
+        grid_assignment_method, nthreads, and do_grid_check are retained for interface consistency
+        but are not used in this computation.
+        
         Args:
-            emitter (Stars/BlackHoles/Gas)
-                The emitter object from which to extract the emission.
-            model (EmissionModel)
-                The emission model defining the emission to extract.
-            mask (np.array)
-                A mask to apply to the particles.
-            lam_mask (np.array)
-                A mask to apply to the spectra's wavelength axis.
-            grid_assignment_method (str)
-                The method to assign particles to the grid. Either
-                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
-            nthreads (int)
-                The number of threads to use in the extraction. If -1 then
-                all available threads will be used.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
-
+            emitter: Emitter object providing a star formation history (sfzh) and a method to
+                generate a mask.
+            model: Emission model from which the wavelength array (lam) is taken for the SED.
+            mask (np.ndarray): Filter applied to the emitter's sfzh to select valid bins (sfzh > 0).
+            lam_mask (np.ndarray or None): Optional mask to restrict the grid spectra to specific wavelengths.
+            grid_assignment_method (str): Unused; maintained for compatibility with particle-based extractors.
+            nthreads (int): Unused; included for interface uniformity with multi-threaded extractors.
+            do_grid_check (bool): Unused; reserved for potential grid consistency checks.
+        
         Returns:
-            Sed
-                The integrated spectra.
+            Sed: Integrated spectral energy distribution computed from the parametric emitter.
         """
         start = tic()
 
@@ -724,5 +763,11 @@ class IntegratedParametricExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
+        """
+        Extract line luminosities from the grid for the emitter.
+        
+        Subclasses should override this method to implement specific strategies for
+        extracting line emission data. Extra positional and keyword arguments may be used
+        to customize the extraction process.
+        """
         pass

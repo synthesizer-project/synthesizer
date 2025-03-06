@@ -10,36 +10,29 @@ _NO_DEFAULT = object()
 
 def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
     """
-    Extract a parameter from a model, emission, and emitter.
-
-    The priority of extraction is:
-        1. Model (EmissionModel)
-        2. Emission (Sed/LineCollection)
-        3. Emitter (Stars/Gas/Galaxy)
-
-    If we find a string value this should mean the parameter points to another
-    attribute, so we will recursively look for that attribute.
-
+    Extracts a parameter from the model, emission, and emitter objects.
+    
+    The function searches for the specified parameter in the model’s fixed parameters,
+    then in the emission object's attributes, and finally in the emitter object's
+    attributes. If the retrieved value is a string, it is treated as a reference to another
+    parameter and is resolved recursively. When the requested parameter name includes
+    "log10", the function attempts to fetch the corresponding non-logged parameter and,
+    if found, returns its base-10 logarithm. If the parameter remains unfound, the function
+    also checks singular and plural forms before either returning a given default or
+    raising a MissingAttribute exception.
+    
     Args:
-        param (str)
-            The parameter to extract.
-        model (EmissionModel)
-            The model object.
-        emission (Sed/LineCollection)
-            The emission object.
-        emitter (Stars/Gas/Galaxy)
-            The emitter object.
-        default (object, optional)
-            The default value to return if the parameter is not found.
-
+        param (str): The name of the parameter to extract.
+        model (EmissionModel): The model object with fixed parameters.
+        emission (Sed or LineCollection): The emission object possibly containing the parameter.
+        emitter (Stars, Gas, or Galaxy): The emitter object possibly containing the parameter.
+        default (object, optional): A default value to return if the parameter is not found.
+    
     Returns:
-        value
-            The value of the parameter extracted from the appropriate object.
-
+        The extracted parameter value, or the default if provided.
+    
     Raises:
-        MissingAttribute
-            If the parameter is not found in the model, emission, or emitter.
-            This is only raised if no default is passed.
+        MissingAttribute: If the parameter is not found in any object and no default is given.
     """
     # Initialize the value to None
     value = None

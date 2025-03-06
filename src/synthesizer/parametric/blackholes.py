@@ -73,56 +73,35 @@ class BlackHole(BlackholesComponent):
         **kwargs,
     ):
         """
-        Intialise the Stars instance. The first two arguments are always
-        required. All other arguments are optional attributes applicable
-        in different situations.
-
+        Initialize a BlackHole instance.
+        
+        Initializes a parametric black hole with physical properties such as mass, accretion rate,
+        radiative efficiency, inclination, and spin. Configurable parameters for the broad and narrow
+        line regions and the torus angle allow for tailored emission models. By default, the black hole
+        is represented as a single particle (nparticles=1 and nbh=1) and its morphology is set as a
+        point source using the specified offset.
+        
         Args:
-            mass (float)
-                The mass of each particle in Msun.
-            accretion_rate (float)
-                The accretion rate of the/each black hole in Msun/yr.
-            epsilon (float)
-                The radiative efficiency. By default set to 0.1.
-            inclination (float)
-                The inclination of the blackhole. Necessary for some disc
-                models.
-            spin (float)
-                The spin of the blackhole. Necessary for some disc models.
-            offset (unyt_array)
-                The (x,y) offsets of the blackhole relative to the centre of
-                the image. Units can be length or angle but should be
-                consistent with the scene.
-            bolometric_luminosity (float)
-                The bolometric luminosity
-            metallicity (float)
-                The metallicity of the region surrounding the/each black hole.
-            ionisation_parameter_blr (array-like, float)
-                The ionisation parameter of the broad line region.
-            hydrogen_density_blr (array-like, float)
-                The hydrogen density of the broad line region.
-            covering_fraction_blr (array-like, float)
-                The covering fraction of the broad line region (effectively
-                the escape fraction).
-            velocity_dispersion_blr (array-like, float)
-                The velocity dispersion of the broad line region.
-            ionisation_parameter_nlr (array-like, float)
-                The ionisation parameter of the narrow line region.
-            hydrogen_density_nlr (array-like, float)
-                The hydrogen density of the narrow line region.
-            covering_fraction_nlr (array-like, float)
-                The covering fraction of the narrow line region (effectively
-                the escape fraction).
-            velocity_dispersion_nlr (array-like, float)
-                The velocity dispersion of the narrow line region.
-            theta_torus (array-like, float)
-                The angle of the torus.
-            fesc (array-like, float)
-                The escape fraction of the black hole. If None then the
-                escape fraction is set to 0.0.
-            kwargs (dict)
-                Any parameter for the emission models can be provided as kwargs
-                here to override the defaults of the emission models.
+            mass (float, optional): Mass of each particle in solar masses.
+            accretion_rate (float, optional): Accretion rate in solar masses per year.
+            epsilon (float, optional): Radiative efficiency (default: 0.1).
+            inclination (float, optional): Inclination angle, required for certain disc models.
+            spin (float, optional): Black hole spin, required for some disc models.
+            offset (unyt_array, optional): (x, y) offset relative to the image center 
+                (default: np.array([0.0, 0.0]) * kpc).
+            bolometric_luminosity (float, optional): Bolometric luminosity.
+            metallicity (float, optional): Metallicity of the surrounding region.
+            ionisation_parameter_blr (float or array-like, optional): Ionisation parameter of the broad line region (default: 0.1).
+            hydrogen_density_blr (float or array-like, optional): Hydrogen density of the broad line region (default: 1e9 / cm**3).
+            covering_fraction_blr (float or array-like, optional): Covering fraction of the broad line region (default: 0.1).
+            velocity_dispersion_blr (float or array-like, optional): Velocity dispersion in the broad line region (default: 2000 * km / s).
+            ionisation_parameter_nlr (float or array-like, optional): Ionisation parameter of the narrow line region (default: 0.01).
+            hydrogen_density_nlr (float or array-like, optional): Hydrogen density of the narrow line region (default: 1e4 / cm**3).
+            covering_fraction_nlr (float or array-like, optional): Covering fraction of the narrow line region (default: 0.1).
+            velocity_dispersion_nlr (float or array-like, optional): Velocity dispersion in the narrow line region (default: 500 * km / s).
+            theta_torus (float or array-like, optional): Angular size of the torus (default: 10 * deg).
+            fesc (float or array-like, optional): Escape fraction; if None, defaults to 0.0.
+            **kwargs: Additional keyword arguments for overriding emission model defaults.
         """
         # Initialise base class
         BlackholesComponent.__init__(
@@ -158,22 +137,24 @@ class BlackHole(BlackholesComponent):
 
     def get_mask(self, attr, thresh, op, mask=None):
         """
-        Create a mask using a threshold and attribute on which to mask.
-
+        Generate a boolean mask by comparing an attribute to a threshold.
+        
+        This method retrieves a specified attribute from the instance and computes a boolean
+        mask by comparing its value to a given threshold using the provided operator. Supported
+        operators are '<', '>', '<=', '>=', '==', and '!='. If an optional mask is supplied, the
+        resulting mask is combined with it via a logical AND operation.
+        
         Args:
-            attr (str)
-                The attribute to derive the mask from.
-            thresh (float)
-                The threshold value.
-            op (str)
-                The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (array)
-                Optionally, a mask to combine with the new mask.
-
+            attr (str): Name of the attribute used for creating the mask.
+            thresh (float): Threshold value for the comparison.
+            op (str): Comparison operator; must be one of '<', '>', '<=', '>=', '==', or '!='.
+            mask (numpy.ndarray, optional): Existing boolean mask to combine with.
+        
+        Raises:
+            InconsistentArguments: If the provided operator is not one of the supported options.
+        
         Returns:
-            mask (array)
-                The mask array.
+            numpy.ndarray: A boolean mask indicating where the attribute meets the threshold condition.
         """
         # Get the attribute
         attr = getattr(self, attr)
@@ -214,31 +195,43 @@ class BlackHole(BlackholesComponent):
         nthreads,
     ):
         """
-        Generate the arguments for the C extension to compute lines.
-
+        Prepare and format input arguments for the C extension that computes spectral lines.
+        
+        This function determines the line region (narrow or broad) from the grid name,
+        establishes a default mask for a singular black hole if none is provided, extracts
+        and normalizes the required black hole properties, and scales them to match the
+        number of particles. It then constructs and returns a tuple containing the grid
+        line and continuum arrays, contiguous property arrays from both the grid and the
+        black hole, the bolometric luminosity, an escape fraction array, grid dimensions,
+        the count of grid properties, the number of particles, the grid assignment method,
+        and the number of threads to use.
+        
         Args:
-            grid (Grid)
-                The AGN grid object to extract lines from.
-            line_id (str)
-                The id of the line to extract.
-            line_type (str)
-                The type of line to extract from the grid. This must match a
-                type of line stored in the grid.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            mask (bool)
-                A mask to be applied to the stars. Spectra will only be
-                computed and returned for stars with True in the mask.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
+            grid: AGN grid object containing spectral line data.
+            line_id (str): Identifier of the line to extract.
+            line_type (str): Category of the line (e.g. blr or nlr) matching a type in the grid.
+            fesc: Escape fraction of stellar emission, as a single float or an array.
+            mask: Boolean array or None. If None, a default mask for a singular black hole is created.
+            grid_assignment_method (str): Method for assigning particles to grid points (e.g., 'cic' or 'ngp').
+            nthreads (int): Number of threads to use; if -1, uses all available CPU threads.
+        
+        Returns:
+            Tuple containing:
+                grid_line: Array of grid line luminosities.
+                grid_continuum: Array of grid continuum values.
+                grid_props: Tuple of contiguous grid property arrays.
+                part_props: Tuple of contiguous, masked particle property arrays.
+                bol_lum: Bolometric luminosity as a float.
+                fesc: Contiguous array of escape fraction values.
+                grid_dims: Array of grid dimensions.
+                num_grid_props: Count of grid property arrays.
+                npart: Number of particles determined from the mask.
+                grid_assignment_method: The method used for grid assignment.
+                nthreads: Number of threads to be used.
+        
+        Raises:
+            InconsistentArguments: If the grid does not indicate a recognized line region or
+                if a required black hole property for the specified line region is missing.
         """
         # Which line region is this for?
         if "nlr" in grid.grid_name:

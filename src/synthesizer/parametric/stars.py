@@ -425,22 +425,27 @@ class Stars(StarsComponent):
 
     def get_mask(self, attr, thresh, op, mask=None):
         """
-        Create a mask using a threshold and attribute on which to mask.
-
+        Generate a boolean mask by comparing an attribute to a threshold.
+        
+        This method retrieves an array attribute from the instance by name, applies an
+        element-wise comparison using the specified operator with the provided threshold,
+        and then broadcasts the result to match the shape of the star formation and
+        metallicity history grid (SFZH). If an additional mask is supplied, it is combined
+        with the generated mask via a logical AND.
+        
         Args:
-            attr (str)
-                The attribute to derive the mask from.
-            thresh (float)
-                The threshold value.
-            op (str)
-                The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (array)
-                Optionally, a mask to combine with the new mask.
-
+            attr (str): The name of the attribute to use for mask generation.
+            thresh (float): The threshold value for the comparison.
+            op (str): The comparison operator; must be one of '<', '>', '<=', '>=', '==', or '!='.
+            mask (array, optional): An existing mask to combine with the new mask. Its shape must
+                                    be either the same as the SFZH grid or compatible with broadcasting.
+        
         Returns:
-            mask (array)
-                The mask array.
+            array: A boolean mask matching the SFZH grid shape.
+        
+        Raises:
+            exceptions.InconsistentArguments: If an invalid operator is provided or if the mask
+                                              dimensions are inconsistent with the SFZH grid.
         """
         # Get the attribute
         attr = getattr(self, attr)
@@ -503,25 +508,29 @@ class Stars(StarsComponent):
         **kwargs,
     ):
         """
-        Calculate rest frame line luminosity and continuum from an SPS Grid.
-
-        This is a flexible base method which extracts the rest frame line
-        luminosity of this stellar population from the SPS grid based on the
-        passed arguments.
-
+        Compute the rest frame line luminosity and continuum from an SPS grid.
+        
+        This method extracts the spectral line properties from the given SPS grid by summing
+        the stellar population’s star formation and metallicity history. It calculates the
+        wavelength, luminosity, and continuum for each specified line identifier. For
+        doublets or multiple lines (specified as comma-separated IDs), the results are combined
+        into a single Line object.
+        
         Args:
-            grid (Grid):
-                A Grid object.
-            line_id (str):
-                A str denoting a line. Doublets can be specified using a
-                comma (e.g. 'OIII4363,OIII4959').
-            line_type (str):
-                The type of line to extract. This must match a key in the Grid.
-
+            grid (Grid): An SPS grid containing line wavelengths, luminosities, and continuum arrays.
+            line_id (str): A string identifier for the spectral line. Use comma separation for
+                multiple lines (e.g., "OIII4363, OIII4959").
+            line_type (str): A key in the grid that selects the corresponding luminosity and
+                continuum arrays.
+            **kwargs: Additional keyword arguments for future extensions (currently unused).
+        
         Returns:
-            Line
-                An instance of Line contain this lines wavelenth, luminosity,
-                and continuum.
+            Line: An object encapsulating the line's wavelength (in angstroms), luminosity
+            (in erg/s), and continuum (in erg/s/Hz). If multiple line IDs are provided, the
+            returned Line object combines their values.
+        
+        Raises:
+            InconsistentArguments: If the provided line_id is not a string.
         """
         # Ensure line_id is a string
         if not isinstance(line_id, str):
@@ -947,21 +956,21 @@ class Stars(StarsComponent):
         show=True,
     ):
         """
-        Plot the metallicity distribution of the stellar population.
-
+        Plot the metallicity distribution as a semilogarithmic step plot.
+        
+        This function creates a matplotlib figure and axes to display the metallicity
+        distribution of the stellar population. The distribution is visualized using a
+        step plot with a filled area (in red) and rendered on a logarithmic (y) scale.
+        Optional x and y-axis limits can be applied, and the plot is displayed immediately
+        if requested.
+        
         Args:
-            xlimits (tuple)
-                The limits of the x-axis.
-            ylimits (tuple)
-                The limits of the y-axis.
-            show (bool)
-                Should we invoke plt.show()?
-
+            xlimits (tuple): Limits for the x-axis; if empty, default limits are used.
+            ylimits (tuple): Limits for the y-axis; if empty, default limits are used.
+            show (bool): If True, display the plot using plt.show().
+        
         Returns:
-            fig
-                The Figure object contain the plot axes.
-            ax
-                The Axes object containing the plotted data.
+            tuple: A tuple containing the matplotlib Figure and Axes objects.
         """
         fig, ax = plt.subplots()
         ax.semilogy()
@@ -989,7 +998,15 @@ class Stars(StarsComponent):
         return fig, ax
 
     def _prepare_line_args(self, *args, **kwargs):
-        """Prepare arguments for line generation."""
+        """
+        Placeholder for preparing arguments for line generation.
+        
+        This method is not applicable for parametric stars and always raises a
+        NotImplementedError.
+        Raises:
+            NotImplementedError: Always raised since argument preparation for line
+                                 generation is not required for parametric stars.
+        """
         raise exceptions.NotImplementedError(
             "Parametric stars don't currently require arg preparation"
         )

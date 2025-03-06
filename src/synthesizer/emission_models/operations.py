@@ -40,16 +40,16 @@ class Extraction:
 
     def __init__(self, grid, extract, vel_shift):
         """
-        Initialise the extraction model.
-
+        Initializes the extraction model and verifies that the grid contains a valid extraction key.
+        
         Args:
-            grid (Grid):
-                The grid to extract from.
-            extract (str):
-                The key for the spectra to extract.
-            vel_shift (bool):
-                Should the emission take into account the velocity shift due
-                to peculiar velocities? (Particle Only!)
+            grid (Grid): The grid instance from which spectra or lines are extracted.
+            extract (str): The key identifying the spectra or lines to extract.
+            vel_shift (bool): Whether to apply velocity shifts due to peculiar velocities
+                (relevant for particle extraction).
+        
+        Raises:
+            MissingSpectraType: If the grid does not contain the specified extraction key.
         """
         # Attach the grid
         self._grid = grid
@@ -79,30 +79,28 @@ class Extraction:
         grid_assignment_method,
     ):
         """
-        Extract spectra from the grid.
-
-        Args:
-            emission_model (EmissionModel):
-                The emission model to extract from.
-            emitters (dict):
-                The emitters to extract the spectra for.
-            spectra (dict):
-                The dictionary to store the extracted spectra in.
-            particle_spectra (dict):
-                The dictionary to store the extracted particle spectra in.
-            verbose (bool):
-                Are we talking?
-            nthreads (int):
-                The number of threads to use when generating spectra.
-            grid_assignment_method (str):
-                The method to use when assigning particles to the grid.
-                Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
-                grid point).
-
-        Returns:
-            dict:
-                The dictionary of extracted spectra.
-        """
+            Extracts emission spectra from the grid based on the given emission model.
+        
+            For each extraction key defined in the emission model, this method selects an
+            appropriate extractor (handling cases such as per-particle extraction, velocity shift,
+            or parametric stars) and generates spectra from the corresponding emitter. If masks
+            are defined for the model, they are combined and applied during extraction. The
+            integrated spectra are stored in the provided 'spectra' dictionary, while per-particle
+            spectra (if applicable) are saved in 'particle_spectra'.
+        
+            Args:
+                emission_model (EmissionModel): Contains extraction keys and associated models.
+                emitters (dict): Mapping from emitter identifiers to their corresponding objects.
+                spectra (dict): Dictionary to store integrated spectra.
+                particle_spectra (dict): Dictionary to store per-particle spectra when applicable.
+                verbose (bool): Flag indicating whether to enable verbose output.
+                nthreads (int): Number of threads to use for parallel extraction.
+                grid_assignment_method (str): Method for assigning particles to the grid 
+                    ('cic' for cloud-in-cell or 'ngp' for nearest grid point).
+        
+            Returns:
+                tuple: A tuple containing the updated 'spectra' and 'particle_spectra' dictionaries.
+            """
         # First step we need to extract each base spectra
         for label, spectra_key in emission_model._extract_keys.items():
             # Skip if we don't need to extract this spectra
@@ -190,30 +188,36 @@ class Extraction:
         **kwargs,
     ):
         """
-        Extract lines from the grid.
-
+        Extract emission lines for each extraction key in the emission model.
+        
+        This method iterates over each extraction key defined in the emission model, and for each key it:
+        temporarily applies any fixed parameters to the associated emitter, builds a mask if specified,
+        and invokes the appropriate line generation function (per-particle or integrated) for every line
+        identifier provided. For per-particle models, it stores both per-particle and integrated lines;
+        otherwise, it only populates the integrated lines dictionary. After extraction, any altered
+        emitter parameters are restored.
+        
         Args:
             line_ids (list):
-                The line ids to extract.
+                The identifiers of the lines to extract.
             emission_model (EmissionModel):
-                The emission model to extract from.
+                The emission model that defines the extraction keys and their associated models.
             emitters (dict):
-                The emitters to extract the lines for.
-            per_particle (bool):
-                Are we generating lines per particle?
+                A mapping of emitter identifiers to emitter instances used for the extraction.
             lines (dict):
-                The dictionary to store the extracted lines in.
+                A dictionary for storing the integrated line collections.
             particle_lines (dict):
-                The dictionary to store the extracted particle lines in.
+                A dictionary for storing per-particle line collections when applicable.
             verbose (bool):
-                Are we talking?
-            kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
-
+                Flag indicating whether verbose output should be enabled.
+            **kwargs:
+                Additional keyword arguments passed to the line generation functions.
+        
         Returns:
-            dict:
-                The dictionary of extracted lines.
+            tuple:
+                A tuple (lines, particle_lines) where:
+                - lines is a dictionary mapping extraction keys to LineCollection instances of integrated lines.
+                - particle_lines is a dictionary mapping extraction keys to LineCollection instances of per-particle lines.
         """
         # First step we need to extract each base lines
         for label in emission_model._extract_keys.keys():

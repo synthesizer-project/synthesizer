@@ -278,7 +278,12 @@ class BlackHoles(Particles, BlackholesComponent):
 
     def calculate_random_inclination(self):
         """
-        Calculate random inclinations to blackholes.
+        Generates random inclination angles for black holes.
+        
+        This method assigns each black hole a random inclination angle drawn from a uniform 
+        distribution between 0 and π/2 radians. The resulting angles, stored as quantities with 
+        angular units in the `inclination` attribute, are used to compute and store their cosine values 
+        in the `cosine_inclination` attribute.
         """
 
         self.inclination = (
@@ -297,27 +302,40 @@ class BlackHoles(Particles, BlackholesComponent):
         nthreads,
     ):
         """
-        Generate the arguments for the C extension to compute lines.
-
+        Prepare arguments for the C extension to compute emission lines.
+        
+        This function extracts and validates the grid and black hole particle properties
+        needed to compute emission lines. It determines the line region ('nlr' or 'blr')
+        from the grid, applies an optional mask to select particles, and ensures that all
+        required particle properties are available. The function also scales properties by
+        the bolometric luminosity and formats grid dimensions and threading information
+        for use with the C extension.
+        
         Args:
-            grid (Grid)
-                The AGN grid object to extract lines from.
-            line_id (str)
-                The id of the line to extract.
-            line_type (str)
-                The type of line to extract from the grid. Must match the
-                spectra/line type in the grid file.
-            mask (bool)
-                A mask to be applied to the stars. Spectra will only be
-                computed and returned for stars with True in the mask.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
+            grid (Grid): The grid object containing line luminosities and continuum data.
+            line_id (str): Identifier for the emission line to extract.
+            line_type (str): Type of emission line; must match the corresponding type in the grid.
+            mask (Optional[ndarray]): Boolean array indicating which black hole particles to include.
+                If None, all particles are used.
+            grid_assignment_method (str): Method for assigning particles to grid points (e.g., "cic" or "ngp").
+            nthreads (int): Number of threads for the C extension. If -1, all available threads are used.
+        
+        Returns:
+            tuple: A tuple containing the following elements:
+                - grid_line (ndarray): Contiguous array of grid line luminosities for the specified line.
+                - grid_continuum (ndarray): Contiguous array of grid continuum values for the specified line.
+                - grid_props (tuple): Tuple of contiguous float64 arrays for each grid property axis.
+                - part_props (tuple): Tuple of contiguous float64 arrays of masked black hole particle properties.
+                - bol_lum (float): Bolometric luminosity used for scaling the line luminosities.
+                - grid_dims (ndarray): Int32 array indicating the size of each grid property axis.
+                - num_grid_axes (int): Number of grid axes.
+                - npart (int): Number of particles after applying the mask.
+                - grid_assignment_method (str): The method used for assigning particles to grid points.
+                - nthreads (int): The effective number of threads to be used.
+        
+        Raises:
+            InconsistentArguments: If the grid does not correspond to a valid line region or if a
+                required black hole property is missing.
         """
         # Which line region is this for?
         if "nlr" in grid.grid_name:
@@ -450,37 +468,29 @@ class BlackHoles(Particles, BlackholesComponent):
         verbose=False,
     ):
         """
-        Calculate rest frame line luminosity and continuum from an AGN Grid.
-
-        This is a flexible base method which extracts the rest frame line
-        luminosity of this blackhole population based on the
-        passed arguments and calculate the luminosity and continuum for
-        each individual particle.
-
+        Compute per-particle emission line luminosity and continuum.
+        
+        Calculates the rest frame emission line luminosity and continuum for each black hole
+        particle using values interpolated from an AGN grid. For a comma-separated string of
+        line identifiers, returns a combined Line object comprising individual entries for each
+        specified emission line.
+        
+        If the black hole population is empty or a provided mask excludes all particles, the
+        function returns zeroed luminosity and continuum arrays and issues a warning.
+        
         Args:
-            grid (Grid):
-                A Grid object.
-            line_id (list/str):
-                A list of line_ids or a str denoting a single line.
-                Doublets can be specified as a nested list or using a
-                comma (e.g. 'OIII4363,OIII4959').
-            line_type (str)
-                The type of line to extract from the grid. Must match the
-                spectra/line type in the grid file.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
+            grid (Grid): Grid object providing line wavelength information.
+            line_id (str): Comma-separated emission line identifier(s).
+            line_type (str): Type of emission line; must match a corresponding entry in the grid.
+            mask (Optional[np.ndarray]): Boolean array to filter particles. If supplied and no particles
+                are selected, zeroed values are returned.
+            method (str): Interpolation method, either "cic" (cloud-in-cell) or "ngp" (nearest grid point).
+            nthreads (int): Number of threads for computation; -1 uses all available threads.
+            verbose (bool): Unused flag for verbose output.
+        
         Returns:
-            Line
-                An instance of Line contain this lines wavelenth, luminosity,
-                and continuum.
+            Line: A Line object encapsulating the emission line wavelength, luminosity, and continuum.
+                  For multiple line identifiers, a combined Line is returned.
         """
         from synthesizer.extensions.particle_line import (
             compute_particle_line,
