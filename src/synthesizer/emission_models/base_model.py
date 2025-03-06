@@ -2709,6 +2709,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Perform all extractions
         lines, particle_lines = self._extract_lines(
+            line_ids,
             emission_model,
             emitters,
             lines,

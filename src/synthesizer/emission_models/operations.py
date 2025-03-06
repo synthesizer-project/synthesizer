@@ -181,6 +181,7 @@ class Extraction:
 
     def _extract_lines(
         self,
+        line_ids,
         emission_model,
         emitters,
         lines,
@@ -193,6 +194,24 @@ class Extraction:
         Extract lines from the grid.
 
         Args:
+            lines_ids (list):
+                The line ids to extract.
+            emission_model (EmissionModel):
+                The emission model to extract from.
+            emitters (dict):
+                The emitters to extract the lines for.
+            lines (dict):
+                The dictionary to store the extracted lines in.
+            particle_lines (dict):
+                The dictionary to store the extracted particle lines in.
+            verbose (bool):
+                Are we talking?
+            nthreads (int):
+                The number of threads to use when generating lines.
+            grid_assignment_method (str):
+                The method to use when assigning particles to the grid.
+                Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
+                grid point).
 
         Returns:
             dict:
@@ -254,11 +273,39 @@ class Extraction:
                     this_model.extract,
                 )
 
+            # Combine the lam_mask the requested lines to give the actual
+            # lam_mask we will pass to the extractor. First, with no lam_mask
+            # on the model we simply set the lam_mask to mask all the
+            # unrequested lines.
+            if this_model._lam_mask is None:
+                lam_mask = np.isin(extractor._grid.available_lines, line_ids)
+
+            # Otherwise we combine the lam_mask with the requested lines
+            # to give the actual lam_mask we will pass to the extractor.
+            else:
+                # Get the mask for the requested lines
+                requested_lines = np.isin(
+                    extractor._grid.available_lines,
+                    line_ids,
+                )
+
+                # Get the indices that would bin the lines into the
+                # spectra grid wavelength array
+                line_indices = np.digitize(
+                    extractor._line_lams,
+                    extractor._grid.lam,
+                )
+
+                # Remove any lines which are masked out in the lam_mask
+                for ind in line_indices:
+                    if not this_model._lam_mask[ind]:
+                        requested_lines[ind] = False
+
             out_lines = extractor.generate_line(
                 emitter,
                 this_model,
                 mask=this_mask,
-                lam_mask=this_model._lam_mask,
+                lam_mask=lam_mask,
                 grid_assignment_method=grid_assignment_method,
                 nthreads=nthreads,
                 do_grid_check=False,
