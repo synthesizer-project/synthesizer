@@ -1,6 +1,8 @@
+import numpy as np
 import pytest
-from unyt import Myr
+from unyt import Myr, kpc
 
+from synthesizer import exceptions
 from synthesizer.exceptions import InconsistentAddition
 from synthesizer.parametric.stars import Stars as ParaStars
 from synthesizer.particle.stars import Stars
@@ -64,3 +66,16 @@ def test_parametric_young_stars(particle_stars_A, test_grid):
         particle_stars_A.young_stars_parametrisation["parametrisation"]
         == "constant"
     )
+
+
+def test_calculate_radii(particle_stars_A):
+    with pytest.raises(
+        exceptions.InconsistentArguments,
+        match="Can't calculate radii without a centre.",
+    ):
+        particle_stars_A.get_radii()
+
+    particle_stars_A.centre = np.array([1.0, 0.0, 2.0]) * kpc
+
+    assert isinstance(particle_stars_A.get_radii(), np.array)
+    assert (particle_stars_A.radii <= 6 * kpc).all()
