@@ -640,12 +640,16 @@ class Grid:
                 # the continuum at the line wavelengths (we use scipy here
                 # because spectres can't handle single value interpolation).
                 # The linecont continuum is explicitly 0 and set above.
-                self.line_conts[spectra] = interp_func(self.line_lams)
+                self.line_conts[spectra] = unyt_array(
+                    interp_func(self.line_lams),
+                    cont_units,
+                )
 
                 # Set the line luminosities to 0 as long as they haven't
                 # already been set
-                self.line_lums[spectra] = np.zeros(
-                    self.spectra[spectra].shape[:-1]
+                self.line_lums[spectra] = unyt_array(
+                    np.zeros(self.spectra[spectra].shape[:-1]),
+                    lum_units,
                 )
 
     def _prepare_lam_axis(

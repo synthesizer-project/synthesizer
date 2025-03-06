@@ -790,6 +790,7 @@ class IntegratedParametricExtractor(Extractor):
 
         # Compute the integrated line array by multiplying the sfzh by
         # the grids
+        print(type(grid_line_lums), lam_mask)
         lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
         cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
 
@@ -798,6 +799,6 @@ class IntegratedParametricExtractor(Extractor):
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=lum * erg / s,
-            cont=cont * erg / s / Hz,
+            lum=lum,
+            cont=cont,
         )
