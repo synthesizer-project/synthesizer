@@ -651,11 +651,6 @@ class Grid:
                     np.zeros((*self.spectra[spectra].shape[:-1], self.nlines)),
                     lum_units,
                 )
-                print(
-                    extract,
-                    self.line_conts[spectra].shape,
-                    self.line_lums[spectra].shape,
-                )
 
     def _prepare_lam_axis(
         self,
