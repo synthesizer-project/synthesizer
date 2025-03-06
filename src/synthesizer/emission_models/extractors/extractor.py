@@ -19,7 +19,7 @@ from synthesizer.synth_warnings import warn
 
 
 class Extractor(ABC):
-    """An abstract base class to define the framework for extracting emissions."""
+    """An abstract base class defining the framework for extraction."""
 
     def __init__(self, grid, extract):
         """
@@ -108,9 +108,9 @@ class Extractor(ABC):
             ):
                 value = value.to(units).value
 
-            # Log the data if necessary
-            if log:
-                value = np.log10(value)
+            # We need these values to be arrays for the C code
+            if not isinstance(value, np.ndarray):
+                value = np.array(value)
 
             # Append the extracted value to the list
             extracted.append(value)
@@ -502,7 +502,10 @@ class ParticleExtractor(Extractor):
 
 
 class IntegratedParametricExtractor(Extractor):
-    """A class to extract the integrated parametric emission from a particle."""
+    """
+    A class to extract the integrated parametric emission from a particle.
+
+    """
 
     def generate_lnu(
         self,
