@@ -368,6 +368,8 @@ class Particles:
         # Calculate the radii
         self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
 
+        return self.radii
+
     @accepts(aperture_radius=Mpc)
     def _aperture_mask(self, aperture_radius):
         """
@@ -948,7 +950,7 @@ class CoordinateGenerator:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 
@@ -956,6 +958,6 @@ class CoordinateGenerator:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )

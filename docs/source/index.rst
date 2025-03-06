@@ -75,7 +75,7 @@ A code paper is currently in preparation. For now please cite `Vijayan et al. 20
 Contributing
 ------------
 
-Please see `here <https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md>`_ for contribution guidelines.
+Please see `here <https://github.com/synthesizer-project/synthesizer/blob/main/docs/CONTRIBUTING.md>`_ for contribution guidelines.
 
 Primary Contributors
 ---------------------
@@ -85,5 +85,5 @@ Primary Contributors
 License
 -------
 
-Synthesizer is free software made available under the GNU General Public License v3.0. For details see the `LICENSE <https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md>`_.
+Synthesizer is free software made available under the GNU General Public License v3.0. For details see the `LICENSE <https://github.com/synthesizer-project/synthesizer/blob/main/LICENSE.md>`_.
 

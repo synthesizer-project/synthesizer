@@ -5,10 +5,6 @@ hydrodynamical simulations suite.
 The EAGLE hdf5 data loading scripts have been taken from
 the `eagle_io` package (https://github.com/flaresimulations/eagle_IO/).
 This has been to make the call as self-contained as possible.
-
-The functions here used in
-https://github.com/flaresimulations/synthesizer-pipeline
-
 """
 
 import glob
@@ -203,6 +199,16 @@ def load_EAGLE(
         verbose=verbose,
     )[ok]
 
+    # get velocities
+    s_velocities = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/Velocities",
+        numThreads=numThreads,
+        verbose=verbose,
+    )[ok]
+
     # Get gas particle properties
     g_sgrpno = read_array(
         "PARTDATA",
@@ -293,6 +299,7 @@ def load_EAGLE(
         s_hsml=s_hsml,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
+        s_velocities=s_velocities,
         g_grpno=g_grpno,
         g_sgrpno=g_sgrpno,
         g_masses=g_masses,

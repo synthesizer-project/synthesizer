@@ -1,10 +1,10 @@
 # Synthesizer
 
-<img src="https://raw.githubusercontent.com/flaresimulations/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
+<img src="https://raw.githubusercontent.com/synthesizer-project/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
 
-[![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/flaresimulations/synthesizer/actions)
-[![Documentation Status](https://github.com/flaresimulations/synthesizer/actions/workflows/static.yml/badge.svg)](https://flaresimulations.github.io/synthesizer/)
-[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md)
+[![workflow](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/synthesizer-project/synthesizer/actions)
+[![Documentation Status](https://github.com/synthesizer-project/synthesizer/actions/workflows/static.yml/badge.svg)](https://synthesizer-project.github.io/synthesizer/)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/synthesizer-project/synthesizer/blob/main/docs/CONTRIBUTING.md)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -17,7 +17,7 @@ This will also display the number of downloads but lets hide for now...
 
 Synthesizer is a Python package for generating synthetic astrophysical observables. It is modular, flexible, extensible and fast.
 
-Read the documentation [here](https://flaresimulations.github.io/synthesizer/).
+Read the documentation [here](https://synthesizer-project.github.io/synthesizer/).
 
 ## Getting Started
 
@@ -27,9 +27,9 @@ The latest stable release of Synthesizer can be installed directly using pip,
 pip install cosmos-synthesizer
 ```
 
-Please refer to the [installation documentation](https://flaresimulations.github.io/synthesizer/getting_started/installation.html) for further information. 
+Please refer to the [installation documentation](https://synthesizer-project.github.io/synthesizer/getting_started/installation.html) for further information. 
 
-Various configuration options can also be set at installation (see [here](https://flaresimulations.github.io/synthesizer/advanced/config_options.html)).
+Various configuration options can also be set at installation (see [here](https://synthesizer-project.github.io/synthesizer/advanced/config_options.html)).
 
 ## Getting Grids
 
@@ -77,4 +77,4 @@ A code paper is currently in preparation. For now please cite [Vijayan et al. 20
 
 ## Licence
 
-[GNU General Public License v3.0](https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md)
+[GNU General Public License v3.0](https://github.com/synthesizer-project/synthesizer/blob/main/LICENSE.md)
