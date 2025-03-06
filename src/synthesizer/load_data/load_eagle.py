@@ -31,7 +31,7 @@ except ImportError:
         " `pip install .[eagle]`."
     )
 
-from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
+from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr, km, s
 
 from synthesizer.load_data.utils import lookup_age
 
@@ -925,6 +925,7 @@ def assign_galaxy_prop(
     s_hsml: NDArray[np.float32],
     s_oxygen: NDArray[np.float32],
     s_hydrogen: NDArray[np.float32],
+    s_velocities: NDArray[np.float32],
     g_grpno: NDArray[np.int32],
     g_sgrpno: NDArray[np.int32],
     g_masses: NDArray[np.float32],
@@ -974,6 +975,8 @@ def assign_galaxy_prop(
             Stellar particle abundance in oxygen
         s_hydrogen (array)
             Stellar particle abundance in hydrogen
+        s_velocities (array)
+            Stellar Velocities
         g_grpno (array)
             Gas particle group number
         g_sgrpno (array)
@@ -1024,6 +1027,7 @@ def assign_galaxy_prop(
         smoothing_lengths=s_hsml[ok] * Mpc,
         s_oxygen=s_oxygen[ok],
         s_hydrogen=s_hydrogen[ok],
+        velocities=s_velocities[ok] * km / s,
         **s_kwargs,
     )
 
