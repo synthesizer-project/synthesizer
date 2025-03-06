@@ -446,11 +446,11 @@ class LineCollection:
                 The line object.
         """
         # Is the key a ratio_id?
-        if key in self.available_ratios:
+        if isinstance(key, str) and key in self.available_ratios:
             return self.get_ratio(key)
 
         # Is the key a diagram_id?
-        elif key in self.available_diagrams:
+        elif isinstance(key, str) and key in self.available_diagrams:
             return self.get_diagram(key)
 
         # Otherwise, we have a line_id
