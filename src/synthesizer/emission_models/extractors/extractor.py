@@ -293,7 +293,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             warn("A mask has filtered out all particles, returning empty Sed")
             return Sed(
                 model.lam,
-                np.zeros(emitter.nparticles, self._grid_nlam) * erg / s / Hz,
+                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
             )
 
         # Get the attributes from the emitter
@@ -462,7 +462,7 @@ class ParticleExtractor(Extractor):
             warn("A mask has filtered out all particles, returning empty Sed")
             return Sed(
                 model.lam,
-                np.zeros(emitter.nparticles, self._grid_nlam) * erg / s / Hz,
+                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
             )
 
         # Get the attributes from the emitter
