@@ -20,15 +20,60 @@ from synthesizer.synth_warnings import warn
 
 
 class Extractor(ABC):
-    """An abstract base class defining the framework for extraction."""
+    """
+    An abstract base class defining the framework for extraction.
+
+    This class provides common methods and attributes for the extraction of
+    emissions (sed and lines) from a grid for a given emitter. It also
+    templates out what methods are needed by any child classes.
+
+    In short, this class provides the machinery to extract emitter
+    attributes corresponding to grid axes and run the extraction code to
+    compute the emission from the grid. This functionality enables extraction
+    from complete arbitrary grids and emitters, as long as the emitter contains
+    the necessary attributes.
+
+    Attributes:
+        _emitter_attributes (tuple)
+            The attributes to extract from the emitter.
+        _grid_axes (tuple)
+            The grid axes corresponding to the emitter attributes.
+        _axes_units (tuple)
+            The units for each grid axis.
+        _weight_var (str)
+            The weight variable to extract from the emitter and use to weight
+            the emission grid. Note, this is set during grid generation and
+            is stored on each grid object explictly from the grid file itself.
+        _grid_dims (np.array)
+            The grid dimensions, the shape of the spectra grid.
+        _grid_naxes (int)
+            The number of grid axes, i.e. the shape of the grid excluding the
+            wavelength axis.
+        _grid_nlam (int)
+            The number of spectra grid wavelength elements.
+        _log_emitter_attr (tuple)
+            Whether to log the emitter data.
+        _grid (Grid)
+            The grid from which to extract the emission.
+        _spectra_grid (unyt_array)
+            The grid of spectra.
+        _line_lum_grid (unyt_array)
+            The grid of line luminosities.
+        _line_cont_grid (unyt_array)
+            The grid of line continua.
+        _line_lams (unyt_array)
+            The line wavelengths.
+    """
 
     def __init__(self, grid, extract):
         """
         Initialize the Extractor object.
 
         Args:
-            grid (Grid): The grid object.
-            extract (str): The emission type to extract from the grid.
+            grid (Grid)
+                The grid object from which to extract the emission.
+            extract (str)
+                The emission type to extract from the grid.
 
         """
         start = tic()
@@ -87,7 +132,8 @@ class Extractor(ABC):
                 because the check is extreme expensive.
 
         Returns:
-            tuple: The extracted attributes and the weight variable.
+            tuple
+                The extracted attributes and the weight variable.
         """
         start = tic()
 
@@ -135,7 +181,10 @@ class Extractor(ABC):
         argument in the generate_lnu and generate_line methods.
 
         Args:
-            extracted_attrs (tuple): The extracted attributes from the emitter.
+            emitter (Stars/BlackHoles/Gas):
+                The emitter from which the attributes were extracted.
+            extracted_attrs (tuple):
+                The extracted attributes from the emitter.
         """
         start = tic()
 
@@ -172,7 +221,15 @@ class Extractor(ABC):
 
 
 class IntegratedParticleExtractor(Extractor):
-    """A class to extract the integrated emission from a particle."""
+    """
+    A class to extract the integrated emission from a particle.
+
+    This Extractor will produce integrated emission from particle based
+    components.
+
+    If no mask is being used it will attempt to reuse any stored grid weights
+    to reduce the computation time.
+    """
 
     def generate_lnu(
         self,
@@ -188,11 +245,29 @@ class IntegratedParticleExtractor(Extractor):
         Extract the spectra from the grid for the emitter.
 
         Args:
-            emitter (Stars/BlackHoles/Gas): The emitter object.
-            model (EmissionModel): The emission model object.
+            emitter (Stars/BlackHoles/Gas)
+                The emitter object from which to extract the emission.
+            model (EmissionModel)
+                The emission model defining the emission to extract.
+            mask (np.array)
+                A mask to apply to the particles.
+            lam_mask (np.array)
+                A mask to apply to the spectra's wavelength axis.
+            grid_assignment_method (str)
+                The method to assign particles to the grid. Either
+                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+            nthreads (int)
+                The number of threads to use in the extraction. If -1 then
+                all available threads will be used.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is a sanity check that can be used to check the consistency
+                of your particles with the grid. It is False by default
+                because the check is extreme expensive.
 
         Returns:
-            Sed: The integrated spectra.
+            Sed
+                The integrated spectra.
         """
         start = tic()
 
@@ -361,7 +436,16 @@ class IntegratedParticleExtractor(Extractor):
 
 
 class DopplerShiftedParticleExtractor(Extractor):
-    """A class to extract the Doppler shifted emission from a particle."""
+    """
+    A class to extract the Doppler shifted emission from a particle.
+
+    This Extractor will produce a Doppler shifted spectra for each particle
+    in a particle based component.
+
+    This is not applicable for line emission which is treated without Doppler
+    shifting. Doppler broadened lines can be extracted from spectra where the
+    width of the lines is accounted for in the spectra grid.
+    """
 
     def generate_lnu(
         self,
@@ -374,14 +458,32 @@ class DopplerShiftedParticleExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the spectra from the grid for the emitter.
+        Extract the per particle doppler shifted spectra from the grid.
 
         Args:
-            emitter (Stars/BlackHoles/Gas): The emitter object.
-            model (EmissionModel): The emission model object.
+            emitter (Stars/BlackHoles/Gas)
+                The emitter object from which to extract the emission.
+            model (EmissionModel)
+                The emission model defining the emission to extract.
+            mask (np.array)
+                A mask to apply to the particles.
+            lam_mask (np.array)
+                A mask to apply to the spectra's wavelength axis.
+            grid_assignment_method (str)
+                The method to assign particles to the grid. Either
+                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+            nthreads (int)
+                The number of threads to use in the extraction. If -1 then
+                all available threads will be used.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is a sanity check that can be used to check the consistency
+                of your particles with the grid. It is False by default
+                because the check is extreme expensive.
 
         Returns:
-            Sed: The integrated spectra.
+            Sed
+                The integrated spectra.
         """
         start = tic()
 
@@ -451,7 +553,16 @@ class DopplerShiftedParticleExtractor(Extractor):
 
 
 class IntegratedDopplerShiftedParticleExtractor(Extractor):
-    """A class to extract the Doppler shifted emission from a particle."""
+    """
+    A class to extract the Doppler shifted emission from a particle.
+
+    This Extractor will produce the integrated Doppler shifted spectra for
+    a particle based component.
+
+    This is not applicable for line emission which is treated without Doppler
+    shifting. Doppler broadened lines can be extracted from spectra where the
+    width of the lines is accounted for in the spectra grid.
+    """
 
     def generate_lnu(
         self,
@@ -464,14 +575,32 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the spectra from the grid for the emitter.
+        Extract the integrated doppler shifted spectra from the grid.
 
         Args:
-            emitter (Stars/BlackHoles/Gas): The emitter object.
-            model (EmissionModel): The emission model object.
+            emitter (Stars/BlackHoles/Gas)
+                The emitter object from which to extract the emission.
+            model (EmissionModel)
+                The emission model defining the emission to extract.
+            mask (np.array)
+                A mask to apply to the particles.
+            lam_mask (np.array)
+                A mask to apply to the spectra's wavelength axis.
+            grid_assignment_method (str)
+                The method to assign particles to the grid. Either
+                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+            nthreads (int)
+                The number of threads to use in the extraction. If -1 then
+                all available threads will be used.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is a sanity check that can be used to check the consistency
+                of your particles with the grid. It is False by default
+                because the check is extreme expensive.
 
         Returns:
-            Sed: The integrated spectra.
+            Sed
+                The integrated spectra.
         """
         start = tic()
 
@@ -538,7 +667,12 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
 
 
 class ParticleExtractor(Extractor):
-    """A class to extract the emission from a particle."""
+    """
+    A class to extract the emission from a particle.
+
+    This Extractor will produce a spectra for each particle in a particle
+    based component.
+    """
 
     def generate_lnu(
         self,
@@ -551,14 +685,32 @@ class ParticleExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the spectra from the grid for the emitter.
+        Extract the per particle spectra from the grid.
 
         Args:
-            emitter (Stars/BlackHoles/Gas): The emitter object.
-            model (EmissionModel): The emission model object.
+            emitter (Stars/BlackHoles/Gas)
+                The emitter object from which to extract the emission.
+            model (EmissionModel)
+                The emission model defining the emission to extract.
+            mask (np.array)
+                A mask to apply to the particles.
+            lam_mask (np.array)
+                A mask to apply to the spectra's wavelength axis.
+            grid_assignment_method (str)
+                The method to assign particles to the grid. Either
+                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+            nthreads (int)
+                The number of threads to use in the extraction. If -1 then
+                all available threads will be used.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is a sanity check that can be used to check the consistency
+                of your particles with the grid. It is False by default
+                because the check is extreme expensive.
 
         Returns:
-            Sed: The integrated spectra.
+            Sed
+                The integrated spectra.
         """
         start = tic()
 
@@ -710,6 +862,10 @@ class IntegratedParametricExtractor(Extractor):
     """
     A class to extract the integrated parametric emission from a particle.
 
+    This Extractor will produce integrated emission from parametric based
+    components. This differs from particle based components only in that we
+    can straight multiply the SFZH by the grid spectra to get the integrated
+    emission.
     """
 
     def generate_lnu(
@@ -723,14 +879,32 @@ class IntegratedParametricExtractor(Extractor):
         do_grid_check,
     ):
         """
-        Extract the spectra from the grid for the emitter.
+        Extract the integrated spectra from the grid for a parametric emitter.
 
         Args:
-            emitter (Stars/BlackHoles/Gas): The emitter object.
-            model (EmissionModel): The emission model object.
+            emitter (Stars/BlackHoles/Gas)
+                The emitter object from which to extract the emission.
+            model (EmissionModel)
+                The emission model defining the emission to extract.
+            mask (np.array)
+                A mask to apply to the particles.
+            lam_mask (np.array)
+                A mask to apply to the spectra's wavelength axis.
+            grid_assignment_method (str)
+                The method to assign particles to the grid. Either
+                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+            nthreads (int)
+                The number of threads to use in the extraction. If -1 then
+                all available threads will be used.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is a sanity check that can be used to check the consistency
+                of your particles with the grid. It is False by default
+                because the check is extreme expensive.
 
         Returns:
-            Sed: The integrated spectra.
+            Sed
+                The integrated spectra.
         """
         start = tic()
 
