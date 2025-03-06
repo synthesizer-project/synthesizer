@@ -77,5 +77,5 @@ def test_calculate_radii(particle_stars_A):
 
     particle_stars_A.centre = np.array([1.0, 0.0, 2.0]) * kpc
 
-    assert isinstance(particle_stars_A.get_radii(), np.array)
+    assert isinstance(particle_stars_A.get_radii(), np.ndarray)
     assert (particle_stars_A.radii <= 6 * kpc).all()
