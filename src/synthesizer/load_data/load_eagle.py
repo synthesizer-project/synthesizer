@@ -204,7 +204,7 @@ def load_EAGLE(
         "PARTDATA",
         fileloc,
         tag,
-        "/PartType4/Velocities",
+        "/PartType4/Velocity",
         numThreads=numThreads,
         verbose=verbose,
     )[ok]
