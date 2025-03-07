@@ -147,7 +147,7 @@ class BlackHole(BlackholesComponent):
             **kwargs,
         )
 
-        # By default a parametric black hole will explictily have 1 "particle",
+        # By default a parametric black hole will explicitly have 1 "particle",
         # set this here so that the downstream extraction can access the
         # attribute.
         self.nparticles = 1
