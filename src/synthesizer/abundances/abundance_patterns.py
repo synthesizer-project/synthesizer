@@ -80,6 +80,7 @@ class Abundances:
         self,
         metallicity=None,
         alpha=0.0,
+        alpha_ehancement=0.0,
         abundances=None,
         reference=reference_abundance_patterns.GalacticConcordance,
         depletion=None,
@@ -111,6 +112,16 @@ class Abundances:
                 some models (e.g. Jenkins (2009)) it's more complex.
 
         """
+
+        # Raise an exception is someone tries to set both alpha and abundances
+        # since this will break things very easily.
+        if (alpha != 0.0) and (abundances is not None):
+            raise exceptions.InconsistentArguments(
+                """
+                Can not define both element scalings and non-zero alpha
+                enhancement.
+                """
+            )
 
         # basic element info
         self.metals = elements.Elements().metals
