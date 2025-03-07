@@ -79,8 +79,8 @@ class Abundances:
     def __init__(
         self,
         metallicity=None,
+        oxygen_to_hydrogen=None,
         alpha=0.0,
-        alpha_ehancement=0.0,
         abundances=None,
         reference=reference_abundance_patterns.GalacticConcordance,
         depletion=None,
@@ -93,6 +93,7 @@ class Abundances:
         Args:
             metallicity (float)
                 Mass fraction in metals, default is reference metallicity.
+                Can not be set with oxygen_to_hydrogen.
             alpha (float)
                 Enhancement of the alpha elements relative to the reference
                 abundance pattern.
@@ -113,7 +114,16 @@ class Abundances:
 
         """
 
-        # Raise an exception is someone tries to set both alpha and abundances
+        # Raise an exception if someone tries to set both metallicity and
+        # oxygen abundance.
+        if (metallicity is not None) and (oxygen_to_hydrogen is not None):
+            raise exceptions.InconsistentArguments(
+                """
+                Can not define both metallicity and oxygen_to_hydrogen.
+                """
+            )
+
+        # Raise an exception if someone tries to set both alpha and abundances
         # since this will break things very easily.
         if (alpha != 0.0) and (abundances is not None):
             raise exceptions.InconsistentArguments(
@@ -162,40 +172,20 @@ class Abundances:
         if isinstance(self.reference, type):
             self.reference = self.reference()
 
-        # If a metallicity is not provided use the metallicity assumed by the
-        # Reference abundance pattern.
-        if self.metallicity is None:
-            self.metallicity = self.reference.metallicity
-
-        # Set helium mass fraction following Bressan et al. (2012)
-        # 10.1111/j.1365-2966.2012.21948.x
-        # https://ui.adsabs.harvard.edu/abs/2012MNRAS.427..127B/abstract
-        self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
-
-        # Define mass fraction in hydrogen
-        self.hydrogen_mass_fraction = (
-            1.0 - self.helium_mass_fraction - self.metallicity
-        )
-
-        # logathrimic total abundance of element relative to H
-        total = {}
-
-        # hydrogen is by definition 0.0
-        total["H"] = 0.0
-        total["He"] = np.log10(
-            self.helium_mass_fraction
-            / self.hydrogen_mass_fraction
-            / self.atomic_mass["He"]
-        )
-
-        # Scale elemental abundances from reference abundances based on given
+        # If neither metallicity or oxygen_to_hydrogen is set the reference
         # metallicity
-        for e in self.metals:
-            total[e] = self.reference.abundance[e] + np.log10(
-                self.metallicity / self.reference.metallicity
-            )
+        if (metallicity is None) and (oxygen_to_hydrogen is None):
+            metallicity = self.reference.metallicity
+            self.metallicity = metallicity
 
-        # Scale alpha-element abundances from reference abundances
+        # Initially, set the abundances of the other elements to match the
+        # reference abundance pattern
+        total = {}
+        for e in self.metals:
+            total[e] = self.reference.abundance[e]
+
+        # If alpha != 0.0, scale alpha-element abundances from reference
+        # abundances
         if alpha != 0.0:
             # unscaled_metals = self.alpha_elements
             for e in self.alpha_elements:
@@ -204,7 +194,7 @@ class Abundances:
         # Set holding elements that don't need to be rescaled.
         unscaled_metals = set([])
 
-        # If abundances argument is provided go ahead and set the abundances.
+        # If abundances argument is provided go ahead and set the abundances
         if abundances is not None:
             # if abundances are given as a single string, then use that model
             # to scale every available element.
@@ -218,18 +208,28 @@ class Abundances:
                     # labelled with the full name PEP8 reasons.
                     element_name = self.element_name[element]
 
-                    # get the specific function request by value
-                    scaling_function = getattr(scaling_study, element_name)
-                    total[element] = scaling_function(metallicity)
+                    # If we're scaling by metallicity set the element abundance
+                    # using the metallicity
+                    if metallicity:
+                        # get the specific function request by value
+                        scaling_function = getattr(scaling_study, element_name)
+                        total[element] = scaling_function(metallicity)
 
-                    # Setting alpha or abundances will result in the
-                    # metallicity no longer being correct. To account for
-                    # this we need to rescale the abundances to recover
-                    # the correct metallicity. However, we don't want to
-                    # rescale the things we've changed. For this reason,
-                    # here we record the elements which have changed. See
-                    # below for the rescaling.
-                    unscaled_metals.add(element)
+                        # Setting alpha or abundances will result in the
+                        # metallicity no longer being correct. To account for
+                        # this we need to rescale the abundances to recover
+                        # the correct metallicity. However, we don't want to
+                        # rescale the things we've changed. For this reason,
+                        # here we record the elements which have changed. See
+                        # below for the rescaling.
+                        unscaled_metals.add(element)
+
+                    # If we're using oxygen_to_hydrogen we need to instead use
+                    # corresponding function.
+                    if oxygen_to_hydrogen:
+                        raise exceptions.UnimplementedFunctionality(
+                            """This functionality is not yet implented!"""
+                        )
 
             if isinstance(abundances, dict):
                 # loop over each element in the dictionary
@@ -242,6 +242,11 @@ class Abundances:
                     if len(element_key.split("/")) > 1:
                         element, ratio_element = element_key.split("/")
                         total[element] = total[ratio_element] + value
+
+                        # If we're using the ratio relative to hydrogen then
+                        # we shouldn't later rescale
+                        if ratio_element == "H":
+                            unscaled_metals.add(element)
 
                     # If it's a ratio, labelled as e.g. "nitrogen_to_oxygen".
                     elif len(element_key.split("_to_")) > 1:
@@ -256,6 +261,11 @@ class Abundances:
                         ]
 
                         total[element] = total[ratio_element] + value
+
+                        # If we're using the ratio relative to hydrogen then
+                        # we shouldn't later rescale
+                        if ratio_element == "H":
+                            unscaled_metals.add(element)
 
                     # Else, if it's not a ratio simply set the abundance to
                     # this value.
@@ -277,6 +287,10 @@ class Abundances:
                         if isinstance(value, float):
                             total[element] = value
 
+                            # Since we're fixing the value we shouldn't
+                            # rescale later
+                            unscaled_metals.add(element)
+
                         # if value is a str use this to call the specific
                         # function to calculate the abundance from the
                         # metallicity.
@@ -290,51 +304,123 @@ class Abundances:
                             # are labelled with the full name PEP8 reasons.
                             element_name = self.element_name[element]
 
-                            # get the specific function request by value
-                            scaling_function = getattr(
-                                scaling_study, element_name
-                            )
+                            # If we're scaling by metallicity set the element
+                            # abundance using the metallicity
+                            if metallicity:
+                                # get the specific function request by value
+                                scaling_function = getattr(
+                                    scaling_study, element_name
+                                )
+                                total[element] = scaling_function(metallicity)
 
-                            total[element] = scaling_function(metallicity)
+                                # Since we're fixing the value we shouldn't
+                                # rescale later
+                                unscaled_metals.add(element)
 
-                        # Setting alpha or abundances will result in the
-                        # metallicity no longer being correct. To account for
-                        # this we need to rescale the abundances to recover
-                        # the correct metallicity. However, we don't want to
-                        # rescale the things we've changed. For this reason,
-                        # here we record the elements which have changed. See
-                        # below for the rescaling.
-                        unscaled_metals.add(element)
+                            # If we're using oxygen_to_hydrogen we need to
+                            # instead use corresponding function.
+                            if oxygen_to_hydrogen:
+                                raise exceptions.UnimplementedFunctionality(
+                                    """This functionality is not yet
+                                    implented!"""
+                                )
 
-        # Set of the metals to be scaled, see above.
+        # Now we need to rescale everything to match either the metallicity,
+        # oxygen_to_hydrogen, or if neither of these are provided, the
+        # reference metallicity.
+
+        # If an element has been set directly then it shouldn't be rescaled.
         scaled_metals = set(self.metals) - unscaled_metals
 
-        # Calculate the mass in unscaled, scaled, and non-metals.
-        mass_in_unscaled_metals = self.calculate_mass(
-            list(unscaled_metals), a=total
-        )
-        mass_in_scaled_metals = self.calculate_mass(
-            list(scaled_metals), a=total
-        )
-        mass_in_non_metals = self.calculate_mass(["H", "He"], a=total)
+        # If oxygen_to_hydrogen is set then we simply need to scale all
+        # elements as this scales.
+        if oxygen_to_hydrogen is not None:
+            # Logarithmic abundance scaling
+            abundance_scaling = oxygen_to_hydrogen - total["O"]
 
-        # Now, calculate the scaling factor. The metallicity is:
-        # metallicity = scaling*mass_in_scaled_metals + mass_in_unscaled_metals
-        #  / (scaling*mass_in_scaled_metals + mass_in_non_metals +
-        # mass_in_unscaled_metals)
-        # and so (by rearranging) the scaling factor is:
-        scaling = (
-            mass_in_unscaled_metals
-            - self.metallicity * mass_in_unscaled_metals
-            - self.metallicity * mass_in_non_metals
-        ) / (mass_in_scaled_metals * (self.metallicity - 1))
+            # Loop over all metals except those that were set direct and apply
+            # the scaling
+            for e in scaled_metals:
+                total[e] += abundance_scaling
 
-        # now apply this scaling
-        for i in scaled_metals:
-            total[i] += np.log10(scaling)
+            # Calculate the metallicity (mass fraction in metals)
+            total["H"] = 0.0
+
+            # Set helium temporarily, this gets updated later
+            total["He"] = -1.014
+            self.metallicity = self.calculate_mass_fraction(
+                self.metals, a=total
+            )
+
+        # Since we now know the metallicity we can go ahead and calculate the
+        # mass fraction of Hydrogen and Helium
+
+        # Set helium mass fraction following Bressan et al. (2012)
+        # 10.1111/j.1365-2966.2012.21948.x
+        # https://ui.adsabs.harvard.edu/abs/2012MNRAS.427..127B/abstract
+        self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
+
+        # Define mass fraction in hydrogen
+        self.hydrogen_mass_fraction = (
+            1.0 - self.helium_mass_fraction - self.metallicity
+        )
+
+        # hydrogen is by definition 0.0
+        total["H"] = 0.0
+        total["He"] = np.log10(
+            self.helium_mass_fraction
+            / self.hydrogen_mass_fraction
+            / self.atomic_mass["He"]
+        )
+
+        # If instead of oxygen_to_hydrogen, metallicity is provided scale this
+        # way
+        if metallicity:
+            # Calculate the mass in unscaled, scaled, and non-metals.
+            mass_in_unscaled_metals = self.calculate_mass(
+                list(unscaled_metals), a=total
+            )
+            mass_in_scaled_metals = self.calculate_mass(
+                list(scaled_metals), a=total
+            )
+            mass_in_non_metals = self.calculate_mass(["H", "He"], a=total)
+
+            # Now, calculate the scaling factor. The metallicity is:
+            # metallicity = scaling*mass_in_scaled_metals +
+            # mass_in_unscaled_metals / (scaling*mass_in_scaled_metals
+            # + mass_in_non_metals + mass_in_unscaled_metals)
+            # and so (by rearranging) the scaling factor is:
+            scaling = (
+                mass_in_unscaled_metals
+                - self.metallicity * mass_in_unscaled_metals
+                - self.metallicity * mass_in_non_metals
+            ) / (mass_in_scaled_metals * (self.metallicity - 1))
+
+            # now apply this scaling
+            for e in scaled_metals:
+                total[e] += np.log10(scaling)
 
         # save as attribute
         self.total = total
+
+        # Check that the metallicity agrees with what was initiall set
+        if (
+            np.fabs(
+                np.log10(
+                    self.metallicity
+                    / self.calculate_mass_fraction(self.metals)
+                )
+            )
+            > 0.1
+        ):
+            raise exceptions.InconsistentArguments(
+                """ Something has gone wrong. The calculated metallicity
+                differs significantly from the provided value."""
+            )
+        else:
+            self.metallicity = self.calculate_mass_fraction(
+                self.metals, a=total
+            )
 
         # If a depletion pattern or depletion_model is provided then calculate
         # the depletion.
@@ -617,8 +703,12 @@ class Abundances:
                 normalised to be useful.
         """
 
+        # if the component is not provided, assume it's the total
+        if not a:
+            a = self.total
+
         # calculate the total mass
-        total_mass = self.calculate_mass(self.all_elements)
+        total_mass = self.calculate_mass(self.all_elements, a=a)
 
         return self.calculate_mass(elements, a=a) / total_mass
 
