@@ -293,6 +293,7 @@ class NebularEmission(StellarEmissionModel):
             nebular_line = NebularLineEmission(
                 grid=grid,
                 fesc_ly_alpha=fesc_ly_alpha,
+                label=label + "_line",
                 **kwargs,
             )
 
@@ -300,6 +301,7 @@ class NebularEmission(StellarEmissionModel):
         if nebular_continuum is None:
             nebular_continuum = NebularContinuumEmission(
                 grid=grid,
+                label=label + "_continuum",
                 **kwargs,
             )
 
