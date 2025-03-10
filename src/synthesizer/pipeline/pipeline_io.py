@@ -300,7 +300,7 @@ class PipelineIO:
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
-            dset = hdf.create_dataset(key, data=data)
+            dset = hdf.create_dataset(key, data=data, compression="gzip")
             dset.attrs["Units"] = units
 
     def write_dataset_parallel(self, data, key):
@@ -323,6 +323,7 @@ class PipelineIO:
             "a",
             driver="mpio",
             comm=self.comm,
+            compression="gzip",
         ) as hdf:
             dset = hdf[key]
             dset[self.start : self.end, ...] = data
@@ -413,30 +414,34 @@ class PipelineIO:
             key (str): The key to write the data to.
             root (int, optional): The root rank for gathering and writing.
         """
-        start = time.perf_counter()
-        # In parallel land we need to make sure we're on the same page with
-        # the structure we are writing
-        if self.is_parallel:
-            data = unify_dict_structure_across_ranks(data, self.comm)
+        try:
+            start = time.perf_counter()
+            # In parallel land we need to make sure we're on the same page with
+            # the structure we are writing
+            if self.is_parallel:
+                data = unify_dict_structure_across_ranks(data, self.comm)
 
-        # Early exit if data is empty
-        if data is None or len(data) == 0:
-            return
+            # Early exit if data is empty
+            if data is None or len(data) == 0:
+                return
 
-        # Use the appropriate write method
-        if self.is_collective:
-            # For collective I/O we need to create the datasets first, then
-            # write the data to them in parallel.
-            paths = self.create_datasets_parallel(data, key)
-            self.comm.barrier()
-            self.write_datasets_parallel(data, key, paths)
-        else:
-            # Otherwise, we can just write everything recursively. Bear in mind
-            # that when using MPI this will write a file per rank ready for
-            # later combination into a virtual file.
-            self.write_datasets_recursive(data, key)
+            # Use the appropriate write method
+            if self.is_collective:
+                # For collective I/O we need to create the datasets first, then
+                # write the data to them in parallel.
+                paths = self.create_datasets_parallel(data, key)
+                self.comm.barrier()
+                self.write_datasets_parallel(data, key, paths)
+            else:
+                # Otherwise, we can just write everything recursively. Bear
+                # in mind that when using MPI this will write a file per
+                # rank ready for later combination into a virtual file.
+                self.write_datasets_recursive(data, key)
 
-        self._took(start, f"Writing {key} (and subgroups)")
+            self._took(start, f"Writing {key} (and subgroups)")
+
+        except Exception as e:
+            self._print(f"Failed to write {key} - {e}")
 
     def combine_rank_files(self):
         """

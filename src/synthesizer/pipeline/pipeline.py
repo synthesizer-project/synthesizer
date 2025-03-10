@@ -40,6 +40,7 @@ from synthesizer.instruments.filters import FilterCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
+    count_and_check_dict_recursive,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
@@ -774,10 +775,13 @@ class Pipeline:
         for spec_type, spec in self.fnu_spectra["BlackHole"].items():
             self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
 
+        # Count the number of spectra we have generated
+        n_spectra = count_and_check_dict_recursive(self.lnu_spectra)
+
         # Done!
         self._got_lnu_spectra = True
         self._got_fnu_spectra = True if cosmo is not None else False
-        self._took(start, "Generating spectra")
+        self._took(start, f"Generating {n_spectra} spectra")
 
     def get_photometry_luminosities(self):
         """Compute the photometric luminosities from the generated spectra."""
@@ -835,9 +839,12 @@ class Pipeline:
                     lnu
                 )
 
+        # Count the number of luminosities we have generated
+        n_luminosities = count_and_check_dict_recursive(self.luminosities)
+
         # Done!
         self._got_luminosities = True
-        self._took(start, "Getting photometric luminosities")
+        self._took(start, f"Getting {n_luminosities} photometric luminosities")
 
     def get_photometry_fluxes(self):
         """Compute the photometric fluxes from the generated spectra."""
@@ -893,9 +900,12 @@ class Pipeline:
             for filt, fnu in phot.items():
                 self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
 
+        # Count the number of fluxes we have generated
+        n_fluxes = count_and_check_dict_recursive(self.fluxes)
+
         # Done!
         self._got_fluxes = True
-        self._took(start, "Getting photometric fluxes")
+        self._took(start, f"Getting {n_fluxes} photometric fluxes")
 
     def get_lines(self, line_ids):
         """
@@ -979,9 +989,12 @@ class Pipeline:
                     unyt_array(lum)
                 )
 
+        # Count the number of lines we have generated
+        n_lines = count_and_check_dict_recursive(self.lines_lum)
+
         # Done!
         self._got_lum_lines = True
-        self._took(start, "Getting emission lines")
+        self._took(start, f"Getting {n_lines} emission lines")
 
     def get_images_luminosity(
         self,
@@ -1077,9 +1090,12 @@ class Pipeline:
             for f, img in imgs.items():
                 self.images_lum["BlackHole"][spec_type][f] = unyt_array(img)
 
+        # Count the number of images we have generated
+        n_images = count_and_check_dict_recursive(self.images_lum)
+
         # Done!
         self._got_images_lum = True
-        self._took(start, "Getting luminosity images")
+        self._took(start, f"Generating {n_images} luminosity images")
 
     def apply_psfs_luminosity(self):
         """Apply any instrument PSFs to the luminosity images."""
@@ -1177,9 +1193,12 @@ class Pipeline:
                     img
                 )
 
+        # Count the number of images we have generated
+        n_images = count_and_check_dict_recursive(self.images_lum_psf)
+
         # Done!
         self._got_images_lum_psf = True
-        self._took(start, "Applying PSFs to luminosity images")
+        self._took(start, f"Applying PSFs to {n_images} luminosity images")
 
     def get_images_flux(
         self,
@@ -1275,9 +1294,12 @@ class Pipeline:
             for f, img in imgs.items():
                 self.images_flux["BlackHole"][spec_type][f] = unyt_array(img)
 
+        # Count the number of images we have generated
+        n_images = count_and_check_dict_recursive(self.images_flux)
+
         # Done!
         self._got_images_flux = True
-        self._took(start, "Getting flux images")
+        self._took(start, f"Generating {n_images} flux images")
 
     def apply_psfs_flux(self):
         """Apply any instrument PSFs to the flux images."""
@@ -1375,9 +1397,12 @@ class Pipeline:
                     img
                 )
 
+        # Count the number of images we have generated
+        n_images = count_and_check_dict_recursive(self.images_flux_psf)
+
         # Done!
         self._got_images_flux_psf = True
-        self._took(start, "Applying PSFs to flux images")
+        self._took(start, f"Applying PSFs to {n_images} flux images")
 
     def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
@@ -1424,29 +1449,122 @@ class Pipeline:
             self._analysis_kwargs,
             self._analysis_results_keys,
         ):
-            func_start = time.perf_counter()
-            res = []
-            for g in self.galaxies:
-                res.append(func(g, *args, **kwargs))
-            self._analysis_results[key] = (
-                combine_list_of_dicts(res)
-                if isinstance(res[0], dict)
-                else unyt_array(res)
-            )
-            self._took(func_start, f"{key} extra analysis")
+            # Run the analysis function on each galaxy
+            try:
+                func_start = time.perf_counter()
+                res = []
+                for g in self.galaxies:
+                    res.append(func(g, *args, **kwargs))
+            except Exception as e:
+                self._print(
+                    "Error running extra analysis function" f" {key}: {e}"
+                )
+
+            # Store the results and combine them if necessary
+            try:
+                # Check we actually have some results
+                if len(res) == 0:
+                    self._print(
+                        f"Extra analysis function {key} returned no results"
+                    )
+                    continue
+
+                # Ensure the data of all results is in the same format.
+                types = set([type(r) for r in res])
+                if len(types) > 1:
+                    raise exceptions.BadResult(
+                        "All results from extra analysis functions must be "
+                        f"of the same type. Got: {set(types)}"
+                    )
+
+                # If we have a list of dictionaries then we need to combine
+                # them into a single dictionary. Otherwise we can just store
+                # the list of results as a unyt array.
+                if isinstance(res[0], dict):
+                    combined_data = combine_list_of_dicts(res)
+                else:
+                    combined_data = unyt_array(res)
+
+                # Ensure we have data after combining
+                if len(combined_data) == 0:
+                    self._print(
+                        f"Extra analysis function {key} returned no data"
+                    )
+                    continue
+
+                # Store the data
+                self._analysis_results[key] = combined_data
+
+                self._took(func_start, f"{key} extra analysis")
+
+            except Exception as e:
+                self._print(
+                    "Error storing extra analysis results" f" {key}: {e}"
+                )
+
+        # Count the number of extra analysis results we have generated
+        n_extra_analysis = count_and_check_dict_recursive(
+            self._analysis_results
+        )
 
         # Done!
-        self._took(start, "Extra analysis")
+        self._took(
+            start, f"Extra analysis (producing {n_extra_analysis} results)"
+        )
 
-    def write(self, outpath, verbose=None):
+    def write(
+        self,
+        outpath,
+        verbose=None,
+        output_lnu=True,
+        output_fnu=True,
+        output_lum=True,
+        output_flux=True,
+        output_lines=True,
+        output_images_lnu=True,
+        output_images_fnu=True,
+        output_images_lnu_psf=True,
+        output_images_fnu_psf=True,
+    ):
         """
         Write what we have produced to a HDF5 file.
+
+        By default everything that has been calculated will be written out. If
+        you only want a subset of the data then set the appropriate flags to
+        False.
 
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
             verbose (bool, optional):
                 If set, override the Pipeline verbose setting.
+            output_lnu (bool, optional):
+                If True, write out the spectral luminosity densities.
+                Default is True.
+            output_fnu (bool, optional):
+                If True, write out the spectral flux densities.
+                Default is True.
+            output_lum (bool, optional):
+                If True, write out the photometric luminosities.
+                Default is True.
+            output_flux (bool, optional):
+                If True, write out the photometric fluxes.
+                Default is True.
+            output_lines (bool, optional):
+                If True, write out the emission line luminosities.
+                Default is True.
+            output_images_lnu (bool, optional):
+                If True, write out the luminosity images.
+                Default is True.
+            output_images_fnu (bool, optional):
+                If True, write out the flux images.
+                Default is True.
+            output_images_lnu_psf (bool, optional):
+                If True, write out the luminosity images with PSFs applied.
+                Default is True.
+            output_images_fnu_psf (bool, optional):
+                If True, write out the flux images with PSFs applied.
+                Default is True.
         """
         # We're done with everything so we know we'll have what is needed for
         # any extra analysis asked for by the user. We'll run these now.
@@ -1482,7 +1600,7 @@ class Pipeline:
             galaxy_indices = None
 
         # Write spectral luminosity densities
-        if self._got_lnu_spectra:
+        if self._got_lnu_spectra and output_lnu:
             self.io_helper.write_data(
                 self.lnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralLuminosityDensities",
@@ -1500,7 +1618,7 @@ class Pipeline:
             )
 
         # Write spectral flux densities
-        if self._got_fnu_spectra:
+        if self._got_fnu_spectra and output_fnu:
             self.io_helper.write_data(
                 self.fnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralFluxDensities",
@@ -1518,7 +1636,7 @@ class Pipeline:
             )
 
         # Write photometric luminosities
-        if self._got_luminosities:
+        if self._got_luminosities and output_lum:
             self.io_helper.write_data(
                 self.luminosities["Galaxy"],
                 "Galaxies/Photometry/Luminosities",
@@ -1536,7 +1654,7 @@ class Pipeline:
             )
 
         # Write photometric fluxes
-        if self._got_fluxes:
+        if self._got_fluxes and output_flux:
             self.io_helper.write_data(
                 self.fluxes["Galaxy"],
                 "Galaxies/Photometry/Fluxes",
@@ -1554,7 +1672,7 @@ class Pipeline:
             )
 
         # Write emission line luminosities
-        if self._got_lum_lines:
+        if self._got_lum_lines and output_lines:
             self.io_helper.write_data(
                 self.lines_lum["Galaxy"],
                 "Galaxies/Lines/Luminosity",
@@ -1587,7 +1705,7 @@ class Pipeline:
             )
 
         # Write luminosity images
-        if self._got_images_lum:
+        if self._got_images_lum and output_images_lnu:
             self.io_helper.write_data(
                 self.images_lum["Galaxy"],
                 "Galaxies/Images/Luminosity",
@@ -1605,7 +1723,7 @@ class Pipeline:
             )
 
         # Write PSF luminosity images
-        if self._got_images_lum_psf:
+        if self._got_images_lum_psf and output_images_lnu_psf:
             self.io_helper.write_data(
                 self.images_lum_psf["Galaxy"],
                 "Galaxies/PSFImages/Luminosity",
@@ -1624,7 +1742,7 @@ class Pipeline:
 
         # Write flux images (again these are heavy so we'll collect them
         # separately)
-        if self._got_images_flux:
+        if self._got_images_flux and output_images_fnu:
             self.io_helper.write_data(
                 self.images_flux["Galaxy"],
                 "Galaxies/Images/Flux",
@@ -1642,7 +1760,7 @@ class Pipeline:
             )
 
         # Write PSF flux images
-        if self._got_images_flux_psf:
+        if self._got_images_flux_psf and output_images_fnu_psf:
             self.io_helper.write_data(
                 self.images_flux_psf["Galaxy"],
                 "Galaxies/PSFImages/Flux",

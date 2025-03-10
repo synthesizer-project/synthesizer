@@ -1028,6 +1028,10 @@ class Sed:
                 "A window of len 2 or 4 must be provided"
             )
 
+        # Ensure the beta we return is a real number
+        if np.isnan(beta):
+            beta = 0.0
+
         return beta
 
     def get_fnu0(self):

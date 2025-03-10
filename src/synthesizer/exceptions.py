@@ -424,3 +424,18 @@ class PipelineNotReady(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Pipeline isn't ready to run current operation."
+
+
+class BadResult(Exception):
+    """Exception class for when a result is not as expected."""
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Result is not as expected."
