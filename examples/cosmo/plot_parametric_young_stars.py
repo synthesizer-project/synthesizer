@@ -5,8 +5,6 @@ Parametric Young Stars Example
 Test the effect on the intrinsic emission of assuming a
 parametric SFH for young star particles.
 
-This is now implemented within call to `generate_lnu`
-on a parametric stars object.
 """
 
 import matplotlib.pyplot as plt
