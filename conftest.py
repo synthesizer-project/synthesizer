@@ -8,6 +8,7 @@ from synthesizer.emission_models import (
     TransmittedEmission,
 )
 from synthesizer.grid import Grid
+from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
 
@@ -130,4 +131,28 @@ def random_part_stars():
         tau_v=tau_v,
         coordinates=coordinates,
         velocities=velocities,
+    )
+
+
+def single_star_particle():
+    """Return a particle Stars object with a single star."""
+    return Stars(
+        initial_masses=np.array([1.0]) * 1e6 * Msun,
+        ages=np.array([10.0]) * Myr,
+        metallicities=np.array([0.01]),
+        redshift=1.0,
+        tau_v=np.array([0.1]),
+        coordinates=np.random.rand(1, 3) * kpc,
+    )
+
+
+def single_star_parametric_particle():
+    """Return a parametric Stars object with a single star."""
+    grid = test_grid()
+    return ParametricStars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist=1e7,
+        metal_dist=0.01,
+        initial_mass=1e6 * Msun,
     )
