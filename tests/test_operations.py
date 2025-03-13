@@ -7,6 +7,9 @@ def test_single_star_extraction(
     single_star_particle,
     single_star_parametric,
     test_grid,
+    incident_emission_model,
+    transmitted_emission_model,
+    nebular_emission_model,
     reprocessed_emission_model,
 ):
     """
@@ -39,17 +42,28 @@ def test_single_star_extraction(
     )
 
     # Ok, we know the SFZH's are equivalent, let's now get the spectra
-    # and compare them.
-    part_sed = single_star_particle.get_spectra(
+    # and compare them for a range of emission model complexities.
+
+    # Loop over the emission models
+    for model in [
+        incident_emission_model,
+        transmitted_emission_model,
+        nebular_emission_model,
         reprocessed_emission_model,
-    )
-    param_sed = single_star_parametric.get_spectra(
-        reprocessed_emission_model,
-    )
-    assert np.allclose(
-        part_sed.lnu,
-        param_sed.lnu,
-    ), (
-        "The SEDs are not equivalent (part_sed - param_sed "
-        f"={np.sum(part_sed.lnu) - np.sum(param_sed.lnu)})"
-    )
+    ]:
+        part_sed = single_star_particle.get_spectra(model)
+        param_sed = single_star_parametric.get_spectra(model)
+        assert np.allclose(part_sed.shape, param_sed.shape), (
+            f"[{model.__class__.__name__}]: "
+            f"The SED shapes are not equivalent (particle={part_sed.shape}, "
+            f"parametric={param_sed.shape})"
+        )
+        resi = np.sum(part_sed.lnu) - np.sum(param_sed.lnu)
+        assert np.allclose(
+            part_sed.lnu,
+            param_sed.lnu,
+        ), (
+            f"[{model.__class__.__name__}]: "
+            "The SEDs are not equivalent (part_sed.sum - param_sed.sum = "
+            f"{np.sum(part_sed.lnu)} - {np.sum(param_sed.lnu)} = {resi}, "
+        )
