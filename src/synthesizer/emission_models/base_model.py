@@ -792,7 +792,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self._unpack_model_recursively(self)
 
         # Also unpack any related models
-        for model in self.related_models:
+        related_models = list(self.related_models)
+        for model in related_models:
             if model.label not in self._models:
                 self._unpack_model_recursively(model)
 
