@@ -1,22 +1,29 @@
 import numpy as np
 import pytest
-from unyt import Mpc, Msun, Myr, km, kpc, s
+from unyt import Mpc, Msun, Myr, km, kpc, s, yr
 
 from synthesizer.emission_models import (
     IncidentEmission,
     NebularEmission,
+    ReprocessedEmission,
     TransmittedEmission,
 )
 from synthesizer.grid import Grid
+from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
+
+# ================================== GRID =====================================
 
 
 @pytest.fixture
 def test_grid():
     """Return a Grid object."""
     return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+
+
+# ================================= MODELS ====================================
 
 
 @pytest.fixture
@@ -41,6 +48,17 @@ def transmitted_emission_model():
     # First need a grid to pass to the IncidentEmission object
     grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
     return TransmittedEmission(grid=grid)
+
+
+@pytest.fixture
+def reprocessed_emission_model():
+    """Return a ReprocessedEmission object."""
+    # First need a grid to pass to the IncidentEmission object
+    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+    return ReprocessedEmission(grid=grid)
+
+
+# ================================= STARS =====================================
 
 
 @pytest.fixture
@@ -134,11 +152,12 @@ def random_part_stars():
     )
 
 
+@pytest.fixture
 def single_star_particle():
     """Return a particle Stars object with a single star."""
     return Stars(
-        initial_masses=np.array([1.0]) * 1e6 * Msun,
-        ages=np.array([10.0]) * Myr,
+        initial_masses=np.array([1.0]) * Msun,
+        ages=np.array([1e7]) * yr,
         metallicities=np.array([0.01]),
         redshift=1.0,
         tau_v=np.array([0.1]),
@@ -146,13 +165,23 @@ def single_star_particle():
     )
 
 
-def single_star_parametric_particle():
+@pytest.fixture
+def single_star_parametric():
     """Return a parametric Stars object with a single star."""
-    grid = test_grid()
+    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
     return ParametricStars(
         grid.log10age,
         grid.metallicity,
-        sf_hist=1e7,
+        sf_hist=1e7 * yr,
         metal_dist=0.01,
-        initial_mass=1e6 * Msun,
+        initial_mass=1 * Msun,
     )
+
+
+# ================================ FILTERS ====================================
+
+
+@pytest.fixture
+def filters_UVJ(test_grid):
+    """Return a dictionary of UVJ filters."""
+    return UVJ(new_lam=test_grid.lam)
