@@ -27,35 +27,31 @@ def test_grid():
 
 
 @pytest.fixture
-def nebular_emission_model():
+def nebular_emission_model(test_grid):
     """Return a NebularEmission object."""
     # First need a grid to pass to the NebularEmission object
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
-    return NebularEmission(grid=grid)
+    return NebularEmission(grid=test_grid)
 
 
 @pytest.fixture
-def incident_emission_model():
+def incident_emission_model(test_grid):
     """Return a IncidentEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
-    return IncidentEmission(grid=grid)
+    return IncidentEmission(grid=test_grid)
 
 
 @pytest.fixture
-def transmitted_emission_model():
+def transmitted_emission_model(test_grid):
     """Return a TransmittedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
-    return TransmittedEmission(grid=grid)
+    return TransmittedEmission(grid=test_grid)
 
 
 @pytest.fixture
-def reprocessed_emission_model():
+def reprocessed_emission_model(test_grid):
     """Return a ReprocessedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
-    return ReprocessedEmission(grid=grid)
+    return ReprocessedEmission(grid=test_grid)
 
 
 # ================================= STARS =====================================
@@ -166,12 +162,11 @@ def single_star_particle():
 
 
 @pytest.fixture
-def single_star_parametric():
+def single_star_parametric(test_grid):
     """Return a parametric Stars object with a single star."""
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
     return ParametricStars(
-        grid.log10age,
-        grid.metallicity,
+        test_grid.log10age,
+        test_grid.metallicity,
         sf_hist=1e7 * yr,
         metal_dist=0.01,
         initial_mass=1 * Msun,
