@@ -311,7 +311,7 @@ class IntegratedParticleExtractor(Extractor):
             self._grid_nlam,
             grid_assignment_method.lower(),
             nthreads,
-            grid_weights,
+            grid_weights if mask is None else None,
             mask,
             lam_mask,
         )
