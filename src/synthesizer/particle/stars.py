@@ -1914,12 +1914,10 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(log10ages, dtype=np.float64),
             np.ascontiguousarray(log10metallicities, dtype=np.float64),
         ]
-        print(grid_props)
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
             np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
         ]
-        print(part_props)
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
         )
