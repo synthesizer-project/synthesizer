@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from synthesizer.emission_models.transformers import PowerLaw
+
 
 def test_single_star_extraction(
     single_star_particle,
@@ -76,3 +78,33 @@ def test_single_star_extraction(
                 "The SEDs are not equivalent (part_sed.sum - param_sed.sum = "
                 f"{np.sum(part_sed.lnu)} - {np.sum(param_sed.lnu)} = {resi}, "
             )
+
+
+def test_attenuation_transform(unit_sed):
+    """Test attenuating an sed."""
+    # Get the attenuation law
+    dcurve = PowerLaw(slope=0.0)
+
+    att_unit_sed = unit_sed.apply_attenuation(
+        tau_v=0.1,
+        dust_curve=dcurve,
+    )
+
+    # Ensure the shape is the same
+    assert np.allclose(
+        unit_sed.lnu.shape,
+        att_unit_sed.lnu.shape,
+    ), (
+        "The attenuated SED shape is not the same as the original"
+        f" (original={unit_sed.lnu.shape},"
+        f" attenuated={att_unit_sed.lnu.shape})"
+    )
+
+    # Ensure the attenuation is correct
+    assert np.allclose(
+        att_unit_sed.lnu,
+        unit_sed.lnu * np.exp(-0.1),
+    ), (
+        "The attenuated SED is not correct"
+        f" (original={unit_sed.lnu}, attenuated={att_unit_sed.lnu})"
+    )

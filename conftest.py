@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from unyt import Mpc, Msun, Myr, km, kpc, s, yr
+from unyt import Hz, Mpc, Msun, Myr, erg, km, kpc, s, yr
 
 from synthesizer.emission_models import (
     IncidentEmission,
@@ -13,6 +13,7 @@ from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
+from synthesizer.sed import Sed
 
 # ================================== GRID =====================================
 
@@ -180,3 +181,15 @@ def single_star_parametric(test_grid):
 def filters_UVJ(test_grid):
     """Return a dictionary of UVJ filters."""
     return UVJ(new_lam=test_grid.lam)
+
+
+# ================================ SPECTRA ====================================
+
+
+@pytest.fixture
+def unit_sed(test_grid):
+    """Return a unit Sed object."""
+    return Sed(
+        lam=test_grid.lam,
+        lnu=np.ones_like(test_grid._lam) * erg / s / Hz,
+    )
