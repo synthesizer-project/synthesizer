@@ -730,7 +730,9 @@ class Stars(Particles, StarsComponent):
                 self._grid_weights[grid_assignment_method].get(
                     grid.grid_name,
                     None,
-                ),
+                )
+                if mask is None
+                else None,
                 mask,
                 lam_mask,
             )
