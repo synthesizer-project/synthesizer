@@ -27,7 +27,9 @@ The latest stable release of Synthesizer can be installed directly using pip,
 pip install cosmos-synthesizer
 ```
 
-Please refer to the [installation documentation](https://synthesizer-project.github.io/synthesizer/getting_started/installation.html) for further information. 
+Please refer to the [installation documentation](https://synthesizer-project.github.io/synthesizer/getting_started/installation.html) for further information.
+
+**Note**: We do not currently support Windows, to use Synthesizer on Windows please install the Windows Subsystem for Linux (WSL).
 
 Various configuration options can also be set at installation (see [here](https://synthesizer-project.github.io/synthesizer/advanced/config_options.html)).
 
