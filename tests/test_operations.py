@@ -51,19 +51,28 @@ def test_single_star_extraction(
         nebular_emission_model,
         reprocessed_emission_model,
     ]:
-        part_sed = single_star_particle.get_spectra(model)
-        param_sed = single_star_parametric.get_spectra(model)
-        assert np.allclose(part_sed.shape, param_sed.shape), (
-            f"[{model.__class__.__name__}]: "
-            f"The SED shapes are not equivalent (particle={part_sed.shape}, "
-            f"parametric={param_sed.shape})"
-        )
-        resi = np.sum(part_sed.lnu) - np.sum(param_sed.lnu)
-        assert np.allclose(
-            part_sed.lnu,
-            param_sed.lnu,
-        ), (
-            f"[{model.__class__.__name__}]: "
-            "The SEDs are not equivalent (part_sed.sum - param_sed.sum = "
-            f"{np.sum(part_sed.lnu)} - {np.sum(param_sed.lnu)} = {resi}, "
-        )
+        # Loop over grid look up methods too
+        for method in ["ngp", "cic"]:
+            part_sed = single_star_particle.get_spectra(
+                model,
+                grid_assignment_method=method,
+            )
+            param_sed = single_star_parametric.get_spectra(
+                model,
+                grid_assignment_method=method,
+            )
+            assert np.allclose(part_sed.shape, param_sed.shape), (
+                f"[{model.__class__.__name__}] (with {method}): "
+                "The SED shapes are not equivalent "
+                f"(particle={part_sed.shape}, "
+                f"parametric={param_sed.shape})"
+            )
+            resi = np.sum(part_sed.lnu) - np.sum(param_sed.lnu)
+            assert np.allclose(
+                part_sed.lnu,
+                param_sed.lnu,
+            ), (
+                f"[{model.__class__.__name__}] (with {method}): "
+                "The SEDs are not equivalent (part_sed.sum - param_sed.sum = "
+                f"{np.sum(part_sed.lnu)} - {np.sum(param_sed.lnu)} = {resi}, "
+            )
