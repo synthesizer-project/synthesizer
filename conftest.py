@@ -1,13 +1,16 @@
 import numpy as np
 import pytest
-from unyt import Hz, Mpc, Msun, Myr, erg, km, kpc, s, yr
+from unyt import Hz, Mpc, Msun, Myr, dimensionless, erg, km, kpc, s, yr
 
 from synthesizer.emission_models import (
+    BimodalPacmanEmission,
     IncidentEmission,
     NebularEmission,
+    PacmanEmission,
     ReprocessedEmission,
     TransmittedEmission,
 )
+from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.grid import Grid
 from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
@@ -53,6 +56,23 @@ def reprocessed_emission_model(test_grid):
     """Return a ReprocessedEmission object."""
     # First need a grid to pass to the IncidentEmission object
     return ReprocessedEmission(grid=test_grid)
+
+
+@pytest.fixture
+def pacman_emission_model(test_grid):
+    """Return a PacmanEmission object."""
+    return PacmanEmission(grid=test_grid)
+
+
+@pytest.fixture
+def bimodal_pacman_emission_model(test_grid):
+    """Return a BimodalPacmanEmission object."""
+    return BimodalPacmanEmission(
+        grid=test_grid,
+        dust_curve_ism=PowerLaw(slope=-1),
+        dust_curve_birth=PowerLaw(slope=-1),
+        age_pivot=5.5 * dimensionless,
+    )
 
 
 # ================================= STARS =====================================

@@ -284,6 +284,22 @@ class Particles:
         # Get the attribute
         attr = getattr(self, attr)
 
+        # Ensure the attribute is not None
+        if attr is None:
+            raise exceptions.MissingMaskAttribute(
+                f"Masking attribute {attr} not found on particle object."
+            )
+
+        # If only one value has units throw an error
+        if hasattr(attr, "units") and not hasattr(thresh, "units"):
+            raise exceptions.InconsistentArguments(
+                "Masking attribute has units but threshold does not."
+            )
+        elif not hasattr(attr, "units") and hasattr(thresh, "units"):
+            raise exceptions.InconsistentArguments(
+                "Masking attribute does not have units but threshold does."
+            )
+
         # Apply the operator
         if op == ">":
             new_mask = attr > thresh

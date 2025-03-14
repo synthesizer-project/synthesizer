@@ -1,7 +1,7 @@
 """Tests for generating spectra."""
 
 import numpy as np
-from unyt import Myr
+from unyt import Myr, yr
 
 
 def test_integrated_generation_ngp(nebular_emission_model, random_part_stars):
@@ -214,7 +214,7 @@ def test_reusing_weights_cic(nebular_emission_model, random_part_stars):
     ), "The first and second spectra are not the same."
 
 
-def test_masked_spectra(particle_stars_B, reprocessed_emission_model):
+def test_masked_int_spectra(particle_stars_B, reprocessed_emission_model):
     """Test the effect of masking during the generation of spectra."""
     # Generate spectra without masking
     unmasked_spec = particle_stars_B.get_spectra(
@@ -236,7 +236,8 @@ def test_masked_spectra(particle_stars_B, reprocessed_emission_model):
         op=">",
     )
 
-    assert np.any(mask), "The mask is empty."
+    assert np.any(mask), f"The mask is empty (defined in yr): {mask}"
+    assert False in mask, f"The mask is all True: {mask}"
 
     masked_spec = particle_stars_B.get_spectra(
         reprocessed_emission_model,
@@ -247,9 +248,137 @@ def test_masked_spectra(particle_stars_B, reprocessed_emission_model):
     assert not np.allclose(
         unmasked_spec._lnu,
         masked_spec._lnu,
-    ), "The masked and unmasked spectra are the same."
+    ), "The masked and unmasked integrated spectra are the same."
 
     # Ensure the masked spectra are less than the unmasked spectra
-    assert np.sum(masked_spec._lnu) < np.sum(
-        unmasked_spec._lnu
-    ), "The masked spectra is not less than the unmasked spectra."
+    assert np.sum(masked_spec._lnu) < np.sum(unmasked_spec._lnu), (
+        "The masked integrated spectra is not less than "
+        "the unmasked integrated spectra."
+    )
+
+
+def test_masked_int_spectra_diff_units(
+    particle_stars_B,
+    reprocessed_emission_model,
+):
+    """Test the effect of masking during the generation of spectra."""
+    # Generate spectra without masking
+    unmasked_spec = particle_stars_B.get_spectra(
+        reprocessed_emission_model,
+        grid_assignment_method="ngp",
+    )
+    particle_stars_B.clear_all_emissions()
+
+    # Generate spectra with masking
+    reprocessed_emission_model.add_mask(
+        attr="ages",
+        op=">",
+        thresh=10**6 * 5.5 * yr,
+        set_all=True,
+    )
+    mask = particle_stars_B.get_mask(
+        attr="ages",
+        thresh=10**6 * 5.5 * yr,
+        op=">",
+    )
+
+    assert np.any(mask), f"The mask is empty (defined in yr): {mask}"
+    assert False in mask, f"The mask is all True: {mask}"
+
+    masked_spec = particle_stars_B.get_spectra(
+        reprocessed_emission_model,
+        grid_assignment_method="ngp",
+    )
+
+    # Ensure that the masked spectra are different
+    assert not np.allclose(
+        unmasked_spec._lnu,
+        masked_spec._lnu,
+    ), "The masked and unmasked integrated spectra are the same."
+
+    # Ensure the masked spectra are less than the unmasked spectra
+    assert np.sum(masked_spec._lnu) < np.sum(unmasked_spec._lnu), (
+        "The masked integrated spectra is not less than "
+        "the unmasked integrated spectra."
+    )
+
+
+def test_masked_part_spectra(particle_stars_B, reprocessed_emission_model):
+    """Test the effect of masking during the generation of spectra."""
+    # Make the model per particle
+    reprocessed_emission_model.set_per_particle(True)
+
+    # Generate spectra without masking
+    unmasked_spec = particle_stars_B.get_spectra(
+        reprocessed_emission_model,
+        grid_assignment_method="ngp",
+    )
+    particle_stars_B.clear_all_emissions()
+
+    # Generate spectra with masking
+    reprocessed_emission_model.add_mask(
+        attr="ages",
+        op=">",
+        thresh=5.5 * Myr,
+        set_all=True,
+    )
+    mask = particle_stars_B.get_mask(
+        attr="ages",
+        thresh=5.5 * Myr,
+        op=">",
+    )
+
+    assert np.any(mask), f"The mask is empty (defined in yr): {mask}"
+    assert False in mask, f"The mask is all True: {mask}"
+
+    masked_spec = particle_stars_B.get_spectra(
+        reprocessed_emission_model,
+        grid_assignment_method="ngp",
+    )
+
+    # Ensure the masked particles have zeroed spectra
+    assert np.allclose(
+        masked_spec._lnu[~mask],
+        0.0,
+    ), "The masked particles have non-zero spectra."
+
+    # Ensure that the masked spectra are different
+    assert not np.allclose(
+        unmasked_spec._lnu,
+        masked_spec._lnu,
+    ), "The masked and unmasked integrated spectra are the same."
+
+    # Ensure the masked spectra are less than the unmasked spectra
+    assert np.sum(masked_spec._lnu) < np.sum(unmasked_spec._lnu), (
+        "The masked integrated spectra is not less than "
+        "the unmasked integrated spectra."
+    )
+
+
+def test_pacman_spectra(
+    particle_stars_B,
+    pacman_emission_model,
+    bimodal_pacman_emission_model,
+):
+    """Test the generation of PACMAN spectra."""
+    # Set the fixed tau_vs
+    particle_stars_B.tau_v = 0.1
+
+    # Generate the PACMAN spectra
+    pacman_spec = particle_stars_B.get_spectra(
+        pacman_emission_model,
+        grid_assignment_method="ngp",
+    )
+    particle_stars_B.clear_all_emissions()
+
+    # Generate the bimodal PACMAN spectra
+    bimodal_pacman_spec = particle_stars_B.get_spectra(
+        bimodal_pacman_emission_model,
+        grid_assignment_method="ngp",
+    )
+
+    # Ensure that the two PACMAN spectra are different
+    assert not np.allclose(
+        pacman_spec._lnu,
+        bimodal_pacman_spec._lnu,
+    ), "The PACMAN and bimodal PACMAN spectra are the same."
