@@ -161,14 +161,12 @@ class Grid:
         self.line_lums = {}
         self.line_conts = {}
 
-        # Set up dictionary to hold parameters used in grid generation
-        self.parameters = {}
-
         # Get the axes of the grid from the HDF5 file
         self.axes = []  # axes names
-        self._logged_axes = []  # need to know which have been logged
         self._axes_values = {}
         self._axes_units = {}
+        self._extract_axes = []
+        self._extract_axes_values = {}
         self._get_axes()
 
         # Read in the metadata
@@ -226,13 +224,20 @@ class Grid:
         with h5py.File(self.grid_filename, "r") as hf:
             # What component variable do we need to weight by for the
             # emission in the grid?
-            self._weight_var = hf.attrs.get("WeightVariable", None)
+            self._weight_var = hf.attrs.get("WeightVariable")
 
             # Loop over the Model metadata stored in the Model group
             # and store it in the Grid object
             if "Model" in hf:
                 for key, value in hf["Model"].attrs.items():
                     self._model_metadata[key] = value
+
+            # Attach all the root level attribtues to the grid object
+            for k, v in hf.attrs.items():
+                # Skip the axes attribute as we've already read that
+                if k == "axes" or k == "WeightVariable":
+                    continue
+                setattr(self, k, v)
 
     def __getattr__(self, name):
         """
@@ -382,8 +387,6 @@ class Grid:
         """Get the grid axes from the HDF5 file."""
         # Get basic info of the grid
         with h5py.File(self.grid_filename, "r") as hf:
-            self.parameters = {k: v for k, v in hf.attrs.items()}
-
             # Get list of axes
             axes = list(hf.attrs["axes"])
 
@@ -391,25 +394,33 @@ class Grid:
             # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in axes:
                 # What are the units of this axis?
-                axis_units = hf["axes"][axis].attrs.get(
-                    "Units", "dimensionless"
-                )
-                log_axis = hf["axes"][axis].attrs.get("log_on_read", False)
+                axis_units = hf["axes"][axis].attrs.get("Units")
+                log_axis = hf["axes"][axis].attrs.get("log_on_read")
 
                 if "log10" in axis:
-                    log_axis = True
+                    raise exceptions.GridError(
+                        "Logged axes are no longer supported because "
+                        "of ambiguous units. Please update your grid file."
+                    )
 
                 # Get the values
                 values = hf["axes"][axis][:]
-                if "log10" in axis:
-                    values = 10**values
-                    axis = axis.replace("log10", "")
 
-                # Set all the axis attributes
+                # Set all the axis attributes as is (without accounting
+                # for any log10 conversions needed for extraction)
                 self.axes.append(axis)
                 self._axes_values[axis] = values
                 self._axes_units[axis] = axis_units
-                self._logged_axes.append(log_axis)
+
+                # Now we handle the extractions
+                if log_axis:
+                    self._extract_axes.append(f"log10{axis}")
+                    self._extract_axes_values[f"log10{axis}"] = np.log10(
+                        values
+                    )
+                else:
+                    self._extract_axes.append(axis)
+                    self._extract_axes_values[axis] = values
 
             # Number of axes
             self.naxes = len(self.axes)
@@ -692,14 +703,14 @@ class Grid:
             # linecont entries.
             for ind, line in enumerate(self.available_lines):
                 self.line_lums["nebular"][line] = hf["lines"]["luminosity"][
-                    :, :, ind
+                    ..., ind
                 ]
                 self.line_conts["nebular"][line] = hf["lines"][
                     "nebular_continuum"
-                ][:, :, ind]
+                ][..., ind]
 
                 self.line_lums["linecont"][line] = hf["lines"]["luminosity"][
-                    :, :, ind
+                    ..., ind
                 ]
                 self.line_conts["linecont"][line] = np.zeros(
                     self.line_lums["nebular"][line].shape
@@ -710,14 +721,14 @@ class Grid:
                 )
                 self.line_conts["nebular_continuum"][line] = hf["lines"][
                     "nebular_continuum"
-                ][:, :, ind]
+                ][..., ind]
 
                 self.line_lums["transmitted"][line] = np.zeros(
                     self.line_lums["nebular"][line].shape
                 )
                 self.line_conts["transmitted"][line] = hf["lines"][
                     "transmitted"
-                ][:, :, ind]
+                ][..., ind]
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries. the line luminosities for all entries
@@ -979,6 +990,16 @@ class Grid:
     def shape(self):
         """Return the shape of the grid."""
         return self.spectra[self.available_spectra[0]].shape
+
+    @property
+    def ndim(self):
+        """Return the number of dimensions in the grid."""
+        return len(self.shape)
+
+    @property
+    def nlam(self):
+        """Return the number of wavelengths in the grid."""
+        return len(self.lam)
 
     @staticmethod
     def get_nearest_index(value, array):
