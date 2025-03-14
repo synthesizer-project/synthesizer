@@ -424,3 +424,18 @@ class PipelineNotReady(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Pipeline isn't ready to run current operation."
+
+
+class MissingMaskAttribute(Exception):
+    """Exception class for when the masking attribute is missing."""
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Mask is missing an attribute."
