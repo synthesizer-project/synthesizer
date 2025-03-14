@@ -107,7 +107,7 @@ class Extractor(ABC):
 
         # Record whether we need to log the emitter data
         self._log_emitter_attr = tuple(
-            axis[:5] == "log10" for axis in grid.axes
+            axis[:5] == "log10" for axis in grid._extract_axes
         )
 
         # Finally, attach a pointer to the grid object
@@ -149,8 +149,10 @@ class Extractor(ABC):
             value = get_param(axis, model, None, emitter)
 
             # Convert the units if necessary
-            if units != "dimensionless" and isinstance(
-                value, (unyt_array, unyt_quantity)
+            if (
+                not log
+                and units != "dimensionless"
+                and isinstance(value, (unyt_array, unyt_quantity))
             ):
                 value = value.to(units).value
 
