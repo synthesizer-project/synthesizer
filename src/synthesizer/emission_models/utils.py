@@ -103,7 +103,6 @@ def get_params(params, model, emission, emitter):
             model,
             emission,
             emitter,
-            default=None,
         )
 
     return values

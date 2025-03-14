@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from unyt import Hz, Mpc, Msun, Myr, dimensionless, erg, km, kpc, s, yr
+from unyt import Hz, Mpc, Msun, Myr, erg, km, kpc, s, yr
 
 from synthesizer.emission_models import (
     BimodalPacmanEmission,
@@ -69,9 +69,8 @@ def bimodal_pacman_emission_model(test_grid):
     """Return a BimodalPacmanEmission object."""
     return BimodalPacmanEmission(
         grid=test_grid,
-        dust_curve_ism=PowerLaw(slope=-1),
-        dust_curve_birth=PowerLaw(slope=-1),
-        age_pivot=5.5 * dimensionless,
+        dust_curve_ism=PowerLaw(slope=-0.7),
+        dust_curve_birth=PowerLaw(slope=-1.3),
     )
 
 

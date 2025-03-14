@@ -1,7 +1,7 @@
 """Tests for generating spectra."""
 
 import numpy as np
-from unyt import Myr, yr
+from unyt import Myr, dimensionless, yr
 
 
 def test_integrated_generation_ngp(nebular_emission_model, random_part_stars):
@@ -26,6 +26,39 @@ def test_integrated_generation_ngp(nebular_emission_model, random_part_stars):
     ), "The integrated and summed per particle spectra are not the same."
 
 
+def test_masked_integrated_generation_ngp(
+    nebular_emission_model,
+    random_part_stars,
+):
+    """Test the generation of integrated with a mask spectra."""
+    # Add a mask to the emission model
+    nebular_emission_model.add_mask(
+        attr="ages",
+        op=">=",
+        thresh=5 * Myr,
+        set_all=True,
+    )
+
+    # Compute the spectra using both the integrated and per particle machinery
+    nebular_emission_model.set_per_particle(False)
+    integrated_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="ngp",
+    )
+    random_part_stars.clear_all_emissions()
+    nebular_emission_model.set_per_particle(True)
+    per_particle_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="ngp",
+    )
+    per_particle_spec = per_particle_spec.sum()
+
+    # Ensure that the integrated spectra are the same
+    assert np.allclose(
+        integrated_spec._lnu, per_particle_spec._lnu
+    ), "The integrated and summed per particle spectra are not the same."
+
+
 def test_integrated_generation_cic(nebular_emission_model, random_part_stars):
     """Test the generation of integrated spectra."""
     # Compute the spectra using both the integrated and per particle machinery
@@ -43,6 +76,38 @@ def test_integrated_generation_cic(nebular_emission_model, random_part_stars):
     per_particle_spec = per_particle_spec.sum()
 
     # Ensure that the integrated spectra are different
+    assert np.allclose(
+        integrated_spec._lnu, per_particle_spec._lnu
+    ), "The integrated and summed per particle spectra are not the same."
+
+
+def test_masked_integrated_generation_cic(
+    nebular_emission_model,
+    random_part_stars,
+):
+    # Add a mask to the emission model
+    nebular_emission_model.add_mask(
+        attr="ages",
+        op=">=",
+        thresh=5 * Myr,
+        set_all=True,
+    )
+
+    # Compute the spectra using both the integrated and per particle machinery
+    nebular_emission_model.set_per_particle(False)
+    integrated_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="cic",
+    )
+    random_part_stars.clear_all_emissions()
+    nebular_emission_model.set_per_particle(True)
+    per_particle_spec = random_part_stars.get_spectra(
+        nebular_emission_model,
+        grid_assignment_method="cic",
+    )
+    per_particle_spec = per_particle_spec.sum()
+
+    # Ensure that the integrated spectra are the same
     assert np.allclose(
         integrated_spec._lnu, per_particle_spec._lnu
     ), "The integrated and summed per particle spectra are not the same."
@@ -363,6 +428,11 @@ def test_pacman_spectra(
     """Test the generation of PACMAN spectra."""
     # Set the fixed tau_vs
     particle_stars_B.tau_v = 0.1
+    particle_stars_B.tau_v_birth = 0.3
+    particle_stars_B.tau_v_ism = 0.1
+
+    # Set the age pivot for the B stars
+    bimodal_pacman_emission_model.age_pivot = 6.7 * dimensionless
 
     # Generate the PACMAN spectra
     pacman_spec = particle_stars_B.get_spectra(
@@ -377,7 +447,8 @@ def test_pacman_spectra(
         grid_assignment_method="ngp",
     )
 
-    # Ensure that the two PACMAN spectra are different
+    # Ensure that the two PACMAN spectra are different to validate that the
+    # age pivot is working in the bimodal PACMAN model
     assert not np.allclose(
         pacman_spec._lnu,
         bimodal_pacman_spec._lnu,
