@@ -18,10 +18,10 @@ from unyt import Mpc, Msun, km, s
 
 from synthesizer import exceptions
 from synthesizer.particle.particles import Particles
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.util_funcs import combine_arrays
-from synthesizer.warnings import warn
 
 
 class Gas(Particles):
@@ -66,8 +66,8 @@ class Gas(Particles):
     ]
 
     # Define class level Quantity attributes
-    smoothing_lengths = Quantity()
-    dust_masses = Quantity()
+    smoothing_lengths = Quantity("spatial")
+    dust_masses = Quantity("mass")
 
     @accepts(
         masses=Msun.in_base("galactic"),

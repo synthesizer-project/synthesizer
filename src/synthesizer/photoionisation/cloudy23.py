@@ -10,10 +10,10 @@ from unyt import angstrom, c, h, unyt_array
 
 from synthesizer.exceptions import (
     InconsistentArguments,
-    UnimplementedFunctionality,
+    UnrecognisedOption,
 )
 from synthesizer.photoionisation import calculate_Q_from_U
-from synthesizer.warnings import warn
+from synthesizer.synth_warnings import warn
 
 
 class ShapeCommands:
@@ -245,9 +245,9 @@ def create_cloudy_input(
         grains approach is metals/element abundances do not talk
         to the grains command and hence there is issues with mass
         conservation (see cloudy documentation). To alleviate
-        this one needs to make the orion grain abundances
-        consistent with the depletion values. Assume 1 per cent of
-        C is in PAH's.
+        this one needs to make the orion or ism (in-built in cloudy)
+        grain abundances consistent with the depletion values. Assume
+        1 per cent of C is in PAH's.
 
         PAHs appear to exist mainly at the interface between the
         H+ region and the molecular clouds. Apparently PAHs are
@@ -294,11 +294,12 @@ def create_cloudy_input(
                 # this is incorrect since the abundance in the ISM is probably
                 # different.
                 elif params["grains"] == "ISM":
-                    reference_C_abund = -3.6259
-                    reference_Si_abund = -4.5547
+                    reference_C_abund = -3.5553
+                    reference_Si_abund = -4.4841
                 else:
-                    raise UnimplementedFunctionality(
-                        "Only Orion grains are currently implemented"
+                    raise UnrecognisedOption(
+                        "Only Orion and ISM grain types "
+                        "are available in cloudy"
                     )
 
                 PAH_abund = -4.446

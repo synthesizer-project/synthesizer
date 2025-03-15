@@ -135,6 +135,24 @@ class InconsistentAddition(Exception):
             return "Unable to add"
 
 
+class InconsistentMultiplication(Exception):
+    """
+    Generic exception class for when multiplying two objects is impossible.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        else:
+            return "Unable to multiply"
+
+
 class InconsistentCoordinates(Exception):
     """
     Generic exception class for when coordinates are inconsistent.
@@ -170,6 +188,26 @@ class SVOFilterNotFound(Exception):
             return "{0} ".format(self.message)
         else:
             return "Filter not found!"
+
+
+class SVOTransmissionHasUnits(Exception):
+    """
+    Exception class for when an SVO filter returns units, which should not be
+    the case for the transmission. For example, where the effective area is
+    provided.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        else:
+            return "Filter provides units, but transmission is dimensionless!"
 
 
 class InconsistentWavelengths(Exception):

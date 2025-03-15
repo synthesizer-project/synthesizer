@@ -33,12 +33,11 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import value_to_array
-from synthesizer.warnings import deprecated, warn
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -82,7 +81,7 @@ class BlackHoles(Particles, BlackholesComponent):
     ]
 
     # Define quantities
-    smoothing_lengths = Quantity()
+    smoothing_lengths = Quantity("spatial")
 
     @accepts(
         masses=Msun.in_base("galactic"),
@@ -123,6 +122,7 @@ class BlackHoles(Particles, BlackholesComponent):
         velocity_dispersion_nlr=500 * km / s,
         theta_torus=10 * deg,
         tau_v=None,
+        fesc=None,
         **kwargs,
     ):
         """
@@ -175,6 +175,8 @@ class BlackHoles(Particles, BlackholesComponent):
                 The angle of the torus.
             tau_v (array-like, float)
                 The optical depth of the dust model.
+            fesc (array-like, float)
+                The escape fraction of the black hole emission.
             kwargs (dict)
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
@@ -204,6 +206,7 @@ class BlackHoles(Particles, BlackholesComponent):
         )
         BlackholesComponent.__init__(
             self,
+            fesc=fesc,
             mass=masses,
             accretion_rate=accretion_rates,
             epsilon=epsilons,
@@ -284,185 +287,11 @@ class BlackHoles(Particles, BlackholesComponent):
 
         self.cosine_inclination = np.cos(self.inclination.to("rad").value)
 
-    def _prepare_sed_args(
-        self,
-        grid,
-        fesc,
-        spectra_type,
-        mask,
-        grid_assignment_method,
-        lam_mask,
-        nthreads,
-    ):
-        """
-        Prepare the arguments for the C extension to compute SEDs.
-
-        Args:
-            grid (Grid)
-                The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
-            spectra_type (str)
-                The type of spectra to extract from the Grid. This must match a
-                type of spectra stored in the Grid.
-            mask(array-like, bool)
-                If not None this mask will be applied to the inputs to the
-                spectra creation.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-            nthreads (int)
-                The number of threads to use for the computation. If -1 then
-                all available threads are used.
-
-        Returns:
-            tuple
-                A tuple of all the arguments required by the C extension.
-        """
-        # Which line region is this for?
-        if "nlr" in grid.grid_name:
-            line_region = "nlr"
-        elif "blr" in grid.grid_name:
-            line_region = "blr"
-        else:
-            # this is a generic disc grid so no line_region
-            line_region = None
-
-        # Handle the case where mask is None
-        if mask is None:
-            mask = np.ones(self.nbh, dtype=bool)
-
-        # If lam_mask is None then we want all wavelengths
-        if lam_mask is None:
-            lam_mask = np.ones(
-                grid.spectra[spectra_type].shape[-1],
-                dtype=bool,
-            )
-
-        # Set up the inputs to the C function.
-        grid_props = [
-            np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
-            for axis in grid.axes
-        ]
-        props = []
-        for axis in grid.axes:
-            # Parameters that need to be provided from the black hole
-            prop = getattr(self, axis, None)
-
-            # We might be trying to get a Quanitity, in which case we need
-            # a leading _
-            if prop is None:
-                prop = getattr(self, f"_{axis}", None)
-
-            # We might be missing a line region suffix, if prop is
-            # None we need to try again with the suffix
-            if prop is None:
-                prop = getattr(self, f"{axis}_{line_region}", None)
-
-            # We could also be tripped up by plurals (TODO: stop this from
-            # happening!)
-            elif prop is None and axis == "mass":
-                prop = getattr(self, "masses", None)
-            elif prop is None and axis == "accretion_rate":
-                prop = getattr(self, "accretion_rates", None)
-            elif prop is None and axis == "metallicity":
-                prop = getattr(self, "metallicities", None)
-
-            # If we still have None here then our blackhole component doesn't
-            # have the required parameter
-            if prop is None:
-                raise exceptions.InconsistentArguments(
-                    f"Could not find {axis} or {axis}_{line_region} "
-                    f"on {type(self)}"
-                )
-
-            props.append(prop)
-
-        # Calculate npart from the mask
-        npart = np.sum(mask)
-
-        # Remove units from any unyt_arrays
-        props = [
-            prop.value if isinstance(prop, unyt_array) else prop
-            for prop in props
-        ]
-
-        # Ensure any parameters inherited from the emission model have
-        # as many values as particles
-        for ind, prop in enumerate(props):
-            if isinstance(prop, float):
-                props[ind] = np.full(self.nbh, prop)
-            elif prop.size == 1:
-                props[ind] = np.full(self.nbh, prop)
-
-        # Apply the mask to each property and make contiguous
-        props = [
-            np.ascontiguousarray(prop[mask], dtype=np.float64)
-            for prop in props
-        ]
-
-        # For black holes the grid Sed are normalised to 1.0 so we need to
-        # scale by the bolometric luminosity.
-        bol_lum = self.bolometric_luminosity.value
-
-        # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(np.sum(lam_mask))
-
-        # Get the grid spctra
-        grid_spectra = np.ascontiguousarray(
-            grid.spectra[spectra_type],
-            dtype=np.float64,
-        )
-
-        # Apply the wavelength mask
-        grid_spectra = np.ascontiguousarray(
-            grid_spectra[..., lam_mask],
-            np.float64,
-        )
-
-        # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
-        for ind, g in enumerate(grid_props):
-            grid_dims[ind] = len(g)
-        grid_dims[ind + 1] = nlam
-
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
-        # Convert inputs to tuples
-        grid_props = tuple(grid_props)
-        props = tuple(props)
-
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        return (
-            grid_spectra,
-            grid_props,
-            props,
-            bol_lum,
-            fesc,
-            grid_dims,
-            len(grid_props),
-            np.int32(npart),
-            nlam,
-            grid_assignment_method,
-            nthreads,
-        )
-
     def _prepare_line_args(
         self,
         grid,
         line_id,
         line_type,
-        fesc,
         mask,
         grid_assignment_method,
         nthreads,
@@ -478,10 +307,6 @@ class BlackHoles(Particles, BlackholesComponent):
             line_type (str)
                 The type of line to extract from the grid. Must match the
                 spectra/line type in the grid file.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (bool)
                 A mask to be applied to the stars. Spectra will only be
                 computed and returned for stars with True in the mask.
@@ -593,10 +418,6 @@ class BlackHoles(Particles, BlackholesComponent):
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
 
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         part_props = tuple(props)
@@ -611,7 +432,6 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_props,
             part_props,
             bol_lum,
-            fesc,
             grid_dims,
             len(grid_props),
             npart,
@@ -619,110 +439,11 @@ class BlackHoles(Particles, BlackholesComponent):
             nthreads,
         )
 
-    def generate_particle_lnu(
-        self,
-        grid,
-        spectra_name,
-        fesc=0.0,
-        mask=None,
-        lam_mask=None,
-        verbose=False,
-        grid_assignment_method="cic",
-        nthreads=0,
-    ):
-        """
-        Generate per particle rest frame spectra for a given key.
-
-        Args:
-            grid (obj):
-                Spectral grid object.
-            spectra_name (string)
-                The name of the target spectra inside the grid file
-                (e.g. "incident", "transmitted", "nebular").
-            fesc (float):
-                Fraction of emission that escapes unattenuated from
-                the birth cloud (defaults to 0.0).
-            mask (array-like, bool)
-                If not None this mask will be applied to the inputs to the
-                spectra creation.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-            verbose (bool)
-                Are we talking?
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            nthreads (int)
-                The number of threads to use for the computation. If -1 then
-                all available threads are used.
-        """
-        start = tic()
-
-        # Ensure we have a key in the grid. If not error.
-        if spectra_name not in list(grid.spectra.keys()):
-            raise exceptions.MissingSpectraType(
-                f"The Grid does not contain the key '{spectra_name}'"
-            )
-
-        # If we have no black holes return zeros
-        if self.nbh == 0:
-            return np.zeros((self.nbh, len(grid.lam)))
-
-        # Handle the case where the masks are None
-        if mask is None:
-            mask = np.ones(self.nbh, dtype=bool)
-        if lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
-        # Handle malformed masks
-        if mask.size != self.nbh:
-            mask = np.ones(self.nbh, dtype=bool)
-
-        from ..extensions.particle_spectra import compute_particle_seds
-
-        # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(
-            grid,
-            fesc=fesc,
-            spectra_type=spectra_name,
-            mask=mask,
-            grid_assignment_method=grid_assignment_method.lower(),
-            nthreads=nthreads,
-            lam_mask=lam_mask,
-        )
-
-        toc("Preparing C args", start)
-
-        # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args)
-
-        start = tic()
-
-        # If there's no mask we're done
-        if mask is None and lam_mask is None:
-            return masked_spec
-        elif mask is None:
-            mask = np.ones(self.nbh, dtype=bool)
-        elif lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
-        # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nbh, grid.lam.size))
-        spec[np.ix_(mask, lam_mask)] = masked_spec
-
-        toc("Masking spectra and adding contribution", start)
-
-        return spec
-
     def generate_particle_line(
         self,
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -746,10 +467,6 @@ class BlackHoles(Particles, BlackholesComponent):
             line_type (str)
                 The type of line to extract from the grid. Must match the
                 spectra/line type in the grid file.
-            fesc (float/array-like, float)
-                Fraction of blackhole emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -822,7 +539,6 @@ class BlackHoles(Particles, BlackholesComponent):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,
@@ -866,6 +582,7 @@ class BlackHoles(Particles, BlackholesComponent):
         tau_v=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=None,
         verbose=True,
         **kwargs,
     ):
@@ -928,6 +645,7 @@ class BlackHoles(Particles, BlackholesComponent):
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )

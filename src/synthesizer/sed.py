@@ -20,12 +20,25 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
-from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s
+from unyt import (
+    Hz,
+    angstrom,
+    c,
+    cm,
+    erg,
+    eV,
+    h,
+    pc,
+    s,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import (
     TableFormatter,
@@ -33,7 +46,6 @@ from synthesizer.utils import (
     wavelength_to_rgba,
 )
 from synthesizer.utils.integrate import integrate_last_axis
-from synthesizer.warnings import deprecated, warn
 
 
 class Sed:
@@ -68,12 +80,12 @@ class Sed:
     """
 
     # Define Quantities, for details see units.py
-    lam = Quantity()
-    nu = Quantity()
-    lnu = Quantity()
-    fnu = Quantity()
-    obsnu = Quantity()
-    obslam = Quantity()
+    lam = Quantity("wavelength")
+    nu = Quantity("frequency")
+    lnu = Quantity("luminosity_density_frequency")
+    fnu = Quantity("flux_density_frequency")
+    obsnu = Quantity("frequency")
+    obslam = Quantity("wavelength")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(self, lam, lnu=None, description=None):
@@ -131,6 +143,7 @@ class Sed:
             sed (object, Sed)
                 Summed 1D SED.
         """
+        start = tic()
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
@@ -150,6 +163,8 @@ class Sed:
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
+
+            toc("Summing Sed", start)
 
             return new_sed
         else:
@@ -289,8 +304,116 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
+    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
+        """
+        Scale the lnu of the Sed object.
+
+        Note: only acts on the rest frame spectra. To get the
+        scaled fnu get_fnu must be called on the newly scaled
+        Sed object.
+
+        Args:
+            scaling (float)
+                The scaling to apply to lnu.
+            inplace (bool)
+                If True, the Sed object is modified in place. If False, a new
+                Sed object is returned with the scaled lnu.
+            mask (array-like, bool)
+                A mask for the lnu array to apply the scaling to. This must
+                be the same shape as the lnu array excluding the wavelength
+                axis.
+            lam_mask (array-like, bool)
+                A mask for the wavelength array to apply the scaling to.
+
+        Returns:
+            Sed
+                A new instance of Sed with scaled lnu.
+        """
+        # If we have units make sure they are ok and then strip them
+        if isinstance(scaling, (unyt_array, unyt_quantity)):
+            if not self.lnu.units.is_compatible(scaling.units):
+                raise exceptions.InconsistentMultiplication(
+                    f"Incompatible units {self.lnu.units} and {scaling.units}"
+                )
+            else:
+                scaling = scaling.to(self.lnu.units)
+                scaling = scaling.value
+
+        # Unpack the array's we'll need during scaling
+        lnu = self._lnu.copy()
+        units = self.lnu.units
+
+        # If we have a wavelength mask apply it now
+        if lam_mask is not None:
+            lnu = lnu[..., lam_mask]
+
+        # Handle a scalar scaling factor
+        if np.isscalar(scaling):
+            if mask is not None:
+                lnu[mask] *= scaling
+            else:
+                lnu *= scaling
+
+        # Handle an single element array scaling factor
+        elif scaling.size == 1:
+            scaling = scaling.item()
+            if mask is not None:
+                lnu[mask] *= scaling
+            else:
+                lnu *= scaling
+
+        # Handle a multi-element array scaling factor as long as it matches
+        # the shape of the lnu array up to the dimensions of the scaling array
+        elif isinstance(scaling, np.ndarray) and len(scaling.shape) < len(
+            self.shape
+        ):
+            # We need to expand the scaling array to match the lnu array
+            expand_axes = tuple(range(len(scaling.shape), len(self.shape)))
+            new_scaling = np.ones(self.shape) * np.expand_dims(
+                scaling, axis=expand_axes
+            )
+
+            # Apply the scaling
+            if mask is not None:
+                lnu[mask] *= new_scaling[mask]
+            else:
+                lnu *= new_scaling
+
+        # If the scaling array is the same shape as the lnu array then we can
+        # just multiply them together
+        elif isinstance(scaling, np.ndarray) and scaling.shape == self.shape:
+            if mask is not None:
+                lnu[mask] *= scaling[..., mask]
+            else:
+                lnu *= scaling
+
+        # Otherwise, we've been handed a bad scaling factor
+        else:
+            out_str = f"Incompatible scaling factor with type {type(scaling)} "
+            if hasattr(scaling, "shape"):
+                out_str += f"and shape {scaling.shape}"
+            else:
+                out_str += f"and value {scaling}"
+            raise exceptions.InconsistentMultiplication(out_str)
+
+        # Now complete the calculation if we need to
+        if lam_mask is not None:
+            new_lnu = self.lnu.copy()
+            new_lnu[..., lam_mask] = lnu
+        else:
+            new_lnu = lnu * units
+
+        # If we scaled then we can return the scaled Sed
+        if not inplace:
+            return Sed(self.lam, lnu=new_lnu)
+
+        self._lnu = new_lnu
+        return self
+
     def __mul__(self, scaling):
         """
+        Scale the lnu of the Sed object.
+
         Overide multiplication operator to allow lnu to be scaled.
         This only works scaling * x.
 
@@ -306,11 +429,12 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-
-        return Sed(self.lam, lnu=scaling * self.lnu)
+        return self.scale(scaling)
 
     def __rmul__(self, scaling):
         """
+        Scale the lnu of the Sed object.
+
         As above but for x * scaling.
 
         Note: only acts on the rest frame spectra. To get the
@@ -325,8 +449,7 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-
-        return Sed(self._lam, lnu=scaling * self.lnu)
+        return self.scale(scaling)
 
     def __str__(self):
         """
@@ -406,6 +529,28 @@ class Sed:
                 The wavelength array.
         """
         return self.lam
+
+    @property
+    def frequency(self):
+        """
+        Alias to nu (frequency array).
+
+        Returns
+            frequency (unyt_array)
+                The frequency array.
+        """
+        return self.nu
+
+    @property
+    def energy(self):
+        """
+        Get the wavelengths in terms of photon energies in eV.
+
+        Returns
+            energy (unyt_array)
+                The energy coordinate.
+        """
+        return (h * c / self.lam).to(eV)
 
     @property
     def ndim(self):
@@ -891,10 +1036,12 @@ class Sed:
 
     def get_fnu0(self):
         """
-        Calculate a dummy observed frame spectral energy distribution.
-        Useful when you want rest-frame quantities.
+        Calculate the rest frame spectral flux density.
 
         Uses a standard distance of 10 pcs.
+
+        This will also populate the observed wavelength and frequency arrays
+        which in this case are the same as the emitted arrays.
 
         Returns:
             fnu (ndarray)
@@ -912,6 +1059,9 @@ class Sed:
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
+
+        This will also populate the observed wavelength and frequency arrays
+        with the observer frame values.
 
         NOTE: if a redshift of 0 is passed the flux return will be calculated
         assuming a distance of 10 pc omitting IGM since at this distance
@@ -951,14 +1101,14 @@ class Sed:
         self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
-        if igm:
+        if igm is not None:
             self._fnu *= igm().get_transmission(z, self._obslam)
 
         return self.fnu
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband luminosities using a FilterCollection object
+        Calculate broadband luminosities using a FilterCollection object.
 
         Args:
             filters (filters.FilterCollection)
@@ -973,7 +1123,6 @@ class Sed:
             photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
-
         # Intialise result dictionary
         photo_lnu = {}
 
@@ -991,7 +1140,7 @@ class Sed:
 
     def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
-        Calculate broadband fluxes using a FilterCollection object
+        Calculate broadband fluxes using a FilterCollection object.
 
         Args:
             filters (object)
@@ -1006,7 +1155,6 @@ class Sed:
             (dict)
                 A dictionary of fluxes in each filter in filters.
         """
-
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             return ValueError(
@@ -1199,7 +1347,13 @@ class Sed:
             sed.obslam = sed.lam * (1.0 + self.redshift)
             sed.obsnu = sed.nu / (1.0 + self.redshift)
             sed.fnu = (
-                spectres(sed._obslam, self._obslam, self._fnu) * self.fnu.units
+                spectres(
+                    sed._obslam,
+                    self._obslam,
+                    self._fnu,
+                    fill=0.0,
+                )
+                * self.fnu.units
             )
             sed.redshift = self.redshift
 

@@ -69,6 +69,7 @@ class BlackHole(BlackholesComponent):
         covering_fraction_nlr=0.1,
         velocity_dispersion_nlr=500 * km / s,
         theta_torus=10 * deg,
+        fesc=None,
         **kwargs,
     ):
         """
@@ -116,6 +117,9 @@ class BlackHole(BlackholesComponent):
                 The velocity dispersion of the narrow line region.
             theta_torus (array-like, float)
                 The angle of the torus.
+            fesc (array-like, float)
+                The escape fraction of the black hole. If None then the
+                escape fraction is set to 0.0.
             kwargs (dict)
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
@@ -123,6 +127,7 @@ class BlackHole(BlackholesComponent):
         # Initialise base class
         BlackholesComponent.__init__(
             self,
+            fesc=fesc,
             bolometric_luminosity=bolometric_luminosity,
             mass=mass,
             accretion_rate=accretion_rate,
@@ -142,7 +147,10 @@ class BlackHole(BlackholesComponent):
             **kwargs,
         )
 
-        # by definition a parametric blackhole is only one blackhole
+        # By default a parametric black hole will explictily have 1 "particle",
+        # set this here so that the downstream extraction can access the
+        # attribute.
+        self.nparticles = 1
         self.nbh = 1
 
         # Initialise morphology using the in-built point-source class
@@ -194,158 +202,6 @@ class BlackHole(BlackholesComponent):
             new_mask = np.logical_and(new_mask, mask)
 
         return new_mask
-
-    def _prepare_sed_args(
-        self,
-        grid,
-        fesc,
-        spectra_type,
-        grid_assignment_method,
-        nthreads,
-        lam_mask,
-        **kwargs,
-    ):
-        """
-        Prepare the arguments for the C extension to compute SEDs.
-
-        Args:
-            grid (Grid)
-                The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
-            spectra_type (str)
-                The type of spectra to extract from the Grid. This must match a
-                type of spectra stored in the Grid.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-            kwargs (dict)
-                Any other arguments. Mainly unused and here for consistency
-                with particle version of this method which does have extra
-                arguments.
-
-        Returns:
-            tuple
-                A tuple of all the arguments required by the C extension.
-        """
-        # Which line region is this for?
-        if "nlr" in grid.grid_name:
-            line_region = "nlr"
-        elif "blr" in grid.grid_name:
-            line_region = "blr"
-        else:
-            # this is a generic disc grid so no line_region
-            line_region = None
-
-        # If lam_mask is None then we want all wavelengths
-        if lam_mask is None:
-            lam_mask = np.ones(
-                grid.spectra[spectra_type].shape[-1],
-                dtype=bool,
-            )
-
-        # Set up the inputs to the C function.
-        grid_props = [
-            np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
-            for axis in grid.axes
-        ]
-        props = []
-        for axis in grid.axes:
-            # Parameters that need to be provided from the black hole
-            prop = getattr(self, axis, None)
-
-            # We might be trying to get a Quanitity, in which case we need
-            # a leading _
-            if prop is None:
-                prop = getattr(self, f"_{axis}", None)
-
-            # We might be missing a line region suffix, if prop is
-            # None we need to try again with the suffix
-            if prop is None:
-                prop = getattr(self, f"{axis}_{line_region}", None)
-
-            # We could also be tripped up by plurals (TODO: stop this from
-            # happening!)
-            elif prop is None and axis == "mass":
-                prop = getattr(self, "masses", None)
-            elif prop is None and axis == "accretion_rate":
-                prop = getattr(self, "accretion_rates", None)
-            elif prop is None and axis == "metallicity":
-                prop = getattr(self, "metallicities", None)
-
-            # If we still have None here then our blackhole component doesn't
-            # have the required parameter
-            if prop is None:
-                raise exceptions.InconsistentArguments(
-                    f"Could not find {axis} or {axis}_{line_region} "
-                    f"on {type(self)}"
-                )
-
-            props.append(prop)
-
-        # Remove units from any unyt_arrays and make contiguous
-        props = [
-            prop.value if isinstance(prop, unyt_array) else prop
-            for prop in props
-        ]
-        props = [
-            np.ascontiguousarray(prop, dtype=np.float64) for prop in props
-        ]
-
-        # For black holes the grid Sed are normalised to 1.0 so we need to
-        # scale by the bolometric luminosity.
-        bol_lum = self.bolometric_luminosity.value
-
-        # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(np.sum(lam_mask))
-
-        # Get the grid spctra
-        grid_spectra = np.ascontiguousarray(
-            grid.spectra[spectra_type],
-            dtype=np.float64,
-        )
-
-        # Apply the wavelength mask
-        grid_spectra = np.ascontiguousarray(
-            grid_spectra[..., lam_mask],
-            np.float64,
-        )
-
-        # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
-        for ind, g in enumerate(grid_props):
-            grid_dims[ind] = len(g)
-        grid_dims[ind + 1] = nlam
-
-        # Convert inputs to tuples
-        grid_props = tuple(grid_props)
-        props = tuple(props)
-
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        return (
-            grid_spectra,
-            grid_props,
-            props,
-            bol_lum,
-            np.array([fesc]),
-            grid_dims,
-            len(grid_props),
-            np.int32(1),
-            nlam,
-            grid_assignment_method,
-            nthreads,
-        )
 
     def _prepare_line_args(
         self,

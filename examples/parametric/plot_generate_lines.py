@@ -82,7 +82,7 @@ if __name__ == "__main__":
         emitter="stellar",
         tau_v=1.0,
         dust_curve=PowerLaw(slope=-1),
-        apply_dust_to=incident,
+        apply_to=incident,
     )
 
     lines_att = galaxy.stars.get_lines(

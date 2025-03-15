@@ -68,6 +68,27 @@ int *extract_data_int(PyArrayObject *np_arr, char *name) {
 }
 
 /**
+ * @brief Extract boolean data from a numpy array.
+ *
+ * This function returns a pointer to the underlying boolean data stored
+ * as npy_bool values (typically unsigned char).
+ *
+ * @param np_arr: The numpy array to extract.
+ * @param name: The name of the numpy array (for error messages).
+ * @return Pointer to the npy_bool data, or NULL on error.
+ */
+npy_bool *extract_data_bool(PyArrayObject *np_arr, char *name) {
+  npy_bool *data = (npy_bool *)PyArray_DATA(np_arr);
+  if (data == NULL) {
+    char error_msg[100];
+    snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
+    PyErr_SetString(PyExc_ValueError, error_msg);
+    return NULL;
+  }
+  return data;
+}
+
+/**
  * @brief Extract the grid properties from a tuple of numpy arrays.
  *
  * @param grid_tuple: A tuple of numpy arrays containing the grid properties.
@@ -163,6 +184,8 @@ double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
  * @param grid_tuple: A tuple of numpy arrays containing the grid properties.
  * @param np_ndims: The number of grid cells along each axis.
  * @param np_grid_spectra: The grid spectra.
+ * @param np_lam: The wavelength array.
+ * @param np_lam_mask: The wavelength mask array.
  * @param ndim: The number of dimensions in the grid.
  * @param nlam: The number of wavelength elements.
  *
@@ -171,7 +194,9 @@ double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,
-                                     const int ndim, const int nlam) {
+                                     PyArrayObject *np_lam,
+                                     PyArrayObject *np_lam_mask, const int ndim,
+                                     const int nlam) {
 
   /* Initialise the grid struct. */
   struct grid *grid = malloc(sizeof(struct grid));
@@ -220,6 +245,25 @@ struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
     if (grid->spectra == NULL) {
       return NULL;
     }
+  }
+
+  /* Extract the wavelength array. */
+  if (np_lam != NULL) {
+    grid->lam = extract_data_double(np_lam, "lam");
+    if (grid->lam == NULL) {
+      return NULL;
+    }
+  }
+
+  /* Extract the wavelength mask array, if this is Py_None then we will
+   * treat it as NULL. */
+  if (np_lam_mask != NULL && np_lam_mask != Py_None) {
+    grid->lam_mask = extract_data_bool(np_lam_mask, "lam_mask");
+    if (grid->lam_mask == NULL) {
+      return NULL;
+    }
+  } else {
+    grid->lam_mask = NULL;
   }
 
   return grid;
@@ -309,14 +353,16 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
  * @param part_tuple: A tuple of numpy arrays containing the particle
  * properties.
  * @param np_part_mass: The particle masses.
- * @param np_fesc: The escape fractions.
+ * @param np_velocities: The particle velocities.
+ * @param np_mask: The particle mask.
  * @param npart: The number of particles.
  *
  * @return struct particles*: A pointer to the particles struct.
  */
 struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_part_mass,
-                                  PyArrayObject *np_fesc, const int npart,
+                                  PyArrayObject *np_velocities,
+                                  PyArrayObject *np_mask, const int npart,
                                   const int ndim) {
 
   /* Initialise the particles struct. */
@@ -340,15 +386,12 @@ struct particles *get_part_struct(PyObject *part_tuple,
     }
   }
 
-  /* Extract a pointer to the fesc array. */
-  if (np_fesc != NULL) {
-    particles->fesc = extract_data_double(np_fesc, "fesc");
-    if (particles->fesc == NULL) {
+  /* Extract a pointer to the particle velocities. */
+  if (np_velocities != NULL) {
+    particles->velocities = extract_data_double(np_velocities, "part_vel");
+    if (particles->velocities == NULL) {
       return NULL;
     }
-  } else {
-    /* If we have no fesc we need an array of zeros. */
-    particles->fesc = calloc(npart, sizeof(double));
   }
 
   /* Extract the particle properties from the tuple of numpy arrays. */
@@ -357,6 +400,17 @@ struct particles *get_part_struct(PyObject *part_tuple,
     if (particles->props == NULL) {
       return NULL;
     }
+  }
+
+  /* Extract a pointer to the particle mask, if this is Py_None then we will
+   * treat it as NULL. */
+  if (np_mask != NULL && np_mask != Py_None) {
+    particles->mask = extract_data_bool(np_mask, "mask");
+    if (particles->mask == NULL) {
+      return NULL;
+    }
+  } else {
+    particles->mask = NULL;
   }
 
   return particles;

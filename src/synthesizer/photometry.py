@@ -45,8 +45,8 @@ class PhotometryCollection:
     """
 
     # Define quantities (there has to be one for rest and observer frame)
-    photo_lnu = Quantity()
-    photo_fnu = Quantity()
+    photo_lnu = Quantity("luminosity_density_frequency")
+    photo_fnu = Quantity("flux_density_frequency")
 
     def __init__(self, filters, **kwargs):
         """
@@ -84,7 +84,9 @@ class PhotometryCollection:
         photometry = unyt_array(photometry, units=photometry[0].units)
 
         # Get the dimensions of a flux for testing
-        flux_dimensions = default_units["photo_fnu"].units.dimensions
+        flux_dimensions = default_units[
+            "flux_density_frequency"
+        ].units.dimensions
 
         # Check if the photometry is flux or luminosity
         if photometry[0].units.dimensions == flux_dimensions:

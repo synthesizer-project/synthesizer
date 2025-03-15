@@ -35,8 +35,8 @@ try:
 except ImportError:
     raise UnmetDependency(
         "The `illustris_python` module is required to load IllustrisTNG data. "
-        "Install synthesizer with the `illustris` extra dependencies:"
-        " `pip install .[illustris]`."
+        "Install it via `pip install 'illustris_python @ "
+        "git+https://github.com/illustristng/illustris_python.git@master'"
     )
 
 

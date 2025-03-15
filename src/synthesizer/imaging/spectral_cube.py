@@ -74,9 +74,9 @@ class SpectralCube:
     """
 
     # Define quantities
-    lam = Quantity()
-    resolution = Quantity()
-    fov = Quantity()
+    lam = Quantity("wavelength")
+    resolution = Quantity("spatial")
+    fov = Quantity("spatial")
 
     def __init__(
         self,
@@ -465,7 +465,7 @@ class SpectralCube:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 
@@ -473,7 +473,7 @@ class SpectralCube:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 
@@ -481,7 +481,7 @@ class SpectralCube:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 
@@ -489,7 +489,7 @@ class SpectralCube:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 

@@ -24,6 +24,7 @@ from scipy import interpolate
 from unyt import angstrom, um
 
 from synthesizer import exceptions
+from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.units import accepts
 
 this_dir, this_filename = os.path.split(__file__)
@@ -31,7 +32,7 @@ this_dir, this_filename = os.path.split(__file__)
 __all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLi08"]
 
 
-class AttenuationLaw:
+class AttenuationLaw(Transformer):
     """
     The base class for all attenuation laws.
 
@@ -54,6 +55,9 @@ class AttenuationLaw:
         """
         # Store the description of the model.
         self.description = description
+
+        # Call the parent constructor
+        Transformer.__init__(self, required_params=("tau_v",))
 
     def get_tau(self, *args):
         """Compute the optical depth."""
@@ -100,6 +104,39 @@ class AttenuationLaw:
                 exponent = tau_v[:, None] * tau_x_v
 
         return np.exp(-exponent)
+
+    def _transform(self, emission, emitter, model, mask, lam_mask):
+        """
+        Apply the dust attenuation to the emission.
+
+        Args:
+            emission (Line/Sed): The emission to transform.
+            emitter (Stars/Gas/BlackHole/Galaxy): The object emitting the
+                emission.
+            model (EmissionModel): The emission model generating the emission.
+            mask (np.ndarray): The mask to apply to the emission.
+            lam_mask (np.ndarray): We must define this parameter in the
+                transformer method, but it is not used in this case. If not
+                None an error will be raised.
+
+        Returns:
+            Line/Sed: The transformed emission.
+        """
+        # Extract the required parameters
+        params = self._extract_params(model, emission, emitter)
+
+        # Ensure we aren't trying to use a wavelength mask
+        if lam_mask is not None:
+            raise exceptions.UnimplementedFunctionality(
+                "Wavelength mask currently not supported in dust attenuation."
+            )
+
+        # Apply the transmission to the emission
+        return emission.apply_attenuation(
+            tau_v=params["tau_v"],
+            dust_curve=self,
+            mask=mask,
+        )
 
     @accepts(lam=angstrom)
     def plot_attenuation(
@@ -473,10 +510,10 @@ class MWN18(AttenuationLaw):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
             interp (str)
-                The type of interpolation to use. Can be ‘linear’, ‘nearest’,
-                ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
-                ‘previous’, or ‘next’. ‘zero’, ‘slinear’, ‘quadratic’ and
-                ‘cubic’ refer to a spline interpolation of zeroth, first,
+                The type of interpolation to use. Can be 'linear', 'nearest',
+                'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
+                'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
+                'cubic' refer to a spline interpolation of zeroth, first,
                 second or third order. Uses scipy.interpolate.interp1d.
 
         Returns:
@@ -531,7 +568,7 @@ class GrainsWD01(AttenuationLaw):
         self.emodel = WD01(self.model)
 
     @accepts(lam=angstrom)
-    def get_tau(self, lam):
+    def get_tau(self, lam, interp="slinear"):
         """
         Calculate V-band normalised optical depth.
 
@@ -540,33 +577,34 @@ class GrainsWD01(AttenuationLaw):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
 
+            interp (str)
+                The type of interpolation to use. Can be 'linear', 'nearest',
+                'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
+                'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
+                'cubic' refer to a spline interpolation of zeroth, first,
+                second or third order. Uses scipy.interpolate.interp1d.
+
         Returns:
             float/array-like, float
                 The optical depth.
         """
-        return self.emodel(lam.to_astropy())
+        lam_lims = np.logspace(2, 8, 10000) * angstrom
+        lam_v = 5500 * angstrom  # V-band wavelength
+        func = interpolate.interp1d(
+            lam_lims,
+            self.emodel(lam_lims.to_astropy()),
+            kind=interp,
+            fill_value="extrapolate",
+        )
+        out = func(lam) / func(lam_v)
 
-    @accepts(lam=angstrom)
-    def get_transmission(self, tau_v, lam):
-        """
-        Return the transmitted flux/luminosity fraction.
+        if np.isscalar(lam):
+            if lam > lam_lims[-1]:
+                out = func(lam_lims[-1])
+        elif np.sum(lam > lam_lims[-1]) > 0:
+            out[(lam > lam_lims[-1])] = func(lam_lims[-1])
 
-        Args:
-            tau_v (float/array-like, float)
-                Optical depth in the V-band. Can either be a single float or
-                array.
-
-            lam (array-like, float)
-                The wavelengths (with units) at which to calculate
-                transmission.
-
-        Returns:
-            array-like
-                The transmission at each wavelength. Either (lam.size,) in
-                shape for singular tau_v values or (tau_v.size, lam.size)
-                tau_v is an array.
-        """
-        return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_v)
+        return out
 
 
 @accepts(lam=um)

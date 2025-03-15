@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from synthesizer import exceptions
 from synthesizer.instruments import Instrument
 from synthesizer.sed import plot_spectra
-from synthesizer.warnings import deprecated, deprecation
+from synthesizer.synth_warnings import deprecated, deprecation
 
 
 class Component(ABC):
@@ -39,11 +39,14 @@ class Component(ABC):
             A dictionary to hold the images in luminosity units.
         images_fnu (dict)
             A dictionary to hold the images in flux units
+        fesc (float)
+            The escape fraction of the component.
     """
 
     def __init__(
         self,
         component_type,
+        fesc,
         **kwargs,
     ):
         """
@@ -52,6 +55,8 @@ class Component(ABC):
         Args:
             component_type (str)
                 The type of component, either "Stars" or "BlackHole".
+            fesc (float)
+                The escape fraction of the component.
             **kwargs
                 Any additional keyword arguments to attach to the Component.
         """
@@ -72,9 +77,15 @@ class Component(ABC):
         self.images_lnu = {}
         self.images_fnu = {}
 
+        # Attach a default escape fraction
+        self.fesc = fesc if fesc is not None else 0.0
+
         # Set any of the extra attribute provided as kwargs
         for key, val in kwargs.items():
             setattr(self, key, val)
+
+        # A container for any grid weights we already computed
+        self._grid_weights = {"cic": {}, "ngp": {}}
 
     @property
     def photo_fluxes(self):
@@ -107,11 +118,6 @@ class Component(ABC):
         return self.photo_lnu
 
     @abstractmethod
-    def generate_lnu(self, *args, **kwargs):
-        """Generate the rest frame spectra for the component."""
-        pass
-
-    @abstractmethod
     def generate_line(self, *args, **kwargs):
         """Generate the rest frame line emission for the component."""
         pass
@@ -119,11 +125,6 @@ class Component(ABC):
     @abstractmethod
     def get_mask(self, attr, thresh, op, mask=None):
         """Return a mask based on the attribute and threshold."""
-        pass
-
-    @abstractmethod
-    def _prepare_sed_args(self, *args, **kwargs):
-        """Prepare arguments for the SED generation."""
         pass
 
     @abstractmethod
@@ -242,9 +243,12 @@ class Component(ABC):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         mask=None,
+        vel_shift=None,
         verbose=True,
+        nthreads=1,
+        grid_assignment_method="cic",
         **kwargs,
     ):
         """
@@ -286,8 +290,16 @@ class Component(ABC):
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
+            shift (bool):
+                Flags whether to apply doppler shift to the spectra.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the tree search. If -1, all
+                available threads will be used.
+            grid_assignment_method (str)
+                The method to use for assigning particles to the grid. Options
+                are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -307,7 +319,10 @@ class Component(ABC):
             tau_v=tau_v,
             fesc=fesc,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
+            nthreads=nthreads,
+            grid_assignment_method=grid_assignment_method,
             **kwargs,
         )
 
@@ -329,7 +344,7 @@ class Component(ABC):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         mask=None,
         verbose=True,
         **kwargs,
@@ -716,3 +731,14 @@ class Component(ABC):
         self.clear_all_spectra()
         self.clear_all_lines()
         self.clear_all_photometry()
+
+    def clear_weights(self):
+        """
+        Clear all cached grid weights from the component.
+
+        This clears all grid weights calculated using different
+        methods from this component, and resets the `_grid_weights`
+        dictionary.
+        """
+        if hasattr(self, "_grid_weights"):
+            self._grid_weights = {"cic": {}, "ngp": {}}

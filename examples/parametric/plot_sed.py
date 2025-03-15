@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # Simple dust and gas screen
     attenuated = AttenuatedEmission(
         tau_v=0.1,
-        apply_dust_to=reprocessed,
+        apply_to=reprocessed,
         dust_curve=PowerLaw(slope=-1),
         emitter="stellar",
     )

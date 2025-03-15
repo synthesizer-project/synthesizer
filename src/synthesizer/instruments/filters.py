@@ -22,6 +22,7 @@ Example usage::
 
 import urllib.request
 from urllib.error import URLError
+from xml.etree import ElementTree
 
 import h5py
 import matplotlib.pyplot as plt
@@ -31,9 +32,9 @@ from unyt import Hz, angstrom, c, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.integrate import integrate_last_axis
-from synthesizer.warnings import warn
 
 
 @accepts(new_lam=angstrom)
@@ -100,9 +101,9 @@ class FilterCollection:
     """
 
     # Define Quantitys
-    lam = Quantity()
-    mean_lams = Quantity()
-    pivot_lams = Quantity()
+    lam = Quantity("wavelength")
+    mean_lams = Quantity("wavelength")
+    pivot_lams = Quantity("wavelength")
 
     accepts(new_lam=angstrom)
 
@@ -802,9 +803,7 @@ class FilterCollection:
             # Are we making an array with a fixed size?
             if lam_size is not None:
                 # Create wavelength array
-                new_lam = (
-                    np.linspace(min_lam, max_lam, lam_size) * min_lam.units
-                )
+                new_lam = np.linspace(min_lam, max_lam, lam_size)
 
             else:
                 # Ok, we are trying to be clever, merge the filter wavelength
@@ -1208,14 +1207,14 @@ class Filter:
     """
 
     # Define Quantitys
-    lam_min = Quantity()
-    lam_max = Quantity()
-    lam_eff = Quantity()
-    lam_fwhm = Quantity()
-    lam = Quantity()
-    nu = Quantity()
-    original_lam = Quantity()
-    original_nu = Quantity()
+    lam_min = Quantity("wavelength")
+    lam_max = Quantity("wavelength")
+    lam_eff = Quantity("wavelength")
+    lam_fwhm = Quantity("wavelength")
+    lam = Quantity("wavelength")
+    nu = Quantity("frequency")
+    original_lam = Quantity("wavelength")
+    original_nu = Quantity("frequency")
 
     @accepts(
         lam_min=angstrom,
@@ -1564,14 +1563,22 @@ class Filter:
         # Read directly from the SVO archive.
         self.svo_url = (
             f"http://svo2.cab.inta-csic.es/theory/"
-            f"fps/getdata.php?format=ascii&id={self.observatory}"
-            f"/{self.instrument}.{self.filter_}"
+            f"fps/fps.php?ID={self.observatory}/"
+            f"{self.instrument}.{self.filter_}"
         )
 
         # Make a request for the data and handle a failure more informatively
         try:
             with urllib.request.urlopen(self.svo_url) as f:
-                df = np.loadtxt(f)
+                # Get the root of the XML tree
+                root = ElementTree.parse(f).getroot()
+
+                # Find the unit data
+                field = root.find(".//*[@name='Transmission']")
+
+                # Find the Table data
+                data = root.find(".//TABLEDATA")
+
         except URLError:
             raise exceptions.SVOInaccessible(
                 (
@@ -1580,18 +1587,38 @@ class Filter:
                 )
             )
 
+        if field.attrib["unit"] not in ["", "ephot"]:
+            raise exceptions.SVOTransmissionHasUnits(
+                (
+                    f"The SVO filter at {self.svo_url} has "
+                    f"units {field.attrib['unit']}, which should not be "
+                    "the case for a transmission curve. This "
+                    "can sometimes occur where the effective "
+                    "area is returned instead. Please check "
+                    "that the filter you are querying returns "
+                    "the transmission / response."
+                )
+            )
+
         # Throw an error if we didn't find the filter.
-        if df.size == 0:
+        if field is None:
             raise exceptions.SVOFilterNotFound(
-                f"Filter ({self.filter_code}) not in the database. "
-                "Double check the database: http://svo2.cab.inta-csic.es/"
-                "svo/theory/fps3/. This could also mean you have no"
-                " connection."
+                (
+                    f"Filter ({self.filter_code}) not in the database. "
+                    "Double check the database: http://svo2.cab.inta-csic.es/"
+                    "svo/theory/fps3/. This could also mean you have no"
+                    " connection."
+                )
             )
 
         # Extract the wavelength and transmission given by SVO
-        self.original_lam = df[:, 0]
-        self.original_t = df[:, 1]
+        self.original_lam = np.array(
+            [float(child.findall("TD")[0].text) for child in data]
+        )
+
+        self.original_t = np.array(
+            [float(child.findall("TD")[1].text) for child in data]
+        )
 
         # If a new wavelength grid is provided, interpolate
         # the transmission curve on to that grid

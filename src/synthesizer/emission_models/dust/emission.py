@@ -45,9 +45,9 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 from synthesizer.utils import planck
-from synthesizer.warnings import warn
 
 
 class EmissionBase:

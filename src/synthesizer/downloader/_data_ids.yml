@@ -1,0 +1,34 @@
+# This defines the download ids to interact with the
+# data available through the server
+
+TestData:
+  # SPS test grid (derived from BPASS)
+  test_grid.hdf5:
+    file: bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5
+    direct_link: https://sussex.box.com/shared/static/o3e1oee08e7131rpl50e3akqxlf1stnj.hdf5
+
+  # UnifiedAGN grids
+  test_grid_agn-blr.hdf5:
+    file: agnsed-limited_cloudy-c23.01-blr.hdf5
+    direct_link: https://sussex.box.com/shared/static/b9ct3ah1zcp5v9xuy2e3t6fwo9d4v9dm.hdf5
+  test_grid_agn-nlr.hdf5:
+    file: agnsed-limited_cloudy-c23.01-nlr.hdf5
+    direct_link: https://sussex.box.com/shared/static/b9ct3ah1zcp5v9xuy2e3t6fwo9d4v9dm.hdf5
+
+  # CAMELS subset data
+  camels_snap.hdf5:
+    file: camels_snap.hdf5
+    direct_link: https://sussex.box.com/shared/static/gnvbg029w4rssu4g0lg3kd5oyeazg66r.hdf5
+  camels_subhalo.hdf5:
+    file: camels_subhalo.hdf5
+    direct_link: https://sussex.box.com/shared/static/xq9wrozw668czer4phwqc34wvu3x46nk.hdf5
+
+  sc-sam_sfhist.dat:
+    file: sc-sam_sfhist.dat
+    direct_link: https://sussex.box.com/shared/static/ep68f9n400tbvg1m82qusyzo3oqceqhb.dat
+
+DustData:
+  # Draine and Li dust emission grid
+  draine_li_dust_emission_grid_MW_3p1.hdf5:
+    file: draine_li_dust_emission_grid_MW_3p1.hdf5
+    direct_link: https://sussex.box.com/shared/static/u4sfij7x3oiehzskdy4l9q0md4nb0cau.hdf5

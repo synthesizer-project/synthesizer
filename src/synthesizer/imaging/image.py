@@ -52,8 +52,8 @@ class Image:
     """
 
     # Define quantities
-    resolution = Quantity()
-    fov = Quantity()
+    resolution = Quantity("spatial")
+    fov = Quantity("spatial")
 
     def __init__(
         self,
@@ -697,6 +697,15 @@ class Image:
         # Create the axis
         if ax is None:
             ax = fig.add_subplot(111)
+
+        # If no extent has been passed, calculate it
+        if extent is None:
+            extent = [
+                -self._fov[0] / 2,
+                self._fov[0] / 2,
+                -self._fov[1] / 2,
+                self._fov[1] / 2,
+            ]
 
         # Plot the image and remove the surrounding axis
         im = ax.imshow(

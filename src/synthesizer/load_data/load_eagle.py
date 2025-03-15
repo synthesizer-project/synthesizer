@@ -5,10 +5,6 @@ hydrodynamical simulations suite.
 The EAGLE hdf5 data loading scripts have been taken from
 the `eagle_io` package (https://github.com/flaresimulations/eagle_IO/).
 This has been to make the call as self-contained as possible.
-
-The functions here used in
-https://github.com/flaresimulations/synthesizer-pipeline
-
 """
 
 import glob
@@ -35,7 +31,7 @@ except ImportError:
         " `pip install .[eagle]`."
     )
 
-from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
+from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr, km, s
 
 from synthesizer.load_data.utils import lookup_age
 
@@ -203,6 +199,16 @@ def load_EAGLE(
         verbose=verbose,
     )[ok]
 
+    # get velocities
+    s_velocities = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/Velocity",
+        numThreads=numThreads,
+        verbose=verbose,
+    )[ok]
+
     # Get gas particle properties
     g_sgrpno = read_array(
         "PARTDATA",
@@ -293,6 +299,7 @@ def load_EAGLE(
         s_hsml=s_hsml,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
+        s_velocities=s_velocities,
         g_grpno=g_grpno,
         g_sgrpno=g_sgrpno,
         g_masses=g_masses,
@@ -918,6 +925,7 @@ def assign_galaxy_prop(
     s_hsml: NDArray[np.float32],
     s_oxygen: NDArray[np.float32],
     s_hydrogen: NDArray[np.float32],
+    s_velocities: NDArray[np.float32],
     g_grpno: NDArray[np.int32],
     g_sgrpno: NDArray[np.int32],
     g_masses: NDArray[np.float32],
@@ -967,6 +975,8 @@ def assign_galaxy_prop(
             Stellar particle abundance in oxygen
         s_hydrogen (array)
             Stellar particle abundance in hydrogen
+        s_velocities (array)
+            Stellar Velocities
         g_grpno (array)
             Gas particle group number
         g_sgrpno (array)
@@ -1017,6 +1027,7 @@ def assign_galaxy_prop(
         smoothing_lengths=s_hsml[ok] * Mpc,
         s_oxygen=s_oxygen[ok],
         s_hydrogen=s_hydrogen[ok],
+        velocities=s_velocities[ok] * km / s,
         **s_kwargs,
     )
 

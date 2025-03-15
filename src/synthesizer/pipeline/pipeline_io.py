@@ -25,7 +25,7 @@ from synthesizer.pipeline.pipeline_utils import (
     get_dataset_properties,
     unify_dict_structure_across_ranks,
 )
-from synthesizer.warnings import warn
+from synthesizer.synth_warnings import warn
 
 
 class PipelineIO:
@@ -104,7 +104,7 @@ class PipelineIO:
         if self.is_collective:
             self.is_collective = False
             warn(
-                "Collective I/O is not currently locks up. "
+                "Collective I/O currently locks up. "
                 "Writing a file per rank instead. "
                 "Feel free to contribute a fix!"
             )

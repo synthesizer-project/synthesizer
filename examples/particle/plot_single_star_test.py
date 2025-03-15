@@ -48,10 +48,14 @@ part_stars = ParticleStars(
 )
 
 # Calculate the particle SFZH grid (equivalent to grid weights)
-part_sfzh = part_stars.get_sfzh(grid, grid_assignment_method="cic")
+part_sfzh = part_stars.get_sfzh(
+    log10ages=grid.log10age,
+    metallicities=grid.metallicity,
+    grid_assignment_method="cic",
+).sfzh
 
 # Plot the SFZH
-part_stars.plot_sfzh(grid, grid_assignment_method="cic")
+part_stars.plot_sfzh()
 
 # Create the figure and axes for the comparison
 fig, ax = plt.subplots()

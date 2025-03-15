@@ -5,7 +5,7 @@ from functools import lru_cache
 from unyt import unyt_array
 
 from synthesizer import exceptions
-from synthesizer.warnings import warn
+from synthesizer.synth_warnings import warn
 
 
 def discover_outputs_recursive(obj, prefix="", output_set=None):

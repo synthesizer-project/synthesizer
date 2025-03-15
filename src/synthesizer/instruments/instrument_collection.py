@@ -41,8 +41,8 @@ import h5py
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
+from synthesizer.synth_warnings import warn
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.warnings import warn
 
 
 class InstrumentCollection:

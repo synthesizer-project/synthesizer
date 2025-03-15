@@ -7,12 +7,12 @@ only contains common attributes and methods to reduce boilerplate.
 from unyt import Mpc
 
 from synthesizer import exceptions
-from synthesizer.emission_models.attenuation.igm import Inoue14
+from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.instruments import Instrument
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
-from synthesizer.warnings import deprecated, deprecation
 
 
 class BaseGalaxy:
@@ -788,9 +788,10 @@ class BaseGalaxy:
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         covering_fraction=None,
         mask=None,
+        vel_shift=None,
         verbose=True,
         **kwargs,
     ):
@@ -850,6 +851,7 @@ class BaseGalaxy:
             tau_v=tau_v,
             covering_fraction=covering_fraction,
             mask=mask,
+            vel_shift=vel_shift,
             verbose=verbose,
             **kwargs,
         )
@@ -906,7 +908,7 @@ class BaseGalaxy:
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         covering_fraction=None,
         mask=None,
         verbose=True,
@@ -1387,3 +1389,18 @@ class BaseGalaxy:
 
         # Clear photometry
         self.clear_all_photometry()
+
+    def clear_weights(self):
+        """
+        Clear all cached grid weights.
+
+        This clears all grid weights calculated using different
+        methods from this base galaxy, and resets the
+        `_grid_weights` dictionary.
+        """
+        if self.stars is not None:
+            if hasattr(self.stars, "_grid_weights"):
+                self._grid_weights = {"cic": {}, "ngp": {}}
+        if self.black_holes is not None:
+            if hasattr(self.black_holes, "_grid_weights"):
+                self._grid_weights = {"cic": {}, "ngp": {}}

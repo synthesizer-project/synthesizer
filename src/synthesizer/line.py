@@ -15,13 +15,25 @@ in plots etc.
 
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Angstrom, Hz, angstrom, cm, erg, s
+from unyt import (
+    Angstrom,
+    Hz,
+    angstrom,
+    cm,
+    erg,
+    pc,
+    s,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.warnings import deprecation
+from synthesizer.utils import TableFormatter
 
 
 def get_line_id(id):
@@ -248,6 +260,9 @@ class LineCollection:
             A list of available line diagrams.
     """
 
+    # Define quantities
+    wavelengths = Quantity("wavelength")
+
     def __init__(self, lines):
         """
         Initialise LineCollection.
@@ -288,11 +303,11 @@ class LineCollection:
         self.wavelengths = self.wavelengths[sorted_arguments]
 
         # Include line ratio and diagram definitions
-        self.line_ratios = line_ratios
+        self._line_ratios = line_ratios
 
         # Create list of available line ratios
         self.available_ratios = []
-        for ratio_id, ratio in self.line_ratios.ratios.items():
+        for ratio_id, ratio in self._line_ratios.ratios.items():
             # Create a set from the ratio line ids while also unpacking
             # any comma separated lines
             ratio_line_ids = set()
@@ -305,7 +320,7 @@ class LineCollection:
 
         # Create list of available line diagnostics
         self.available_diagrams = []
-        for diagram_id, diagram in self.line_ratios.diagrams.items():
+        for diagram_id, diagram in self._line_ratios.diagrams.items():
             # Create a set from the diagram line ids while also unpacking
             # any comma separated lines
             diagram_line_ids = set()
@@ -357,33 +372,6 @@ class LineCollection:
 
         return LineCollection(my_lines)
 
-    def __str__(self):
-        """
-        Function to print a basic summary of the LineCollection object.
-
-        Returns a string containing the id, wavelength, luminosity,
-        equivalent width, and flux if generated.
-
-        Returns:
-            summary (str)
-                Summary string containing the total mass formed and
-                lists of the available SEDs, lines, and images.
-        """
-
-        # Set up string for printing
-        summary = ""
-
-        # Add the content of the summary to the string to be printed
-        summary += "-" * 10 + "\n"
-        summary += "LINE COLLECTION\n"
-        summary += f"number of lines: {len(self.line_ids)}\n"
-        summary += f"lines: {self.line_ids}\n"
-        summary += f"available ratios: {self.available_ratios}\n"
-        summary += f"available diagrams: {self.available_diagrams}\n"
-        summary += "-" * 10
-
-        return summary
-
     def __iter__(self):
         """
         Overload iteration to allow simple looping over Line objects,
@@ -408,6 +396,23 @@ class LineCollection:
             # Return the filter
             return self.lines[self.line_ids[self._current_ind - 1]]
 
+    def __len__(self):
+        """Return the number of lines in the collection."""
+        return self.nlines
+
+    def __str__(self):
+        """
+        Return a string representation of the LineCollection object.
+
+        Returns:
+            table (str)
+                A string representation of the LineCollection object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("LineCollection")
+
     def sum(self):
         """
         For collections containing lines from multiple particles calculate the
@@ -419,6 +424,15 @@ class LineCollection:
             summed_lines[line_id] = line.sum()
 
         return LineCollection(summed_lines)
+
+    def shape(self):
+        """
+        Return the shape of the lines.
+
+        Note, the shape in this context is the shape of a single line. This
+        will change in a future update to the way we store lines.
+        """
+        return self.lines[self.line_ids[0]].shape()
 
     def _get_ratio(self, line1, line2):
         """
@@ -465,7 +479,7 @@ class LineCollection:
         # defined in the line_ratios module...
         if isinstance(ratio_id, str):
             # Check if ratio_id exists
-            if ratio_id not in self.line_ratios.available_ratios:
+            if ratio_id not in self._line_ratios.available_ratios:
                 raise exceptions.UnrecognisedOption(
                     f"ratio_id not recognised ({ratio_id})"
                 )
@@ -477,7 +491,7 @@ class LineCollection:
                     f"this ratio ({ratio_id})"
                 )
 
-            line1, line2 = self.line_ratios.ratios[ratio_id]
+            line1, line2 = self._line_ratios.ratios[ratio_id]
 
         # Otherwise interpret as a list
         elif isinstance(ratio_id, list):
@@ -502,7 +516,7 @@ class LineCollection:
         # defined in the line_ratios module...
         if isinstance(diagram_id, str):
             # check if ratio_id exists
-            if diagram_id not in self.line_ratios.available_diagrams:
+            if diagram_id not in self._line_ratios.available_diagrams:
                 raise exceptions.UnrecognisedOption(
                     f"diagram_id not recognised ({diagram_id})"
                 )
@@ -514,7 +528,7 @@ class LineCollection:
                     f"this diagram ({diagram_id})"
                 )
 
-            ab, cd = self.line_ratios.diagrams[diagram_id]
+            ab, cd = self._line_ratios.diagrams[diagram_id]
 
         # Otherwise interpret as a list
         elif isinstance(diagram_id, list):
@@ -535,6 +549,300 @@ class LineCollection:
         """
 
         return get_diagram_labels(diagram_id)
+
+    def get_flux0(self):
+        """
+        Calculate the rest frame line flux for all lines.
+
+        Uses a standard distance of 10pc to calculate the flux.
+
+        Returns:
+            flux (unyt_quantity)
+                Flux of the line in units of erg/s/cm2 by default.
+        """
+        for line in self.lines.values():
+            line.get_flux0()
+
+    def get_flux(self, cosmo, z, igm=None):
+        """
+        Calculate the line flux given a redshift and cosmology for all lines.
+
+        This will also populate the observed_wavelength attribute with the
+        wavelength of the line when observed.
+
+        NOTE: if a redshift of 0 is passed the flux return will be calculated
+        assuming a distance of 10 pc omitting IGM since at this distance
+        IGM contribution makes no sense.
+
+        Args:
+            cosmo (astropy.cosmology.)
+                Astropy cosmology object.
+            z (float)
+                The redshift.
+            igm (igm)
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
+
+        Returns:
+            flux (unyt_quantity)
+                Flux of the line in units of erg/s/cm2 by default.
+        """
+        for line in self.lines.values():
+            line.get_flux(cosmo, z, igm)
+
+    def plot_lines(
+        self, subset=None, figsize=(8, 6), show=False, xlimits=(), ylimits=()
+    ):
+        """
+        Plot the lines in the LineCollection.
+
+        Args:
+            show (bool)
+                Whether to show the plot.
+            xlimits (tuple)
+                The x-axis limits. Must be a length 2 tuple.
+                Defaults to (), in which case the default limits are used.
+            ylimits (tuple)
+                The y-axis limits. Must be a length 2 tuple.
+                Defaults to (), in which case the default limits are used.
+
+        Returns:
+            fig (matplotlib.figure.Figure)
+                The figure object.
+            ax (matplotlib.axes.Axes)
+                The axis object.
+        """
+        # Are we doing all lines?
+        if subset is None:
+            subset = self.line_ids
+
+        # Collect luminosities and wavelengths
+        luminosities = np.array(
+            [
+                line._luminosity
+                for line in self.lines.values()
+                if line.id in subset
+            ]
+        )
+        wavelengths = np.array(
+            [
+                line.wavelength
+                for line in self.lines.values()
+                if line.id in subset
+            ]
+        )
+
+        # Remove 0s and nans
+        mask = np.logical_and(luminosities > 0, ~np.isnan(luminosities))
+        luminosities = luminosities[mask]
+        wavelengths = wavelengths[mask]
+
+        # Warn the user if we removed anything
+        if np.sum(~mask) > 0:
+            warn(
+                f"Removed {np.sum(~mask)} lines with zero or NaN luminosities"
+            )
+
+        # Set up the plot
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.semilogy()
+
+        # Plot vertical lines
+        ax.vlines(
+            x=wavelengths,
+            ymin=min(luminosities) / 10,
+            ymax=luminosities,
+            color="C0",
+        )
+
+        # If we haven't been given a lower lim, set it to the minimum
+        if len(xlimits) == 0:
+            xlimits = (min(wavelengths) - 100, max(wavelengths) + 100)
+        if len(ylimits) == 0:
+            ylimits = (min(luminosities) / 10, max(luminosities) * 10)
+        elif ylimits[0] is None:
+            ylimits = list(ylimits)
+            ylimits[0] = min(luminosities) / 10
+
+        # Optionally label each line at the tip
+        # (assuming self.line_ids is in the same order)
+        for x, y, label in zip(wavelengths, luminosities, self.line_ids):
+            # On a log scale, you might want a small offset (e.g., y*1.05)
+            ax.text(x, y, label, rotation=45, ha="left", va="bottom")
+
+        # Set the x-axis to be in Angstroms
+        ax.set_xlabel(r"$ \lambda / \AA$")
+        ax.set_ylabel("$L / $erg s$^{-1}$")
+
+        # Apply limits if requested
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+
+        # Show the plot if requested
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    @accepts(wavelength_bins=angstrom)
+    def get_blended_lines(self, wavelength_bins):
+        """
+        Blend lines separated by less than the provided wavelength resolution.
+
+        We use a set of wavelength bins to enable the user to control exactly
+        which lines are blended together. This also enables an array to be
+        used emulating an instrument resolution.
+
+        A simple resolution would lead to ambiguity in situations where A and
+        B are blended, and B and C are blended, but A and C are not.
+
+        Args:
+            wavelength_bins (unyt_array)
+                The wavelength bin edges into which the lines will be blended.
+                Any lines outside the range of the bins will be ignored.
+
+        Returns:
+            LineCollection
+                A new LineCollection object containing the blended lines.
+        """
+        # Ensure the bins are sorted and actually have a length
+        wavelength_bins = np.sort(wavelength_bins)
+        if len(wavelength_bins) < 2:
+            raise exceptions.InconsistentArguments(
+                "Wavelength bins must have a length of at least 2"
+            )
+
+        # Sort wavelengths into the bins getting the indices in each bin
+        bin_inds = np.digitize(self.wavelengths, wavelength_bins)
+
+        # Create a dictionary to hold the blended lines
+        blended_lines = np.empty(len(wavelength_bins), dtype=object)
+
+        # Initialise the array of blended lines to None
+        for i in range(blended_lines.size):
+            blended_lines[i] = None
+
+        # Loop bin indices and combine the lines into the blended_lines array
+        for i, bin_ind in enumerate(bin_inds):
+            # If the bin index is 0 or the length of the bins then it lay
+            # outside the range of the bins
+            if bin_ind == 0 or bin_ind == len(wavelength_bins):
+                continue
+
+            # Ok, now we can handle the off by 1 error that digitize gives us
+            bin_ind -= 1
+
+            # Get the line id
+            line_id = self.line_ids[i]
+
+            # Get the line itself
+            line = self.lines[line_id]
+
+            # If the bin is empty, just store the line
+            if blended_lines[bin_ind] is None:
+                blended_lines[bin_ind] = line
+
+            # Otherwise, combine the line with the existing line
+            else:
+                blended_lines[bin_ind] = blended_lines[bin_ind] + line
+
+        # Convert the array of lines to a dictionary ready to make a new
+        # LineCollection
+        new_lines = {}
+        for line in blended_lines:
+            if line is not None:
+                new_lines[line.id] = line
+
+        return LineCollection(new_lines)
+
+    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
+        """
+        Scale all lines in the collection by a factor.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the lines.
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                values will not be scaled.
+            lam_mask (array-like, bool)
+                This mask must be None, it is here for consistency with
+                the Sed method.
+        """
+        # Are we doing this inplace?
+        if inplace:
+            for line in self.lines.values():
+                line.scale(scaling, inplace=True, mask=mask)
+            return self
+
+        # Otherwise, create a dictionary to hold the scaled lines
+        new_lines = {}
+
+        # Get the scaled lines
+        for line in self.lines.values():
+            new_lines[line.id] = line.scale(scaling, inplace=False, mask=mask)
+
+        return LineCollection(new_lines)
+
+    def __mul__(self, scaling):
+        """
+        Scale all lines in the collection by a factor.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the lines.
+        """
+        self.scale(scaling)
+
+    def __rmul__(self, scaling):
+        """
+        Scale all lines in the collection by a factor.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the lines.
+        """
+        self.scale(scaling)
+
+    def apply_attenuation(
+        self,
+        tau_v,
+        dust_curve,
+        mask=None,
+    ):
+        """
+        Apply attenuation to all lines in the collection.
+
+        Args:
+            tau_v (float/array-like, float)
+                The V-band optical depth for every star particle.
+            dust_curve (synthesizer.emission_models.attenuation.*)
+                An instance of one of the dust attenuation models. (defined in
+                synthesizer/emission_models.transformers.dust_attenuation.py)
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                spectra will be ignored when applying the attenuation. Only
+                applicable for multidimensional lines.
+
+        Returns:
+            LineCollection
+                A new LineCollection object containing the attenuated lines.
+        """
+        # Set up a dictionary to hold the attenuated lines
+        new_lines = {}
+
+        # Loop the lines and apply the attenuation
+        for line in self.lines.values():
+            new_lines[line.id] = line.apply_attenuation(
+                tau_v,
+                dust_curve,
+                mask,
+            )
+
+        # Return a new LineCollection object
+        return LineCollection(new_lines)
 
 
 class Line:
@@ -571,11 +879,12 @@ class Line:
     """
 
     # Define quantities
-    wavelength = Quantity()
-    vacuum_wavelength = Quantity()
-    continuum = Quantity()
-    luminosity = Quantity()
-    flux = Quantity()
+    wavelength = Quantity("wavelength")
+    vacuum_wavelength = Quantity("wavelength")
+    obslam = Quantity("wavelength")
+    continuum = Quantity("luminosity_density_frequency")
+    luminosity = Quantity("luminosity")
+    flux = Quantity("flux")
 
     @accepts(
         wavelength=angstrom,
@@ -647,8 +956,10 @@ class Line:
             combine_lines if len(combine_lines) > 0 else [self]
         )
 
-        # Initialise the flux (populated by get_flux when called)
+        # Initialise the flux and observed wavelength (populated by
+        # get_flux/get_flux0 when called)
         self.flux = None
+        self.observed_wavelength = None
 
         # Calculate the vacuum wavelength.
         self.vacuum_wavelength = standard_to_vacuum(self.wavelength)
@@ -665,6 +976,20 @@ class Line:
     def equivalent_width(self):
         """Return the equivalent width."""
         return self.luminosity / self.continuum_llam
+
+    @property
+    def lam(self):
+        """Return the wavelength in units of angstrom."""
+        return self.wavelength
+
+    @property
+    def _lam(self):
+        """Return the wavelength in units of angstrom."""
+        return self._wavelength
+
+    def shape(self):
+        """Return the shape of the line."""
+        return self.luminosity.shape
 
     @accepts(
         wavelength=angstrom,
@@ -720,52 +1045,16 @@ class Line:
 
     def __str__(self):
         """
-        Return a basic summary of the Line object.
-
-        Returns a string containing the id, wavelength, luminosity,
-        equivalent width, and flux if generated.
+        Return a string representation of the LineCollection object.
 
         Returns:
-            summary (str)
-                Summary string containing the total mass formed and
-                lists of the available SEDs, lines, and images.
+            table (str)
+                A string representation of the LineCollection object.
         """
-        # Set up string for printing
-        pstr = ""
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += f"SUMMARY OF {self.id}" + "\n"
-        pstr += f"wavelength: {self.wavelength:.1f}" + "\n"
-        if isinstance(self.luminosity, np.ndarray):
-            mean_lum = np.mean(self._luminosity)
-            pstr += f"Npart: {self.luminosity.size}\n"
-            pstr += (
-                f"<log10(luminosity/{self.luminosity.units})>: "
-                f"{np.log10(mean_lum):.2f}\n"
-            )
-            mean_eq = np.mean(self.equivalent_width)
-            pstr += f"<equivalent width>: {mean_eq:.0f}" + "\n"
-            mean_flux = np.mean(self.flux) if self.flux is not None else None
-            pstr += (
-                f"<log10(flux/{self.flux.units}): {np.log10(mean_flux):.2f}"
-                if self.flux is not None
-                else ""
-            )
-        else:
-            pstr += (
-                f"log10(luminosity/{self.luminosity.units}): "
-                f"{np.log10(self.luminosity):.2f}\n"
-            )
-            pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
-            pstr += (
-                f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
-                if self.flux is not None
-                else ""
-            )
-        pstr += "-" * 10
-
-        return pstr
+        return formatter.get_table("Line")
 
     def __add__(self, second_line):
         """
@@ -792,20 +1081,58 @@ class Line:
             continuum=np.sum(self.continuum),
         )
 
-    def get_flux(self, cosmo, z):
+    def get_flux0(self):
         """
-        Calculate the line flux.
+        Calculate the rest frame line flux.
+
+        Uses a standard distance of 10pc to calculate the flux.
+
+        This will also populate the observed_wavelength attribute with the
+        wavelength of the line when observed (which in the rest frame is the
+        same as the emitted wavelength).
+
+        Returns:
+            flux (unyt_quantity)
+                Flux of the line in units of erg/s/cm2 by default.
+        """
+        # Compute flux
+        self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
+
+        # Set the observed wavelength (in this case this is the rest frame
+        # wavelength)
+        self.obslam = self.wavelength
+
+        return self.flux
+
+    def get_flux(self, cosmo, z, igm=None):
+        """
+        Calculate the line flux given a redshift and cosmology.
+
+        This will also populate the observed_wavelength attribute with the
+        wavelength of the line when observed.
+
+        NOTE: if a redshift of 0 is passed the flux return will be calculated
+        assuming a distance of 10 pc omitting IGM since at this distance
+        IGM contribution makes no sense.
 
         Args:
             cosmo (astropy.cosmology.)
                 Astropy cosmology object.
             z (float)
                 The redshift.
+            igm (igm)
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
 
         Returns:
-            flux (float)
+            flux (unyt_quantity)
                 Flux of the line in units of erg/s/cm2 by default.
         """
+        # If the redshift is 0 we can assume a distance of 10pc and ignore
+        # the IGM
+        if z == 0:
+            return self.get_flux0()
+
         # Get the luminosity distance
         luminosity_distance = (
             cosmo.luminosity_distance(z).to("cm").value
@@ -813,6 +1140,13 @@ class Line:
 
         # Compute flux
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
+
+        # Set the observed wavelength
+        self.obslam = self.wavelength * (1 + z)
+
+        # If we are applying an IGM model apply it
+        if igm is not None:
+            self.flux *= igm().get_transmission(z, self._obslam)
 
         return self.flux
 
@@ -911,3 +1245,152 @@ class Line:
             luminosity=att_lum,
             continuum=att_cont,
         )
+
+    def scale(self, scaling, inplace=False, mask=None):
+        """
+        Scale the line by a given factor.
+
+        Note: this will only scale the rest frame continuum and luminosity.
+        To get the scaled flux get_flux must be called on the new Line object.
+
+        Args:
+            scaling (float)
+                The factor by which to scale the line.
+            inplace (bool)
+                If True the Line object will be scaled in place, otherwise a
+                new Line object will be returned.
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                spectra will not be scaled. Only applicable for
+                multidimensional lines.
+        """
+        # If we have units make sure they are ok and then strip them
+        if isinstance(scaling, (unyt_array, unyt_quantity)):
+            # Check if we have compatible units with the continuum
+            if self.continuum.units.is_compatible(scaling.units):
+                scaling_cont = scaling.to(self.continuum.units).value
+                scaling_lum = (
+                    (scaling * self.nu).to(self.luminosity.units).value
+                )
+            elif self.luminosity.units.is_compatible(scaling.units):
+                scaling_lum = scaling.to(self.luminosity.units).value
+                scaling_cont = (
+                    (scaling / self.nu).to(self.continuum.units).value
+                )
+            else:
+                raise exceptions.InconsistentMultiplication(
+                    f"{scaling.units} is neither compatible with the "
+                    f"continuum ({self.continuum.units}) nor the "
+                    f"luminosity ({self.luminosity.units})"
+                )
+        else:
+            # Ok, dimensionless scaling is easier
+            scaling_cont = scaling
+            scaling_lum = scaling
+
+        # Unpack the arrays we'll need during the scaling
+        lum = self._luminosity
+        cont = self._continuum
+
+        # Handle a scalar scaling factor
+        if np.isscalar(scaling_lum):
+            if mask is None:
+                lum *= scaling_lum
+                cont *= scaling_cont
+            else:
+                lum[mask] *= scaling_lum
+                cont[mask] *= scaling_cont
+
+        # Handle an single element array scaling factor
+        elif scaling_lum.size == 1:
+            scaling_lum = scaling_lum.item()
+            scaling_cont = scaling_cont.item()
+            if mask is None:
+                lum *= scaling_lum
+                cont *= scaling_cont
+            else:
+                lum[mask] *= scaling_lum
+                cont[mask] *= scaling_cont
+
+        # Handle a multi-element array scaling factor as long as it matches
+        # the shape of the lnu array up to the dimensions of the scaling array
+        elif isinstance(scaling_lum, np.ndarray) and len(
+            scaling_lum.shape
+        ) < len(self.shape):
+            # We need to expand the scaling array to match the lnu array
+            expand_axes = tuple(range(len(scaling_lum.shape), len(self.shape)))
+            new_scaling_lum = np.ones(self.shape) * np.expand_dims(
+                scaling_lum, axis=expand_axes
+            )
+            new_scaling_cont = np.ones(self.shape) * np.expand_dims(
+                scaling_cont, axis=expand_axes
+            )
+
+            # Now we can multiply the arrays together
+            if mask is None:
+                lum *= new_scaling_lum
+                cont *= new_scaling_cont
+            else:
+                lum[mask] *= new_scaling_lum[mask]
+                cont[mask] *= new_scaling_cont[mask]
+
+        # If the scaling array is the same shape as the lnu array then we can
+        # just multiply them together
+        elif (
+            isinstance(scaling_lum, np.ndarray)
+            and scaling_lum.shape == self.shape
+        ):
+            if mask is None:
+                lum *= scaling_lum
+                cont *= scaling_cont
+            else:
+                lum[mask] *= scaling_lum[mask]
+                cont[mask] *= scaling_cont[mask]
+
+        # Otherwise, we've been handed a bad scaling factor
+        else:
+            out_str = f"Incompatible scaling factor with type {type(scaling)} "
+            if hasattr(scaling, "shape"):
+                out_str += f"and shape {scaling.shape}"
+            else:
+                out_str += f"and value {scaling}"
+            raise exceptions.InconsistentMultiplication(out_str)
+
+        # If we aren't doing this inplace then return a new Line object
+        if not inplace:
+            return Line(
+                line_id=self.id,
+                wavelength=self.wavelength,
+                luminosity=lum * self.luminosity.units,
+                continuum=cont * self.continuum.units,
+            )
+
+        # Otherwise, we need to update the Line inplace
+        self._luminosity = lum
+        self._continuum = cont
+
+        return self
+
+    def __mul__(self, scaling):
+        """
+        Scale the line by a given factor.
+
+        Overloads * operator to allow direct scaling of Line objects.
+
+        Returns
+            (Line)
+                New instance of Line containing the scaled line.
+        """
+        return self.scale(scaling)
+
+    def __rmul__(self, scaling):
+        """
+        Scale the line by a given factor.
+
+        Overloads * operator to allow direct scaling of Line objects.
+
+        Returns
+            (Line)
+                New instance of Line containing the scaled line.
+        """
+        return self.scale(scaling)

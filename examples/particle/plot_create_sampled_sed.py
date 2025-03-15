@@ -9,7 +9,7 @@ with constant star formation.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Myr
+from unyt import Msun, Myr
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
@@ -38,7 +38,11 @@ metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
 sfzh = ParametricStars(
-    log10ages, metallicities, sf_hist=sfh, metal_dist=metal_dist
+    log10ages,
+    metallicities,
+    sf_hist=sfh,
+    metal_dist=metal_dist,
+    initial_mass=10**9 * Msun,
 )
 print(sfzh)
 # sfzh.plot()
@@ -58,16 +62,6 @@ galaxy.generate_intrinsic_spectra(grid, fesc=0.0)
 calculate only integrated SEDs """
 galaxy.stars.get_spectra(model)
 
-# --- generate dust screen
-# galaxy.get_screen(0.5) # tau_v
-
-# --- generate CF00 variable dust screen
-# galaxy.get_CF00(grid, 0.5, 0.5) # grid, tau_v_BC, tau_v_ISM
-
-# --- generate for los model
-# TODO: to be implemented
-# tau_vs = np.ones(N) * 0.5
-# galaxy.get_los(tau_vs)  # grid, tau_v_BC, tau_v_ISM
 
 for sed_type, sed in galaxy.stars.spectra.items():
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=sed_type)

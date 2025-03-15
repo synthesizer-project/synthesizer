@@ -1,38 +1,43 @@
 # Synthesizer
 
-<img src="docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
+<img src="https://raw.githubusercontent.com/synthesizer-project/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
 
-[![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/flaresimulations/synthesizer/actions)
-[![Documentation Status](https://github.com/flaresimulations/synthesizer/actions/workflows/publish_docs.yml/badge.svg)](https://flaresimulations.github.io/synthesizer/)
-[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md)
+[![workflow](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/synthesizer-project/synthesizer/actions)
+[![Documentation Status](https://github.com/synthesizer-project/synthesizer/actions/workflows/static.yml/badge.svg)](https://synthesizer-project.github.io/synthesizer/)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/synthesizer-project/synthesizer/blob/main/docs/CONTRIBUTING.md)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![PyPI version](https://img.shields.io/pypi/v/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
 
+<!--
+This will also display the number of downloads but lets hide for now...
+[![Downloads](https://img.shields.io/pypi/dm/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
+-->
 
+Synthesizer is a Python package for generating synthetic astrophysical observables. It is modular, flexible, extensible and fast.
 
-Synthesizer is a python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
-
-Read the documentation [here](https://flaresimulations.github.io/synthesizer/).
+Read the documentation [here](https://synthesizer-project.github.io/synthesizer/).
 
 ## Getting Started
 
-First clone the latest version of `synthesizer`
+The latest stable release of Synthesizer can be installed directly using pip,
 
-    git clone https://github.com/flaresimulations/synthesizer.git
+```bash
+pip install cosmos-synthesizer
+```
 
-To install, enter the `synthesizer` directory and install with pip.
+Please refer to the [installation documentation](https://synthesizer-project.github.io/synthesizer/getting_started/installation.html) for further information.
 
-    cd synthesizer
-    pip install .
-    
-We also provide optional dependency sets for development (``dev``), testing (``test``), and building the documentation (``docs``) should you ever needed them. To install all dependancies simply run the following (or delete as appropriate to get a specific subset):
+**Note**: We do not currently support Windows, to use Synthesizer on Windows please install the Windows Subsystem for Linux (WSL).
 
-    pip install .[dev,test,docs]
+Various configuration options can also be set at installation (see [here](https://synthesizer-project.github.io/synthesizer/advanced/config_options.html)).
 
-Make sure you stay up to date with the latest versions through git:
+## Getting Grids
 
-    git pull origin main
+In most use cases you will need a grid of theoretical spectra. Premade grids can be downloaded from the [grids data server](https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&e=1&dl=0).
+
+Note that you can also create your own grids using (or adapting) the [`grid-generation` repo](https://github.com/synthesizer-project/grid-generation).
 
 ## Contributing
 
@@ -74,4 +79,4 @@ A code paper is currently in preparation. For now please cite [Vijayan et al. 20
 
 ## Licence
 
-[GNU General Public License v3.0](https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md)
+[GNU General Public License v3.0](https://github.com/synthesizer-project/synthesizer/blob/main/LICENSE.md)

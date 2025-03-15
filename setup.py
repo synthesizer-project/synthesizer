@@ -145,7 +145,7 @@ compiler = new_compiler()
 # Determine the platform-specific default compiler and linker flags
 if sys.platform == "darwin":  # macOS
     default_compile_flags = [
-        "-std=c99",
+        "-std=gnu99",
         "-Wall",
         "-O3",
         "-ffast-math",
@@ -163,7 +163,7 @@ elif sys.platform == "win32":  # windows
     include_dirs = []
 else:  # Unix-like systems (Linux)
     default_compile_flags = [
-        "-std=c99",
+        "-std=gnu99",
         "-Wall",
         "-O3",
         "-ffast-math",

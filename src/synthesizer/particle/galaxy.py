@@ -29,9 +29,9 @@ from synthesizer.imaging import Image, SpectralCube
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.warnings import deprecated, warn
 
 
 class Galaxy(BaseGalaxy):

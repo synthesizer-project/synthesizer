@@ -45,8 +45,7 @@ static double *get_lines_serial(struct grid *grid_props, double *grid_weights) {
     if (weight <= 0)
       continue;
 
-    /* Add this grid cell's contribution to the lines (fesc is included in
-     * the weight).*/
+    /* Add this grid cell's contribution to the lines.*/
     line_lum += grid_props->lines[grid_ind] * weight;
     line_cont += grid_props->continuum[grid_ind] * weight;
   }
@@ -97,8 +96,7 @@ static double *get_lines_omp(struct grid *grid_props, double *grid_weights,
       if (weight <= 0)
         continue;
 
-      /* Add this grid cell's contribution to the lines (fesc is included in
-       * the weight).*/
+      /* Add this grid cell's contribution to the lines.*/
       line_lum_thread += grid_props->lines[grid_ind] * weight;
       line_cont_thread += grid_props->continuum[grid_ind] * weight;
     }
@@ -160,7 +158,6 @@ static double *get_lines(struct grid *grid_props, double *grid_weights,
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
- * @param fesc: The escape fraction.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
@@ -178,13 +175,12 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_lines, *np_grid_continuum;
-  PyArrayObject *np_fesc;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiisi", &np_grid_lines, &np_grid_continuum,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
-                        &np_ndims, &ndim, &npart, &method, &nthreads))
+  if (!PyArg_ParseTuple(args, "OOOOOOiisi", &np_grid_lines, &np_grid_continuum,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
+                        &ndim, &npart, &method, &nthreads))
     return NULL;
 
   /* Extract the grid struct. */
@@ -195,8 +191,8 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   }
 
   /* Extract the particle struct. */
-  struct particles *part_props =
-      get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
+  struct particles *part_props = get_part_struct(
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, NULL, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }

@@ -26,17 +26,8 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from unyt import yr
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import warn
 from synthesizer.utils.stats import weighted_mean, weighted_median
-from synthesizer.warnings import warn
-
-# This import is in quarantine because it insists on printing
-# "Starting dense_basis" to the console on import! It can stay here until
-# a PR is raised to fix this.
-original_stdout = sys.stdout
-sys.stdout = io.StringIO()
-import dense_basis as db
-
-sys.stdout = original_stdout
 
 # Define a list of the available parametrisations
 parametrisations = (
@@ -45,7 +36,7 @@ parametrisations = (
     "Exponential",
     "TruncatedExponential",
     "DecliningExponential",
-    "DelayedExponential" "LogNormal",
+    "DelayedExponentialLogNormal",
     "DoublePowerLaw",
     "DenseBasis",
 )
@@ -207,7 +198,7 @@ class Common:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 
@@ -254,9 +245,9 @@ class Common:
         for parameter_name, parameter_value in self.parameters.items():
             pstr += f"{parameter_name}: {parameter_value}" + "\n"
         pstr += (
-            f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+            f"median age: {self.calculate_median_age().to('Myr'):.2f}" + "\n"
         )
-        pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
+        pstr += f"mean age: {self.calculate_mean_age().to('Myr'):.2f}" + "\n"
         pstr += "-" * 10 + "\n"
 
         return pstr
@@ -750,7 +741,7 @@ class DenseBasis(Common):
         self, interpolator="gp_george", min_age=5, max_age=10.3
     ):
         """
-        Convert dense basis representation to a binned SFH
+        Convert dense basis representation to a binned SFH.
 
         Args:
             interpolator (string)
@@ -762,6 +753,24 @@ class DenseBasis(Common):
             max_age (float)
                 maximum age of SFH grid
         """
+        # Attempt to import dense_basis, if missing they need to
+        # install the optional dependency
+        try:
+            # This import is in quarantine because it insists on printing
+            # "Starting dense_basis" to the console on import! It can stay here
+            # until a PR is raised to fix this.
+            original_stdout = sys.stdout
+            sys.stdout = io.StringIO()
+            import dense_basis as db
+
+            sys.stdout = original_stdout
+        except ImportError:
+            raise exceptions.UnmetDependency(
+                "dense_basis not found. Please install Synthesizer with "
+                " dense_basis support by running `pip install "
+                ".[dense_basis]`"
+            )
+
         # Convert the dense basis tuple arguments to sfh in mass fraction units
         tempsfh, temptime = db.tuple_to_sfh(
             self.db_tuple, self.redshift, interpolator=interpolator, vb=False

@@ -21,23 +21,20 @@ Example usages:
 
 import os
 
-import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.util_funcs import combine_arrays
-from synthesizer.warnings import deprecated, warn
 
 
 class Stars(Particles, StarsComponent):
@@ -81,6 +78,10 @@ class Stars(Particles, StarsComponent):
             The slope of high mass end of the initial mass function (WIP).
         nstars (int)
             The number of stellar particles in the object.
+        fesc (array-like, float)
+            The escape fractions of each stellar particle (i.e. the fraction of
+            incident photons that escape the galaxy unreprocessed by the
+            interstellar medium).
     """
 
     # Define the allowed attributes
@@ -106,9 +107,9 @@ class Stars(Particles, StarsComponent):
     ]
 
     # Define class level Quantity attributes
-    initial_masses = Quantity()
-    current_masses = Quantity()
-    smoothing_lengths = Quantity()
+    initial_masses = Quantity("mass")
+    current_masses = Quantity("mass")
+    smoothing_lengths = Quantity("spatial")
 
     @accepts(
         initial_masses=Msun.in_base("galactic"),
@@ -137,6 +138,8 @@ class Stars(Particles, StarsComponent):
         softening_lengths=None,
         centre=None,
         metallicity_floor=1e-5,
+        fesc=None,
+        fesc_ly_alpha=None,
         **kwargs,
     ):
         """
@@ -179,6 +182,10 @@ class Stars(Particles, StarsComponent):
                 a number of way (e.g. centre of mass)
             metallicity_floor (float)
                 The minimum metallicity allowed in the simulation.
+            fesc (array-like, float)
+                The escape fraction of each stellar particle, i.e. the
+                fraction of incident photons that escape the galaxy
+                unreprocessed by the interstellar medium.
             **kwargs
                 Additional keyword arguments to be set as attributes.
         """
@@ -196,7 +203,15 @@ class Stars(Particles, StarsComponent):
             tau_v=tau_v,
             name="Stars",
         )
-        StarsComponent.__init__(self, ages, metallicities, **kwargs)
+        StarsComponent.__init__(
+            self,
+            ages,
+            metallicities,
+            _star_type="particle",
+            fesc=fesc,
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
 
         # Ensure we don't have negative ages
         if len(ages) > 0:
@@ -561,314 +576,6 @@ class Stars(Particles, StarsComponent):
 
         return Stars(**kwargs)
 
-    def _prepare_sed_args(
-        self,
-        grid,
-        fesc,
-        spectra_type,
-        mask,
-        grid_assignment_method,
-        lam_mask,
-        nthreads,
-    ):
-        """
-        Prepare the arguments for SED computation with the C functions.
-
-        Args:
-            grid (Grid)
-                The SPS grid object to extract spectra from.
-            fesc (float)
-                The escape fraction.
-            spectra_type (str)
-                The type of spectra to extract from the Grid. This must match a
-                type of spectra stored in the Grid.
-            mask (bool)
-                A mask to be applied to the stars. Spectra will only be
-                computed and returned for stars with True in the mask.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
-        Returns:
-            tuple
-                A tuple of all the arguments required by the C extension.
-        """
-        # Make a dummy mask if none has been passed
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
-
-        # If lam_mask is None then we want all wavelengths
-        if lam_mask is None:
-            lam_mask = np.ones(
-                grid.spectra[spectra_type].shape[-1],
-                dtype=bool,
-            )
-
-        # Set up the inputs to the C function.
-        grid_props = [
-            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
-            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
-        ]
-        part_props = [
-            np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(
-                self.log10metallicities[mask], dtype=np.float64
-            ),
-        ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses[mask],
-            dtype=np.float64,
-        )
-
-        # Make sure we set the number of particles to the size of the mask
-        npart = np.int32(np.sum(mask))
-
-        # Make sure we get the wavelength index of the grid array
-        nlam = np.int32(np.sum(lam_mask))
-
-        # Slice the spectral grids and pad them with copies of the edges.
-        grid_spectra = np.ascontiguousarray(
-            grid.spectra[spectra_type],
-            np.float64,
-        )
-
-        # Apply the wavelength mask
-        grid_spectra = np.ascontiguousarray(
-            grid_spectra[..., lam_mask],
-            np.float64,
-        )
-
-        # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
-        for ind, g in enumerate(grid_props):
-            grid_dims[ind] = len(g)
-        grid_dims[ind + 1] = nlam
-
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
-        # Convert inputs to tuples
-        grid_props = tuple(grid_props)
-        part_props = tuple(part_props)
-
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        return (
-            grid_spectra,
-            grid_props,
-            part_props,
-            part_mass,
-            fesc,
-            grid_dims,
-            len(grid_props),
-            npart,
-            nlam,
-            grid_assignment_method,
-            nthreads,
-        )
-
-    def generate_lnu(
-        self,
-        grid,
-        spectra_name,
-        fesc=0.0,
-        young=None,
-        old=None,
-        mask=None,
-        lam_mask=None,
-        verbose=False,
-        do_grid_check=False,
-        grid_assignment_method="cic",
-        aperture=None,
-        nthreads=0,
-    ):
-        """
-        Generate the integrated rest frame spectra for a given grid key.
-
-        Can optionally apply masks.
-
-        Args:
-            grid (Grid)
-                The spectral grid object.
-            spectra_name (string)
-                The name of the target spectra inside the grid file.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            young (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
-            mask (array-like, bool)
-                Boolean array of star particles to include.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-            verbose (bool)
-                Flag for verbose output.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the
-                consistency of your particles with the grid. It is False by
-                default because the check is extreme expensive.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            aperture (float)
-                If not None, specifies the radius of a spherical aperture
-                to apply to the particles.
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
-        Returns:
-            numpy.ndarray:
-                Numpy array of integrated spectra in units of (erg / s / Hz).
-        """
-        # Ensure we have a key in the grid. If not error.
-        if spectra_name not in list(grid.spectra.keys()):
-            raise exceptions.MissingSpectraType(
-                "The Grid does not contain the key '%s'" % spectra_name
-            )
-
-        # If we have no stars just return zeros
-        if self.nstars == 0:
-            return np.zeros(len(grid.lam))
-
-        # Are we checking the particles are consistent with the grid?
-        if do_grid_check:
-            # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[
-                self.log10ages < grid.log10age[0]
-            ].size
-            n_below_metal = self.metallicities[
-                self.metallicities < grid.metallicity[0]
-            ].size
-
-            # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[
-                self.log10ages > grid.log10age[-1]
-            ].size
-            n_above_metal = self.metallicities[
-                self.metallicities > grid.metallicity[-1]
-            ].size
-
-            # Check the fraction of particles outside of the grid (these
-            # will be pinned to the edge of the grid) by finding
-            # those inside
-            age_inside_mask = np.logical_and(
-                self.log10ages <= grid.log10age[-1],
-                self.log10ages >= grid.log10age[0],
-            )
-            met_inside_mask = np.logical_and(
-                self.metallicities < grid.metallicity[-1],
-                grid.metallicity[0] < self.metallicities,
-            )
-
-            # Combine the boolean arrays for each axis
-            inside_mask = np.logical_and(age_inside_mask, met_inside_mask)
-
-            # Get the number outside
-            n_out = self.metallicities[~inside_mask].size
-
-            # Compute the ratio of those outside to total number
-            ratio_out = n_out / self.nparticles
-
-            # Tell the user if there are particles outside the grid
-            if ratio_out > 0:
-                print(
-                    f"{ratio_out * 100:.2f}% of particles lie "
-                    "outside the grid! "
-                    "These will be pinned at the grid limits."
-                )
-                print("Of these:")
-                print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}%"
-                    f" have log10(ages/yr) > {grid.log10age[0]}"
-                )
-                print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}%"
-                    f" have metallicities < {grid.metallicity[0]}"
-                )
-                print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}%"
-                    f" have log10(ages/yr) > {grid.log10age[-1]}"
-                )
-                print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}%"
-                    f" have metallicities > {grid.metallicity[-1]}"
-                )
-
-        # Get particle age masks
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
-
-        age_mask = self._get_masks(young, old)
-
-        # Ensure and warn that the masking hasn't removed everything
-        if np.sum(mask) == 0:
-            warn("`mask` has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        if np.sum(age_mask) == 0:
-            warn("Age mask has filtered out all particles")
-            return np.zeros(len(grid.lam))
-
-        mask = mask & age_mask
-
-        if aperture is not None:
-            # Get aperture mask
-            aperture_mask = self._aperture_mask(aperture_radius=aperture)
-
-            # Ensure and warn that the masking hasn't removed everything
-            if np.sum(aperture_mask & mask) == 0:
-                warn("Aperture and age masks have filtered out all particles")
-
-                return np.zeros(len(grid.lam))
-        else:
-            aperture_mask = np.ones(self.nparticles, dtype=bool)
-
-        from ..extensions.integrated_spectra import compute_integrated_sed
-
-        # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(
-            grid,
-            fesc=fesc,
-            spectra_type=spectra_name,
-            mask=mask & aperture_mask,
-            grid_assignment_method=grid_assignment_method.lower(),
-            nthreads=nthreads,
-            lam_mask=lam_mask,
-        )
-
-        # Get the integrated spectra in grid units (erg / s / Hz)
-        spec = compute_integrated_sed(*args)
-
-        # If we had a wavelength mask we need to make sure we return a spectra
-        # compatible with the original wavelength array.
-        if lam_mask is not None:
-            out_spec = np.zeros(len(grid.lam))
-            out_spec[lam_mask] = spec
-            spec = out_spec
-
-        return spec
-
     def _remove_stars(self, pmask):
         """
         Update stars attribute arrays based on a mask, `pmask`.
@@ -1068,7 +775,6 @@ class Stars(Particles, StarsComponent):
         grid,
         line_id,
         line_type,
-        fesc,
         mask,
         grid_assignment_method,
         nthreads,
@@ -1084,10 +790,6 @@ class Stars(Particles, StarsComponent):
             line_type (str)
                 The type of line to extract from the Grid. This must match a
                 type of spectra/lines stored in the Grid.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (bool)
                 A mask to be applied to the stars. Spectra will only be
                 computed and returned for stars with True in the mask.
@@ -1138,10 +840,6 @@ class Stars(Particles, StarsComponent):
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
 
-        # If fesc isn't an array make it one
-        if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc))
-
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
@@ -1156,7 +854,6 @@ class Stars(Particles, StarsComponent):
             grid_props,
             part_props,
             part_mass,
-            fesc,
             grid_dims,
             len(grid_props),
             npart,
@@ -1169,7 +866,6 @@ class Stars(Particles, StarsComponent):
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -1192,10 +888,6 @@ class Stars(Particles, StarsComponent):
             line_type (str):
                 The type of line to extract from the Grid. This must match a
                 type of spectra/lines stored in the Grid.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -1268,7 +960,6 @@ class Stars(Particles, StarsComponent):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,
@@ -1291,184 +982,11 @@ class Stars(Particles, StarsComponent):
         else:
             return Line(combine_lines=lines)
 
-    def generate_particle_lnu(
-        self,
-        grid,
-        spectra_name,
-        fesc=0.0,
-        verbose=False,
-        do_grid_check=False,
-        mask=None,
-        lam_mask=None,
-        grid_assignment_method="cic",
-        nthreads=0,
-    ):
-        """
-        Generate the particle rest frame spectra for a given grid key spectra
-        for all stars. Can optionally apply masks.
-
-        Args:
-            grid (Grid)
-                The spectral grid object.
-            spectra_name (string)
-                The name of the target spectra inside the grid file.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            verbose (bool)
-                Flag for verbose output. By default False.
-            do_grid_check (bool)
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the
-                consistency of your particles with the grid. It is False by
-                default because the check is extreme expensive.
-            mask (array-like, bool)
-                Boolean array of star particles to include.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
-        Returns:
-            numpy.ndarray:
-                Numpy array of integrated spectra in units of (erg / s / Hz).
-        """
-        start = tic()
-
-        # Ensure we have a total key in the grid. If not error.
-        if spectra_name not in list(grid.spectra.keys()):
-            raise exceptions.MissingSpectraType(
-                f"The Grid does not contain the key '{spectra_name}'"
-            )
-
-        # If we have no stars just return zeros
-        if self.nstars == 0:
-            return np.zeros((self.nstars, len(grid.lam)))
-
-        # Handle the case where the masks are None
-        if mask is None:
-            mask = np.ones(self.nstars, dtype=bool)
-        if lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
-        # Are we checking the particles are consistent with the grid?
-        if do_grid_check:
-            # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[
-                self.log10ages < grid.log10age[0]
-            ].size
-            n_below_metal = self.metallicities[
-                self.metallicities < grid.metallicity[0]
-            ].size
-
-            # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[
-                self.log10ages > grid.log10age[-1]
-            ].size
-            n_above_metal = self.metallicities[
-                self.metallicities > grid.metallicity[-1]
-            ].size
-
-            # Check the fraction of particles outside of the grid (these will
-            # be pinned to the edge of the grid) by finding those inside
-            age_inside_mask = np.logical_and(
-                self.log10ages <= grid.log10age[-1],
-                self.log10ages >= grid.log10age[0],
-            )
-            met_inside_mask = np.logical_and(
-                self.metallicities < grid.metallicity[-1],
-                grid.metallicity[0] < self.metallicities,
-            )
-
-            # Combine the boolean arrays for each axis
-            inside_mask = np.logical_and(age_inside_mask, met_inside_mask)
-
-            # Get the number outside
-            n_out = self.metallicities[~inside_mask].size
-
-            # Compute the ratio of those outside to total number
-            ratio_out = n_out / self.nparticles
-
-            # Tell the user if there are particles outside the grid
-            if ratio_out > 0:
-                print(
-                    f"{ratio_out * 100:.2f}% of particles "
-                    "lie outside the grid! "
-                    "These will be pinned at the grid limits."
-                )
-                print("Of these:")
-                print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}%"
-                    f" have log10(ages/yr) < {grid.log10age[0]}"
-                )
-                print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}% "
-                    f"have metallicities < {grid.metallicity[0]}"
-                )
-                print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}% "
-                    f"have log10(ages/yr) > {grid.log10age[-1]}"
-                )
-                print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}% "
-                    f"have metallicities > {grid.metallicity[-1]}"
-                )
-
-        # Ensure and warn that the masking hasn't removed everything
-        if np.sum(mask) == 0:
-            warn("Age mask has filtered out all particles")
-
-            return np.zeros((self.nstars, len(grid.lam)))
-
-        from ..extensions.particle_spectra import compute_particle_seds
-
-        # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(
-            grid,
-            fesc=fesc,
-            spectra_type=spectra_name,
-            mask=mask,
-            grid_assignment_method=grid_assignment_method.lower(),
-            nthreads=nthreads,
-            lam_mask=lam_mask,
-        )
-        toc("Preparing C args", start)
-
-        # Get the integrated spectra in grid units (erg / s / Hz)
-        masked_spec = compute_particle_seds(*args)
-
-        start = tic()
-
-        # If there's no mask we're done
-        if mask is None and lam_mask is None:
-            return masked_spec
-        elif mask is None:
-            mask = np.ones(self.nstars, dtype=bool)
-        elif lam_mask is None:
-            lam_mask = np.ones(len(grid.lam), dtype=bool)
-
-        # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nstars, grid.lam.size))
-        spec[np.ix_(mask, lam_mask)] = masked_spec
-
-        toc("Masking spectra and adding contribution", start)
-
-        return spec
-
     def generate_particle_line(
         self,
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -1492,10 +1010,6 @@ class Stars(Particles, StarsComponent):
             line_type (str):
                 The type of line to extract from the Grid. This must match a
                 type of spectra/lines stored in the Grid.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -1568,7 +1082,6 @@ class Stars(Particles, StarsComponent):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,
@@ -1840,7 +1353,8 @@ class Stars(Particles, StarsComponent):
 
     def _prepare_sfzh_args(
         self,
-        grid,
+        log10ages,
+        metallicities,
         grid_assignment_method,
         nthreads,
     ):
@@ -1848,8 +1362,10 @@ class Stars(Particles, StarsComponent):
         Prepare the arguments for SFZH computation with the C functions.
 
         Args:
-            grid (Grid)
-                The SPS grid object to extract spectra from.
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1862,8 +1378,8 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(log10ages, dtype=np.float64),
+            np.ascontiguousarray(metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
@@ -1898,27 +1414,34 @@ class Stars(Particles, StarsComponent):
             npart,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def get_sfzh(
         self,
-        grid,
+        log10ages,
+        metallicities,
         grid_assignment_method="cic",
         nthreads=0,
     ):
         """
-        Generate the binned SFZH history of this collection of particles.
+        Generate the binned SFZH history of these stars.
+
+        The binned SFZH is calculated by binning the particles onto the
+        desired grid defined by the input log10ages and metallicities.
 
         The binned SFZH produced by this method is equivalent to the weights
         used to extract spectra from the grid.
 
         Args:
-            grid (Grid)
-                The spectral grid object.
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                grid point (ngp) or their uppercase equivalents (CIC, NGP).
                 Defaults to cic.
             nthreads (int)
                 The number of threads to use in the computation. If set to -1
@@ -1928,22 +1451,31 @@ class Stars(Particles, StarsComponent):
             numpy.ndarray:
                 Numpy array of containing the SFZH.
         """
-
+        # Import parametric stars here to avoid circular imports
         from synthesizer.extensions.sfzh import compute_sfzh
+        from synthesizer.parametric import Stars as ParametricStars
 
         # Prepare the arguments for the C function.
         args = self._prepare_sfzh_args(
-            grid,
+            log10ages,
+            metallicities,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
 
-        # Get the SFZH
-        self.sfzh = compute_sfzh(*args)
+        # Get the SFZH and create the ParametricStars object
+        self.sfzh = ParametricStars(
+            log10ages,
+            metallicities,
+            sfzh=compute_sfzh(*args),
+        )
 
         return self.sfzh
 
-    def plot_sfzh(self, grid, grid_assignment_method="cic", show=True):
+    def plot_sfzh(
+        self,
+        show=True,
+    ):
         """
         Plot the binned SZFH.
 
@@ -1957,61 +1489,316 @@ class Stars(Particles, StarsComponent):
             ax
                 The Axes object containing the plotted data.
         """
-
         # Ensure we have the SFZH
         if self.sfzh is None:
-            self.get_sfzh(grid, grid_assignment_method)
+            raise exceptions.MissingAttribute(
+                "The SFZH has not been calculated. Run get_sfzh() first."
+            )
+        return self.sfzh.plot_sfzh(show=show)
 
-        # Get the grid axes
-        log10ages = grid.log10age
-        log10metallicities = np.log10(grid.metallicity)
+    def _prepare_sfh_args(
+        self,
+        log10ages,
+        grid_assignment_method,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for SFH computation with the C functions.
 
-        # Create the figure and extra axes for histograms
-        fig, ax, haxx, haxy = single_histxy()
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
 
-        # Visulise the SFZH grid
-        ax.pcolormesh(
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(log10ages, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(len(part_mass))
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_props,
+            part_props,
+            part_mass,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+            nthreads,
+            None,
+        )
+
+    def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
+        """
+        Generate the SFH of these stars in terms of mass.
+
+        The SFH is calculated by summing the mass of the particles in each age
+        bin defined by the input log10ages.
+
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFH.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or their uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
+
+        Returns:
+            numpy.ndarray:
+                Numpy array of containing the SFH.
+        """
+        # Import parametric stars here to avoid circular imports
+        from synthesizer.extensions.sfzh import compute_sfzh
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sfh_args(
             log10ages,
-            log10metallicities,
-            self.sfzh.T,
-            cmap=cmr.sunburst,
+            grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
         )
 
-        # Add binned Z to right of the plot
-        metal_dist = np.sum(self.sfzh, axis=0)
-        haxy.fill_betweenx(
-            log10metallicities,
-            metal_dist / np.max(metal_dist),
-            step="mid",
-            color="k",
-            alpha=0.3,
-        )
+        return compute_sfzh(*args)
 
-        # Add binned SF_HIST to top of the plot
-        sf_hist = np.sum(self.sfzh, axis=1)
-        haxx.fill_between(
-            log10ages,
-            sf_hist / np.max(sf_hist),
-            step="mid",
-            color="k",
-            alpha=0.3,
-        )
+    def plot_sfh(
+        self,
+        log10ages,
+        nthreads=0,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the SFH in terms of mass.
 
-        # Set plot limits
-        haxy.set_xlim([0.0, 1.2])
-        haxy.set_ylim(log10metallicities[0], log10metallicities[-1])
-        haxx.set_ylim([0.0, 1.2])
-        haxx.set_xlim(log10ages[0], log10ages[-1])
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFH.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
+            xlimits (tuple)
+                The limits of the x-axis. If not set, the limits are set to the
+                minimum and maximum of the log10ages.
+            ylimits (tuple)
+                The limits of the y-axis. If not set, the limits are set to the
+                minimum and maximum of the SFH.
+            show (bool)
+                Should we invoke plt.show()?
 
-        # Set labels
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        # Compute the SFH
+        sfh = self.get_sfh(log10ages, nthreads=nthreads)
+
+        # Plot the SFH as a step function
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(log10ages, sfh, where="mid", color="blue")
+
+        ax.fill_between(log10ages, sfh, step="mid", alpha=0.5, color="blue")
         ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
-        ax.set_ylabel(r"$\log_{10}Z$")
+        ax.set_ylabel(r"SFH / M$_\odot$")
 
-        # Set the limits so all axes line up
-        ax.set_ylim(log10metallicities[0], log10metallicities[-1])
-        ax.set_xlim(log10ages[0], log10ages[-1])
+        # Apply any limits we have
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
 
-        # Shall we show it?
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    def _prepare_metal_dist_args(
+        self,
+        metallicities,
+        grid_assignment_method,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for metalicity computation with the C functions.
+
+        Args:
+            log10ages (array-like, float)
+                The log10 ages of the desired SFZH.
+            metallicities (array-like, float)
+                The metallicities of the desired SFZH.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(metallicities, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(len(part_mass))
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_props,
+            part_props,
+            part_mass,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+            nthreads,
+            None,
+        )
+
+    def get_metal_dist(
+        self,
+        metallicities,
+        grid_assignment_method="cic",
+        nthreads=0,
+    ):
+        """
+        Generate the metallicity distribution of these stars in terms of mass.
+
+        Args:
+            metallicities (array-like, float)
+                The metallicity bins of the desired metallicity distribution.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or their uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
+
+        Returns:
+            numpy.ndarray:
+                Numpy array of containing the SFH.
+        """
+        # Import parametric stars here to avoid circular imports
+        from synthesizer.extensions.sfzh import compute_sfzh
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_metal_dist_args(
+            metallicities,
+            grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
+        )
+
+        return compute_sfzh(*args)
+
+    def plot_metal_dist(
+        self,
+        metallicities,
+        nthreads=0,
+        xlimits=(),
+        ylimits=(),
+        show=True,
+    ):
+        """
+        Plot the metallicity distribution in terms of mass.
+
+        Args:
+            metallicities (array-like, float)
+                The metallicity bins of the desired metallicity distribution.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
+            xlimits (tuple)
+                The limits of the x-axis. If not set, the limits are set to the
+                minimum and maximum of the log10ages.
+            ylimits (tuple)
+                The limits of the y-axis. If not set, the limits are set to the
+                minimum and maximum of the SFH.
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+        # Compute the SFH
+        metal_dist = self.get_metal_dist(metallicities, nthreads=nthreads)
+
+        # Plot the SFH as a step function
+        fig, ax = plt.subplots()
+        ax.semilogy()
+        ax.step(metallicities, metal_dist, where="mid", color="red")
+
+        ax.fill_between(
+            metallicities, metal_dist, step="mid", alpha=0.5, color="red"
+        )
+        ax.set_xlabel(r"$Z$")
+        ax.set_ylabel(r"Z_D / M$_\odot$")
+
+        # Apply any limits we have
+        if len(xlimits) > 0:
+            ax.set_xlim(xlimits)
+        if len(ylimits) > 0:
+            ax.set_ylim(ylimits)
+
         if show:
             plt.show()
 
@@ -2026,7 +1813,7 @@ class Stars(Particles, StarsComponent):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         mask=None,
         verbose=True,
         **kwargs,
@@ -2108,7 +1895,7 @@ class Stars(Particles, StarsComponent):
         emission_model,
         dust_curves=None,
         tau_v=None,
-        fesc=0.0,
+        fesc=None,
         mask=None,
         verbose=True,
         **kwargs,

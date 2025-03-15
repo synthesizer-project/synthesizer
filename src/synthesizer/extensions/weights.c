@@ -21,73 +21,6 @@
 #endif
 
 /**
- * @brief Compute an ndimensional index from a flat index.
- *
- * @param flat_ind: The flattened index to unravel.
- * @param ndim: The number of dimensions for the unraveled index.
- * @param dims: The size of each dimension.
- * @param indices: The output N-dimensional indices.
- */
-void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
-                           int *indices) {
-
-  /* Loop over indices calculating each one. */
-  for (int i = ndim - 1; i > -1; i--) {
-    indices[i] = flat_ind % dims[i];
-    flat_ind /= dims[i];
-  }
-}
-
-/**
- * @brief Compute a flat grid index based on the grid dimensions.
- *
- * @param multi_index: An array of N-dimensional indices.
- * @param dims: The length of each dimension.
- * @param ndim: The number of dimensions.
- */
-int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
-    index += stride * multi_index[i];
-    stride *= dims[i];
-  }
-
-  return index;
-}
-
-/**
- * @brief Performs a binary search for the index of an array corresponding to
- * a value.
- *
- * @param low: The initial low index (probably beginning of array).
- * @param high: The initial high index (probably size of array).
- * @param arr: The array to search in.
- * @param val: The value to search for.
- */
-int binary_search(int low, int high, const double *arr, const double val) {
-
-  /* While we don't have a pair of adjacent indices. */
-  int diff = high - low;
-  while (diff > 1) {
-
-    /* Define the midpoint. */
-    int mid = low + (int)floor(diff / 2);
-
-    /* Where is the midpoint relative to the value? */
-    if (val >= arr[mid]) {
-      low = mid;
-    } else {
-      high = mid;
-    }
-
-    /* Compute the new range. */
-    diff = high - low;
-  }
-
-  return high;
-}
-
-/**
  * @brief Get the grid indices of a particle based on it's properties.
  *
  * This will also calculate the fractions of the particle's mass in each grid
@@ -172,14 +105,26 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
+
+  /* Set the sub cell constants we'll use below. */
+  const int num_sub_cells = 1 << ndim; /* 2^ndim */
+  int sub_dims[ndim];
+  for (int i = 0; i < ndim; i++) {
+    sub_dims[i] = 2;
+  }
 
   /* Convert out. */
   double *out_arr = (double *)out;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip if this particle is masked. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass. */
     const double mass = part_masses[p];
@@ -192,17 +137,9 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
                           part_props, p);
 
-    /* To combine fractions we will need an array of dimensions for the
-     * subset. These are always two in size, one for the low and one for high
-     * grid point. */
-    int sub_dims[ndim];
-    for (int idim = 0; idim < ndim; idim++) {
-      sub_dims[idim] = 2;
-    }
-
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
-    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    for (int icell = 0; icell < num_sub_cells; icell++) {
 
       /* Set up some index arrays we'll need. */
       int subset_ind[ndim];
@@ -233,7 +170,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
       int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
       /* Store the weight. */
-      out_arr[flat_ind] += frac * mass * (1.0 - fesc[p]);
+      out_arr[flat_ind] += frac * mass;
     }
   }
 }
@@ -258,25 +195,6 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   /* Convert out. */
   double *out_arr = (double *)out;
 
-  /* Allocate a single contiguous block of memory for all threads. */
-  double *out_data = calloc(nthreads * out_size, sizeof(double));
-  if (out_data == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return;
-  }
-
-  /* Allocate pointers to each thread's portion of the output array. */
-  double **out_per_thread = malloc(nthreads * sizeof(double *));
-  if (out_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    free(out_data);
-    return;
-  }
-  for (int i = 0; i < nthreads; i++) {
-    out_per_thread[i] = out_data + i * out_size;
-  }
-
   /* Unpack the grid properties. */
   int *dims = grid->dims;
   int ndim = grid->ndim;
@@ -285,24 +203,53 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
+
+  /* Set the sub cell constants we'll use below. */
+  const int num_sub_cells = 1 << ndim; // 2^ndim
+  int sub_dims[ndim];
+  for (int i = 0; i < ndim; i++) {
+    sub_dims[i] = 2;
+  }
 
 #pragma omp parallel num_threads(nthreads)
   {
 
+    /* First lets slice up the particles between the threads. */
+    int npart_per_thread = (npart + nthreads - 1) / nthreads;
+
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Get a local pointer to the thread weights. */
-    double *local_out = out_per_thread[tid];
+    /* Get the start and end particle indices for this thread. */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
+    }
 
-    /* Loop over particles. */
-#pragma omp for
-    for (int p = 0; p < npart; p++) {
+    /* Get local pointers to the particle properties. */
+    double *local_part_masses = part_masses + start;
+    int *local_mask = (mask == NULL) ? mask : mask + start;
+
+    /* Allocate a local output array. */
+    double *local_out_arr = calloc(out_size, sizeof(double));
+    if (local_out_arr == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for output.");
+    }
+
+    /* Parallel loop with atomic updates. */
+    for (int p = 0; p < end - start; p++) {
+
+      /* Skip if this particle is masked. */
+      if (local_mask != NULL && !local_mask[p]) {
+        continue;
+      }
 
       /* Get this particle's mass. */
-      const double mass = part_masses[p];
+      const double mass = local_part_masses[p];
 
       /* Setup the index and mass fraction arrays. */
       int part_indices[ndim];
@@ -310,19 +257,11 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
       /* Get the grid indices and cell fractions for the particle. */
       get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                            part_props, p);
-
-      /* To combine fractions we will need an array of dimensions for the
-       * subset. These are always two in size, one for the low and one for high
-       * grid point. */
-      int sub_dims[ndim];
-      for (int idim = 0; idim < ndim; idim++) {
-        sub_dims[idim] = 2;
-      }
+                            part_props, p + start);
 
       /* Now loop over this collection of cells collecting and setting their
        * weights. */
-      for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+      for (int icell = 0; icell < num_sub_cells; icell++) {
 
         /* Set up some index arrays we'll need. */
         int subset_ind[ndim];
@@ -352,29 +291,21 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
         int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
         /* Store the weight. */
-        local_out[flat_ind] += frac * mass * (1.0 - fesc[p]);
+        local_out_arr[flat_ind] += frac * mass;
       }
     }
-  }
 
-  /* Hierarchical reduction */
-  for (int step = 1; step < nthreads; step *= 2) {
-    for (int tid = 0; tid < nthreads; tid += 2 * step) {
-      if (tid + step < nthreads) {
-#pragma omp parallel for num_threads(nthreads)
-        for (int i = 0; i < out_size; i++) {
-          out_per_thread[tid][i] += out_per_thread[tid + step][i];
-        }
+    /* Update the global output array */
+#pragma omp critical
+    {
+      for (int i = 0; i < out_size; i++) {
+        out_arr[i] += local_out_arr[i];
       }
     }
+
+    /* Clean up. */
+    free(local_out_arr);
   }
-
-  /* Copy the final reduced result to spectra */
-  memcpy(out_arr, out_per_thread[0], out_size * sizeof(double));
-
-  /* Free the allocated memory. */
-  free(out_per_thread);
-  free(out_data);
 }
 #endif
 
@@ -503,14 +434,19 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Convert out. */
   double *out_arr = (double *)out;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
+
+    /* Skip masked particles. */
+    if (mask != NULL && !mask[p]) {
+      continue;
+    }
 
     /* Get this particle's mass. */
     const double mass = part_masses[p];
@@ -525,7 +461,7 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
     int flat_ind = get_flat_index(part_indices, dims, ndim);
 
     /* Store the weight. */
-    out_arr[flat_ind] += mass * (1.0 - fesc[p]);
+    out_arr[flat_ind] += mass;
   }
 }
 
@@ -548,25 +484,6 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   /* Convert out. */
   double *out_arr = (double *)out;
 
-  /* Allocate a single contiguous block of memory for all threads. */
-  double *out_data = calloc(nthreads * out_size, sizeof(double));
-  if (out_data == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return;
-  }
-
-  /* Allocate pointers to each thread's portion of the output array. */
-  double **out_per_thread = malloc(nthreads * sizeof(double *));
-  if (out_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    free(out_data);
-    return;
-  }
-  for (int i = 0; i < nthreads; i++) {
-    out_per_thread[i] = out_data + i * out_size;
-  }
-
   /* Unpack the grid properties. */
   int *dims = grid->dims;
   int ndim = grid->ndim;
@@ -575,57 +492,70 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   /* Unpack the particles properties. */
   double *part_masses = parts->mass;
   double **part_props = parts->props;
-  double *fesc = parts->fesc;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
 #pragma omp parallel num_threads(nthreads)
   {
 
+    /* First lets slice up the particles between the threads. */
+    int npart_per_thread = (npart + nthreads - 1) / nthreads;
+
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Get a local pointer to the thread weights. */
-    double *local_out = out_per_thread[tid];
+    /* Get the start and end particle indices for this thread. */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
+    }
 
-    /* Loop over particles. */
-#pragma omp for
-    for (int p = 0; p < npart; p++) {
+    /* Get local pointers to the particle properties. */
+    double *local_part_masses = part_masses + start;
+    npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
-      /* Get this particle's mass. */
-      const double mass = part_masses[p];
+    /* Allocate a local output array. */
+    double *local_out_arr = calloc(out_size, sizeof(double));
+    if (local_out_arr == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for output.");
+    }
 
-      /* Setup the index array. */
-      int part_indices[ndim];
+    /* Parallel loop with atomic updates. */
+    for (int p = 0; p < end - start; p++) {
+
+      /* Skip masked particles. */
+      if (local_mask != NULL && !local_mask[p]) {
+        continue;
+      }
 
       /* Get the grid indices for the particle */
-      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+      int part_indices[ndim];
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props,
+                        p + start);
 
       /* Unravel the indices. */
       int flat_ind = get_flat_index(part_indices, dims, ndim);
 
-      /* Store the weight. */
-      local_out[flat_ind] += mass * (1.0 - fesc[p]);
-    }
-  }
+      /* Calculate this particles contribution to the grid cell. */
+      double contribution = local_part_masses[p];
 
-  /* Hierarchical reduction */
-  for (int step = 1; step < nthreads; step *= 2) {
-    for (int tid = 0; tid < nthreads; tid += 2 * step) {
-      if (tid + step < nthreads) {
-#pragma omp parallel for num_threads(nthreads)
-        for (int i = 0; i < out_size; i++) {
-          out_per_thread[tid][i] += out_per_thread[tid + step][i];
-        }
+      /* Update the shared output array atomically */
+      local_out_arr[flat_ind] += contribution;
+    }
+
+    /* Update the global output array */
+#pragma omp critical
+    {
+      for (int i = 0; i < out_size; i++) {
+        out_arr[i] += local_out_arr[i];
       }
     }
+
+    /* Clean up. */
+    free(local_out_arr);
   }
-
-  /* Copy the final reduced result to spectra */
-  memcpy(out_arr, out_per_thread[0], out_size * sizeof(double));
-
-  /* Free the allocated memory. */
-  free(out_per_thread);
-  free(out_data);
 }
 #endif
 
@@ -670,4 +600,117 @@ void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
 
 #endif
   toc("Nearest Grid Point weight loop", start_time);
+}
+
+/**
+ * @brief Compute the weight in each grid cell based on the particles.
+ *
+ * @param grid: The Grid object.
+ * @param parts: The object containing the particle properties.
+ * @param method: The method to use for assigning weights.
+ * @param nthreads: The number of threads to use.
+ *
+ * @return The weights in each grid cell.
+ */
+PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
+
+  double start_time = tic();
+  double setup_start = tic();
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  int ndim, npart, nthreads;
+  PyObject *grid_tuple, *part_tuple;
+  PyArrayObject *np_part_mass, *np_ndims;
+  char *method;
+
+  if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
+                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
+                        &nthreads))
+    return NULL;
+
+  /* Extract the grid struct. */
+  struct grid *grid_props =
+      get_spectra_grid_struct(grid_tuple, np_ndims, /*np_grid_spectra*/ NULL,
+                              /*np_lam*/ NULL, NULL, ndim, /*nlam*/ 1);
+  if (grid_props == NULL) {
+    return NULL;
+  }
+
+  /* Extract the particle struct. */
+  struct particles *part_props = get_part_struct(
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, NULL, npart, ndim);
+  if (part_props == NULL) {
+    return NULL;
+  }
+  /* Allocate the sfzh array to output. */
+  double *grid_weights = calloc(grid_props->size, sizeof(double));
+  if (grid_weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
+    return NULL;
+  }
+
+  toc("Extracting Python data", setup_start);
+
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
+                    nthreads);
+  } else if (strcmp(method, "ngp") == 0) {
+    weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
+                    nthreads);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method.");
+    return NULL;
+  }
+
+  /* Check we got the output. (Any error messages will already be set) */
+  if (grid_weights == NULL) {
+    return NULL;
+  }
+
+  /* Reconstruct the python array to return. */
+  npy_intp np_dims[grid_props->ndim];
+  for (int idim = 0; idim < grid_props->ndim; idim++) {
+    np_dims[idim] = grid_props->dims[idim];
+  }
+
+  PyArrayObject *out_weights = (PyArrayObject *)PyArray_SimpleNewFromData(
+      grid_props->ndim, np_dims, NPY_FLOAT64, grid_weights);
+
+  /* Clean up memory! */
+  free(part_props);
+  free(grid_props);
+
+  toc("Computing SFZH", start_time);
+
+  return Py_BuildValue("N", out_weights);
+}
+
+/* Below is all the gubbins needed to make the module importable in Python. */
+static PyMethodDef WeightMethods[] = {
+    {"compute_grid_weights", (PyCFunction)compute_grid_weights, METH_VARARGS,
+     "Method for calculating the weights on a grid."},
+    {NULL, NULL, 0, NULL}};
+
+/* Make this importable. */
+static struct PyModuleDef moduledef = {
+    PyModuleDef_HEAD_INIT,
+    "compute_weights",                                    /* m_name */
+    "A module to calculating particle weigths on a grid", /* m_doc */
+    -1,                                                   /* m_size */
+    WeightMethods,                                        /* m_methods */
+    NULL,                                                 /* m_reload */
+    NULL,                                                 /* m_traverse */
+    NULL,                                                 /* m_clear */
+    NULL,                                                 /* m_free */
+};
+
+PyMODINIT_FUNC PyInit_weights(void) {
+  PyObject *m = PyModule_Create(&moduledef);
+  import_array();
+  return m;
 }

@@ -60,17 +60,12 @@ maintainers = [
 
 # Classifiers
 classifiers = [  # Optional
-  # How mature is this project? Common values are
-  #   3 - Alpha
-  #   4 - Beta
-  #   5 - Production/Stable
   "Development Status :: 4 - Beta",  # 3 Alpha/4 Beta/5 Production/Stable
-  "Intended Audience :: Astronomers",
-  "Topic :: Synthetic Observations",
-  "License :: GNU GENERAL PUBLIC LICENSE v3.0",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 
   # Supported Python versions
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -93,7 +88,6 @@ dependencies = [
   "tqdm",
   "requests",
   "pathos",
-  "dense_basis@git+https://github.com/kartheikiyer/dense_basis",
   "statsmodels",
 ]
 
@@ -102,6 +96,8 @@ dependencies = [
 # Development
 dev = [
     "ruff==0.7.4",
+    "pre-commit",
+    "nb-clean",
 ]
 # Testing
 test = [
@@ -132,21 +128,17 @@ bluetides = [
 eagle = [
     "schwimmbad",
 ]
-illustris = [
-    "illustris_python @ git+https://github.com/illustristng/illustris_python.git@master",
-]
-
 
 # Project urls
 [project.urls]
-"Homepage" = "https://github.com/flaresimulations/synthesizer"
-"Bug Reports" = "https://github.com/flaresimulations/synthesizer/issues"
-"Source" = "https://github.com/flaresimulations/synthesizer"
-"Documentation" = "https://flaresimulations.github.io/synthesizer/"
+"Homepage" = "https://github.com/synthesizer-project/synthesizer"
+"Bug Reports" = "https://github.com/synthesizer-project/synthesizer/issues"
+"Source" = "https://github.com/synthesizer-project/synthesizer"
+"Documentation" = "https://synthesizer-project.github.io/synthesizer/"
 
 # Entry points
 [project.scripts]
-synthesizer-download="synthesizer.download_data:download"
+synthesizer-download="synthesizer.downloader.downloader:download"
 
 # Package data
 [tool.setuptools.package-data]

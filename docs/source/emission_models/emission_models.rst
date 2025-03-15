@@ -5,21 +5,21 @@ Overview
 --------
 
 To simplify the calculation of complex emission, with many contributing components and different operations involved in their construction, synthesizer provides ``EmissionModels``.
-At their simplest, ``EmissionModels`` define the generation of a single type of spectra, e.g. the incident emission from a population of stars.
+At their simplest, ``EmissionModels`` define a set of inputs and produce an emission (spectra or emission lines), e.g. the incident emission from a stellar component based on an SPS ``Grid``.
 Hwoever, ``EmissionModels`` can be arbitrarily complex, defining multiple different types of spectra and lines from different components, and defining how they interact.
 The possible operations that ``EmissionModels`` can define are:
 
-- Extraction of spectra / lines from a ``Grid`` (see the `grid docs <../grids/grids_example.ipynb>`_).
+- Extraction of an emission from a ``Grid`` (see the `grid docs <../grids/grids_example.ipynb>`_).
 - Generation of spectra, i.e. dust emission (see the `dust emission docs <.../dust/dust_emission.ipynb>`_) or AGN torus emission (see the `AGN models docs <agn_models.ipynb>`_).
 - Combination of spectra.
-- Attenuation of spectra with a dust curve (see the `dust attenuation docs <../dust/dust_attenuation.ipynb>`_).
+- Transformation of an emission, e.g. applying a dust curve (see the `dust attenuation docs <../dust/dust_attenuation.ipynb>`_).
 
-Any of these operations can be done in the presence of a mask, to apply the operation to a subset of the components contents (e.g. applying dust attenuation only to young stars).
+Any of these operations can be done in the presence of a property mask, to apply the operation to a subset of the components contents (e.g. applying dust attenuation only to young stars), or a wavelength mask to apply the operation only to a subset of the wavelength range.
 These masks can be applied identically to particle or parametric models.
 
 Once an ``EmissionModel`` is constructed it can be used to generate spectra.
 This is done by passing the ``EmissionMmodel`` to the ``get_spectra`` or ``get_lines`` method on a ``Galaxy`` or galaxy component.
-This will then generate the spectra defined within the ``EmissionMmodel``, given the properties of the Galaxy or component.
+This will then generate the spectra defined within the ``EmissionModel``, given the properties of the Galaxy or component.
 For more details see `Generating spectra <../spectra/spectra.rst>`_.
 
 Named spectra

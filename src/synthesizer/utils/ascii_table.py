@@ -91,6 +91,15 @@ class TableFormatter:
             str:
                 The formatted string showing the mean value of the array.
         """
+        # Handle an empty array
+        if len(array) == 0:
+            return "[]"
+
+        # Handle the case where the array is full of strings
+        if isinstance(array[0], str):
+            # Print the first 3 elements followed by an ellipsis
+            return "[" + ", ".join(array[:3]) + ", ...]"
+
         return (
             f"{np.min(array):.2e} -> {np.max(array):.2e} "
             f"(Mean: {np.mean(array):.2e})"
@@ -109,9 +118,18 @@ class TableFormatter:
                 A list of tuples where each tuple contains the dictionary
                 key and the type of its value.
         """
-        return [
-            (key, type(value).__name__) for key, value in dictionary.items()
-        ]
+        # Set up output
+        out = []
+
+        # Loop over the dictionary and fill in the key value pair
+        for key, value in dictionary.items():
+            # If the value is not a string, float or int, just get the Type
+            if not isinstance(value, (str, float, int, bytes)):
+                value = type(value).__name__
+
+            out.append((key, value))
+
+        return out
 
     def format_list(self, lst):
         """
@@ -129,20 +147,39 @@ class TableFormatter:
         out = []
         line = []
         for i, value in enumerate(lst):
+            # If the value is not a string, float or int, just get the Type
+            if not isinstance(value, (str, float, int, bytes)):
+                value = type(value).__name__
+
+            # Handle the first value
             if i == 0:
-                line.append(f"[{value}, ")
+                line.append(f"[{value}")
+
+            # Handle the first value on a new line
+            elif len(line) == 0:
+                line.append(f" {value}")
+
+            # Handle any other value on a line
             else:
-                line.append(f" {value}, ")
-            if len(line) == 4:
-                out.append("".join(line))
+                line.append(f"{value}")
+
+            # Do we need to start a new line?
+            if len(", ".join(line)) > 40:
+                out.append(", ".join(line) + ",")
                 line = []
+
+        # Trying to make things pretty... if theres only 1 element add a
+        # trailing comma
+        if len(line) == 1:
+            line[0] += ", "
 
         # Handle the edge case where line is empty (we don't want the closing
         # bracket on a new line).
         if len(line) > 0:
-            out.append("".join(line) + "]")
+            out.append(", ".join(line) + "]")
         else:
             out[-1] += "]"
+
         return out
 
     def get_value_rows(self):

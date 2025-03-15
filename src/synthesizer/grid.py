@@ -6,7 +6,7 @@ object contains attributes and methods for interfacing with spectral and line
 grids.
 
 The grids themselves use a standardised HDF5 format which can be generated
-using the synthesizer-grids sister package.
+using the grid-generation sister package.
 
 Example usage:
 
@@ -39,9 +39,10 @@ from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.warnings import warn
 
 from . import __file__ as filepath
 
@@ -100,7 +101,7 @@ class Grid:
     """
 
     # Define Quantities
-    lam = Quantity()
+    lam = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
     def __init__(
@@ -160,11 +161,18 @@ class Grid:
         self.line_lums = {}
         self.line_conts = {}
 
-        # Set up dictionary to hold parameters used in grid generation
-        self.parameters = {}
-
         # Get the axes of the grid from the HDF5 file
+        self.axes = []  # axes names
+        self._axes_values = {}
+        self._axes_units = {}
+        self._extract_axes = []
+        self._extract_axes_values = {}
         self._get_axes()
+
+        # Read in the metadata
+        self._weight_var = None
+        self._model_metadata = {}
+        self._get_grid_metadata()
 
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
@@ -210,34 +218,209 @@ class Grid:
             f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
         )
 
-    @property
-    def log10metallicities(self):
-        """Return the log10 metallicity axis."""
-        return np.log10(self.metallicity)
+    def _get_grid_metadata(self):
+        """Unpack the grids metadata into the Grid."""
+        # Open the file
+        with h5py.File(self.grid_filename, "r") as hf:
+            # What component variable do we need to weight by for the
+            # emission in the grid?
+            self._weight_var = hf.attrs.get("WeightVariable")
 
-    @property
-    def log10ages(self):
-        """
-        Return the log10 age axis.
+            # Loop over the Model metadata stored in the Model group
+            # and store it in the Grid object
+            if "Model" in hf:
+                for key, value in hf["Model"].attrs.items():
+                    self._model_metadata[key] = value
 
-        This is an alias to provide a pluralised version of the log10age
-        attribute.
+            # Attach all the root level attribtues to the grid object
+            for k, v in hf.attrs.items():
+                # Skip the axes attribute as we've already read that
+                if k == "axes" or k == "WeightVariable":
+                    continue
+                setattr(self, k, v)
+
+    def __getattr__(self, name):
         """
-        return self.log10age
+        Return an attribute handling arbitrary axis names.
+
+        This method allows for the dynamic extraction of axes with units,
+        either logged or not or using singular or plural axis names (to handle
+        legacy naming conventions).
+        """
+        # First up, do we just have the attribute and it isn't an axis?
+        if name in self.__dict__:
+            return self.__dict__[name]
+
+        # Now, do some silly pluralisation checks to handle old naming
+        # conventions. We do this now so everything works, we can grumble
+        # about it later
+        plural_name = pluralize(name)
+        singular_name = depluralize(name)
+
+        # Another old convention was allowing for logged axes to be stored in
+        # the grid file (this is no longer allowed)
+        if name[0] != "_":
+            log_name = f"log10{name}"
+            log_plural_name = f"log10{plural_name}"
+            log_singular_name = f"log10{singular_name}"
+        else:
+            log_name = f"_log10{name[1:]}"
+            log_plural_name = f"_log10{plural_name[1:]}"
+            log_singular_name = f"_log10{singular_name[1:]}"
+
+        # If we have the axis name, return the axis with units (handling all
+        # the silly pluralisation and logging conventions)
+        if name in self.axes:
+            return unyt_array(self._axes_values[name], self._axes_units[name])
+        elif plural_name in self.axes:
+            return unyt_array(
+                self._axes_values[plural_name], self._axes_units[plural_name]
+            )
+        elif singular_name in self.axes:
+            warn(
+                "The use of singular axis names is deprecated. Update "
+                "your grid file."
+            )
+            return unyt_array(
+                self._axes_values[singular_name],
+                self._axes_units[singular_name],
+            )
+        elif log_name in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return unyt_array(
+                10 ** self._axes_values[log_name], self._axes_units[log_name]
+            )
+        elif log_plural_name in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return unyt_array(
+                10 ** self._axes_values[log_plural_name],
+                self._axes_units[log_plural_name],
+            )
+        elif log_singular_name in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return unyt_array(
+                10 ** self._axes_values[log_singular_name],
+                self._axes_units[log_singular_name],
+            )
+
+        # It might be a Quantity style unitless request? (handling all
+        # the silly pluralisation and logging conventions)
+        elif name[1:] in self.axes:
+            return self._axes_values[name[1:]]
+        elif plural_name[1:] in self.axes:
+            return self._axes_values[plural_name[1:]]
+        elif singular_name[1:] in self.axes:
+            warn(
+                "The use of singular axis names is deprecated. Update "
+                "your grid file."
+            )
+            return self._axes_values[singular_name[1:]]
+        elif log_name[1:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return 10 ** self._axes_values[log_name[1:]]
+        elif log_plural_name[1:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return 10 ** self._axes_values[log_plural_name[1:]]
+        elif log_singular_name[1:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return 10 ** self._axes_values[log_singular_name[1:]]
+
+        # Are we doing a log10 request? (handling all the silly pluralisation)
+        elif name[:5] == "log10" and name[5:] in self.axes:
+            return np.log10(self._axes_values[name[5:]])
+        elif plural_name[:5] == "log10" and plural_name[5:] in self.axes:
+            return np.log10(self._axes_values[plural_name[5:]])
+        elif singular_name[:5] == "log10" and singular_name[5:] in self.axes:
+            warn(
+                "The use of singular axis names is deprecated. Update "
+                "your grid file."
+            )
+            return np.log10(self._axes_values[singular_name[5:]])
+        elif log_name[:5] == "log10" and log_name[5:] in self.axes:
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return self._axes_values[log_name[5:]]
+        elif (
+            log_plural_name[:5] == "log10" and log_plural_name[5:] in self.axes
+        ):
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return self._axes_values[log_plural_name[5:]]
+        elif (
+            log_singular_name[:5] == "log10"
+            and log_singular_name[5:] in self.axes
+        ):
+            warn(
+                "The use of logged axis names is deprecated. Update "
+                "your grid file."
+            )
+            return self._axes_values[log_singular_name[5:]]
+
+        # If we get here, we don't have the attribute
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
 
     def _get_axes(self):
         """Get the grid axes from the HDF5 file."""
         # Get basic info of the grid
         with h5py.File(self.grid_filename, "r") as hf:
-            self.parameters = {k: v for k, v in hf.attrs.items()}
-
             # Get list of axes
-            self.axes = list(hf.attrs["axes"])
+            axes = list(hf.attrs["axes"])
 
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
-            for axis in self.axes:
-                setattr(self, axis, hf["axes"][axis][:])
+            for axis in axes:
+                # What are the units of this axis?
+                axis_units = hf["axes"][axis].attrs.get("Units")
+                log_axis = hf["axes"][axis].attrs.get("log_on_read")
+
+                if "log10" in axis:
+                    raise exceptions.GridError(
+                        "Logged axes are no longer supported because "
+                        "of ambiguous units. Please update your grid file."
+                    )
+
+                # Get the values
+                values = hf["axes"][axis][:]
+
+                # Set all the axis attributes as is (without accounting
+                # for any log10 conversions needed for extraction)
+                self.axes.append(axis)
+                self._axes_values[axis] = values
+                self._axes_units[axis] = axis_units
+
+                # Now we handle the extractions
+                if log_axis:
+                    self._extract_axes.append(f"log10{axis}")
+                    self._extract_axes_values[f"log10{axis}"] = np.log10(
+                        values
+                    )
+                else:
+                    self._extract_axes.append(axis)
+                    self._extract_axes_values[axis] = values
 
             # Number of axes
             self.naxes = len(self.axes)
@@ -256,9 +439,11 @@ class Grid:
 
             # Old name for backwards compatibility (DEPRECATED)
             if "log10Q" in hf.keys():
-                self.log10Q = {}
+                self.log10_specific_ionising_lum = {}
                 for ion in hf["log10Q"].keys():
-                    self.log10Q[ion] = hf["log10Q"][ion][:]
+                    self.log10_specific_ionising_lum[ion] = hf["log10Q"][ion][
+                        :
+                    ]
 
     def _get_spectra_grid(self, spectra_to_read):
         """
@@ -303,20 +488,6 @@ class Grid:
             for spectra_id in self.available_spectra:
                 self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
-            # # THIS IS A HACK BECAUSE SW CHANGED THE AGN EMISSIONS WITHOUT
-            # # UPDATING THE TEST GRIDS AND ONLY HE HAS ACCESS TO THE DROPBOX.
-            # # THIS WILL BE REMOVED WHEN THE GRIDS ARE UPDATED.
-            # if "nlr" in self.grid_filename or "blr" in self.grid_filename:
-            #     for spectra_id in self.available_spectra:
-            #         # Normalise spectra by bolometric luminosity
-            #         sed = Sed(
-            #             self.lam, lnu=self.spectra[spectra_id] * erg / s / Hz
-            #         )
-            #         self.spectra[spectra_id] = (
-            #             self.spectra[spectra_id]
-            #             / sed.bolometric_luminosity[..., None]
-            #         )
-
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed:
@@ -334,7 +505,7 @@ class Grid:
             )
             self.available_spectra.append("nebular_continuum")
 
-    def _get_lines_grid(self, read_lines):
+    def _get_lines_grid_old(self, read_lines):
         """
         Get the lines grid from the HDF5 file.
 
@@ -465,6 +636,152 @@ class Grid:
                         for line in self.available_lines
                     }
 
+    def _get_lines_grid_new(self, read_lines):
+        """
+        Get the lines grid from the HDF5 file.
+
+        Args:
+            read_lines (bool/list)
+                Flag for whether to read all available lines or subset of
+                lines to read.
+        """
+        # Double check we actually have lines to read
+        if not self.lines_available:
+            if not self.reprocessed:
+                raise exceptions.GridError(
+                    "Grid hasn't been reprocessed with cloudy and has no "
+                    "lines. Either pass `read_lines=False` or load a grid "
+                    "which has been run through cloudy."
+                )
+
+            else:
+                raise exceptions.GridError(
+                    (
+                        "No lines available on this grid object. "
+                        "Either set `read_lines=False`, or load a grid "
+                        "containing line information"
+                    )
+                )
+
+        with h5py.File(self.grid_filename, "r") as hf:
+            self.available_lines = [
+                id.decode("utf-8") for id in hf["lines"]["id"][:]
+            ]
+
+            # Read the line wavelengths
+            lines_outside_lam = []
+            for ind, line in enumerate(self.available_lines):
+                self.line_lams[line] = hf["lines"]["wavelength"][ind]
+
+                # Ensure this wavelength is within the wavelength array of the
+                # grid
+                if (
+                    self.line_lams[line] < self.lam[0]
+                    or self.line_lams[line] > self.lam[-1]
+                ):
+                    lines_outside_lam.append(line)
+
+            # If we have lines outside the wavelength range of the grid
+            # warn the user
+            if len(lines_outside_lam) > 0:
+                warn(
+                    "The following lines are outside the wavelength "
+                    f"range of the grid: {lines_outside_lam}"
+                )
+
+            # Intialise keys we know we will have
+            self.line_lums.setdefault("nebular", {})
+            self.line_conts.setdefault("nebular", {})
+            self.line_lums.setdefault("linecont", {})
+            self.line_conts.setdefault("linecont", {})
+            self.line_lums.setdefault("nebular_continuum", {})
+            self.line_conts.setdefault("nebular_continuum", {})
+            self.line_lums.setdefault("transmitted", {})
+            self.line_conts.setdefault("transmitted", {})
+
+            # Read the lines and continua into the nebular and
+            # linecont entries.
+            for ind, line in enumerate(self.available_lines):
+                self.line_lums["nebular"][line] = hf["lines"]["luminosity"][
+                    ..., ind
+                ]
+                self.line_conts["nebular"][line] = hf["lines"][
+                    "nebular_continuum"
+                ][..., ind]
+
+                self.line_lums["linecont"][line] = hf["lines"]["luminosity"][
+                    ..., ind
+                ]
+                self.line_conts["linecont"][line] = np.zeros(
+                    self.line_lums["nebular"][line].shape
+                )
+
+                self.line_lums["nebular_continuum"][line] = np.zeros(
+                    self.line_lums["nebular"][line].shape
+                )
+                self.line_conts["nebular_continuum"][line] = hf["lines"][
+                    "nebular_continuum"
+                ][..., ind]
+
+                self.line_lums["transmitted"][line] = np.zeros(
+                    self.line_lums["nebular"][line].shape
+                )
+                self.line_conts["transmitted"][line] = hf["lines"][
+                    "transmitted"
+                ][..., ind]
+
+            # Now that we have read the line data itself we need to populate
+            # the other spectra entries. the line luminosities for all entries
+            # other than nebular are 0 but the continuums need to be sampled
+            # from the spectra.
+            for spectra in self.available_spectra:
+                # Define the extraction key
+                extract = spectra
+
+                # Skip those we have already read
+                if extract in self.line_conts:
+                    continue
+
+                # Create an interpolation function for this spectra
+                interp_func = interp1d(
+                    self._lam,
+                    self.spectra[extract],
+                    axis=-1,
+                    kind="linear",
+                    fill_value=0.0,
+                    bounds_error=False,
+                )
+
+                # Get the continuum luminosities by interpolating the to get
+                # the continuum at the line wavelengths (we use scipy here
+                # because spectres can't handle single value interpolation).
+                # The linecont continuum is explicitly 0 and set above.
+                self.line_conts[spectra] = {
+                    line: interp_func(self.line_lams[line])
+                    for line in self.available_lines
+                }
+
+                # Set the line luminosities to 0 as long as they haven't
+                # already been set
+                self.line_lums[spectra] = {
+                    line: np.zeros(self.spectra[spectra].shape[:-1])
+                    for line in self.available_lines
+                }
+
+    def _get_lines_grid(self, read_lines):
+        """
+        Get the lines grid from the HDF5 file.
+
+        Args:
+            read_lines (bool/list)
+                Flag for whether to read all available lines or subset of
+                lines to read.
+        """
+        if self.new_line_format:
+            self._get_lines_grid_new(read_lines)
+        else:
+            self._get_lines_grid_old(read_lines)
+
     def _prepare_lam_axis(
         self,
         new_lam,
@@ -523,9 +840,11 @@ class Grid:
         """
         if self._reprocessed is None:
             with h5py.File(self.grid_filename, "r") as hf:
-                self._reprocessed = (
+                old_grids = (
                     True if "cloudy_version" in hf.attrs.keys() else False
                 )
+                new_grid = True if "CloudyParams" in hf.keys() else False
+                self._reprocessed = old_grids or new_grid
 
         return self._reprocessed
 
@@ -546,6 +865,17 @@ class Grid:
                 self._lines_available = True if "lines" in hf.keys() else False
 
         return self._lines_available
+
+    @property
+    def new_line_format(self):
+        """Return whether the grid has the new line format."""
+        if not self.lines_available:
+            return False
+
+        # If the lines group has a luminosity dataset then we have the new
+        # format
+        with h5py.File(self.grid_filename, "r") as hf:
+            return "luminosity" in hf["lines"]
 
     @property
     def has_spectra(self):
@@ -661,6 +991,16 @@ class Grid:
         """Return the shape of the grid."""
         return self.spectra[self.available_spectra[0]].shape
 
+    @property
+    def ndim(self):
+        """Return the number of dimensions in the grid."""
+        return len(self.shape)
+
+    @property
+    def nlam(self):
+        """Return the number of wavelengths in the grid."""
+        return len(self.lam)
+
     @staticmethod
     def get_nearest_index(value, array):
         """
@@ -697,6 +1037,8 @@ class Grid:
         """
         Identify the nearest grid point for a tuple of values.
 
+        Any axes not specified will be returned as a full slice.
+
         Args:
             **kwargs (dict)
                 Pairs of axis names and values for the desired grid point,
@@ -706,12 +1048,66 @@ class Grid:
             tuple
                 A tuple of integers specifying the closest grid point.
         """
-        return tuple(
-            [
-                self.get_nearest_index(value, getattr(self, axis))
-                for axis, value in kwargs.items()
-            ]
-        )
+        # Create a list we will return
+        indices = []
+
+        # Loop over axes and get the nearest index for each
+        for axis in self.axes:
+            # Get plural, singular and log10 versions of the axis name
+            plural_axis = pluralize(axis)
+            singular_axis = depluralize(axis)
+            log10_axis = f"log10{axis}"
+            log10_plural_axis = f"log10{plural_axis}"
+            log10_singular_axis = f"log10{singular_axis}"
+            if axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(axis), getattr(self, axis)
+                    )
+                )
+            elif plural_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(plural_axis), getattr(self, plural_axis)
+                    )
+                )
+            elif singular_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(singular_axis), getattr(self, singular_axis)
+                    )
+                )
+            elif log10_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(log10_axis), getattr(self, axis)
+                    )
+                )
+            elif log10_plural_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(log10_plural_axis),
+                        getattr(self, plural_axis),
+                    )
+                )
+            elif log10_singular_axis in kwargs:
+                indices.append(
+                    self.get_nearest_index(
+                        kwargs.pop(log10_singular_axis),
+                        getattr(self, singular_axis),
+                    )
+                )
+            else:
+                indices.append(slice(None))
+
+        # Warn the user is any kwargs weren't a grid axis
+        if len(kwargs) > 0:
+            warn(
+                "The following axes are not on the grid:"
+                f" {list(kwargs.keys())}"
+            )
+
+        return tuple(indices)
 
     def get_spectra(self, grid_point, spectra_id="incident"):
         """
@@ -910,10 +1306,7 @@ class Grid:
         y = np.arange(len(self.metallicity))
 
         # Select grid for specific ion
-        if hasattr(self, "log10_specific_ionising_lum"):
-            log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
-        else:
-            log10_specific_ionising_lum = self.log10Q[ion]
+        log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
 
         # Truncate grid if max age provided
         if max_log10age is not None:
@@ -1146,15 +1539,14 @@ class Template:
     """
 
     # Define Quantities
-    lam = Quantity()
-    lnu = Quantity()
+    lam = Quantity("wavelength")
+    lnu = Quantity("luminosity_density_frequency")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(
         self,
         lam,
         lnu,
-        fesc=0.0,
         unify_with_grid=None,
         **kwargs,
     ):
@@ -1166,8 +1558,6 @@ class Template:
                 Wavelength array.
             lnu (array)
                 Luminosity array.
-            fesc (float)
-                The escape fraction of the AGN.
             unify_with_grid (Grid)
                 A grid object to unify the template with. This will ensure
                 the template has the same wavelength array as the grid.
@@ -1183,15 +1573,14 @@ class Template:
             sed = sed.get_resampled_sed(new_lam=unify_with_grid.lam)
 
         # Attach the template now we've done the interpolation (if needed)
+        self._sed = sed
         self.lnu = sed.lnu
         self.lam = sed.lam
 
         # Normalise, just in case
         self.normalisation = sed._bolometric_luminosity
-        self.lnu /= self.normalisation
-
-        # Set the escape fraction
-        self.fesc = fesc
+        self._sed._lnu /= self.normalisation
+        self._lnu /= self.normalisation
 
     @accepts(bolometric_luminosity=erg / s)
     def get_spectra(self, bolometric_luminosity):
@@ -1211,19 +1600,5 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
-        # Compute the scaling based on normalisation
-        scaling = bolometric_luminosity.value
-
-        # Handle the dimensions of the bolometric luminosity
-        if bolometric_luminosity.shape[0] == 1:
-            sed = Sed(
-                self.lam,
-                scaling * self.lnu * (1 - self.fesc),
-            )
-        else:
-            sed = Sed(
-                self.lam,
-                scaling[:, None] * self.lnu * (1 - self.fesc),
-            )
-
-        return sed
+        # Scale the spectra and return
+        return self._sed * bolometric_luminosity

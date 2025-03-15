@@ -12,10 +12,10 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, rad, s
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import deprecation
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.warnings import deprecation
 
 
 class Particles:
@@ -48,15 +48,20 @@ class Particles:
             The V band optical depth.
         radii (array-like, float)
             The radii of the particles.
+        _grid_weights (dict, array-like, float)
+            Weights for each particle sorted onto a grid. This dictionary takes
+            the form of {<method>: {grid_name: weights}} where weights is an
+            array of the same shape as the grid containg the particles sorted
+            onto the grid.
     """
 
     # Define class level Quantity attributes
-    coordinates = Quantity()
-    velocities = Quantity()
-    masses = Quantity()
-    softening_lengths = Quantity()
-    centre = Quantity()
-    radii = Quantity()
+    coordinates = Quantity("spatial")
+    velocities = Quantity("velocity")
+    masses = Quantity("mass")
+    softening_lengths = Quantity("spatial")
+    centre = Quantity("spatial")
+    radii = Quantity("spatial")
 
     @accepts(
         coordinates=Mpc,
@@ -362,6 +367,8 @@ class Particles:
 
         # Calculate the radii
         self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
+
+        return self.radii
 
     @accepts(aperture_radius=Mpc)
     def _aperture_mask(self, aperture_radius):
@@ -943,7 +950,7 @@ class CoordinateGenerator:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
 
@@ -951,6 +958,6 @@ class CoordinateGenerator:
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
+            "https://github.com/synthesizer-project/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )

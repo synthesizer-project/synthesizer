@@ -11,9 +11,9 @@ from unyt import Hz, Msun, angstrom, c, cm, deg, erg, km, s, yr
 from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.line import Line
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
-from synthesizer.warnings import warn
 
 
 class BlackholesComponent(Component):
@@ -75,12 +75,12 @@ class BlackholesComponent(Component):
     """
 
     # Define class level Quantity attributes
-    accretion_rate = Quantity()
-    inclination = Quantity()
-    bolometric_luminosity = Quantity()
-    eddington_luminosity = Quantity()
-    bb_temperature = Quantity()
-    mass = Quantity()
+    accretion_rate = Quantity("mass_rate")
+    inclination = Quantity("angle")
+    bolometric_luminosity = Quantity("luminosity")
+    eddington_luminosity = Quantity("luminosity")
+    bb_temperature = Quantity("temperature")
+    mass = Quantity("mass")
 
     @accepts(
         mass=Msun.in_base("galactic"),
@@ -96,6 +96,7 @@ class BlackholesComponent(Component):
     )
     def __init__(
         self,
+        fesc,
         mass=None,
         accretion_rate=None,
         epsilon=0.1,
@@ -165,7 +166,7 @@ class BlackholesComponent(Component):
                 kwargs.
         """
         # Initialise the parent class
-        Component.__init__(self, "BlackHoles", **kwargs)
+        Component.__init__(self, "BlackHoles", fesc, **kwargs)
 
         # Save the black hole properties
         self.mass = mass
@@ -268,97 +269,11 @@ class BlackholesComponent(Component):
                 self.inclination.to("radian").value
             )
 
-    def generate_lnu(
-        self,
-        grid,
-        spectra_name,
-        fesc=0.0,
-        mask=None,
-        lam_mask=None,
-        verbose=False,
-        grid_assignment_method="cic",
-        nthreads=0,
-    ):
-        """
-        Generate integrated rest frame spectra for a given key.
-
-        Args:
-            emission_model (synthesizer.blackhole_emission_models.*)
-                An instance of a blackhole emission model.
-            grid (obj):
-                Spectral grid object.
-            fesc (float):
-                Fraction of emission that escapes unattenuated from
-                the birth cloud (defaults to 0.0).
-            spectra_name (string)
-                The name of the target spectra inside the grid file
-                (e.g. "incident", "transmitted", "nebular").
-            mask (array-like, bool)
-                If not None this mask will be applied to the inputs to the
-                spectra creation.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-            verbose (bool)
-                Are we talking?
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-        """
-        # Ensure we have a key in the grid. If not error.
-        if spectra_name not in list(grid.spectra.keys()):
-            raise exceptions.MissingSpectraType(
-                f"The Grid does not contain the key '{spectra_name}'"
-            )
-
-        # If we have have 0 particles (regardless of mask) just return an
-        # array of zeros
-        if hasattr(self, "nbh") and self.nbh == 0:
-            return np.zeros(len(grid.lam))
-
-        # If the mask is False (parametric case) or contains only
-        # 0 (particle case) just return an array of zeros
-        if isinstance(mask, bool) and not mask:
-            return np.zeros(len(grid.lam))
-        if mask is not None and np.sum(mask) == 0:
-            return np.zeros(len(grid.lam))
-
-        from ..extensions.integrated_spectra import compute_integrated_sed
-
-        # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(
-            grid,
-            fesc=fesc,
-            spectra_type=spectra_name,
-            mask=mask,
-            grid_assignment_method=grid_assignment_method.lower(),
-            nthreads=nthreads,
-            lam_mask=lam_mask,
-        )
-
-        # Get the integrated spectra in grid units (erg / s / Hz)
-        spec = compute_integrated_sed(*args)
-
-        # If we had a wavelength mask we need to make sure we return a spectra
-        # compatible with the original wavelength array.
-        if lam_mask is not None:
-            out_spec = np.zeros(len(grid.lam))
-            out_spec[lam_mask] = spec
-            spec = out_spec
-
-        return spec
-
     def generate_line(
         self,
         grid,
         line_id,
         line_type,
-        fesc,
         mask=None,
         method="cic",
         nthreads=0,
@@ -381,10 +296,6 @@ class BlackholesComponent(Component):
             line_type (str)
                 The type of line to extract from the grid. Must match the
                 spectra/line type in the grid file.
-            fesc (float/array-like, float)
-                Fraction of AGN emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
             mask (array)
                 A mask to apply to the particles (only applicable to particle)
             method (str)
@@ -458,7 +369,6 @@ class BlackholesComponent(Component):
                     grid,
                     line_id_,
                     line_type,
-                    fesc,
                     mask=mask,
                     grid_assignment_method=method,
                     nthreads=nthreads,

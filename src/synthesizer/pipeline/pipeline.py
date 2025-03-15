@@ -35,14 +35,15 @@ from pathos.multiprocessing import ProcessingPool as Pool
 from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
+from synthesizer.instruments import Instrument, InstrumentCollection
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
     count_and_check_dict_recursive,
 )
+from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
-from synthesizer.warnings import warn
 
 
 class Pipeline:
@@ -148,8 +149,9 @@ class Pipeline:
         Args:
             emission_model (EmissionModel): The emission model to use for the
                 pipeline.
-            instruments (list): A list of Instrument objects to use for the
-                pipeline.
+            instruments (Instrument, InstrumentCollection): Either a singular
+                Instrument object, or an InstrumentCollection containing
+                multiple Instrument objects.
             nthreads (int): The number of threads to use for shared memory
                 parallelism. Default is 1.
             comm (MPI.Comm): The MPI communicator to use for MPI parallelism.
@@ -163,7 +165,15 @@ class Pipeline:
 
         # Attach all the attributes we need to know what to do
         self.emission_model = emission_model
-        self.instruments = instruments
+
+        # Check if it's a single instrument
+        if isinstance(instruments, Instrument):
+            # mock up an InstrumentCollection
+            collection = InstrumentCollection()
+            collection.add_instruments(self, instruments)
+            self.instruments = collection
+        else:
+            self.instruments = instruments
 
         # Set verbosity
         self.verbose = verbose
@@ -346,7 +356,7 @@ class Pipeline:
             [
                 m
                 for m in self.emission_model._models.values()
-                if m._is_dust_attenuating
+                if m._is_transforming
             ]
         )
         ngen_models = len(
@@ -1802,8 +1812,7 @@ class Pipeline:
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
-                "Cannot combine files before writing data! "
-                "Call write first."
+                "Cannot combine files before writing data! Call write first."
             )
 
         # Nothing to do if we're using collective I/O
@@ -1836,8 +1845,7 @@ class Pipeline:
         # Ensure we have written the data
         if self.io_helper is None:
             raise exceptions.PipelineNotReady(
-                "Cannot combine files before writing data! "
-                "Call write first."
+                "Cannot combine files before writing data! Call write first."
             )
 
         # Nothing to do if we're using collective I/O
