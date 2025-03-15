@@ -1,15 +1,24 @@
 import numpy as np
 import pytest
-from unyt import Mpc, Msun, Myr, km, kpc, s
+from unyt import Hz, Mpc, Msun, Myr, erg, km, kpc, s, yr
 
 from synthesizer.emission_models import (
+    BimodalPacmanEmission,
     IncidentEmission,
     NebularEmission,
+    PacmanEmission,
+    ReprocessedEmission,
     TransmittedEmission,
 )
+from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.grid import Grid
+from synthesizer.instruments.filters import UVJ
+from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
+from synthesizer.sed import Sed
+
+# ================================== GRID =====================================
 
 
 @pytest.fixture
@@ -18,28 +27,54 @@ def test_grid():
     return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
 
 
+# ================================= MODELS ====================================
+
+
 @pytest.fixture
-def nebular_emission_model():
+def nebular_emission_model(test_grid):
     """Return a NebularEmission object."""
     # First need a grid to pass to the NebularEmission object
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
-    return NebularEmission(grid=grid)
+    return NebularEmission(grid=test_grid)
 
 
 @pytest.fixture
-def incident_emission_model():
+def incident_emission_model(test_grid):
     """Return a IncidentEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
-    return IncidentEmission(grid=grid)
+    return IncidentEmission(grid=test_grid)
 
 
 @pytest.fixture
-def transmitted_emission_model():
+def transmitted_emission_model(test_grid):
     """Return a TransmittedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    grid = Grid("test_grid.hdf5", grid_dir="tests/test_grid")
-    return TransmittedEmission(grid=grid)
+    return TransmittedEmission(grid=test_grid)
+
+
+@pytest.fixture
+def reprocessed_emission_model(test_grid):
+    """Return a ReprocessedEmission object."""
+    # First need a grid to pass to the IncidentEmission object
+    return ReprocessedEmission(grid=test_grid)
+
+
+@pytest.fixture
+def pacman_emission_model(test_grid):
+    """Return a PacmanEmission object."""
+    return PacmanEmission(grid=test_grid)
+
+
+@pytest.fixture
+def bimodal_pacman_emission_model(test_grid):
+    """Return a BimodalPacmanEmission object."""
+    return BimodalPacmanEmission(
+        grid=test_grid,
+        dust_curve_ism=PowerLaw(slope=-0.7),
+        dust_curve_birth=PowerLaw(slope=-1.3),
+    )
+
+
+# ================================= STARS =====================================
 
 
 @pytest.fixture
@@ -130,4 +165,50 @@ def random_part_stars():
         tau_v=tau_v,
         coordinates=coordinates,
         velocities=velocities,
+    )
+
+
+@pytest.fixture
+def single_star_particle():
+    """Return a particle Stars object with a single star."""
+    return Stars(
+        initial_masses=np.array([1.0]) * Msun,
+        ages=np.array([1e7]) * yr,
+        metallicities=np.array([0.01]),
+        redshift=1.0,
+        tau_v=np.array([0.1]),
+        coordinates=np.random.rand(1, 3) * kpc,
+    )
+
+
+@pytest.fixture
+def single_star_parametric(test_grid):
+    """Return a parametric Stars object with a single star."""
+    return ParametricStars(
+        test_grid.log10age,
+        test_grid.metallicity,
+        sf_hist=1e7 * yr,
+        metal_dist=0.01,
+        initial_mass=1 * Msun,
+    )
+
+
+# ================================ FILTERS ====================================
+
+
+@pytest.fixture
+def filters_UVJ(test_grid):
+    """Return a dictionary of UVJ filters."""
+    return UVJ(new_lam=test_grid.lam)
+
+
+# ================================ SPECTRA ====================================
+
+
+@pytest.fixture
+def unit_sed(test_grid):
+    """Return a unit Sed object."""
+    return Sed(
+        lam=test_grid.lam,
+        lnu=np.ones_like(test_grid._lam) * erg / s / Hz,
     )

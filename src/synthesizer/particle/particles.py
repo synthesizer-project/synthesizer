@@ -282,7 +282,26 @@ class Particles:
                 The mask array.
         """
         # Get the attribute
-        attr = getattr(self, attr)
+        attr_str = attr
+        attr = getattr(self, attr_str)
+
+        # Ensure the attribute is not None
+        if attr is None:
+            raise exceptions.MissingMaskAttribute(
+                f"Masking attribute ({attr_str}) not found on particle object."
+            )
+
+        # If only one value has units throw an error
+        if hasattr(attr, "units") and not hasattr(thresh, "units"):
+            raise exceptions.InconsistentArguments(
+                f"Masking attribute ({attr_str}) has units "
+                f"but threshold does not ({thresh})."
+            )
+        elif not hasattr(attr, "units") and hasattr(thresh, "units"):
+            raise exceptions.InconsistentArguments(
+                f"Masking attribute ({attr_str}) does not have units "
+                f"but threshold has ({thresh})."
+            )
 
         # Apply the operator
         if op == ">":

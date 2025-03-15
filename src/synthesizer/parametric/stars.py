@@ -281,6 +281,7 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
+    @accepts(instant_sf=yr)
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """
         Compute the SFZH for all possible combinations of input.
@@ -291,10 +292,12 @@ class Stars(StarsComponent):
         Args:
             instant_sf (unyt_quantity/float)
                 An age at which to compute an instantaneous SFH, i.e. all
-                stellar mass populating a single SFH bin.
+                stellar mass populating a single SFH bin. Note, this must
+                be the age itself, not the log10(age).
             instant_metallicity (float)
                 A metallicity at which to compute an instantaneous ZH, i.e. all
-                stellar populating a single ZH bin.
+                stellar populating a single ZH bin. Note, this must be the
+                metallicity itself, not the log10(metallicity).
         """
         # Hide imports to avoid cyclic imports
         from synthesizer.particle import Stars as ParticleStars
@@ -322,7 +325,7 @@ class Stars(StarsComponent):
             # Compute the SFZH grid
             self.sfzh = inst_stars.get_sfzh(
                 self.log10ages,
-                self.metallicities,
+                self.log10metallicities,
                 grid_assignment_method="cic",
             ).sfzh
 
