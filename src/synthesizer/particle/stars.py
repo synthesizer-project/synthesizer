@@ -23,7 +23,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
+from unyt import Hz, Mpc, Msun, Myr, angstrom, dimensionless, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
@@ -334,7 +334,7 @@ class Stars(Particles, StarsComponent):
             log10ages (array)
                 log10 stellar ages
         """
-        return np.log10(self.ages)
+        return np.log10(self.ages) * dimensionless
 
     def _check_star_args(self):
         """
