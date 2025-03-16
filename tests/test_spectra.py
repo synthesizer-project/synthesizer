@@ -453,3 +453,80 @@ def test_pacman_spectra(
         pacman_spec._lnu,
         bimodal_pacman_spec._lnu,
     ), "The PACMAN and bimodal PACMAN spectra are the same."
+
+
+def test_masked_combination(
+    particle_stars_B,
+    transmitted_emission_model,
+    test_grid,
+):
+    """Test that the combination of two masked spectra is correct."""
+    # Get the spectra without any masks
+    unmasked_spec = particle_stars_B.get_spectra(
+        transmitted_emission_model,
+        grid_assignment_method="ngp",
+    )
+    particle_stars_B.clear_all_emissions()
+
+    # Add a mask to the emission model
+    transmitted_emission_model.add_mask(
+        attr="ages",
+        op=">=",
+        thresh=5.5 * Myr,
+        set_all=True,
+    )
+
+    # Generate the old masked spectra
+    old_spec = particle_stars_B.get_spectra(
+        transmitted_emission_model,
+        grid_assignment_method="ngp",
+    )
+    particle_stars_B.clear_all_emissions()
+
+    # Ensure there is some emission
+    assert np.sum(old_spec._lnu) > 0, "The old spectra has no emission."
+
+    # And now swap the mask to a young mask
+    transmitted_emission_model.clear_masks(True)
+    transmitted_emission_model.add_mask(
+        attr="ages",
+        op="<",
+        thresh=5.5 * Myr,
+        set_all=True,
+    )
+
+    # Generate the yound masked spectra
+    young_spec = particle_stars_B.get_spectra(
+        transmitted_emission_model,
+        grid_assignment_method="ngp",
+    )
+    particle_stars_B.clear_all_emissions()
+
+    # Ensure there is some emission
+    assert np.sum(young_spec._lnu) > 0, "The young spectra has no emission."
+
+    # Combine the two masked spectra
+    combined_spec = old_spec + young_spec
+    combined_array = old_spec._lnu + young_spec._lnu
+
+    # Ensure that the masked spectra are different
+    assert not np.allclose(
+        young_spec._lnu,
+        old_spec._lnu,
+    ), "The old and young integrated spectra are the same."
+
+    # Ensure the arrays are the same
+    assert np.allclose(
+        combined_spec._lnu,
+        combined_array,
+    ), "The combined and summed arrays are not the same."
+
+    # Ensure the combined spectra are the same as the unmasked spectra
+    assert np.allclose(
+        combined_spec._lnu,
+        unmasked_spec._lnu,
+    ), (
+        "The combined and unmasked integrated spectra are not the same "
+        f"(combined={np.sum(combined_spec._lnu)} vs"
+        f" unmasked={np.sum(unmasked_spec._lnu)})."
+    )
