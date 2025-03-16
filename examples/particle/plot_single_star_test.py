@@ -62,7 +62,7 @@ fig, ax = plt.subplots()
 ax.grid(True)
 
 # Plot the grid points
-x, y = np.meshgrid(grid.log10age, grid.metallicity)
+x, y = np.meshgrid(grid.log10age, grid.log10metallicities)
 ax.scatter(
     x.flatten(),
     np.log10(y.flatten()),
@@ -85,7 +85,7 @@ plt_part_sfzh = np.full_like(part_sfzh, np.nan)
 plt_part_sfzh[part_sfzh > 0] = part_sfzh[part_sfzh > 0]
 pcm2 = ax.pcolormesh(
     grid.log10age,
-    np.log10(grid.metallicity),
+    grid.log10metallicities,
     plt_part_sfzh.T,
     cmap="plasma",
     norm=Normalize(vmin=np.min(part_sfzh[part_sfzh > 0]), vmax=1.0, clip=True),

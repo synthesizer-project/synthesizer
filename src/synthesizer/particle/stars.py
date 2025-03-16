@@ -1364,7 +1364,7 @@ class Stars(Particles, StarsComponent):
         Args:
             log10ages (array-like, float)
                 The log10 ages of the desired SFZH.
-            metallicities (array-like, float)
+            log10metallicities (array-like, float)
                 The metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
@@ -1436,7 +1436,7 @@ class Stars(Particles, StarsComponent):
         Args:
             log10ages (array-like, float)
                 The log10 ages of the desired SFZH.
-            metallicities (array-like, float)
+            log10metallicities (array-like, float)
                 The metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
@@ -1466,7 +1466,7 @@ class Stars(Particles, StarsComponent):
         # Get the SFZH and create the ParametricStars object
         self.sfzh = ParametricStars(
             log10ages,
-            log10metallicities,
+            10**log10metallicities,
             sfzh=compute_sfzh(*args),
         )
 
