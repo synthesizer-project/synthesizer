@@ -29,7 +29,7 @@ model = TransmittedEmission(grid)
 stars = ParametricStars(
     grid.log10age,
     grid.metallicity,
-    sf_hist=1e7,
+    sf_hist=1e7 * yr,
     metal_dist=0.01,
     initial_mass=1 * Msun,
 )
