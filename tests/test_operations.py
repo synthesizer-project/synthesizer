@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from synthesizer.emission_models import StellarEmissionModel
 from synthesizer.emission_models.transformers import PowerLaw
 
 
@@ -107,4 +108,47 @@ def test_attenuation_transform(unit_sed):
     ), (
         "The attenuated SED is not correct"
         f" (original={unit_sed.lnu}, attenuated={att_unit_sed.lnu})"
+    )
+
+
+def test_combination_spectra(
+    random_part_stars,
+    test_grid,
+    incident_emission_model,
+    transmitted_emission_model,
+):
+    """Test the combination of spectra."""
+    # Create an emission model that will combine the incident and transmitted
+    # emission models
+    model = StellarEmissionModel(
+        label="combined",
+        combine=(incident_emission_model, transmitted_emission_model),
+    )
+
+    # Get the spectra
+    combined_spec = random_part_stars.get_spectra(model)
+
+    # Explicitly add the spectra together
+    explicit_spectra = (
+        random_part_stars.spectra["incident"].lnu
+        + random_part_stars.spectra["transmitted"].lnu
+    )
+
+    # Ensure the shapes are the same
+    assert np.allclose(
+        combined_spec.lnu.shape,
+        explicit_spectra.shape,
+    ), (
+        "The combined spectra shape is not the same as the explicit sum"
+        f" (combined={combined_spec.lnu.shape}, "
+        f"explicit={explicit_spectra.shape})"
+    )
+
+    # Ensure the spectra are the same
+    assert np.allclose(
+        combined_spec.lnu,
+        explicit_spectra,
+    ), (
+        "The combined spectra are not the same as the explicit sum"
+        f" (combined={combined_spec.lnu}, explicit={explicit_spectra})"
     )

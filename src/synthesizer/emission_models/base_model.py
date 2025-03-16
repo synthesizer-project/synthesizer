@@ -703,7 +703,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self._is_generating = (
             generator is not None and not self._is_dust_emitting
         )
-        self._is_masked = len(self.masks) > 0
 
     def _unpack_model_recursively(self, model):
         """
@@ -1345,14 +1344,35 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Add the mask
         if not set_all:
             self.masks.append({"attr": attr, "thresh": thresh, "op": op})
-            self._is_masked = True
         else:
             for model in self._models.values():
                 model.masks.append({"attr": attr, "thresh": thresh, "op": op})
-                model._is_masked = True
 
         # Unpack now that we're done
         self.unpack_model()
+
+    def clear_masks(self, set_all=False):
+        """
+        Clear all masks.
+
+        Args:
+            set_all (bool):
+                Whether to clear the masks on all models.
+        """
+        # Clear the masks
+        if not set_all:
+            self.masks = []
+        else:
+            for model in self._models.values():
+                model.masks = []
+
+        # Unpack now that we're done
+        self.unpack_model()
+
+    @property
+    def _is_masked(self):
+        """Check if the model is masked."""
+        return len(self.masks) > 0
 
     def replace_model(self, replace_label, *replacements, new_label=None):
         """
