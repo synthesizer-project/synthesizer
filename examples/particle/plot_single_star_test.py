@@ -50,7 +50,7 @@ part_stars = ParticleStars(
 # Calculate the particle SFZH grid (equivalent to grid weights)
 part_sfzh = part_stars.get_sfzh(
     log10ages=grid.log10age,
-    metallicities=grid.metallicity,
+    log10metallicities=grid.log10metallicities,
     grid_assignment_method="cic",
 ).sfzh
 
