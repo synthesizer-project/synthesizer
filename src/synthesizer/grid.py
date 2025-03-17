@@ -1116,7 +1116,6 @@ class Grid:
         value=None,
         marginalize_function=np.average,
         pre_interp_function=None,
-        inplace=True,
     ):
         """
         Collapse the grid along a specified axis.
@@ -1137,9 +1136,6 @@ class Grid:
                 A function to apply to the axis values before interpolation.
                 Can be used to interpolate in logarithmic space, for example.
                 Defaults to None, i.e., interpolation in linear space.
-            inplace (bool)
-                Whether to modify the grid in place (default) or return a
-                new grid.
 
         Returns:
             grid (Grid)
@@ -1257,52 +1253,28 @@ class Grid:
                 collapsed_line_conts[spectra_id] = {}
                 for line in self.available_lines:
                     collapsed_line_lums[spectra_id][line] = np.take(
-                        line_lums,
+                        line_lums[line],
                         np.argmin(np.abs(axis_values - value)),
                         axis=axis_index,
                     )
                     collapsed_line_conts[spectra_id][line] = np.take(
-                        line_conts,
+                        line_conts[line],
                         np.argmin(np.abs(axis_values - value)),
                         axis=axis_index,
                     )
 
-        if inplace:
-            # Update the grid metadata
-            self.axes.pop(axis_index)
-            self._axes_values.pop(axis)
-            self._axes_units.pop(axis)
-            self.naxes -= 1
+        # Update the grid metadata
+        self.axes.pop(axis_index)
+        self._axes_values.pop(axis)
+        self._axes_units.pop(axis)
+        self.naxes -= 1
 
-            # Update the spectra
-            self.spectra = collapsed_spectra
+        # Update the spectra
+        self.spectra = collapsed_spectra
 
-            # Update the line luminosities and continua
-            self.line_lums = collapsed_line_lums
-            self.line_conts = collapsed_line_conts
-
-            return self
-
-        else:
-            # Return a copy of the grid
-            from copy import deepcopy
-
-            collapsed_grid = deepcopy(self)
-
-            # Update the grid metadata
-            collapsed_grid.axes.pop(axis_index)
-            collapsed_grid._axes_values.pop(axis)
-            collapsed_grid._axes_units.pop(axis)
-            collapsed_grid.naxes -= 1
-
-            # Update the spectra
-            collapsed_grid.spectra = collapsed_spectra
-
-            # Update the line luminosities and continua
-            collapsed_grid.line_lums = collapsed_line_lums
-            collapsed_grid.line_conts = collapsed_line_conts
-
-            return collapsed_grid
+        # Update the line luminosities and continua
+        self.line_lums = collapsed_line_lums
+        self.line_conts = collapsed_line_conts
 
     def get_spectra(self, grid_point, spectra_id="incident"):
         """
