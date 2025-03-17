@@ -1138,8 +1138,8 @@ class Grid:
                 Defaults to None, i.e., interpolation in linear space.
 
         Returns:
-            grid (Grid)
-                A new Grid object with the collapsed axis.
+            None
+                Collapses the grid in-place over the specified axis.
         """
 
         # Check the axis is valid
@@ -1170,11 +1170,6 @@ class Grid:
                 raise exceptions.InconsistentParameter(
                     f"Value {value} is outside the bounds of the axis {axis}."
                 )
-
-            if np.min(np.abs(axis_values - value)) / value < 1e-3:
-                # Revert to "nearest" if the value is
-                # very close to an axis value
-                method = "nearest"
 
         # Collapse the grid
         collapsed_spectra = {}
@@ -1207,6 +1202,14 @@ class Grid:
             elif method == "interpolate":
                 # Adopt pre-interpolation function if provided
                 pre_interp_function = pre_interp_function or (lambda x: x)
+
+                # Validate axis monotonicity
+                dv = np.diff(axis_values)
+                if not np.all(dv > 0):
+                    raise exceptions.UnimplementedFunctionality(
+                        "Axis values must be strictly increasing for "
+                        "interpolation."
+                    )
 
                 # Interpolate the spectra
                 i0 = np.argmax(axis_values[axis_values <= value])

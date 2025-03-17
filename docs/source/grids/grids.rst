@@ -84,7 +84,7 @@ Common variants
 
 Higher-dimensionality grids
 ---------------------------
-Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `metallicity`. However synthesizer can utlilise grids with higher dimensionality e.g. including varying alpha-abundance, or photoionisation parameters (e.g. `U`).
+Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `metallicity`. However synthesizer can utilise grids with higher dimensionality e.g. including varying alpha-abundance, or photoionisation parameters (e.g. `U`).
 
 By default, certain models (e.g., parametric stars) aren't set up to handle higher dimensionality, though this may change in a future version. 
 For now, we provide the functionality to handle these grids by "collapsing" over the additional axes. 
