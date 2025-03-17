@@ -1109,6 +1109,201 @@ class Grid:
 
         return tuple(indices)
 
+    def collapse(
+        self,
+        axis,
+        method="marginalize",
+        value=None,
+        marginalize_function=np.average,
+        pre_interp_function=None,
+        inplace=True,
+    ):
+        """
+        Collapse the grid along a specified axis.
+
+        Args:
+            axis (str)
+                The name of the axis to collapse.
+            method (str)
+                The method to use for collapsing the grid. Options are
+                "marginalize", "interpolate", or "nearest".
+            value (float)
+                The value to collapse the grid at. Required if method
+                is "interpolate" or "nearest".
+            marginalize_function (function)
+                The function to use for marginalizing over the axis.
+                Defaults to np.average.
+            pre_interp_function (function)
+                A function to apply to the axis values before interpolation.
+                Can be used to interpolate in logarithmic space, for example.
+                Defaults to None, i.e., interpolation in linear space.
+            inplace (bool)
+                Whether to modify the grid in place (default) or return a
+                new grid.
+
+        Returns:
+            grid (Grid)
+                A new Grid object with the collapsed axis.
+        """
+
+        # Check the axis is valid
+        if axis not in self.axes:
+            raise exceptions.InconsistentParameter(
+                f"Axis {axis} is not a valid axis on the grid."
+            )
+
+        # Get the index of the axis to collapse
+        axis_index = self.axes.index(axis)
+        axis_values = getattr(self, axis)
+
+        # Check the method is valid
+        if method not in ["marginalize", "interpolate", "nearest"]:
+            raise exceptions.InconsistentParameter(
+                f"Method {method} is not a valid collapse method."
+            )
+
+        if method in ["interpolate", "nearest"]:
+            # Check the value is provided
+            if value is None:
+                raise exceptions.InconsistentParameter(
+                    "Must provide kwarg `value` if `method` is "
+                    "`interpolate` or `nearest`"
+                )
+            # Check the value is within the bounds of the axis
+            if value < np.min(axis_values) or value > np.max(axis_values):
+                raise exceptions.InconsistentParameter(
+                    f"Value {value} is outside the bounds of the axis {axis}."
+                )
+
+            if np.min(np.abs(axis_values - value)) / value < 1e-3:
+                # Revert to "nearest" if the value is
+                # very close to an axis value
+                method = "nearest"
+
+        # Collapse the grid
+        collapsed_spectra = {}
+        collapsed_line_lums = {}
+        collapsed_line_conts = {}
+        for spectra_id in self.available_spectra:
+            # Extract the spectra (and lines) for the given id
+            spectra = self.spectra[spectra_id]
+            line_lums = self.line_lums[spectra_id]
+            line_conts = self.line_conts[spectra_id]
+
+            # Collapse the spectra based on the method
+            if method == "marginalize":
+                # Marginalize over the entire axis
+                collapsed_spectra[spectra_id] = marginalize_function(
+                    spectra, axis=axis_index
+                )  # TODO Could allow weights as kwargs?
+
+                collapsed_line_lums[spectra_id] = {}
+                collapsed_line_conts[spectra_id] = {}
+                for line in self.available_lines:
+                    collapsed_line_lums[spectra_id][line] = (
+                        marginalize_function(line_lums[line], axis=axis_index)
+                    )
+                    collapsed_line_conts[spectra_id][line] = (
+                        marginalize_function(line_conts[line], axis=axis_index)
+                    )
+
+            elif method == "interpolate":
+                pre_interp_function = pre_interp_function or (lambda x: x)
+
+                i0 = np.argmax(axis_values[axis_values <= value])
+                i1 = i0 + 1
+                value_0 = pre_interp_function(axis_values[i0])
+                value_1 = pre_interp_function(axis_values[i1])
+                value_i = pre_interp_function(value)
+                c0 = (value_1 - value_i) / (value_1 - value_0)
+                c1 = (value_i - value_0) / (value_1 - value_0)
+
+                collapsed_spectra[spectra_id] = np.sum(
+                    [
+                        c0 * np.take(spectra, i0, axis=axis_index),
+                        c1 * np.take(spectra, i1, axis=axis_index),
+                    ],
+                    axis=0,
+                )  # TODO Check if np.take uses too much memory?
+
+                collapsed_line_lums[spectra_id] = {}
+                collapsed_line_conts[spectra_id] = {}
+                for line in self.available_lines:
+                    collapsed_line_lums[spectra_id][line] = np.sum(
+                        [
+                            c0 * np.take(line_lums[line], i0, axis=axis_index),
+                            c1 * np.take(line_lums[line], i1, axis=axis_index),
+                        ],
+                        axis=0,
+                    )
+                    collapsed_line_conts[spectra_id][line] = np.sum(
+                        [
+                            c0
+                            * np.take(line_conts[line], i0, axis=axis_index),
+                            c1
+                            * np.take(line_conts[line], i1, axis=axis_index),
+                        ],
+                        axis=0,
+                    )
+
+            elif method == "nearest":
+                collapsed_spectra[spectra_id] = np.take(
+                    spectra,
+                    np.argmin(np.abs(axis_values - value)),
+                    axis=axis_index,
+                )  # TODO Check if np.take uses too much memory?
+
+                collapsed_line_lums[spectra_id] = {}
+                collapsed_line_conts[spectra_id] = {}
+                for line in self.available_lines:
+                    collapsed_line_lums[spectra_id][line] = np.take(
+                        line_lums,
+                        np.argmin(np.abs(axis_values - value)),
+                        axis=axis_index,
+                    )
+                    collapsed_line_conts[spectra_id][line] = np.take(
+                        line_conts,
+                        np.argmin(np.abs(axis_values - value)),
+                        axis=axis_index,
+                    )
+
+        if inplace:
+            # Update the grid metadata
+            self.axes.pop(axis_index)
+            self._axes_values.pop(axis)
+            self._axes_units.pop(axis)
+            self.naxes -= 1
+
+            # Update the spectra
+            self.spectra = collapsed_spectra
+
+            # Update the line luminosities and continua
+            self.line_lums = collapsed_line_lums
+            self.line_conts = collapsed_line_conts
+
+            return self
+
+        else:
+            # Return a copy of the grid
+            from copy import deepcopy
+
+            collapsed_grid = deepcopy(self)
+
+            # Update the grid metadata
+            collapsed_grid.axes.pop(axis_index)
+            collapsed_grid._axes_values.pop(axis)
+            collapsed_grid._axes_units.pop(axis)
+            collapsed_grid.naxes -= 1
+
+            # Update the spectra
+            collapsed_grid.spectra = collapsed_spectra
+
+            # Update the line luminosities and continua
+            collapsed_grid.line_lums = collapsed_line_lums
+            collapsed_grid.line_conts = collapsed_line_conts
+
+            return collapsed_grid
+
     def get_spectra(self, grid_point, spectra_id="incident"):
         """
         Create an Sed object for a specific grid point.
