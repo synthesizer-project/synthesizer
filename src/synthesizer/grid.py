@@ -1193,6 +1193,7 @@ class Grid:
                     spectra, axis=axis_index
                 )  # TODO Could allow weights as kwargs?
 
+                # Marginalize the line luminosities and continua
                 collapsed_line_lums[spectra_id] = {}
                 collapsed_line_conts[spectra_id] = {}
                 for line in self.available_lines:
@@ -1204,8 +1205,10 @@ class Grid:
                     )
 
             elif method == "interpolate":
+                # Adopt pre-interpolation function if provided
                 pre_interp_function = pre_interp_function or (lambda x: x)
 
+                # Interpolate the spectra
                 i0 = np.argmax(axis_values[axis_values <= value])
                 i1 = i0 + 1
                 value_0 = pre_interp_function(axis_values[i0])
@@ -1222,6 +1225,7 @@ class Grid:
                     axis=0,
                 )  # TODO Check if np.take uses too much memory?
 
+                # Interpolate the line luminosities and continua
                 collapsed_line_lums[spectra_id] = {}
                 collapsed_line_conts[spectra_id] = {}
                 for line in self.available_lines:
@@ -1243,12 +1247,14 @@ class Grid:
                     )
 
             elif method == "nearest":
+                # Extract the nearest value in the axis
                 collapsed_spectra[spectra_id] = np.take(
                     spectra,
                     np.argmin(np.abs(axis_values - value)),
                     axis=axis_index,
                 )  # TODO Check if np.take uses too much memory?
 
+                # Extract the line luminosities and continua
                 collapsed_line_lums[spectra_id] = {}
                 collapsed_line_conts[spectra_id] = {}
                 for line in self.available_lines:
