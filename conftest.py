@@ -5,6 +5,7 @@ from unyt import Hz, Mpc, Msun, Myr, erg, km, kpc, s, yr
 from synthesizer.emission_models import (
     BimodalPacmanEmission,
     IncidentEmission,
+    IntrinsicEmission,
     NebularEmission,
     PacmanEmission,
     ReprocessedEmission,
@@ -56,6 +57,12 @@ def reprocessed_emission_model(test_grid):
     """Return a ReprocessedEmission object."""
     # First need a grid to pass to the IncidentEmission object
     return ReprocessedEmission(grid=test_grid)
+
+
+@pytest.fixture
+def intrinsic_emission_model(test_grid):
+    """Return an IntrinsicEmission object."""
+    return IntrinsicEmission(grid=test_grid)
 
 
 @pytest.fixture
