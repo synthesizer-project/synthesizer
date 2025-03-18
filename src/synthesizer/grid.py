@@ -1165,18 +1165,17 @@ class Grid:
                 f"Value {value} is outside the bounds of the axis {axis}."
             )
 
+        # Validate axis monotonicity
+        dv = np.diff(axis_values)
+        if not np.all(dv > 0):
+            raise exceptions.UnimplementedFunctionality(
+                "Axis values must be strictly increasing for interpolation."
+            )
+
+        # Adopt pre-interpolation function if provided
+        pre_interp_function = pre_interp_function or (lambda x: x)
+
         for spectra_id in self.available_spectra:
-            # Adopt pre-interpolation function if provided
-            pre_interp_function = pre_interp_function or (lambda x: x)
-
-            # Validate axis monotonicity
-            dv = np.diff(axis_values)
-            if not np.all(dv > 0):
-                raise exceptions.UnimplementedFunctionality(
-                    "Axis values must be strictly increasing for "
-                    "interpolation."
-                )
-
             # Interpolate the spectra
             i0 = np.argmax(axis_values[axis_values <= value])
             i1 = i0 + 1
