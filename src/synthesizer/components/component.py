@@ -118,11 +118,6 @@ class Component(ABC):
         return self.photo_lnu
 
     @abstractmethod
-    def generate_line(self, *args, **kwargs):
-        """Generate the rest frame line emission for the component."""
-        pass
-
-    @abstractmethod
     def get_mask(self, attr, thresh, op, mask=None):
         """Return a mask based on the attribute and threshold."""
         pass
