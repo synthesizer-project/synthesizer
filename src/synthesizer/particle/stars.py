@@ -23,7 +23,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
+from unyt import Hz, Mpc, Msun, Myr, angstrom, dimensionless, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
@@ -334,7 +334,7 @@ class Stars(Particles, StarsComponent):
             log10ages (array)
                 log10 stellar ages
         """
-        return np.log10(self.ages)
+        return np.log10(self.ages) * dimensionless
 
     def _check_star_args(self):
         """
@@ -1354,7 +1354,7 @@ class Stars(Particles, StarsComponent):
     def _prepare_sfzh_args(
         self,
         log10ages,
-        metallicities,
+        log10metallicities,
         grid_assignment_method,
         nthreads,
     ):
@@ -1364,8 +1364,8 @@ class Stars(Particles, StarsComponent):
         Args:
             log10ages (array-like, float)
                 The log10 ages of the desired SFZH.
-            metallicities (array-like, float)
-                The metallicities of the desired SFZH.
+            log10metallicities (array-like, float)
+                The logged metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1379,11 +1379,11 @@ class Stars(Particles, StarsComponent):
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(log10ages, dtype=np.float64),
-            np.ascontiguousarray(metallicities, dtype=np.float64),
+            np.ascontiguousarray(log10metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
-            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+            np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
@@ -1420,7 +1420,7 @@ class Stars(Particles, StarsComponent):
     def get_sfzh(
         self,
         log10ages,
-        metallicities,
+        log10metallicities,
         grid_assignment_method="cic",
         nthreads=0,
     ):
@@ -1436,8 +1436,8 @@ class Stars(Particles, StarsComponent):
         Args:
             log10ages (array-like, float)
                 The log10 ages of the desired SFZH.
-            metallicities (array-like, float)
-                The metallicities of the desired SFZH.
+            log10metallicities (array-like, float)
+                The logged metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1458,7 +1458,7 @@ class Stars(Particles, StarsComponent):
         # Prepare the arguments for the C function.
         args = self._prepare_sfzh_args(
             log10ages,
-            metallicities,
+            log10metallicities,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
@@ -1466,7 +1466,7 @@ class Stars(Particles, StarsComponent):
         # Get the SFZH and create the ParametricStars object
         self.sfzh = ParametricStars(
             log10ages,
-            metallicities,
+            10**log10metallicities,
             sfzh=compute_sfzh(*args),
         )
 
