@@ -169,6 +169,10 @@ class Extractor(ABC):
         # Also extract the weight variable
         weight = get_param(self._weight_var, model, None, emitter)
 
+        # Remove the units from the weight if necessary
+        if isinstance(weight, (unyt_array, unyt_quantity)):
+            weight = weight.value
+
         toc("Preparing particle data for extraction", start)
 
         return tuple(extracted), weight
