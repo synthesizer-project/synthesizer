@@ -84,6 +84,7 @@ class NebularLineEmission(StellarEmissionModel):
         grid,
         label="nebular_line",
         fesc_ly_alpha="fesc_ly_alpha",
+        fesc="fesc",
         **kwargs,
     ):
         """
@@ -268,6 +269,7 @@ class NebularEmission(StellarEmissionModel):
         grid,
         label="nebular",
         fesc_ly_alpha="fesc_ly_alpha",
+        fesc="fesc",
         nebular_line=None,
         nebular_continuum=None,
         **kwargs,
@@ -305,10 +307,20 @@ class NebularEmission(StellarEmissionModel):
                 **kwargs,
             )
 
+        # Combined nebular emission
+        combined_nebular = StellarEmissionModel(
+            label=label + "_combined",
+            combine=(nebular_line, nebular_continuum),
+            save=False,
+            **kwargs,
+        )
+
         StellarEmissionModel.__init__(
             self,
             label=label,
-            combine=(nebular_line, nebular_continuum),
+            apply_to=combined_nebular,
+            transformer=ProcessedFraction(),
+            fesc=fesc,
             **kwargs,
         )
 
@@ -354,6 +366,7 @@ class ReprocessedEmission(StellarEmissionModel):
             nebular = NebularEmission(
                 grid=grid,
                 fesc_ly_alpha=fesc_ly_alpha,
+                fesc=fesc,
                 **kwargs,
             )
 
