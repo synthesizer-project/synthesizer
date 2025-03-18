@@ -577,7 +577,7 @@ class Grid:
                     lum_units,
                 )
                 self.line_conts["nebular"] = unyt_array(
-                    np.zeros(self.line_lums["nebular"].shape),
+                    hf["lines"]["nebular_continuum"][...],
                     cont_units,
                 )
 
@@ -1319,30 +1319,6 @@ class Grid:
         del all_lines
 
         return line
-
-    def get_line(self, grid_point, line_id, spectra_type="nebular"):
-        """
-        Extract a single line from the grid.
-
-        This is an alias to get_lines to maintain legacy behaviour.
-
-        Args:
-            grid_point (tuple)
-                A tuple of the grid point indices.
-            line_id (str)
-                The id/s of the line. If a string contains a comma separated
-                list of line_ids a composite line will be returned containing
-                the sum of the luminosities and the mean of the wavelengths.
-            spectra_type (str)
-                The spectra type to extract the line from. Default is
-                "nebular", all other spectra will have line luminosities of 0
-                by definition.
-
-
-        Returns:
-            lines (LineCollection)
-        """
-        return self.get_lines(grid_point, line_id, spectra_type)
 
     def plot_specific_ionising_lum(
         self,
