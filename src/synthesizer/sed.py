@@ -1029,7 +1029,6 @@ class Sed:
             )
 
         # Ensure the beta we return is a real number
-        print(beta, type(beta))
         if isinstance(beta, np.ndarray) and np.any(np.isnan(beta)):
             beta[np.isnan(beta)] = 0.0
         elif isinstance(beta, (list, tuple)) and np.any(np.isnan(beta)):
