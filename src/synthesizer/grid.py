@@ -792,12 +792,16 @@ class Grid:
                 List of associated wavelengths.
         """
         with h5py.File(self.grid_filename, "r") as hf:
-            lines = list(hf["lines"].keys())
-
-            wavelengths = np.array(
-                [hf["lines"][line].attrs["wavelength"] for line in lines]
+            lines = np.array(
+                [id.decode("utf-8") for id in hf["lines"]["id"][:]]
             )
-        return lines, wavelengths
+
+            # Read the line wavelengths
+            lams = hf["lines"]["wavelength"][...]
+            lam_units = hf["lines"]["wavelength"].attrs.get("Units")
+            lams = unyt_array(lams, lam_units).to(angstrom)
+
+        return lines, lams
 
     @accepts(new_lam=angstrom)
     def interp_spectra(self, new_lam, loop_grid=False):
