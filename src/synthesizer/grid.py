@@ -1013,13 +1013,12 @@ class Grid:
             )
 
             # Marginalize the line luminosities and continua
-            for line in self.available_lines:
-                self.line_lums[spectra_id][line] = marginalize_function(
-                    self.line_lums[spectra_id][line], axis=axis_index
-                )
-                self.line_conts[spectra_id][line] = marginalize_function(
-                    self.line_conts[spectra_id][line], axis=axis_index
-                )
+            self.line_lums[spectra_id] = marginalize_function(
+                self.line_lums[spectra_id], axis=axis_index
+            )
+            self.line_conts[spectra_id] = marginalize_function(
+                self.line_conts[spectra_id], axis=axis_index
+            )
 
     def _collapse_grid_interpolate(self, axis, value, pre_interp_function):
         """
@@ -1043,6 +1042,7 @@ class Grid:
                 "Must provide kwarg `value` if `method` is "
                 "`interpolate` or `nearest`"
             )
+
         # Check the value is within the bounds of the axis
         if value < np.min(axis_values) or value > np.max(axis_values):
             raise exceptions.InconsistentParameter(
@@ -1080,41 +1080,40 @@ class Grid:
             )
 
             # Interpolate the line luminosities and continua
-            for line in self.available_lines:
-                self.line_lums[spectra_id][line] = np.sum(
-                    [
-                        c0
-                        * np.take(
-                            self.line_lums[spectra_id][line],
-                            i0,
-                            axis=axis_index,
-                        ),
-                        c1
-                        * np.take(
-                            self.line_lums[spectra_id][line],
-                            i1,
-                            axis=axis_index,
-                        ),
-                    ],
-                    axis=0,
-                )
-                self.line_conts[spectra_id][line] = np.sum(
-                    [
-                        c0
-                        * np.take(
-                            self.line_conts[spectra_id][line],
-                            i0,
-                            axis=axis_index,
-                        ),
-                        c1
-                        * np.take(
-                            self.line_conts[spectra_id][line],
-                            i1,
-                            axis=axis_index,
-                        ),
-                    ],
-                    axis=0,
-                )
+            self.line_lums[spectra_id] = np.sum(
+                [
+                    c0
+                    * np.take(
+                        self.line_lums[spectra_id],
+                        i0,
+                        axis=axis_index,
+                    ),
+                    c1
+                    * np.take(
+                        self.line_lums[spectra_id],
+                        i1,
+                        axis=axis_index,
+                    ),
+                ],
+                axis=0,
+            )
+            self.line_conts[spectra_id] = np.sum(
+                [
+                    c0
+                    * np.take(
+                        self.line_conts[spectra_id],
+                        i0,
+                        axis=axis_index,
+                    ),
+                    c1
+                    * np.take(
+                        self.line_conts[spectra_id],
+                        i1,
+                        axis=axis_index,
+                    ),
+                ],
+                axis=0,
+            )
 
     def _collapse_grid_nearest(self, axis, value):
         """
@@ -1151,17 +1150,16 @@ class Grid:
             )
 
             # Extract the line luminosities and continua
-            for line in self.available_lines:
-                self.line_lums[spectra_id][line] = np.take(
-                    self.line_lums[spectra_id][line],
-                    np.argmin(np.abs(axis_values - value)),
-                    axis=axis_index,
-                )
-                self.line_conts[spectra_id][line] = np.take(
-                    self.line_conts[spectra_id][line],
-                    np.argmin(np.abs(axis_values - value)),
-                    axis=axis_index,
-                )
+            self.line_lums[spectra_id] = np.take(
+                self.line_lums[spectra_id],
+                np.argmin(np.abs(axis_values - value)),
+                axis=axis_index,
+            )
+            self.line_conts[spectra_id] = np.take(
+                self.line_conts[spectra_id],
+                np.argmin(np.abs(axis_values - value)),
+                axis=axis_index,
+            )
 
     def collapse(
         self,
