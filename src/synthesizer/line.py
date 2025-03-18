@@ -128,7 +128,7 @@ class LineCollection:
                 A list of the line ids.
         """
         if self.nlines == 1:
-            return self.line_ids[0]
+            return str(self.line_ids[0])
 
         raise exceptions.UnimplementedFunctionality(
             "id only applicable for a single line. Use line_ids instead."
@@ -478,9 +478,9 @@ class LineCollection:
             return new_line
 
         # Do we have a blended line?
-        if isinstance(line_id, str) and "," in line_id:
+        elif isinstance(line_id, str) and "," in line_id:
             # Split the line id into a list of individual lines
-            line_ids = line_id.split(",")
+            line_ids = [li.strip() for li in line_id.split(",")]
 
             # Loop over the lines and combine them into a single line
             new_lam = self.lam[self._line2index[line_ids[0]]]
@@ -528,8 +528,10 @@ class LineCollection:
                 new_line.obs_continuum = new_obs_cont
                 new_line.obslam = new_obslam / len(line_ids)
 
+            return new_line
+
         # Do we have a single line?
-        if isinstance(line_id, str):
+        elif isinstance(line_id, str):
             # Return the single line
             new_line = LineCollection(
                 line_ids=[line_id],
