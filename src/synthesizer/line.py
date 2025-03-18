@@ -1276,7 +1276,3 @@ class LineCollection:
             lum=blended_line_lums * self.luminosity.units,
             cont=blended_line_conts * self.continuum.units,
         )
-
-
-class Line:
-    pass

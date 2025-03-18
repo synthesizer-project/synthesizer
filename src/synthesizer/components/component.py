@@ -127,11 +127,6 @@ class Component(ABC):
         """Return a mask based on the attribute and threshold."""
         pass
 
-    @abstractmethod
-    def _prepare_line_args(self, *args, **kwargs):
-        """Prepare arguments for the line generation."""
-        pass
-
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.
