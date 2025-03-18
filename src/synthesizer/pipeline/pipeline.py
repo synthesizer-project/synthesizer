@@ -661,8 +661,23 @@ class Pipeline:
                 nthreads=self.nthreads,
             )
 
+        # Count how many optical depths we have generated (1 per particle)
+        n_optical_depths = sum(
+            [g.stars.nstars + g.black_holes.nbh for g in self.galaxies]
+        )
+
         # Done!
-        self._took(start, "Getting LOS optical depths")
+        if self.comm is not None:
+            tot_n_optical_depths = self.comm.allreduce(n_optical_depths)
+            self._took(
+                start,
+                f"Generating {n_optical_depths} LOS optical depths "
+                f"({tot_n_optical_depths} total)",
+            )
+        else:
+            self._took(
+                start, f"Generating {n_optical_depths} LOS optical depths"
+            )
 
     def get_sfzh(self, grid):
         """
@@ -695,7 +710,18 @@ class Pipeline:
 
         # Done!
         self._got_sfzh = True
-        self._took(start, "Getting SFZH")
+
+        if self.comm is not None:
+            self._took(
+                start,
+                f"Generating {self.n_galaxies_local} SFZH grids "
+                f"({self.n_galaxies} total)",
+            )
+        else:
+            self._took(
+                start,
+                f"Generating {self.n_galaxies_local} SFZH grids",
+            )
 
     def get_spectra(self, cosmo=None):
         """Generate the spectra for the galaxies based on the EmissionModel."""
@@ -781,7 +807,15 @@ class Pipeline:
         # Done!
         self._got_lnu_spectra = True
         self._got_fnu_spectra = True if cosmo is not None else False
-        self._took(start, f"Generating {n_spectra} spectra")
+
+        if self.comm is not None:
+            tot_n_spectra = self.comm.allreduce(n_spectra)
+            self._took(
+                start,
+                f"Generating {n_spectra} spectra ({tot_n_spectra} total)",
+            )
+        else:
+            self._took(start, f"Generating {n_spectra} spectra")
 
     def get_photometry_luminosities(self):
         """Compute the photometric luminosities from the generated spectra."""
@@ -844,7 +878,18 @@ class Pipeline:
 
         # Done!
         self._got_luminosities = True
-        self._took(start, f"Getting {n_luminosities} photometric luminosities")
+
+        if self.comm is not None:
+            tot_n_luminosities = self.comm.allreduce(n_luminosities)
+            self._took(
+                start,
+                f"Getting {n_luminosities} photometric luminosities "
+                f"({tot_n_luminosities} total)",
+            )
+        else:
+            self._took(
+                start, f"Getting {n_luminosities} photometric luminosities"
+            )
 
     def get_photometry_fluxes(self):
         """Compute the photometric fluxes from the generated spectra."""
@@ -905,7 +950,16 @@ class Pipeline:
 
         # Done!
         self._got_fluxes = True
-        self._took(start, f"Getting {n_fluxes} photometric fluxes")
+
+        if self.comm is not None:
+            tot_n_fluxes = self.comm.allreduce(n_fluxes)
+            self._took(
+                start,
+                f"Getting {n_fluxes} photometric fluxes "
+                f"({tot_n_fluxes} total)",
+            )
+        else:
+            self._took(start, f"Getting {n_fluxes} photometric fluxes")
 
     def get_lines(self, line_ids):
         """
@@ -994,7 +1048,15 @@ class Pipeline:
 
         # Done!
         self._got_lum_lines = True
-        self._took(start, f"Getting {n_lines} emission lines")
+
+        if self.comm is not None:
+            tot_n_lines = self.comm.allreduce(n_lines)
+            self._took(
+                start,
+                f"Getting {n_lines} emission lines ({tot_n_lines} total)",
+            )
+        else:
+            self._took(start, f"Getting {n_lines} emission lines")
 
     def get_images_luminosity(
         self,
@@ -1095,7 +1157,16 @@ class Pipeline:
 
         # Done!
         self._got_images_lum = True
-        self._took(start, f"Generating {n_images} luminosity images")
+
+        if self.comm is not None:
+            tot_n_images = self.comm.allreduce(n_images)
+            self._took(
+                start,
+                f"Generating {n_images} luminosity images "
+                f"({tot_n_images} total)",
+            )
+        else:
+            self._took(start, f"Generating {n_images} luminosity images")
 
     def apply_psfs_luminosity(self):
         """Apply any instrument PSFs to the luminosity images."""
@@ -1198,7 +1269,16 @@ class Pipeline:
 
         # Done!
         self._got_images_lum_psf = True
-        self._took(start, f"Applying PSFs to {n_images} luminosity images")
+
+        if self.comm is not None:
+            tot_n_images = self.comm.allreduce(n_images)
+            self._took(
+                start,
+                f"Applying PSFs to {n_images} luminosity images "
+                f"({tot_n_images} total)",
+            )
+        else:
+            self._took(start, f"Applying PSFs to {n_images} luminosity images")
 
     def get_images_flux(
         self,
@@ -1299,7 +1379,15 @@ class Pipeline:
 
         # Done!
         self._got_images_flux = True
-        self._took(start, f"Generating {n_images} flux images")
+
+        if self.comm is not None:
+            tot_n_images = self.comm.allreduce(n_images)
+            self._took(
+                start,
+                f"Generating {n_images} flux images ({tot_n_images} total)",
+            )
+        else:
+            self._took(start, f"Generating {n_images} flux images")
 
     def apply_psfs_flux(self):
         """Apply any instrument PSFs to the flux images."""
@@ -1402,7 +1490,16 @@ class Pipeline:
 
         # Done!
         self._got_images_flux_psf = True
-        self._took(start, f"Applying PSFs to {n_images} flux images")
+
+        if self.comm is not None:
+            tot_n_images = self.comm.allreduce(n_images)
+            self._took(
+                start,
+                f"Applying PSFs to {n_images} flux images "
+                f"({tot_n_images} total)",
+            )
+        else:
+            self._took(start, f"Applying PSFs to {n_images} flux images")
 
     def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
@@ -1508,9 +1605,17 @@ class Pipeline:
         )
 
         # Done!
-        self._took(
-            start, f"Extra analysis (producing {n_extra_analysis} results)"
-        )
+        if self.comm is not None:
+            tot_n_extra_analysis = self.comm.allreduce(n_extra_analysis)
+            self._took(
+                start,
+                f"Extra analysis (producing {n_extra_analysis} results) "
+                f"({tot_n_extra_analysis} total)",
+            )
+        else:
+            self._took(
+                start, f"Extra analysis (producing {n_extra_analysis} results)"
+            )
 
     def write(
         self,
