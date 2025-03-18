@@ -1365,7 +1365,7 @@ class Stars(Particles, StarsComponent):
             log10ages (array-like, float)
                 The log10 ages of the desired SFZH.
             log10metallicities (array-like, float)
-                The metallicities of the desired SFZH.
+                The logged metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1437,7 +1437,7 @@ class Stars(Particles, StarsComponent):
             log10ages (array-like, float)
                 The log10 ages of the desired SFZH.
             log10metallicities (array-like, float)
-                The metallicities of the desired SFZH.
+                The logged metallicities of the desired SFZH.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest

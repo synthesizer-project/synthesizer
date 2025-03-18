@@ -97,7 +97,7 @@ plt_para_sfzh = np.full_like(stars.sfzh, np.nan)
 plt_para_sfzh[stars.sfzh > 0] = stars.sfzh[stars.sfzh > 0]
 pcm1 = ax.pcolormesh(
     grid.log10age,
-    np.log10(grid.metallicity),
+    grid.log10metallicities,
     plt_para_sfzh.T,
     cmap="Greys_r",
     alpha=0.8,
