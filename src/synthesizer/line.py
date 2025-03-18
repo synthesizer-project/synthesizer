@@ -562,7 +562,7 @@ class LineCollection:
 
         Args:
             axis (int/tuple)
-                The axis/axes to sum over. By defaul this will sum over all
+                The axis/axes to sum over. By default this will sum over all
                 but the final axis (the axis containing different lines).
         """
         # First lets check if we have a multidimensional line collection, if
@@ -811,7 +811,7 @@ class LineCollection:
             axis=0,
         )
 
-        return numer_lum / denom_lum
+        return float(numer_lum / denom_lum)
 
     def get_ratio(self, ratio_id):
         """
