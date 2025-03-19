@@ -31,7 +31,7 @@ except ImportError:
         " `pip install .[eagle]`."
     )
 
-from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr, km, s
+from unyt import Mpc, Msun, km, s, unyt_array, unyt_quantity, yr
 
 from synthesizer.load_data.utils import lookup_age
 

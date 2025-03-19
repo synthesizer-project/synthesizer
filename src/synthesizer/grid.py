@@ -161,14 +161,12 @@ class Grid:
         self.line_lums = {}
         self.line_conts = {}
 
-        # Set up dictionary to hold parameters used in grid generation
-        self.parameters = {}
-
         # Get the axes of the grid from the HDF5 file
         self.axes = []  # axes names
-        self._logged_axes = []  # need to know which have been logged
         self._axes_values = {}
         self._axes_units = {}
+        self._extract_axes = []
+        self._extract_axes_values = {}
         self._get_axes()
 
         # Read in the metadata
@@ -226,13 +224,20 @@ class Grid:
         with h5py.File(self.grid_filename, "r") as hf:
             # What component variable do we need to weight by for the
             # emission in the grid?
-            self._weight_var = hf.attrs.get("WeightVariable", None)
+            self._weight_var = hf.attrs.get("WeightVariable")
 
             # Loop over the Model metadata stored in the Model group
             # and store it in the Grid object
             if "Model" in hf:
                 for key, value in hf["Model"].attrs.items():
                     self._model_metadata[key] = value
+
+            # Attach all the root level attribtues to the grid object
+            for k, v in hf.attrs.items():
+                # Skip the axes attribute as we've already read that
+                if k == "axes" or k == "WeightVariable":
+                    continue
+                setattr(self, k, v)
 
     def __getattr__(self, name):
         """
@@ -382,8 +387,6 @@ class Grid:
         """Get the grid axes from the HDF5 file."""
         # Get basic info of the grid
         with h5py.File(self.grid_filename, "r") as hf:
-            self.parameters = {k: v for k, v in hf.attrs.items()}
-
             # Get list of axes
             axes = list(hf.attrs["axes"])
 
@@ -391,25 +394,33 @@ class Grid:
             # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in axes:
                 # What are the units of this axis?
-                axis_units = hf["axes"][axis].attrs.get(
-                    "Units", "dimensionless"
-                )
-                log_axis = hf["axes"][axis].attrs.get("log_on_read", False)
+                axis_units = hf["axes"][axis].attrs.get("Units")
+                log_axis = hf["axes"][axis].attrs.get("log_on_read")
 
                 if "log10" in axis:
-                    log_axis = True
+                    raise exceptions.GridError(
+                        "Logged axes are no longer supported because "
+                        "of ambiguous units. Please update your grid file."
+                    )
 
                 # Get the values
                 values = hf["axes"][axis][:]
-                if "log10" in axis:
-                    values = 10**values
-                    axis = axis.replace("log10", "")
 
-                # Set all the axis attributes
+                # Set all the axis attributes as is (without accounting
+                # for any log10 conversions needed for extraction)
                 self.axes.append(axis)
                 self._axes_values[axis] = values
                 self._axes_units[axis] = axis_units
-                self._logged_axes.append(log_axis)
+
+                # Now we handle the extractions
+                if log_axis:
+                    self._extract_axes.append(f"log10{axis}")
+                    self._extract_axes_values[f"log10{axis}"] = np.log10(
+                        values
+                    )
+                else:
+                    self._extract_axes.append(axis)
+                    self._extract_axes_values[axis] = values
 
             # Number of axes
             self.naxes = len(self.axes)
@@ -692,14 +703,14 @@ class Grid:
             # linecont entries.
             for ind, line in enumerate(self.available_lines):
                 self.line_lums["nebular"][line] = hf["lines"]["luminosity"][
-                    :, :, ind
+                    ..., ind
                 ]
                 self.line_conts["nebular"][line] = hf["lines"][
                     "nebular_continuum"
-                ][:, :, ind]
+                ][..., ind]
 
                 self.line_lums["linecont"][line] = hf["lines"]["luminosity"][
-                    :, :, ind
+                    ..., ind
                 ]
                 self.line_conts["linecont"][line] = np.zeros(
                     self.line_lums["nebular"][line].shape
@@ -710,14 +721,14 @@ class Grid:
                 )
                 self.line_conts["nebular_continuum"][line] = hf["lines"][
                     "nebular_continuum"
-                ][:, :, ind]
+                ][..., ind]
 
                 self.line_lums["transmitted"][line] = np.zeros(
                     self.line_lums["nebular"][line].shape
                 )
                 self.line_conts["transmitted"][line] = hf["lines"][
                     "transmitted"
-                ][:, :, ind]
+                ][..., ind]
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries. the line luminosities for all entries
@@ -980,6 +991,16 @@ class Grid:
         """Return the shape of the grid."""
         return self.spectra[self.available_spectra[0]].shape
 
+    @property
+    def ndim(self):
+        """Return the number of dimensions in the grid."""
+        return len(self.shape)
+
+    @property
+    def nlam(self):
+        """Return the number of wavelengths in the grid."""
+        return len(self.lam)
+
     @staticmethod
     def get_nearest_index(value, array):
         """
@@ -1087,6 +1108,246 @@ class Grid:
             )
 
         return tuple(indices)
+
+    def _collapse_grid_marginalize(self, axis, marginalize_function):
+        """
+        Collapse the grid by marginalizing over an entire axis.
+
+        Args:
+            axis (str)
+                The name of the axis to collapse.
+            marginalize_function (function)
+                The function to use for marginalizing over the axis.
+        """
+        # Get the index of the axis to collapse
+        axis_index = self.axes.index(axis)
+
+        for spectra_id in self.available_spectra:
+            # Marginalize over the entire axis
+            self.spectra[spectra_id] = marginalize_function(
+                self.spectra[spectra_id], axis=axis_index
+            )
+
+            # Marginalize the line luminosities and continua
+            for line in self.available_lines:
+                self.line_lums[spectra_id][line] = marginalize_function(
+                    self.line_lums[spectra_id][line], axis=axis_index
+                )
+                self.line_conts[spectra_id][line] = marginalize_function(
+                    self.line_conts[spectra_id][line], axis=axis_index
+                )
+
+    def _collapse_grid_interpolate(self, axis, value, pre_interp_function):
+        """
+        Collapse the grid by interpolating to the specified value.
+
+        Args:
+            axis (str)
+                The name of the axis to collapse.
+            value (float)
+                The value to collapse the grid at.
+            pre_interp_function (function)
+                A function to apply to the axis values before interpolation.
+        """
+        # Get the index of the axis to collapse
+        axis_index = self.axes.index(axis)
+        axis_values = getattr(self, axis)
+
+        # Check the value is provided
+        if value is None:
+            raise exceptions.InconsistentParameter(
+                "Must provide kwarg `value` if `method` is "
+                "`interpolate` or `nearest`"
+            )
+        # Check the value is within the bounds of the axis
+        if value < np.min(axis_values) or value > np.max(axis_values):
+            raise exceptions.InconsistentParameter(
+                f"Value {value} is outside the bounds of the axis {axis}."
+            )
+
+        # Validate axis monotonicity
+        dv = np.diff(axis_values)
+        if not np.all(dv > 0):
+            raise exceptions.UnimplementedFunctionality(
+                "Axis values must be strictly increasing for interpolation."
+            )
+
+        # Adopt pre-interpolation function if provided
+        pre_interp_function = pre_interp_function or (lambda x: x)
+
+        for spectra_id in self.available_spectra:
+            # Interpolate the spectra
+            i0 = np.argmax(axis_values[axis_values <= value])
+            i1 = i0 + 1
+            value_0 = pre_interp_function(axis_values[i0])
+            value_1 = pre_interp_function(axis_values[i1])
+            value_i = pre_interp_function(value)
+            c0 = (value_1 - value_i) / (value_1 - value_0)
+            c1 = (value_i - value_0) / (value_1 - value_0)
+
+            self.spectra[spectra_id] = np.sum(
+                [
+                    c0
+                    * np.take(self.spectra[spectra_id], i0, axis=axis_index),
+                    c1
+                    * np.take(self.spectra[spectra_id], i1, axis=axis_index),
+                ],
+                axis=0,
+            )
+
+            # Interpolate the line luminosities and continua
+            for line in self.available_lines:
+                self.line_lums[spectra_id][line] = np.sum(
+                    [
+                        c0
+                        * np.take(
+                            self.line_lums[spectra_id][line],
+                            i0,
+                            axis=axis_index,
+                        ),
+                        c1
+                        * np.take(
+                            self.line_lums[spectra_id][line],
+                            i1,
+                            axis=axis_index,
+                        ),
+                    ],
+                    axis=0,
+                )
+                self.line_conts[spectra_id][line] = np.sum(
+                    [
+                        c0
+                        * np.take(
+                            self.line_conts[spectra_id][line],
+                            i0,
+                            axis=axis_index,
+                        ),
+                        c1
+                        * np.take(
+                            self.line_conts[spectra_id][line],
+                            i1,
+                            axis=axis_index,
+                        ),
+                    ],
+                    axis=0,
+                )
+
+    def _collapse_grid_nearest(self, axis, value):
+        """
+        Collapse the grid by extracting the nearest value of the axis.
+
+        Args:
+            axis (str)
+                The name of the axis to collapse.
+            value (float)
+                The value to collapse the grid at.
+        """
+        # Get the index of the axis to collapse
+        axis_index = self.axes.index(axis)
+        axis_values = getattr(self, axis)
+
+        # Check the value is provided
+        if value is None:
+            raise exceptions.InconsistentParameter(
+                "Must provide kwarg `value` if `method` is "
+                "`interpolate` or `nearest`"
+            )
+        # Check the value is within the bounds of the axis
+        if value < np.min(axis_values) or value > np.max(axis_values):
+            raise exceptions.InconsistentParameter(
+                f"Value {value} is outside the bounds of the axis {axis}."
+            )
+
+        for spectra_id in self.available_spectra:
+            # Extract the nearest value in the axis
+            self.spectra[spectra_id] = np.take(
+                self.spectra[spectra_id],
+                np.argmin(np.abs(axis_values - value)),
+                axis=axis_index,
+            )
+
+            # Extract the line luminosities and continua
+            for line in self.available_lines:
+                self.line_lums[spectra_id][line] = np.take(
+                    self.line_lums[spectra_id][line],
+                    np.argmin(np.abs(axis_values - value)),
+                    axis=axis_index,
+                )
+                self.line_conts[spectra_id][line] = np.take(
+                    self.line_conts[spectra_id][line],
+                    np.argmin(np.abs(axis_values - value)),
+                    axis=axis_index,
+                )
+
+    def collapse(
+        self,
+        axis,
+        method="marginalize",
+        value=None,
+        marginalize_function=np.average,
+        pre_interp_function=None,
+    ):
+        """
+        Collapse the grid in place along a specified axis.
+
+        Reduces the dimensionality of the grid by collapsing along the
+        specified axis, using the specified method. The method can be
+        "marginalize", "interpolate", or "nearest". Note that
+        interpolation can yield unrealistic results if the grid is
+        particularly coarse, and should be used with caution.
+
+        Args:
+            axis (str)
+                The name of the axis to collapse.
+            method (str)
+                The method to use for collapsing the grid. Options are
+                "marginalize", "interpolate", or "nearest". Defaults
+                to "marginalize".
+            value (float)
+                The value to collapse the grid at. Required if method
+                is "interpolate" or "nearest".
+            marginalize_function (function)
+                The function to use for marginalizing over the axis.
+                Defaults to np.average.
+            pre_interp_function (function)
+                A function to apply to the axis values before interpolation.
+                Can be used to interpolate in logarithmic space, for example.
+                Defaults to None, i.e., interpolation in linear space.
+
+        Returns:
+            None
+                Collapses the grid in-place over the specified axis.
+        """
+        # Check the axis is valid
+        if axis not in self.axes:
+            raise exceptions.InconsistentParameter(
+                f"Axis {axis} is not a valid axis on the grid."
+            )
+
+        # Check the method is valid
+        if method not in ["marginalize", "interpolate", "nearest"]:
+            raise exceptions.InconsistentParameter(
+                f"Method {method} is not a valid collapse method."
+            )
+
+        # Collapse the spectra based on the method
+        if method == "marginalize":
+            # Marginalize over the entire axis
+            self._collapse_grid_marginalize(axis, marginalize_function)
+
+        elif method == "interpolate":
+            # Interpolate the grid at the given value
+            self._collapse_grid_interpolate(axis, value, pre_interp_function)
+
+        elif method == "nearest":
+            # Extract the nearest value in the axis
+            self._collapse_grid_nearest(axis, value)
+
+        # Update the grid metadata
+        self.axes.pop(self.axes.index(axis))
+        self._axes_values.pop(axis)
+        self._axes_units.pop(axis)
+        self.naxes -= 1
 
     def get_spectra(self, grid_point, spectra_id="incident"):
         """

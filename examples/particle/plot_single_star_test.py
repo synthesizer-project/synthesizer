@@ -29,7 +29,7 @@ model = TransmittedEmission(grid)
 stars = ParametricStars(
     grid.log10age,
     grid.metallicity,
-    sf_hist=1e7,
+    sf_hist=1e7 * yr,
     metal_dist=0.01,
     initial_mass=1 * Msun,
 )
@@ -50,7 +50,7 @@ part_stars = ParticleStars(
 # Calculate the particle SFZH grid (equivalent to grid weights)
 part_sfzh = part_stars.get_sfzh(
     log10ages=grid.log10age,
-    metallicities=grid.metallicity,
+    log10metallicities=grid.log10metallicities,
     grid_assignment_method="cic",
 ).sfzh
 
@@ -62,7 +62,7 @@ fig, ax = plt.subplots()
 ax.grid(True)
 
 # Plot the grid points
-x, y = np.meshgrid(grid.log10age, grid.metallicity)
+x, y = np.meshgrid(grid.log10age, grid.log10metallicities)
 ax.scatter(
     x.flatten(),
     np.log10(y.flatten()),
@@ -85,7 +85,7 @@ plt_part_sfzh = np.full_like(part_sfzh, np.nan)
 plt_part_sfzh[part_sfzh > 0] = part_sfzh[part_sfzh > 0]
 pcm2 = ax.pcolormesh(
     grid.log10age,
-    np.log10(grid.metallicity),
+    grid.log10metallicities,
     plt_part_sfzh.T,
     cmap="plasma",
     norm=Normalize(vmin=np.min(part_sfzh[part_sfzh > 0]), vmax=1.0, clip=True),
@@ -97,7 +97,7 @@ plt_para_sfzh = np.full_like(stars.sfzh, np.nan)
 plt_para_sfzh[stars.sfzh > 0] = stars.sfzh[stars.sfzh > 0]
 pcm1 = ax.pcolormesh(
     grid.log10age,
-    np.log10(grid.metallicity),
+    grid.log10metallicities,
     plt_para_sfzh.T,
     cmap="Greys_r",
     alpha=0.8,
