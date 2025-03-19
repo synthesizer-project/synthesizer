@@ -44,11 +44,11 @@ def get_line_label(line_id):
     if isinstance(line_id, list):
         line_id = ", ".join(line_id)
 
-    if line_id in line_ratios.line_labels.keys():
-        line_label = line_ratios.line_labels[line_id]
+    if line_id in line_labels.keys():
+        line_label = line_labels[line_id]
     else:
         line_id = line_id.split(",")
-        line_labels = []
+        _line_labels = []
         for line_id_ in line_id:
             # get the element, ion, and wavelength
             element, ion, wavelength = line_id_.split(" ")
@@ -62,11 +62,11 @@ def get_line_label(line_id):
                 unit = r"\mu m"
             wavelength = wavelength[:-1] + unit
 
-            line_labels.append(
+            _line_labels.append(
                 f"{element}{get_roman_numeral(int(ion))}{wavelength}"
             )
 
-        line_label = "+".join(line_labels)
+        line_label = "+".join(_line_labels)
 
     return line_label
 
@@ -205,3 +205,64 @@ def get_roman_numeral(number):
             div -= 1
         i -= 1
     return roman
+
+
+# Shorthand for common lines
+aliases = {
+    "Hb": "H 1 4861.32A",
+    "Ha": "H 1 6562.80A",
+    "Hg": "H 1 4340.46A",
+    "O1": "O 1 6300.30A",
+    "O2b": "O 2 3726.03A",
+    "O2r": "O 2 3728.81A",
+    "O2": "O 2 3726.03A, O 2 3728.81A",
+    "O3b": "O 3 4958.91A",
+    "O3r": "O 3 5006.84A",
+    "O3": "O 3 4958.91A, O 3 5006.84A",
+    "Ne3": "Ne 3 3868.76A",
+    "N2": "N 2 6583.45A",
+    "S2": "S 2 6730.82A, S 2 6716.44A",
+}
+
+
+# Standard names
+Ha = aliases["Ha"]
+Hb = aliases["Hb"]
+O1 = aliases["O1"]
+O2b = aliases["O2b"]
+O2r = aliases["O2r"]
+O2 = aliases["O2"]
+O3b = aliases["O3b"]
+O3r = aliases["O3r"]
+O3 = aliases["O3"]
+Ne3 = aliases["Ne3"]
+N2 = aliases["N2"]
+S2 = aliases["S2"]
+
+
+# Dictionary of common line labels to use by default
+line_labels = {
+    "O 2 3726.03A,O 2 3728.81A": "[OII]3726,3729",
+    "H 1 4861.32A": r"H\beta",
+    "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
+    "H 1 6562.80A": r"H\alpha",
+    "O 3 5006.84A": "[OIII]5007",
+    "N 2 6583.45A": "[NII]6583",
+}
+
+
+def alias_to_line_id(alias):
+    """
+    Convert a line alias to a line id.
+
+    Args:
+        alias (str)
+            The line alias.
+
+    Returns:
+        line_id (str)
+            The line id.
+    """
+    if alias in aliases:
+        return aliases[alias]
+    return alias

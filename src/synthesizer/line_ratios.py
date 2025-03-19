@@ -8,49 +8,21 @@ standard, i.e. using vacuum wavelengths at <200nm and air wavelengths at
 >200nm.
 """
 
-# Shorthand for common lines
-aliases = {
-    "Hb": "H 1 4861.32A",
-    "Ha": "H 1 6562.80A",
-    "Hg": "H 1 4340.46A",
-    "O1": "O 1 6300.30A",
-    "O2b": "O 2 3726.03A",
-    "O2r": "O 2 3728.81A",
-    "O2": "O 2 3726.03A, O 2 3728.81A",
-    "O3b": "O 3 4958.91A",
-    "O3r": "O 3 5006.84A",
-    "O3": "O 3 4958.91A, O 3 5006.84A",
-    "Ne3": "Ne 3 3868.76A",
-    "N2": "N 2 6583.45A",
-    "S2": "S 2 6730.82A, S 2 6716.44A",
-}
+import matplotlib.pyplot as plt
 
-
-# Standard names
-Ha = aliases["Ha"]
-Hb = aliases["Hb"]
-O1 = aliases["O1"]
-O2b = aliases["O2b"]
-O2r = aliases["O2r"]
-O2 = aliases["O2"]
-O3b = aliases["O3b"]
-O3r = aliases["O3r"]
-O3 = aliases["O3"]
-Ne3 = aliases["Ne3"]
-N2 = aliases["N2"]
-S2 = aliases["S2"]
-
-
-# Dictionary of common line labels to use by default
-line_labels = {
-    "O 2 3726.03A,O 2 3728.81A": "[OII]3726,3729",
-    "H 1 4861.32A": r"H\beta",
-    "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
-    "H 1 6562.80A": r"H\alpha",
-    "O 3 5006.84A": "[OIII]5007",
-    "N 2 6583.45A": "[NII]6583",
-}
-
+from synthesizer.emissions.utils import (
+    N2,
+    O1,
+    O2,
+    O3,
+    S2,
+    Ha,
+    Hb,
+    Ne3,
+    O2b,
+    O3r,
+    get_diagram_labels,
+)
 
 # Define a dictionary to hold line ratios
 ratios = {}
@@ -107,6 +79,74 @@ def get_bpt_kewley01(logNII_Ha):
     return 0.61 / (logNII_Ha - 0.47) + 1.19
 
 
+def plot_bpt_kewley01(
+    logNII_Ha,
+    fig=None,
+    ax=None,
+    show=True,
+    xlimits=(0.01, 10),
+    ylimits=(0.05, 20),
+    **kwargs,
+):
+    """
+    Plot the BPT-NII demarcations from Kewley+2001.
+
+    Kewley+03: https://arxiv.org/abs/astro-ph/0106324
+
+    Demarcation defined by:
+
+    log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
+
+    Args:
+        logNII_Ha (array)
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line.
+        fig (matplotlib.figure.Figure)
+            Optional figure to plot on,
+        ax (matplotlib.axes.Axes)
+            Optional axis to plot on.
+        show (bool)
+            Should we show the plot?
+        xlimits (tuple)
+            The x-axis limits.
+        ylimits (tuple)
+            The y-axis limits.
+        kwargs
+            Any additional keyword arguments to pass to the plot.
+
+    Returns:
+        fig, ax
+            The figure and axis objects
+    """
+    # Get the OIII/Hb ratio
+    logOIII_Hb = get_bpt_kewley01(logNII_Ha)
+
+    # Create the figure and axis if not provided
+    if fig is None:
+        fig = plt.figure()
+    if ax is None:
+        ax = fig.add_subplot(111)
+
+    # Plot the demarcation line
+    ax.loglog(10**logNII_Ha, 10**logOIII_Hb, **kwargs)
+
+    # Limit the axes
+    ax.set_xlim(xlimits)
+    ax.set_ylim(ylimits)
+
+    # Label the axes
+    xlabel, ylabel = get_diagram_labels("BPT-NII")
+    ax.set_xlabel(f"${xlabel}$")
+    ax.set_ylabel(f"${ylabel}$")
+
+    # Are we showing the plot?
+    if show:
+        plt.show()
+
+    # Return the figure and axis
+    return fig, ax
+
+
 def get_bpt_kauffman03(logNII_Ha):
     """
     BPT-NII demarcations from Kauffman+2003.
@@ -127,3 +167,71 @@ def get_bpt_kauffman03(logNII_Ha):
             Corresponding log([OIII]/Hb) ratio array
     """
     return 0.61 / (logNII_Ha - 0.05) + 1.3
+
+
+def plot_bpt_kauffman03(
+    logNII_Ha,
+    fig=None,
+    ax=None,
+    show=True,
+    xlimits=(0.01, 10),
+    ylimits=(0.05, 20),
+    **kwargs,
+):
+    """
+    Plot the BPT-NII demarcations from Kauffman+2003.
+
+    Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
+
+    Demarcation defined by:
+
+    log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
+
+    Args:
+        logNII_Ha (array)
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line.
+        fig (matplotlib.figure.Figure)
+            Optional figure to plot on.
+        ax (matplotlib.axes.Axes)
+            Optional axis to plot on.
+        show (bool)
+            Should we show the plot?
+        xlimits (tuple)
+            The x-axis limits.
+        ylimits (tuple)
+            The y-axis limits.
+        kwargs
+            Any additional keyword arguments to pass to the plot_bpt_kewley01.
+
+    Returns:
+        fig, ax
+            The figure and axis objects
+    """
+    # Get the OIII/Hb ratio
+    logOIII_Hb = get_bpt_kauffman03(logNII_Ha)
+
+    # Create the figure and axis if not provided
+    if fig is None:
+        fig = plt.figure()
+    if ax is None:
+        ax = fig.add_subplot(111)
+
+    # Plot the demarcation line
+    ax.loglog(10**logNII_Ha, 10**logOIII_Hb, **kwargs)
+
+    # Limit the axes
+    ax.set_xlim(xlimits)
+    ax.set_ylim(ylimits)
+
+    # Label the axes
+    xlabel, ylabel = get_diagram_labels("BPT-NII")
+    ax.set_xlabel(f"${xlabel}$")
+    ax.set_ylabel(f"${ylabel}$")
+
+    # Are we showing the plot?
+    if show:
+        plt.show()
+
+    # Return the figure and axis
+    return fig, ax

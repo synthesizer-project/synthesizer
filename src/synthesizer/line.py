@@ -33,6 +33,7 @@ from unyt import (
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
@@ -458,8 +459,9 @@ class LineCollection:
 
         # Do we have a list of lines?
         if isinstance(line_id, (list, tuple, np.ndarray)):
-            # Collect together the indices we'll need to extract
-            inds = [self._line2index[li] for li in line_id]
+            # Collect together the indices we'll need to extract, handling
+            # any aliases
+            inds = [self._line2index[alias_to_line_id(li)] for li in line_id]
 
             # Get the subset of lines
             new_line = LineCollection(
@@ -479,8 +481,11 @@ class LineCollection:
 
         # Do we have a blended line?
         elif isinstance(line_id, str) and "," in line_id:
-            # Split the line id into a list of individual lines
-            line_ids = [li.strip() for li in line_id.split(",")]
+            # Split the line id into a list of individual lines, handling any
+            # aliases
+            line_ids = [
+                alias_to_line_id(li.strip()) for li in line_id.split(",")
+            ]
 
             # Loop over the lines and combine them into a single line
             new_lam = self.lam[self._line2index[line_ids[0]]]
@@ -532,6 +537,9 @@ class LineCollection:
 
         # Do we have a single line?
         elif isinstance(line_id, str):
+            # Are we dealing with an alias?
+            line_id = alias_to_line_id(line_id)
+
             # Return the single line
             new_line = LineCollection(
                 line_ids=[line_id],
