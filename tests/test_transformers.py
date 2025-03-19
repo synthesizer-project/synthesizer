@@ -10,10 +10,12 @@ def test_fesc_model_level(
     random_part_stars,
 ):
     """
-    Test the fesc override in the emission model.
+    Test setting fesc on the emission model.
 
-    This test ensures that the fesc override on get_spectra methods is working
-    correctly.
+    This test ensures that the fesc set during instantiation of a model
+    is set correctly. We only do this for the IntrinsicEmission model here
+    since it encompasses all the models that relate to fesc with some parent
+    models derived from it.
     """
     # Get the spectra with fesc=0
     model = IntrinsicEmission(test_grid, fesc=0)
@@ -39,10 +41,11 @@ def test_fesc_override(
     pacman_emission_model,
 ):
     """
-    Test the fesc override in the emission model.
+    Test the get_spectra fesc override in the emission model.
 
     This test ensures that the fesc override on get_spectra methods is working
-    correctly.
+    correctly. Unlike above, we test all the models here to ensure the
+    override is correctly passed through different levels of complexity.
     """
     # For this test we need a singular tau_V value (we're only doing integrated
     # spectra)
