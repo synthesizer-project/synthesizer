@@ -615,7 +615,7 @@ class LineCollection:
         """
         # Check the LineCollections are compatible
         for other_line in other_lines:
-            if self.line_ids != other_line.line_ids:
+            if np.any(self.line_ids != other_line.line_ids):
                 raise exceptions.InconsistentArguments(
                     "LineCollections must contain the same lines to be added"
                 )
