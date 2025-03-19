@@ -28,7 +28,7 @@ from astropy.cosmology import Planck15
 from tqdm import tqdm
 from unyt import Msun, kpc, yr
 
-from .utils import age_lookup_table, lookup_age
+from synthesizer.load_data.utils import age_lookup_table, lookup_age
 from synthesizer.exceptions import UnmetDependency
 
 try:
