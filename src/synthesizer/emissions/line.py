@@ -154,6 +154,12 @@ class LineCollection:
         # Set the line continuum
         self.continuum = cont
 
+        # Ensure the luminosity and continuum are the same shape
+        if self.luminosity.shape != self.continuum.shape:
+            raise exceptions.InconsistentArguments(
+                "Luminosity and continuum arrays must have the same shape"
+            )
+
         # We'll populate observer frame properties when get_flux is called
         self.obslam = None
         self.flux = None
@@ -994,12 +1000,12 @@ class LineCollection:
         # If we have units make sure they are ok and then strip them
         if isinstance(scaling, (unyt_array, unyt_quantity)):
             # Check if we have compatible units with the continuum
-            if self.continuum.units.is_compatible(scaling.units):
+            if self.continuum.units.dimensions == scaling.units.dimensions:
                 scaling_cont = scaling.to(self.continuum.units).value
                 scaling_lum = (
                     (scaling * self.nu).to(self.luminosity.units).value
                 )
-            elif self.luminosity.units.is_compatible(scaling.units):
+            elif self.luminosity.units.dimensions == scaling.units.dimensions:
                 scaling_lum = scaling.to(self.luminosity.units).value
                 scaling_cont = (
                     (scaling / self.nu).to(self.continuum.units).value
@@ -1019,25 +1025,32 @@ class LineCollection:
         lum = self._luminosity.copy()
         cont = self._continuum.copy()
 
+        # First we will handle the luminosity scaling (we need to do each
+        # individually because the scalings can have different dimensions
+        # depending on the conversion done above)
+
         # Handle a scalar scaling factor
         if np.isscalar(scaling_lum):
             if mask is None:
                 lum *= scaling_lum
-                cont *= scaling_cont
             else:
                 lum[mask] *= scaling_lum
-                cont[mask] *= scaling_cont
 
         # Handle an single element array scaling factor
         elif scaling_lum.size == 1:
             scaling_lum = scaling_lum.item()
-            scaling_cont = scaling_cont.item()
             if mask is None:
                 lum *= scaling_lum
-                cont *= scaling_cont
             else:
                 lum[mask] *= scaling_lum
-                cont[mask] *= scaling_cont
+
+        # Handle the case where we have a 1D scaling array that matches the
+        # wavelength axis
+        elif scaling_lum.ndim == 1 and scaling_lum.size == self.lam.size:
+            if mask is None:
+                lum *= scaling_lum
+            else:
+                lum[mask] *= scaling_lum[mask]
 
         # Handle a multi-element array scaling factor as long as it matches
         # the shape of the lnu array up to the dimensions of the scaling array
@@ -1049,17 +1062,12 @@ class LineCollection:
             new_scaling_lum = np.ones(self.shape) * np.expand_dims(
                 scaling_lum, axis=expand_axes
             )
-            new_scaling_cont = np.ones(self.shape) * np.expand_dims(
-                scaling_cont, axis=expand_axes
-            )
 
             # Now we can multiply the arrays together
             if mask is None:
                 lum *= new_scaling_lum
-                cont *= new_scaling_cont
             else:
                 lum[mask] *= new_scaling_lum[mask]
-                cont[mask] *= new_scaling_cont[mask]
 
         # If the scaling array is the same shape as the lnu array then we can
         # just multiply them together
@@ -1069,14 +1077,79 @@ class LineCollection:
         ):
             if mask is None:
                 lum *= scaling_lum
-                cont *= scaling_cont
             else:
                 lum[mask] *= scaling_lum[mask]
+
+        # Otherwise, we've been handed a bad scaling factor
+        else:
+            out_str = (
+                "Incompatible scaling factor for luminsoity "
+                f"with type {type(scaling)} "
+            )
+            if hasattr(scaling, "shape"):
+                out_str += f"and shape {scaling.shape}"
+            else:
+                out_str += f"and value {scaling}"
+            raise exceptions.InconsistentMultiplication(out_str)
+
+        # Handle a scalar scaling factor
+        if np.isscalar(scaling_cont):
+            if mask is None:
+                cont *= scaling_cont
+            else:
+                cont[mask] *= scaling_cont
+
+        # Handle an single element array scaling factor
+        elif scaling_cont.size == 1:
+            scaling_cont = scaling_cont.item()
+            if mask is None:
+                cont *= scaling_cont
+            else:
+                cont[mask] *= scaling_cont
+
+        # Handle the case where we have a 1D scaling array that matches the
+        # wavelength axis
+        elif scaling_cont.ndim == 1 and scaling_cont.size == self.lam.size:
+            if mask is None:
+                cont *= scaling_cont
+            else:
+                cont[mask] *= scaling_cont[mask]
+
+        # Handle a multi-element array scaling factor as long as it matches
+        elif isinstance(scaling_cont, np.ndarray) and len(
+            scaling_cont.shape
+        ) < len(self.shape):
+            # We need to expand the scaling array to match the lnu array
+            expand_axes = tuple(
+                range(len(scaling_cont.shape), len(self.shape))
+            )
+            new_scaling_cont = np.ones(self.shape) * np.expand_dims(
+                scaling_cont, axis=expand_axes
+            )
+
+            # Now we can multiply the arrays together
+            if mask is None:
+                cont *= new_scaling_cont
+            else:
+                cont[mask] *= new_scaling_cont[mask]
+
+        # If the scaling array is the same shape as the lnu array then we can
+        # just multiply them together
+        elif (
+            isinstance(scaling_cont, np.ndarray)
+            and scaling_cont.shape == self.shape
+        ):
+            if mask is None:
+                cont *= scaling_cont
+            else:
                 cont[mask] *= scaling_cont[mask]
 
         # Otherwise, we've been handed a bad scaling factor
         else:
-            out_str = f"Incompatible scaling factor with type {type(scaling)} "
+            out_str = (
+                "Incompatible scaling factor for continuum "
+                f"with type {type(scaling)} "
+            )
             if hasattr(scaling, "shape"):
                 out_str += f"and shape {scaling.shape}"
             else:
@@ -1206,7 +1279,7 @@ class LineCollection:
         # Collect luminosities and wavelengths
         line_ids = plot_lines.line_ids
         luminosities = plot_lines.luminosity
-        wavelengths = plot_lines.lam
+        wavelengths = plot_lines.lam.to("angstrom").value
 
         # Remove 0s and nans
         mask = np.logical_and(luminosities > 0, ~np.isnan(luminosities))
@@ -1233,9 +1306,15 @@ class LineCollection:
 
         # If we haven't been given a lower lim, set it to the minimum
         if len(xlimits) == 0:
-            xlimits = (min(wavelengths) - 100, max(wavelengths) + 100)
+            xlimits = (
+                np.min(wavelengths),
+                np.max(wavelengths),
+            )
         if len(ylimits) == 0:
-            ylimits = (min(luminosities) / 10, max(luminosities) * 10)
+            ylimits = (
+                min(luminosities) / 10 / (erg / s),
+                max(luminosities) * 10 / (erg / s),
+            )
         elif ylimits[0] is None:
             ylimits = list(ylimits)
             ylimits[0] = min(luminosities) / 10

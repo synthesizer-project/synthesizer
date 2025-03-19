@@ -11,9 +11,11 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import angstrom
 
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.exceptions import UnimplementedFunctionality
+from synthesizer.units import accepts
 
 # Define the path to the data files
 filepath = os.path.abspath(__file__)
@@ -185,7 +187,7 @@ class Inoue14(IGMBase):
         laf_file = os.path.join(data_path, "LAFcoeff.txt")
         data = np.loadtxt(laf_file, unpack=True)
         _, lam, alf1, alf2, alf3 = data
-        self.lam = lam[:, np.newaxis]
+        self.lam = lam[:, np.newaxis] * angstrom
         self.alf1 = alf1[:, np.newaxis]
         self.alf2 = alf2[:, np.newaxis]
         self.alf3 = alf3[:, np.newaxis]
@@ -199,6 +201,7 @@ class Inoue14(IGMBase):
 
         return True
 
+    @accepts(lam_obs=angstrom)
     def tau_laf(self, redshift, lam_obs):
         """
         Compute the Lyman series and Lyman-alpha forest optical depth.
@@ -213,7 +216,7 @@ class Inoue14(IGMBase):
         z1_laf = 1.2
         z2_laf = 4.7
 
-        tau_laf_value = np.zeros_like(lam_obs * self.lam).T
+        tau_laf_value = np.zeros_like(lam_obs.value * self.lam.value).T
 
         # Conditions based on observed lam and redshift
         cond0 = lam_obs < self.lam * (1 + redshift)
@@ -227,16 +230,17 @@ class Inoue14(IGMBase):
         tau_laf_value = np.zeros_like(lam_obs * self.lam)
         tau_laf_value[cond1] += ((self.alf1 / self.lam**1.2) * lam_obs**1.2)[
             cond1
-        ]
+        ].value
         tau_laf_value[cond2] += ((self.alf2 / self.lam**3.7) * lam_obs**3.7)[
             cond2
-        ]
+        ].value
         tau_laf_value[cond3] += ((self.alf3 / self.lam**5.5) * lam_obs**5.5)[
             cond3
-        ]
+        ].value
 
         return tau_laf_value.sum(axis=0)
 
+    @accepts(lam_obs=angstrom)
     def tau_dla(self, redshift, lam_obs):
         """
         Compute the Lyman series and Damped Lyman-alpha (DLA) optical depth.
@@ -250,7 +254,7 @@ class Inoue14(IGMBase):
         """
         z1_dla = 2.0
 
-        tau_dla_value = np.zeros_like(lam_obs * self.lam)
+        tau_dla_value = np.zeros_like(lam_obs.value * self.lam.value)
 
         # Conditions based on observed wavelength and redshift
         cond0 = (lam_obs < self.lam * (1 + redshift)) & (
@@ -269,6 +273,7 @@ class Inoue14(IGMBase):
 
         return tau_dla_value.sum(axis=0)
 
+    @accepts(lam_obs=angstrom)
     def tau_lc_dla(self, redshift, lam_obs):
         """
         Compute the Lyman continuum optical depth for DLA.
@@ -283,7 +288,10 @@ class Inoue14(IGMBase):
         z1_dla = 2.0
         lam_l = 911.8
 
-        tau_lc_dla_value = np.zeros_like(lam_obs)
+        tau_lc_dla_value = np.zeros_like(lam_obs.value)
+
+        # Strip units for the following calculations
+        lam_obs = lam_obs.value
 
         cond0 = lam_obs < lam_l * (1.0 + redshift)
         if redshift < z1_dla:
@@ -316,6 +324,7 @@ class Inoue14(IGMBase):
 
         return tau_lc_dla_value
 
+    @accepts(lam_obs=angstrom)
     def tau_lc_laf(self, redshift, lam_obs):
         """
         Compute the Lyman continuum optical depth for LAF.
@@ -331,9 +340,12 @@ class Inoue14(IGMBase):
         z2_laf = 4.7
         lam_l = 911.8
 
-        tau_lc_laf_value = np.zeros_like(lam_obs)
+        tau_lc_laf_value = np.zeros_like(lam_obs.value)
 
         cond0 = lam_obs < lam_l * (1.0 + redshift)
+
+        # Strip units for the following calculations
+        lam_obs = lam_obs.value
 
         if redshift < z1_laf:
             tau_lc_laf_value[cond0] = 0.3248 * (

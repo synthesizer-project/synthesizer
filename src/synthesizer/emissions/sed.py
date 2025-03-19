@@ -327,7 +327,7 @@ class Sed:
         """
         # If we have units make sure they are ok and then strip them
         if isinstance(scaling, (unyt_array, unyt_quantity)):
-            if not self.lnu.units.is_compatible(scaling.units):
+            if self.lnu.units.dimensions != scaling.units.dimensions:
                 raise exceptions.InconsistentMultiplication(
                     f"Incompatible units {self.lnu.units} and {scaling.units}"
                 )
