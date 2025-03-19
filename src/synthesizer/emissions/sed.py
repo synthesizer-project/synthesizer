@@ -1094,7 +1094,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            self._fnu *= igm().get_transmission(z, self._obslam)
+            self._fnu *= igm().get_transmission(z, self.obslam)
 
         return self.fnu
 
