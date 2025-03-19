@@ -49,7 +49,7 @@ class LineCollection:
     luminosity = Quantity("luminosity")
     continuum = Quantity("luminosity_density_frequency")
     flux = Quantity("flux")
-    obs_continuum = Quantity("flux_density_frequency")
+    continuum_flux = Quantity("flux_density_frequency")
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
 
@@ -94,7 +94,7 @@ class LineCollection:
         # We'll populate observer frame properties when get_flux is called
         self.obslam = None
         self.flux = None
-        self.obs_continuum = None
+        self.continuum_flux = None
 
         # So we can do easy look ups in the future we need to make an index
         # look up table to map line ids to indices and enable dictionary like
@@ -472,7 +472,7 @@ class LineCollection:
             # Copy over the flux and observed wavelength if they exist
             if self.flux is not None:
                 new_line.flux = self.flux[..., inds]
-                new_line.obs_continuum = self.obs_continuum[..., inds]
+                new_line.continuum_flux = self.continuum_flux[..., inds]
                 new_line.obslam = self.obslam[inds]
 
             return new_line
@@ -492,8 +492,8 @@ class LineCollection:
                 else None
             )
             new_obs_cont = (
-                self.obs_continuum[..., self._line2index[line_ids[0]]]
-                if self.obs_continuum is not None
+                self.continuum_flux[..., self._line2index[line_ids[0]]]
+                if self.continuum_flux is not None
                 else None
             )
             new_obslam = (
@@ -507,7 +507,7 @@ class LineCollection:
                 new_cont += self.continuum[..., self._line2index[li]]
                 if self.flux is not None:
                     new_flux += self.flux[..., self._line2index[li]]
-                    new_obs_cont += self.obs_continuum[
+                    new_obs_cont += self.continuum_flux[
                         ..., self._line2index[li]
                     ]
                     new_obslam += self.obslam[self._line2index[li]]
@@ -525,7 +525,7 @@ class LineCollection:
             # (converting the wavelength to the mean of the individual lines)
             if self.flux is not None:
                 new_line.flux = new_flux
-                new_line.obs_continuum = new_obs_cont
+                new_line.continuum_flux = new_obs_cont
                 new_line.obslam = new_obslam / len(line_ids)
 
             return new_line
@@ -543,7 +543,7 @@ class LineCollection:
             # Copy over the flux and observed wavelength if they exist
             if self.flux is not None:
                 new_line.flux = self.flux[..., self._line2index[line_id]]
-                new_line.obs_continuum = self.obs_continuum[
+                new_line.continuum_flux = self.continuum_flux[
                     ..., self._line2index[line_id]
                 ]
                 new_line.obslam = self.obslam[self._line2index[line_id]]
@@ -684,7 +684,7 @@ class LineCollection:
         """
         # Compute flux
         self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
-        self.obs_continuum = self.continuum / (4 * np.pi * (10 * pc) ** 2)
+        self.continuum_flux = self.continuum / (4 * np.pi * (10 * pc) ** 2)
 
         # Set the observed wavelength (in this case this is the rest frame
         # wavelength)
@@ -728,7 +728,7 @@ class LineCollection:
 
         # Compute flux and observed continuum
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
-        self.obs_continuum = self.continuum / (
+        self.continuum_flux = self.continuum / (
             4 * np.pi * luminosity_distance**2
         )
 
@@ -739,7 +739,7 @@ class LineCollection:
         if igm is not None:
             igm_transmission = igm.get_transmission(z, self.obslam)
             self.flux *= igm_transmission
-            self.obs_continuum *= igm_transmission
+            self.continuum_flux *= igm_transmission
 
         return self.flux
 
