@@ -560,58 +560,53 @@ class Grid:
                     f"range of the grid: {lines_outside_lam}"
                 )
 
-            # Read the lines and continua into the nebular and
-            # linecont entries.
-            for ind, line in enumerate(self.available_lines):
-                # Get the units, we only do this once since all the
-                # luminosities and continuums will have the same units
-                lum_units = hf["lines"]["luminosity"].attrs.get("Units")
-                cont_units = hf["lines"]["nebular_continuum"].attrs.get(
-                    "Units"
-                )
+            # Get the units, we only do this once since all the
+            # luminosities and continuums will have the same units
+            lum_units = hf["lines"]["luminosity"].attrs.get("Units")
+            cont_units = hf["lines"]["nebular_continuum"].attrs.get("Units")
 
-                # Read the nebular line luminosities and continuums
-                self.line_lums["nebular"] = unyt_array(
-                    hf["lines"]["luminosity"][...],
-                    lum_units,
-                )
-                self.line_conts["nebular"] = unyt_array(
-                    hf["lines"]["nebular_continuum"][...],
-                    cont_units,
-                )
+            # Read the nebular line luminosities and continuums
+            self.line_lums["nebular"] = unyt_array(
+                hf["lines"]["luminosity"][...],
+                lum_units,
+            )
+            self.line_conts["nebular"] = unyt_array(
+                hf["lines"]["nebular_continuum"][...],
+                cont_units,
+            )
 
-                # Read the line contribution luminosities and continuums (as
-                # called by cloudy, this is the same as nebular in our
-                # nomenclature - the line emissions from the birth cloud)
-                self.line_lums["linecont"] = unyt_array(
-                    hf["lines"]["luminosity"][...],
-                    lum_units,
-                )
-                self.line_conts["linecont"] = unyt_array(
-                    np.zeros(self.line_lums["nebular"].shape),
-                    cont_units,
-                )
+            # Read the line contribution luminosities and continuums (as
+            # called by cloudy, this is the same as nebular in our
+            # nomenclature - the line emissions from the birth cloud)
+            self.line_lums["linecont"] = unyt_array(
+                hf["lines"]["luminosity"][...],
+                lum_units,
+            )
+            self.line_conts["linecont"] = unyt_array(
+                np.zeros(self.line_lums["nebular"].shape),
+                cont_units,
+            )
 
-                # Read the nebular continuum luminosities and continuums
-                self.line_lums["nebular_continuum"] = unyt_array(
-                    np.zeros(self.line_lums["nebular"].shape),
-                    lum_units,
-                )
-                self.line_conts["nebular_continuum"] = unyt_array(
-                    hf["lines"]["nebular_continuum"][...],
-                    cont_units,
-                )
+            # Read the nebular continuum luminosities and continuums
+            self.line_lums["nebular_continuum"] = unyt_array(
+                np.zeros(self.line_lums["nebular"].shape),
+                lum_units,
+            )
+            self.line_conts["nebular_continuum"] = unyt_array(
+                hf["lines"]["nebular_continuum"][...],
+                cont_units,
+            )
 
-                # Read the transmitted line luminosities and continuums (the
-                # emission transmitted through the birth cloud)
-                self.line_lums["transmitted"] = unyt_array(
-                    np.zeros(self.line_lums["nebular"].shape),
-                    lum_units,
-                )
-                self.line_conts["transmitted"] = unyt_array(
-                    hf["lines"]["transmitted"][...],
-                    cont_units,
-                )
+            # Read the transmitted line luminosities and continuums (the
+            # emission transmitted through the birth cloud)
+            self.line_lums["transmitted"] = unyt_array(
+                np.zeros(self.line_lums["nebular"].shape),
+                lum_units,
+            )
+            self.line_conts["transmitted"] = unyt_array(
+                hf["lines"]["transmitted"][...],
+                cont_units,
+            )
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries. the line luminosities for all entries
