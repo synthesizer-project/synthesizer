@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Hz, c, erg, s
 
+from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
-from synthesizer.sed import Sed
 
 # define grid
 grid_name = "test_grid"

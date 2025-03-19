@@ -8,14 +8,13 @@ from unyt import Hz, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.particle_spectra import (
     compute_part_seds_with_vel_shift,
     compute_particle_seds,
 )
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.line import LineCollection
-from synthesizer.sed import Sed
 from synthesizer.synth_warnings import warn
 
 

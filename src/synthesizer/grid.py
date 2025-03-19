@@ -37,8 +37,7 @@ from spectres import spectres
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.line import LineCollection
-from synthesizer.sed import Sed
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import depluralize, pluralize
@@ -1242,8 +1241,8 @@ class Grid:
                 The name of the spectra (in the grid) that is desired.
 
         Returns:
-            synthesizer.sed.Sed
-                A synthesizer Sed object
+            synthesizer.emissions.Sed
+                A synthesizer.emissions object
         """
         # Throw exception if the spectra_id not in list of available spectra
         if spectra_id not in self.available_spectra:

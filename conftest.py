@@ -12,12 +12,12 @@ from synthesizer.emission_models import (
     TransmittedEmission,
 )
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
+from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
 from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
-from synthesizer.sed import Sed
 
 # ================================== GRID =====================================
 

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from unyt import angstrom
 
-from synthesizer.sed import Sed
+from synthesizer.emissions import Sed
 
 
 @pytest.fixture

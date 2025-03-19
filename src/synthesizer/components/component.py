@@ -12,8 +12,8 @@ respectively.
 from abc import ABC, abstractmethod
 
 from synthesizer import exceptions
+from synthesizer.emissions import plot_spectra
 from synthesizer.instruments import Instrument
-from synthesizer.sed import plot_spectra
 from synthesizer.synth_warnings import deprecated, deprecation
 
 

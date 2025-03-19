@@ -13,10 +13,10 @@ from unyt import Msun, deg, kelvin, yr
 
 from synthesizer.emission_models import UnifiedAGN
 from synthesizer.emission_models.dust.emission import Greybody
+from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.parametric import BlackHole
 from synthesizer.particle import BlackHoles
-from synthesizer.sed import plot_spectra
 
 # Set a random number seed to ensure consistent results
 np.random.seed(42)

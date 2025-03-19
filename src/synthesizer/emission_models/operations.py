@@ -18,13 +18,12 @@ from synthesizer.emission_models.extractors.extractor import (
     IntegratedParticleExtractor,
     ParticleExtractor,
 )
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
 )
-from synthesizer.line import LineCollection
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.sed import Sed
 
 
 class Extraction:
