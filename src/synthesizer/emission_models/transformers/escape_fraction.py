@@ -111,7 +111,7 @@ class ProcessedFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fesc <= 1:
-            raise exceptions.InvalidProcessedFraction(
+            raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
 
@@ -201,7 +201,7 @@ class EscapedFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fesc <= 1:
-            raise exceptions.InvalidProcessedFraction(
+            raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
 
@@ -292,7 +292,7 @@ class CoveringFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fcov <= 1:
-            raise exceptions.InvalidProcessedFraction(
+            raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
 
@@ -383,7 +383,7 @@ class EscapingFraction(Transformer):
 
         # Ensure the escape fraction is between 0 and 1
         if not 0 <= fcov <= 1:
-            raise exceptions.InvalidProcessedFraction(
+            raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
 
