@@ -1,17 +1,4 @@
 import numpy as np
-import pytest
-
-from synthesizer.emission_models.attenuation import Inoue14, Madau96
-
-
-@pytest.fixture
-def i14():
-    return Inoue14()
-
-
-@pytest.fixture
-def m96():
-    return Madau96()
 
 
 def test_I14_name(i14):

@@ -1,3 +1,5 @@
+"""A collection of fixtures for testing the synthesizer package."""
+
 import numpy as np
 import pytest
 from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, yr
@@ -11,6 +13,7 @@ from synthesizer.emission_models import (
     ReprocessedEmission,
     TransmittedEmission,
 )
+from synthesizer.emission_models.attenuation import Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.grid import Grid
 from synthesizer.instruments.filters import UVJ
@@ -85,6 +88,19 @@ def bimodal_pacman_emission_model(test_grid):
         dust_curve_ism=PowerLaw(slope=-0.7),
         dust_curve_birth=PowerLaw(slope=-1.3),
     )
+
+
+# ================================= IGMS ======================================
+
+
+@pytest.fixture
+def i14():
+    return Inoue14()
+
+
+@pytest.fixture
+def m96():
+    return Madau96()
 
 
 # ================================= STARS =====================================
