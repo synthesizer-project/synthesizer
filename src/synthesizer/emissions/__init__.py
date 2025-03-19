@@ -27,3 +27,20 @@ from synthesizer.emissions.utils import (
     get_attenuation_at_lam,
     get_transmission,
 )
+
+__all__ = [
+    "LineCollection",
+    "Sed",
+    "plot_observed_spectra",
+    "plot_spectra",
+    "plot_spectra_as_rainbow",
+    "combine_list_of_seds",
+    "get_attenuation",
+    "get_attenuation_at_1500",
+    "get_attenuation_at_5500",
+    "get_attenuation_at_lam",
+    "get_transmission",
+]
+
+# Add the line aliases to the __all__ list
+__all__.extend(line_aliases.keys())
