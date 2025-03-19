@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from unyt import Hz, Mpc, Msun, Myr, erg, km, kpc, s, yr
+from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, yr
 
 from synthesizer.emission_models import (
     BimodalPacmanEmission,
@@ -12,7 +12,7 @@ from synthesizer.emission_models import (
     TransmittedEmission,
 )
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
-from synthesizer.emissions import Sed
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid
 from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
@@ -219,3 +219,34 @@ def unit_sed(test_grid):
         lam=test_grid.lam,
         lnu=np.ones_like(test_grid._lam) * erg / s / Hz,
     )
+
+
+# ================================= LINES =====================================
+
+
+@pytest.fixture
+def simple_line_collection():
+    """Return a simple LineCollection with two emission lines."""
+    return LineCollection(
+        line_ids=["O III 5007 A", "H 1 6563 A"],
+        lam=np.array([5007, 6563]) * angstrom,
+        lum=np.array([1e40, 1e39]) * erg / s,
+        cont=np.array([1e38, 1e37]) * erg / s / Hz,
+    )
+
+
+@pytest.fixture
+def multi_dimension_line_collection():
+    """Return a LineCollection with multidimensional arrays of lines."""
+    return LineCollection(
+        line_ids=["O III 5007 A", "H 1 6563 A", "H 1 4861 A"],
+        lam=np.array([5007, 6563, 4861]) * angstrom,
+        lum=np.array([[1e40, 1e39, 1e38], [2e40, 2e39, 2e38]]) * erg / s,
+        cont=np.array([[1e38, 1e37, 1e36], [2e38, 2e37, 2e36]]) * erg / s / Hz,
+    )
+
+
+@pytest.fixture
+def line_ratio_collection(test_grid):
+    """Return a LineCollection with lines needed for common ratios."""
+    return test_grid.get_lines((1, 1))
