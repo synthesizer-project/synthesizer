@@ -9,7 +9,7 @@ import numpy as np
 from astropy.cosmology import FlatLambdaCDM
 from unyt import Msun, kpc, yr
 
-from .utils import age_lookup_table, lookup_age
+from synthesizer.load_data.utils import age_lookup_table, lookup_age
 from ..particle.galaxy import Galaxy
 
 
