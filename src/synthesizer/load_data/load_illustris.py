@@ -29,6 +29,7 @@ from tqdm import tqdm
 from unyt import Msun, kpc, yr
 
 from synthesizer.exceptions import UnmetDependency
+from synthesizer.load_data.utils import age_lookup_table, lookup_age
 
 try:
     import illustris_python as il
@@ -51,6 +52,8 @@ def load_IllustrisTNG(
     dtm=0.3,
     physical=True,
     metals=True,
+    age_lookup=True,
+    age_lookup_delta_a=1e-4,
 ):
     """
     Load IllustrisTNG particle data into galaxy objects.
@@ -80,6 +83,10 @@ def load_IllustrisTNG(
             Default: True. This property may not be available for
             all snapshots ( see
             https://www.tng-project.org/data/docs/specifications/#sec1a ).
+        age_lookup (bool):
+            Create a lookup table for ages
+        age_lookup_delta_a (float):
+            Scale factor resolution of the age lookup
 
     Returns:
         galaxies (list):
@@ -183,7 +190,24 @@ def load_IllustrisTNG(
             # convert formation times to ages
             cosmo = Planck15
             universe_age = cosmo.age(1.0 / scale_factor - 1)
-            _ages = cosmo.age(1.0 / form_time - 1)
+
+            # Are we creating a lookup table for ages?
+            if age_lookup:
+                # Create the lookup grid
+                scale_factors, ages = age_lookup_table(
+                    cosmo,
+                    redshift=redshift,
+                    delta_a=age_lookup_delta_a,
+                    low_lim=1e-4,
+                )
+
+                # Look up the ages for the particles
+                _ages = lookup_age(form_time, scale_factors, ages)
+            else:
+                # Calculate ages of these explicitly using astropy
+                _ages = cosmo.age(1.0 / form_time - 1)
+
+            # Calculate ages at snapshot redshift
             ages = (universe_age - _ages).value * 1e9  # yr
 
             if hsml is None:
