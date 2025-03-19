@@ -51,7 +51,7 @@ Example::
 
 from unyt import dimensionless
 
-from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emission_models.attenuation import PowerLaw, Calzetti2000
 from synthesizer.emission_models.base_model import (
     EmissionModel,
     StellarEmissionModel,
@@ -112,6 +112,7 @@ class PacmanEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
+        tau_v=0.33,
         dust_curve=PowerLaw(),
         dust_emission=None,
         fesc="fesc",
@@ -124,25 +125,33 @@ class PacmanEmission(StellarEmissionModel):
         Initialize the PacmanEmission model.
 
         Args:
-            grid (synthesizer.grid.Grid): The grid object.
-            tau_v (float): The V-band optical depth.
-            dust_curve (synthesizer.dust.DustCurve): The dust curve.
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            tau_v (float):
+                The V-band optical depth. Defaults to 0.33.
+            dust_curve (synthesizer.dust.DustCurve):
+                The assumed dust curve. Defaults to `Calzetti2000`, with
+                default parameters.
             dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
-            fesc (float): The escape fraction.
-            fesc_ly_alpha (float): The Lyman alpha escape fraction.
-            label (str): The label for the total emission model. If None
-                this will be set to "total" or "emergent" if dust_emission is
-                None.
-            stellar_dust (bool): If True, the dust emission will be treated as
-                stellar emission, otherwise it will be treated as galaxy
-                emission.
-            **kwargs: Additional keyword arguments to pass to the models.
+            fesc (float):
+                The escape fraction.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction.
+            label (str):
+                The label for the total emission model. If `None` this will
+                be set to "total" or "emergent" if dust_emission is `None`.
+            stellar_dust (bool):
+                If `True`, the dust emission will be treated as stellar
+                emission, otherwise it will be treated as galaxy emission.
+            **kwargs:
+                Additional keyword arguments to pass to the models.
         """
         # Attach the grid
         self._grid = grid
 
         # Attach the dust properties
+        self._tau_v = tau_v
         self._dust_curve = dust_curve
 
         # Attach the dust emission properties
@@ -273,6 +282,7 @@ class PacmanEmission(StellarEmissionModel):
     def _make_attenuated(self, **kwargs):
         return AttenuatedEmission(
             label="attenuated",
+            tau_v=self._tau_v,
             dust_curve=self._dust_curve,
             apply_to=self.reprocessed,
             emitter="stellar",
@@ -457,8 +467,8 @@ class BimodalPacmanEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
-        dust_curve_ism,
-        dust_curve_birth,
+        dust_curve_ism=Calzetti2000(),
+        dust_curve_birth=Calzetti2000(),
         tau_v_ism="tau_v_ism",
         tau_v_birth="tau_v_birth",
         age_pivot=7 * dimensionless,
@@ -474,28 +484,37 @@ class BimodalPacmanEmission(StellarEmissionModel):
         Initialize the PacmanEmission model.
 
         Args:
-            grid (synthesizer.grid.Grid): The grid object.
-            tau_v_ism (float): The V-band optical depth for the ISM.
-            tau_v_birth (float): The V-band optical depth for the nebular.
-            dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
-                ISM.
-            dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for
-                the nebular.
-            age_pivot (unyt.unyt_quantity): The age pivot between young and old
-                populations, expressed in terms of log10(age) in Myr.
-            dust_emission_ism (synthesizer.dust.EmissionModel): The dust
-                emission model for the ISM.
-            dust_emission_birth (synthesizer.dust.EmissionModel): The
-                dust emission model for the nebular.
-            fesc (float): The escape fraction.
-            fesc_ly_alpha (float): The Lyman alpha escape fraction.
-            label (str): The label for the total emission model. If None
-                this will be set to "total" or "emergent" if dust_emission is
-                None.
-            stellar_dust (bool): If True, the dust emission will be treated as
-                stellar emission, otherwise it will be treated as galaxy
-                emission.
-            **kwargs: Additional keyword arguments to pass to the models.
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            tau_v_ism (float):
+                The V-band optical depth for the ISM.
+            tau_v_birth (float):
+                The V-band optical depth for the nebular.
+            dust_curve_ism (synthesizer.dust.DustCurve):
+                The assumed dust curve for the ISM. Defaults to `Calzetti2000`
+                with default parameters.
+            dust_curve_birth (synthesizer.dust.DustCurve):
+                The assumed dust curve for the nebular. Defaults to
+                `Calzetti2000` with default parameters.
+            age_pivot (unyt.unyt_quantity):
+                The age pivot between young and old populations,
+                expressed in terms of log10(age) in Myr.
+            dust_emission_ism (synthesizer.dust.EmissionModel):
+                The dust emission model for the ISM.
+            dust_emission_birth (synthesizer.dust.EmissionModel):
+                The dust emission model for the nebular.
+            fesc (float):
+                The escape fraction.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction.
+            label (str):
+                The label for the total emission model. If `None` this will
+                be set to "total" or "emergent" if dust_emission is `None`.
+            stellar_dust (bool):
+                If `True`, the dust emission will be treated as stellar
+                emission, otherwise it will be treated as galaxy emission.
+            **kwargs:
+                Additional keyword arguments to pass to the models.
         """
         # Attach the grid
         self._grid = grid
@@ -1252,8 +1271,8 @@ class CharlotFall2000(BimodalPacmanEmission):
         grid (synthesizer.grid.Grid): The grid object.
         tau_v_ism (float): The V-band optical depth for the ISM.
         tau_v_birth (float): The V-band optical depth for the nebular.
-        dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
-            ISM.
+        dust_curve_ism (synthesizer.dust.DustCurve):
+            The dust curve for the ISM.
         dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for the
             nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
@@ -1267,11 +1286,11 @@ class CharlotFall2000(BimodalPacmanEmission):
     def __init__(
         self,
         grid,
-        tau_v_ism,
-        tau_v_birth,
-        dust_curve_ism,
-        dust_curve_birth,
+        tau_v_ism=0.33,
+        tau_v_birth=0.67,
         age_pivot=7 * dimensionless,
+        dust_curve_ism=Calzetti2000(),
+        dust_curve_birth=Calzetti2000(),
         dust_emission_ism=None,
         dust_emission_birth=None,
         label=None,
@@ -1282,26 +1301,35 @@ class CharlotFall2000(BimodalPacmanEmission):
         Initialize the PacmanEmission model.
 
         Args:
-            grid (synthesizer.grid.Grid): The grid object.
-            tau_v_ism (float): The V-band optical depth for the ISM.
-            tau_v_birth (float): The V-band optical depth for the nebular.
-            dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
-                ISM.
-            dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for
-                the nebular.
-            age_pivot (unyt.unyt_quantity): The age pivot between young and old
-                populations, expressed in terms of log10(age) in Myr.
-            dust_emission_ism (synthesizer.dust.EmissionModel): The dust
-                emission model for the ISM.
-            dust_emission_birth (synthesizer.dust.EmissionModel): The
-                dust emission model for the nebular.
-            label (str): The label for the total emission model. If None
-                this will be set to "total" or "emergent" if dust_emission is
-                None.
-            stellar_dust (bool): If True, the dust emission will be treated as
-                stellar emission, otherwise it will be treated as galaxy
-                emission.
-            kwargs: Additional keyword arguments to pass to the models.
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            tau_v_ism (float):
+                The V-band optical depth for the ISM. Defaults to a value
+                of 0.33                
+            tau_v_birth (float):
+                The V-band optical depth for the nebular. Defaults to a
+                value of 0.67.
+            age_pivot (unyt.unyt_quantity):
+                The age pivot between young and old populations, expressed
+                in terms of log10(age) in Myr. Defaults to 10^7 Myr.
+            dust_curve_ism (synthesizer.dust.DustCurve):
+                The dust curve for the ISM. Defaults to `Calzetti2000`
+                with fiducial parameters.
+            dust_curve_birth (synthesizer.dust.DustCurve):
+                The dust curve for the nebular. Defaults to `Calzetti2000`
+                with fiducial parameters.
+            dust_emission_ism (synthesizer.dust.EmissionModel):
+                The dust emission model for the ISM.
+            dust_emission_birth (synthesizer.dust.EmissionModel):
+                The dust emission model for the nebular.
+            label (str):
+                The label for the total emission model. If None this will
+                be set to "total" or "emergent" if dust_emission is `None`.
+            stellar_dust (bool):
+                If `True`, the dust emission will be treated as stellar
+                emission, otherwise it will be treated as galaxy emission.
+            kwargs:
+                Additional keyword arguments to pass to the models.
         """
         # Call the parent constructor to intialise the model
         BimodalPacmanEmission.__init__(
@@ -1342,7 +1370,7 @@ class ScreenEmission(PacmanEmission):
     def __init__(
         self,
         grid,
-        dust_curve,
+        dust_curve=Calzetti2000(),
         dust_emission=None,
         label=None,
         **kwargs,
@@ -1351,14 +1379,18 @@ class ScreenEmission(PacmanEmission):
         Initialize the ScreenEmission model.
 
         Args:
-            grid (synthesizer.grid.Grid): The grid object.
-            dust_curve (synthesizer.dust.DustCurve): The dust curve.
-            dust_emission (synthesizer.dust.EmissionModel): The dust emission
-                model.
-            label (str): The label for the total emission model. If None
-                this will be set to "total" or "emergent" if dust_emission is
-                None.
-            kwargs: Additional keyword arguments to pass to the models.
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            dust_curve (synthesizer.dust.DustCurve):
+                The assumed dust curve. Defaults to `Calzetti2000` with
+                default parameters.
+            dust_emission (synthesizer.dust.EmissionModel):
+                The dust emission model.
+            label (str):
+                The label for the total emission model. If None this will
+                be set to "total" or "emergent" if dust_emission is None.
+            kwargs:
+                Additional keyword arguments to pass to the models.
         """
         # Call the parent constructor to intialise the model
         PacmanEmission.__init__(
