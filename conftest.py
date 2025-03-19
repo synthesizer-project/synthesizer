@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from unyt import Hz, Mpc, Msun, Myr, erg, km, kpc, s, yr
+from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, yr
 
 from synthesizer.emission_models import (
     BimodalPacmanEmission,
@@ -26,6 +26,12 @@ from synthesizer.sed import Sed
 def test_grid():
     """Return a Grid object."""
     return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+
+
+@pytest.fixture
+def lam():
+    """Return a Grid object."""
+    return np.logspace(2, 6, 1000) * angstrom
 
 
 # ================================= MODELS ====================================
@@ -219,3 +225,9 @@ def unit_sed(test_grid):
         lam=test_grid.lam,
         lnu=np.ones_like(test_grid._lam) * erg / s / Hz,
     )
+
+
+@pytest.fixture
+def empty_sed(lam):
+    """Return an Sed instance."""
+    return Sed(lam=lam)
