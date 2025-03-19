@@ -454,4 +454,3 @@ class MissingMaskAttribute(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Mask is missing an attribute."
-
