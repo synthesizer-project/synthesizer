@@ -7,7 +7,6 @@ import numpy as np
 from unyt import angstrom
 
 from synthesizer import exceptions
-from synthesizer.emissions import line_ratios
 from synthesizer.emissions.sed import Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
@@ -124,53 +123,6 @@ def flatten_linelist(list_to_flatten):
             )
 
     return list(set(flattened_list))
-
-
-def get_ratio_label(ratio_id):
-    """
-    Get a label for a given ratio_id.
-
-    Args:
-        ratio_id (str)
-            The ratio identificantion, e.g. R23.
-
-    Returns:
-        label (str)
-            A string representation of the label.
-    """
-    # If the id is a string get the lines from the line_ratios sub-module
-    if isinstance(ratio_id, str):
-        ratio_line_ids = line_ratios.ratios[ratio_id]
-    if isinstance(ratio_id, list):
-        ratio_line_ids = ratio_id
-
-    numerator = get_line_label(ratio_line_ids[0])
-    denominator = get_line_label(ratio_line_ids[1])
-    label = f"{numerator}/{denominator}"
-
-    return label
-
-
-def get_diagram_labels(diagram_id):
-    """
-    Get a x and y labels for a given diagram_id.
-
-    Args:
-        diagram_id (str)
-            The diagram identificantion, e.g. OHNO.
-
-    Returns:
-        xlabel (str)
-            A string representation of the x-label.
-        ylabel (str)
-            A string representation of the y-label.
-    """
-    # Get the list of lines for a given ratio_id
-    diagram_line_ids = line_ratios.diagrams[diagram_id]
-    xlabel = get_ratio_label(diagram_line_ids[0])
-    ylabel = get_ratio_label(diagram_line_ids[1])
-
-    return xlabel, ylabel
 
 
 def get_roman_numeral(number):
