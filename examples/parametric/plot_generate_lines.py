@@ -8,9 +8,9 @@ parametric galaxy.
 
 from unyt import Msun, Myr
 
-import synthesizer.emissions_ratios as line_ratios
 from synthesizer.emission_models import AttenuatedEmission, NebularEmission
 from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emissions import line_ratios
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
