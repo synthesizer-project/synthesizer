@@ -10,7 +10,7 @@ from unyt import Msun, Myr
 
 from synthesizer.emission_models import AttenuatedEmission, NebularEmission
 from synthesizer.emission_models.attenuation import PowerLaw
-from synthesizer.emissions import line_ratios
+from synthesizer.emissions import O3, Hb, O3b, O3r
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -54,10 +54,10 @@ if __name__ == "__main__":
     # first extract some line ratios from the `line_ratios` module, and then
     # Extract the individual lines from each ratio
     line_ids = [
-        line_ratios.Hb,  # "H 1 4861.32A"
-        line_ratios.O3b,  # "O 3 4958.91A"
-        line_ratios.O3r,  # "O 3 5006.84A"
-        line_ratios.O3,  # ["O 3 4958.91A", "O 3 5006.84A"]
+        Hb,  # "H 1 4861.32A"
+        O3b,  # "O 3 4958.91A"
+        O3r,  # "O 3 5006.84A"
+        O3,  # ["O 3 4958.91A", "O 3 5006.84A"]
     ]
     line_ids = [lid.strip() for lids in line_ids for lid in lids.split(",")]
 

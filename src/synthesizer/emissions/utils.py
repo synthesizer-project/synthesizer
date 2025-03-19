@@ -55,7 +55,7 @@ def get_line_label(line_id):
     if line_id in line_labels.keys():
         line_label = line_labels[line_id]
     else:
-        line_id = line_id.split(",")
+        line_id = [li.strip() for li in line_id.split(",")]
         _line_labels = []
         for line_id_ in line_id:
             # get the element, ion, and wavelength

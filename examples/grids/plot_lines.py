@@ -11,7 +11,10 @@ This example demonstrates how to:
 
 import matplotlib.pyplot as plt
 
-from synthesizer.emissions.utils import get_diagram_labels, get_ratio_label
+from synthesizer.emissions.line_ratios import (
+    get_diagram_labels,
+    get_ratio_label,
+)
 from synthesizer.grid import Grid
 
 if __name__ == "__main__":
@@ -40,7 +43,7 @@ if __name__ == "__main__":
     )
 
     # get information on one line
-    line = grid.get_line(grid_point, "H 1 4861.32A")
+    line = grid.get_lines(grid_point, "H 1 4861.32A")
     print(line)
 
     # or a combination of lines, e.g. a doublet

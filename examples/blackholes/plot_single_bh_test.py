@@ -50,6 +50,9 @@ model = UnifiedAGN(
     covering_fraction_nlr=0.1,
     covering_fraction_blr=0.1,
     torus_emission_model=Greybody(1000 * kelvin, 1.5),
+    ionisation_parameter=1e-2,
+    hydrogen_density=1e3,
+    velocity_dispersion=100 * 1e3,
 )
 
 # Get the spectra assuming this emission model
