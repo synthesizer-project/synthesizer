@@ -1,17 +1,39 @@
-"""A module containing functionality for working with spectral lines.
+"""A module containing functionality for working with emission lines.
 
-The primary class is Line which holds information about an individual or
-blended emission line, including its identification, wavelength, luminosity,
-and the strength of the continuum. From these the equivalent width is
-automatically calculated. Combined with a redshift and cosmology the flux can
-also be calcualted.
+Emission lines in Synthesizer are represented by the LineCollection class. This
+holds a collection of emission lines, each with a rest frame wavelength, a
+luminosity, and a continuum. The LineCollection class also has the ability to
+calculate the flux of the lines given a redshift and cosmology, including the
+observed wavelength and flux density. It also provides a number of helpful
+conversions and derived properties, such as the equivalent widths, photon
+energies, and line ratios.
 
-A second class is LineCollection which holds a collection of Line objects and
-provides additional functionality such as calcualting line ratios and diagrams
-(e.g. BPT-NII, OHNO).
+Note that emission lines held by a LineCollection object exist at a specific
+wavelength and thus don't account for any broadening effects at this time. To
+account for broadening effects, `Seds` including line contribution should be
+used (i.e. spectra extracted from the "nebular" type on a `Grid`).
 
-Several functions exist for obtaining line, ratio, and diagram labels for use
-in plots etc.
+Example uaages::
+
+    # Create a LineCollection objects
+    lines = LineCollection(
+        line_ids=["O III 5007 A", "H 1 1215.67A"],
+        lam=[5007, 1215.67] * angstrom,
+        lum=[1e40, 1e39] * erg / s,
+        cont=[1e39, 1e38] * erg / s / Hz,
+    )
+
+    # Get the flux of the lines at redshift z=0.1
+    lines.get_flux(cosmo, z=0.1)
+
+    # Get the flux of the lines at redshift z=0.1 with IGM absorption
+    lines.get_flux(cosmo, z=0.1, igm=Inoue14())
+
+    # Get a ratio
+    lines.get_ratio("R23")
+
+    # Get a diagram
+    lines.get_diagram("OHNO")
 
 """
 
@@ -43,6 +65,45 @@ from synthesizer.utils import TableFormatter
 class LineCollection:
     """
     A class holding a collection of emission lines.
+
+    The LineCollection class holds a collection of emission lines, each with a
+    rest frame wavelength, a luminosity, and a continuum. The LineCollection
+    class also has the ability to calculate the flux of the lines given a
+    redshift and cosmology, including the observed wavelength and flux density.
+    It also provides a number of helpful conversions and derived properties,
+    such as the equivalent widths, photon energies, and line ratios.
+
+    Note that emission lines held by a LineCollection object exist at a
+    specific wavelength and thus don't account for any broadening effects at
+    this time.
+
+    Attributes:
+        line_ids (list)
+            A list of the line ids.
+        lam (unyt_array)
+            An array of rest frame line wavelengths.
+        luminosity (unyt_array)
+            An array of rest frame line luminosities.
+        continuum (unyt_array)
+            An array of rest frame line continuum.
+        description (str)
+            An optional description of the line collection.
+        obslam (unyt_array)
+            An array of observed line wavelengths.
+        flux (unyt_array)
+            An array of line fluxes.
+        continuum_flux (unyt_array)
+            An array of line continuum fluxes.
+        vacuum_wavelength (unyt_array)
+            An array of vacuum wavelengths.
+        available_ratios (list)
+            A list of the available line ratios based on the lines in the
+            collection.
+        available_diagrams (list)
+            A list of the available line diagrams based on the lines in the
+            collection.
+        nlines (int)
+            The number of lines in the collection.
     """
 
     # Define quantities, for details see units.py
