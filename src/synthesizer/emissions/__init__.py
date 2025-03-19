@@ -11,7 +11,12 @@ for alias, line in line_aliases.items():
 
 # Import the emissions classe
 from synthesizer.emissions.line import LineCollection
-from synthesizer.emissions.sed import Sed
+from synthesizer.emissions.sed import (
+    Sed,
+    plot_observed_spectra,
+    plot_spectra,
+    plot_spectra_as_rainbow,
+)
 
 # Import some important utility functions
 from synthesizer.emissions.utils import (
@@ -21,7 +26,4 @@ from synthesizer.emissions.utils import (
     get_attenuation_at_5500,
     get_attenuation_at_lam,
     get_transmission,
-    plot_observed_spectra,
-    plot_spectra,
-    plot_spectra_as_rainbow,
 )
