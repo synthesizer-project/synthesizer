@@ -930,6 +930,28 @@ class Particles:
         # Call the rotate_particles method with the computed angles
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
+    def get_weighted_attr(self, attr, weights):
+        """
+        Get a weighted attribute.
+
+        Args:
+            attr (str)
+                The attribute to weight.
+            weights (array-like, float)
+                The weights to apply to the attribute.
+        """
+        # Get the attribute
+        attr = getattr(self, attr)
+
+        # Ensure the weights are the same length as the attribute
+        if np.any(weights.shape != attr.shape):
+            raise exceptions.InconsistentArguments(
+                "Weights and attribute must be the same length "
+                f"(weights.shape={len(weights)} != {attr}.shape{len(attr)})"
+            )
+
+        return np.sum(attr * weights) / np.sum(weights)
+
 
 class CoordinateGenerator:
     """
