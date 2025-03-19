@@ -33,7 +33,17 @@ def test_grid():
 
 @pytest.fixture
 def lam():
-    """Return a Grid object."""
+    """
+    Return a wavelength array.
+
+    This function generates a logarithmically spaced array of wavelengths
+    ranging from 10^2 to 10^6 angstroms, with 1000 points in total.
+
+    Returns:
+        np.ndarray:
+            A numpy array containing the generated wavelengths with
+            angstrom units.
+    """
     return np.logspace(2, 6, 1000) * angstrom
 
 
