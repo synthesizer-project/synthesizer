@@ -193,7 +193,7 @@ class Extraction:
         Extract lines from the grid.
 
         Args:
-            lines_ids (list):
+            line_ids (list):
                 The line ids to extract.
             emission_model (EmissionModel):
                 The emission model to extract from.

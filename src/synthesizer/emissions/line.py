@@ -13,7 +13,7 @@ wavelength and thus don't account for any broadening effects at this time. To
 account for broadening effects, `Seds` including line contribution should be
 used (i.e. spectra extracted from the "nebular" type on a `Grid`).
 
-Example uaages::
+Example usages::
 
     # Create a LineCollection objects
     lines = LineCollection(
