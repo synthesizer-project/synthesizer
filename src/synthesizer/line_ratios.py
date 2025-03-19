@@ -1,6 +1,7 @@
-"""
-A module holding useful line ratios (e.g. R23) and diagrams (pairs of ratios),
-e.g. BPT-NII.
+"""A module holding useful line ratios.
+
+This contains both line ratios and diagnostic diagrams for emission line. As
+well as including the standard line labels for common lines.
 
 Line ids and specifically the wavelength part here are defined using the cloudy
 standard, i.e. using vacuum wavelengths at <200nm and air wavelengths at
@@ -94,7 +95,7 @@ def get_bpt_kewley01(logNII_Ha):
 
     log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
 
-    Arguments:
+    Args:
         logNII_Ha (array)
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line
