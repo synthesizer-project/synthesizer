@@ -96,9 +96,14 @@ class Extractor(ABC):
 
         # Attach the spectra and line grids to the Extractor object
         self._spectra_grid = grid.spectra[extract]
-        self._line_lum_grid = grid.line_lums[extract]
-        self._line_cont_grid = grid.line_conts[extract]
-        self._line_lams = grid.line_lams
+        if grid.lines_available:
+            self._line_lum_grid = grid.line_lums[extract]
+            self._line_cont_grid = grid.line_conts[extract]
+            self._line_lams = grid.line_lams
+        else:
+            self._line_lum_grid = None
+            self._line_cont_grid = None
+            self._line_lams = None
 
         # Attach the grid dimensions that we will need
         self._grid_dims = np.array(grid.shape, dtype=np.int32)
