@@ -9,6 +9,7 @@ import numpy as np
 from astropy.cosmology import FlatLambdaCDM
 from unyt import Msun, kpc, yr
 
+from synthesizer.load_data.utils import age_lookup_table, lookup_age
 from ..particle.galaxy import Galaxy
 
 
@@ -18,6 +19,8 @@ def load_Simba(
     caesar_name="fof_subhalo_tab_033.hdf5",
     caesar_directory=None,
     load_halo=False,
+    age_lookup=True,
+    age_lookup_delta_a=1e-4,
 ):
     """
     Load Simba galaxy data from a caesar file and snapshot
@@ -35,6 +38,10 @@ def load_Simba(
         load_halo (bool, false):
             optional argument, whether to load galaxy or halo objects.
             If False (default), will load individual galaxies.
+        age_lookup (bool):
+            Create a lookup table for ages
+        age_lookup_delta_a (float):
+            Scale factor resolution of the age lookup
 
     Returns:
         galaxies (object):
@@ -66,6 +73,8 @@ def load_Simba(
 
         g_dustmass = hf["PartType0/Dust_Masses"][:]
 
+    redshift = (1.0 / scale_factor) - 1
+
     # convert units
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
@@ -80,7 +89,24 @@ def load_Simba(
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
     universe_age = cosmo.age(1.0 / scale_factor - 1)
-    _ages = cosmo.age(1.0 / form_time - 1)
+
+    # Are we creating a lookup table for ages?
+    if age_lookup:
+        # Create the lookup grid
+        scale_factors, ages = age_lookup_table(
+            cosmo,
+            redshift=redshift,
+            delta_a=age_lookup_delta_a,
+            low_lim=1e-4,
+        )
+
+        # Look up the ages for the particles
+        _ages = lookup_age(form_time, scale_factors, ages)
+    else:
+        # Calculate ages of these explicitly using astropy
+        _ages = cosmo.age(1.0 / form_time - 1)
+
+    # Calculate ages at snapshot redshift
     ages = (universe_age - _ages).value * 1e9  # yr
 
     # check which kind of object we're loading
@@ -101,7 +127,7 @@ def load_Simba(
     for i, (b, e) in enumerate(zip(begin, end)):
         # create the individual galaxy objects
         galaxies[i] = Galaxy()
-
+        galaxies[i].redshift = redshift
         galaxies[i].load_stars(
             initial_masses=imasses[b:e] * Msun,
             ages=ages[b:e] * yr,
