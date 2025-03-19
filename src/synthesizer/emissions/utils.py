@@ -3,20 +3,24 @@
 from synthesizer import line_ratios
 
 
-def get_line_id(id):
+def get_composite_line_id_from_list(id):
     """
-    A function for converting a line id possibly represented as a list to
-    a single string.
+    Convert a list of line ids to a single string describing a composite line.
+
+    A composite line is a line that is made up of multiple lines, e.g.
+    a doublet or triplet. This function takes a list of line ids and converts
+    them to a single string.
+
+    e.g. ["H 1 4861.32A", "H 1 6562.80A"] -> "H 1 4861.32A, H 1 6562.80A"
 
     Args
-        id (str, list, tuple)
+        id (list, tuple)
             a str, list, or tuple containing the id(s) of the lines
 
     Returns
         id (str)
             string representation of the id
     """
-
     if isinstance(id, list):
         return ", ".join(id)
     else:
@@ -25,12 +29,13 @@ def get_line_id(id):
 
 def get_line_label(line_id):
     """
-    Get a line label for a given line_id, ratio, or diagram. Where the line_id
-    is one of several predifined lines in line_ratios.line_labels this label
-    is used, otherwise the label is constructed from the line_id.
+    Get a line label for a given line_id, ratio, or diagram.
+
+    Where the line_id is one of several predifined lines in line_labels this
+    label is used, otherwise the label is constructed from the line_id.
 
     Argumnents
-        line_id (str or list)
+        line_id (str)
             The line_id either as a list of individual lines or a string. If
             provided as a list this is automatically converted to a single
             string so it can be used as a key.
@@ -39,7 +44,6 @@ def get_line_label(line_id):
         line_label (str)
             A nicely formatted line label.
     """
-
     # if the line_id is a list (denoting a doublet or higher)
     if isinstance(line_id, list):
         line_id = ", ".join(line_id)
@@ -123,10 +127,7 @@ def get_ratio_label(ratio_id):
         label (str)
             A string representation of the label.
     """
-
-    # get the list of lines for a given ratio_id
-
-    # if the id is a string get the lines from the line_ratios sub-module
+    # If the id is a string get the lines from the line_ratios sub-module
     if isinstance(ratio_id, str):
         ratio_line_ids = line_ratios.ratios[ratio_id]
     if isinstance(ratio_id, list):
@@ -141,7 +142,7 @@ def get_ratio_label(ratio_id):
 
 def get_diagram_labels(diagram_id):
     """
-    Get a x and y labels for a given diagram_id
+    Get a x and y labels for a given diagram_id.
 
     Args:
         diagram_id (str)
@@ -153,8 +154,7 @@ def get_diagram_labels(diagram_id):
         ylabel (str)
             A string representation of the y-label.
     """
-
-    # get the list of lines for a given ratio_id
+    # Get the list of lines for a given ratio_id
     diagram_line_ids = line_ratios.diagrams[diagram_id]
     xlabel = get_ratio_label(diagram_line_ids[0])
     ylabel = get_ratio_label(diagram_line_ids[1])
@@ -164,7 +164,7 @@ def get_diagram_labels(diagram_id):
 
 def get_roman_numeral(number):
     """
-    Function to convert an integer into a roman numeral str.
+    Convert an integer into a roman numeral str.
 
     Used for renaming emission lines from the cloudy defaults.
 
@@ -176,7 +176,6 @@ def get_roman_numeral(number):
         number_representation (str)
             String reprensentation of the roman numeral.
     """
-
     num = [1, 4, 5, 9, 10, 40, 50, 90, 100, 400, 500, 900, 1000]
     sym = [
         "I",
