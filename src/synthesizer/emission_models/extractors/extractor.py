@@ -96,9 +96,14 @@ class Extractor(ABC):
 
         # Attach the spectra and line grids to the Extractor object
         self._spectra_grid = grid.spectra[extract]
-        self._line_lum_grid = grid.line_lums[extract]
-        self._line_cont_grid = grid.line_conts[extract]
-        self._line_lams = grid.line_lams
+        if grid.lines_available:
+            self._line_lum_grid = grid.line_lums[extract]
+            self._line_cont_grid = grid.line_conts[extract]
+            self._line_lams = grid.line_lams
+        else:
+            self._line_lum_grid = None
+            self._line_cont_grid = None
+            self._line_lams = None
 
         # Attach the grid dimensions that we will need
         self._grid_dims = np.array(grid.shape, dtype=np.int32)
@@ -107,7 +112,7 @@ class Extractor(ABC):
 
         # Record whether we need to log the emitter data
         self._log_emitter_attr = tuple(
-            axis[:5] == "log10" for axis in grid.axes
+            axis[:5] == "log10" for axis in grid._extract_axes
         )
 
         # Finally, attach a pointer to the grid object
@@ -149,8 +154,10 @@ class Extractor(ABC):
             value = get_param(axis, model, None, emitter)
 
             # Convert the units if necessary
-            if units != "dimensionless" and isinstance(
-                value, (unyt_array, unyt_quantity)
+            if (
+                not log
+                and units != "dimensionless"
+                and isinstance(value, (unyt_array, unyt_quantity))
             ):
                 value = value.to(units).value
 
@@ -294,9 +301,12 @@ class IntegratedParticleExtractor(Extractor):
             nthreads = os.cpu_count()
 
         # Get the grid_weights if they exist and we don't have a mask
-        grid_weights = emitter._grid_weights.get(
-            grid_assignment_method.lower(), {}
-        ).get(self._grid.grid_name, None)
+        if mask is None:
+            grid_weights = emitter._grid_weights.get(
+                grid_assignment_method.lower(), {}
+            ).get(self._grid.grid_name, None)
+        else:
+            grid_weights = None
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)

@@ -439,3 +439,19 @@ class BadResult(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Result is not as expected."
+
+
+class MissingMaskAttribute(Exception):
+    """Exception class for when the masking attribute is missing."""
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Mask is missing an attribute."
+
