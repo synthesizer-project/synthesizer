@@ -39,12 +39,13 @@ lnu = (np.zeros(len(sed.lam)) + 1) * erg / s / Hz
 
 lc = grid.get_lines(grid_point)
 
-for line in lc:
-    idx = (np.abs(sed.lam - line.lam)).argmin()
+for ind in range(lc.nlines):
+    lam = lc.lam[ind]
+    idx = (np.abs(sed.lam - lam)).argmin()
     dl = 0.5 * (sed.lam[idx + 1] - sed.lam[idx - 1])
-    n = c / line.lam
-    llnu = line.lam * (line.luminosity / n) / dl
-    print(line.id, llnu)
+    n = c / lam
+    llnu = lam * (lc.luminosity[ind] / n) / dl
+    print(lc.line_ids[ind], llnu)
     lnu[idx] += llnu.to("erg/s/Hz")
 
 linecont = Sed(lam=sed.lam, lnu=lnu)
