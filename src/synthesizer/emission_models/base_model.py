@@ -2866,13 +2866,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_lines:
                         del particle_lines[model.label]
 
-            # Go through all line collections and remove any lines that are not
-            # in the line_ids list
-            for label, line_collection in lines.items():
-                lines[label] = line_collection[line_ids]
-                if label in particle_lines:
-                    particle_lines[label] = particle_lines[label][line_ids]
-
         return lines, particle_lines
 
     @accepts(resolution=kpc, fov=kpc)
