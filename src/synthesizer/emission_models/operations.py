@@ -221,16 +221,12 @@ class Extraction:
         passed_line_ids = line_ids
         line_ids = []
         for lid in passed_line_ids:
-            line_ids.extend(lid.split(","))
+            for ljd in lid.split(","):
+                line_ids.append(ljd.strip())
 
-        # Before we do anything, check that the line ids don't have duplicates
-        # or aliases
-        set_line_ids = set(line_ids)
-        if len(set_line_ids) != len(line_ids):
-            raise exceptions.InconsistentArguments(
-                "Found duplicate line ids, this is not allowed. "
-                f"line_ids: {line_ids}"
-            )
+        # Remove any duplicated lines, will give the user exactly what they
+        # asked for, but there's not point doing extra work!
+        line_ids = list(set(line_ids))
 
         # First step we need to extract each base lines
         for label in emission_model._extract_keys.keys():
@@ -246,12 +242,13 @@ class Extraction:
                 continue
 
             # Check the attached grid has all the right lines in it
-            if not all(
-                line_id in this_model.grid.available_lines
-                for line_id in line_ids
-            ):
-                raise exceptions.MissingSpectraType(
-                    f"The Grid does not contain all the lines {line_ids}."
+            missing_lines = set(line_ids) - set(
+                this_model.grid.available_lines
+            )
+            if missing_lines:
+                raise exceptions.MissingLines(
+                    f"The Grid does not contain the following lines: "
+                    f"{missing_lines}."
                 )
 
             # Get the emitter
