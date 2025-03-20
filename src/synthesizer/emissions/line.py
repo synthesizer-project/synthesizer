@@ -1296,7 +1296,7 @@ class LineCollection:
             if self._luminosity.shape[0] != mask.size:
                 raise exceptions.InconsistentArguments(
                     "Mask and lines are incompatible shapes "
-                    f"({mask.shape}, {self._lnu.shape})"
+                    f"({mask.shape}, {self.lum.shape})"
                 )
 
         # If tau_v is an array it needs to match the spectra shape
@@ -1309,7 +1309,7 @@ class LineCollection:
             if self._luminosity.shape[0] != tau_v.size:
                 raise exceptions.InconsistentArguments(
                     "tau_v and lines are incompatible shapes "
-                    f"({tau_v.shape}, {self._lnu.shape})"
+                    f"({tau_v.shape}, {self.lum.shape})"
                 )
 
         # Compute the transmission
