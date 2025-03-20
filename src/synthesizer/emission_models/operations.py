@@ -245,6 +245,15 @@ class Extraction:
             if this_model.emitter not in emitters:
                 continue
 
+            # Check the attached grid has all the right lines in it
+            if not all(
+                line_id in this_model.grid.available_lines
+                for line_id in line_ids
+            ):
+                raise exceptions.MissingSpectraType(
+                    f"The Grid does not contain all the lines {line_ids}."
+                )
+
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
@@ -316,11 +325,11 @@ class Extraction:
                 do_grid_check=False,
             )
 
-            # Ok, we have our lines but these are individuals. If passed_lines
-            # contains any composite lines we need to sum the individual lines.
-            # Luckily, we can do this by invoking the __getitem__ method of the
-            # LineCollection object.
-            if len(passed_line_ids) < len(line_ids):
+            # Ok, we have our lines but this contains all lines currentlty
+            # with any not asked for set to zero. We need to filter this
+            # down to just the lines we want. Note that this will also
+            # handle composite lines
+            if len(passed_line_ids) < out_lines.nlines:
                 out_lines = out_lines[passed_line_ids]
 
             # Store the lines in the right place (integrating if we need to)
