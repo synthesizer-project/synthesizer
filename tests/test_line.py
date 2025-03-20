@@ -419,9 +419,7 @@ class TestLineCollectionManipulation:
 
         assert concat_lines.nlines == lines.nlines
         assert concat_lines.nlines == concat_lines.luminosity.shape[-1]
-        assert (
-            concat_lines.luminosity.shape[-1] == 2 * lines.luminosity.shape[-1]
-        )
+        assert concat_lines.luminosity.shape[0] == 2
 
     def test_extend(self, simple_line_collection):
         """Test extending line collections."""
