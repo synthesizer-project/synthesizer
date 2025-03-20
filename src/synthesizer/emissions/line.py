@@ -576,6 +576,45 @@ class LineCollection:
 
             return new_line
 
+        # Do we have a single line?
+        elif isinstance(line_id, str) and line_id in self.line_ids:
+            # Are we dealing with an alias?
+            line_id = alias_to_line_id(line_id)
+
+            # Return the single line
+            new_line = LineCollection(
+                line_ids=[line_id],
+                lam=unyt_array(
+                    [self.lam[self._line2index[line_id]]],
+                    self.lam.units,
+                ),
+                lum=unyt_array(
+                    [self.luminosity[..., self._line2index[line_id]]],
+                    self.luminosity.units,
+                ),
+                cont=unyt_array(
+                    [self.continuum[..., self._line2index[line_id]]],
+                    self.continuum.units,
+                ),
+            )
+
+            # Copy over the flux and observed wavelength if they exist
+            if self.flux is not None:
+                new_line.flux = unyt_array(
+                    [self.flux[..., self._line2index[line_id]]],
+                    self.flux.units,
+                )
+                new_line.continuum_flux = unyt_array(
+                    [self.continuum_flux[..., self._line2index[line_id]]],
+                    self.continuum_flux.units,
+                )
+                new_line.obslam = unyt_array(
+                    [self.obslam[self._line2index[line_id]]],
+                    self.obslam.units,
+                )
+
+            return new_line
+
         # Do we have a blended line?
         elif isinstance(line_id, str) and "," in line_id:
             # Split the line id into a list of individual lines, handling any
@@ -632,45 +671,6 @@ class LineCollection:
                 )
                 new_line.obslam = unyt_array(
                     [new_obslam / len(line_ids)], self.obslam.units
-                )
-
-            return new_line
-
-        # Do we have a single line?
-        elif isinstance(line_id, str):
-            # Are we dealing with an alias?
-            line_id = alias_to_line_id(line_id)
-
-            # Return the single line
-            new_line = LineCollection(
-                line_ids=[line_id],
-                lam=unyt_array(
-                    [self.lam[self._line2index[line_id]]],
-                    self.lam.units,
-                ),
-                lum=unyt_array(
-                    [self.luminosity[..., self._line2index[line_id]]],
-                    self.luminosity.units,
-                ),
-                cont=unyt_array(
-                    [self.continuum[..., self._line2index[line_id]]],
-                    self.continuum.units,
-                ),
-            )
-
-            # Copy over the flux and observed wavelength if they exist
-            if self.flux is not None:
-                new_line.flux = unyt_array(
-                    [self.flux[..., self._line2index[line_id]]],
-                    self.flux.units,
-                )
-                new_line.continuum_flux = unyt_array(
-                    [self.continuum_flux[..., self._line2index[line_id]]],
-                    self.continuum_flux.units,
-                )
-                new_line.obslam = unyt_array(
-                    [self.obslam[self._line2index[line_id]]],
-                    self.obslam.units,
                 )
 
             return new_line
