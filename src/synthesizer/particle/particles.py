@@ -967,7 +967,9 @@ class Particles:
 
         return np.average(attr_vals, weights=weights_vals, axis=axis)
 
-    def get_lum_weighted_attr(self, attr, spectra_type, filter_code):
+    def get_lum_weighted_attr(
+        self, attr, spectra_type, filter_code, axis=None
+    ):
         """
         Get a luminosity weighted attribute.
 
@@ -991,9 +993,11 @@ class Particles:
         # Get the luminosity
         lum = self.particle_photo_lnu[spectra_type][filter_code]
 
-        return self.get_weighted_attr(attr, lum)
+        return self.get_weighted_attr(attr, lum, axis)
 
-    def get_flux_weighted_attr(self, attr, spectra_type, filter_code):
+    def get_flux_weighted_attr(
+        self, attr, spectra_type, filter_code, axis=None
+    ):
         """
         Get a flux weighted attribute.
 
@@ -1017,7 +1021,7 @@ class Particles:
         # Get the flux
         flux = self.particle_photo_fnu[spectra_type][filter_code]
 
-        return self.get_weighted_attr(attr, flux)
+        return self.get_weighted_attr(attr, flux, axis)
 
 
 class CoordinateGenerator:
