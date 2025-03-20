@@ -216,6 +216,13 @@ class Extraction:
             dict:
                 The dictionary of extracted lines.
         """
+        # We need to be certain that any composite lines we have been
+        # passed are split into their constituent parts
+        passed_line_ids = line_ids
+        line_ids = []
+        for lid in passed_line_ids:
+            line_ids.extend(lid.split(","))
+
         # First step we need to extract each base lines
         for label in emission_model._extract_keys.keys():
             # Skip it if we happen to already have the lines
@@ -299,6 +306,13 @@ class Extraction:
                 nthreads=nthreads,
                 do_grid_check=False,
             )
+
+            # Ok, we have our lines but these are individuals. If passed_lines
+            # contains any composite lines we need to sum the individual lines.
+            # Luckily, we can do this by invoking the __getitem__ method of the
+            # LineCollection object.
+            if len(passed_line_ids) < len(line_ids):
+                out_lines = out_lines[passed_line_ids]
 
             # Store the lines in the right place (integrating if we need to)
             if this_model.per_particle:
