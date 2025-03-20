@@ -611,18 +611,34 @@ class LineCollection:
             # Return the single line
             new_line = LineCollection(
                 line_ids=[line_id],
-                lam=self.lam[self._line2index[line_id]],
-                lum=self.luminosity[..., self._line2index[line_id]],
-                cont=self.continuum[..., self._line2index[line_id]],
+                lam=unyt_array(
+                    [self.lam[self._line2index[line_id]]],
+                    self.lam.units,
+                ),
+                lum=unyt_array(
+                    [self.luminosity[..., self._line2index[line_id]]],
+                    self.luminosity.units,
+                ),
+                cont=unyt_array(
+                    [self.continuum[..., self._line2index[line_id]]],
+                    self.continuum.units,
+                ),
             )
 
             # Copy over the flux and observed wavelength if they exist
             if self.flux is not None:
-                new_line.flux = self.flux[..., self._line2index[line_id]]
-                new_line.continuum_flux = self.continuum_flux[
-                    ..., self._line2index[line_id]
-                ]
-                new_line.obslam = self.obslam[self._line2index[line_id]]
+                new_line.flux = unyt_array(
+                    [self.flux[..., self._line2index[line_id]]],
+                    self.flux.units,
+                )
+                new_line.continuum_flux = unyt_array(
+                    [self.continuum_flux[..., self._line2index[line_id]]],
+                    self.continuum_flux.units,
+                )
+                new_line.obslam = unyt_array(
+                    [self.obslam[self._line2index[line_id]]],
+                    self.obslam.units,
+                )
 
             return new_line
 
@@ -700,14 +716,64 @@ class LineCollection:
         return LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
-            lum=np.concatenate(
+            lum=np.vstack(
                 [self.luminosity, *[ol.luminosity for ol in other_lines]],
-                axis=-1,
             ),
-            cont=np.concatenate(
+            cont=np.vstack(
                 [self.continuum, *[ol.continuum for ol in other_lines]],
-                axis=-1,
             ),
+        )
+
+    def extend(self, *other_lines):
+        """
+        Extend the LineCollection with additional lines.
+
+        This will add the lines to the end of the LineCollection. The combined
+        LineCollections must not contain any duplicate lines.
+
+        Args:
+            other_lines (LineCollection)
+                The other LineCollections to extend with.
+
+        Returns:
+            LineCollection
+                The extended LineCollection.
+        """
+        # Check the LineCollections are compatible
+        lst_ids = [*self.line_ids]
+        set_ids = set(self.line_ids)
+        for other_line in other_lines:
+            lst_ids.extend(other_line.line_ids)
+            set_ids.update(other_line.line_ids)
+
+        # Check for duplicates
+        if len(lst_ids) != len(set_ids):
+            raise exceptions.InconsistentArguments(
+                "LineCollections must contain different lines to be "
+                "combined"
+            )
+
+        # Extend the LineCollection
+        new_line_ids = np.concatenate(
+            [self.line_ids, *[ol.line_ids for ol in other_lines]]
+        )
+        new_lam = np.concatenate(
+            [self.lam, *[ol.lam for ol in other_lines]], axis=0
+        )
+        new_lum = np.concatenate(
+            [self.luminosity, *[ol.luminosity for ol in other_lines]],
+            axis=-1,
+        )
+        new_cont = np.concatenate(
+            [self.continuum, *[ol.continuum for ol in other_lines]],
+            axis=-1,
+        )
+
+        return LineCollection(
+            line_ids=new_line_ids,
+            lam=new_lam,
+            lum=new_lum,
+            cont=new_cont,
         )
 
     def _which_ratios(self):
