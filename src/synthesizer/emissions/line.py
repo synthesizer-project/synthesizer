@@ -527,23 +527,43 @@ class LineCollection:
 
         # Do we have a list of lines?
         if isinstance(line_id, (list, tuple, np.ndarray)):
-            # Collect together the indices we'll need to extract, handling
-            # any aliases
-            inds = [self._line2index[alias_to_line_id(li)] for li in line_id]
+            # Define lists to hold the indices we'll need to extract
+            line_ids = []
+            lam = []
+            lum = []
+            cont = []
+            flux = []
+            obslam = []
+            cont_flux = []
 
-            # Get the subset of lines
+            # Loop over each line_id and extract the relevant properties
+            for li in line_id:
+                single_line = self[li]
+
+                line_ids.extend(single_line.line_ids)
+                lam.extend(single_line.lam)
+                lum.extend(single_line.luminosity)
+                cont.extend(single_line.continuum)
+                if single_line.flux is not None:
+                    flux.extend(single_line.flux)
+                    obslam.extend(single_line.obslam)
+                    cont_flux.extend(single_line.continuum_flux)
+
+            # Create the new line (converting to unyt_arrays)
             new_line = LineCollection(
-                line_ids=self.line_ids[inds],
-                lam=self.lam[inds],
-                lum=self.luminosity[..., inds],
-                cont=self.continuum[..., inds],
+                line_ids=line_ids,
+                lam=unyt_array(lam, self.lam.units),
+                lum=unyt_array(lum, self.luminosity.units),
+                cont=unyt_array(cont, self.continuum.units),
             )
 
             # Copy over the flux and observed wavelength if they exist
-            if self.flux is not None:
-                new_line.flux = self.flux[..., inds]
-                new_line.continuum_flux = self.continuum_flux[..., inds]
-                new_line.obslam = self.obslam[inds]
+            if len(flux) > 0:
+                new_line.flux = unyt_array(flux, self.flux.units)
+                new_line.obslam = unyt_array(obslam, self.obslam.units)
+                new_line.continuum_flux = unyt_array(
+                    cont_flux, self.continuum_flux.units
+                )
 
             return new_line
 
@@ -589,17 +609,21 @@ class LineCollection:
             # individual lines)
             new_line = LineCollection(
                 line_ids=[line_id],
-                lam=new_lam / len(line_ids),
-                lum=new_lum,
-                cont=new_cont,
+                lam=unyt_array([new_lam / len(line_ids)], self.lam.units),
+                lum=unyt_array([new_lum], self.luminosity.units),
+                cont=unyt_array([new_cont], self.continuum.units),
             )
 
             # Copy over the flux and observed wavelength if they exist
             # (converting the wavelength to the mean of the individual lines)
             if self.flux is not None:
-                new_line.flux = new_flux
-                new_line.continuum_flux = new_obs_cont
-                new_line.obslam = new_obslam / len(line_ids)
+                new_line.flux = unyt_array([new_flux], self.flux.units)
+                new_line.continuum_flux = unyt_array(
+                    [new_obs_cont], self.continuum_flux.units
+                )
+                new_line.obslam = unyt_array(
+                    [new_obslam / len(line_ids)], self.obslam.units
+                )
 
             return new_line
 
