@@ -996,3 +996,33 @@ class Stars(StarsComponent):
         raise exceptions.NotImplementedError(
             "Parametric stars don't currently require arg preparation"
         )
+
+    def get_weighted_attr(self, attr):
+        """
+        Get a weighted attribute of the stellar population.
+
+        Args:
+            attr (str)
+                The attribute to get.
+            axis (int)
+                The axis to sum over.
+
+        Returns:
+            unyt_quantity:
+                The weighted attribute.
+        """
+        # For now we need to raise an error if this is not an axis of the
+        # SFZH grid
+        if "age" not in attr and "metal" not in attr:
+            raise exceptions.InconsistentArguments(
+                "The attribute must be an axis of the SFZH grid"
+            )
+
+        # Get the attribute and the weights
+        attr = getattr(self, attr)
+        if "age" in attr:
+            weight = self.sf_hist
+        else:
+            weight = self.metal_dist
+
+        return weighted_mean(attr, weight)

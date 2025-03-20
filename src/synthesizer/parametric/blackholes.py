@@ -365,3 +365,17 @@ class BlackHole(BlackholesComponent):
             grid_assignment_method,
             nthreads,
         )
+
+    def get_weighted_attrs(self, *args, **kwargs):
+        """
+        Raise an error, weighted attributes are meaningless for a BlackHole.
+
+        Raises:
+            NotImplementedError
+                Parametric black holes are singular and so weighted attributes
+                make no sense.
+        """
+        raise NotImplementedError(
+            "Parametric black holes are by definition singular "
+            "making weighted attributes non-sensical."
+        )
