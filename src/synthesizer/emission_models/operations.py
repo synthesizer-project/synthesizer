@@ -570,7 +570,6 @@ class Generation:
 
     def _generate_lines(
         self,
-        line_ids,
         this_model,
         emission_model,
         lines,
@@ -584,8 +583,6 @@ class Generation:
         emission at the line wavelengths.
 
         Args:
-            line_ids (list):
-                The line ids to extract.
             this_model (EmissionModel):
                 The model to generate the lines for.
             emission_model (EmissionModel):
@@ -1032,7 +1029,6 @@ class Combination:
 
     def _combine_lines(
         self,
-        line_ids,
         emission_model,
         lines,
         particle_lines,
@@ -1042,8 +1038,6 @@ class Combination:
         Combine the extracted lines.
 
         Args:
-            line_ids (list):
-                The line ids to extract.
             emission_model (EmissionModel):
                 The root emission model. This is used to get a consistent
                 wavelength grid.

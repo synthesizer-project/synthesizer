@@ -2789,7 +2789,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if this_model._is_combining:
                 try:
                     lines, particle_lines = self._combine_lines(
-                        line_ids,
                         emission_model,
                         lines,
                         particle_lines,
@@ -2815,7 +2814,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
                     lines, particle_lines = self._generate_lines(
-                        line_ids,
                         this_model,
                         emission_model,
                         lines,
