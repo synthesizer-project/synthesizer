@@ -366,7 +366,7 @@ class BlackHole(BlackholesComponent):
             nthreads,
         )
 
-    def get_weighted_attrs(self, *args, **kwargs):
+    def get_weighted_attr(self, *args, **kwargs):
         """
         Raise an error, weighted attributes are meaningless for a BlackHole.
 
