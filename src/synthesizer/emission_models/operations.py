@@ -223,6 +223,15 @@ class Extraction:
         for lid in passed_line_ids:
             line_ids.extend(lid.split(","))
 
+        # Before we do anything, check that the line ids don't have duplicates
+        # or aliases
+        set_line_ids = set(line_ids)
+        if len(set_line_ids) != len(line_ids):
+            raise exceptions.InconsistentArguments(
+                "Found duplicate line ids, this is not allowed. "
+                f"line_ids: {line_ids}"
+            )
+
         # First step we need to extract each base lines
         for label in emission_model._extract_keys.keys():
             # Skip it if we happen to already have the lines
