@@ -960,7 +960,64 @@ class Particles:
         else:
             weights_vals = weights
 
+        # Strip units off the weights if they have them, this can confuse
+        # things
+        if hasattr(weights_vals, "units"):
+            weights_vals = weights_vals.value
+
         return np.average(attr_vals, weights=weights_vals, axis=axis)
+
+    def get_lum_weighted_attr(self, attr, spectra_type, filter_code):
+        """
+        Get a luminosity weighted attribute.
+
+        This will compute the luminosity weighted average of an attribute
+        using the provided weights.
+
+        Args:
+            attr (str)
+                The attribute to weight.
+            spectra_type (str)
+                The type of spectra to use to compute the luminosity.
+            filter_code (str)
+                The filter code to compute the luminosity for.
+            axis (int)
+                The axis to compute the weighted attribute along.
+
+        Returns:
+            weighted_attr (float)
+                The luminosity weighted attribute.
+        """
+        # Get the luminosity
+        lum = self.particle_photo_lnu[spectra_type][filter_code]
+
+        return self.get_weighted_attr(attr, lum)
+
+    def get_flux_weighted_attr(self, attr, spectra_type, filter_code):
+        """
+        Get a flux weighted attribute.
+
+        This will compute the flux weighted average of an attribute using the
+        provided weights.
+
+        Args:
+            attr (str)
+                The attribute to weight.
+            spectra_type (str)
+                The type of spectra to use to compute the flux.
+            filter_code (str)
+                The filter code to compute the flux for.
+            axis (int)
+                The axis to compute the weighted attribute along.
+
+        Returns:
+            weighted_attr (float)
+                The flux weighted attribute.
+        """
+        # Get the flux
+        flux = self.particle_photo_fnu[spectra_type][filter_code]
+
+        return self.get_weighted_attr(attr, flux)
 
 
 class CoordinateGenerator:
