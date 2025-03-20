@@ -577,7 +577,10 @@ class LineCollection:
             return new_line
 
         # Do we have a single line?
-        elif isinstance(line_id, str) and line_id in self.line_ids:
+        elif (
+            isinstance(line_id, str)
+            and alias_to_line_id(line_id) in self.line_ids
+        ):
             # Are we dealing with an alias?
             line_id = alias_to_line_id(line_id)
 
