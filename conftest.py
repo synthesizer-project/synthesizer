@@ -1,3 +1,5 @@
+"""A collection of fixtures for testing the synthesizer package."""
+
 import numpy as np
 import pytest
 from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, yr
@@ -11,6 +13,7 @@ from synthesizer.emission_models import (
     ReprocessedEmission,
     TransmittedEmission,
 )
+from synthesizer.emission_models.attenuation import Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid
@@ -26,6 +29,22 @@ from synthesizer.particle.stars import Stars
 def test_grid():
     """Return a Grid object."""
     return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+
+
+@pytest.fixture
+def lam():
+    """
+    Return a wavelength array.
+
+    This function generates a logarithmically spaced array of wavelengths
+    ranging from 10^2 to 10^6 angstroms, with 1000 points in total.
+
+    Returns:
+        np.ndarray:
+            A numpy array containing the generated wavelengths with
+            angstrom units.
+    """
+    return np.logspace(2, 6, 1000) * angstrom
 
 
 # ================================= MODELS ====================================
@@ -79,6 +98,19 @@ def bimodal_pacman_emission_model(test_grid):
         dust_curve_ism=PowerLaw(slope=-0.7),
         dust_curve_birth=PowerLaw(slope=-1.3),
     )
+
+
+# ================================= IGMS ======================================
+
+
+@pytest.fixture
+def i14():
+    return Inoue14()
+
+
+@pytest.fixture
+def m96():
+    return Madau96()
 
 
 # ================================= STARS =====================================
@@ -219,6 +251,12 @@ def unit_sed(test_grid):
         lam=test_grid.lam,
         lnu=np.ones_like(test_grid._lam) * erg / s / Hz,
     )
+
+
+@pytest.fixture
+def empty_sed(lam):
+    """Return an Sed instance."""
+    return Sed(lam=lam)
 
 
 # ================================= LINES =====================================

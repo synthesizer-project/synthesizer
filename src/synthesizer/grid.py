@@ -1504,9 +1504,9 @@ class Grid:
 
         # Apply the mask to the spectra
         for spectra_type in self.available_spectra:
-            self.spectra[spectra_type] = self.spectra[spectra_type][
-                ..., okinds
-            ]
+            self.spectra[spectra_type] = np.ascontiguousarray(
+                self.spectra[spectra_type][..., okinds]
+            )
 
     def animate_grid(
         self,

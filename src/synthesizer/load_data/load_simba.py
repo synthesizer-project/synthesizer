@@ -10,6 +10,7 @@ from astropy.cosmology import FlatLambdaCDM
 from unyt import Msun, kpc, yr
 
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
+
 from ..particle.galaxy import Galaxy
 
 
