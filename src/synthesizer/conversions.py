@@ -427,13 +427,35 @@ def standard_to_vacuum(wavelength):
         wavelength (unyt_array)
             A wavelength in vacuum.
     """
-    # If wavelength is < 2000A simply return since no change required.
-    if wavelength <= 2000.0 * angstrom:
+    # Treat scalars and arrays differently
+    if np.isscalar(wavelength):
+        # If wavelength is < 2000A simply return since no change required.
+        if wavelength <= 2000.0 * angstrom:
+            return wavelength
+
+        # Otherwise, convert to vacuum
+        else:
+            return air_to_vacuum(wavelength)
+
+    # Otherwise, we have an array and need to use a mask
+
+    # Create a mask for the two cases
+    mask = wavelength <= 2000.0 * angstrom
+
+    # If all values are < 2000A simply return since no change required.
+    if np.all(mask):
         return wavelength
 
-    # Otherwise, convert to vacuum
-    else:
-        return air_to_vacuum(wavelength)
+    # Create an array to store the result
+    result = np.zeros_like(wavelength)
+
+    # Apply the mask
+    result[mask] = wavelength[mask]
+
+    # Apply the conversion where appropriate
+    result[~mask] = air_to_vacuum(wavelength[~mask])
+
+    return result
 
 
 @accepts(wavelength=angstrom)
@@ -451,13 +473,35 @@ def vacuum_to_standard(wavelength):
         wavelength (unyt_array)
             A standard wavelength.
     """
-    # If wavelength is < 2000A simply return since no change required.
-    if wavelength <= 2000.0 * angstrom:
+    # Treat scalars and arrays differently
+    if np.isscalar(wavelength):
+        # If wavelength is < 2000A simply return since no change required.
+        if wavelength <= 2000.0 * angstrom:
+            return wavelength
+
+        # Otherwise, convert to air
+        else:
+            return vacuum_to_air(wavelength)
+
+    # Otherwise, we have an array and need to use a mask
+
+    # Create a mask for the two cases
+    mask = wavelength <= 2000.0 * angstrom
+
+    # If all values are < 2000A simply return since no change required.
+    if np.all(mask):
         return wavelength
 
-    # Otherwise, convert to vacuum
-    else:
-        return vacuum_to_air(wavelength)
+    # Create an array to store the result
+    result = np.zeros_like(wavelength)
+
+    # Apply the mask
+    result[mask] = wavelength[mask]
+
+    # Apply the conversion where appropriate
+    result[~mask] = vacuum_to_air(wavelength[~mask])
+
+    return result
 
 
 def attenuation_to_optical_depth(attenuation):

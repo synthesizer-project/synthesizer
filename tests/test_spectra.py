@@ -367,6 +367,37 @@ def test_masked_int_spectra_diff_units(
         "the unmasked integrated spectra."
     )
 
+    # Clear the masks define a new mask in different units
+    reprocessed_emission_model.clear_masks()
+    reprocessed_emission_model.add_mask(
+        attr="ages",
+        op=">",
+        thresh=5.5 * Myr,
+        set_all=True,
+    )
+    new_mask = particle_stars_B.get_mask(
+        attr="ages",
+        thresh=5.5 * Myr,
+        op=">",
+    )
+
+    assert np.any(new_mask), f"The mask is empty (defined in yr): {new_mask}"
+    assert False in new_mask, f"The mask is all True: {new_mask}"
+    assert np.all(
+        mask == new_mask
+    ), "The masks with different units are not the same."
+
+    dif_units_masked_spec = particle_stars_B.get_spectra(
+        reprocessed_emission_model,
+        grid_assignment_method="ngp",
+    )
+
+    # Ensure the masks with diffferent units have produced the same result
+    assert np.allclose(
+        masked_spec._lnu,
+        dif_units_masked_spec._lnu,
+    ), "The masked spectra with different units are not the same."
+
 
 def test_masked_part_spectra(particle_stars_B, reprocessed_emission_model):
     """Test the effect of masking during the generation of spectra."""

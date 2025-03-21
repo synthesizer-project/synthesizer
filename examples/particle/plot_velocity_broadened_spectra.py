@@ -13,9 +13,9 @@ import numpy as np
 from unyt import km, rad, s
 
 from synthesizer.emission_models import NebularEmission
+from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
-from synthesizer.sed import plot_spectra
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]

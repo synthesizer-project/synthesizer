@@ -8,9 +8,9 @@ parametric galaxy.
 
 from unyt import Msun, Myr
 
-import synthesizer.line_ratios as line_ratios
-from synthesizer.emission_models import AttenuatedEmission, IncidentEmission
+from synthesizer.emission_models import AttenuatedEmission, NebularEmission
 from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emissions import O3, Hb, O3b, O3r
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Define the emission model
-    incident = IncidentEmission(grid)
+    nebular = NebularEmission(grid)
 
     # Let's now build a galaxy following the other tutorials:
     # Define the functional form of the star formation and metal
@@ -50,28 +50,23 @@ if __name__ == "__main__":
     # Print a summary of the Galaxy object
     print(galaxy)
 
-    # Let's define a list of lines that we're interested in. Note that we can
-    # provide multiples which are automatically summed as if they were blended.
+    # Let's define a list of lines that we're interested in. To do this we'll
+    # first extract some line ratios from the `line_ratios` module, and then
+    # Extract the individual lines from each ratio
     line_ids = [
-        line_ratios.Hb,  # "H 1 4861.32A"
-        line_ratios.O3b,  # "O 3 4958.91A"
-        line_ratios.O3r,  # "O 3 5006.84A"
-        line_ratios.O3,  # ["O 3 4958.91A", "O 3 5006.84A"]
-        line_ratios.O3
-        + ","
-        + line_ratios.Hb,  # ["O 3 4958.91A", "O 3 5006.84A", "H 1 4861.32A"]
+        Hb,  # "H 1 4861.32A"
+        O3b,  # "O 3 4958.91A"
+        O3r,  # "O 3 5006.84A"
+        O3,  # ["O 3 4958.91A", "O 3 5006.84A"]
     ]
+    line_ids = [lid.strip() for lids in line_ids for lid in lids.split(",")]
 
     # Next, let's get the intrinsic line properties:
-    lines = galaxy.stars.get_lines(line_ids, incident)
+    lines = galaxy.stars.get_lines(line_ids, nebular)
 
     # This produces a LineCollection object which has some useful methods and
     # information.
     print(lines)
-
-    # Let's now examine individual lines (or doublets):
-    for line in lines:
-        print(line)
 
     # Those lines are now associated with the `Galaxy` object, revealed by
     # using the print function:
@@ -82,7 +77,7 @@ if __name__ == "__main__":
         emitter="stellar",
         tau_v=1.0,
         dust_curve=PowerLaw(slope=-1),
-        apply_to=incident,
+        apply_to=nebular,
     )
 
     lines_att = galaxy.stars.get_lines(

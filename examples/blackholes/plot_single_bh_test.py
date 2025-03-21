@@ -13,10 +13,10 @@ from unyt import Msun, deg, kelvin, yr
 
 from synthesizer.emission_models import UnifiedAGN
 from synthesizer.emission_models.dust.emission import Greybody
+from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.parametric import BlackHole
 from synthesizer.particle import BlackHoles
-from synthesizer.sed import plot_spectra
 
 # Set a random number seed to ensure consistent results
 np.random.seed(42)
@@ -50,6 +50,9 @@ model = UnifiedAGN(
     covering_fraction_nlr=0.1,
     covering_fraction_blr=0.1,
     torus_emission_model=Greybody(1000 * kelvin, 1.5),
+    ionisation_parameter=1e-2,
+    hydrogen_density=1e3,
+    velocity_dispersion=100 * 1e3,
 )
 
 # Get the spectra assuming this emission model

@@ -14,10 +14,10 @@ import matplotlib.pyplot as plt
 from unyt import Msun, Myr
 
 from synthesizer.emission_models import PacmanEmission
+from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.sed import plot_spectra
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this

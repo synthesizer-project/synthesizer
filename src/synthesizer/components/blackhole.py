@@ -6,12 +6,10 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Hz, Msun, angstrom, c, cm, deg, erg, km, s, yr
+from unyt import Msun, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.line import Line
-from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 
@@ -268,128 +266,6 @@ class BlackholesComponent(Component):
             self.cosine_inclination = np.cos(
                 self.inclination.to("radian").value
             )
-
-    def generate_line(
-        self,
-        grid,
-        line_id,
-        line_type,
-        mask=None,
-        method="cic",
-        nthreads=0,
-        verbose=False,
-    ):
-        """
-        Calculate rest frame line luminosity and continuum from an AGN Grid.
-
-        This is a flexible base method which extracts the rest frame line
-        luminosity of this stellar population from the AGN grid based on the
-        passed arguments.
-
-        Args:
-            grid (Grid):
-                A Grid object.
-            line_id (list/str):
-                A list of line_ids or a str denoting a single line.
-                Doublets can be specified as a nested list or using a
-                comma (e.g. 'OIII4363,OIII4959').
-            line_type (str)
-                The type of line to extract from the grid. Must match the
-                spectra/line type in the grid file.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-            nthreads (int)
-                The number of threads to use in the C extension. If -1 then
-                all available threads are used.
-
-        Returns:
-            Line
-                An instance of Line contain this lines wavelenth, luminosity,
-                and continuum.
-        """
-        from synthesizer.extensions.integrated_line import (
-            compute_integrated_line,
-        )
-
-        # Ensure line_id is a string
-        if not isinstance(line_id, str):
-            raise exceptions.InconsistentArguments("line_id must be a string")
-
-        # If we have have 0 particles (regardless of mask) just return a line
-        # containing zeros
-        if hasattr(self, "nbh") and self.nbh == 0:
-            return Line(
-                combine_lines=[
-                    Line(
-                        line_id=line_id_,
-                        wavelength=grid.line_lams[line_id_] * angstrom,
-                        luminosity=0.0 * erg / s,
-                        continuum=0.0 * erg / s / Hz,
-                    )
-                    for line_id_ in line_id.split(",")
-                ]
-            )
-
-        # Ensure and warn that the masking hasn't removed everything
-        if mask is not None and np.sum(mask) == 0:
-            warn("Age mask has filtered out all particles")
-
-            return Line(
-                combine_lines=[
-                    Line(
-                        line_id=line_id_,
-                        wavelength=grid.line_lams[line_id_] * angstrom,
-                        luminosity=0.0 * erg / s,
-                        continuum=0.0 * erg / s / Hz,
-                    )
-                    for line_id_ in line_id.split(",")
-                ]
-            )
-
-        # Set up a list to hold each individual Line
-        lines = []
-
-        # Loop over the ids in this container
-        for line_id_ in line_id.split(","):
-            # Strip off any whitespace (can be left by split)
-            line_id_ = line_id_.strip()
-
-            # Get this line's wavelength
-            # TODO: The units here should be extracted from the grid but aren't
-            # yet stored.
-            lam = grid.line_lams[line_id_] * angstrom
-
-            # Get the luminosity and continuum
-            lum, cont = compute_integrated_line(
-                *self._prepare_line_args(
-                    grid,
-                    line_id_,
-                    line_type,
-                    mask=mask,
-                    grid_assignment_method=method,
-                    nthreads=nthreads,
-                )
-            )
-
-            # Append this lines values to the containers
-            lines.append(
-                Line(
-                    line_id=line_id_,
-                    wavelength=lam,
-                    luminosity=lum * erg / s,
-                    continuum=cont * erg / s / Hz,
-                )
-            )
-
-        # Don't init another line if there was only 1 in the first place
-        if len(lines) == 1:
-            return lines[0]
-        else:
-            return Line(combine_lines=lines)
 
     def calculate_bolometric_luminosity(self):
         """

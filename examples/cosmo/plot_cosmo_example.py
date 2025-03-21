@@ -21,10 +21,10 @@ from synthesizer.emission_models import (
     StellarEmissionModel,
 )
 from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emissions import Sed, plot_spectra
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
-from synthesizer.sed import Sed, plot_spectra
 
 # Get the grid
 grid_dir = "../../tests/test_grid"

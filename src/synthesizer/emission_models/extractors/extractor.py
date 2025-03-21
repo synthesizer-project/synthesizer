@@ -8,13 +8,13 @@ from unyt import Hz, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.particle_spectra import (
     compute_part_seds_with_vel_shift,
     compute_particle_seds,
 )
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.sed import Sed
 from synthesizer.synth_warnings import warn
 
 
@@ -341,9 +341,114 @@ class IntegratedParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
-    def generate_line(self, *args, **kwargs):
+    def generate_line(
+        self,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        grid_assignment_method,
+        nthreads,
+        do_grid_check,
+    ):
         """Extract the line luminosities from the grid for the emitter."""
-        pass
+        start = tic()
+
+        # Check we actually have to do the calculation
+        if emitter.nparticles == 0:
+            warn("Found emitter with no particles, returning empty Line")
+            return LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=np.zeros(self._grid.nlines) * erg / s,
+                cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+            )
+        elif mask is not None and np.sum(mask) == 0:
+            warn("A mask has filtered out all particles, returning empty Line")
+            return LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=np.zeros(self._grid.nlines) * erg / s,
+                cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+            )
+
+        # Get the attributes from the emitter
+        extracted, weight = self.get_emitter_attrs(
+            emitter,
+            model,
+            do_grid_check,
+        )
+
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        # Get the grid_weights if they exist and we don't have a mask
+        if mask is None:
+            grid_weights = emitter._grid_weights.get(
+                grid_assignment_method.lower(), {}
+            ).get(self._grid.grid_name, None)
+        else:
+            grid_weights = None
+
+        # We need to modify the grid dims to account for the difference
+        # in the final axis between the spectra and line grids
+        grid_dims = np.array(self._grid_dims)
+        grid_dims[-1] = self._grid.nlines
+
+        # Compute the integrated line lum array
+        lum, grid_weights = compute_integrated_sed(
+            self._line_lum_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            grid_weights,
+            mask,
+            lam_mask,
+        )
+
+        # Compute the integrated continuum array
+        cont, _ = compute_integrated_sed(
+            self._line_cont_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            grid_weights,
+            mask,
+            lam_mask,
+        )
+
+        # If we have no mask then lets store the grid weights in case
+        # we can make use of them later
+        if (
+            mask is None
+            and self._grid.grid_name
+            not in emitter._grid_weights[grid_assignment_method.lower()]
+        ):
+            emitter._grid_weights[grid_assignment_method.lower()][
+                self._grid.grid_name
+            ] = grid_weights
+
+        toc("Generating integrated line", start)
+
+        return LineCollection(
+            line_ids=self._grid.line_ids,
+            lam=self._line_lams,
+            lum=lum * erg / s,
+            cont=cont * erg / s / Hz,
+        )
 
 
 class DopplerShiftedParticleExtractor(Extractor):
@@ -455,8 +560,12 @@ class DopplerShiftedParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
-        pass
+        """Doppler shifted line luminosities make no sense."""
+        raise exceptions.UnimplementedFunctionality(
+            "Doppler shifted emission lines aren't implemented since they "
+            "have no width. To include the effects of velocity broadening"
+            " on line emissions, extract them from the spectra."
+        )
 
 
 class IntegratedDopplerShiftedParticleExtractor(Extractor):
@@ -565,8 +674,12 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         return Sed(model.lam, spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
-        pass
+        """Doppler shifted line luminosities make no sense."""
+        raise exceptions.UnimplementedFunctionality(
+            "Doppler shifted emission lines aren't implemented since they "
+            "have no width. To include the effects of velocity broadening"
+            " on line emissions, extract them from the spectra."
+        )
 
 
 class ParticleExtractor(Extractor):
@@ -662,9 +775,103 @@ class ParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
-    def generate_line(self, *args, **kwargs):
+    def generate_line(
+        self,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        grid_assignment_method,
+        nthreads,
+        do_grid_check,
+    ):
         """Extract the line luminosities from the grid for the emitter."""
-        pass
+        start = tic()
+
+        # Check we actually have to do the calculation
+        if emitter.nparticles == 0:
+            warn("Found emitter with no particles, returning empty Line")
+            return LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                * erg
+                / s,
+                cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                * erg
+                / s
+                / Hz,
+            )
+        elif mask is not None and np.sum(mask) == 0:
+            warn("A mask has filtered out all particles, returning empty Line")
+            return LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                * erg
+                / s,
+                cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                * erg
+                / s
+                / Hz,
+            )
+
+        # Get the attributes from the emitter
+        extracted, weight = self.get_emitter_attrs(
+            emitter,
+            model,
+            do_grid_check,
+        )
+
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        # We need to modify the grid dims to account for the difference
+        # in the final axis between the spectra and line grids
+        grid_dims = np.array(self._grid_dims)
+        grid_dims[-1] = self._grid.nlines
+
+        # Compute the integrated line lum array
+        lum = compute_particle_seds(
+            self._line_lum_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            mask,
+            lam_mask,
+        )
+
+        # Compute the integrated continuum array
+        cont = compute_particle_seds(
+            self._line_cont_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            mask,
+            lam_mask,
+        )
+
+        toc("Generating particle line", start)
+
+        return LineCollection(
+            line_ids=self._grid.line_ids,
+            lam=self._line_lams,
+            lum=lum * erg / s,
+            cont=cont * erg / s / Hz,
+        )
 
 
 class IntegratedParametricExtractor(Extractor):
@@ -737,6 +944,56 @@ class IntegratedParametricExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
-    def generate_line(self, *args, **kwargs):
-        """Extract the line luminosities from the grid for the emitter."""
-        pass
+    def generate_line(
+        self,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        grid_assignment_method,
+        nthreads,
+        do_grid_check,
+    ):
+        """
+        Extract the line luminosities from the grid for the emitter.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas): The emitter object.
+            model (EmissionModel): The emission model object.
+
+        """
+        start = tic()
+
+        # Get a mask for non-zero bins in the SFZH
+        mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
+
+        # Add an extra dimension to enable later summation
+        sfzh = np.expand_dims(emitter.sfzh, axis=self._grid_naxes)
+
+        # Get the grid line lunminosities and continua including any lam mask
+        if lam_mask is None:
+            grid_line_lums = self._line_lum_grid
+            grid_line_conts = self._line_cont_grid
+        else:
+            grid_line_lums = self._line_lum_grid[..., lam_mask]
+            grid_line_conts = self._line_cont_grid[..., lam_mask]
+
+        # Compute the integrated line array by multiplying the sfzh by
+        # the grids
+        if lam_mask is not None:
+            lum = np.zeros(self._grid.nlines) * erg / s
+            cont = np.zeros(self._grid.nlines) * erg / s / Hz
+            lum[lam_mask] = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
+            cont[lam_mask] = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
+        else:
+            lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
+            cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
+
+        toc("Generating integrated lnu", start)
+
+        return LineCollection(
+            line_ids=self._grid.line_ids,
+            lam=self._grid.line_lams,
+            lum=lum,
+            cont=cont,
+        )

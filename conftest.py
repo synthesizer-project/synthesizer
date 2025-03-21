@@ -15,12 +15,12 @@ from synthesizer.emission_models import (
 )
 from synthesizer.emission_models.attenuation import Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid
 from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
-from synthesizer.sed import Sed
 
 # ================================== GRID =====================================
 
@@ -257,3 +257,34 @@ def unit_sed(test_grid):
 def empty_sed(lam):
     """Return an Sed instance."""
     return Sed(lam=lam)
+
+
+# ================================= LINES =====================================
+
+
+@pytest.fixture
+def simple_line_collection():
+    """Return a simple LineCollection with two emission lines."""
+    return LineCollection(
+        line_ids=["O III 5007 A", "H 1 6563 A"],
+        lam=np.array([5007, 6563]) * angstrom,
+        lum=np.array([1e40, 1e39]) * erg / s,
+        cont=np.array([1e38, 1e37]) * erg / s / Hz,
+    )
+
+
+@pytest.fixture
+def multi_dimension_line_collection():
+    """Return a LineCollection with multidimensional arrays of lines."""
+    return LineCollection(
+        line_ids=["O III 5007 A", "H 1 6563 A", "H 1 4861 A"],
+        lam=np.array([5007, 6563, 4861]) * angstrom,
+        lum=np.array([[1e40, 1e39, 1e38], [2e40, 2e39, 2e38]]) * erg / s,
+        cont=np.array([[1e38, 1e37, 1e36], [2e38, 2e37, 2e36]]) * erg / s / Hz,
+    )
+
+
+@pytest.fixture
+def line_ratio_collection(test_grid):
+    """Return a LineCollection with lines needed for common ratios."""
+    return test_grid.get_lines((1, 1))
