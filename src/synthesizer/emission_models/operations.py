@@ -11,11 +11,19 @@ import numpy as np
 from unyt import Hz, erg, s
 
 from synthesizer import exceptions
+from synthesizer.emission_models.extractors.extractor import (
+    DopplerShiftedParticleExtractor,
+    IntegratedDopplerShiftedParticleExtractor,
+    IntegratedParametricExtractor,
+    IntegratedParticleExtractor,
+    ParticleExtractor,
+)
 from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
 )
 from synthesizer.line import Line, LineCollection
+from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.sed import Sed
 
 
@@ -48,6 +56,13 @@ class Extraction:
 
         # What base key will we be extracting?
         self._extract = extract
+
+        # Ensure the grid has the right key
+        if extract not in grid.spectra and extract not in grid.lines:
+            raise exceptions.MissingSpectraType(
+                f"The Grid does not contain the key '{extract}' "
+                f"(available types are {grid.available_spectra}."
+            )
 
         # Should the emission take into account the velocity shift due to
         # peculiar velocities? (Particle Only!)
@@ -104,39 +119,54 @@ class Extraction:
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
+            # Are we doing a parametric Stars object? If so we have a special
+            # case (TODO: In the future we should make this work without
+            # needing to do this)
+            if isinstance(emitter, ParametricStars):
+                parametric_stars = True
+            else:
+                parametric_stars = False
+
             # Do we have to define a property mask?
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
-            # Fix any parameters we need to fix
-            prev_properties = {}
-            for prop in this_model.fixed_parameters:
-                prev_properties[prop] = getattr(emitter, prop, None)
-                setattr(emitter, prop, this_model.fixed_parameters[prop])
-
-            # Get the generator function
-            if this_model.per_particle:
-                generator_func = emitter.generate_particle_lnu
-            else:
-                generator_func = emitter.generate_lnu
-
-            # Get this base spectra
-            sed = Sed(
-                emission_model.lam,
-                generator_func(
+            # Get the appropriate extractor
+            if this_model.per_particle and this_model.vel_shift:
+                extractor = DopplerShiftedParticleExtractor(
                     this_model.grid,
-                    spectra_key,
-                    mask=this_mask,
-                    vel_shift=this_model.vel_shift,
-                    lam_mask=this_model._lam_mask,
-                    verbose=verbose,
-                    nthreads=nthreads,
-                    grid_assignment_method=grid_assignment_method,
+                    this_model.extract,
                 )
-                * erg
-                / s
-                / Hz,
+            elif this_model.per_particle:
+                extractor = ParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif this_model.vel_shift:
+                extractor = IntegratedDopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif parametric_stars:
+                extractor = IntegratedParametricExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            else:
+                extractor = IntegratedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+
+            sed = extractor.generate_lnu(
+                emitter,
+                this_model,
+                mask=this_mask,
+                lam_mask=this_model._lam_mask,
+                grid_assignment_method=grid_assignment_method,
+                nthreads=nthreads,
+                do_grid_check=False,
             )
 
             # Store the spectra in the right place (integrating if we
@@ -146,10 +176,6 @@ class Extraction:
                 spectra[label] = sed.sum()
             else:
                 spectra[label] = sed
-
-            # Replace any fixed parameters
-            for prop in prev_properties:
-                setattr(emitter, prop, prev_properties[prop])
 
         return spectra, particle_spectra
 

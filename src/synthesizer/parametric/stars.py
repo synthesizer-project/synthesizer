@@ -281,6 +281,7 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
+    @accepts(instant_sf=yr)
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """
         Compute the SFZH for all possible combinations of input.
@@ -291,10 +292,12 @@ class Stars(StarsComponent):
         Args:
             instant_sf (unyt_quantity/float)
                 An age at which to compute an instantaneous SFH, i.e. all
-                stellar mass populating a single SFH bin.
+                stellar mass populating a single SFH bin. Note, this must
+                be the age itself, not the log10(age).
             instant_metallicity (float)
                 A metallicity at which to compute an instantaneous ZH, i.e. all
-                stellar populating a single ZH bin.
+                stellar populating a single ZH bin. Note, this must be the
+                metallicity itself, not the log10(metallicity).
         """
         # Hide imports to avoid cyclic imports
         from synthesizer.particle import Stars as ParticleStars
@@ -322,7 +325,7 @@ class Stars(StarsComponent):
             # Compute the SFZH grid
             self.sfzh = inst_stars.get_sfzh(
                 self.log10ages,
-                self.metallicities,
+                self.log10metallicities,
                 grid_assignment_method="cic",
             ).sfzh
 
@@ -494,85 +497,6 @@ class Stars(StarsComponent):
                 )
 
         return new_mask
-
-    def generate_lnu(
-        self,
-        grid,
-        spectra_name,
-        old=None,
-        young=None,
-        mask=None,
-        lam_mask=None,
-        **kwargs,
-    ):
-        """
-        Calculate rest frame spectra from an SPS Grid.
-
-        This is a flexible base method which extracts the rest frame spectra of
-        this stellar popualtion from the SPS grid based on the passed
-        arguments. More sophisticated types of spectra are produced by the
-        get_spectra_* methods on StarsComponent, which call this method.
-
-        Args:
-            grid (object, Grid):
-                The SPS Grid object from which to extract spectra.
-            spectra_name (str):
-                A string denoting the desired type of spectra. Must match a
-                key on the Grid.
-            old (bool/float):
-                Are we extracting only old stars? If so only SFZH bins with
-                log10(Ages) > old will be included in the spectra. Defaults to
-                False.
-            young (bool/float):
-                Are we extracting only young stars? If so only SFZH bins with
-                log10(Ages) <= young will be included in the spectra. Defaults
-                to False.
-            mask (array):
-                An array to mask the SFZH grid. This can be used to mask
-                specific SFZH bins.
-            lam_mask (array, bool)
-                A mask to apply to the wavelength array of the grid. This
-                allows for the extraction of specific wavelength ranges.
-
-        Returns:
-            The Stars's integrated rest frame spectra in erg / s / Hz.
-        """
-        # Ensure arguments make sense
-        if old is not None and young is not None:
-            raise ValueError("Cannot provide old and young stars together")
-
-        # Get a mask for non-zero bins in the SFZH
-        mask = self.get_mask("sfzh", 0, ">", mask=mask)
-
-        # Make the mask for relevent SFZH bins if we haven't been handed one.
-        if mask is not None:
-            if old is not None:
-                mask = self.get_mask("log10ages", old, ">", mask=mask)
-            elif young is not None:
-                mask = self.get_mask("log10ages", young, "<=", mask=mask)
-
-        # Add an extra dimension to enable later summation
-        sfzh = np.expand_dims(self.sfzh, axis=2)
-
-        # Get the grid spectra (including any wavelength mask)
-        if lam_mask is not None:
-            grid_spectra = grid.spectra[spectra_name][..., lam_mask]
-        else:
-            grid_spectra = grid.spectra[spectra_name]
-
-        # Compute the spectra
-        spectra = np.sum(
-            grid_spectra[mask] * sfzh[mask],
-            axis=0,
-        )
-
-        # Apply the wavelength mask if provided
-        if lam_mask is not None:
-            out_spec = np.zeros(grid.lam.size)
-            out_spec[lam_mask] = spectra
-            spectra = out_spec
-
-        return spectra
 
     def generate_line(
         self,
@@ -1066,12 +990,6 @@ class Stars(StarsComponent):
             plt.show()
 
         return fig, ax
-
-    def _prepare_sed_args(self, *args, **kwargs):
-        """Prepare arguments for SED generation."""
-        raise exceptions.NotImplementedError(
-            "Parametric stars don't currently require arg preparation"
-        )
 
     def _prepare_line_args(self, *args, **kwargs):
         """Prepare arguments for line generation."""
