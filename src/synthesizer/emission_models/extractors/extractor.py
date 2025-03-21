@@ -384,9 +384,12 @@ class IntegratedParticleExtractor(Extractor):
             nthreads = os.cpu_count()
 
         # Get the grid_weights if they exist and we don't have a mask
-        grid_weights = emitter._grid_weights.get(
-            grid_assignment_method.lower(), {}
-        ).get(self._grid.grid_name, None)
+        if mask is None:
+            grid_weights = emitter._grid_weights.get(
+                grid_assignment_method.lower(), {}
+            ).get(self._grid.grid_name, None)
+        else:
+            grid_weights = None
 
         # We need to modify the grid dims to account for the difference
         # in the final axis between the spectra and line grids
