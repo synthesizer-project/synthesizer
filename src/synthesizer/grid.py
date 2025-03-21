@@ -647,23 +647,6 @@ class Grid:
                     lum_units,
                 )
 
-        # Remove any lines whose luminosities are all 0 in the nebular key
-        non_zero_lines_mask = np.ones(
-            self.line_lums["nebular"].shape[-1], dtype=bool
-        )
-        for i, line in enumerate(self.available_lines):
-            if np.all(self.line_lums["nebular"][..., i] == 0):
-                non_zero_lines_mask[i] = 0
-
-        # Update the lines
-        self.available_lines = self.available_lines[non_zero_lines_mask]
-        self.line_lams = self.line_lams[non_zero_lines_mask.astype(bool)]
-        for key in self.line_lums.keys():
-            self.line_lums[key] = self.line_lums[key][..., non_zero_lines_mask]
-            self.line_conts[key] = self.line_conts[key][
-                ..., non_zero_lines_mask
-            ]
-
     def _prepare_lam_axis(
         self,
         new_lam,
