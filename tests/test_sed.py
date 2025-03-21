@@ -1,16 +1,6 @@
+"""A test suite for testing the Sed class."""
+
 import numpy as np
-import pytest
-from unyt import angstrom
-
-from synthesizer.sed import Sed
-
-
-@pytest.fixture
-def empty_sed():
-    """returns an Sed instance"""
-    lam = np.loadtxt("tests/test_sed/lam.txt") * angstrom
-
-    return Sed(lam=lam)
 
 
 def test_sed_empty(empty_sed):

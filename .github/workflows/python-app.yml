@@ -40,6 +40,7 @@ jobs:
           # neither are on PyPI so must be installed separately
           pip install "illustris_python @ git+https://github.com/illustristng/illustris_python.git@master"
           pip install "dense_basis@git+https://github.com/kartheikiyer/dense_basis"
+          pip install pytest-xdist  # enable parallel pytest execution
           # Output the compilation report so it can be viewed in an action log
           cat build_synth.log
       - uses: astral-sh/ruff-action@v1 # Lint with Ruff
@@ -54,9 +55,9 @@ jobs:
           synthesizer-download -d tests/data --all-sim-data
       - name: Test with pytest
         run: |
-          pytest
+          pytest -n auto
           # Test ipython notebooks
-          pytest --nbmake docs/source/*/*.ipynb docs/source/*/*/*.ipynb
+          pytest -n auto --nbmake docs/source/*/*.ipynb docs/source/*/*/*.ipynb
       - name: Sphinx Build
         run: |
           # Test sphinx build (runs all notebooks)
