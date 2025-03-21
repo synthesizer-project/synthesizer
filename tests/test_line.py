@@ -23,6 +23,7 @@ from synthesizer.conversions import standard_to_vacuum
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import LineCollection
 from synthesizer.emissions.line_ratios import ratios
+from synthesizer.emissions.utils import O2, O3, Hb, O3b, O3r
 
 
 class TestLineCollectionInitialization:
@@ -1310,7 +1311,179 @@ class TestLineCollectionGenerationMasked:
 class TestLineCollectionGenerationSubsets:
     """Test generating subsets of lines."""
 
-    pass
+    def test_singular_int_lines(
+        self,
+        random_part_stars,
+        nebular_emission_model,
+    ):
+        """Test generating a singular line."""
+        # Get the subset of lines
+        subset_lines = random_part_stars.get_lines(
+            [
+                "H 1 6562.80A",
+            ],
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure the subset has the correct number of lines
+        assert (
+            subset_lines.nlines == 1
+        ), "The subset has the wrong number of lines."
+
+        # Ensure the luminosity and continuum is an array of length 1
+        assert (
+            subset_lines.luminosity.shape[-1] == 1
+        ), "The luminosity is not an array of length 1."
+        assert (
+            subset_lines.continuum.shape[-1] == 1
+        ), "The continuum is not an array of length 1."
+
+    def test_subset_int_lines(
+        self,
+        random_part_stars,
+        nebular_emission_model,
+    ):
+        """Test generating a subset of lines."""
+        # Get the subset of lines
+        subset_lines = random_part_stars.get_lines(
+            [
+                "H 1 6562.80A",
+                "O 3 4363.21A",
+            ],
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure the subset has the correct number of lines
+        assert (
+            subset_lines.nlines == 2
+        ), "The subset has the wrong number of lines."
+
+        # Ensure the luminosity is an array of length 2
+        assert (
+            subset_lines.luminosity.shape[-1] == 2
+        ), "The luminosity is not an array of length 2."
+
+        # Ensure the continuum is an array of length 2
+        assert (
+            subset_lines.continuum.shape[-1] == 2
+        ), "The continuum is not an array of length 2."
+
+        # Ensure the lines are 1D (i.e. intrgrated)
+        assert (
+            len(subset_lines.luminosity.shape) == 1
+        ), "The luminosity is not 1D."
+        assert (
+            len(subset_lines.continuum.shape) == 1
+        ), "The continuum is not 1D."
+
+    def test_singular_part_lines(
+        self,
+        random_part_stars,
+        nebular_emission_model,
+    ):
+        """Test generating a singular line."""
+        nebular_emission_model.set_per_particle(True)
+
+        # Get the subset of lines
+        subset_lines = random_part_stars.get_lines(
+            [
+                "H 1 6562.80A",
+            ],
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure the subset has the correct number of lines
+        assert (
+            subset_lines.nlines == 1
+        ), "The subset has the wrong number of lines."
+
+        # Ensure the luminosity and continuum is an array of length 1
+        assert (
+            subset_lines.luminosity.shape[-1] == 1
+        ), "The luminosity is not an array of length 1."
+        assert (
+            subset_lines.continuum.shape[-1] == 1
+        ), "The continuum is not an array of length 1."
+
+        # Ensure the lines are 2D (i.e. per particle)
+        assert (
+            len(subset_lines.luminosity.shape) == 2
+        ), "The luminosity is not 2D."
+        assert (
+            len(subset_lines.continuum.shape) == 2
+        ), "The continuum is not 2D."
+
+    def test_subset_part_lines(
+        self,
+        random_part_stars,
+        nebular_emission_model,
+    ):
+        """Test generating a subset of lines."""
+        nebular_emission_model.set_per_particle(True)
+
+        # Get the subset of lines
+        subset_lines = random_part_stars.get_lines(
+            [
+                "H 1 6562.80A",
+                "O 3 4363.21A",
+            ],
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure the subset has the correct number of lines
+        assert (
+            subset_lines.nlines == 2
+        ), "The subset has the wrong number of lines."
+
+        # Ensure the luminosity is an array of length 2
+        assert (
+            subset_lines.luminosity.shape[-1] == 2
+        ), "The luminosity is not an array of length 2."
+
+        # Ensure the continuum is an array of length 2
+        assert (
+            subset_lines.continuum.shape[-1] == 2
+        ), "The continuum is not an array of length 2."
+
+        # Ensure the lines are 2D (i.e. per particle)
+        assert (
+            len(subset_lines.luminosity.shape) == 2
+        ), "The luminosity is not 2D."
+        assert (
+            len(subset_lines.continuum.shape) == 2
+        ), "The continuum is not 2D."
+
+    def test_subset_with_composites(
+        self,
+        random_part_stars,
+        nebular_emission_model,
+    ):
+        """Test generating a subset of lines with a composite line."""
+        # Get the subset of lines with a mixture of composite and normal lines
+        subset_lines = random_part_stars.get_lines(
+            [O2, O3, Hb, O3b, O3r],
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure the subset has the correct number of lines
+        assert (
+            subset_lines.nlines == 5
+        ), "The subset has the wrong number of lines."
+
+        # Ensure the luminosity is an array of length 5
+        assert (
+            subset_lines.luminosity.shape[-1] == 5
+        ), "The luminosity is not an array of length 5."
+
+        # Ensure the continuum is an array of length 5
+        assert (
+            subset_lines.continuum.shape[-1] == 5
+        ), "The continuum is not an array of length 5."
 
 
 if __name__ == "__main__":
