@@ -1028,6 +1028,15 @@ class Sed:
                 "A window of len 2 or 4 must be provided"
             )
 
+        # Ensure the beta we return is a real number
+        if np.any(np.isnan(beta)):
+            if isinstance(beta, np.ndarray):
+                beta[np.isnan(beta)] = 0.0
+            elif isinstance(beta, (list, tuple)):
+                beta = [0.0 if np.isnan(b) else b for b in beta]
+            elif isinstance(beta, float):
+                beta = 0.0
+
         return beta
 
     def get_fnu0(self):

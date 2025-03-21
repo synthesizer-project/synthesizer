@@ -12,7 +12,7 @@ def weighted_mean(data, weights):
     Author: Stephen Wilkins
 
     """
-    return np.sum(data * weights) / np.sum(weights)
+    return np.average(data, weights=weights)
 
 
 def weighted_median(data, weights):

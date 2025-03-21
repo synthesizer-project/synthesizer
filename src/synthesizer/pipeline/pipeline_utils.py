@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from unyt import unyt_array
 
+from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
 
 
@@ -172,6 +173,57 @@ def discover_dict_structure(data):
     return output_set
 
 
+def count_and_check_dict_recursive(data, prefix=""):
+    """
+    Recursively count the number of leaves in a dictionary.
+
+    Args:
+        obj (dict):
+            The dictionary to search.
+        prefix (str):
+            A prefix to add to the keys of the arrays.
+        output_dict (dict):
+            A dictionary to store the output paths in.
+
+    Returns:
+        dict:
+            A dictionary of all the numpy arrays in the input dictionary.
+    """
+    count = 0
+
+    # If the obj is a dictionary, loop over the keys and values and recurse
+    if isinstance(data, dict):
+        for k, v in data.items():
+            count += count_and_check_dict_recursive(
+                v,
+                prefix=f"{prefix}/{k}",
+            )
+        return count
+
+    # Otherwise, we are at a leaf with some data to account for. Check the
+    # result makes sense.The count is always the first element of the
+    # shape tuple
+    if data is None:
+        raise exceptions.BadResult(
+            f"Found a NoneType object at {prefix}. "
+            "All results should be numeric with associated units."
+        )
+
+    if not hasattr(data, "shape"):
+        raise exceptions.BadResult(
+            f"Found a non-array object at {prefix}. "
+            "All results should be numeric with associated units."
+        )
+
+    if not hasattr(data, "units"):
+        raise exceptions.BadResult(
+            f"Found an array object without units at {prefix}. "
+            "All results should be numeric with associated units."
+        )
+
+    return data.shape[0]
+
+
 @lru_cache(maxsize=500)
 def cached_split(split_key):
     """
@@ -204,14 +256,14 @@ def combine_list_of_dicts(dicts):
             The combined dictionary.
     """
 
-    def combine_values(*values):
+    def combine_values(values):
         # Combine values into a unyt_array
         return unyt_array(values)
 
     def recursive_merge(dict_list):
         if not isinstance(dict_list[0], dict):
             # Base case: combine non-dict leaves
-            return combine_values(*dict_list)
+            return combine_values(dict_list)
 
         # Recursive case: merge dictionaries
         merged = {}
