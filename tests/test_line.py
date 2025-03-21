@@ -6,14 +6,17 @@ import pytest
 from astropy.cosmology import Planck18 as cosmo
 from unyt import (
     Hz,
+    Myr,
     angstrom,
     c,
     cm,
+    dimensionless,
     erg,
     eV,
     h,
     pc,
     s,
+    yr,
 )
 
 from synthesizer.conversions import standard_to_vacuum
@@ -505,6 +508,809 @@ class TestLineCollectionVisualization:
 
         # Clean up
         plt.close(fig)
+
+
+class TestLineCollectionGenerationMethods:
+    """Test line generation with different methods."""
+
+    def test_integrated_generation_ngp(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of intergrated line emission."""
+        # Compute the lines using both integrated and per particle methods
+        nebular_emission_model.set_per_particle(False)
+        intregrated_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+        random_part_stars.clear_all_emissions()
+        nebular_emission_model.set_per_particle(True)
+        per_particle_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+        per_particle_lines = per_particle_lines.sum()
+
+        # Ensure the luminosities match
+        assert np.allclose(
+            intregrated_lines.luminosity.value,
+            per_particle_lines.luminosity.value,
+        ), (
+            "The integrated and summed per particles "
+            "line luminosities do not match."
+            f"{intregrated_lines.luminosity.value} != "
+            f"{per_particle_lines.luminosity.value}"
+        )
+
+        # Ensure the continuum luminosities match
+        assert np.allclose(
+            intregrated_lines.continuum.value,
+            per_particle_lines.continuum.value,
+        ), (
+            "The integrated and summed per particles "
+            "continuum luminosities do not match."
+            f"{intregrated_lines.continuum.value} != "
+            f"{per_particle_lines.continuum.value}"
+        )
+
+    def test_masked_integrated_generation_ngp(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of intergrated line emission with a mask."""
+        # Add a mask to the emission model
+        nebular_emission_model.add_mask(
+            attr="ages",
+            op=">=",
+            thresh=5 * Myr,
+            set_all=True,
+        )
+
+        # Compute the lines using both the integrated and per
+        # particle machinery
+        nebular_emission_model.set_per_particle(False)
+        integrated_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+        random_part_stars.clear_all_emissions()
+        nebular_emission_model.set_per_particle(True)
+        per_particle_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+        per_particle_lines = per_particle_lines.sum()
+
+        # Ensure the luminosities match
+        assert np.allclose(
+            integrated_lines.luminosity.value,
+            per_particle_lines.luminosity.value,
+        ), (
+            "The integrated and summed per particle "
+            "line luminosities do not match."
+            f"{integrated_lines.luminosity.value} != "
+            f"{per_particle_lines.luminosity.value}"
+        )
+
+        # Ensure the continuum luminosities match
+        assert np.allclose(
+            integrated_lines.continuum.value,
+            per_particle_lines.continuum.value,
+        ), (
+            "The integrated and summed per particle "
+            "continuum luminosities do not match."
+            f"{integrated_lines.continuum.value} != "
+            f"{per_particle_lines.continuum.value}"
+        )
+
+    def test_integrated_generation_cic(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of intergrated line emission."""
+        # Compute the lines using both integrated and per particle methods
+        nebular_emission_model.set_per_particle(False)
+        intregrated_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+        )
+        random_part_stars.clear_all_emissions()
+        nebular_emission_model.set_per_particle(True)
+        per_particle_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+        )
+        per_particle_lines = per_particle_lines.sum()
+
+        # Ensure the luminosities match
+        assert np.allclose(
+            intregrated_lines.luminosity.value,
+            per_particle_lines.luminosity.value,
+        ), (
+            "The integrated and summed per particles "
+            "line luminosities do not match."
+            f"{intregrated_lines.luminosity.value} != "
+            f"{per_particle_lines.luminosity.value}"
+        )
+
+        # Ensure the continuum luminosities match
+        assert np.allclose(
+            intregrated_lines.continuum.value,
+            per_particle_lines.continuum.value,
+        ), (
+            "The integrated and summed per particles "
+            "continuum luminosities do not match."
+            f"{intregrated_lines.continuum.value} != "
+            f"{per_particle_lines.continuum.value}"
+        )
+
+    def test_masked_integrated_generation_cic(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of intergrated line emission with a mask."""
+        # Add a mask to the emission model
+        nebular_emission_model.add_mask(
+            attr="ages",
+            op=">=",
+            thresh=5 * Myr,
+            set_all=True,
+        )
+
+        # Compute the lines using both the integrated and per
+        # particle machinery
+        nebular_emission_model.set_per_particle(False)
+        integrated_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+        )
+        random_part_stars.clear_all_emissions()
+        nebular_emission_model.set_per_particle(True)
+        per_particle_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+        )
+        per_particle_lines = per_particle_lines.sum()
+
+        # Ensure the luminosities match
+        assert np.allclose(
+            integrated_lines.luminosity.value,
+            per_particle_lines.luminosity.value,
+        ), (
+            "The integrated and summed per particle "
+            "line luminosities do not match."
+            f"{integrated_lines.luminosity.value} != "
+            f"{per_particle_lines.luminosity.value}"
+        )
+
+        # Ensure the continuum luminosities match
+        assert np.allclose(
+            integrated_lines.continuum.value,
+            per_particle_lines.continuum.value,
+        ), (
+            "The integrated and summed per particle "
+            "continuum luminosities do not match."
+            f"{integrated_lines.continuum.value} != "
+            f"{per_particle_lines.continuum.value}"
+        )
+
+    def test_pacman_lines(
+        self,
+        test_grid,
+        particle_stars_B,
+        pacman_emission_model,
+        bimodal_pacman_emission_model,
+    ):
+        """Test the generation of PACMAN lines."""
+        # Set the fixed tau_vs
+        particle_stars_B.tau_v = 0.1
+        particle_stars_B.tau_v_birth = 0.3
+        particle_stars_B.tau_v_ism = 0.1
+
+        # Set the age pivot for the B stars
+        bimodal_pacman_emission_model.age_pivot = 6.7 * dimensionless
+
+        # Generate the PACMAN lines
+        pacman_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            pacman_emission_model,
+            grid_assignment_method="ngp",
+        )
+        particle_stars_B.clear_all_emissions()
+
+        # Generate the bimodal PACMAN lines
+        bimodal_pacman_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            bimodal_pacman_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure that the two PACMAN lines are different to validate that the
+        # age pivot is working in the bimodal PACMAN model
+        assert not np.allclose(
+            pacman_lines._luminosity,
+            bimodal_pacman_lines._luminosity,
+        ), "The PACMAN and bimodal PACMAN lines are the same."
+        assert np.allclose(
+            pacman_lines._luminosity.shape,
+            bimodal_pacman_lines._luminosity.shape,
+        ), "The PACMAN and bimodal PACMAN lines have different shapes."
+        assert not np.allclose(
+            pacman_lines._continuum,
+            bimodal_pacman_lines._continuum,
+        ), "The PACMAN and bimodal PACMAN continuum are the same."
+
+
+class TestLineCollectionGenerationThreaded:
+    """Test line generation with and without threading."""
+
+    def test_threaded_generation_ngp_per_particle(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of lines with and without threading."""
+        nebular_emission_model.set_per_particle(True)
+
+        # Compute the lines using both the integrated and
+        # per particle machinery
+        serial_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+            nthreads=1,
+        )
+        random_part_stars.clear_all_emissions()
+        threaded_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+            nthreads=4,
+        )
+
+        # Ensure that the integrated lines are the same
+        assert np.allclose(
+            serial_lines._luminosity, threaded_lines._luminosity
+        ), "The serial and threaded lines are not the same."
+        assert np.allclose(
+            serial_lines._continuum, threaded_lines._continuum
+        ), "The serial and threaded continuum are not the same."
+
+    def test_threaded_generation_ngp_integrated(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of lines with and without threading."""
+        nebular_emission_model.set_per_particle(False)
+
+        # Compute the lines using both the integrated and
+        # per particle machinery
+        serial_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+            nthreads=1,
+        )
+        random_part_stars.clear_all_emissions()
+        threaded_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+            nthreads=4,
+        )
+
+        # Ensure that the integrated lines are the same
+        assert np.allclose(
+            serial_lines._luminosity, threaded_lines._luminosity
+        ), "The serial and threaded lines are not the same."
+        assert np.allclose(
+            serial_lines._continuum, threaded_lines._continuum
+        ), "The serial and threaded continuum are not the same."
+
+    def test_threaded_generation_cic_per_particle(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of lines with and without threading."""
+        nebular_emission_model.set_per_particle(True)
+
+        # Compute the lines using both the integrated and
+        # per particle machinery
+        serial_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+            nthreads=1,
+        )
+        random_part_stars.clear_all_emissions()
+        threaded_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+            nthreads=4,
+        )
+
+        # Ensure that the integrated lines are the same
+        assert np.allclose(
+            serial_lines._luminosity, threaded_lines._luminosity
+        ), "The serial and threaded lines are not the same."
+        assert np.allclose(
+            serial_lines._continuum, threaded_lines._continuum
+        ), "The serial and threaded continuum are not the same."
+
+    def test_threaded_generation_cic_integrated(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test the generation of lines with and without threading."""
+        nebular_emission_model.set_per_particle(False)
+
+        # Compute the lines using both the integrated and
+        # per particle machinery
+        serial_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+            nthreads=1,
+        )
+        random_part_stars.clear_all_emissions()
+        threaded_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+            nthreads=4,
+        )
+
+        # Ensure that the integrated lines are the same
+        assert np.allclose(
+            serial_lines._luminosity, threaded_lines._luminosity
+        ), "The serial and threaded lines are not the same."
+        assert np.allclose(
+            serial_lines._continuum, threaded_lines._continuum
+        ), "The serial and threaded continuum are not the same."
+
+
+class TestLineCollectionWeights:
+    """Test the storage and reuse of grid weights."""
+
+    def test_reusing_weights_ngp(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test reusing weights to calculate lines for the same grid."""
+
+        # Compute the lines the first time
+        first_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure we have the weights
+        assert hasattr(
+            random_part_stars, "_grid_weights"
+        ), "The grid weights are not stored."
+        assert (
+            "test_grid" in random_part_stars._grid_weights["ngp"]
+        ), "The grid weights are not stored."
+
+        # Compute the lines the second time which will reuse the weights
+        random_part_stars.clear_all_emissions()
+        second_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure that the integrated lines are different
+        assert np.allclose(
+            first_lines._luminosity,
+            second_lines._luminosity,
+        ), "The first and second lines are not the same."
+        assert np.allclose(
+            first_lines._continuum,
+            second_lines._continuum,
+        ), "The first and second continuum are not the same."
+
+    def test_reusing_weights_cic(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_part_stars,
+    ):
+        """Test reusing weights to calculate lines for the same grid."""
+
+        # Compute the lines the first time
+        first_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+        )
+
+        # Ensure we have the weights
+        assert hasattr(
+            random_part_stars, "_grid_weights"
+        ), "The grid weights are not stored."
+        assert (
+            "test_grid" in random_part_stars._grid_weights["cic"]
+        ), "The grid weights are not stored."
+
+        # Compute the lines the second time which will reuse the weights
+        random_part_stars.clear_all_emissions()
+        second_lines = random_part_stars.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="cic",
+        )
+
+        # Ensure that the integrated lines are different
+        assert np.allclose(
+            first_lines._luminosity,
+            second_lines._luminosity,
+        ), "The first and second lines are not the same."
+        assert np.allclose(
+            first_lines._continuum,
+            second_lines._continuum,
+        ), "The first and second continuum are not the same."
+
+
+class TestLineCollectionGenerationMasked:
+    """Test line generation with masks."""
+
+    def test_masked_int_lines(
+        self,
+        test_grid,
+        particle_stars_B,
+        reprocessed_emission_model,
+    ):
+        """Test the effect of masking during integrated line generation."""
+        # Generate lines without masking
+        unmasked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            reprocessed_emission_model,
+            grid_assignment_method="ngp",
+        )
+        particle_stars_B.clear_all_emissions()
+
+        # Generate lines with masking
+        reprocessed_emission_model.add_mask(
+            attr="ages",
+            op=">",
+            thresh=5.5 * Myr,
+            set_all=True,
+        )
+        mask = particle_stars_B.get_mask(
+            attr="ages",
+            thresh=5.5 * Myr,
+            op=">",
+        )
+
+        assert np.any(mask), f"The mask is empty (defined in yr): {mask}"
+        assert False in mask, f"The mask is all True: {mask}"
+
+        masked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            reprocessed_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure that the masked lines are different
+        assert not np.allclose(
+            unmasked_lines._luminosity,
+            masked_lines._luminosity,
+        ), "The masked and unmasked integrated lines are the same."
+        assert not np.allclose(
+            unmasked_lines._continuum,
+            masked_lines._continuum,
+        ), "The masked and unmasked continuum are the same."
+
+        # Ensure the masked lines are less than the unmasked lines
+        assert np.sum(masked_lines._luminosity) < np.sum(
+            unmasked_lines._luminosity
+        ), (
+            "The masked integrated lines is not less than "
+            "the unmasked integrated lines."
+        )
+        assert np.sum(masked_lines._continuum) < np.sum(
+            unmasked_lines._continuum
+        ), "The masked continuum is not less than the unmasked continuum"
+
+    def test_masked_int_lines_diff_units(
+        self,
+        test_grid,
+        particle_stars_B,
+        reprocessed_emission_model,
+    ):
+        """Test applying masks with different units."""
+        # Generate lines without masking
+        unmasked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            reprocessed_emission_model,
+            grid_assignment_method="ngp",
+        )
+        particle_stars_B.clear_all_emissions()
+
+        # Generate lines with masking
+        reprocessed_emission_model.add_mask(
+            attr="ages",
+            op=">",
+            thresh=10**6 * 5.5 * yr,
+            set_all=True,
+        )
+        mask = particle_stars_B.get_mask(
+            attr="ages",
+            thresh=10**6 * 5.5 * yr,
+            op=">",
+        )
+
+        assert np.any(mask), f"The mask is empty (defined in yr): {mask}"
+        assert False in mask, f"The mask is all True: {mask}"
+
+        masked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            reprocessed_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure that the masked lines are different
+        assert not np.allclose(
+            unmasked_lines._luminosity,
+            masked_lines._luminosity,
+        ), "The masked and unmasked integrated lines are the same."
+        assert not np.allclose(
+            unmasked_lines._continuum,
+            masked_lines._continuum,
+        ), "The masked and unmasked continuum are the same."
+
+        # Ensure the masked lines are less than the unmasked lines
+        assert np.sum(masked_lines._luminosity) < np.sum(
+            unmasked_lines._luminosity
+        ), (
+            "The masked integrated lines is not less than "
+            "the unmasked integrated lines."
+        )
+        assert np.sum(masked_lines._continuum) < np.sum(
+            unmasked_lines._continuum
+        ), "The masked continuum is not less than the unmasked continuum"
+
+        # Clear the masks define a new mask in different units
+        reprocessed_emission_model.clear_masks()
+        reprocessed_emission_model.add_mask(
+            attr="ages",
+            op=">",
+            thresh=5.5 * Myr,
+            set_all=True,
+        )
+        new_mask = particle_stars_B.get_mask(
+            attr="ages",
+            thresh=5.5 * Myr,
+            op=">",
+        )
+
+        assert np.any(
+            new_mask
+        ), f"The mask is empty (defined in yr): {new_mask}"
+        assert False in new_mask, f"The mask is all True: {new_mask}"
+        assert np.all(
+            mask == new_mask
+        ), "The masks with different units are not the same."
+
+        dif_units_masked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            reprocessed_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure the masks with diffferent units have produced the same result
+        assert np.allclose(
+            masked_lines._luminosity,
+            dif_units_masked_lines._luminosity,
+        ), "The masked lines with different units are not the same."
+        assert np.allclose(
+            masked_lines._continuum,
+            dif_units_masked_lines._continuum,
+        ), "The masked continuum with different units are not the same."
+
+    def test_masked_part_lines(
+        self,
+        test_grid,
+        particle_stars_B,
+        reprocessed_emission_model,
+    ):
+        """Test the effect of masking during per particle line generation."""
+        reprocessed_emission_model.set_per_particle(True)
+
+        # Generate lines without masking
+        unmasked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            reprocessed_emission_model,
+            grid_assignment_method="ngp",
+        )
+        particle_stars_B.clear_all_emissions()
+
+        # Generate lines with masking
+        reprocessed_emission_model.add_mask(
+            attr="ages",
+            op=">",
+            thresh=5.5 * Myr,
+            set_all=True,
+        )
+        mask = particle_stars_B.get_mask(
+            attr="ages",
+            thresh=5.5 * Myr,
+            op=">",
+        )
+
+        assert np.any(mask), f"The mask is empty (defined in Myr): {mask}"
+        assert False in mask, f"The mask is all True: {mask}"
+
+        masked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            reprocessed_emission_model,
+            grid_assignment_method="ngp",
+        )
+
+        # Ensure that the masked lines are different
+        assert not np.allclose(
+            unmasked_lines._luminosity,
+            masked_lines._luminosity,
+        ), "The masked and unmasked integrated lines are the same."
+        assert not np.allclose(
+            unmasked_lines._continuum,
+            masked_lines._continuum,
+        ), "The masked and unmasked continuum are the same."
+
+        # Ensure the masked lines are less than the unmasked lines
+        assert np.sum(masked_lines._luminosity) < np.sum(
+            unmasked_lines._luminosity
+        ), (
+            "The masked per particle lines are not less than "
+            "the unmasked per particle lines."
+        )
+        assert np.sum(masked_lines._continuum) < np.sum(
+            unmasked_lines._continuum
+        ), "The masked continuum is not less than the unmasked continuum"
+
+    def test_masked_combination(
+        self,
+        test_grid,
+        particle_stars_B,
+        nebular_emission_model,
+    ):
+        """Test that the combination of two masked lines is correct."""
+        # Get the lines without any masks
+        unmasked_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+        particle_stars_B.clear_all_emissions()
+
+        # Add a mask to the emission model
+        nebular_emission_model.add_mask(
+            attr="ages",
+            op=">=",
+            thresh=5.5 * Myr,
+            set_all=True,
+        )
+        mask = particle_stars_B.get_mask(
+            attr="ages",
+            thresh=5.5 * Myr,
+            op=">=",
+        )
+        assert np.any(mask), f"The mask is empty (defined in Myr): {mask}"
+        assert False in mask, f"The mask is all True: {mask}"
+
+        # Generate the old masked lines
+        old_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+        particle_stars_B.clear_all_emissions()
+
+        # Ensure there is some emission
+        assert (
+            np.sum(old_lines._luminosity) > 0
+        ), "The old lines has no emission."
+
+        # And now swap the mask to a young mask
+        nebular_emission_model.clear_masks(True)
+        nebular_emission_model.add_mask(
+            attr="ages",
+            op="<",
+            thresh=5.5 * Myr,
+            set_all=True,
+        )
+        assert np.any(mask), f"The mask is empty (defined in Myr): {mask}"
+        assert False in mask, f"The mask is all True: {mask}"
+
+        # Generate the yound masked lines
+        young_lines = particle_stars_B.get_lines(
+            test_grid.available_lines,
+            nebular_emission_model,
+            grid_assignment_method="ngp",
+        )
+        particle_stars_B.clear_all_emissions()
+
+        # Ensure there is some emission
+        assert (
+            np.sum(young_lines._luminosity) > 0
+        ), "The young lines has no emission."
+
+        # Combine the two masked lines
+        combined_lines = old_lines + young_lines
+        combined_array = old_lines._luminosity + young_lines._luminosity
+
+        # Ensure that the masked lines are different
+        assert not np.allclose(
+            young_lines._luminosity,
+            old_lines._luminosity,
+        ), "The old and young integrated lines are the same."
+        assert not np.allclose(
+            young_lines._continuum,
+            old_lines._continuum,
+        ), "The old and young continuum are the same."
+
+        # Ensure the arrays are the same
+        assert np.allclose(
+            combined_lines._luminosity,
+            combined_array,
+        ), "The combined and summed arrays are not the same."
+        assert np.allclose(
+            combined_lines._continuum,
+            old_lines._continuum + young_lines._continuum,
+        ), "The combined and summed continuum are not the same."
+
+        # Ensure the combined lines are the same as the unmasked lines
+        assert np.allclose(
+            combined_lines._luminosity,
+            unmasked_lines._luminosity,
+        ), (
+            "The combined and unmasked integrated lines are not the same "
+            f"(combined={np.sum(combined_lines._luminosity)} vs"
+            f" unmasked={np.sum(unmasked_lines._luminosity)})."
+        )
+        assert np.allclose(
+            combined_lines._continuum,
+            unmasked_lines._continuum,
+        ), (
+            "The combined and unmasked continuum are not the same "
+            f"(combined={np.sum(combined_lines._continuum)} vs"
+            f" unmasked={np.sum(unmasked_lines._continuum)})."
+        )
+
+
+class TestLineCollectionGenerationSubsets:
+    """Test generating subsets of lines."""
+
+    pass
 
 
 if __name__ == "__main__":
