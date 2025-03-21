@@ -101,6 +101,7 @@ class Grid:
 
     # Define Quantities
     lam = Quantity("wavelength")
+    line_lams = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
     def __init__(
@@ -156,7 +157,7 @@ class Grid:
         # Set up spectra and lines dictionaries (if we don't read them they'll
         # just stay as empty dicts)
         self.spectra = {}
-        self.line_lams = {}
+        self.line_lams = None
         self.line_lums = {}
         self.line_conts = {}
 
@@ -645,6 +646,23 @@ class Grid:
                     np.zeros((*self.spectra[spectra].shape[:-1], self.nlines)),
                     lum_units,
                 )
+
+        # Remove any lines whose luminosities are all 0 in the nebular key
+        non_zero_lines_mask = np.ones(
+            self.line_lums["nebular"].shape[-1], dtype=bool
+        )
+        for i, line in enumerate(self.available_lines):
+            if np.all(self.line_lums["nebular"][..., i] == 0):
+                non_zero_lines_mask[i] = 0
+
+        # Update the lines
+        self.available_lines = self.available_lines[non_zero_lines_mask]
+        self.line_lams = self.line_lams[non_zero_lines_mask.astype(bool)]
+        for key in self.line_lums.keys():
+            self.line_lums[key] = self.line_lums[key][..., non_zero_lines_mask]
+            self.line_conts[key] = self.line_conts[key][
+                ..., non_zero_lines_mask
+            ]
 
     def _prepare_lam_axis(
         self,
