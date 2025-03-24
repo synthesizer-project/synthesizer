@@ -383,6 +383,20 @@ class Sed:
             else:
                 lnu *= scaling
 
+        # Ok, if we have an array but the shapes don't match then we need to
+        # create a new array where each element of the scaling array is
+        # multipled by the whole lnu array producing a new lnu array of
+        # shape (scaling.shape + lnu.shape)
+        elif isinstance(scaling, np.ndarray):
+            new_lnu = scaling[..., np.newaxis] * lnu
+
+            # Masks are not supported in this case
+            if mask is not None:
+                raise exceptions.InconsistentMultiplication(
+                    "Masking is not supported for scaling arrays"
+                    " with different shapes"
+                )
+
         # Otherwise, we've been handed a bad scaling factor
         else:
             out_str = f"Incompatible scaling factor with type {type(scaling)} "
