@@ -387,7 +387,7 @@ class Sed:
         else:
             out_str = f"Incompatible scaling factor with type {type(scaling)} "
             if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape}"
+                out_str += f"and shape {scaling.shape} (expected {self.shape})"
             else:
                 out_str += f"and value {scaling}"
             raise exceptions.InconsistentMultiplication(out_str)
