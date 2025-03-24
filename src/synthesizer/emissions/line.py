@@ -678,7 +678,12 @@ class LineCollection:
 
             return new_line
 
-        # Otherwise, raise an exception
+        # Otherwise, raise an exception, we have two options here, either the
+        # line_id is not recognised or the type is not recognised
+        if isinstance(line_id, str):
+            raise exceptions.UnrecognisedOption(
+                f"Unrecognised line_id (line_id={line_id})"
+            )
         raise exceptions.UnrecognisedOption(
             "Unrecognised line_id type. Please provide a string, list, or "
             f"comma separated string (type={type(line_id)} line_id={line_id})"
