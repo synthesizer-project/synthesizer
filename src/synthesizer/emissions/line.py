@@ -681,7 +681,7 @@ class LineCollection:
         # Otherwise, raise an exception
         raise exceptions.UnrecognisedOption(
             "Unrecognised line_id type. Please provide a string, list, or "
-            "comma separated string."
+            f"comma separated string (type={type(line_id)} line_id={line_id})"
         )
 
     def sum(self, axis=None):
