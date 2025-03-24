@@ -1677,4 +1677,4 @@ class Template:
             )
 
         # Scale the spectra and return
-        return self._sed * bolometric_luminosity
+        return self._sed * (bolometric_luminosity / Hz)
