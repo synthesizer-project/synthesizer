@@ -1343,7 +1343,13 @@ class Sed:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
 
         # Evaluate the function at the desired wavelengths
-        new_spectra = spectres(new_lam, self._lam, self._lnu, fill=0)
+        new_spectra = spectres(
+            new_lam,
+            self._lam,
+            self._lnu,
+            fill=0,
+            verbose=False,
+        )
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra * self.lnu.units)
