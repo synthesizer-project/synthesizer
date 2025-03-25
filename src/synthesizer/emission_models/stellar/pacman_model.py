@@ -1367,6 +1367,7 @@ class ScreenEmission(PacmanEmission):
     def __init__(
         self,
         grid,
+        tau_v,
         dust_curve=Calzetti2000(),
         dust_emission=None,
         label=None,
@@ -1393,6 +1394,7 @@ class ScreenEmission(PacmanEmission):
         PacmanEmission.__init__(
             self,
             grid,
+            tau_v,
             dust_curve,
             dust_emission,
             fesc=0.0,
