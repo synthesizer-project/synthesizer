@@ -21,6 +21,7 @@ from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
+from synthesizer.photometry import PhotometryCollection
 
 # ================================== GRID =====================================
 
