@@ -1373,6 +1373,8 @@ class ScreenEmission(PacmanEmission):
         dust_curve=Calzetti2000(),
         dust_emission=None,
         label=None,
+        fesc=None,
+        fesc_ly_alpha=None,
         **kwargs,
     ):
         """
@@ -1399,8 +1401,8 @@ class ScreenEmission(PacmanEmission):
             tau_v,
             dust_curve,
             dust_emission,
-            fesc=0.0,
-            fesc_ly_alpha=1.0,
+            fesc=fesc,
+            fesc_ly_alpha=fesc_ly_alpha,
             label=label,
             **kwargs,
         )
