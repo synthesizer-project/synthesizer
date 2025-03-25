@@ -361,6 +361,7 @@ class PacmanEmission(StellarEmissionModel):
                 label="emergent" if label is None else label,
                 dust_curve=self._dust_curve,
                 apply_to=self.intrinsic,
+                tau_v=self._tau_v,
                 related_models=related_models,
                 **kwargs,
             )
