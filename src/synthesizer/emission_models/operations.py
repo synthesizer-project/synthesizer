@@ -18,13 +18,12 @@ from synthesizer.emission_models.extractors.extractor import (
     IntegratedParticleExtractor,
     ParticleExtractor,
 )
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
 )
-from synthesizer.line import Line, LineCollection
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.sed import Sed
 
 
 class Extraction:
@@ -187,7 +186,8 @@ class Extraction:
         lines,
         particle_lines,
         verbose,
-        **kwargs,
+        nthreads,
+        grid_assignment_method,
     ):
         """
         Extract lines from the grid.
@@ -199,22 +199,35 @@ class Extraction:
                 The emission model to extract from.
             emitters (dict):
                 The emitters to extract the lines for.
-            per_particle (bool):
-                Are we generating lines per particle?
             lines (dict):
                 The dictionary to store the extracted lines in.
             particle_lines (dict):
                 The dictionary to store the extracted particle lines in.
             verbose (bool):
                 Are we talking?
-            kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
+            nthreads (int):
+                The number of threads to use when generating lines.
+            grid_assignment_method (str):
+                The method to use when assigning particles to the grid.
+                Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
+                grid point).
 
         Returns:
             dict:
                 The dictionary of extracted lines.
         """
+        # We need to be certain that any composite lines we have been
+        # passed are split into their constituent parts
+        passed_line_ids = line_ids
+        line_ids = []
+        for lid in passed_line_ids:
+            for ljd in lid.split(","):
+                line_ids.append(ljd.strip())
+
+        # Remove any duplicated lines, will give the user exactly what they
+        # asked for, but there's not point doing extra work!
+        line_ids = list(set(line_ids))
+
         # First step we need to extract each base lines
         for label in emission_model._extract_keys.keys():
             # Skip it if we happen to already have the lines
@@ -228,56 +241,100 @@ class Extraction:
             if this_model.emitter not in emitters:
                 continue
 
+            # Check the attached grid has all the right lines in it
+            missing_lines = set(line_ids) - set(
+                this_model.grid.available_lines
+            )
+            if missing_lines:
+                raise exceptions.MissingLines(
+                    f"The Grid does not contain the following lines: "
+                    f"{missing_lines}."
+                )
+
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
-            # Do we have to define a mask?
+            # Are we doing a parametric Stars object? If so we have a special
+            # case (TODO: In the future we should make this work without
+            # needing to do this)
+            if isinstance(emitter, ParametricStars):
+                parametric_stars = True
+            else:
+                parametric_stars = False
+
+            # Do we have to define a property mask?
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
-            # Fix any parameters we need to fix
-            prev_properties = {}
-            for prop in this_model.fixed_parameters:
-                prev_properties[prop] = getattr(emitter, prop, None)
-                setattr(emitter, prop, this_model.fixed_parameters[prop])
-
-            # Get the generator function
-            if this_model.per_particle:
-                generator_func = emitter.generate_particle_line
-            else:
-                generator_func = emitter.generate_line
-
-            # Initialise the lines dictionary for this label
-            out_lines = {}
-
-            # Loop over the line ids
-            for line_id in line_ids:
-                # Get this base lines
-                out_lines[line_id] = generator_func(
-                    grid=this_model.grid,
-                    line_id=line_id,
-                    line_type=this_model.extract,
-                    mask=this_mask,
-                    verbose=verbose,
-                    **kwargs,
+            # Get the appropriate extractor
+            if this_model.per_particle and this_model.vel_shift:
+                extractor = DopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
                 )
+            elif this_model.per_particle:
+                extractor = ParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif this_model.vel_shift:
+                extractor = IntegratedDopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif parametric_stars:
+                extractor = IntegratedParametricExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            else:
+                extractor = IntegratedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+
+            # Get the lam_mask based on the line_ids that have been requested
+            lam_mask = np.isin(extractor._grid.available_lines, line_ids)
+
+            # Now combine the model's lam_mask with the requested lines
+            # if it exists
+            if this_model._lam_mask is not None:
+                # Get the indices that would bin the lines into the
+                # spectra grid wavelength array
+                line_indices = np.digitize(
+                    extractor._line_lams,
+                    extractor._grid.lam,
+                )
+
+                # Remove any lines which are masked out in the lam_mask
+                for ind in line_indices:
+                    if not this_model._lam_mask[ind]:
+                        lam_mask[ind] = False
+
+            out_lines = extractor.generate_line(
+                emitter,
+                this_model,
+                mask=this_mask,
+                lam_mask=lam_mask,
+                grid_assignment_method=grid_assignment_method,
+                nthreads=nthreads,
+                do_grid_check=False,
+            )
+
+            # Ok, we have our lines but this contains all lines currentlty
+            # with any not asked for set to zero. We need to filter this
+            # down to just the lines we want. Note that this will also
+            # handle composite lines
+            if len(passed_line_ids) < out_lines.nlines:
+                out_lines = out_lines[passed_line_ids]
 
             # Store the lines in the right place (integrating if we need to)
             if this_model.per_particle:
-                particle_lines[label] = LineCollection(out_lines)
-                lines[label] = LineCollection(
-                    {
-                        line_id: line.sum()
-                        for line_id, line in out_lines.items()
-                    }
-                )
+                particle_lines[label] = out_lines
+                lines[label] = out_lines.sum()
             else:
-                lines[label] = LineCollection(out_lines)
-
-            # Replace any fixed parameters
-            for prop in prev_properties:
-                setattr(emitter, prop, prev_properties[prop])
+                lines[label] = out_lines
 
         return lines, particle_lines
 
@@ -528,7 +585,6 @@ class Generation:
 
     def _generate_lines(
         self,
-        line_ids,
         this_model,
         emission_model,
         lines,
@@ -542,8 +598,6 @@ class Generation:
         emission at the line wavelengths.
 
         Args:
-            line_ids (list):
-                The line ids to extract.
             this_model (EmissionModel):
                 The model to generate the lines for.
             emission_model (EmissionModel):
@@ -559,7 +613,6 @@ class Generation:
             dict:
                 The dictionary of lines.
         """
-        # Unpack what we need for dust emission
         per_particle = this_model.per_particle
 
         # Do we already have the spectra?
@@ -573,58 +626,56 @@ class Generation:
                 "spectra must be generated first."
             )
 
+        # Get the  previous line
+        if (
+            per_particle
+            and this_model.lum_intrinsic_model.label in particle_lines
+        ):
+            prev_lines = particle_lines[this_model.lum_intrinsic_model.label]
+        elif this_model.lum_intrinsic_model.label in lines:
+            prev_lines = lines[this_model.lum_intrinsic_model.label]
+        else:
+            prev_lines = None
+
+        # Get the wavelength of each line
+        lams = prev_lines.lam
+
         # If the emitter is empty we can just return zeros. This is only
         # applicable when nparticles exists in the emitter
         if getattr(emitter, "nparticles", 1) == 0:
-            lines[this_model.label] = {}
-            for line_id in line_ids:
-                # Get the emission at this lines wavelength
-                lam = lines[this_model.lum_intrinsic_model.label][
-                    line_id
-                ].wavelength
+            # Create the zeroed luminosity and continuum arrays
+            lums = np.zeros((0, len(lams))) * erg / s
+            conts = np.zeros((0, len(lams))) * erg / s / Hz
 
-                lines[this_model.label][line_id] = Line(
-                    line_id=line_id,
-                    wavelength=lam * Hz,
-                    luminosity=np.zeros(emitter.nparticles),
-                    continuum=np.zeros(emitter.nparticles),
-                )
+            zeroed_lines = LineCollection(
+                line_ids=prev_lines.line_ids,
+                lam=lams,
+                lum=lums,
+                cont=conts,
+            )
 
-            # We need to make sure we do this for each particle too if needs
-            # be
             if per_particle:
-                particle_lines[this_model.label] = lines[this_model.label]
+                particle_lines[this_model.label] = zeroed_lines
+                lines[this_model.label] = zeroed_lines
+            else:
+                lines[this_model.label] = zeroed_lines
 
             return lines, particle_lines
 
-        # Now we have the spectra we can get the emission at each line
-        # and include it
-        out_lines = {}
-        for line_id in line_ids:
-            # Get the emission at this lines wavelength
-            lam = lines[this_model.lum_intrinsic_model.label][
-                line_id
-            ].wavelength
-
-            # Get the continuum at this wavelength
-            cont = spectra.get_lnu_at_lam(lam)
-
-            # Create the line (luminoisty = continuum)
-            out_lines[line_id] = Line(
-                line_id=line_id,
-                wavelength=lam,
-                luminosity=0.0 * erg / s,
-                continuum=cont,
-            )
+        # Compute the new line
+        out_lines = LineCollection(
+            line_ids=prev_lines.line_ids,
+            lam=lams,
+            lum=np.zeros_like(prev_lines.luminosity),
+            cont=spectra.get_lnu_at_lam(lams),
+        )
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
-            particle_lines[this_model.label] = LineCollection(out_lines)
-            lines[this_model.label] = LineCollection(
-                {line_id: line.sum() for line_id, line in out_lines.items()}
-            )
+            particle_lines[this_model.label] = out_lines
+            lines[this_model.label] = out_lines.sum()
         else:
-            lines[this_model.label] = LineCollection(out_lines)
+            lines[this_model.label] = out_lines
 
         return lines, particle_lines
 
@@ -993,7 +1044,6 @@ class Combination:
 
     def _combine_lines(
         self,
-        line_ids,
         emission_model,
         lines,
         particle_lines,
@@ -1003,8 +1053,6 @@ class Combination:
         Combine the extracted lines.
 
         Args:
-            line_ids (list):
-                The line ids to extract.
             emission_model (EmissionModel):
                 The root emission model. This is used to get a consistent
                 wavelength grid.
@@ -1028,36 +1076,17 @@ class Combination:
         else:
             in_lines = lines
 
-        # Loop over lines copying over the first set of lines
-        for line_id in line_ids:
-            # Initialise the combined luminosity and continuum for the line
-            lum = 0
-            cont = 0
-
-            # Get the wavelength of the line
-            lam = in_lines[this_model.combine[0].label][line_id].wavelength
-
-            # Combine the lines
-            for combine_model in this_model.combine:
-                lum += in_lines[combine_model.label][line_id]._luminosity
-                cont += in_lines[combine_model.label][line_id]._continuum
-
-            # Add the line to the dictionary
-            out_lines[line_id] = Line(
-                line_id=line_id,
-                wavelength=lam,
-                luminosity=lum * erg / s,
-                continuum=cont * erg / s / Hz,
-            )
+        # Loop over combination models adding the lines
+        out_lines = in_lines[this_model.combine[0].label]
+        for combine_model in this_model.combine[1:]:
+            out_lines += in_lines[combine_model.label]
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
-            particle_lines[this_model.label] = LineCollection(out_lines)
-            lines[this_model.label] = LineCollection(
-                {line_id: line.sum() for line_id, line in out_lines.items()}
-            )
+            particle_lines[this_model.label] = out_lines
+            lines[this_model.label] = out_lines.sum()
         else:
-            lines[this_model.label] = LineCollection(out_lines)
+            lines[this_model.label] = out_lines
 
         return lines, particle_lines
 

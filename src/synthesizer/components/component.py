@@ -12,8 +12,8 @@ respectively.
 from abc import ABC, abstractmethod
 
 from synthesizer import exceptions
+from synthesizer.emissions import plot_spectra
 from synthesizer.instruments import Instrument
-from synthesizer.sed import plot_spectra
 from synthesizer.synth_warnings import deprecated, deprecation
 
 
@@ -118,18 +118,8 @@ class Component(ABC):
         return self.photo_lnu
 
     @abstractmethod
-    def generate_line(self, *args, **kwargs):
-        """Generate the rest frame line emission for the component."""
-        pass
-
-    @abstractmethod
     def get_mask(self, attr, thresh, op, mask=None):
         """Return a mask based on the attribute and threshold."""
-        pass
-
-    @abstractmethod
-    def _prepare_line_args(self, *args, **kwargs):
-        """Prepare arguments for the line generation."""
         pass
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):

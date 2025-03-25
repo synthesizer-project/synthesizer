@@ -16,11 +16,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
 from scipy.interpolate import RegularGridInterpolator
-from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity, yr
+from unyt import Hz, Msun, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
-from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.units import Quantity, accepts
@@ -498,77 +497,6 @@ class Stars(StarsComponent):
 
         return new_mask
 
-    def generate_line(
-        self,
-        grid,
-        line_id,
-        line_type,
-        **kwargs,
-    ):
-        """
-        Calculate rest frame line luminosity and continuum from an SPS Grid.
-
-        This is a flexible base method which extracts the rest frame line
-        luminosity of this stellar population from the SPS grid based on the
-        passed arguments.
-
-        Args:
-            grid (Grid):
-                A Grid object.
-            line_id (str):
-                A str denoting a line. Doublets can be specified using a
-                comma (e.g. 'OIII4363,OIII4959').
-            line_type (str):
-                The type of line to extract. This must match a key in the Grid.
-
-        Returns:
-            Line
-                An instance of Line contain this lines wavelenth, luminosity,
-                and continuum.
-        """
-        # Ensure line_id is a string
-        if not isinstance(line_id, str):
-            raise exceptions.InconsistentArguments("line_id must be a string")
-
-        # Set up a list to hold each individual Line
-        lines = []
-
-        # Loop over the ids in this container
-        for line_id_ in line_id.split(","):
-            # Strip off any whitespace (can be left by split)
-            line_id_ = line_id_.strip()
-
-            # Get this line's wavelength
-            # TODO: The units here should be extracted from the grid but aren't
-            # yet stored.
-            lam = grid.line_lams[line_id_] * angstrom
-
-            # Line luminosity erg/s
-            lum = np.sum(
-                grid.line_lums[line_type][line_id_] * self.sfzh, axis=(0, 1)
-            )
-
-            # Continuum at line wavelength, erg/s/Hz
-            cont = np.sum(
-                grid.line_conts[line_type][line_id_] * self.sfzh, axis=(0, 1)
-            )
-
-            # Append this lines values to the containers
-            lines.append(
-                Line(
-                    line_id=line_id_,
-                    wavelength=lam,
-                    luminosity=lum * erg / s,
-                    continuum=cont * erg / s / Hz,
-                )
-            )
-
-        # Don't init another line if there was only 1 in the first place
-        if len(lines) == 1:
-            return lines[0]
-        else:
-            return Line(combine_lines=lines)
-
     def calculate_median_age(self):
         """
         Calculate the median age of the stellar population.
@@ -990,9 +918,3 @@ class Stars(StarsComponent):
             plt.show()
 
         return fig, ax
-
-    def _prepare_line_args(self, *args, **kwargs):
-        """Prepare arguments for line generation."""
-        raise exceptions.NotImplementedError(
-            "Parametric stars don't currently require arg preparation"
-        )
