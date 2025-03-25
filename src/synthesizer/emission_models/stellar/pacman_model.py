@@ -285,6 +285,7 @@ class PacmanEmission(StellarEmissionModel):
             dust_curve=self._dust_curve,
             apply_to=self.reprocessed,
             emitter="stellar",
+            tau_v=self._tau_v,
             **kwargs,
         )
 
