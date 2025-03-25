@@ -8,10 +8,11 @@ Plot IGM transmission curves (Inoue+14 & Madau+96
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import angstrom
 
 from synthesizer.emission_models.attenuation import Inoue14, Madau96
 
-lam = np.arange(0, 20000)
+lam = np.arange(0, 20000) * angstrom
 
 
 redshifts = [3.0, 5.0, 7.0]

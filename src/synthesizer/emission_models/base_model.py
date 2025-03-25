@@ -55,7 +55,6 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.line import LineCollection
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 
@@ -2605,6 +2604,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         lines=None,
         particle_lines=None,
         _is_related=False,
+        nthreads=1,
+        grid_assignment_method="cic",
         **kwargs,
     ):
         """
@@ -2733,8 +2734,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emitters,
             lines,
             particle_lines,
-            verbose,
-            **kwargs,
+            verbose=verbose,
+            nthreads=nthreads,
+            grid_assignment_method=grid_assignment_method,
         )
 
         # With all base lines extracted we can now loop from bottom to top
@@ -2787,7 +2789,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if this_model._is_combining:
                 try:
                     lines, particle_lines = self._combine_lines(
-                        line_ids,
                         emission_model,
                         lines,
                         particle_lines,
@@ -2813,7 +2814,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
                     lines, particle_lines = self._generate_lines(
-                        line_ids,
                         this_model,
                         emission_model,
                         lines,
@@ -2851,20 +2851,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Only convert to LineCollections, apply post processing and deletion
         # if we aren't in a recursive related model call
         if not _is_related:
-            # Finally, loop over everything we've created and convert the
-            # nested dictionaries to LineCollections
-            for label in lines:
-                # If we are in a related model we might have already done this
-                # conversion
-                if isinstance(lines[label], dict):
-                    lines[label] = LineCollection(lines[label])
-                if self._models[label].per_particle and isinstance(
-                    particle_lines[label], dict
-                ):
-                    particle_lines[label] = LineCollection(
-                        particle_lines[label]
-                    )
-
             # Apply any post processing functions
             for func in self._post_processing:
                 lines = func(lines, emitters, self)

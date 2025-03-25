@@ -40,11 +40,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import (
-    TableFormatter,
-    rebin_1d,
-    wavelength_to_rgba,
-)
+from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis
 
 
@@ -331,7 +327,7 @@ class Sed:
         """
         # If we have units make sure they are ok and then strip them
         if isinstance(scaling, (unyt_array, unyt_quantity)):
-            if not self.lnu.units.is_compatible(scaling.units):
+            if self.lnu.units.dimensions != scaling.units.dimensions:
                 raise exceptions.InconsistentMultiplication(
                     f"Incompatible units {self.lnu.units} and {scaling.units}"
                 )
@@ -391,7 +387,7 @@ class Sed:
         else:
             out_str = f"Incompatible scaling factor with type {type(scaling)} "
             if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape}"
+                out_str += f"and shape {scaling.shape} (expected {self.shape})"
             else:
                 out_str += f"and value {scaling}"
             raise exceptions.InconsistentMultiplication(out_str)
@@ -1107,7 +1103,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            self._fnu *= igm().get_transmission(z, self._obslam)
+            self._fnu *= igm().get_transmission(z, self.obslam)
 
         return self.fnu
 
@@ -1506,7 +1502,7 @@ class Sed:
         """
         Plot the spectra.
 
-        A wrapper for synthesizer.sed.plot_spectra()
+        A wrapper for synthesizer.emissions.plot_spectra()
         """
         return plot_spectra(self, **kwargs)
 
@@ -1514,7 +1510,7 @@ class Sed:
         """
         Plot the observed spectra.
 
-        A wrapper for synthesizer.sed.plot_observed_spectra()
+        A wrapper for synthesizer.emissions.plot_observed_spectra()
         """
         return plot_observed_spectra(self, self.redshift, **kwargs)
 
@@ -1522,7 +1518,7 @@ class Sed:
         """
         Plot the spectra as a rainbow.
 
-        A wrapper for synthesizer.sed.plot_spectra_as_rainbow()
+        A wrapper for synthesizer.emissions.plot_spectra_as_rainbow()
         """
         return plot_spectra_as_rainbow(self, **kwargs)
 
@@ -1542,6 +1538,8 @@ def plot_spectra(
     quantity_to_plot="lnu",
 ):
     """
+    Plot a spectra or dictionary of spectra.
+
     Plots either a specific spectra or all spectra provided in a dictionary.
     The plotted "type" of spectra is defined by the quantity_to_plot keyword
     arrgument which defaults to "lnu".
@@ -1597,7 +1595,6 @@ def plot_spectra(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
-
     # Check we have been given a valid quantity_to_plot
     if quantity_to_plot not in (
         "lnu",
@@ -1796,6 +1793,8 @@ def plot_observed_spectra(
     quantity_to_plot="fnu",
 ):
     """
+    Plot a spectra or dictionary of spectra.
+
     Plots either a specific observed spectra or all observed spectra
     provided in a dictionary.
 
@@ -1856,7 +1855,6 @@ def plot_observed_spectra(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
-
     # Check we have been given a valid quantity_to_plot
     if quantity_to_plot not in ("fnu", "flam"):
         raise exceptions.InconsistentArguments(
@@ -1930,8 +1928,8 @@ def plot_spectra_as_rainbow(
     Create a plot of the spectrum as a rainbow.
 
     Arguments:
-        sed (synthesizer.sed.Sed)
-            A synthesizer Sed object.
+        sed (synthesizer.emissions.Sed)
+            A synthesizer.emissions object.
         figsize (tuple)
             Fig-size tuple (width, height).
         lam_min (float)
@@ -1954,12 +1952,11 @@ def plot_spectra_as_rainbow(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
-
-    # take sum of Seds if two dimensional
+    # Take sum of Seds if two dimensional
     sed = sed.sum()
 
     if use_fnu:
-        # define filter for spectra
+        # Define filter for spectra
         wavelength_indices = np.logical_and(
             sed._obslam < lam_max, sed._obslam > lam_min
         )
@@ -1973,10 +1970,13 @@ def plot_spectra_as_rainbow(
         lam = sed.lam[wavelength_indices].to("nm").value
         spectra = sed._lnu[wavelength_indices]
 
-    # normalise spectrum
-    spectra /= np.max(spectra)
+    # Normalise spectrum
+    max_val = np.max(spectra)
+    if max_val == 0:
+        return fig, ax  # or handle gracefully
+    spectra /= max_val
 
-    # if logged rescale to between 0 and 1 using min_log_lnu
+    # If logged rescale to between 0 and 1 using min_log_lnu
     if logged:
         spectra = (np.log10(spectra) - min_log_lnu) / (-min_log_lnu)
         spectra[spectra < min_log_lnu] = 0
@@ -1984,7 +1984,7 @@ def plot_spectra_as_rainbow(
     # initialise figure
     fig = plt.figure(figsize=figsize)
 
-    # initialise axes
+    # Initialise axes
     if include_xaxis:
         ax = fig.add_axes((0, 0.3, 1, 1))
         ax.set_xlabel(r"$\lambda/\AA$")
@@ -1992,13 +1992,13 @@ def plot_spectra_as_rainbow(
         ax = fig.add_axes((0, 0.0, 1, 1))
         ax.set_xticks([])
 
-    # set background
+    # Set background
     ax.set_facecolor("black")
 
-    # always turn off y-ticks
+    # Always turn off y-ticks
     ax.set_yticks([])
 
-    # get an array of colours
+    # Get an array of colours
     colours = np.array(
         [
             wavelength_to_rgba(lam_, alpha=spectra_)
@@ -2006,146 +2006,10 @@ def plot_spectra_as_rainbow(
         ]
     )
 
-    # expand dimensions to get an image array
+    # Expand dimensions to get an image array
     im = np.expand_dims(colours, axis=0)
 
-    # show image
+    # Show image
     ax.imshow(im, aspect="auto", extent=(lam_min, lam_max, 0, 1))
 
     return fig, ax
-
-
-def get_transmission(intrinsic_sed, attenuated_sed):
-    """
-    Calculate transmission as a function of wavelength from an attenuated and
-    an intrinsic sed.
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-        array-like, float
-            The transmission array.
-    """
-
-    # Ensure wavelength arrays are equal
-    if not np.array_equal(attenuated_sed._lam, intrinsic_sed._lam):
-        raise exceptions.InconsistentArguments(
-            "Wavelength arrays of input spectra must be the same!"
-        )
-
-    return attenuated_sed.lnu / intrinsic_sed.lnu
-
-
-def get_attenuation(intrinsic_sed, attenuated_sed):
-    """
-    Calculate attenuation as a function of wavelength
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-        array-like, float
-            The attenuation array in magnitudes.
-    """
-
-    # Calculate the transmission array
-    transmission = get_transmission(intrinsic_sed, attenuated_sed)
-
-    return -2.5 * np.log10(transmission)
-
-
-@accepts(lam=angstrom)
-def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
-    """
-    Calculate attenuation at a given wavelength
-
-    Args:
-        lam (float/array-like, float)
-            The wavelength/s at which to evaluate the attenuation in
-            the same units as sed.lam (by default angstrom).
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-        float/array-like, float
-            The attenuation at the passed wavelength/s in magnitudes.
-    """
-    # Ensure lam is in the same units as the sed
-    if lam.units != intrinsic_sed.lam.units:
-        lam = lam.to(intrinsic_sed.lam.units)
-
-    # Calcilate the transmission array
-    attenuation = get_attenuation(intrinsic_sed, attenuated_sed)
-
-    return np.interp(lam.value, intrinsic_sed._lam, attenuation)
-
-
-def get_attenuation_at_5500(intrinsic_sed, attenuated_sed):
-    """
-    Calculate rest-frame FUV attenuation at 5500 angstrom.
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-         float
-            The attenuation at rest-frame 5500 angstrom in magnitudes.
-    """
-
-    return get_attenuation_at_lam(
-        5500.0 * angstrom,
-        intrinsic_sed,
-        attenuated_sed,
-    )
-
-
-def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
-    """
-    Calculate rest-frame FUV attenuation at 1500 angstrom.
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-         float
-            The attenuation at rest-frame 1500 angstrom in magnitudes.
-    """
-
-    return get_attenuation_at_lam(
-        1500.0 * angstrom,
-        intrinsic_sed,
-        attenuated_sed,
-    )
-
-
-def combine_list_of_seds(sed_list):
-    """
-    Combine a list of `Sed` objects (length `Ngal`) into a single
-    `Sed` object, with dimensions `Ngal x Nlam`. Each `Sed` object
-    in the list should have an identical wavelength range.
-
-    Args:
-        sed_list (list)
-            list of `Sed` objects
-    """
-
-    out_sed = sed_list[0]
-    for sed in sed_list[1:]:
-        out_sed = out_sed.concat(sed)
-
-    return out_sed
