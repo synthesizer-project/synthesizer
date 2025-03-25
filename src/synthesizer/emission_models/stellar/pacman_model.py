@@ -112,7 +112,7 @@ class PacmanEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
-        tau_v,
+        tau_v="tau_v",
         dust_curve=PowerLaw(),
         dust_emission=None,
         fesc="fesc",
