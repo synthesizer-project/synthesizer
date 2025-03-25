@@ -122,6 +122,11 @@ class Component(ABC):
         """Return a mask based on the attribute and threshold."""
         pass
 
+    @abstractmethod
+    def get_weighted_attr(self, attr, weights, **kwargs):
+        """Return the weighted attribute."""
+        pass
+
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.
