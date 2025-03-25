@@ -14,9 +14,9 @@ from synthesizer.emission_models.extractors.extractor import (
     IntegratedParticleExtractor,
     ParticleExtractor,
 )
+from synthesizer.emissions import Sed
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.sed import Sed
 
 
 # Mock Extractor implementation for testing abstract base class methods
