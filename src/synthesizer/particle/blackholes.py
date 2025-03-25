@@ -176,9 +176,7 @@ class BlackHoles(Particles, BlackholesComponent):
         """
 
         # Handle singular values being passed (arrays are just returned)
-        print("masses: ", masses)
         masses = scalar_to_array(masses)
-        print("after masses: ", masses)
         accretion_rates = scalar_to_array(accretion_rates)
         epsilons = scalar_to_array(epsilons)
         inclinations = scalar_to_array(inclinations)
