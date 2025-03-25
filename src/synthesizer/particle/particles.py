@@ -930,6 +930,99 @@ class Particles:
         # Call the rotate_particles method with the computed angles
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
+    def get_weighted_attr(self, attr, weights, axis=None):
+        """
+        Get a weighted attribute.
+
+        This will compute the weighted average of an attribute using the
+        provided weights.
+
+        Args:
+            attr (str)
+                The attribute to weight.
+            weights (str/(array-like, float))
+                The weights to apply to the attribute. This can either be a
+                string to get the attribute from the particle object or an
+                array-like of the weights.
+            axis (int)
+                The axis to compute the weighted attribute along.
+
+        Returns:
+            weighted_attr (float)
+                The weighted attribute.
+        """
+        # Get the attribute
+        attr_vals = getattr(self, attr)
+
+        # If the weights are a string get the attribute
+        if isinstance(weights, str):
+            weights_vals = getattr(self, weights)
+        else:
+            weights_vals = weights
+
+        # Strip units off the weights if they have them, this can confuse
+        # things
+        if hasattr(weights_vals, "units"):
+            weights_vals = weights_vals.value
+
+        return np.average(attr_vals, weights=weights_vals, axis=axis)
+
+    def get_lum_weighted_attr(
+        self, attr, spectra_type, filter_code, axis=None
+    ):
+        """
+        Get a luminosity weighted attribute.
+
+        This will compute the luminosity weighted average of an attribute
+        using the provided weights.
+
+        Args:
+            attr (str)
+                The attribute to weight.
+            spectra_type (str)
+                The type of spectra to use to compute the luminosity.
+            filter_code (str)
+                The filter code to compute the luminosity for.
+            axis (int)
+                The axis to compute the weighted attribute along.
+
+        Returns:
+            weighted_attr (float)
+                The luminosity weighted attribute.
+        """
+        # Get the luminosity
+        lum = self.particle_photo_lnu[spectra_type][filter_code]
+
+        return self.get_weighted_attr(attr, lum, axis)
+
+    def get_flux_weighted_attr(
+        self, attr, spectra_type, filter_code, axis=None
+    ):
+        """
+        Get a flux weighted attribute.
+
+        This will compute the flux weighted average of an attribute using the
+        provided weights.
+
+        Args:
+            attr (str)
+                The attribute to weight.
+            spectra_type (str)
+                The type of spectra to use to compute the flux.
+            filter_code (str)
+                The filter code to compute the flux for.
+            axis (int)
+                The axis to compute the weighted attribute along.
+
+        Returns:
+            weighted_attr (float)
+                The flux weighted attribute.
+        """
+        # Get the flux
+        flux = self.particle_photo_fnu[spectra_type][filter_code]
+
+        return self.get_weighted_attr(attr, flux, axis)
+
 
 class CoordinateGenerator:
     """

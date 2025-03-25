@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, yr
+from unyt import Hz, Mpc, Msun, Myr, angstrom, cm, erg, km, kpc, s, yr
 
 from synthesizer.emission_models import (
     BimodalPacmanEmission,
@@ -21,6 +21,7 @@ from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
+from synthesizer.photometry import PhotometryCollection
 
 # ================================== GRID =====================================
 
@@ -142,6 +143,49 @@ def particle_stars_B():
         coordinates=np.random.rand(4, 3) * Mpc,
         dummy_attr=1.2,
     )
+
+
+@pytest.fixture
+def unit_mass_stars():
+    """Return a particle Stars object with unit masses for weighting tests."""
+    return Stars(
+        initial_masses=np.ones(3) * Msun,
+        ages=np.array([1.0, 2.0, 3.0]) * Myr,
+        metallicities=np.array([0.01, 0.02, 0.03]),
+        redshift=1.0,
+        tau_v=np.array([0.1, 0.2, 0.3]),
+        coordinates=np.array(
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]
+        )
+        * kpc,
+        current_masses=np.ones(3) * Msun,
+    )
+
+
+@pytest.fixture
+def unit_emission_stars():
+    """Return a particle Stars object with unit masses for weighting tests."""
+    stars = Stars(
+        initial_masses=np.ones(3) * Msun,
+        ages=np.array([1.0, 2.0, 3.0]) * Myr,
+        metallicities=np.array([0.01, 0.02, 0.03]),
+        redshift=1.0,
+        tau_v=np.array([0.1, 0.2, 0.3]),
+        coordinates=np.array(
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]
+        )
+        * kpc,
+        current_masses=np.ones(3) * Msun,
+    )
+    stars.particle_photo_lnu["FAKE"] = PhotometryCollection(
+        filters=None,
+        fake=np.ones(3) * erg / s / Hz,
+    )
+    stars.particle_photo_fnu["FAKE"] = PhotometryCollection(
+        filters=None,
+        fake=np.ones(3) * erg / s / cm**2 / Hz,
+    )
+    return stars
 
 
 @pytest.fixture
