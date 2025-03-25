@@ -40,6 +40,7 @@ Example usage::
 """
 
 import copy
+import sys
 
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
@@ -2408,17 +2409,29 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
         # Perform all extractions
-        extract_start = tic()
-        spectra, particle_spectra = self._extract_spectra(
-            emission_model,
-            emitters,
-            spectra,
-            particle_spectra,
-            verbose=verbose,
-            nthreads=nthreads,
-            grid_assignment_method=grid_assignment_method,
-        )
-        toc("Extracting spectra (Operation)", extract_start)
+        for label, spectra_key in emission_model._extract_keys.items():
+            # Skip if we don't need to extract this spectra
+            if label in spectra:
+                continue
+            try:
+                extract_start = tic()
+                spectra, particle_spectra = self._extract_spectra(
+                    emission_model[label],
+                    emitters,
+                    spectra,
+                    particle_spectra,
+                    verbose=verbose,
+                    nthreads=nthreads,
+                    grid_assignment_method=grid_assignment_method,
+                )
+                toc("Extracting spectra", extract_start)
+            except Exception as e:
+                msg = f"Error in {label}!"
+                if sys.version_info >= (3, 11):
+                    e.add_note(msg)
+                    raise
+                else:
+                    raise RuntimeError(msg) from e
 
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
@@ -2480,8 +2493,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_model,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             # Are we doing a transformation?
             elif this_model._is_transforming:
@@ -2494,8 +2511,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_mask,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
@@ -2508,8 +2529,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         emitter,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
@@ -2727,17 +2752,32 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "want to use a child model you are saving instead?"
             )
 
-        # Perform all extractions
-        lines, particle_lines = self._extract_lines(
-            line_ids,
-            emission_model,
-            emitters,
-            lines,
-            particle_lines,
-            verbose=verbose,
-            nthreads=nthreads,
-            grid_assignment_method=grid_assignment_method,
-        )
+        # Perform all extractions first
+        for label in emission_model._extract_keys.keys():
+            # Skip it if we happen to already have the lines
+            if label in lines:
+                continue
+
+            try:
+                extract_start = tic()
+                lines, particle_lines = self._extract_lines(
+                    line_ids,
+                    emission_model[label],
+                    emitters,
+                    lines,
+                    particle_lines,
+                    verbose=verbose,
+                    nthreads=nthreads,
+                    grid_assignment_method=grid_assignment_method,
+                )
+                toc("Extracting lines", extract_start)
+            except Exception as e:
+                msg = f"Error in {label}!"
+                if sys.version_info >= (3, 11):
+                    e.add_note(msg)
+                    raise
+                else:
+                    raise RuntimeError(msg) from e
 
         # With all base lines extracted we can now loop from bottom to top
         # of the tree creating each lines
@@ -2795,8 +2835,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_model,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             elif this_model._is_transforming:
                 try:
@@ -2808,8 +2852,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_mask,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
@@ -2821,8 +2869,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         emitter,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
@@ -2949,20 +3001,41 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             images = {}
 
         # Get all the images at the extraction leaves of the tree
-        images.update(
-            self._extract_images(
-                instrument,
-                fov,
-                img_type,
-                do_flux,
-                emitters,
-                images,
-                kernel,
-                kernel_threshold,
-                nthreads,
-                limit_to,
-            )
-        )
+        for label in emission_model._extract_keys.keys():
+            # Skip it if we happen to already have the images
+            if label in images:
+                continue
+
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label != limit_to:
+                continue
+
+            # Also skip any models we didn't save
+            if not emission_model[label].save:
+                continue
+
+            # Get the images for this model
+            try:
+                images = self._extract_images(
+                    emission_model[label],
+                    instrument,
+                    fov,
+                    img_type,
+                    do_flux,
+                    emitters,
+                    images,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                    limit_to,
+                )
+            except Exception as e:
+                msg = f"Error in {label}!"
+                if sys.version_info >= (3, 11):
+                    e.add_note(msg)
+                    raise
+                else:
+                    raise RuntimeError(msg) from e
 
         # Loop through the models from bottom to top order creating the
         # images as we go
@@ -3033,8 +3106,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             elif this_model._is_transforming:
                 try:
@@ -3051,8 +3128,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
@@ -3069,8 +3150,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}!")
-                    raise e
+                    msg = f"Error in {this_model.label}!"
+                    if sys.version_info >= (3, 11):
+                        e.add_note(msg)
+                        raise
+                    else:
+                        raise RuntimeError(msg) from e
 
         return images
 
