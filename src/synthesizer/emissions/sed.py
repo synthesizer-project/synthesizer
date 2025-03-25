@@ -350,14 +350,6 @@ class Sed:
             else:
                 lnu *= scaling
 
-        # Handle an single element array scaling factor
-        elif scaling.size == 1:
-            scaling = scaling.item()
-            if mask is not None:
-                lnu[mask] *= scaling
-            else:
-                lnu *= scaling
-
         # Handle a multi-element array scaling factor as long as it matches
         # the shape of the lnu array up to the dimensions of the scaling array
         elif isinstance(scaling, np.ndarray) and len(scaling.shape) < len(
@@ -379,7 +371,7 @@ class Sed:
         # just multiply them together
         elif isinstance(scaling, np.ndarray) and scaling.shape == self.shape:
             if mask is not None:
-                lnu[mask] *= scaling[..., mask]
+                lnu[mask] *= scaling[mask]
             else:
                 lnu *= scaling
 
@@ -388,7 +380,7 @@ class Sed:
         # multipled by the whole lnu array producing a new lnu array of
         # shape (scaling.shape + lnu.shape)
         elif isinstance(scaling, np.ndarray):
-            new_lnu = scaling[..., np.newaxis] * lnu
+            lnu = scaling[..., np.newaxis] * lnu
 
             # Masks are not supported in this case
             if mask is not None:
@@ -413,7 +405,7 @@ class Sed:
         else:
             new_lnu = lnu * units
 
-        # If we scaled then we can return the scaled Sed
+        # Return a new Sed object if we aren't scaling inplace
         if not inplace:
             return Sed(self.lam, lnu=new_lnu)
 
