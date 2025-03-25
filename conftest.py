@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, yr
+from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, unyt_array, yr
 
 from synthesizer.emission_models import (
     BimodalPacmanEmission,
@@ -11,16 +11,16 @@ from synthesizer.emission_models import (
     NebularEmission,
     PacmanEmission,
     ReprocessedEmission,
+    TemplateEmission,
     TransmittedEmission,
 )
 from synthesizer.emission_models.attenuation import Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
-from synthesizer.grid import Grid
+from synthesizer.grid import Grid, Template
 from synthesizer.instruments.filters import UVJ
 from synthesizer.parametric.stars import Stars as ParametricStars
-from synthesizer.particle.gas import Gas
-from synthesizer.particle.stars import Stars
+from synthesizer.particle import BlackHoles, Gas, Stars
 
 # ================================== GRID =====================================
 
@@ -29,6 +29,14 @@ from synthesizer.particle.stars import Stars
 def test_grid():
     """Return a Grid object."""
     return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+
+
+@pytest.fixture
+def test_template():
+    """Return a Template object."""
+    lam = unyt_array(np.linspace(1000, 10000, 100), "angstrom")
+    lnu = unyt_array(np.ones_like(lam.value), "erg/s/Hz")
+    return Template(lam, lnu)
 
 
 @pytest.fixture
@@ -100,16 +108,24 @@ def bimodal_pacman_emission_model(test_grid):
     )
 
 
+@pytest.fixture
+def template_emission_model_bh(test_template):
+    """Return a TemplateEmission object."""
+    return TemplateEmission(test_template, "blackhole")
+
+
 # ================================= IGMS ======================================
 
 
 @pytest.fixture
 def i14():
+    """Return an Inoue14 IGM object."""
     return Inoue14()
 
 
 @pytest.fixture
 def m96():
+    """Return a Madau96 IGM object."""
     return Madau96()
 
 
@@ -229,6 +245,42 @@ def single_star_parametric(test_grid):
         sf_hist=1e7 * yr,
         metal_dist=0.01,
         initial_mass=1 * Msun,
+    )
+
+
+# ================================== AGN ======================================
+
+
+@pytest.fixture
+def particle_black_hole():
+    """Return a particle BlackHole object."""
+    return BlackHoles(
+        masses=np.array([1.0, 2.0, 3.0]) * 1e6 * Msun,
+        accretion_rates=np.array([1.0, 2.0, 3.0]) * Msun / yr,
+        redshift=1.0,
+        coordinates=np.random.rand(3, 3) * Mpc,
+    )
+
+
+@pytest.fixture
+def single_particle_black_hole():
+    """Return a particle BlackHole object with a single black hole."""
+    return BlackHoles(
+        masses=np.array([1.0]) * 1e6 * Msun,
+        accretion_rates=np.array([1.0]) * Msun / yr,
+        redshift=1.0,
+        coordinates=np.random.rand(1, 3) * Mpc,
+    )
+
+
+@pytest.fixture
+def single_particle_black_hole_scalars():
+    """Return a particle BlackHole object with a single black hole."""
+    return BlackHoles(
+        masses=1.0 * 1e6 * Msun,
+        accretion_rates=1.0 * Msun / yr,
+        redshift=1.0,
+        coordinates=np.random.rand(1, 3) * Mpc,
     )
 
 
