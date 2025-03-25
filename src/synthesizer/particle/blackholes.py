@@ -262,6 +262,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # Ensure all arrays are the expected length
         for key in self.attrs:
             attr = getattr(self, key)
+            print(key, attr)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
                     raise exceptions.InconsistentArguments(

@@ -110,20 +110,33 @@ def scalar_to_array(value):
         InconsistentArguments
             If the value is not a scalar or array-like object.
     """
+    # Do we have units? If so strip them away for now for simplicity
+    if isinstance(value, (unyt_quantity, unyt_array)):
+        units = value.units
+        value = value.value
+    else:
+        units = None
+
     # Just return it if we have been handed an array already or None
     if value is None or not np.isscalar(value):
         arr = value
 
     elif np.isscalar(value):
-        arr = np.array([value])
+        arr = np.array(
+            [
+                value,
+            ]
+        )
 
-    elif isinstance(value, unyt_quantity):
-        arr = np.array([value.value]) * value.units
     else:
         raise exceptions.InconsistentArguments(
             "Value to convert to an array wasn't a float or a unyt_quantity:"
             f"type(value) = {type(value)}"
         )
+
+    # Reattach the units if they were stripped
+    if units is not None:
+        arr = unyt_array(arr, units)
 
     return arr
 
