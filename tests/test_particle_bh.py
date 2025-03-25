@@ -21,9 +21,10 @@ class TestBlackHolesInit:
             arr, unyt_array
         ), f"Scalar with units failed: 1 * s->{arr}"
         assert arr.units == s, f"Scalar with units failed: 1 * s->{arr}"
-        assert arr.shape == (
-            1,
-        ), f"Scalar with units shape is wrong: 1 * s->{arr}"
+        assert arr.shape == (1,), (
+            f"Scalar with units shape is wrong: {arr.shape} "
+            f"(value: {arr}, type: {type(arr)})"
+        )
 
         # Check that an array without units is returned as is
         arr = scalar_to_array(np.arange(10))

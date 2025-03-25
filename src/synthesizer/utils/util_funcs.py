@@ -110,6 +110,10 @@ def scalar_to_array(value):
         InconsistentArguments
             If the value is not a scalar or array-like object.
     """
+    # If the value is None just return it straight away
+    if value is None:
+        return None
+
     # Do we have units? If so strip them away for now for simplicity
     if isinstance(value, (unyt_quantity, unyt_array)):
         units = value.units
@@ -117,11 +121,12 @@ def scalar_to_array(value):
     else:
         units = None
 
-    # Just return it if we have been handed an array already or None
-    if value is None or not np.isscalar(value):
+    # Just return it if we have been handed a ndim > 0 array already or None
+    if not np.isscalar(value) and value.shape != ():
         arr = value
 
-    elif np.isscalar(value):
+    # If we have a scalar or a 0D array then wrap it in a 1D array
+    elif np.isscalar(value) or value.shape == ():
         arr = np.array(
             [
                 value,
