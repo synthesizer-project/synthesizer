@@ -30,8 +30,8 @@ Example::
 
     To create a CharlotFall2000 model, you can use the following code:
 
-    tau_v_ism = 0.5
-    tau_v_birth = 0.5
+    tau_v_ism = 0.33
+    tau_v_birth = 0.67
     dust_curve_ism = PowerLaw(...)
     dust_curve_birth = PowerLaw(...)
     age_pivot = 7 * dimensionless
@@ -51,7 +51,7 @@ Example::
 
 from unyt import dimensionless
 
-from synthesizer.emission_models.attenuation import PowerLaw, Calzetti2000
+from synthesizer.emission_models.attenuation import Calzetti2000, PowerLaw
 from synthesizer.emission_models.base_model import (
     EmissionModel,
     StellarEmissionModel,
@@ -103,7 +103,7 @@ class PacmanEmission(StellarEmissionModel):
 
     Attributes:
         grid (synthesizer.grid.Grid): The grid object
-        dust_curve (synthesizer.dust.DustCurve): The dust curve
+        dust_curve (AttenuationLaw): The dust curve
         dust_emission (synthesizer.dust.EmissionModel): The dust emission
         fesc (float): The escape fraction
         fesc_ly_alpha (float): The Lyman alpha escape fraction
@@ -112,7 +112,7 @@ class PacmanEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
-        tau_v=0.33,
+        tau_v,
         dust_curve=PowerLaw(),
         dust_emission=None,
         fesc="fesc",
@@ -128,9 +128,9 @@ class PacmanEmission(StellarEmissionModel):
             grid (synthesizer.grid.Grid):
                 The grid object.
             tau_v (float):
-                The V-band optical depth. Defaults to 0.33.
-            dust_curve (synthesizer.dust.DustCurve):
-                The assumed dust curve. Defaults to `Calzetti2000`, with
+                The V-band optical depth.
+            dust_curve (synthesizer.emission_models.Transformer):
+                The assumed dust curve. Defaults to `PowerLaw`, with
                 default parameters.
             dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
@@ -282,7 +282,6 @@ class PacmanEmission(StellarEmissionModel):
     def _make_attenuated(self, **kwargs):
         return AttenuatedEmission(
             label="attenuated",
-            tau_v=self._tau_v,
             dust_curve=self._dust_curve,
             apply_to=self.reprocessed,
             emitter="stellar",
@@ -449,9 +448,9 @@ class BimodalPacmanEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object.
         tau_v_ism (float): The V-band optical depth for the ISM.
         tau_v_birth (float): The V-band optical depth for the nebular.
-        dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
+        dust_curve_ism (AttenuationLaw): The dust curve for the
             ISM.
-        dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for the
+        dust_curve_birth (AttenuationLaw): The dust curve for the
             nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
@@ -467,10 +466,10 @@ class BimodalPacmanEmission(StellarEmissionModel):
     def __init__(
         self,
         grid,
-        dust_curve_ism=Calzetti2000(),
-        dust_curve_birth=Calzetti2000(),
         tau_v_ism="tau_v_ism",
         tau_v_birth="tau_v_birth",
+        dust_curve_ism=Calzetti2000(),
+        dust_curve_birth=Calzetti2000(),
         age_pivot=7 * dimensionless,
         dust_emission_ism=None,
         dust_emission_birth=None,
@@ -490,10 +489,10 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 The V-band optical depth for the ISM.
             tau_v_birth (float):
                 The V-band optical depth for the nebular.
-            dust_curve_ism (synthesizer.dust.DustCurve):
+            dust_curve_ism (synthesizer.Transformer.AttenuationLaw):
                 The assumed dust curve for the ISM. Defaults to `Calzetti2000`
                 with default parameters.
-            dust_curve_birth (synthesizer.dust.DustCurve):
+            dust_curve_birth (synthesizer.Transformer.AttenuationLaw):
                 The assumed dust curve for the nebular. Defaults to
                 `Calzetti2000` with default parameters.
             age_pivot (unyt.unyt_quantity):
@@ -1271,9 +1270,9 @@ class CharlotFall2000(BimodalPacmanEmission):
         grid (synthesizer.grid.Grid): The grid object.
         tau_v_ism (float): The V-band optical depth for the ISM.
         tau_v_birth (float): The V-band optical depth for the nebular.
-        dust_curve_ism (synthesizer.dust.DustCurve):
+        dust_curve_ism (AttenuationLaw):
             The dust curve for the ISM.
-        dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for the
+        dust_curve_birth (AttenuationLaw): The dust curve for the
             nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
@@ -1286,8 +1285,8 @@ class CharlotFall2000(BimodalPacmanEmission):
     def __init__(
         self,
         grid,
-        tau_v_ism=0.33,
-        tau_v_birth=0.67,
+        tau_v_ism,
+        tau_v_birth,
         age_pivot=7 * dimensionless,
         dust_curve_ism=Calzetti2000(),
         dust_curve_birth=Calzetti2000(),
@@ -1304,18 +1303,16 @@ class CharlotFall2000(BimodalPacmanEmission):
             grid (synthesizer.grid.Grid):
                 The grid object.
             tau_v_ism (float):
-                The V-band optical depth for the ISM. Defaults to a value
-                of 0.33                
+                The V-band optical depth for the ISM.
             tau_v_birth (float):
-                The V-band optical depth for the nebular. Defaults to a
-                value of 0.67.
+                The V-band optical depth for the nebular.
             age_pivot (unyt.unyt_quantity):
                 The age pivot between young and old populations, expressed
                 in terms of log10(age) in Myr. Defaults to 10^7 Myr.
-            dust_curve_ism (synthesizer.dust.DustCurve):
+            dust_curve_ism (AttenuationLaw):
                 The dust curve for the ISM. Defaults to `Calzetti2000`
                 with fiducial parameters.
-            dust_curve_birth (synthesizer.dust.DustCurve):
+            dust_curve_birth (AttenuationLaw):
                 The dust curve for the nebular. Defaults to `Calzetti2000`
                 with fiducial parameters.
             dust_emission_ism (synthesizer.dust.EmissionModel):
@@ -1362,7 +1359,7 @@ class ScreenEmission(PacmanEmission):
 
     Attributes:
         grid (synthesizer.grid.Grid): The grid object.
-        dust_curve (synthesizer.dust.DustCurve): The dust curve.
+        dust_curve (AttenuationLaw): The dust curve.
         dust_emission (synthesizer.dust.EmissionModel): The dust emission
             model.
     """
@@ -1381,7 +1378,7 @@ class ScreenEmission(PacmanEmission):
         Args:
             grid (synthesizer.grid.Grid):
                 The grid object.
-            dust_curve (synthesizer.dust.DustCurve):
+            dust_curve (AttenuationLaw):
                 The assumed dust curve. Defaults to `Calzetti2000` with
                 default parameters.
             dust_emission (synthesizer.dust.EmissionModel):
