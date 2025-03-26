@@ -255,6 +255,93 @@ class BaseGalaxy:
                         igm=igm,
                     )
 
+    def get_observed_lines(self, cosmo, igm=Inoue14):
+        """
+        Calculate the observed lines for all Line objects within this galaxy.
+
+        This will run Line.get_fnu(...) and populate Line.fnu (and Line.obslam
+        and Line.obsnu) for all lines in:
+        - Galaxy.lines
+        - Galaxy.stars.lines
+        - Galaxy.gas.lines (WIP)
+        - Galaxy.black_holes.lines
+
+        And in the case of particle galaxies
+        - Galaxy.stars.particle_lines
+        - Galaxy.gas.particle_lines (WIP)
+        - Galaxy.black_holes.particle_lines
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology)
+                The cosmology object containing the cosmological model used
+                to calculate the luminosity distance.
+            igm (igm)
+                The object describing the intergalactic medium (defaults to
+                Inoue14).
+
+        Raises:
+            MissingAttribute
+                If a galaxy has no redshift we can't get the observed lines.
+        """
+        # Ensure we have a redshift
+        if self.redshift is None:
+            raise exceptions.MissingAttribute(
+                "This Galaxy has no redshift! Fluxes can't be"
+                " calculated without one."
+            )
+
+        # Loop over all combined lines
+        for line in self.lines.values():
+            # Calculate the observed lines
+            line.get_fnu(
+                cosmo=cosmo,
+                z=self.redshift,
+                igm=igm,
+            )
+
+        # Do we have stars?
+        if self.stars is not None:
+            # Loop over all stellar lines
+            for line in self.stars.lines.values():
+                # Calculate the observed lines
+                line.get_fnu(
+                    cosmo=cosmo,
+                    z=self.redshift,
+                    igm=igm,
+                )
+
+            # Loop over all stellar particle lines
+            if getattr(self.stars, "particle_lines", None) is not None:
+                # Loop over all stellar particle lines
+                for line in self.stars.particle_lines.values():
+                    # Calculate the observed lines
+                    line.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
+
+        # Do we have black holes?
+        if self.black_holes is not None:
+            # Loop over all black hole lines
+            for line in self.black_holes.lines.values():
+                # Calculate the observed lines
+                line.get_fnu(
+                    cosmo=cosmo,
+                    z=self.redshift,
+                    igm=igm,
+                )
+
+            # Loop over all black hole particle lines
+            if getattr(self.black_holes, "particle_lines", None) is not None:
+                for line in self.black_holes.particle_lines.values():
+                    # Calculate the observed lines
+                    line.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
+
     def get_spectra_combined(self):
         """
         Combine all common component spectra from components onto the galaxy.
