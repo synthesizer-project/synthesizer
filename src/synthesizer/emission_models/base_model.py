@@ -2426,12 +2426,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
                 toc("Extracting spectra", extract_start)
             except Exception as e:
-                msg = f"Error in {label}!"
                 if sys.version_info >= (3, 11):
-                    e.add_note(msg)
+                    e.add_note(f"EmissionModel.label: {label}")
                     raise
                 else:
-                    raise RuntimeError(msg) from e
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {label}]"
+                    ).with_traceback(e.__traceback__)
 
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
@@ -2493,12 +2494,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_model,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             # Are we doing a transformation?
             elif this_model._is_transforming:
@@ -2511,12 +2513,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_mask,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
@@ -2529,12 +2532,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         emitter,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
@@ -2772,12 +2776,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
                 toc("Extracting lines", extract_start)
             except Exception as e:
-                msg = f"Error in {label}!"
                 if sys.version_info >= (3, 11):
-                    e.add_note(msg)
+                    e.add_note(f"EmissionModel.label: {label}")
                     raise
                 else:
-                    raise RuntimeError(msg) from e
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {label}]"
+                    ).with_traceback(e.__traceback__)
 
         # With all base lines extracted we can now loop from bottom to top
         # of the tree creating each lines
@@ -2835,12 +2840,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_model,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             elif this_model._is_transforming:
                 try:
@@ -2852,12 +2858,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_mask,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
@@ -2869,12 +2876,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         emitter,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
@@ -3030,12 +3038,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     limit_to,
                 )
             except Exception as e:
-                msg = f"Error in {label}!"
                 if sys.version_info >= (3, 11):
-                    e.add_note(msg)
+                    e.add_note(f"EmissionModel.label: {label}")
                     raise
                 else:
-                    raise RuntimeError(msg) from e
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {label}]"
+                    ).with_traceback(e.__traceback__)
 
         # Loop through the models from bottom to top order creating the
         # images as we go
@@ -3106,12 +3115,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             elif this_model._is_transforming:
                 try:
@@ -3128,12 +3138,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
             elif this_model._is_dust_emitting or this_model._is_generating:
                 try:
@@ -3150,12 +3161,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads,
                     )
                 except Exception as e:
-                    msg = f"Error in {this_model.label}!"
                     if sys.version_info >= (3, 11):
-                        e.add_note(msg)
+                        e.add_note(f"EmissionModel.label: {this_model.label}")
                         raise
                     else:
-                        raise RuntimeError(msg) from e
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {this_model.label}]"
+                        ).with_traceback(e.__traceback__)
 
         return images
 
