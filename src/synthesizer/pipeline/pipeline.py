@@ -182,6 +182,7 @@ class Pipeline:
         # How many galaxies are we going to be looking at?
         self.n_galaxies = 0
         self.n_galaxies_local = 0  # Only applicable when using MPI
+        self.n_galaxies_per_rank = 0  # Only applicable when using MPI
 
         # Define the container to hold the galaxies
         self.galaxies = []
@@ -668,6 +669,10 @@ class Pipeline:
         elapsed = time.perf_counter() - start
         mem_mb = self.results_memory_usage
 
+        # In MPI land we need to add the offset to this ranks galaxy index
+        if self.using_mpi:
+            igal += sum(self.n_galaxies_per_rank[: self.rank])
+
         self._print(
             "|"
             + f"{igal:>{self._table_col_width}}"
@@ -697,6 +702,57 @@ class Pipeline:
             + "-" * self._table_col_width * 2
             + "+"
         )
+
+    def _report_total_timings(self):
+        """Print the total timings for each operation."""
+        # If we are using MPI we need to sum the timings and counts across all
+        # ranks to get the total time taken and total counts
+        if self.using_mpi:
+            for key in self._op_timing:
+                self._op_timing[key] = self.comm.allreduce(
+                    self._op_timing[key]
+                )
+            for key in self._op_counts:
+                self._op_counts[key] = self.comm.allreduce(
+                    self._op_counts[key]
+                )
+
+            # We only want to report this on rank 0 so we'll return if we're
+            # not rank 0
+            if self.rank != 0:
+                return
+
+        # Loop over the timings and print them out
+        for key, elapsed in self._op_timing.items():
+            if elapsed == 0.0:
+                continue
+
+            # Report in sensible units
+            if elapsed < 1:
+                elapsed *= 1000
+                units = "ms"
+            elif elapsed < 60:
+                units = "s"
+            else:
+                elapsed /= 60
+                units = "mins"
+
+            # Handle reporting (extra analysis and unpackign need some special
+            # handling because they are not operations)
+            if key == "Unpacking results":
+                self._print(f"{key} took {elapsed:.2f} {units}")
+            elif key == "Extra Analyses":
+                self._print(
+                    f"Running {self._op_counts[key]} extra analyses"
+                    f" took {elapsed:.2f} {units}"
+                )
+            elif key in self._op_counts:
+                self._print(
+                    f"Computing {self._op_counts[key]} {key}"
+                    f" took {elapsed:.2f} {units}"
+                )
+            else:
+                self._print(f"Computing {key} took {elapsed:.2f} {units}")
 
     def add_analysis_func(self, func, result_key, *args, **kwargs):
         """
@@ -799,6 +855,9 @@ class Pipeline:
         # to get the total number of galaxies
         if self.using_mpi:
             self.n_galaxies = self.comm.allreduce(self.n_galaxies_local)
+            self.n_galaxies_per_rank = self.comm.allgather(
+                self.n_galaxies_local
+            )
         else:
             self.n_galaxies = self.n_galaxies_local
 
@@ -2288,36 +2347,7 @@ class Pipeline:
         self._print_progress_footer()
 
         # We're done! Report the time taken
-        for key, elapsed in self._op_timing.items():
-            if elapsed == 0.0:
-                continue
-
-            # Report in sensible units
-            if elapsed < 1:
-                elapsed *= 1000
-                units = "ms"
-            elif elapsed < 60:
-                units = "s"
-            else:
-                elapsed /= 60
-                units = "mins"
-
-            # Handle reporting (extra analysis and unpackign need some special
-            # handling because they are not operations)
-            if key == "Unpacking results":
-                self._print(f"{key} took {elapsed:.2f} {units}")
-            elif key == "Extra Analyses":
-                self._print(
-                    f"Running {self._op_counts[key]} extra analyses"
-                    f" took {elapsed:.2f} {units}"
-                )
-            elif key in self._op_counts:
-                self._print(
-                    f"Computing {self._op_counts[key]} {key}"
-                    f" took {elapsed:.2f} {units}"
-                )
-            else:
-                self._print(f"Computing {key} took {elapsed:.2f} {units}")
+        self._report_total_timings()
 
         # Clean up the outputs
         self._clean_outputs()
