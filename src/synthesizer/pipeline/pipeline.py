@@ -351,6 +351,11 @@ class Pipeline:
         # Attach the writer, we'll assign this later in the write method
         self.io_helper = None
 
+        # If we are using MPI we need to make sure everyone agrees on the
+        # start time, take the minimum
+        if self.using_mpi:
+            self._start_time = comm.allreduce(self._start_time, op=comm.MIN)
+
         # Hold back everyone in MPI land until we're all ready to go
         if self.using_mpi:
             comm.Barrier()
@@ -628,23 +633,30 @@ class Pipeline:
 
     def _print_progress_header(self):
         """Print the header for the progress report."""
+        # Nothing to do if we are not rank 0
+        if self.rank != 0:
+            return
+
+        # Obey 0 verbosity
+        if self.verbose == 0:
+            return
+
         self._print("Running the pipeline...")
         self._print_progress_footer()
 
-        if self.rank == 0:
-            self._print(
-                "|"
-                + f"{'Galaxy #':>{self._table_col_width}}"
-                + "|"
-                + f"{'Nstars':>{self._table_col_width}}"
-                + "|"
-                + f"{'Nbh':>{self._table_col_width}}"
-                + "|"
-                + f"{'dt (s)':>{self._table_col_width}}"
-                + "|"
-                + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
-                + "|"
-            )
+        self._print(
+            "|"
+            + f"{'Galaxy #':>{self._table_col_width}}"
+            + "|"
+            + f"{'Nstars':>{self._table_col_width}}"
+            + "|"
+            + f"{'Nbh':>{self._table_col_width}}"
+            + "|"
+            + f"{'dt (s)':>{self._table_col_width}}"
+            + "|"
+            + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
+            + "|"
+        )
 
         self._print_progress_footer()
 
@@ -657,6 +669,10 @@ class Pipeline:
             igal (int): The index of the galaxy.
             start (float): The start time of the process.
         """
+        # Obey 0 verbosity
+        if self.verbose == 0:
+            return
+
         # Get the number of stars, for parametric galaxies we don't have this
         # information but we do have the sfzh shape
         if gal.stars is not None and hasattr(gal.stars, "nstars"):
@@ -674,7 +690,35 @@ class Pipeline:
         if self.using_mpi:
             igal += sum(self.n_galaxies_per_rank[: self.rank])
 
-        self._print(
+        # We don't want to obey the verbosity level here, we always want to
+        # print this information so we'll use the print method directly
+
+        # Get the current time code in seconds with 0 padding and 2
+        # decimal places
+        now = time.perf_counter() - self._start_time
+        int_now = str(int(now)).zfill(
+            len(str(int(now))) + 1 if now > 9999 else 5
+        )
+        decimal = str(now).split(".")[-1][:2]
+        now_str = f"{int_now}.{decimal}"
+
+        # Create the prefix for the print, theres extra info to output if
+        # we are using MPI
+        if self.using_mpi:
+            # Only print on rank 0 if we are using MPI and have verbosity 1
+            if self.verbose == 1 and self.rank != 0:
+                return
+
+            prefix = (
+                f"[{str(self.rank).zfill(len(str(self.size)) + 1)}]"
+                f"[{now_str}]:"
+            )
+
+        else:
+            prefix = f"[{now_str}]:"
+
+        print(
+            prefix,
             "|"
             + f"{igal:>{self._table_col_width}}"
             + "|"
@@ -685,7 +729,7 @@ class Pipeline:
             + f"{elapsed:>{self._table_col_width}.2f}"
             + "|"
             + f"{mem_mb:>{self._table_col_width * 2}.2f}"
-            + "|"
+            + "|",
         )
 
     def _print_progress_footer(self):
