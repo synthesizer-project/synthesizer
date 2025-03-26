@@ -280,8 +280,11 @@ class Pipeline:
         self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.lines_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_cont_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_lams = None
+        self.line_ids = None
         self.line_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_cont_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_obs_lams = None
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -1148,6 +1151,9 @@ class Pipeline:
         # get_lines method is considered the intent to write it out)
         self._write_lines = True
 
+        # Store the line IDs, we'll write these once later
+        self.line_ids = line_ids
+
     def _get_lines(self, galaxy):
         """
         Generate the emission lines for the galaxies.
@@ -1167,6 +1173,23 @@ class Pipeline:
             self.emission_model,
             nthreads=self.nthreads,
         )
+
+        # Store the line wavelengths for writing, we only do this once since
+        # they are the same for all galaxies but we need to find them first
+        # (either on the galaxy, stars, or black holes)
+        if self.line_lams is None:
+            # Get the line lams from the first line collection we can find
+            for lines in galaxy.lines.values():
+                self.line_lams = lines.lam
+                break
+            if self.line_lams is None and galaxy.stars is not None:
+                for lines in galaxy.stars.lines.values():
+                    self.line_lams = lines.lam
+                    break
+            if self.line_lams is None and galaxy.black_holes is not None:
+                for lines in galaxy.black_holes.lines.values():
+                    self.line_lams = lines.lam
+                    break
 
         # Count the number of emission lines we have generated
         self._op_counts["Emission Lines Luminosities"] += (
@@ -1230,6 +1253,23 @@ class Pipeline:
             cosmo=self._operation_kwargs["get_observed_lines"]["cosmo"],
             igm=self._operation_kwargs["get_observed_lines"]["igm"],
         )
+
+        # Store the observed line wavelengths for writing, we only do this once
+        # since they are the same for all galaxies but we need to find them
+        # first (either on the galaxy, stars, or black holes)
+        if self.line_obs_lams is None:
+            # Get the line lams from the first line collection we can find
+            for lines in galaxy.lines.values():
+                self.line_obs_lams = lines.obslam
+                break
+            if self.line_obs_lams is None and galaxy.stars is not None:
+                for lines in galaxy.stars.lines.values():
+                    self.line_obs_lams = lines.obslam
+                    break
+            if self.line_obs_lams is None and galaxy.black_holes is not None:
+                for lines in galaxy.black_holes.lines.values():
+                    self.line_obs_lams = lines.obslam
+                    break
 
         # Count the number of observed emission lines we have generated
         self._op_counts["Emission Lines Fluxes"] += (
@@ -2345,7 +2385,6 @@ class Pipeline:
             )
 
         # Write emission line luminosities
-        # TODO: Write out wavelengths and line ids
         if self._write_lines:
             self.io_helper.write_data(
                 self.lines_lum["Galaxy"],
@@ -2377,9 +2416,18 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
+            self.io_helper.write_data(
+                self.line_ids,
+                "Galaxies/Lines/IDs",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_lams,
+                "Galaxies/Lines/Wavelengths",
+                galaxy_indices,
+            )
 
         # Write observed emission line fluxes
-        # TODO: Write out wavelengths and line ids
         if self._write_flux_lines:
             self.io_helper.write_data(
                 self.line_fluxes["Galaxy"],
@@ -2409,6 +2457,11 @@ class Pipeline:
             self.io_helper.write_data(
                 self.line_cont_flux["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Continuum",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_obs_lams,
+                "Galaxies/Lines/ObservedWavelengths",
                 galaxy_indices,
             )
 
