@@ -176,6 +176,26 @@ class PhotometryCollection:
         """
         return self._look_up.items()
 
+    def __len__(self):
+        """
+        Enable len() behaviour.
+
+        Returns:
+            int
+                The number of filter codes.
+        """
+        return len(self._look_up)
+
+    def shape(self):
+        """
+        Return the shape of the photometry array.
+
+        Returns:
+            tuple
+                The shape of the photometry array.
+        """
+        return self.photometry.shape
+
     def __iter__(self):
         """
         Enable dict iter behaviour.
