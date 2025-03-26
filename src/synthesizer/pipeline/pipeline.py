@@ -1426,7 +1426,7 @@ class Pipeline:
         self._operation_kwargs["get_lines"] = {"line_ids": line_ids}
 
         # Flag that we will compute the emission lines
-        self._do_lines = True
+        self._do_lum_lines = True
 
         # To compute the emission lines we need to have already computed the
         # lnu spectra
@@ -1525,7 +1525,7 @@ class Pipeline:
         # To compute the observed emission lines we need to have already
         # computed the emission lines which themselves require the lnu spectra
         # to be computed
-        self._do_lines = True
+        self._do_lum_lines = True
         self._do_lnu_spectra = True
 
         # Flag that we will want to write out the observed emission lines
@@ -2402,7 +2402,7 @@ class Pipeline:
                 self._get_photometry_fluxes(gal)
 
             # Are we generating emission lines?
-            if self._do_lines:
+            if self._do_lum_lines:
                 self._get_lines(gal)
 
             # Are we generating observed emission lines?
