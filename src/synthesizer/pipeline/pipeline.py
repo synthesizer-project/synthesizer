@@ -209,6 +209,7 @@ class Pipeline:
                 self.filters += inst.filters
 
         # Define flags for what we will do
+        self._do_los_optical_depths = False
         self._do_lnu_spectra = False
         self._do_fnu_spectra = False
         self._do_luminosities = False
@@ -224,7 +225,6 @@ class Pipeline:
         self._do_spectroscopy = False
         self._do_sfzh = False
         self._do_sfh = False
-        self._do_los_optical_depths = False
 
         # Define the container for all the kwargs needed by each operation
         # This will be a dict of dicts
@@ -753,6 +753,101 @@ class Pipeline:
                 )
             else:
                 self._print(f"Computing {key} took {elapsed:.2f} {units}")
+
+    def report_operations(self):
+        """
+        Print the operations that will be performed by the Pipeline.
+
+        This will print out the operations that will be performed by the
+        pipeline, including which will be written out and which will just be
+        computed.
+        """
+        self._print("-" * 60)
+        self._print("".ljust(30) + "Compute?".rjust(15) + "Write?".rjust(15))
+
+        # Print each operation and whether it will be written out
+        self._print(
+            "Line of Sight Optical Depths".ljust(30)
+            + str(self._do_los_optical_depths).rjust(15)
+            + "N/A".rjust(15)
+        )
+        self._print(
+            "SFZH".ljust(30)
+            + str(self._do_sfzh).rjust(15)
+            + str(self._write_sfzh).rjust(15)
+        )
+        self._print(
+            "SFH".ljust(30)
+            + str(self._do_sfh).rjust(15)
+            + str(self._write_sfh).rjust(15)
+        )
+        self._print(
+            "Lnu Spectra".ljust(30)
+            + str(self._do_lnu_spectra).rjust(15)
+            + str(self._write_lnu_spectra).rjust(15)
+        )
+        self._print(
+            "Fnu Spectra".ljust(30)
+            + str(self._do_fnu_spectra).rjust(15)
+            + str(self._write_fnu_spectra).rjust(15)
+        )
+        self._print(
+            "Photometric Luminosities".ljust(30)
+            + str(self._do_luminosities).rjust(15)
+            + str(self._write_luminosities).rjust(15)
+        )
+        self._print(
+            "Photometric Fluxes".ljust(30)
+            + str(self._do_fluxes).rjust(15)
+            + str(self._write_fluxes).rjust(15)
+        )
+        self._print(
+            "Emission Line Luminosities".ljust(30)
+            + str(self._do_lum_lines).rjust(15)
+            + str(self._write_lines).rjust(15)
+        )
+        self._print(
+            "Emission Line Fluxes".ljust(30)
+            + str(self._do_flux_lines).rjust(15)
+            + str(self._write_flux_lines).rjust(15)
+        )
+        self._print(
+            "Luminosity Images".ljust(30)
+            + str(self._do_images_lum).rjust(15)
+            + str(self._write_images_lum).rjust(15)
+        )
+        self._print(
+            "Luminosity Images (with PSF)".ljust(30)
+            + str(self._do_images_lum_psf).rjust(15)
+            + str(self._write_images_lum_psf).rjust(15)
+        )
+        self._print(
+            "Flux Images".ljust(30)
+            + str(self._do_images_flux).rjust(15)
+            + str(self._write_images_flux).rjust(15)
+        )
+        self._print(
+            "Flux Images (with PSF)".ljust(30)
+            + str(self._do_images_flux_psf).rjust(15)
+            + str(self._write_images_flux_psf).rjust(15)
+        )
+        # Coming soon...
+        # self._print(
+        #     "Lnu Data Cubes".ljust(30)
+        #     + str(self._do_lnu_data_cubes).rjust(15)
+        #     + str(self._write_lnu_data_cubes).rjust(15)
+        # )
+        # self._print(
+        #     "Fnu Data Cubes".ljust(30)
+        #     + str(self._do_fnu_data_cubes).rjust(15)
+        #     + str(self._write_fnu_data_cubes).rjust(15)
+        # )
+        # self._print(
+        #     "Spectroscopy".ljust(30)
+        #     + str(self._do_spectroscopy).rjust(15)
+        #     + str(self._write_spectroscopy).rjust(15)
+        # )
+        self._print("-" * 60)
 
     def add_analysis_func(self, func, result_key, *args, **kwargs):
         """
