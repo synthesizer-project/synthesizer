@@ -108,7 +108,12 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
             return value
 
         raise exceptions.MissingAttribute(
-            f"{param} can't be found on the model, emission, or emitter"
+            f"{param} can't be found on the model "
+            f"({model.label if model is not None else None}),"
+            " emission ("
+            f"{emission.__class__.__name__ if emission is not None else None}"
+            "), or emitter ("
+            f"{emitter.__class__.__name__ if emitter is not None else None})."
         )
 
 

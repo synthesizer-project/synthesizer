@@ -69,7 +69,7 @@ class Extraction:
 
     def _extract_spectra(
         self,
-        emission_model,
+        this_model,
         emitters,
         spectra,
         particle_spectra,
@@ -81,8 +81,8 @@ class Extraction:
         Extract spectra from the grid.
 
         Args:
-            emission_model (EmissionModel):
-                The emission model to extract from.
+            this_model (EmissionModel):
+                The emission model defining the extraction.
             emitters (dict):
                 The emitters to extract the spectra for.
             spectra (dict):
@@ -102,86 +102,80 @@ class Extraction:
             dict:
                 The dictionary of extracted spectra.
         """
-        # First step we need to extract each base spectra
-        for label, spectra_key in emission_model._extract_keys.items():
-            # Skip if we don't need to extract this spectra
-            if label in spectra:
-                continue
+        # Extract the label for this model
+        label = this_model.label
 
-            # Get this model
-            this_model = emission_model._models[label]
+        # Skip models for a different emitter
+        if this_model.emitter not in emitters:
+            return spectra, particle_spectra
 
-            # Skip models for a different emitter
-            if this_model.emitter not in emitters:
-                continue
+        # Get the emitter
+        emitter = emitters[this_model.emitter]
 
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
+        # Are we doing a parametric Stars object? If so we have a special
+        # case (TODO: In the future we should make this work without
+        # needing to do this)
+        if isinstance(emitter, ParametricStars):
+            parametric_stars = True
+        else:
+            parametric_stars = False
 
-            # Are we doing a parametric Stars object? If so we have a special
-            # case (TODO: In the future we should make this work without
-            # needing to do this)
-            if isinstance(emitter, ParametricStars):
-                parametric_stars = True
-            else:
-                parametric_stars = False
+        # Do we have to define a property mask?
+        this_mask = None
+        for mask_dict in this_model.masks:
+            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
-            # Do we have to define a property mask?
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
-
-            # Get the appropriate extractor
-            if this_model.per_particle and this_model.vel_shift:
-                extractor = DopplerShiftedParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            elif this_model.per_particle:
-                extractor = ParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            elif this_model.vel_shift:
-                extractor = IntegratedDopplerShiftedParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            elif parametric_stars:
-                extractor = IntegratedParametricExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            else:
-                extractor = IntegratedParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-
-            sed = extractor.generate_lnu(
-                emitter,
-                this_model,
-                mask=this_mask,
-                lam_mask=this_model._lam_mask,
-                grid_assignment_method=grid_assignment_method,
-                nthreads=nthreads,
-                do_grid_check=False,
+        # Get the appropriate extractor
+        if this_model.per_particle and this_model.vel_shift:
+            extractor = DopplerShiftedParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        elif this_model.per_particle:
+            extractor = ParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        elif this_model.vel_shift:
+            extractor = IntegratedDopplerShiftedParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        elif parametric_stars:
+            extractor = IntegratedParametricExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        else:
+            extractor = IntegratedParticleExtractor(
+                this_model.grid,
+                this_model.extract,
             )
 
-            # Store the spectra in the right place (integrating if we
-            # need to)
-            if this_model.per_particle:
-                particle_spectra[label] = sed
-                spectra[label] = sed.sum()
-            else:
-                spectra[label] = sed
+        sed = extractor.generate_lnu(
+            emitter,
+            this_model,
+            mask=this_mask,
+            lam_mask=this_model._lam_mask,
+            grid_assignment_method=grid_assignment_method,
+            nthreads=nthreads,
+            do_grid_check=False,
+        )
+
+        # Store the spectra in the right place (integrating if we
+        # need to)
+        if this_model.per_particle:
+            particle_spectra[label] = sed
+            spectra[label] = sed.sum()
+        else:
+            spectra[label] = sed
 
         return spectra, particle_spectra
 
     def _extract_lines(
         self,
         line_ids,
-        emission_model,
+        this_model,
         emitters,
         lines,
         particle_lines,
@@ -195,8 +189,8 @@ class Extraction:
         Args:
             line_ids (list):
                 The line ids to extract.
-            emission_model (EmissionModel):
-                The emission model to extract from.
+            this_model (EmissionModel):
+                The emission model defining the extraction.
             emitters (dict):
                 The emitters to extract the lines for.
             lines (dict):
@@ -228,118 +222,111 @@ class Extraction:
         # asked for, but there's not point doing extra work!
         line_ids = list(set(line_ids))
 
-        # First step we need to extract each base lines
-        for label in emission_model._extract_keys.keys():
-            # Skip it if we happen to already have the lines
-            if label in lines:
-                continue
+        # Extract the label for this model
+        label = this_model.label
 
-            # Get this model
-            this_model = emission_model._models[label]
+        # Skip models for a different emitter
+        if this_model.emitter not in emitters:
+            return lines, particle_lines
 
-            # Skip models for a different emitter
-            if this_model.emitter not in emitters:
-                continue
-
-            # Check the attached grid has all the right lines in it
-            missing_lines = set(line_ids) - set(
-                this_model.grid.available_lines
-            )
-            if missing_lines:
-                raise exceptions.MissingLines(
-                    f"The Grid does not contain the following lines: "
-                    f"{missing_lines}."
-                )
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Are we doing a parametric Stars object? If so we have a special
-            # case (TODO: In the future we should make this work without
-            # needing to do this)
-            if isinstance(emitter, ParametricStars):
-                parametric_stars = True
-            else:
-                parametric_stars = False
-
-            # Do we have to define a property mask?
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
-
-            # Get the appropriate extractor
-            if this_model.per_particle and this_model.vel_shift:
-                extractor = DopplerShiftedParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            elif this_model.per_particle:
-                extractor = ParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            elif this_model.vel_shift:
-                extractor = IntegratedDopplerShiftedParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            elif parametric_stars:
-                extractor = IntegratedParametricExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-            else:
-                extractor = IntegratedParticleExtractor(
-                    this_model.grid,
-                    this_model.extract,
-                )
-
-            # Get the lam_mask based on the line_ids that have been requested
-            lam_mask = np.isin(extractor._grid.available_lines, line_ids)
-
-            # Now combine the model's lam_mask with the requested lines
-            # if it exists
-            if this_model._lam_mask is not None:
-                # Get the indices that would bin the lines into the
-                # spectra grid wavelength array
-                line_indices = np.digitize(
-                    extractor._line_lams,
-                    extractor._grid.lam,
-                )
-
-                # Remove any lines which are masked out in the lam_mask
-                for ind in line_indices:
-                    if not this_model._lam_mask[ind]:
-                        lam_mask[ind] = False
-
-            out_lines = extractor.generate_line(
-                emitter,
-                this_model,
-                mask=this_mask,
-                lam_mask=lam_mask,
-                grid_assignment_method=grid_assignment_method,
-                nthreads=nthreads,
-                do_grid_check=False,
+        # Check the attached grid has all the right lines in it
+        missing_lines = set(line_ids) - set(this_model.grid.available_lines)
+        if missing_lines:
+            raise exceptions.MissingLines(
+                f"The Grid does not contain the following lines: "
+                f"{missing_lines}."
             )
 
-            # Ok, we have our lines but this contains all lines currentlty
-            # with any not asked for set to zero. We need to filter this
-            # down to just the lines we want. Note that this will also
-            # handle composite lines
-            if len(passed_line_ids) < out_lines.nlines:
-                out_lines = out_lines[passed_line_ids]
+        # Get the emitter
+        emitter = emitters[this_model.emitter]
 
-            # Store the lines in the right place (integrating if we need to)
-            if this_model.per_particle:
-                particle_lines[label] = out_lines
-                lines[label] = out_lines.sum()
-            else:
-                lines[label] = out_lines
+        # Are we doing a parametric Stars object? If so we have a special
+        # case (TODO: In the future we should make this work without
+        # needing to do this)
+        if isinstance(emitter, ParametricStars):
+            parametric_stars = True
+        else:
+            parametric_stars = False
+
+        # Do we have to define a property mask?
+        this_mask = None
+        for mask_dict in this_model.masks:
+            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+
+        # Get the appropriate extractor
+        if this_model.per_particle and this_model.vel_shift:
+            extractor = DopplerShiftedParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        elif this_model.per_particle:
+            extractor = ParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        elif this_model.vel_shift:
+            extractor = IntegratedDopplerShiftedParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        elif parametric_stars:
+            extractor = IntegratedParametricExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        else:
+            extractor = IntegratedParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+
+        # Get the lam_mask based on the line_ids that have been requested
+        lam_mask = np.isin(extractor._grid.available_lines, line_ids)
+
+        # Now combine the model's lam_mask with the requested lines
+        # if it exists
+        if this_model._lam_mask is not None:
+            # Get the indices that would bin the lines into the
+            # spectra grid wavelength array
+            line_indices = np.digitize(
+                extractor._line_lams,
+                extractor._grid.lam,
+            )
+
+            # Remove any lines which are masked out in the lam_mask
+            for ind in line_indices:
+                if not this_model._lam_mask[ind]:
+                    lam_mask[ind] = False
+
+        out_lines = extractor.generate_line(
+            emitter,
+            this_model,
+            mask=this_mask,
+            lam_mask=lam_mask,
+            grid_assignment_method=grid_assignment_method,
+            nthreads=nthreads,
+            do_grid_check=False,
+        )
+
+        # Ok, we have our lines but this contains all lines currentlty
+        # with any not asked for set to zero. We need to filter this
+        # down to just the lines we want. Note that this will also
+        # handle composite lines
+        if len(passed_line_ids) < out_lines.nlines:
+            out_lines = out_lines[passed_line_ids]
+
+        # Store the lines in the right place (integrating if we need to)
+        if this_model.per_particle:
+            particle_lines[label] = out_lines
+            lines[label] = out_lines.sum()
+        else:
+            lines[label] = out_lines
 
         return lines, particle_lines
 
     def _extract_images(
         self,
+        this_model,
         instrument,
         fov,
         img_type,
@@ -352,9 +339,11 @@ class Extraction:
         limit_to,
     ):
         """
-        Create images for all the extraction keys.
+        Create an image for an extraction key.
 
         Args:
+            this_model (EmissionModel):
+                The model defining the extraction.
             instrument (Instrument):
                 The instrument to use when generating images.
             fov (float):
@@ -380,39 +369,25 @@ class Extraction:
             dict:
                 The dictionary of image collections.
         """
-        # Loop over the extraction keys
-        for label in self._extract_keys.keys():
-            # If we are limiting to a specific model, skip all others
-            if limit_to is not None and label != limit_to:
-                continue
+        # Extract the label for this model
+        label = this_model.label
 
-            # Also skip any models we didn't save
-            if not self._models[label].save:
-                continue
+        # Get the emitter
+        emitter = emitters[this_model.emitter]
 
-            # Get the model
-            this_model = self._models[label]
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Store the resulting image collection
-            try:
-                images[label] = _generate_image_collection_generic(
-                    instrument,
-                    fov,
-                    img_type,
-                    do_flux,
-                    this_model.per_particle,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                    label,
-                    emitter,
-                )
-            except Exception as e:
-                print(f"Failed to generate image for {label}: {e}")
-                raise e
+        # Store the resulting image collection
+        images[label] = _generate_image_collection_generic(
+            instrument,
+            fov,
+            img_type,
+            do_flux,
+            this_model.per_particle,
+            kernel,
+            kernel_threshold,
+            nthreads,
+            label,
+            emitter,
+        )
 
         return images
 
