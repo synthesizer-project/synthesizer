@@ -289,8 +289,8 @@ class Pipeline:
             "Fnu Spectra": 0.0,
             "Luminosities": 0.0,
             "Fluxes": 0.0,
-            "Emission Lines Luminosities": 0.0,
-            "Emission Lines Fluxes": 0.0,
+            "Emission Line Luminosities": 0.0,
+            "Emission Line Fluxes": 0.0,
             "Luminosity Images": 0.0,
             "Luminosity Images (with PSF)": 0.0,
             "Flux Images": 0.0,
@@ -311,8 +311,8 @@ class Pipeline:
             "Fnu Spectra": 0,
             "Luminosities": 0,
             "Fluxes": 0,
-            "Emission Lines Luminosities": 0,
-            "Emission Lines Fluxes": 0,
+            "Emission Line Luminosities": 0,
+            "Emission Line Fluxes": 0,
             "Luminosity Images": 0,
             "Luminosity Images (with PSF)": 0,
             "Flux Images": 0,
@@ -674,6 +674,12 @@ class Pipeline:
                 A list of Galaxy objects to add to the Pipeline.
         """
         start = time.perf_counter()
+
+        # Check there are actually galaxies...
+        if len(galaxies) == 0:
+            raise exceptions.InconsistentArguments(
+                "No galaxies provided to add to the Pipeline."
+            )
 
         # Attach the galaxies
         self.galaxies = galaxies
@@ -1209,20 +1215,20 @@ class Pipeline:
                     break
 
         # Count the number of emission lines we have generated
-        self._op_counts["Emission Lines Luminosities"] += (
+        self._op_counts["Emission Line Luminosities"] += (
             count_and_check_dict_recursive(galaxy.lines)
         )
         if galaxy.stars is not None:
-            self._op_counts["Emission Lines Luminosities"] += (
+            self._op_counts["Emission Line Luminosities"] += (
                 count_and_check_dict_recursive(galaxy.stars.lines)
             )
         if galaxy.black_holes is not None:
-            self._op_counts["Emission Lines Luminosities"] += (
+            self._op_counts["Emission Line Luminosities"] += (
                 count_and_check_dict_recursive(galaxy.black_holes.lines)
             )
 
         # Record the time taken
-        self._op_timing["Emission Lines Luminosities"] += (
+        self._op_timing["Emission Line Luminosities"] += (
             time.perf_counter() - start
         )
 
@@ -1297,20 +1303,20 @@ class Pipeline:
                     break
 
         # Count the number of observed emission lines we have generated
-        self._op_counts["Emission Lines Fluxes"] += (
+        self._op_counts["Emission Line Fluxes"] += (
             count_and_check_dict_recursive(galaxy.lines)
         )
         if galaxy.stars is not None:
-            self._op_counts["Emission Lines Fluxes"] += (
+            self._op_counts["Emission Line Fluxes"] += (
                 count_and_check_dict_recursive(galaxy.stars.lines)
             )
         if galaxy.black_holes is not None:
-            self._op_counts["Emission Lines Fluxes"] += (
+            self._op_counts["Emission Line Fluxes"] += (
                 count_and_check_dict_recursive(galaxy.black_holes.lines)
             )
 
         # Record the time taken
-        self._op_timing["Emission Lines Fluxes"] += time.perf_counter() - start
+        self._op_timing["Emission Line Fluxes"] += time.perf_counter() - start
 
     def get_images_luminosity(
         self,
@@ -2176,19 +2182,19 @@ class Pipeline:
             # Handle reporting (extra analysis and unpackign need some special
             # handling because they are not operations)
             if key == "Unpacking results":
-                print(f"{key} took {elapsed:.2f} {units}")
+                self._print(f"{key} took {elapsed:.2f} {units}")
             elif key == "Extra Analyses":
-                print(
+                self._print(
                     f"Running {self._op_counts[key]} extra analyses"
                     f" took {elapsed:.2f} {units}"
                 )
             elif key in self._op_counts:
-                print(
+                self._print(
                     f"Computing {self._op_counts[key]} {key}"
                     f" took {elapsed:.2f} {units}"
                 )
             else:
-                print(f"Computing {key} took {elapsed:.2f} {units}")
+                self._print(f"Computing {key} took {elapsed:.2f} {units}")
 
         # Clean up the outputs
         self._clean_outputs()
