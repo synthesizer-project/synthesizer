@@ -2,9 +2,11 @@
 
 from functools import lru_cache
 
-from unyt import unyt_array, unyt_quantity
+import numpy as np
+from unyt import unyt_array
 
 from synthesizer import exceptions
+from synthesizer.emissions import Sed
 from synthesizer.synth_warnings import warn
 
 
@@ -209,22 +211,22 @@ def count_and_check_dict_recursive(data, prefix=""):
             "All results should be numeric with associated units."
         )
 
-    if not hasattr(data, "units"):
+    if not hasattr(data, "units") and isinstance(data, np.ndarray):
         raise exceptions.BadResult(
             f"Found an array object without units at {prefix}. "
             "All results should be numeric with associated units. "
             f"Data: {data}"
         )
 
-    if not hasattr(data, "shape") and not isinstance(data, unyt_quantity):
+    if not hasattr(data, "shape"):
         raise exceptions.BadResult(
             f"Found a non-array object at {prefix}. "
             "All results should be numeric with associated units."
         )
 
-    if isinstance(data, unyt_quantity):
+    # If we have a Sed then we have a count of 1
+    if isinstance(data, Sed):
         return 1
-
     return data.shape[0]
 
 

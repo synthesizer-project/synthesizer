@@ -200,6 +200,17 @@ class PhotometryCollection:
         """
         return self.photometry.shape
 
+    @property
+    def ndim(self):
+        """
+        Return the number of dimensions of the photometry array.
+
+        Returns:
+            int
+                The number of dimensions of the photometry array.
+        """
+        return self.photometry.ndim
+
     def __iter__(self):
         """
         Enable dict iter behaviour.

@@ -920,7 +920,7 @@ class LineCollection:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            igm_transmission = igm.get_transmission(z, self.obslam)
+            igm_transmission = igm().get_transmission(z, self.obslam)
             self.flux *= igm_transmission
             self.continuum_flux *= igm_transmission
 

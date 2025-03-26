@@ -293,7 +293,7 @@ class BaseGalaxy:
         # Loop over all combined lines
         for line in self.lines.values():
             # Calculate the observed lines
-            line.get_fnu(
+            line.get_flux(
                 cosmo=cosmo,
                 z=self.redshift,
                 igm=igm,
@@ -304,7 +304,7 @@ class BaseGalaxy:
             # Loop over all stellar lines
             for line in self.stars.lines.values():
                 # Calculate the observed lines
-                line.get_fnu(
+                line.get_flux(
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
@@ -315,7 +315,7 @@ class BaseGalaxy:
                 # Loop over all stellar particle lines
                 for line in self.stars.particle_lines.values():
                     # Calculate the observed lines
-                    line.get_fnu(
+                    line.get_flux(
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
@@ -326,7 +326,7 @@ class BaseGalaxy:
             # Loop over all black hole lines
             for line in self.black_holes.lines.values():
                 # Calculate the observed lines
-                line.get_fnu(
+                line.get_flux(
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
@@ -336,7 +336,7 @@ class BaseGalaxy:
             if getattr(self.black_holes, "particle_lines", None) is not None:
                 for line in self.black_holes.particle_lines.values():
                     # Calculate the observed lines
-                    line.get_fnu(
+                    line.get_flux(
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,

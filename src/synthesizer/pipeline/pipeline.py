@@ -263,12 +263,12 @@ class Pipeline:
         self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.lines_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_cont_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_cont_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_lams = None
         self.line_ids = None
         self.line_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_cont_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_cont_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_obs_lams = None
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -291,15 +291,15 @@ class Pipeline:
             "Fluxes": 0.0,
             "Emission Lines Luminosities": 0.0,
             "Emission Lines Fluxes": 0.0,
-            "Images Luminosities": 0.0,
-            "Images Luminosities PSF": 0.0,
-            "Images Fluxes": 0.0,
-            "Images Fluxes PSF": 0.0,
+            "Luminosity Images": 0.0,
+            "Luminosity Images (with PSF)": 0.0,
+            "Flux Images": 0.0,
+            "Flux Images (With PSF)": 0.0,
             "Lnu Data Cubes": 0.0,
             "Fnu Data Cubes": 0.0,
             "Spectroscopy": 0.0,
-            "Extra Analysis": 0.0,
-            "Unpacking": 0.0,
+            "Extra Analyses": 0.0,
+            "Unpacking results": 0.0,
         }
 
         # We'll also report total counts so define a container for those.
@@ -313,14 +313,14 @@ class Pipeline:
             "Fluxes": 0,
             "Emission Lines Luminosities": 0,
             "Emission Lines Fluxes": 0,
-            "Images Luminosities": 0,
-            "Images Luminosities PSF": 0,
-            "Images Fluxes": 0,
-            "Images Fluxes PSF": 0,
+            "Luminosity Images": 0,
+            "Luminosity Images (with PSF)": 0,
+            "Flux Images": 0,
+            "Flux Images (With PSF)": 0,
             "Lnu Data Cubes": 0,
             "Fnu Data Cubes": 0,
             "Spectroscopy": 0,
-            "Analysis": 0,
+            "Extra Analyses": 0,
         }
 
         # Everything that follows is only needed for hybrid parallelism
@@ -657,7 +657,7 @@ class Pipeline:
                 "Choose a different result_key"
             )
         else:
-            self._analysis_results[result_key] = None
+            self._analysis_results[result_key] = []
 
         self._print(f"Added analysis function: {result_key}")
 
@@ -943,6 +943,14 @@ class Pipeline:
         self._op_counts["Lnu Spectra"] += count_and_check_dict_recursive(
             galaxy.spectra
         )
+        if galaxy.stars is not None:
+            self._op_counts["Lnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.stars.spectra
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Lnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.black_holes.spectra
+            )
 
         # Record the time taken
         self._op_timing["Lnu Spectra"] += time.perf_counter() - start
@@ -1000,6 +1008,14 @@ class Pipeline:
         self._op_counts["Fnu Spectra"] += count_and_check_dict_recursive(
             galaxy.spectra
         )
+        if galaxy.stars is not None:
+            self._op_counts["Fnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.stars.spectra
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Fnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.black_holes.spectra
+            )
 
         # Record the time taken
         self._op_timing["Fnu Spectra"] += time.perf_counter() - start
@@ -1108,8 +1124,16 @@ class Pipeline:
 
         # Count the number of photometric fluxes we have generated
         self._op_counts["Fluxes"] += count_and_check_dict_recursive(
-            galaxy.fluxes
+            galaxy.photo_fnu
         )
+        if galaxy.stars is not None:
+            self._op_counts["Fluxes"] += count_and_check_dict_recursive(
+                galaxy.stars.photo_fnu
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Fluxes"] += count_and_check_dict_recursive(
+                galaxy.black_holes.photo_fnu
+            )
 
         # Record the time taken
         self._op_timing["Fluxes"] += time.perf_counter() - start
@@ -1188,6 +1212,14 @@ class Pipeline:
         self._op_counts["Emission Lines Luminosities"] += (
             count_and_check_dict_recursive(galaxy.lines)
         )
+        if galaxy.stars is not None:
+            self._op_counts["Emission Lines Luminosities"] += (
+                count_and_check_dict_recursive(galaxy.stars.lines)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Emission Lines Luminosities"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.lines)
+            )
 
         # Record the time taken
         self._op_timing["Emission Lines Luminosities"] += (
@@ -1266,8 +1298,16 @@ class Pipeline:
 
         # Count the number of observed emission lines we have generated
         self._op_counts["Emission Lines Fluxes"] += (
-            count_and_check_dict_recursive(galaxy.observed_lines)
+            count_and_check_dict_recursive(galaxy.lines)
         )
+        if galaxy.stars is not None:
+            self._op_counts["Emission Lines Fluxes"] += (
+                count_and_check_dict_recursive(galaxy.stars.lines)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Emission Lines Fluxes"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.lines)
+            )
 
         # Record the time taken
         self._op_timing["Emission Lines Fluxes"] += time.perf_counter() - start
@@ -1362,6 +1402,14 @@ class Pipeline:
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
             galaxy.images_lnu
         )
+        if galaxy.stars is not None:
+            self._op_counts["Luminosity Images"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_lnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Luminosity Images"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.images_lnu)
+            )
 
         # Record the time taken
         self._op_timing["Luminosity Images"] += time.perf_counter() - start
@@ -1380,7 +1428,7 @@ class Pipeline:
         anything.
         """
         # Flag that we will apply the PSFs to the luminosity images
-        self._do_images_lum_psfs = True
+        self._do_images_lum_psf = True
 
         # To apply the PSFs to the luminosity images we need to have already
         # computed the luminosity images which themselves require the
@@ -1392,7 +1440,7 @@ class Pipeline:
         # Flag that we will want to write out the luminosity images with PSFs
         # (calling the get_images_luminosity_psfs method is considered the
         # intent to write it out)
-        self._write_images_lum_psfs = True
+        self._write_images_lum_psf = True
 
     def _get_images_luminosity_psfs(self, galaxy):
         """
@@ -1456,12 +1504,20 @@ class Pipeline:
                     )
 
         # Count the number of images we have generated
-        self._op_counts["Luminosity Images PSFs"] += (
+        self._op_counts["Luminosity Images (with PSF)"] += (
             count_and_check_dict_recursive(galaxy.images_lnu)
         )
+        if galaxy.stars is not None:
+            self._op_counts["Luminosity Images (with PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_lnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Luminosity Images (with PSF)"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.images_lnu)
+            )
 
         # Record the time taken
-        self._op_timing["Luminosity Images PSFs"] += (
+        self._op_timing["Luminosity Images (with PSF)"] += (
             time.perf_counter() - start
         )
 
@@ -1551,6 +1607,14 @@ class Pipeline:
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
             galaxy.images_fnu
         )
+        if galaxy.stars is not None:
+            self._op_counts["Flux Images"] += count_and_check_dict_recursive(
+                galaxy.stars.images_fnu
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Flux Images"] += count_and_check_dict_recursive(
+                galaxy.black_holes.images_fnu
+            )
 
         # Record the time taken
         self._op_timing["Flux Images"] += time.perf_counter() - start
@@ -1569,7 +1633,7 @@ class Pipeline:
         anything.
         """
         # Flag that we will apply the PSFs to the flux images
-        self._do_images_flux_psfs = True
+        self._do_images_flux_psf = True
 
         # To apply the PSFs to the flux images we need to have already computed
         # the flux images which themselves require the fluxes, and therefore
@@ -1644,12 +1708,22 @@ class Pipeline:
                     )
 
         # Count the number of images we have generated
-        self._op_counts["Flux Images PSFs"] += count_and_check_dict_recursive(
-            galaxy.images_fnu
+        self._op_counts["Flux Images (With PSF)"] += (
+            count_and_check_dict_recursive(galaxy.images_fnu)
         )
+        if galaxy.stars is not None:
+            self._op_counts["Flux Images (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_fnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Flux Images (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.images_fnu)
+            )
 
         # Record the time taken
-        self._op_timing["Flux Images PSFs"] += time.perf_counter() - start
+        self._op_timing["Flux Images (With PSF)"] += (
+            time.perf_counter() - start
+        )
 
     def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
@@ -1709,7 +1783,7 @@ class Pipeline:
                 res = func(galaxy, *args, **kwargs)
 
                 # Count the number of times we have run this function
-                self._op_counts["Extra analyses"] += 1
+                self._op_counts["Extra Analyses"] += 1
 
                 # Record the time taken
                 self._op_timing[key] = (
@@ -1725,6 +1799,9 @@ class Pipeline:
 
             # Store the result on the galaxy
             galaxy._extra_analysis_results[key] = res
+
+        # Record the time taken
+        self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
     def _unpack_results(self, galaxy):
         """
@@ -1783,7 +1860,7 @@ class Pipeline:
                     ).append(spec.fnu)
 
         # Do we need to unpack the photometric luminosities?
-        if self._write_photometry_luminosities:
+        if self._write_luminosities:
             for spec_type, phot in galaxy.photo_lnu.items():
                 for filt, lnu in phot.items():
                     self.luminosities["Galaxy"].setdefault(
@@ -1803,7 +1880,7 @@ class Pipeline:
                         ).setdefault(filt, []).append(lnu)
 
         # Do we need to unpack the photometric fluxes?
-        if self._write_photometry_fluxes:
+        if self._write_fluxes:
             for spec_type, phot in galaxy.photo_fnu.items():
                 for filt, fnu in phot.items():
                     self.fluxes["Galaxy"].setdefault(spec_type, {}).setdefault(
@@ -1825,60 +1902,54 @@ class Pipeline:
         # Do we need to unpack the emission lines?
         if self._write_lines:
             for spec_type, lines in galaxy.lines.items():
-                for line in lines:
-                    self.lines_lum["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(line.id, []).append(line.luminosity)
-                    self.line_cont_lum["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(line.id, []).append(line.continuum)
+                self.line_lums["Galaxy"].setdefault(spec_type, []).append(
+                    lines.luminosity
+                )
+                self.line_cont_lums["Galaxy"].setdefault(spec_type, []).append(
+                    lines.continuum
+                )
             if galaxy.stars is not None:
                 for spec_type, lines in galaxy.stars.lines.items():
-                    for line in lines:
-                        self.lines_lum["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.luminosity)
-                        self.line_cont_lum["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.continuum)
+                    self.line_lums["Stars"].setdefault(spec_type, []).append(
+                        lines.luminosity
+                    )
+                    self.line_cont_lums["Stars"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
             if galaxy.black_holes is not None:
                 for spec_type, lines in galaxy.black_holes.lines.items():
-                    for line in lines:
-                        self.lines_lum["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.luminosity)
-                        self.line_cont_lum["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.continuum)
+                    self.line_lums["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.luminosity)
+                    self.line_cont_lums["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
 
         # Do we need to unpack the observed emission lines?
         if self._write_flux_lines:
             for spec_type, lines in galaxy.lines.items():
-                for line in lines:
-                    self.line_fluxes["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(line.id, []).append(line.flux)
-                    self.line_cont_flux["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(line.id, []).append(line.continuum)
+                self.line_fluxes["Galaxy"].setdefault(spec_type, []).append(
+                    lines.flux
+                )
+                self.line_cont_fluxes["Galaxy"].setdefault(
+                    spec_type, []
+                ).append(lines.continuum)
             if galaxy.stars is not None:
                 for spec_type, lines in galaxy.stars.lines.items():
-                    for line in lines:
-                        self.line_fluxes["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.flux)
-                        self.line_cont_flux["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.continuum)
+                    self.line_fluxes["Stars"].setdefault(spec_type, []).append(
+                        lines.flux
+                    )
+                    self.line_cont_fluxes["Stars"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
             if galaxy.black_holes is not None:
                 for spec_type, lines in galaxy.black_holes.lines.items():
-                    for line in lines:
-                        self.line_fluxes["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.flux)
-                        self.line_cont_flux["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.continuum)
+                    self.line_fluxes["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.flux)
+                    self.line_cont_fluxes["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
 
         # Do we need to unpack the luminosity images?
         if self._write_images_lum:
@@ -1927,7 +1998,7 @@ class Pipeline:
                             ).setdefault(f, []).append(img.arr * img.units)
 
         # Do we need to unpack the luminosity images with PSFs?
-        if self._write_images_lum_psfs:
+        if self._write_images_lum_psf:
             for d in galaxy.images_psf_lnu.values():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
@@ -1950,7 +2021,7 @@ class Pipeline:
                             ).setdefault(f, []).append(img.arr * img.units)
 
         # Do we need to unpack the flux images with PSFs?
-        if self._write_images_flux_psfs:
+        if self._write_images_flux_psf:
             for d in galaxy.images_psf_fnu.values():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
@@ -1974,7 +2045,7 @@ class Pipeline:
 
         # Do we need to unpack the extra analysis results?
         for key, res in galaxy._extra_analysis_results.items():
-            self._analysis_results.setdefault(key, []).append(res)
+            self._analysis_results[key].append(res)
 
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
@@ -2051,7 +2122,7 @@ class Pipeline:
                 self._get_photometry_luminosities(gal)
 
             # Are we generating photometric fluxes?
-            if self._do_photometry_fluxes:
+            if self._do_fluxes:
                 self._get_photometry_fluxes(gal)
 
             # Are we generating emission lines?
@@ -2071,11 +2142,11 @@ class Pipeline:
                 self._get_images_flux(gal)
 
             # Are we applying PSFs to the luminosity images?
-            if self._do_images_lum_psfs:
+            if self._do_images_lum_psf:
                 self._get_images_luminosity_psfs(gal)
 
             # Are we applying PSFs to the flux images?
-            if self._do_images_flux_psfs:
+            if self._do_images_flux_psf:
                 self._get_images_flux_psfs(gal)
 
             # Run any extra analysis functions
@@ -2104,15 +2175,20 @@ class Pipeline:
 
             # Handle reporting (extra analysis and unpackign need some special
             # handling because they are not operations)
-            if key == "Unpacking" or key == "Extra Analysis":
+            if key == "Unpacking results":
                 print(f"{key} took {elapsed:.2f} {units}")
-            else:
+            elif key == "Extra Analyses":
+                print(
+                    f"Running {self._op_counts[key]} extra analyses"
+                    f" took {elapsed:.2f} {units}"
+                )
+            elif key in self._op_counts:
                 print(
                     f"Computing {self._op_counts[key]} {key}"
                     f" took {elapsed:.2f} {units}"
                 )
-
-            print(f"{key} took {elapsed:.2f} {units}")
+            else:
+                print(f"Computing {key} took {elapsed:.2f} {units}")
 
         # Clean up the outputs
         self._clean_outputs()
@@ -2173,40 +2249,32 @@ class Pipeline:
                 self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
 
         # Convert the lists of line luminosities and continua to unyt arrays
-        for spec_type, lines in self.lines_lum["Galaxy"].items():
-            self.lines_lum["Galaxy"][spec_type] = unyt_array(lines.luminosity)
-            self.line_cont_lum["Galaxy"][spec_type] = unyt_array(
-                lines.continuum
-            )
-        for spec_type, lines in self.lines_lum["Stars"].items():
-            self.lines_lum["Stars"][spec_type] = unyt_array(lines.luminosity)
-            self.line_cont_lum["Stars"][spec_type] = unyt_array(
-                lines.continuum
-            )
-        for spec_type, lines in self.lines_lum["BlackHole"].items():
-            self.lines_lum["BlackHole"][spec_type] = unyt_array(
-                lines.luminosity
-            )
-            self.line_cont_lum["BlackHole"][spec_type] = unyt_array(
-                lines.continuum
-            )
+        for spec_type, lines in self.line_lums["Galaxy"].items():
+            self.line_lums["Galaxy"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.line_cont_lums["Galaxy"].items():
+            self.line_cont_lums["Galaxy"][spec_type] = unyt_array(conts)
+        for spec_type, lines in self.line_lums["Stars"].items():
+            self.line_lums["Stars"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.line_cont_lums["Stars"].items():
+            self.line_cont_lums["Stars"][spec_type] = unyt_array(conts)
+        for spec_type, lines in self.line_lums["BlackHole"].items():
+            self.line_lums["BlackHole"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.line_cont_lums["BlackHole"].items():
+            self.line_cont_lums["BlackHole"][spec_type] = unyt_array(conts)
 
         # Convert the lists of line fluxes and continua to unyt arrays
-        for spec_type, lines in self.line_fluxes["Galaxy"].items():
-            self.line_fluxes["Galaxy"][spec_type] = unyt_array(lines.flux)
-            self.line_cont_flux["Galaxy"][spec_type] = unyt_array(
-                lines.continuum
-            )
-        for spec_type, lines in self.line_fluxes["Stars"].items():
-            self.line_fluxes["Stars"][spec_type] = unyt_array(lines.flux)
-            self.line_cont_flux["Stars"][spec_type] = unyt_array(
-                lines.continuum
-            )
-        for spec_type, lines in self.line_fluxes["BlackHole"].items():
-            self.line_fluxes["BlackHole"][spec_type] = unyt_array(lines.flux)
-            self.line_cont_flux["BlackHole"][spec_type] = unyt_array(
-                lines.continuum
-            )
+        for spec_type, fluxes in self.line_fluxes["Galaxy"].items():
+            self.line_fluxes["Galaxy"][spec_type] = unyt_array(fluxes)
+        for spec_type, conts in self.line_cont_fluxes["Galaxy"].items():
+            self.line_cont_fluxes["Galaxy"][spec_type] = unyt_array(conts)
+        for spec_type, fluxes in self.line_fluxes["Stars"].items():
+            self.line_fluxes["Stars"][spec_type] = unyt_array(fluxes)
+        for spec_type, conts in self.line_cont_fluxes["Stars"].items():
+            self.line_cont_fluxes["Stars"][spec_type] = unyt_array(conts)
+        for spec_type, fluxes in self.line_fluxes["BlackHole"].items():
+            self.line_fluxes["BlackHole"][spec_type] = unyt_array(fluxes)
+        for spec_type, conts in self.line_cont_fluxes["BlackHole"].items():
+            self.line_cont_fluxes["BlackHole"][spec_type] = unyt_array(conts)
 
         # Convert the lists of luminosity images to unyt arrays
         for spec_type, imgs in self.images_lum["Galaxy"].items():
@@ -2379,7 +2447,7 @@ class Pipeline:
             )
 
         # Write photometric luminosities
-        if self._write_photometry_luminosities:
+        if self._write_luminosities:
             self.io_helper.write_data(
                 self.luminosities["Galaxy"],
                 "Galaxies/Photometry/Luminosities",
@@ -2397,7 +2465,7 @@ class Pipeline:
             )
 
         # Write photometric fluxes
-        if self._write_photometry_fluxes:
+        if self._write_fluxes:
             self.io_helper.write_data(
                 self.fluxes["Galaxy"],
                 "Galaxies/Photometry/Fluxes",
@@ -2417,32 +2485,32 @@ class Pipeline:
         # Write emission line luminosities
         if self._write_lines:
             self.io_helper.write_data(
-                self.lines_lum["Galaxy"],
+                self.line_lums["Galaxy"],
                 "Galaxies/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.lines_lum["Stars"],
+                self.line_lums["Stars"],
                 "Galaxies/Stars/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.lines_lum["BlackHole"],
+                self.line_lums["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lum["Galaxy"],
+                self.line_cont_lums["Galaxy"],
                 "Galaxies/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lum["Stars"],
+                self.line_cont_lums["Stars"],
                 "Galaxies/Stars/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lum["BlackHole"],
+                self.line_cont_lums["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
@@ -2475,17 +2543,17 @@ class Pipeline:
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_flux["Galaxy"],
+                self.line_cont_fluxes["Galaxy"],
                 "Galaxies/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_flux["Stars"],
+                self.line_cont_fluxes["Stars"],
                 "Galaxies/Stars/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_flux["BlackHole"],
+                self.line_cont_fluxes["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
@@ -2514,7 +2582,7 @@ class Pipeline:
             )
 
         # Write PSF luminosity images
-        if self._write_images_lum_psfs:
+        if self._write_images_lum_psf:
             self.io_helper.write_data(
                 self.images_lum_psf["Galaxy"],
                 "Galaxies/PSFImages/Luminosity",
@@ -2550,7 +2618,7 @@ class Pipeline:
             )
 
         # Write PSF flux images
-        if self._write_images_flux_psfs:
+        if self._write_images_flux_psf:
             self.io_helper.write_data(
                 self.images_flux_psf["Galaxy"],
                 "Galaxies/PSFImages/Flux",
