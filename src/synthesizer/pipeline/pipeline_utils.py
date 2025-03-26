@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from unyt import unyt_array
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
@@ -209,17 +209,21 @@ def count_and_check_dict_recursive(data, prefix=""):
             "All results should be numeric with associated units."
         )
 
-    if not hasattr(data, "shape"):
+    if not hasattr(data, "units"):
+        raise exceptions.BadResult(
+            f"Found an array object without units at {prefix}. "
+            "All results should be numeric with associated units. "
+            f"Data: {data}"
+        )
+
+    if not hasattr(data, "shape") and not isinstance(data, unyt_quantity):
         raise exceptions.BadResult(
             f"Found a non-array object at {prefix}. "
             "All results should be numeric with associated units."
         )
 
-    if not hasattr(data, "units"):
-        raise exceptions.BadResult(
-            f"Found an array object without units at {prefix}. "
-            "All results should be numeric with associated units."
-        )
+    if isinstance(data, unyt_quantity):
+        return 1
 
     return data.shape[0]
 
@@ -277,11 +281,6 @@ def combine_list_of_dicts(dicts):
             # Recurse for each key
             merged[key] = recursive_merge([d[key] for d in dict_list])
         return merged
-
-    if not isinstance(dicts[0], dict):
-        TypeError(
-            f"Input must be a list of dictionaries, not {type(dicts[0])}"
-        )
 
     return recursive_merge(dicts)
 
