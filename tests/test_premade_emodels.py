@@ -48,7 +48,7 @@ class TestPacmanEmission:
         # Try to generate spectra without setting tau_v on the model or
         # stars
         random_part_stars.tau_v = None
-        with pytest.raises((RuntimeError, exceptions.MissingAttribute)):
+        with pytest.raises(exceptions.MissingAttribute):
             random_part_stars.get_spectra(model)
 
     def test_pacman_with_no_fesc(self, test_grid, random_part_stars):
@@ -428,7 +428,7 @@ class TestBimodalPacmanEmission:
 
         # Try to generate spectra without setting tau_v on the model or
         # stars
-        with pytest.raises((RuntimeError, exceptions.MissingAttribute)):
+        with pytest.raises(exceptions.MissingAttribute):
             random_part_stars.get_spectra(model)
 
     def test_bimodal_pacman_with_no_fesc(self, test_grid, random_part_stars):
