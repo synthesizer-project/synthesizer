@@ -631,19 +631,20 @@ class Pipeline:
         self._print("Running the pipeline...")
         self._print_progress_footer()
 
-        self._print(
-            "|"
-            + f"{'Galaxy #':>{self._table_col_width}}"
-            + "|"
-            + f"{'Nstars':>{self._table_col_width}}"
-            + "|"
-            + f"{'Nbh':>{self._table_col_width}}"
-            + "|"
-            + f"{'dt (s)':>{self._table_col_width}}"
-            + "|"
-            + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
-            + "|"
-        )
+        if self.rank == 0:
+            self._print(
+                "|"
+                + f"{'Galaxy #':>{self._table_col_width}}"
+                + "|"
+                + f"{'Nstars':>{self._table_col_width}}"
+                + "|"
+                + f"{'Nbh':>{self._table_col_width}}"
+                + "|"
+                + f"{'dt (s)':>{self._table_col_width}}"
+                + "|"
+                + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
+                + "|"
+            )
 
         self._print_progress_footer()
 
