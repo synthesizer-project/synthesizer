@@ -31,6 +31,7 @@ Example usage:
 import time
 
 import numpy as np
+from pympler import asizeof
 from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
@@ -323,6 +324,9 @@ class Pipeline:
             "Extra Analyses": 0,
         }
 
+        # Some constants we'll use to format the progress report
+        self._table_col_width = 12
+
         # Everything that follows is only needed for hybrid parallelism
         # (running with MPI in addition to shared memory parallelism)
 
@@ -587,6 +591,112 @@ class Pipeline:
 
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
+
+    @property
+    def results_memory_usage(self):
+        """
+        Return the memory usage of the various results stored on the Pipeline.
+
+        Returns:
+            float: The memory usage in Gigabytes.
+        """
+        results = [
+            self.sfzhs,
+            self.sfhs,
+            self.lnu_spectra,
+            self.fnu_spectra,
+            self.luminosities,
+            self.fluxes,
+            self.line_lums,
+            self.line_cont_lums,
+            self.line_lams,
+            self.line_ids,
+            self.line_fluxes,
+            self.line_cont_fluxes,
+            self.line_obs_lams,
+            self.images_lum,
+            self.images_lum_psf,
+            self.images_flux,
+            self.images_flux_psf,
+            self.lnu_data_cubes,
+            self.fnu_data_cubes,
+            self.spectroscopy,
+        ]
+
+        return asizeof.asizeof(results) / (1024**2)
+
+    def _print_progress_header(self):
+        """Print the header for the progress report."""
+        self._print("Running the pipeline...")
+        self._print_progress_footer()
+
+        self._print(
+            "|"
+            + f"{'Galaxy #':>{self._table_col_width}}"
+            + "|"
+            + f"{'Nstars':>{self._table_col_width}}"
+            + "|"
+            + f"{'Nbh':>{self._table_col_width}}"
+            + "|"
+            + f"{'dt (s)':>{self._table_col_width}}"
+            + "|"
+            + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
+            + "|"
+        )
+
+        self._print_progress_footer()
+
+    def _add_progress_row(self, gal, igal, start):
+        """
+        Print a row for the progress report.
+
+        Args:
+            gal (Galaxy): The galaxy object to report on.
+            igal (int): The index of the galaxy.
+            start (float): The start time of the process.
+        """
+        # Get the number of stars, for parametric galaxies we don't have this
+        # information but we do have the sfzh shape
+        if gal.stars is not None and hasattr(gal.stars, "nstars"):
+            nstars = gal.stars.nstars
+        elif gal.stars is not None:
+            nstars = str(gal.stars.sfzh.shape)
+        else:
+            nstars = "None"
+
+        nbh = gal.black_holes.nbh if gal.black_holes is not None else "None"
+        elapsed = time.perf_counter() - start
+        mem_mb = self.results_memory_usage
+
+        self._print(
+            "|"
+            + f"{igal:>{self._table_col_width}}"
+            + "|"
+            + f"{nstars:>{self._table_col_width}}"
+            + "|"
+            + f"{nbh:>{self._table_col_width}}"
+            + "|"
+            + f"{elapsed:>{self._table_col_width}.2f}"
+            + "|"
+            + f"{mem_mb:>{self._table_col_width * 2}.2f}"
+            + "|"
+        )
+
+    def _print_progress_footer(self):
+        """Print the footer for the progress report."""
+        self._print(
+            "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width * 2
+            + "+"
+        )
 
     def add_analysis_func(self, func, result_key, *args, **kwargs):
         """
@@ -2097,9 +2207,15 @@ class Pipeline:
                 "Use the get_* methods to signal operations."
             )
 
+        # Print the header for the pipeline run to the console
+        self._print_progress_header()
+
         # Loop over galaxie and compute what has been requested using get_*
         # signalling methods
+        igal = 0
         while len(self.galaxies) > 0:
+            start_gal = time.perf_counter()
+
             # Pop the first galaxy from the list
             gal = self.galaxies.pop(0)
 
@@ -2161,8 +2277,15 @@ class Pipeline:
             # Ok, we're done with this galaxy so we can unpack the results
             self._unpack_results(gal)
 
+            # Output into the progress table
+            self._add_progress_row(gal, igal, start_gal)
+            igal += 1
+
             # Now we can remove the galaxy to free up memory
             del gal
+
+        # print the footer for the pipeline run to the console
+        self._print_progress_footer()
 
         # We're done! Report the time taken
         for key, elapsed in self._op_timing.items():
