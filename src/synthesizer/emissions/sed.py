@@ -1984,9 +1984,8 @@ def plot_spectra_as_rainbow(
 
     # Normalise spectrum
     max_val = np.max(spectra)
-    if max_val == 0:
-        return fig, ax  # or handle gracefully
-    spectra /= max_val
+    if max_val > 0:
+        spectra /= max_val
 
     # If logged rescale to between 0 and 1 using min_log_lnu
     if logged:

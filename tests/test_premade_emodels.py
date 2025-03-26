@@ -262,11 +262,11 @@ class TestCharlotFallEmission:
     def test_missing_optical_depth(self, test_grid, random_part_stars):
         """Test the initialization of the CharlotFall2000 object."""
         with pytest.raises(TypeError):
-            model = CharlotFall2000(
+            _ = CharlotFall2000(
                 test_grid,
             )
         with pytest.raises(TypeError):
-            model = CharlotFall2000(
+            _ = CharlotFall2000(
                 test_grid,
                 tau_v_ism=0.33,
             )

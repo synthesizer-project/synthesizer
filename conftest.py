@@ -2,7 +2,20 @@
 
 import numpy as np
 import pytest
-from unyt import Hz, Mpc, Msun, Myr, angstrom, cm, erg, km, kpc, s, unyt_array, yr
+from unyt import (
+    Hz,
+    Mpc,
+    Msun,
+    Myr,
+    angstrom,
+    cm,
+    erg,
+    km,
+    kpc,
+    s,
+    unyt_array,
+    yr,
+)
 
 from synthesizer.emission_models import (
     BimodalPacmanEmission,
