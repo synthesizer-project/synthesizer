@@ -450,7 +450,7 @@ class EmergentEmission(StellarEmissionModel):
 
     Attributes:
         grid (synthesizer.grid.Grid): The grid object to extract from.
-        dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
+        dust_curve (AttenuationLaw): The dust curve to use.
         apply_to (EmissionModel): The emission model to apply the dust to.
         label (str): The label for this emission model.
     """
@@ -472,7 +472,7 @@ class EmergentEmission(StellarEmissionModel):
 
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
-            dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
+            dust_curve (AttenuationLaw): The dust curve to use.
             apply_to (EmissionModel): The model to apply the dust to.
             fesc (float): The escape fraction of the emission.
             label (str): The label for this emission model.
@@ -526,7 +526,7 @@ class TotalEmission(StellarEmissionModel):
 
     Attributes:
         grid (synthesizer.grid.Grid): The grid object to extract from.
-        dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
+        dust_curve (AttenuationLaw): The dust curve to use.
         dust_emission_model (synthesizer.dust.EmissionModel): The dust
             emission model to use.
         label (str): The label for this emission model.
@@ -548,7 +548,7 @@ class TotalEmission(StellarEmissionModel):
 
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
-            dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
+            dust_curve (AttenuationLaw): The dust curve to use.
             dust_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use.
             label (str): The label for this emission model.
