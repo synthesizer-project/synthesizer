@@ -354,7 +354,7 @@ class Pipeline:
         # If we are using MPI we need to make sure everyone agrees on the
         # start time, take the minimum
         if self.using_mpi:
-            self._start_time = comm.allreduce(self._start_time, op=comm.MIN)
+            self._start_time = min(self.comm.allgather(self._start_time))
 
         # Hold back everyone in MPI land until we're all ready to go
         if self.using_mpi:
@@ -708,11 +708,9 @@ class Pipeline:
 
         nbh = gal.black_holes.nbh if gal.black_holes is not None else "None"
         elapsed = time.perf_counter() - start
-        s = time.perf_counter()
         res_mem_mb = self.results_memory_usage
         self_mem_mb = self.memory_usage
         gal_mem_mb = self.galaxies_memory_usage
-        print("Getting table memory", time.perf_counter() - s)
 
         # In MPI land we need to add the offset to this ranks galaxy index
         if self.using_mpi:
