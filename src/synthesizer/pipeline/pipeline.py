@@ -706,7 +706,7 @@ class Pipeline:
         # If we are reporting memory usage we need to add the extra columns
         if self._report_memory:
             header += (
-                +f"{'Memory footprint (MB)':>{self._table_col_width * 2}}"
+                f"{'Memory footprint (MB)':>{self._table_col_width * 2}}"
                 + "|"
                 + f"{'Galaxy memory (MB)':>{self._table_col_width * 2}}"
                 + "|"
@@ -800,12 +800,12 @@ class Pipeline:
         # If we are reporting memory usage we need to add the extra columns
         if self._report_memory:
             row += (
-                +f"{self_mem_mb:>{self._table_col_width * 2}.2f}"
+                f"{self_mem_mb:>{self._table_col_width * 2}.2f}"
                 + "|"
                 + f"{gal_mem_mb:>{self._table_col_width * 2}.2f}"
                 + "|"
                 + f"{res_mem_mb:>{self._table_col_width * 2}.2f}"
-                + "|",
+                + "|"
             )
 
         print(prefix, row)
@@ -827,12 +827,12 @@ class Pipeline:
         # If we are reporting memory usage we need to add the extra columns
         if self._report_memory:
             footer += (
-                +"-" * self._table_col_width * 2
+                "-" * self._table_col_width * 2
                 + "+"
                 + "-" * self._table_col_width * 2
                 + "+"
                 + "-" * self._table_col_width * 2
-                + "+",
+                + "+"
             )
         self._print(footer)
 
@@ -1109,7 +1109,8 @@ class Pipeline:
             )
         else:
             self._print(
-                f"Galaxies memory footprint: {self.galaxy_memory_usage:.2f} MB"
+                "Galaxies memory footprint: "
+                f"{self.galaxies_memory_usage:.2f} MB"
             )
 
         # Done!
