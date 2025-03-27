@@ -1650,13 +1650,11 @@ class Template:
 
         # Attach the template now we've done the interpolation (if needed)
         self._sed = sed
-        self.lnu = sed.lnu
         self.lam = sed.lam
 
         # Normalise, just in case
-        self.normalisation = sed._bolometric_luminosity
-        self._sed._lnu /= self.normalisation
-        self._lnu /= self.normalisation
+        self.normalisation = sed.bolometric_luminosity
+        self._sed._lnu /= self.normalisation.to(self._sed.lnu.units * Hz).value
 
     @accepts(bolometric_luminosity=erg / s)
     def get_spectra(self, bolometric_luminosity):
