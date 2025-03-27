@@ -130,6 +130,7 @@ class Pipeline:
         nthreads=1,
         comm=None,
         verbose=1,
+        report_memory=False,
     ):
         """
         Initialise the Pipeline object.
@@ -160,6 +161,13 @@ class Pipeline:
             verbose (int): How talkative are we? 0: No output beyond hello and
                 goodbye. 1: Outputs with timings but only on rank 0 (when using
                 MPI). 2: Outputs with timings on all ranks (when using MPI).
+            report_memory (bool): Should we report memory usage as we run?
+                This should only be turned on for debugging purposes. This
+                will report the memory usage of the galaxies, the results,
+                and the pipeline object itself in the progress table. This
+                can be very EXPENSIVE in terms of time since we recurse through
+                all objects to get the memory usage after processing each
+                galaxy. Default is False.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -179,10 +187,14 @@ class Pipeline:
         # Set verbosity
         self.verbose = verbose
 
+        # Are we reporting memory usage?
+        self._report_memory = report_memory
+
         # How many galaxies are we going to be looking at?
         self.n_galaxies = 0
         self.n_galaxies_local = 0  # Only applicable when using MPI
         self.n_galaxies_per_rank = 0  # Only applicable when using MPI
+        self.n_galaxies_offset = 0  # Only applicable when using MPI
 
         # Define the container to hold the galaxies
         self.galaxies = []
@@ -642,6 +654,18 @@ class Pipeline:
         return get_full_memory(self.galaxies) / (1024**2)
 
     @property
+    def all_galaxies_memory_usage(self):
+        """
+        Return the memory usage of all galaxies across all ranks.
+
+        Returns:
+            float: The memory usage in Megabytes.
+        """
+        if self.using_mpi:
+            return self.comm.allreduce(self.galaxies_memory_usage)
+        return self.galaxies_memory_usage
+
+    @property
     def memory_usage(self):
         """
         Return the memory usage of the Pipeline object.
@@ -661,10 +685,13 @@ class Pipeline:
         if self.verbose == 0:
             return
 
+        # Print the pipeline footprint regardless of report memory setting
+        self._print("Pipeline memory footprint (MB):", self.memory_usage)
         self._print("Running the pipeline...")
         self._print_progress_footer()
 
-        self._print(
+        # Define the header for the progress report
+        header = (
             "|"
             + f"{'Galaxy #':>{self._table_col_width}}"
             + "|"
@@ -674,13 +701,20 @@ class Pipeline:
             + "|"
             + f"{'dt (s)':>{self._table_col_width}}"
             + "|"
-            + f"{'Memory footprint (MB)':>{self._table_col_width * 2}}"
-            + "|"
-            + f"{'Galaxy memory (MB)':>{self._table_col_width * 2}}"
-            + "|"
-            + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
-            + "|"
         )
+
+        # If we are reporting memory usage we need to add the extra columns
+        if self._report_memory:
+            header += (
+                +f"{'Memory footprint (MB)':>{self._table_col_width * 2}}"
+                + "|"
+                + f"{'Galaxy memory (MB)':>{self._table_col_width * 2}}"
+                + "|"
+                + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
+                + "|"
+            )
+
+        self._print(header)
 
         self._print_progress_footer()
 
@@ -706,15 +740,22 @@ class Pipeline:
         else:
             nstars = "None"
 
+        # Get the number of blackholes (this is automatically 1 for parametric
+        # galaxies)
         nbh = gal.black_holes.nbh if gal.black_holes is not None else "None"
+
+        # Get the elapsed time for this galaxy
         elapsed = time.perf_counter() - start
-        res_mem_mb = self.results_memory_usage
-        self_mem_mb = self.memory_usage
-        gal_mem_mb = self.galaxies_memory_usage
+
+        # Get the memory footprint if we are reporting memory usage
+        if self._report_memory:
+            res_mem_mb = self.results_memory_usage
+            self_mem_mb = self.memory_usage
+            gal_mem_mb = self.galaxies_memory_usage
 
         # In MPI land we need to add the offset to this ranks galaxy index
         if self.using_mpi:
-            igal += sum(self.n_galaxies_per_rank[: self.rank])
+            igal += self.n_galaxies_offset
 
         # We don't want to obey the verbosity level here, we always want to
         # print this information so we'll use the print method directly
@@ -743,8 +784,8 @@ class Pipeline:
         else:
             prefix = f"[{now_str}]:"
 
-        print(
-            prefix,
+        # Define the row for the progress report
+        row = (
             "|"
             + f"{igal:>{self._table_col_width}}"
             + "|"
@@ -754,17 +795,24 @@ class Pipeline:
             + "|"
             + f"{elapsed:>{self._table_col_width}.2f}"
             + "|"
-            + f"{self_mem_mb:>{self._table_col_width * 2}.2f}"
-            + "|"
-            + f"{gal_mem_mb:>{self._table_col_width * 2}.2f}"
-            + "|"
-            + f"{res_mem_mb:>{self._table_col_width * 2}.2f}"
-            + "|",
         )
+
+        # If we are reporting memory usage we need to add the extra columns
+        if self._report_memory:
+            row += (
+                +f"{self_mem_mb:>{self._table_col_width * 2}.2f}"
+                + "|"
+                + f"{gal_mem_mb:>{self._table_col_width * 2}.2f}"
+                + "|"
+                + f"{res_mem_mb:>{self._table_col_width * 2}.2f}"
+                + "|",
+            )
+
+        print(prefix, row)
 
     def _print_progress_footer(self):
         """Print the footer for the progress report."""
-        self._print(
+        footer = (
             "+"
             + "-" * self._table_col_width
             + "+"
@@ -774,13 +822,19 @@ class Pipeline:
             + "+"
             + "-" * self._table_col_width
             + "+"
-            + "-" * self._table_col_width * 2
-            + "+"
-            + "-" * self._table_col_width * 2
-            + "+"
-            + "-" * self._table_col_width * 2
-            + "+"
         )
+
+        # If we are reporting memory usage we need to add the extra columns
+        if self._report_memory:
+            footer += (
+                +"-" * self._table_col_width * 2
+                + "+"
+                + "-" * self._table_col_width * 2
+                + "+"
+                + "-" * self._table_col_width * 2
+                + "+",
+            )
+        self._print(footer)
 
     def _report_total_timings(self):
         """Print the total timings for each operation."""
@@ -1032,12 +1086,31 @@ class Pipeline:
             self.n_galaxies_per_rank = self.comm.allgather(
                 self.n_galaxies_local
             )
+            self.n_galaxies_offset = sum(self.n_galaxies_per_rank[: self.rank])
         else:
             self.n_galaxies = self.n_galaxies_local
+            self.n_galaxies_per_rank = [self.n_galaxies_local]
+            self.n_galaxies_offset = 0
 
         # If we have MPI lets report the balance
         if self.using_mpi:
             self._report_balance()
+
+        # Report the galaxy memory footprint (in MPI land we'll report
+        # the total and local memory usage)
+        if self.using_mpi:
+            self._print(
+                "Local galaxies memory footprint:"
+                f" {self.galaxies_memory_usage:.2f} MB"
+            )
+            self._print(
+                "Distributed galaxies total memory footprint:"
+                f" {self.all_galaxies_memory_usage:.2f} MB"
+            )
+        else:
+            self._print(
+                f"Galaxies memory footprint: {self.galaxy_memory_usage:.2f} MB"
+            )
 
         # Done!
         self._loaded_galaxies = True
