@@ -1,5 +1,6 @@
 """A submodule with helpers for writing out Synthesizer pipeline results."""
 
+import sys
 from functools import lru_cache
 
 import numpy as np
@@ -375,3 +376,65 @@ def get_dataset_properties(data, comm, root=0):
         units[path] = str(d.units)
 
     return shapes, dtypes, units, out_paths
+
+
+import sys
+from collections.abc import Mapping
+
+import numpy as np
+
+
+def get_full_memory(obj, seen=None):
+    """
+    Estimate memory usage of a Python object, including NumPy arrays.
+
+    Args:
+        obj: The object to inspect.
+        seen: Set of seen object ids to avoid double-counting.
+
+    Returns:
+        int: Approximate size in bytes.
+    """
+    if seen is None:
+        seen = set()
+
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    seen.add(obj_id)
+
+    size = 0
+
+    # NumPy arrays — very important to check early
+    if isinstance(obj, np.ndarray):
+        return obj.nbytes + sys.getsizeof(obj)
+
+    # Built-in container types
+    elif isinstance(obj, Mapping):
+        size += sys.getsizeof(obj)
+        for k, v in obj.items():
+            size += get_full_memory(k, seen)
+            size += get_full_memory(v, seen)
+
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        size += sys.getsizeof(obj)
+        for item in obj:
+            size += get_full_memory(item, seen)
+
+    # Objects with __dict__
+    elif hasattr(obj, "__dict__"):
+        size += sys.getsizeof(obj)
+        size += get_full_memory(vars(obj), seen)
+
+    # Objects with __slots__
+    elif hasattr(obj, "__slots__"):
+        size += sys.getsizeof(obj)
+        for slot in obj.__slots__:
+            if hasattr(obj, slot):
+                size += get_full_memory(getattr(obj, slot), seen)
+
+    else:
+        # Fallback: include basic object size
+        size += sys.getsizeof(obj)
+
+    return size

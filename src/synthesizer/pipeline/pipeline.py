@@ -31,7 +31,6 @@ Example usage:
 import time
 
 import numpy as np
-from pympler import asizeof
 from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
@@ -42,6 +41,7 @@ from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
     count_and_check_dict_recursive,
+    get_full_memory,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
@@ -604,7 +604,7 @@ class Pipeline:
         Return the memory usage of the various results stored on the Pipeline.
 
         Returns:
-            float: The memory usage in Gigabytes.
+            float: The memory usage in Megabytes.
         """
         results = [
             self.sfzhs,
@@ -629,7 +629,27 @@ class Pipeline:
             self.spectroscopy,
         ]
 
-        return asizeof.asizeof(results) / (1024**2)
+        return get_full_memory(results) / (1024**2)
+
+    @property
+    def galaxies_memory_usage(self):
+        """
+        Return the memory usage of the galaxies loaded into the Pipeline.
+
+        Returns:
+            float: The memory usage in Megabytes.
+        """
+        return get_full_memory(self.galaxies) / (1024**2)
+
+    @property
+    def memory_usage(self):
+        """
+        Return the memory usage of the Pipeline object.
+
+        Returns:
+            float: The memory usage in Megabytes.
+        """
+        return get_full_memory(self) / (1024**2)
 
     def _print_progress_header(self):
         """Print the header for the progress report."""
@@ -653,6 +673,10 @@ class Pipeline:
             + f"{'Nbh':>{self._table_col_width}}"
             + "|"
             + f"{'dt (s)':>{self._table_col_width}}"
+            + "|"
+            + f"{'Memory footprint (MB)':>{self._table_col_width * 2}}"
+            + "|"
+            + f"{'Galaxy memory (MB)':>{self._table_col_width * 2}}"
             + "|"
             + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
             + "|"
@@ -684,7 +708,11 @@ class Pipeline:
 
         nbh = gal.black_holes.nbh if gal.black_holes is not None else "None"
         elapsed = time.perf_counter() - start
-        mem_mb = self.results_memory_usage
+        s = time.perf_counter()
+        res_mem_mb = self.results_memory_usage
+        self_mem_mb = self.memory_usage
+        gal_mem_mb = self.galaxies_memory_usage
+        print("Getting table memory", time.perf_counter() - s)
 
         # In MPI land we need to add the offset to this ranks galaxy index
         if self.using_mpi:
@@ -728,7 +756,11 @@ class Pipeline:
             + "|"
             + f"{elapsed:>{self._table_col_width}.2f}"
             + "|"
-            + f"{mem_mb:>{self._table_col_width * 2}.2f}"
+            + f"{self_mem_mb:>{self._table_col_width * 2}.2f}"
+            + "|"
+            + f"{gal_mem_mb:>{self._table_col_width * 2}.2f}"
+            + "|"
+            + f"{res_mem_mb:>{self._table_col_width * 2}.2f}"
             + "|",
         )
 
@@ -743,6 +775,10 @@ class Pipeline:
             + "-" * self._table_col_width
             + "+"
             + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width * 2
+            + "+"
+            + "-" * self._table_col_width * 2
             + "+"
             + "-" * self._table_col_width * 2
             + "+"
