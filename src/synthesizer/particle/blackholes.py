@@ -30,7 +30,7 @@ from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import value_to_array
+from synthesizer.utils import scalar_to_array
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -176,13 +176,13 @@ class BlackHoles(Particles, BlackholesComponent):
         """
 
         # Handle singular values being passed (arrays are just returned)
-        masses = value_to_array(masses)
-        accretion_rates = value_to_array(accretion_rates)
-        epsilons = value_to_array(epsilons)
-        inclinations = value_to_array(inclinations)
-        spins = value_to_array(spins)
-        metallicities = value_to_array(metallicities)
-        smoothing_lengths = value_to_array(smoothing_lengths)
+        masses = scalar_to_array(masses)
+        accretion_rates = scalar_to_array(accretion_rates)
+        epsilons = scalar_to_array(epsilons)
+        inclinations = scalar_to_array(inclinations)
+        spins = scalar_to_array(spins)
+        metallicities = scalar_to_array(metallicities)
+        smoothing_lengths = scalar_to_array(smoothing_lengths)
 
         # Instantiate parents
         Particles.__init__(
