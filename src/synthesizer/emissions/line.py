@@ -27,7 +27,7 @@ Example usages::
     lines.get_flux(cosmo, z=0.1)
 
     # Get the flux of the lines at redshift z=0.1 with IGM absorption
-    lines.get_flux(cosmo, z=0.1, igm=Inoue14())
+    lines.get_flux(cosmo, z=0.1, igm=Inoue14)
 
     # Get a ratio
     lines.get_ratio("R23")

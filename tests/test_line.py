@@ -326,7 +326,7 @@ class TestLineCollectionFlux:
 
         # Get flux with and without IGM
         flux_no_igm = lines.get_flux(cosmo, z)
-        flux_with_igm = lines.get_flux(cosmo, z, igm=Inoue14())
+        flux_with_igm = lines.get_flux(cosmo, z, igm=Inoue14)
 
         # IGM should reduce the flux
         assert np.all(flux_with_igm <= flux_no_igm)
