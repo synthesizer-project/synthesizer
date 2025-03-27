@@ -1501,7 +1501,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Luminosities"] += time.perf_counter() - start
 
-    def get_photometry_fluxes(self):
+    def get_photometry_fluxes(self, cosmo=None, igm=None):
         """
         Flag that the Pipeline should compute the photometric fluxes.
 
@@ -1510,6 +1510,17 @@ class Pipeline:
 
         The photometric fluxes are generated based on the fnu spectra and the
         instrument filters.
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the cosmology to compute the observed spectra
+                first. Default is None.
+            igm (IGMBase):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the IGM model to compute the observed spectra
+                first. Unlike the cosmology, this is not required if IGM
+                attenuation is not needed. Default is None.
         """
         # Ensure we have filters to compute the photometry
         if len(self.filters) == 0:
@@ -1526,6 +1537,23 @@ class Pipeline:
         # computed
         self._do_fnu_spectra = True
         self._do_lnu_spectra = True
+
+        # Ensure we have a cosmology if we need to compute the observed spectra
+        # and get_spectra_observed has not been called
+        if (
+            "get_observed_spectra" not in self._operation_kwargs
+            and cosmo is None
+        ):
+            raise exceptions.PipelineNotReady(
+                "Cannot generate fluxes without an astropy.cosmology object, "
+                "please pass one to the cosmo argument of "
+                "get_photometry_fluxes."
+            )
+        elif "get_observed_spectra" not in self._operation_kwargs:
+            self._operation_kwargs["get_observed_spectra"] = {
+                "cosmo": cosmo,
+                "igm": igm,
+            }
 
         # Flag that we will want to write out the photometric fluxes (calling
         # the get_photometry_fluxes method is considered the intent to write it
@@ -1649,7 +1677,7 @@ class Pipeline:
             time.perf_counter() - start
         )
 
-    def get_observed_lines(self, cosmo, igm=Inoue14):
+    def get_observed_lines(self, cosmo, igm=Inoue14, line_ids=None):
         """
         Flag that the Pipeline should compute the observed emission lines.
 
@@ -1665,6 +1693,9 @@ class Pipeline:
             igm (IGMBase):
                 The IGM model to use for the observed emission lines. Default
                 is Inoue14.
+            line_ids (list):
+                If get_lines has not been called explicitly, then we will need
+                the line IDs to generate the emission lines. Default is None.
         """
         # Store the cosmology for the operation
         self._operation_kwargs["get_observed_lines"] = {
@@ -1680,6 +1711,17 @@ class Pipeline:
         # to be computed
         self._do_lum_lines = True
         self._do_lnu_spectra = True
+
+        # Ensure we have line IDs if we need to compute the emission lines and
+        # get_lines has not been called
+        if "get_lines" not in self._operation_kwargs and line_ids is None:
+            raise exceptions.PipelineNotReady(
+                "Cannot generate observed lines without line IDs, "
+                "please pass a list of line IDs to the line_ids argument of "
+                "get_observed_lines."
+            )
+        elif "get_lines" not in self._operation_kwargs:
+            self._operation_kwargs["get_lines"] = {"line_ids": line_ids}
 
         # Flag that we will want to write out the observed emission lines
         # (calling the get_observed_lines method is considered the intent to
@@ -1837,7 +1879,13 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Luminosity Images"] += time.perf_counter() - start
 
-    def get_images_luminosity_psfs(self):
+    def get_images_luminosity_psfs(
+        self,
+        fov=None,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+    ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
 
@@ -1849,6 +1897,24 @@ class Pipeline:
 
         Instruments must have PSFs defined on them for this method to do
         anything.
+
+        Args:
+            fov (unyt_quantity):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the field of view of the image with units. Default
+                is None.
+            img_type (str):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the type of image to generate. Options are
+                'smoothed' or 'hist'. Default is 'smoothed'.
+            kernel (array-like):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the kernel to use for smoothing the image. Default
+                is None. Required for 'smoothed' images from a particle
+                distribution.
+            kernel_threshold (float):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the threshold of the kernel. Default is 1.0.
         """
         # Flag that we will apply the PSFs to the luminosity images
         self._do_images_lum_psf = True
@@ -1859,6 +1925,46 @@ class Pipeline:
         self._do_images_lum = True
         self._do_luminosities = True
         self._do_lnu_spectra = True
+
+        # Ensure we have the arguments for the operation if
+        # get_images_luminosity has not been called
+        if "get_images_luminosity" not in self._operation_kwargs:
+            self._operation_kwargs["get_images_luminosity"] = {}
+            if fov is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a field of view, please pass "
+                    "one to the fov argument of get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"]["fov"] = fov
+            if img_type is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without an image type, please pass one "
+                    "to the img_type argument of get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"]["img_type"] = (
+                    img_type
+                )
+            if kernel is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel, please pass one to "
+                    "the kernel argument of get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"]["kernel"] = (
+                    kernel
+                )
+            if kernel_threshold is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel threshold, please"
+                    " pass one to the kernel_threshold argument of "
+                    "get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"][
+                    "kernel_threshold"
+                ] = kernel_threshold
 
         # Flag that we will want to write out the luminosity images with PSFs
         # (calling the get_images_luminosity_psfs method is considered the
@@ -1950,6 +2056,8 @@ class Pipeline:
         img_type="smoothed",
         kernel=None,
         kernel_threshold=1.0,
+        cosmo=None,
+        igm=None,
     ):
         """
         Flag that the Pipeline should compute the flux images.
@@ -1971,6 +2079,15 @@ class Pipeline:
                 Required for 'smoothed' images from a particle distribution.
             kernel_threshold (float):
                 The threshold of the kernel. Default is 1.0.
+            cosmo (astropy.cosmology.Cosmology):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the cosmology to compute the observed spectra
+                first. Default is None.
+            igm (IGMBase):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the IGM model to compute the observed spectra
+                first. Unlike the cosmology, this is not required if IGM
+                attenuation is not needed. Default is None.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_flux"] = {
@@ -1987,6 +2104,23 @@ class Pipeline:
         # fluxes which themselves require the fnu spectra to be computed
         self._do_fluxes = True
         self._do_fnu_spectra = True
+
+        # Ensure we have a cosmology if we need to compute the observed spectra
+        # and get_spectra_observed has not been called
+        if (
+            "get_observed_spectra" not in self._operation_kwargs
+            and cosmo is None
+        ):
+            raise exceptions.PipelineNotReady(
+                "Cannot generate flux images without an astropy.cosmology"
+                " object, please pass one to the cosmo argument of "
+                "get_images_flux."
+            )
+        elif "get_observed_spectra" not in self._operation_kwargs:
+            self._operation_kwargs["get_observed_spectra"] = {
+                "cosmo": cosmo,
+                "igm": igm,
+            }
 
         # Flag that we will want to write out the flux images (calling the
         # get_images_flux method is considered the intent to write it out)
@@ -2042,7 +2176,15 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Flux Images"] += time.perf_counter() - start
 
-    def get_images_flux_psfs(self):
+    def get_images_flux_psfs(
+        self,
+        fov=None,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+        cosmo=None,
+        igm=None,
+    ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
 
@@ -2054,6 +2196,33 @@ class Pipeline:
 
         Instruments must have PSFs defined on them for this method to do
         anything.
+
+        Args:
+            fov (unyt_quantity):
+                If get_images_flux has not been called explicitly, then we will
+                need the field of view of the image with units. Default is
+                None.
+            img_type (str):
+                If get_images_flux has not been called explicitly, then we will
+                need the type of image to generate. Options are 'smoothed' or
+                'hist'. Default is 'smoothed'.
+            kernel (array-like):
+                If get_images_flux has not been called explicitly, then we will
+                need the kernel to use for smoothing the image. Default is
+                None.
+                Required for 'smoothed' images from a particle distribution.
+            kernel_threshold (float):
+                If get_images_flux has not been called explicitly, then we will
+                need the threshold of the kernel. Default is 1.0.
+            cosmo (astropy.cosmology.Cosmology):
+                If get_spectra_observed has not been called explicitly, then we
+                will need the cosmology to compute the observed spectra first.
+                Default is None.
+            igm (IGMBase):
+                If get_spectra_observed has not been called explicitly, then we
+                will need the IGM model to compute the observed spectra first.
+                Unlike the cosmology, this is not required if IGM attenuation
+                is not needed. Default is None.
         """
         # Flag that we will apply the PSFs to the flux images
         self._do_images_flux_psf = True
@@ -2064,6 +2233,61 @@ class Pipeline:
         self._do_images_flux = True
         self._do_fluxes = True
         self._do_fnu_spectra = True
+
+        # Ensure we have the arguments for the operation if get_images_flux has
+        # not been called
+        if "get_images_flux" not in self._operation_kwargs:
+            self._operation_kwargs["get_images_flux"] = {}
+            if fov is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a field of view, please pass "
+                    "one to the fov argument of get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"]["fov"] = fov
+            if img_type is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without an image type, please pass one "
+                    "to the img_type argument of get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"]["img_type"] = (
+                    img_type
+                )
+            if kernel is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel, please pass one to "
+                    "the kernel argument of get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"]["kernel"] = kernel
+            if kernel_threshold is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel threshold, please"
+                    " pass one to the kernel_threshold argument of "
+                    "get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"][
+                    "kernel_threshold"
+                ] = kernel_threshold
+
+        # Ensure we have a cosmology if we need to compute the observed spectra
+        # and get_spectra_observed has not been called
+        if (
+            "get_observed_spectra" not in self._operation_kwargs
+            and cosmo is None
+        ):
+            raise exceptions.PipelineNotReady(
+                "Cannot generate flux images without an astropy.cosmology"
+                " object, please pass one to the cosmo argument of "
+                "get_images_flux_psfs."
+            )
+        elif "get_observed_spectra" not in self._operation_kwargs:
+            self._operation_kwargs["get_observed_spectra"] = {
+                "cosmo": cosmo,
+                "igm": igm,
+            }
 
         # Flag that we will want to write out the flux images (calling the
         # get_images_flux_psfs method is considered the intent to write it out)
