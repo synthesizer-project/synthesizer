@@ -107,7 +107,6 @@ def discover_attr_paths_recursive(obj, prefix="", output_set=None):
     # Otherwise, we have something we need to write out so add the path to
     # the set
     else:
-        print(prefix)
         output_set.add(prefix.replace(" ", "_"))
 
     return output_set
@@ -318,7 +317,7 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
             d = data
             for k in path.split("/")[:-1]:
                 d = d.setdefault(k, {})
-            d.setdefault(path.split("/")[-1], unyt_array([], "dimensionsless"))
+            d.setdefault(path.split("/")[-1], unyt_array([], "dimensionless"))
 
     return data
 
