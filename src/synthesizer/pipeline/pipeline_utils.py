@@ -1,19 +1,21 @@
 """A submodule with helpers for writing out Synthesizer pipeline results."""
 
+import inspect
 import sys
+from collections.abc import Mapping
 from functools import lru_cache
 
 import numpy as np
-from unyt import unyt_array
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
 from synthesizer.synth_warnings import warn
 
 
-def discover_outputs_recursive(obj, prefix="", output_set=None):
+def discover_attr_paths_recursive(obj, prefix="", output_set=None):
     """
-    Recursively discover all outputs attached to a galaxy.
+    Recursively discover all outputs attached to an object.
 
     This function will collate all paths to attributes at any level within
     the input object.
@@ -27,6 +29,9 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
 
     If the object is a "value" (i.e. an array or a scalar), we will append
     the full path to the output list.
+
+    NOTE: this function is currently unused but is kept for debugging purposes
+    since it is extremely useful to see the nesting of attributes on objects.
 
     Args:
         obj (dict):
@@ -43,19 +48,31 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
     # If the obj is a dictionary, loop over the keys and values and recurse
     if isinstance(obj, dict):
         for k, v in obj.items():
-            output_set = discover_outputs_recursive(
+            output_set = discover_attr_paths_recursive(
                 v,
                 prefix=f"{prefix}/{k}",
                 output_set=output_set,
             )
 
-    # If the obj is a class instance, loop over the attributes and recurse
-    elif hasattr(obj, "__dict__"):
-        for k, v in obj.__dict__.items():
-            # # Skip callables as long as not a property
-            # if callable(v) and not isinstance(v, property):
-            #     continue
+    # If it's a class instance and not a leaf type
+    elif hasattr(obj, "__class__") and not isinstance(
+        obj, (unyt_array, unyt_quantity, np.ndarray, str, bool, int, float)
+    ):
+        members = inspect.getmembers(
+            obj.__class__, lambda a: isinstance(a, property)
+        )
+        prop_names = {name for name, _ in members}
 
+        # Collect public instance attributes if the object has a __dict__
+        # attribute
+        if hasattr(obj, "__dict__"):
+            keys = set(vars(obj).keys())
+        else:
+            # Otherwise, just collect the property names
+            keys = set()
+        keys.update(prop_names)
+
+        for k in keys:
             # Handle Quantity objects
             if hasattr(obj, k[1:]):
                 k = k[1:]
@@ -64,8 +81,16 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
             if k.startswith("_"):
                 continue
 
-            # Recurse
-            output_set = discover_outputs_recursive(
+            try:
+                v = getattr(obj, k)
+            except Exception:
+                continue  # Skip properties that raise errors
+
+            # Skip if None
+            if v is None:
+                continue
+
+            discover_attr_paths_recursive(
                 v,
                 prefix=f"{prefix}/{k}",
                 output_set=output_set,
@@ -82,42 +107,8 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
     # Otherwise, we have something we need to write out so add the path to
     # the set
     else:
+        print(prefix)
         output_set.add(prefix.replace(" ", "_"))
-
-    return output_set
-
-
-def discover_outputs(galaxies):
-    """
-    Recursively discover all outputs attached to a galaxy.
-
-    This function will collate all paths to attributes at any level within
-    the input object.
-
-    If the object is a dictionary, we will loop over all keys and values
-    recursing where appropriate.
-
-    If the object is a class instance (e.g. Galaxy, Stars,
-    ImageCollection, etc.), we will loop over all attributes and
-    recurse where appropriate.
-
-    If the object is a "value" (i.e. an array or a scalar), we will append
-    the full path to the output list.
-
-    Args:
-        galaxy (dict):
-            The dictionary to search.
-        prefix (str):
-            A prefix to add to the keys of the arrays.
-        output (dict):
-            A dictionary to store the output paths in.
-    """
-    # Set up the set to hold the global output paths
-    output_set = set()
-
-    # Loop over the galaxies and recursively discover the outputs
-    for galaxy in galaxies:
-        output_set = discover_outputs_recursive(galaxy, output_set=output_set)
 
     return output_set
 
@@ -376,12 +367,6 @@ def get_dataset_properties(data, comm, root=0):
         units[path] = str(d.units)
 
     return shapes, dtypes, units, out_paths
-
-
-import sys
-from collections.abc import Mapping
-
-import numpy as np
 
 
 def get_full_memory(obj, seen=None):
