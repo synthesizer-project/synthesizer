@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from scipy import signal
 from unyt import (
     Hz,
     Mpc,
@@ -31,10 +32,13 @@ from synthesizer.emission_models.attenuation import Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid, Template
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.instruments.filters import UVJ
+from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric.stars import Stars as ParametricStars
-from synthesizer.particle import BlackHoles, Gas, Stars
+from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
 from synthesizer.photometry import PhotometryCollection
+from synthesizer.pipeline import Pipeline
 
 # ================================== GRID =====================================
 
@@ -218,30 +222,6 @@ def unit_emission_stars():
 
 
 @pytest.fixture
-def particle_gas_A():
-    """Return a particle Gas object."""
-    return Gas(
-        masses=np.array([1.0, 2.0, 3.0]) * 1e6 * Msun,
-        metallicities=np.array([0.01, 0.02, 0.03]),
-        redshift=1.0,
-        coordinates=np.random.rand(3, 3) * Mpc,
-        dust_to_metal_ratio=0.3,
-    )
-
-
-@pytest.fixture
-def particle_gas_B():
-    """Return a particle Gas object."""
-    return Gas(
-        masses=np.array([4.0, 5.0, 6.0, 7.0]) * 1e6 * Msun,
-        metallicities=np.array([0.04, 0.05, 0.06, 0.07]),
-        redshift=1.0,
-        coordinates=np.random.rand(4, 3) * Mpc,
-        dust_to_metal_ratio=0.3,
-    )
-
-
-@pytest.fixture
 def random_part_stars():
     """Return a particle Stars object with velocities."""
     # Randomly generate the attribute we'll need for the stars
@@ -268,6 +248,7 @@ def random_part_stars():
         * km
         / s
     )
+    smls = np.random.uniform(0.1, 1, nstars) * Mpc
 
     return Stars(
         initial_masses=initial_masses,
@@ -277,6 +258,7 @@ def random_part_stars():
         tau_v=tau_v,
         coordinates=coordinates,
         velocities=velocities,
+        smoothing_lengths=smls,
     )
 
 
@@ -302,6 +284,71 @@ def single_star_parametric(test_grid):
         sf_hist=1e7 * yr,
         metal_dist=0.01,
         initial_mass=1 * Msun,
+    )
+
+
+# ================================= GAS =======================================
+
+
+@pytest.fixture
+def particle_gas_A():
+    """Return a particle Gas object."""
+    return Gas(
+        masses=np.array([1.0, 2.0, 3.0]) * 1e6 * Msun,
+        metallicities=np.array([0.01, 0.02, 0.03]),
+        redshift=1.0,
+        coordinates=np.random.rand(3, 3) * Mpc,
+        dust_to_metal_ratio=0.3,
+    )
+
+
+@pytest.fixture
+def particle_gas_B():
+    """Return a particle Gas object."""
+    return Gas(
+        masses=np.array([4.0, 5.0, 6.0, 7.0]) * 1e6 * Msun,
+        metallicities=np.array([0.04, 0.05, 0.06, 0.07]),
+        redshift=1.0,
+        coordinates=np.random.rand(4, 3) * Mpc,
+        dust_to_metal_ratio=0.3,
+    )
+
+
+@pytest.fixture
+def random_particle_gas():
+    """Return a particle Gas object with velocities."""
+    # Randomly generate the attribute we'll need for the gas
+    ngas = np.random.randint(1, 10)
+    masses = np.random.uniform(0.1, 10, ngas) * 1e6 * Msun
+    metallicities = np.random.uniform(0.01, 0.1, ngas)
+    redshift = np.random.randint(0, 10)
+    coordinates = (
+        np.random.normal(
+            0,
+            np.random.rand(1) * 100,
+            (ngas, 3),
+        )
+        * Mpc
+    )
+    velocities = (
+        np.random.normal(
+            np.random.uniform(-100, 100),
+            np.random.rand(1) * 200,
+            (ngas, 3),
+        )
+        * km
+        / s
+    )
+    smls = np.random.uniform(0.1, 1, ngas) * Mpc
+
+    return Gas(
+        masses=masses,
+        metallicities=metallicities,
+        redshift=redshift,
+        coordinates=coordinates,
+        velocities=velocities,
+        dust_to_metal_ratio=0.3,
+        smoothing_lengths=smls,
     )
 
 
@@ -341,13 +388,192 @@ def single_particle_black_hole_scalars():
     )
 
 
+@pytest.fixture
+def random_particle_black_hole():
+    """Return a particle BlackHole object with velocities."""
+    # Randomly generate the attribute we'll need for the black holes
+    nblackholes = np.random.randint(1, 5)
+    masses = np.random.uniform(0.1, 10, nblackholes) * 1e6 * Msun
+    accretion_rates = np.random.uniform(0.1, 10, nblackholes) * Msun / yr
+    redshift = np.random.randint(0, 10)
+    coordinates = (
+        np.random.normal(
+            0,
+            np.random.rand(1) * 100,
+            (nblackholes, 3),
+        )
+        * Mpc
+    )
+    velocities = (
+        np.random.normal(
+            np.random.uniform(-100, 100),
+            np.random.rand(1) * 200,
+            (nblackholes, 3),
+        )
+        * km
+        / s
+    )
+    smls = np.random.uniform(0.1, 1, nblackholes) * Mpc
+
+    return BlackHoles(
+        masses=masses,
+        accretion_rates=accretion_rates,
+        redshift=redshift,
+        coordinates=coordinates,
+        velocities=velocities,
+        smoothing_lengths=smls,
+    )
+
+
+# ================================= GALAXIES ==================================
+
+
+@pytest.fixture
+def random_particle_galaxy(
+    random_particle_gas,
+    random_part_stars,
+    random_particle_black_hole,
+):
+    """Return a particle Galaxy object with random particles."""
+    # Unify the redshifts of the component
+    redshift = random_part_stars.redshift
+    random_particle_gas.redshift = redshift
+    random_particle_black_hole.redshift = redshift
+    centre = random_part_stars.coordinates.mean(axis=0)
+    return Galaxy(
+        stars=random_part_stars,
+        gas=random_particle_gas,
+        black_holes=random_particle_black_hole,
+        redshift=redshift,
+        centre=centre,
+    )
+
+
+@pytest.fixture
+def list_of_random_particle_galaxies(random_particle_galaxy):
+    """Return a list of particle Galaxy objects with random particles."""
+    # Unify the redshifts of the component
+    return [random_particle_galaxy for _ in range(3)]
+
+
 # ================================ FILTERS ====================================
 
 
 @pytest.fixture
-def filters_UVJ(test_grid):
+def filters_UVJ(lam):
     """Return a dictionary of UVJ filters."""
-    return UVJ(new_lam=test_grid.lam)
+    return UVJ(new_lam=lam)
+
+
+@pytest.fixture
+def nircam_filters(lam):
+    """Return a dictionary of NIRCam filters."""
+    return FilterCollection(
+        filter_codes=[
+            f"JWST/NIRCam.{f}"
+            for f in ["F090W", "F150W", "F200W", "F277W", "F356W", "F444W"]
+        ],
+        new_lam=lam,
+    )
+
+
+# =============================== INSTRUMENTS =================================
+
+
+@pytest.fixture
+def uvj_instrument(filters_UVJ):
+    """Return a UVJ instrument object."""
+    return Instrument("UVJ", filters=filters_UVJ)
+
+
+@pytest.fixture
+def nircam_instrument(nircam_filters):
+    """Return a NIRCAM instrument object."""
+    # Create a fake PSF for each filter
+    psf = np.outer(
+        signal.windows.gaussian(100, 3),
+        signal.windows.gaussian(100, 3),
+    )
+    return Instrument(
+        "JWST",
+        filters=nircam_filters,
+        resolution=1 * Mpc,
+        psfs={f: psf for f in nircam_filters.filter_codes},
+    )
+
+
+@pytest.fixture
+def spectroscopy_instrument(test_grid):
+    """Return a generic spectroscopy instrument object."""
+    return Instrument("GenericSpec", lam=test_grid.lam)
+
+
+@pytest.fixture
+def spatial_spec_instrument(test_grid):
+    """Return a generic spatial spectroscopy instrument object."""
+    return Instrument("GenericIFU", lam=test_grid.lam, resolution=1 * Mpc)
+
+
+@pytest.fixture
+def spectroscopy_instruments(spectroscopy_instrument, spatial_spec_instrument):
+    """Return a dictionary of spectroscopy instruments."""
+    return spectroscopy_instrument + spatial_spec_instrument
+
+
+@pytest.fixture
+def uvj_nircam_insts(uvj_instrument, nircam_instrument):
+    """Return a dictionary of UVJ and NIRCAM instruments."""
+    return uvj_instrument + nircam_instrument
+
+
+# ================================ PIPELINE ===================================
+
+
+@pytest.fixture
+def base_pipeline(uvj_nircam_insts, nebular_emission_model):
+    """Return an empty pipeline."""
+    return Pipeline(
+        emission_model=nebular_emission_model,
+        instruments=uvj_nircam_insts,
+        nthreads=1,
+        verbose=0,
+    )
+
+
+@pytest.fixture
+def pipeline_with_galaxies(
+    uvj_nircam_insts,
+    nebular_emission_model,
+    list_of_random_particle_galaxies,
+):
+    """Return an empty pipeline."""
+    p = Pipeline(
+        emission_model=nebular_emission_model,
+        instruments=uvj_nircam_insts,
+        nthreads=1,
+        verbose=0,
+    )
+    p.add_galaxies(list_of_random_particle_galaxies)
+    return p
+
+
+@pytest.fixture
+def pipeline_with_galaxies_per_particle(
+    uvj_nircam_insts,
+    nebular_emission_model,
+    list_of_random_particle_galaxies,
+):
+    """Return an empty pipeline."""
+    # Make the emisison model per particle
+    nebular_emission_model.set_per_particle(True)
+    p = Pipeline(
+        emission_model=nebular_emission_model,
+        instruments=uvj_nircam_insts,
+        nthreads=1,
+        verbose=0,
+    )
+    p.add_galaxies(list_of_random_particle_galaxies)
+    return p
 
 
 # ================================ SPECTRA ====================================
@@ -397,3 +623,13 @@ def multi_dimension_line_collection():
 def line_ratio_collection(test_grid):
     """Return a LineCollection with lines needed for common ratios."""
     return test_grid.get_lines((1, 1))
+
+
+# ================================== KERNEL ===================================
+
+
+@pytest.fixture
+def kernel():
+    """Return a Kernel object."""
+    sph_kernel = Kernel()
+    return sph_kernel.get_kernel()

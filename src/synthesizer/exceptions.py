@@ -282,6 +282,19 @@ class MissingImage(Exception):
             return "Image not yet created!"
 
 
+class MissingModelSettings(Exception):
+    """Exception class for when a model is missing settings."""
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        return "Model is missing settings!"
+
+
 class WavelengthOutOfRange(Exception):
     """
     Exception class for when a wavelength is not accessible to

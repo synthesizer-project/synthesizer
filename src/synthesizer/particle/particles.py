@@ -167,10 +167,10 @@ class Particles:
             "The `particle_photo_fluxes` attribute is deprecated. Use "
             "`particle_photo_fnu` instead. Will be removed in v1.0.0"
         )
-        return self.photo_fnu
+        return self.particle_photo_fnu
 
     @property
-    def photo_luminosities(self):
+    def particle_photo_luminosities(self):
         """
         Get the photometry luminosities.
 
@@ -182,7 +182,7 @@ class Particles:
             "The `particle_photo_luminosities` attribute is deprecated. Use "
             "`particle_photo_lnu` instead. Will be removed in v1.0.0"
         )
-        return self.photo_lnu
+        return self.particle_photo_lnu
 
     @property
     def centered_coordinates(self):
