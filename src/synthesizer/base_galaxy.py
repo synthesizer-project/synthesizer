@@ -96,6 +96,16 @@ class BaseGalaxy:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+        # If the centre has been provided then we need to make sure all our
+        # components agree
+        if centre is not None:
+            if self.stars is not None:
+                self.stars.centre = centre
+            if self.gas is not None:
+                self.gas.centre = centre
+            if self.black_holes is not None:
+                self.black_holes.centre = centre
+
     @property
     def photo_fluxes(self):
         """
