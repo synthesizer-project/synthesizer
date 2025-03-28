@@ -23,6 +23,7 @@ from synthesizer.grid import Template
 from synthesizer.imaging.image_collection import (
     _generate_image_collection_generic,
 )
+from synthesizer.parametric import BlackHole
 
 
 class Extraction:
@@ -132,7 +133,7 @@ class Extraction:
                 this_model.grid,
                 this_model.extract,
             )
-        elif emitter.is_parametric:
+        elif emitter.is_parametric and not isinstance(emitter, BlackHole):
             extractor = IntegratedParametricExtractor(
                 this_model.grid,
                 this_model.extract,
@@ -252,7 +253,7 @@ class Extraction:
                 this_model.grid,
                 this_model.extract,
             )
-        elif emitter.is_parametric:
+        elif emitter.is_parametric and not isinstance(emitter, BlackHole):
             extractor = IntegratedParametricExtractor(
                 this_model.grid,
                 this_model.extract,
