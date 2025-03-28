@@ -177,9 +177,9 @@ class Pipeline:
 
         # Check if it's a single instrument
         if isinstance(instruments, Instrument):
-            # mock up an InstrumentCollection
+            # Mock up an InstrumentCollection
             collection = InstrumentCollection()
-            collection.add_instruments(self, instruments)
+            collection.add_instruments(instruments)
             self.instruments = collection
         else:
             self.instruments = instruments
@@ -216,7 +216,7 @@ class Pipeline:
         # on an instrument-by-instrument basis (e.g. check resolution are
         # the same for imaging, wavelength arrays for spectroscopy etc.).
         self.filters = FilterCollection()
-        for inst in instruments:
+        for inst in self.instruments:
             if inst.can_do_photometry:
                 self.filters += inst.filters
 
@@ -374,6 +374,8 @@ class Pipeline:
 
     def _say_hello(self):
         """Print a nice welcome."""
+        if self.verbose == 0:
+            return
         print()
         print("\n".join([" " * 25 + s for s in Art.galaxy.split("\n")]))
         print()
@@ -1343,7 +1345,7 @@ class Pipeline:
         Spectral flux densities can be computed with get_observed_spectra.
         """
         # Flag that we will compute the spectra
-        self._do_lnu_spectra
+        self._do_lnu_spectra = True
 
         # Flag that we will want to write out the spectra (calling the
         # get_spectra method is considered the intent to write it out)
@@ -2466,11 +2468,11 @@ class Pipeline:
 
         # Do we need to unpack the SFZH?
         if self._write_sfzh:
-            self.sfzhs.append(galaxy.sfzh)
+            self.sfzhs.append(galaxy.stars.sfzh)
 
         # Do we need to unpack the SFH?
         if self._write_sfh:
-            self.sfhs.append(galaxy.sfh)
+            self.sfhs.append(galaxy.stars.sfh)
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
@@ -2691,8 +2693,9 @@ class Pipeline:
                             ).setdefault(f, []).append(img.arr * img.units)
 
         # Do we need to unpack the extra analysis results?
-        for key, res in galaxy._extra_analysis_results.items():
-            self._analysis_results[key].append(res)
+        if hasattr(galaxy, "_extra_analysis_results"):
+            for key, res in galaxy._extra_analysis_results.items():
+                self._analysis_results[key].append(res)
 
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
@@ -2728,9 +2731,21 @@ class Pipeline:
         # Ensure we have at least one operation signalled
         signals = [
             self._do_los_optical_depths,
-            self._do_sfzh,
             self._do_lnu_spectra,
             self._do_fnu_spectra,
+            self._do_luminosities,
+            self._do_fluxes,
+            self._do_lum_lines,
+            self._do_flux_lines,
+            self._do_images_lum,
+            self._do_images_lum_psf,
+            self._do_images_flux,
+            self._do_images_flux_psf,
+            self._do_lnu_data_cubes,
+            self._do_fnu_data_cubes,
+            self._do_spectroscopy,
+            self._do_sfzh,
+            self._do_sfh,
         ]
         if not any(signals):
             raise exceptions.PipelineNotReady(
