@@ -5,7 +5,7 @@ from unyt import Myr, kpc
 from synthesizer import exceptions
 from synthesizer.exceptions import InconsistentAddition
 from synthesizer.parametric.stars import Stars as ParaStars
-from synthesizer.particle.stars import Stars
+from synthesizer.particle.stars import Stars, sample_sfzh
 
 
 def test_cant_add_different_types(particle_stars_A, particle_gas_A):
@@ -277,3 +277,56 @@ class TestWeightedAttributes:
                 "FAKE",
                 "not_a_key",
             )
+
+
+class TestSFZHSampling:
+    """Tests for checking SFZH sampling works correctly."""
+
+    def test_sample_sfzh_attrs(self, unit_parametric_stars):
+        """Test that SFZH sampling of ages works correctly."""
+        new_stars = sample_sfzh(
+            unit_parametric_stars.sfzh,
+            unit_parametric_stars.log10ages,
+            unit_parametric_stars.log10metallicities,
+            nstar=100,
+        )
+
+        # Ensure we don't have an non-sensical attributes set
+        assert new_stars.current_masses is None, (
+            "Current masses should be None, we can't say anything about them"
+            " from the parametric stars object"
+        )
+        assert new_stars.coordinates is None, (
+            "Sampled stars should not have coordinates, as they are not "
+            "part of the parametric stars object"
+        )
+
+    def test_sample_sfzh_axes_sampling(self, unit_parametric_stars):
+        """Test that SFZH sampling of ages works correctly."""
+        new_stars = sample_sfzh(
+            unit_parametric_stars.sfzh,
+            unit_parametric_stars.log10ages,
+            unit_parametric_stars.log10metallicities,
+            nstar=100,
+        )
+
+        # Ensure the ages all differ
+        assert (
+            np.unique(new_stars.ages).size > 1
+        ), "Sampled stars should have a range of ages"
+
+        # Ensure the metallicities are all the same (we have fixed metallicity
+        # in the SFZH)
+        assert np.unique(new_stars.metallicities).size == 1, (
+            "Sampled stars should have a single metallicities since "
+            "the parent SFZH has a single metallicity"
+        )
+
+        # Ensure the weighted mean age is the same as the parent SFZH
+        assert np.isclose(
+            unit_parametric_stars.get_mass_weighted_age(),
+            new_stars.get_mass_weighted_age(),
+        ), (
+            "Sampled stars should have the same"
+            " mass weighted age as the parent SFZH"
+        )

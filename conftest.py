@@ -32,6 +32,7 @@ from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid, Template
 from synthesizer.instruments.filters import UVJ
+from synthesizer.parametric import SFH
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle import BlackHoles, Gas, Stars
 from synthesizer.photometry import PhotometryCollection
@@ -300,6 +301,18 @@ def single_star_parametric(test_grid):
         test_grid.log10age,
         test_grid.metallicity,
         sf_hist=1e7 * yr,
+        metal_dist=0.01,
+        initial_mass=1 * Msun,
+    )
+
+
+@pytest.fixture
+def unit_parametric_stars(test_grid):
+    """Return a parametric Stars object with unit masses."""
+    return ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=SFH.Constant(max_age=1e7 * yr),
         metal_dist=0.01,
         initial_mass=1 * Msun,
     )

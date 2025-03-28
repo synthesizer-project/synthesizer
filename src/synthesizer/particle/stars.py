@@ -1644,32 +1644,32 @@ def sample_sfzh(
     Create "fake" stellar particles by sampling a SFZH.
 
     Args:
-        sfhz (array-like, float)
-            The Star Formation Metallicity History grid
-            (from parametric.Stars).
+        sfzh (array-like, float)
+            The Star Formation Metallicity History grid.
         log10ages (array-like, float)
             The log of the SFZH age axis.
         log10metallicities (array-like, float)
             The log of the SFZH metallicities axis.
         nstar (int)
             The number of stellar particles to produce.
-        intial_mass (int)
-            The intial mass of the fake stellar particles.
+        initial_mass (float)
+            The initial mass of the fake stellar particles.
 
     Returns:
         stars (Stars)
             An instance of Stars containing the fake stellar particles.
     """
-    # Normalise the sfhz to produce a histogram (binned in time) between 0
-    # and 1.
+    # Normalize the sfzh to produce a histogram (binned in time)
+    # between 0 and 1.
     hist = sfzh / np.sum(sfzh)
 
-    # Compute the cumaltive distribution function
+    # Compute the cumulative distribution function
     cdf = np.cumsum(hist.flatten())
     cdf = cdf / cdf[-1]
 
-    # Get a random sample from the cdf
-    values = np.random.rand(nstar)
+    # Systematic resampling: generate evenly spaced values in [0, 1]
+    u0 = np.random.rand() / nstar
+    values = u0 + np.arange(nstar) / nstar
     value_bins = np.searchsorted(cdf, values)
 
     # Convert 1D random indices to 2D indices
@@ -1677,19 +1677,19 @@ def sample_sfzh(
         value_bins, (len(log10ages), len(log10metallicities))
     )
 
-    # Extract the sampled ages and metallicites and create an array
+    # Extract the sampled ages and metallicities and create an array
     random_from_cdf = np.column_stack(
         (log10ages[x_idx], log10metallicities[y_idx])
     )
 
     # Extract the individual logged quantities
-    log10ages, log10metallicities = random_from_cdf.T
+    log10ages_sampled, log10metallicities_sampled = random_from_cdf.T
 
     # Instantiate Stars object with extra keyword arguments
     stars = Stars(
         initial_mass * np.ones(nstar),
-        10**log10ages * yr,
-        10**log10metallicities,
+        10**log10ages_sampled * yr,
+        10**log10metallicities_sampled,
         **kwargs,
     )
 
