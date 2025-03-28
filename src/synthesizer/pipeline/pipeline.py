@@ -2007,13 +2007,19 @@ class Pipeline:
                 galaxy.black_holes.images_psf_lnu.setdefault(inst.label, {})
 
             # Apply PSFs to the galaxy level images
-            for spec_type, imgs in galaxy.images_lnu[inst.label].items():
-                galaxy.images_psf_lnu[inst.label][spec_type] = imgs.apply_psfs(
-                    inst.psfs,
-                )
+            if inst.label in galaxy.images_lnu:
+                for spec_type, imgs in galaxy.images_lnu[inst.label].items():
+                    galaxy.images_psf_lnu[inst.label][spec_type] = (
+                        imgs.apply_psfs(
+                            inst.psfs,
+                        )
+                    )
 
             # Apply PSFs to the stars level images
-            if galaxy.stars is not None:
+            if (
+                galaxy.stars is not None
+                and inst.label in galaxy.stars.images_lnu
+            ):
                 for spec_type, imgs in galaxy.stars.images_lnu[
                     inst.label
                 ].items():
@@ -2024,7 +2030,10 @@ class Pipeline:
                     )
 
             # Apply PSFs to the black hole level images
-            if galaxy.black_holes is not None:
+            if (
+                galaxy.black_holes is not None
+                and inst.label in galaxy.black_holes.images_lnu
+            ):
                 for spec_type, imgs in galaxy.black_holes.images_lnu[
                     inst.label
                 ].items():
@@ -2105,6 +2114,7 @@ class Pipeline:
         # To compute the flux images we need to have already computed the
         # fluxes which themselves require the fnu spectra to be computed
         self._do_fluxes = True
+        self._do_lnu_spectra = True
         self._do_fnu_spectra = True
 
         # Ensure we have a cosmology if we need to compute the observed spectra
@@ -2234,6 +2244,7 @@ class Pipeline:
         # also the fnu spectra
         self._do_images_flux = True
         self._do_fluxes = True
+        self._do_lnu_spectra = True
         self._do_fnu_spectra = True
 
         # Ensure we have the arguments for the operation if get_images_flux has
@@ -2293,7 +2304,7 @@ class Pipeline:
 
         # Flag that we will want to write out the flux images (calling the
         # get_images_flux_psfs method is considered the intent to write it out)
-        self._write_images_flux = True
+        self._write_images_flux_psf = True
 
     def _get_images_flux_psfs(self, galaxy):
         """
@@ -2329,13 +2340,19 @@ class Pipeline:
                 galaxy.black_holes.images_psf_fnu.setdefault(inst.label, {})
 
             # Apply PSFs to the galaxy level images
-            for spec_type, imgs in galaxy.images_fnu[inst.label].items():
-                galaxy.images_psf_fnu[inst.label][spec_type] = imgs.apply_psfs(
-                    inst.psfs,
-                )
+            if inst.label in galaxy.images_fnu:
+                for spec_type, imgs in galaxy.images_fnu[inst.label].items():
+                    galaxy.images_psf_fnu[inst.label][spec_type] = (
+                        imgs.apply_psfs(
+                            inst.psfs,
+                        )
+                    )
 
             # Apply PSFs to the stars level images
-            if galaxy.stars is not None:
+            if (
+                galaxy.stars is not None
+                and inst.label in galaxy.stars.images_fnu
+            ):
                 for spec_type, imgs in galaxy.stars.images_fnu[
                     inst.label
                 ].items():
@@ -2346,7 +2363,10 @@ class Pipeline:
                     )
 
             # Apply PSFs to the black hole level images
-            if galaxy.black_holes is not None:
+            if (
+                galaxy.black_holes is not None
+                and inst.label in galaxy.black_holes.images_fnu
+            ):
                 for spec_type, imgs in galaxy.black_holes.images_fnu[
                     inst.label
                 ].items():
