@@ -749,7 +749,7 @@ class Pipeline:
         nbh = gal.black_holes.nbh if gal.black_holes is not None else "None"
 
         # Get the number of gas particles (this should be None for parametric)
-        ngas = gal.gas.ngas if gal.gas is not None else "None"
+        ngas = gal.gas.nparticles if gal.gas is not None else "None"
 
         # Get the elapsed time for this galaxy
         elapsed = time.perf_counter() - start
