@@ -2003,17 +2003,17 @@ class Pipeline:
             # and add the appropriate keys
             if not hasattr(galaxy, "images_psf_lnu"):
                 galaxy.images_psf_lnu = {}
-                galaxy.images_psf_lnu.setdefault(inst.label, {})
+            galaxy.images_psf_lnu.setdefault(inst.label, {})
             if galaxy.stars is not None and not hasattr(
                 galaxy.stars, "images_psf_lnu"
             ):
                 galaxy.stars.images_psf_lnu = {}
-                galaxy.stars.images_psf_lnu.setdefault(inst.label, {})
+            galaxy.stars.images_psf_lnu.setdefault(inst.label, {})
             if galaxy.black_holes is not None and not hasattr(
                 galaxy.black_holes, "images_psf_lnu"
             ):
                 galaxy.black_holes.images_psf_lnu = {}
-                galaxy.black_holes.images_psf_lnu.setdefault(inst.label, {})
+            galaxy.black_holes.images_psf_lnu.setdefault(inst.label, {})
 
             # Apply PSFs to the galaxy level images
             if inst.label in galaxy.images_lnu:
@@ -2336,17 +2336,17 @@ class Pipeline:
             # and add the appropriate keys
             if not hasattr(galaxy, "images_psf_fnu"):
                 galaxy.images_psf_fnu = {}
-                galaxy.images_psf_fnu.setdefault(inst.label, {})
+            galaxy.images_psf_fnu.setdefault(inst.label, {})
             if galaxy.stars is not None and not hasattr(
                 galaxy.stars, "images_psf_fnu"
             ):
                 galaxy.stars.images_psf_fnu = {}
-                galaxy.stars.images_psf_fnu.setdefault(inst.label, {})
+            galaxy.stars.images_psf_fnu.setdefault(inst.label, {})
             if galaxy.black_holes is not None and not hasattr(
                 galaxy.black_holes, "images_psf_fnu"
             ):
                 galaxy.black_holes.images_psf_fnu = {}
-                galaxy.black_holes.images_psf_fnu.setdefault(inst.label, {})
+            galaxy.black_holes.images_psf_fnu.setdefault(inst.label, {})
 
             # Apply PSFs to the galaxy level images
             if inst.label in galaxy.images_fnu:
