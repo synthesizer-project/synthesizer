@@ -1217,9 +1217,10 @@ class Pipeline:
 
         # Count how many optical depths we have generated (1 per particle) and
         # increment the total counts
-        self._op_counts["LOS optical depths"] += (
-            galaxy.stars.nstars + galaxy.black_holes.nbh
-        )
+        if galaxy.stars is not None and galaxy.gas is not None:
+            self._op_counts["LOS optical depths"] += galaxy.stars.nstars
+        if galaxy.black_holes is not None and galaxy.gas is not None:
+            self._op_counts["LOS optical depths"] += galaxy.black_holes.nbh
 
         # Record the time taken
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
