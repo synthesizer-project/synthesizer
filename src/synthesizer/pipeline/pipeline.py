@@ -1180,22 +1180,40 @@ class Pipeline:
         start = time.perf_counter()
 
         # Compute the optical depths for the present components.
-        galaxy.get_stellar_los_tau_v(
-            kappa=self._operation_kwargs["get_los_optical_depths"]["kappa"],
-            kernel=self._operation_kwargs["get_los_optical_depths"]["kernel"],
-            threshold=self._operation_kwargs["get_los_optical_depths"][
-                "kernel_threshold"
-            ],
-            nthreads=self.nthreads,
-        )
-        galaxy.get_black_hole_los_tau_v(
-            kappa=self._operation_kwargs["get_los_optical_depths"]["kappa"],
-            kernel=self._operation_kwargs["get_los_optical_depths"]["kernel"],
-            threshold=self._operation_kwargs["get_los_optical_depths"][
-                "kernel_threshold"
-            ],
-            nthreads=self.nthreads,
-        )
+        if (
+            galaxy.stars is not None
+            and galaxy.gas is not None
+            and galaxy.stars.nstars > 0
+        ):
+            galaxy.get_stellar_los_tau_v(
+                kappa=self._operation_kwargs["get_los_optical_depths"][
+                    "kappa"
+                ],
+                kernel=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel"
+                ],
+                threshold=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel_threshold"
+                ],
+                nthreads=self.nthreads,
+            )
+        if (
+            galaxy.black_holes is not None
+            and galaxy.gas is not None
+            and galaxy.black_holes.nbh > 0
+        ):
+            galaxy.get_black_hole_los_tau_v(
+                kappa=self._operation_kwargs["get_los_optical_depths"][
+                    "kappa"
+                ],
+                kernel=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel"
+                ],
+                threshold=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel_threshold"
+                ],
+                nthreads=self.nthreads,
+            )
 
         # Count how many optical depths we have generated (1 per particle) and
         # increment the total counts
