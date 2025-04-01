@@ -398,7 +398,6 @@ class Particles:
             aperture_radius (float)
                 Radius of spherical aperture in kpc
         """
-
         if self.centre is None:
             raise ValueError(
                 "Centre of particles must be set to use aperture mask."
@@ -424,6 +423,18 @@ class Particles:
             radius (float)
                 The radius of the particle distribution.
         """
+        # Handle special cases
+        if frac == 0:
+            return 0 * self.radii.units
+        elif frac == 1:
+            return np.max(self.radii) * self.radii.units
+        elif self.nparticles == 0:
+            return 0 * self.radii.units
+        elif self.nparticles == 1:
+            return self.radii[0] * frac * self.radii.units
+        elif np.sum(weights) == 0:
+            return 0 * self.radii.units
+
         # Get the radii if not already set
         if self.radii is None:
             self.get_radii()
