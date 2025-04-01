@@ -699,6 +699,8 @@ class Pipeline:
             + "|"
             + f"{'Nstars':>{self._table_col_width}}"
             + "|"
+            + f"{'Ngas':>{self._table_col_width}}"
+            + "|"
             + f"{'Nbh':>{self._table_col_width}}"
             + "|"
             + f"{'dt (s)':>{self._table_col_width}}"
@@ -745,6 +747,9 @@ class Pipeline:
         # Get the number of blackholes (this is automatically 1 for parametric
         # galaxies)
         nbh = gal.black_holes.nbh if gal.black_holes is not None else "None"
+
+        # Get the number of gas particles (this should be None for parametric)
+        ngas = gal.gas.ngas if gal.gas is not None else "None"
 
         # Get the elapsed time for this galaxy
         elapsed = time.perf_counter() - start
@@ -793,6 +798,8 @@ class Pipeline:
             + "|"
             + f"{nstars:>{self._table_col_width}}"
             + "|"
+            + f"{ngas:>{self._table_col_width}}"
+            + "|"
             + f"{nbh:>{self._table_col_width}}"
             + "|"
             + f"{elapsed:>{self._table_col_width}.2f}"
@@ -816,6 +823,8 @@ class Pipeline:
         """Print the footer for the progress report."""
         footer = (
             "+"
+            + "-" * self._table_col_width
+            + "+"
             + "-" * self._table_col_width
             + "+"
             + "-" * self._table_col_width
