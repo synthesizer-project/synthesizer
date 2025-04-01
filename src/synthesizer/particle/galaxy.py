@@ -398,6 +398,7 @@ class Galaxy(BaseGalaxy):
         self,
         kappa,
         kernel,
+        tau_v_attr="tau_v",
         mask=None,
         threshold=1,
         force_loop=0,
@@ -423,6 +424,9 @@ class Galaxy(BaseGalaxy):
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
+            tau_v_attr (str)
+                The attribute to store the tau_v values in the stars object.
+                Defaults to "tau_v".
             mask (bool)
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -475,10 +479,15 @@ class Galaxy(BaseGalaxy):
         # Finalise the calculation
         tau_v = kappa * los_dustsds
 
+        # Apply the mask if provided
+        if mask is not None:
+            tau_vs = np.zeros(self.stars.nparticles)
+            tau_vs[mask] = tau_v
+        else:
+            tau_vs = tau_v
+
         # Store the result in self.stars
-        if self.stars.tau_v is None:
-            self.stars.tau_v = np.zeros(self.stars.nparticles)
-        self.stars.tau_v[mask] = tau_v
+        setattr(self.stars, tau_v_attr, tau_vs)
 
         toc("Calculating stellar LOS tau_v", start)
 
@@ -488,6 +497,7 @@ class Galaxy(BaseGalaxy):
         self,
         kappa,
         kernel,
+        tau_v_attr="tau_v",
         mask=None,
         threshold=1,
         force_loop=0,
@@ -513,6 +523,9 @@ class Galaxy(BaseGalaxy):
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
+            tau_v_attr (str)
+                The attribute to store the tau_v values in the black_holes
+                object. Defaults to "tau_v".
             mask (bool)
                 A mask to be applied to the black holes. Surface densities will
                 only be computed and returned for black holes with True in the
@@ -566,10 +579,15 @@ class Galaxy(BaseGalaxy):
         # Finalise the calculation
         tau_v = kappa * los_dustsds
 
+        # Apply the mask if provided
+        if mask is not None:
+            tau_vs = np.zeros(self.black_holes.nbh)
+            tau_vs[mask] = tau_v
+        else:
+            tau_vs = tau_v
+
         # Store the result in self.black_holes
-        if self.black_holes.tau_v is None:
-            self.black_holes.tau_v = np.zeros(self.black_holes.nbh)
-        self.black_holes.tau_v[mask] = tau_v
+        setattr(self.black_holes, "tau_v", tau_vs)
 
         toc("Calculating black hole LOS tau_v", start)
 
@@ -580,6 +598,7 @@ class Galaxy(BaseGalaxy):
         self,
         kappa,
         kernel,
+        tau_v_attr="tau_v",
         mask=None,
         threshold=1,
         force_loop=0,
@@ -605,6 +624,9 @@ class Galaxy(BaseGalaxy):
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
+            tau_v_attr (str)
+                The attribute to store the tau_v values in the stars object.
+                Defaults to "tau_v".
             mask (bool)
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -657,10 +679,15 @@ class Galaxy(BaseGalaxy):
         # Finalise the calculation
         tau_v = kappa * los_dustsds
 
+        # Apply the mask if provided
+        if mask is not None:
+            tau_vs = np.zeros(self.stars.nparticles)
+            tau_vs[mask] = tau_v
+        else:
+            tau_vs = tau_v
+
         # Store the result in self.stars
-        if self.stars.tau_v is None:
-            self.stars.tau_v = np.zeros(self.stars.nparticles)
-        self.stars.tau_v[mask] = tau_v
+        setattr(self.stars, tau_v_attr, tau_vs)
 
         toc("Calculating LOS tau_v", start)
 

@@ -691,6 +691,7 @@ class Particles:
         other_parts,
         density_attr,
         kernel,
+        column_density_attr=None,
         mask=None,
         threshold=1,
         force_loop=0,
@@ -714,6 +715,10 @@ class Particles:
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
+            column_density_attr (str)
+                The attribute to store the column density in on the Particles
+                instance. If None, the column density will not be stored. By
+                default this is None.
             mask (array-like, bool)
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -750,7 +755,7 @@ class Particles:
             mask = np.ones(self.nparticles, dtype=bool)
 
         # Compute the column density
-        return compute_column_density(
+        col_den = compute_column_density(
             *self._prepare_los_args(
                 other_parts,
                 density_attr,
@@ -762,6 +767,12 @@ class Particles:
                 nthreads,
             )
         )
+
+        # Set the column density attribute (if requested)
+        if column_density_attr is not None:
+            setattr(self, column_density_attr, col_den)
+
+        return col_den
 
     @accepts(phi=rad, theta=rad)
     def rotate_particles(
