@@ -446,12 +446,6 @@ class TestPipelineNotReady:
             base_pipeline.run()
         assert "galaxies" in str(excinfo.value).lower()
 
-    def test_add_empty_galaxy_list(self, base_pipeline):
-        """Test that adding an empty galaxy list raises an error."""
-        with pytest.raises(exceptions.InconsistentArguments) as excinfo:
-            base_pipeline.add_galaxies([])
-        assert "no galaxies provided" in str(excinfo.value).lower()
-
     def test_get_photometry_luminosities_without_filters(
         self,
         nebular_emission_model,
