@@ -3031,10 +3031,11 @@ class Pipeline:
             combined_data = combine_list_of_dicts(res)
 
             # Ensure we have data after combining
-            if len(combined_data) == 0:
+            if len(combined_data) != len(self.galaxies):
                 raise exceptions.BadResult(
                     f"Combining data from extra analysis function {key} "
-                    "resulted in empty list"
+                    "resulted fewer entries than galaxies! Something terrible "
+                    "has happened because this should not be possible."
                 )
 
             # Store the data
