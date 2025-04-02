@@ -1082,9 +1082,7 @@ class Pipeline:
 
         # Check there are actually galaxies...
         if len(galaxies) == 0:
-            raise exceptions.InconsistentArguments(
-                "No galaxies provided to add to the Pipeline."
-            )
+            self._print("No galaxies provided to add to the Pipeline.")
 
         # Attach the galaxies
         self.galaxies = galaxies
