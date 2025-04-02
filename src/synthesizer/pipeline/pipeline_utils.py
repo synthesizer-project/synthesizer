@@ -258,6 +258,8 @@ def combine_list_of_dicts(dicts):
         return unyt_array(values)
 
     def recursive_merge(dict_list):
+        if len(dict_list) == 0:
+            return {}
         if not isinstance(dict_list[0], dict):
             # Base case: combine non-dict leaves
             return combine_values(dict_list)
