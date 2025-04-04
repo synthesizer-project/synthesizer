@@ -1811,6 +1811,7 @@ class Pipeline:
         img_type="smoothed",
         kernel=None,
         kernel_threshold=1.0,
+        spectra_type=None,
     ):
         """
         Flag that the Pipeline should compute the luminosity images.
@@ -1832,6 +1833,10 @@ class Pipeline:
                 Required for 'smoothed' images from a particle distribution.
             kernel_threshold (float):
                 The threshold of the kernel. Default is 1.0.
+            spectra_type (list/str):
+                The type of spectra to generate images for. By default this
+                is None and all spectra types will be used. This can either
+                be a list of strings or a single string.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_luminosity"] = {
@@ -1839,6 +1844,9 @@ class Pipeline:
             "img_type": img_type,
             "kernel": kernel,
             "kernel_threshold": kernel_threshold,
+            "spectra_type": spectra_type
+            if isinstance(spectra_type, list)
+            else [spectra_type],
         }
 
         # Flag that we will compute the luminosity images
@@ -1867,29 +1875,57 @@ class Pipeline:
                 The galaxy to generate the luminosity images for.
         """
         start = time.perf_counter()
+
+        # Unpack the spectra types
+        spectra_types = self._operation_kwargs["get_images_luminosity"][
+            "spectra_type"
+        ]
+
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
             if not inst.can_do_imaging:
                 continue
 
-            # Get the basic images
-            galaxy.get_images_luminosity(
-                resolution=inst.resolution,
-                fov=self._operation_kwargs["get_images_luminosity"]["fov"],
-                emission_model=self.emission_model,
-                img_type=self._operation_kwargs["get_images_luminosity"][
-                    "img_type"
-                ],
-                kernel=self._operation_kwargs["get_images_luminosity"][
-                    "kernel"
-                ],
-                kernel_threshold=self._operation_kwargs[
-                    "get_images_luminosity"
-                ]["kernel_threshold"],
-                nthreads=self.nthreads,
-                instrument=inst,
-            )
+            # Get the basic images for the requested spectra types
+            if spectra_types is None:
+                galaxy.get_images_luminosity(
+                    resolution=inst.resolution,
+                    fov=self._operation_kwargs["get_images_luminosity"]["fov"],
+                    emission_model=self.emission_model,
+                    img_type=self._operation_kwargs["get_images_luminosity"][
+                        "img_type"
+                    ],
+                    kernel=self._operation_kwargs["get_images_luminosity"][
+                        "kernel"
+                    ],
+                    kernel_threshold=self._operation_kwargs[
+                        "get_images_luminosity"
+                    ]["kernel_threshold"],
+                    nthreads=self.nthreads,
+                    instrument=inst,
+                )
+            else:
+                for spec_type in spectra_types:
+                    galaxy.get_images_luminosity(
+                        resolution=inst.resolution,
+                        fov=self._operation_kwargs["get_images_luminosity"][
+                            "fov"
+                        ],
+                        emission_model=self.emission_model,
+                        img_type=self._operation_kwargs[
+                            "get_images_luminosity"
+                        ]["img_type"],
+                        kernel=self._operation_kwargs["get_images_luminosity"][
+                            "kernel"
+                        ],
+                        kernel_threshold=self._operation_kwargs[
+                            "get_images_luminosity"
+                        ]["kernel_threshold"],
+                        nthreads=self.nthreads,
+                        instrument=inst,
+                        limit_to=spec_type,
+                    )
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -1913,6 +1949,7 @@ class Pipeline:
         img_type="smoothed",
         kernel=None,
         kernel_threshold=1.0,
+        spectra_type=None,
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -1943,6 +1980,11 @@ class Pipeline:
             kernel_threshold (float):
                 If get_images_luminosity has not been called explicitly, then
                 we will need the threshold of the kernel. Default is 1.0.
+            spectra_type (list/str):
+                The type of spectra to generate images for. By default this
+                is None and all spectra types will be used. This can either
+                be a list of strings or a single string.
+
         """
         # Flag that we will apply the PSFs to the luminosity images
         self._do_images_lum_psf = True
@@ -1993,6 +2035,11 @@ class Pipeline:
                 self._operation_kwargs["get_images_luminosity"][
                     "kernel_threshold"
                 ] = kernel_threshold
+            self._operation_kwargs["get_images_luminosity"]["spectra_type"] = (
+                spectra_type
+                if isinstance(spectra_type, list)
+                else [spectra_type]
+            )
 
         # Flag that we will want to write out the luminosity images with PSFs
         # (calling the get_images_luminosity_psfs method is considered the
@@ -2093,6 +2140,7 @@ class Pipeline:
         kernel_threshold=1.0,
         cosmo=None,
         igm=None,
+        spectra_type=None,
     ):
         """
         Flag that the Pipeline should compute the flux images.
@@ -2123,6 +2171,10 @@ class Pipeline:
                 we will need the IGM model to compute the observed spectra
                 first. Unlike the cosmology, this is not required if IGM
                 attenuation is not needed. Default is None.
+            spectra_type (list/str):
+                The type of spectra to generate images for. By default this
+                is None and all spectra types will be used. This can either
+                be a list of strings or a single string.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_flux"] = {
@@ -2130,6 +2182,9 @@ class Pipeline:
             "img_type": img_type,
             "kernel": kernel,
             "kernel_threshold": kernel_threshold,
+            "spectra_type": spectra_type
+            if isinstance(spectra_type, list)
+            else [spectra_type],
         }
 
         # Flag that we will compute the flux images
@@ -2176,25 +2231,52 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Unpack the spectra types
+        spectra_types = self._operation_kwargs["get_images_flux"][
+            "spectra_type"
+        ]
+
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
             if not inst.can_do_imaging:
                 continue
 
-            # Get the basic images
-            galaxy.get_images_flux(
-                resolution=inst.resolution,
-                fov=self._operation_kwargs["get_images_flux"]["fov"],
-                emission_model=self.emission_model,
-                img_type=self._operation_kwargs["get_images_flux"]["img_type"],
-                kernel=self._operation_kwargs["get_images_flux"]["kernel"],
-                kernel_threshold=self._operation_kwargs["get_images_flux"][
-                    "kernel_threshold"
-                ],
-                nthreads=self.nthreads,
-                instrument=inst,
-            )
+            # Get the basic images for the requested spectra types
+            if spectra_types is None:
+                galaxy.get_images_flux(
+                    resolution=inst.resolution,
+                    fov=self._operation_kwargs["get_images_flux"]["fov"],
+                    emission_model=self.emission_model,
+                    img_type=self._operation_kwargs["get_images_flux"][
+                        "img_type"
+                    ],
+                    kernel=self._operation_kwargs["get_images_flux"]["kernel"],
+                    kernel_threshold=self._operation_kwargs["get_images_flux"][
+                        "kernel_threshold"
+                    ],
+                    nthreads=self.nthreads,
+                    instrument=inst,
+                )
+            else:
+                for spec_type in spectra_types:
+                    galaxy.get_images_flux(
+                        resolution=inst.resolution,
+                        fov=self._operation_kwargs["get_images_flux"]["fov"],
+                        emission_model=self.emission_model,
+                        img_type=self._operation_kwargs["get_images_flux"][
+                            "img_type"
+                        ],
+                        kernel=self._operation_kwargs["get_images_flux"][
+                            "kernel"
+                        ],
+                        kernel_threshold=self._operation_kwargs[
+                            "get_images_flux"
+                        ]["kernel_threshold"],
+                        nthreads=self.nthreads,
+                        instrument=inst,
+                        limit_to=spec_type,
+                    )
 
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
@@ -2220,6 +2302,7 @@ class Pipeline:
         kernel_threshold=1.0,
         cosmo=None,
         igm=None,
+        spectra_type=None,
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -2259,6 +2342,11 @@ class Pipeline:
                 will need the IGM model to compute the observed spectra first.
                 Unlike the cosmology, this is not required if IGM attenuation
                 is not needed. Default is None.
+            spectra_type (str):
+                The type of spectra to generate images for. By default this is
+                None and all spectra types will be used. This can either be a
+                single string or a list of strings.
+
         """
         # Flag that we will apply the PSFs to the flux images
         self._do_images_flux_psf = True
@@ -2308,6 +2396,11 @@ class Pipeline:
                 self._operation_kwargs["get_images_flux"][
                     "kernel_threshold"
                 ] = kernel_threshold
+            self._operation_kwargs["get_images_flux"]["spectra_type"] = (
+                spectra_type
+                if isinstance(spectra_type, list)
+                else [spectra_type]
+            )
 
         # Ensure we have a cosmology if we need to compute the observed spectra
         # and get_spectra_observed has not been called
