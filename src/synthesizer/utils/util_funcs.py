@@ -474,6 +474,10 @@ def ensure_array_c_compatible_double(arr):
     Args:
         arr (np.ndarray): The input array to be checked.
     """
+    # If the array is None, return it as is
+    if arr is None:
+        return arr
+
     # If we have units we need to strip them off temporarily
     units = None
     if isinstance(arr, (unyt_array, unyt_quantity)):
