@@ -208,7 +208,7 @@ class Particles:
         mets = self.metallicities
         mets[mets == 0.0] = self.metallicity_floor
 
-        return np.log10(mets)
+        return np.log10(mets, dtype=np.float64)
 
     def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
