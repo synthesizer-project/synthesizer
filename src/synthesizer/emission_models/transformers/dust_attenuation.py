@@ -147,6 +147,7 @@ class AttenuationLaw(Transformer):
         label=None,
         figsize=(8, 6),
         show=True,
+        **kwargs,
     ):
         """
         Plot the attenuation curve.
@@ -165,6 +166,8 @@ class AttenuationLaw(Transformer):
                 The size of the figure to create if fig is None.
             show (bool)
                 Whether to show the plot.
+            **kwargs (dict)
+                Keyword arguments to be provided to the `plot` call.
 
         Returns:
             fig, ax
@@ -179,7 +182,7 @@ class AttenuationLaw(Transformer):
         a_V = self.get_tau(lam)
 
         # Plot the transmission curve
-        ax.plot(lam, a_V, label=label)
+        ax.plot(lam, a_V, label=label, **kwargs)
 
         # Add labels
         ax.set_xlabel(r"$\lambda/(\AA)$")
