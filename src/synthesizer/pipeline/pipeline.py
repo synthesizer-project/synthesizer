@@ -1845,7 +1845,7 @@ class Pipeline:
             "kernel": kernel,
             "kernel_threshold": kernel_threshold,
             "spectra_type": spectra_type
-            if isinstance(spectra_type, list)
+            if isinstance(spectra_type, (list, tuple))
             else [spectra_type],
         }
 
@@ -2037,7 +2037,7 @@ class Pipeline:
                 ] = kernel_threshold
             self._operation_kwargs["get_images_luminosity"]["spectra_type"] = (
                 spectra_type
-                if isinstance(spectra_type, list)
+                if isinstance(spectra_type, (list, tuple))
                 else [spectra_type]
             )
 
@@ -2183,7 +2183,7 @@ class Pipeline:
             "kernel": kernel,
             "kernel_threshold": kernel_threshold,
             "spectra_type": spectra_type
-            if isinstance(spectra_type, list)
+            if isinstance(spectra_type, (list, tuple))
             else [spectra_type],
         }
 
@@ -2398,7 +2398,7 @@ class Pipeline:
                 ] = kernel_threshold
             self._operation_kwargs["get_images_flux"]["spectra_type"] = (
                 spectra_type
-                if isinstance(spectra_type, list)
+                if isinstance(spectra_type, (list, tuple))
                 else [spectra_type]
             )
 
