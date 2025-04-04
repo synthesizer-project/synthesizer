@@ -530,6 +530,10 @@ def get_attr_c_compatible_double(obj, attr):
     # Get the attribute from the object
     arr = getattr(obj, attr)
 
+    # Just return it if it's None
+    if arr is None:
+        return arr
+
     # Handle singular floats
     if np.isscalar(arr):
         return np.float64(arr)
