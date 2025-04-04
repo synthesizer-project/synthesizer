@@ -478,6 +478,10 @@ def ensure_array_c_compatible_double(arr):
     if arr is None:
         return arr
 
+    # Convert a list to a numpy array before we move on
+    if isinstance(arr, list):
+        arr = np.array(arr)
+
     # If we have units we need to strip them off temporarily
     units = None
     if isinstance(arr, (unyt_array, unyt_quantity)):
