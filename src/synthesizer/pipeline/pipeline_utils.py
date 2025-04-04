@@ -1,16 +1,21 @@
 """A submodule with helpers for writing out Synthesizer pipeline results."""
 
+import inspect
+import sys
+from collections.abc import Mapping
 from functools import lru_cache
 
-from unyt import unyt_array
+import numpy as np
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.emissions import Sed
 from synthesizer.synth_warnings import warn
 
 
-def discover_outputs_recursive(obj, prefix="", output_set=None):
+def discover_attr_paths_recursive(obj, prefix="", output_set=None):
     """
-    Recursively discover all outputs attached to a galaxy.
+    Recursively discover all outputs attached to an object.
 
     This function will collate all paths to attributes at any level within
     the input object.
@@ -24,6 +29,9 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
 
     If the object is a "value" (i.e. an array or a scalar), we will append
     the full path to the output list.
+
+    NOTE: this function is currently unused but is kept for debugging purposes
+    since it is extremely useful to see the nesting of attributes on objects.
 
     Args:
         obj (dict):
@@ -40,19 +48,31 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
     # If the obj is a dictionary, loop over the keys and values and recurse
     if isinstance(obj, dict):
         for k, v in obj.items():
-            output_set = discover_outputs_recursive(
+            output_set = discover_attr_paths_recursive(
                 v,
                 prefix=f"{prefix}/{k}",
                 output_set=output_set,
             )
 
-    # If the obj is a class instance, loop over the attributes and recurse
-    elif hasattr(obj, "__dict__"):
-        for k, v in obj.__dict__.items():
-            # # Skip callables as long as not a property
-            # if callable(v) and not isinstance(v, property):
-            #     continue
+    # If it's a class instance and not a leaf type
+    elif hasattr(obj, "__class__") and not isinstance(
+        obj, (unyt_array, unyt_quantity, np.ndarray, str, bool, int, float)
+    ):
+        members = inspect.getmembers(
+            obj.__class__, lambda a: isinstance(a, property)
+        )
+        prop_names = {name for name, _ in members}
 
+        # Collect public instance attributes if the object has a __dict__
+        # attribute
+        if hasattr(obj, "__dict__"):
+            keys = set(vars(obj).keys())
+        else:
+            # Otherwise, just collect the property names
+            keys = set()
+        keys.update(prop_names)
+
+        for k in keys:
             # Handle Quantity objects
             if hasattr(obj, k[1:]):
                 k = k[1:]
@@ -61,8 +81,16 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
             if k.startswith("_"):
                 continue
 
-            # Recurse
-            output_set = discover_outputs_recursive(
+            try:
+                v = getattr(obj, k)
+            except Exception:
+                continue  # Skip properties that raise errors
+
+            # Skip if None
+            if v is None:
+                continue
+
+            discover_attr_paths_recursive(
                 v,
                 prefix=f"{prefix}/{k}",
                 output_set=output_set,
@@ -80,41 +108,6 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
     # the set
     else:
         output_set.add(prefix.replace(" ", "_"))
-
-    return output_set
-
-
-def discover_outputs(galaxies):
-    """
-    Recursively discover all outputs attached to a galaxy.
-
-    This function will collate all paths to attributes at any level within
-    the input object.
-
-    If the object is a dictionary, we will loop over all keys and values
-    recursing where appropriate.
-
-    If the object is a class instance (e.g. Galaxy, Stars,
-    ImageCollection, etc.), we will loop over all attributes and
-    recurse where appropriate.
-
-    If the object is a "value" (i.e. an array or a scalar), we will append
-    the full path to the output list.
-
-    Args:
-        galaxy (dict):
-            The dictionary to search.
-        prefix (str):
-            A prefix to add to the keys of the arrays.
-        output (dict):
-            A dictionary to store the output paths in.
-    """
-    # Set up the set to hold the global output paths
-    output_set = set()
-
-    # Loop over the galaxies and recursively discover the outputs
-    for galaxy in galaxies:
-        output_set = discover_outputs_recursive(galaxy, output_set=output_set)
 
     return output_set
 
@@ -209,18 +202,22 @@ def count_and_check_dict_recursive(data, prefix=""):
             "All results should be numeric with associated units."
         )
 
+    if not hasattr(data, "units") and isinstance(data, np.ndarray):
+        raise exceptions.BadResult(
+            f"Found an array object without units at {prefix}. "
+            "All results should be numeric with associated units. "
+            f"Data: {data}"
+        )
+
     if not hasattr(data, "shape"):
         raise exceptions.BadResult(
             f"Found a non-array object at {prefix}. "
             "All results should be numeric with associated units."
         )
 
-    if not hasattr(data, "units"):
-        raise exceptions.BadResult(
-            f"Found an array object without units at {prefix}. "
-            "All results should be numeric with associated units."
-        )
-
+    # If we have a Sed then we have a count of 1
+    if isinstance(data, Sed):
+        return 1
     return data.shape[0]
 
 
@@ -261,6 +258,8 @@ def combine_list_of_dicts(dicts):
         return unyt_array(values)
 
     def recursive_merge(dict_list):
+        if len(dict_list) == 0:
+            return {}
         if not isinstance(dict_list[0], dict):
             # Base case: combine non-dict leaves
             return combine_values(dict_list)
@@ -277,11 +276,6 @@ def combine_list_of_dicts(dicts):
             # Recurse for each key
             merged[key] = recursive_merge([d[key] for d in dict_list])
         return merged
-
-    if not isinstance(dicts[0], dict):
-        TypeError(
-            f"Input must be a list of dictionaries, not {type(dicts[0])}"
-        )
 
     return recursive_merge(dicts)
 
@@ -325,7 +319,7 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
             d = data
             for k in path.split("/")[:-1]:
                 d = d.setdefault(k, {})
-            d.setdefault(path.split("/")[-1], unyt_array([], "dimensionsless"))
+            d.setdefault(path.split("/")[-1], unyt_array([], "dimensionless"))
 
     return data
 
@@ -374,3 +368,59 @@ def get_dataset_properties(data, comm, root=0):
         units[path] = str(d.units)
 
     return shapes, dtypes, units, out_paths
+
+
+def get_full_memory(obj, seen=None):
+    """
+    Estimate memory usage of a Python object, including NumPy arrays.
+
+    Args:
+        obj: The object to inspect.
+        seen: Set of seen object ids to avoid double-counting.
+
+    Returns:
+        int: Approximate size in bytes.
+    """
+    if seen is None:
+        seen = set()
+
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    seen.add(obj_id)
+
+    size = 0
+
+    # NumPy arrays — very important to check early
+    if isinstance(obj, np.ndarray):
+        return obj.nbytes + sys.getsizeof(obj)
+
+    # Built-in container types
+    elif isinstance(obj, Mapping):
+        size += sys.getsizeof(obj)
+        for k, v in obj.items():
+            size += get_full_memory(k, seen)
+            size += get_full_memory(v, seen)
+
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        size += sys.getsizeof(obj)
+        for item in obj:
+            size += get_full_memory(item, seen)
+
+    # Objects with __dict__
+    elif hasattr(obj, "__dict__"):
+        size += sys.getsizeof(obj)
+        size += get_full_memory(vars(obj), seen)
+
+    # Objects with __slots__
+    elif hasattr(obj, "__slots__"):
+        size += sys.getsizeof(obj)
+        for slot in obj.__slots__:
+            if hasattr(obj, slot):
+                size += get_full_memory(getattr(obj, slot), seen)
+
+    else:
+        # Fallback: include basic object size
+        size += sys.getsizeof(obj)
+
+    return size

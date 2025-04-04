@@ -281,9 +281,10 @@ class Stars(Particles, StarsComponent):
         # Check the arguments we've been given
         self._check_star_args()
 
-        # Particle stars can calculate and attach a SFZH analogous to a
-        # parametric galaxy
+        # Particle stars can calculate and attach a SFZH (and SFH) analogous
+        # to a parametric galaxy
         self.sfzh = None
+        self.sfh = None
 
     def get_sfr(self, timescale=10 * Myr):
         """
@@ -1249,7 +1250,9 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
         )
 
-        return compute_sfzh(*args)
+        self.sfh = compute_sfzh(*args)
+
+        return self.sfh
 
     def plot_sfh(
         self,

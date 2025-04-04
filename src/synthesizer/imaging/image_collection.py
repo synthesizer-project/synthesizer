@@ -224,6 +224,19 @@ class ImageCollection:
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
 
+    @property
+    def shape(self):
+        """
+        Return the shape of the image collection.
+
+        Returns:
+            tuple: A tuple containing (number of images, height, width) if
+                  images exist, or an empty tuple if no images are present.
+        """
+        if self.imgs is None:
+            return ()
+        return (len(self.imgs), self.npix[0], self.npix[1])
+
     def downsample(self, factor):
         """
         Supersamples all images contained within this instance.

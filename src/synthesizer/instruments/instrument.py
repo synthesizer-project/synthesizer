@@ -367,9 +367,18 @@ class Instrument:
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
             psfs = {}
             for key in group["PSFs"]:
-                psfs[key] = unyt_array(
-                    group["PSFs"][key][...], group["PSFs"][key].attrs["units"]
-                )
+                # We can also have a group of datasets or a single dataset here
+                if isinstance(group["PSFs"][key], h5py.Group):
+                    for subkey in group["PSFs"][key]:
+                        psfs[f"{key}/{subkey}"] = unyt_array(
+                            group["PSFs"][key][subkey][...],
+                            group["PSFs"][key][subkey].attrs["units"],
+                        )
+                else:
+                    psfs[key] = unyt_array(
+                        group["PSFs"][key][...],
+                        group["PSFs"][key].attrs["units"],
+                    )
         elif "PSFs" in group:
             psfs = unyt_array(group["PSFs"][...], group["PSFs"].attrs["units"])
         else:
