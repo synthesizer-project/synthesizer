@@ -1812,6 +1812,7 @@ class Pipeline:
         kernel=None,
         kernel_threshold=1.0,
         spectra_type=None,
+        write=True,
     ):
         """
         Flag that the Pipeline should compute the luminosity images.
@@ -1837,6 +1838,8 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all spectra types will be used. This can either
                 be a list of strings or a single string.
+            write (bool):
+                Whether to write the images to disk. Default is True.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_luminosity"] = {
@@ -1860,7 +1863,8 @@ class Pipeline:
         # Flag that we will want to write out the luminosity images (calling
         # the get_images_luminosity method is considered the intent to write
         # it out)
-        self._write_images_lum = True
+        if write:
+            self._write_images_lum = True
 
     def _get_images_luminosity(self, galaxy):
         """
@@ -1950,6 +1954,7 @@ class Pipeline:
         kernel=None,
         kernel_threshold=1.0,
         spectra_type=None,
+        write=True,
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -1984,7 +1989,8 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all spectra types will be used. This can either
                 be a list of strings or a single string.
-
+            write (bool):
+                Whether to write the images to disk. Default is True.
         """
         # Flag that we will apply the PSFs to the luminosity images
         self._do_images_lum_psf = True
@@ -2044,7 +2050,8 @@ class Pipeline:
         # Flag that we will want to write out the luminosity images with PSFs
         # (calling the get_images_luminosity_psfs method is considered the
         # intent to write it out)
-        self._write_images_lum_psf = True
+        if write:
+            self._write_images_lum_psf = True
 
     def _get_images_luminosity_psfs(self, galaxy):
         """
@@ -2141,6 +2148,7 @@ class Pipeline:
         cosmo=None,
         igm=None,
         spectra_type=None,
+        write=True,
     ):
         """
         Flag that the Pipeline should compute the flux images.
@@ -2175,6 +2183,8 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all spectra types will be used. This can either
                 be a list of strings or a single string.
+            write (bool):
+                Whether to write the images to disk. Default is True.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_flux"] = {
@@ -2215,7 +2225,8 @@ class Pipeline:
 
         # Flag that we will want to write out the flux images (calling the
         # get_images_flux method is considered the intent to write it out)
-        self._write_images_flux = True
+        if write:
+            self._write_images_flux = True
 
     def _get_images_flux(self, galaxy):
         """
@@ -2303,6 +2314,7 @@ class Pipeline:
         cosmo=None,
         igm=None,
         spectra_type=None,
+        write=True,
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -2346,6 +2358,8 @@ class Pipeline:
                 The type of spectra to generate images for. By default this is
                 None and all spectra types will be used. This can either be a
                 single string or a list of strings.
+            write (bool):
+                Whether to write out the images with PSFs. Default is True.
 
         """
         # Flag that we will apply the PSFs to the flux images
@@ -2421,7 +2435,8 @@ class Pipeline:
 
         # Flag that we will want to write out the flux images (calling the
         # get_images_flux_psfs method is considered the intent to write it out)
-        self._write_images_flux_psf = True
+        if write:
+            self._write_images_flux_psf = True
 
     def _get_images_flux_psfs(self, galaxy):
         """
