@@ -1813,6 +1813,7 @@ class Pipeline:
         kernel_threshold=1.0,
         spectra_type=None,
         write=True,
+        instrument_subset=None,
     ):
         """
         Flag that the Pipeline should compute the luminosity images.
@@ -1840,6 +1841,9 @@ class Pipeline:
                 be a list of strings or a single string.
             write (bool):
                 Whether to write the images to disk. Default is True.
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_luminosity"] = {
@@ -1850,6 +1854,9 @@ class Pipeline:
             "spectra_type": spectra_type
             if isinstance(spectra_type, (list, tuple))
             else [spectra_type],
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset],
         }
 
         # Flag that we will compute the luminosity images
@@ -1885,10 +1892,22 @@ class Pipeline:
             "spectra_type"
         ]
 
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs["get_images_luminosity"][
+            "instrument_subset"
+        ]
+
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
             if not inst.can_do_imaging:
+                continue
+
+            # Skip if the instrument is not in the subset
+            if (
+                instrument_subset is not None
+                and inst.name not in instrument_subset
+            ):
                 continue
 
             # Get the basic images for the requested spectra types
@@ -1955,6 +1974,7 @@ class Pipeline:
         kernel_threshold=1.0,
         spectra_type=None,
         write=True,
+        instrument_subset=None,
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -1991,7 +2011,17 @@ class Pipeline:
                 be a list of strings or a single string.
             write (bool):
                 Whether to write the images to disk. Default is True.
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
         """
+        # Store the instrument subset for the operation
+        self._operation_kwargs["get_images_luminosity_psfs"] = {
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset]
+        }
+
         # Flag that we will apply the PSFs to the luminosity images
         self._do_images_lum_psf = True
 
@@ -2046,6 +2076,13 @@ class Pipeline:
                 if isinstance(spectra_type, (list, tuple))
                 else [spectra_type]
             )
+            self._operation_kwargs["get_images_luminosity"][
+                "instrument_subset"
+            ] = (
+                instrument_subset
+                if isinstance(instrument_subset, (list, tuple))
+                else [instrument_subset]
+            )
 
         # Flag that we will want to write out the luminosity images with PSFs
         # (calling the get_images_luminosity_psfs method is considered the
@@ -2063,10 +2100,22 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs[
+            "get_images_luminosity_psfs"
+        ]["instrument_subset"]
+
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do PSF imaging
             if not inst.can_do_psf_imaging:
+                continue
+
+            # Skip if the instrument is not in the subset
+            if (
+                instrument_subset is not None
+                and inst.name not in instrument_subset
+            ):
                 continue
 
             # Unlike the other operations we need a container to hold the
@@ -2149,6 +2198,7 @@ class Pipeline:
         igm=None,
         spectra_type=None,
         write=True,
+        instrument_subset=None,
     ):
         """
         Flag that the Pipeline should compute the flux images.
@@ -2185,6 +2235,9 @@ class Pipeline:
                 be a list of strings or a single string.
             write (bool):
                 Whether to write the images to disk. Default is True.
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_flux"] = {
@@ -2195,6 +2248,9 @@ class Pipeline:
             "spectra_type": spectra_type
             if isinstance(spectra_type, (list, tuple))
             else [spectra_type],
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset],
         }
 
         # Flag that we will compute the flux images
@@ -2247,10 +2303,22 @@ class Pipeline:
             "spectra_type"
         ]
 
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs["get_images_flux"][
+            "instrument_subset"
+        ]
+
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do imaging
             if not inst.can_do_imaging:
+                continue
+
+            # Skip if the instrument is not in the subset
+            if (
+                instrument_subset is not None
+                and inst.name not in instrument_subset
+            ):
                 continue
 
             # Get the basic images for the requested spectra types
@@ -2315,6 +2383,7 @@ class Pipeline:
         igm=None,
         spectra_type=None,
         write=True,
+        instrument_subset=None,
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -2360,8 +2429,17 @@ class Pipeline:
                 single string or a list of strings.
             write (bool):
                 Whether to write out the images with PSFs. Default is True.
-
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
         """
+        # Store the instrument subset for the operation
+        self._operation_kwargs["get_images_flux_psfs"] = {
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset]
+        }
+
         # Flag that we will apply the PSFs to the flux images
         self._do_images_flux_psf = True
 
@@ -2415,6 +2493,11 @@ class Pipeline:
                 if isinstance(spectra_type, (list, tuple))
                 else [spectra_type]
             )
+            self._operation_kwargs["get_images_flux"]["instrument_subset"] = (
+                instrument_subset
+                if isinstance(instrument_subset, (list, tuple))
+                else [instrument_subset]
+            )
 
         # Ensure we have a cosmology if we need to compute the observed spectra
         # and get_spectra_observed has not been called
@@ -2448,10 +2531,22 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs["get_images_flux_psfs"][
+            "instrument_subset"
+        ]
+
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
             # Skip if the instrument can't do PSF imaging
             if not inst.can_do_psf_imaging:
+                continue
+
+            # Skip if the instrument is not in the subset
+            if (
+                instrument_subset is not None
+                and inst.name not in instrument_subset
+            ):
                 continue
 
             # Unlike the other operations we need a container to hold the
