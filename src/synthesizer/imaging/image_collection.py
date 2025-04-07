@@ -734,6 +734,7 @@ class ImageCollection:
         scaling_func=None,
         cmap="Greys_r",
         filters=None,
+        ncols=4,
     ):
         """
         Plot all images.
@@ -764,6 +765,11 @@ class ImageCollection:
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
+            filters (list)
+                A list of filter codes to plot. If None, all filters will
+                be plotted.
+            ncols (int)
+                The number of columns to use when plotting multiple images.
 
         Returns:
             matplotlib.pyplot.figure
@@ -794,13 +800,16 @@ class ImageCollection:
 
         # Set up the figure
         fig = plt.figure(
-            figsize=(4 * 3.5, int(np.ceil(len(filter_codes) / 4)) * 3.5)
+            figsize=(
+                ncols * 3.5,
+                int(np.ceil(len(filter_codes) / ncols)) * 3.5,
+            )
         )
 
         # Create a gridspec grid
         gs = gridspec.GridSpec(
-            int(np.ceil(len(filter_codes) / 4)),
-            4,
+            int(np.ceil(len(filter_codes) / ncols)),
+            ncols,
             hspace=0.0,
             wspace=0.0,
         )
@@ -811,7 +820,7 @@ class ImageCollection:
             img = self.imgs[f].arr
 
             # Create the axis
-            ax = fig.add_subplot(gs[int(np.floor(ind / 4)), ind % 4])
+            ax = fig.add_subplot(gs[int(np.floor(ind / ncols)), ind % ncols])
 
             # Set up minima and maxima
             if unique_norm_min:
