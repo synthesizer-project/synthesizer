@@ -1813,7 +1813,7 @@ class Pipeline:
         kernel_threshold=1.0,
         spectra_type=None,
         write=True,
-        instrument_subset=None,
+        instrument_subset=(),
     ):
         """
         Flag that the Pipeline should compute the luminosity images.
@@ -1905,7 +1905,7 @@ class Pipeline:
 
             # Skip if the instrument is not in the subset
             if (
-                instrument_subset is not None
+                len(instrument_subset) > 0
                 and inst.label not in instrument_subset
             ):
                 continue
@@ -1974,7 +1974,7 @@ class Pipeline:
         kernel_threshold=1.0,
         spectra_type=None,
         write=True,
-        instrument_subset=None,
+        instrument_subset=(),
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -2113,7 +2113,7 @@ class Pipeline:
 
             # Skip if the instrument is not in the subset
             if (
-                instrument_subset is not None
+                len(instrument_subset) > 0
                 and inst.label not in instrument_subset
             ):
                 continue
@@ -2198,7 +2198,7 @@ class Pipeline:
         igm=None,
         spectra_type=None,
         write=True,
-        instrument_subset=None,
+        instrument_subset=(),
     ):
         """
         Flag that the Pipeline should compute the flux images.
@@ -2316,7 +2316,7 @@ class Pipeline:
 
             # Skip if the instrument is not in the subset
             if (
-                instrument_subset is not None
+                len(instrument_subset) > 0
                 and inst.label not in instrument_subset
             ):
                 continue
@@ -2383,7 +2383,7 @@ class Pipeline:
         igm=None,
         spectra_type=None,
         write=True,
-        instrument_subset=None,
+        instrument_subset=(),
     ):
         """
         Flag that the Pipeline should apply the instrument PSFs to images.
@@ -2544,7 +2544,7 @@ class Pipeline:
 
             # Skip if the instrument is not in the subset
             if (
-                instrument_subset is not None
+                len(instrument_subset) > 0
                 and inst.label not in instrument_subset
             ):
                 continue
