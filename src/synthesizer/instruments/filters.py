@@ -284,6 +284,9 @@ class FilterCollection:
         # resampled they will be at the end of the __init__
         self._merge_filter_lams()
 
+        # Count our filters
+        self.nfilters = len(self.filter_codes)
+
     @classmethod
     def _from_hdf5(cls, hdf):
         """
