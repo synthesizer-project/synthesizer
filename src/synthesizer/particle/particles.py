@@ -427,11 +427,11 @@ class Particles:
         if frac == 0:
             return 0 * self.radii.units
         elif frac == 1:
-            return np.max(self.radii) * self.radii.units
+            return np.max(self.radii.value) * self.radii.units
         elif self.nparticles == 0:
             return 0 * self.radii.units
         elif self.nparticles == 1:
-            return self.radii[0] * frac * self.radii.units
+            return self.radii[0].value * frac * self.radii.units
         elif np.sum(weights) == 0:
             return 0 * self.radii.units
 
