@@ -733,6 +733,7 @@ class ImageCollection:
         vmax=None,
         scaling_func=None,
         cmap="Greys_r",
+        filters=None,
     ):
         """
         Plot all images.
@@ -785,18 +786,27 @@ class ImageCollection:
         unique_norm_min = vmin is None
         unique_norm_max = vmax is None
 
+        # Are we looping over a specified set of filters?
+        if filters is not None:
+            filter_codes = filters
+        else:
+            filter_codes = self.filter_codes
+
         # Set up the figure
         fig = plt.figure(
-            figsize=(4 * 3.5, int(np.ceil(len(self.filter_codes) / 4)) * 3.5)
+            figsize=(4 * 3.5, int(np.ceil(len(filter_codes) / 4)) * 3.5)
         )
 
         # Create a gridspec grid
         gs = gridspec.GridSpec(
-            int(np.ceil(len(self.filter_codes) / 4)), 4, hspace=0.0, wspace=0.0
+            int(np.ceil(len(filter_codes) / 4)),
+            4,
+            hspace=0.0,
+            wspace=0.0,
         )
 
         # Loop over filters making each image
-        for ind, f in enumerate(self.filter_codes):
+        for ind, f in enumerate(filter_codes):
             # Get the image
             img = self.imgs[f].arr
 
