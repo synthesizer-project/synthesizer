@@ -1906,7 +1906,7 @@ class Pipeline:
             # Skip if the instrument is not in the subset
             if (
                 instrument_subset is not None
-                and inst.name not in instrument_subset
+                and inst.label not in instrument_subset
             ):
                 continue
 
@@ -2114,7 +2114,7 @@ class Pipeline:
             # Skip if the instrument is not in the subset
             if (
                 instrument_subset is not None
-                and inst.name not in instrument_subset
+                and inst.label not in instrument_subset
             ):
                 continue
 
@@ -2317,7 +2317,7 @@ class Pipeline:
             # Skip if the instrument is not in the subset
             if (
                 instrument_subset is not None
-                and inst.name not in instrument_subset
+                and inst.label not in instrument_subset
             ):
                 continue
 
@@ -2545,7 +2545,7 @@ class Pipeline:
             # Skip if the instrument is not in the subset
             if (
                 instrument_subset is not None
-                and inst.name not in instrument_subset
+                and inst.label not in instrument_subset
             ):
                 continue
 
