@@ -160,6 +160,9 @@ version_file = "src/synthesizer/_version.py"
 # Configure the linter and formatter
 [tool.ruff]
 
+# We use google format for docstrings
+docstring-convention = "google"
+
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
@@ -201,8 +204,7 @@ indent-width = 4
 target-version = "py38"
 
 [tool.ruff.lint]
-# Enable Pyflakes (`F`) and pycodestyle (`E`)  codes by default.
-select = ["F", "E", "W"]
+select = ["F", "E", "W", "D"]
 ignore = [
        "E402",  # "module level import not at top of file" (isolate C imports in case python alternatives exist)
        "F811",  # "redefinition of unused name from line N" (breaks quantity objects)
