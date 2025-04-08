@@ -157,6 +157,8 @@ def create_cloudy_input(
         "z": 0.0,
         # include CMB heating
         "CMB": None,
+        # include turbulence
+        "turbulence": None,
         # include cosmic rays
         "cosmic_rays": None,
         # include metals
@@ -378,6 +380,10 @@ def create_cloudy_input(
 
     if params["CMB"] is not None:
         cinput.append(f'CMB {params["z"]}\n')
+
+    # define turbulence
+    if params["turbulence"] is not None:
+        cinput.append(f"turbulence {params['turbulence']}\n")
 
     # define hydrogen density
     if params["hydrogen_density"] is not None:
