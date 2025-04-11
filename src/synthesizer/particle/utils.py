@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Mpc, unyt_array, rad
+from unyt import Mpc, rad, unyt_array
 
 from synthesizer.units import accepts
 
@@ -30,7 +30,7 @@ def rotate(
             A 3x3 rotation matrix to apply to the coordinates
             instead of phi and theta.
 
-    returns 
+    returns
         coordinates (np.array)
             transformed coordinate array
     """
@@ -62,6 +62,7 @@ def rotate(
         rot_matrix = np.dot(rot_matrix_y, rot_matrix_z)
 
     return np.dot(coordinates, rot_matrix.T)
+
 
 @accepts(coordinates=Mpc, boxsize=Mpc)
 def calculate_smoothing_lengths(

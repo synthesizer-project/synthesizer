@@ -12,11 +12,11 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, rad, s
 
 from synthesizer import exceptions
+from synthesizer.particle.utils import rotate
 from synthesizer.synth_warnings import deprecation
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.particle.utils import rotate
 
 
 class Particles:
@@ -827,8 +827,12 @@ class Particles:
         new_parts = copy.deepcopy(self)
 
         # Rotate the coordinates
-        new_parts.coordinates = rotate(new_parts.coordinates, phi, theta, rot_matrix)
-        new_parts.velocities = rotate(new_parts.velocities, phi, theta, rot_matrix)
+        new_parts.coordinates = rotate(
+            new_parts.coordinates, phi, theta, rot_matrix
+        )
+        new_parts.velocities = rotate(
+            new_parts.velocities, phi, theta, rot_matrix
+        )
         if self.centre is not None:
             new_parts.centre = rotate(new_parts.centre, phi, theta, rot_matrix)
 
