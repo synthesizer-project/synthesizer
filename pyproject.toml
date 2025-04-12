@@ -160,9 +160,6 @@ version_file = "src/synthesizer/_version.py"
 # Configure the linter and formatter
 [tool.ruff]
 
-# We use google format for docstrings
-docstring-convention = "google"
-
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
@@ -210,6 +207,7 @@ ignore = [
        "F811",  # "redefinition of unused name from line N" (breaks quantity objects)
        ]
 
+
 # Sort imports alphabetically
 extend-select = ["I"]
 
@@ -219,6 +217,9 @@ unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
