@@ -372,14 +372,15 @@ void populate_smoothed_image(const double *pix_values,
  */
 static double calculate_pix_recursive(struct cell *c, const double x,
                                       const double y, double threshold,
-                                      int kdim, const double *kernel) {
+                                      int kdim, const double *kernel, double r,
+                                      double part_val) {
 
   /* Set up the pixel value to return. */
   double pix_value = 0;
 
   /* Early exit if the projected distance between cells is more than the
    * maximum smoothing length in the cell. */
-  if (c->max_sml_squ < min_projected_dist2(c, x, y)) {
+  if (r < min_projected_dist2(c, x, y)) {
     return 0;
   }
 
@@ -396,7 +397,8 @@ static double calculate_pix_recursive(struct cell *c, const double x,
       }
 
       /* Recurse... */
-      pix_value += calculate_pix_recursive(cp, x, y, threshold, kdim, kernel);
+      pix_value += calculate_pix_recursive(cp, x, y, threshold, kdim, kernel, r,
+                                           part_val);
     }
 
   } else {
@@ -420,7 +422,7 @@ static double calculate_pix_recursive(struct cell *c, const double x,
 
       /* Early skip if the star's line of sight doesn't fall in the gas
        * particles kernel. */
-      if (b > (threshold * part->sml)) {
+      if (b > (threshold * r)) {
         continue;
       }
 
@@ -432,7 +434,7 @@ static double calculate_pix_recursive(struct cell *c, const double x,
       double kvalue = kernel[index];
 
       /* Finally, compute the surface density itself. */
-      pix_value += part->surf_den_var / (part->sml * part->sml) * kvalue;
+      pix_value += part_val / (r * r) * kvalue;
     }
   }
 
@@ -496,34 +498,37 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     pos[i * 3 + 2] = 0;
   }
 
+  /* Allocate the image.. */
+  const int npix = npix_x * npix_y;
+  double *img = synth_malloc(npix * sizeof(double), "image");
+
+  /* Define the pixel positions. */
+  double *pix_pos =
+      synth_malloc(3 * npix_x * npix_y * sizeof(double), "pix_pos");
+  double pix_smls[npix];
+  double pix_pix_values[npix];
+  for (int i = 0; i < npix; i++) {
+    pix_pos[i * 3] = (i % npix_x) * res;
+    pix_pos[i * 3 + 1] = (i / npix_x) * res;
+    pix_pos[i * 3 + 2] = 0;
+    pix_smls[i] = 1.0;
+    pix_pix_values[i] = 1.0;
+  }
+
   /* Allocate cells array. The first cell will be the root and then we will
    * dynamically nibble off cells for the progeny. */
   int ncells = 1;
   struct cell *root = synth_malloc(sizeof(struct cell), "root cell");
 
   /* Consturct the cell tree. */
-  construct_cell_tree(pos, smoothing_lengths, pix_values, npart, root, ncells,
+  construct_cell_tree(pix_pos, pix_smls, pix_pix_values, npix, root, ncells,
                       MAX_DEPTH, 1);
 
-  /* Allocate the image.. */
-  const int npix = npix_x * npix_y;
-  double *img = synth_malloc(npix * sizeof(double), "image");
-
   /* Populate the image. */
-  for (int i = 0; i < npix; i++) {
-    /* Define the pixel coordinates. */
-    int pix_x = i % npix_x * res;
-    int pix_y = i / npix_x * res;
-
-    /* Skip if we are outside the root cell. */
-    if (pix_x < root->loc[0] || pix_x > root->loc[0] + root->width ||
-        pix_y < root->loc[1] || pix_y > root->loc[1] + root->width) {
-      img[i] = 0;
-      continue;
-    }
-
-    img[i] = calculate_pix_recursive(root, i % npix_x * res, i / npix_x * res,
-                                     threshold, kdim, kernel);
+  for (int i = 0; i < npart; i++) {
+    /* Recurse... */
+    calculate_pix_recursive(root, xs[i], ys[i], threshold, kdim, kernel,
+                            smoothing_lengths[i], pix_values[i]);
   }
 
   /* Construct a numpy python array to return the IFU. */
