@@ -357,7 +357,7 @@ class Image:
             )
             got_kernel = "None" if kernel is None else type(kernel)
             raise exceptions.InconsistentArguments(
-                "Particle based smoothed images require the coordinates"
+                "Particle based smoothed images require the coordinates "
                 f"({got_coords}), "
                 f"smoothing_lengths ({got_smls}), and kernel arguments "
                 f"({got_kernel}) to be passed."
