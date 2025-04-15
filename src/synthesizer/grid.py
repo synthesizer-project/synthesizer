@@ -1466,13 +1466,15 @@ class Grid:
 
     def get_flattened_axes_values(self):
         """
-        Create flattened of the axes values
+        Get the flattened axis values for the grid.
+
+        This will return a dictionary of the axes values that correspond to
+        the grid once flattened.
 
         Returns:
             dict
                 A dictionary containing the flattened versions of the axes.
         """
-
         # Create a tuple of the axes values
         axes_values_tuple = (self._axes_values[axis] for axis in self.axes)
 
