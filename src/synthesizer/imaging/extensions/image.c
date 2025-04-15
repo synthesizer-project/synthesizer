@@ -15,7 +15,6 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes. */
-#include "../../extensions/octree.h"
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
 
@@ -361,85 +360,6 @@ void populate_smoothed_image(const double *pix_values,
 }
 
 /**
- * @brief Recursively calculate the value of a pixel.
- *
- * @param c The cell to recurse through
- * @param x The x position of the pixel.
- * @param y The y position of the pixel.
- * @param threshold The threshold for the kernel.
- * @param kdim The dimension of the kernel.
- * @param kernel The kernel to use for the calculation.
- */
-static double calculate_pix_recursive(struct cell *c, const double x,
-                                      const double y, double threshold,
-                                      int kdim, const double *kernel) {
-
-  /* Set up the pixel value to return. */
-  double pix_value = 0;
-
-  /* Early exit if the projected distance between cells is more than the
-   * maximum smoothing length in the cell. */
-  if (c->max_sml_squ < min_projected_dist2(c, x, y)) {
-    return 0;
-  }
-
-  /* Is the cell split? */
-  if (c->split) {
-
-    /* Ok, so we recurse... */
-    for (int ip = 0; ip < 8; ip++) {
-      struct cell *cp = &c->progeny[ip];
-
-      /* Skip empty progeny. */
-      if (cp->part_count == 0) {
-        continue;
-      }
-
-      /* Recurse... */
-      pix_value += calculate_pix_recursive(cp, x, y, threshold, kdim, kernel);
-    }
-
-  } else {
-
-    /* We're in a leaf if we get here, unpack the particles. */
-    int npart_j = c->part_count;
-    struct particle *parts = c->particles;
-
-    /* Loop over the particles adding their contribution. */
-    for (int j = 0; j < npart_j; j++) {
-
-      /* Get the particle. */
-      struct particle *part = &parts[j];
-
-      /* Calculate the x and y separations. */
-      double dx = part->pos[0] - x;
-      double dy = part->pos[1] - y;
-
-      /* Calculate the impact parameter. */
-      double b = sqrt(dx * dx + dy * dy);
-
-      /* Early skip if the star's line of sight doesn't fall in the gas
-       * particles kernel. */
-      if (b > (threshold * part->sml)) {
-        continue;
-      }
-
-      /* Find fraction of smoothing length. */
-      double q = b / part->sml;
-
-      /* Get the value of the kernel at q. */
-      int index = kdim * q;
-      double kvalue = kernel[index];
-
-      /* Finally, compute the surface density itself. */
-      pix_value += part->surf_den_var / (part->sml * part->sml) * kvalue;
-    }
-  }
-
-  return pix_value;
-}
-
-/**
  * @brief Function to compute an image from particle data and a kernel.
  *
  * The SPH kernel of a particle (integrated along the z axis) is used to
@@ -488,44 +408,14 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   const double *ys = extract_data_double(np_ys, "ys");
   const double *kernel = extract_data_double(np_kernel, "kernel");
 
-  /* Construct positions */
-  double *pos = synth_malloc(npart * 3 * sizeof(double), "pos");
-  for (int i = 0; i < npart; i++) {
-    pos[i * 3] = xs[i];
-    pos[i * 3 + 1] = ys[i];
-    pos[i * 3 + 2] = 0;
-  }
-
-  /* Allocate cells array. The first cell will be the root and then we will
-   * dynamically nibble off cells for the progeny. */
-  int ncells = 1;
-  struct cell *root = synth_malloc(sizeof(struct cell), "root cell");
-
-  /* Consturct the cell tree. */
-  construct_cell_tree(pos, smoothing_lengths, pix_values, npart, root, ncells,
-                      MAX_DEPTH, 1);
-
   /* Allocate the image.. */
   const int npix = npix_x * npix_y;
   double *img = synth_malloc(npix * sizeof(double), "image");
 
   /* Populate the image. */
-  for (int i = 0; i < npix; i++) {
-    /* Define the pixel coordinates. */
-    double pix_x = i % npix_x * res;
-    double pix_y = i / npix_x * res;
-
-    /* Skip if we are outside the root cell. */
-    if (pix_x < root->loc[0] || pix_x > root->loc[0] + root->width ||
-        pix_y < root->loc[1] || pix_y > root->loc[1] + root->width) {
-      img[i] = 0;
-      continue;
-    }
-
-    /* Recurse... */
-    img[i] +=
-        calculate_pix_recursive(root, pix_x, pix_y, threshold, kdim, kernel);
-  }
+  populate_smoothed_image(pix_values, smoothing_lengths, xs, ys, kernel, res,
+                          npix_x, npix_y, npart, threshold, kdim, img,
+                          nthreads);
 
   /* Construct a numpy python array to return the IFU. */
   npy_intp dims[3] = {npix_x, npix_y};
