@@ -8,6 +8,9 @@
 /* C headers. */
 #include <stdint.h>
 
+/* Define the maximum tree depth. */
+#define MAX_DEPTH 64
+
 /**
  * @brief A particle to be contained in a cell.
  */
