@@ -1464,6 +1464,29 @@ class Grid:
         # Return tuple of wavelengths and delta lambda
         return self.lam, delta_lambda
 
+    def get_flattened_axes_values(self):
+        """
+        Create flattened of the axes values
+
+        Returns:
+            dict
+                A dictionary containing the flattened versions of the axes.
+        """
+
+        # Create a tuple of the axes values
+        axes_values_tuple = (self.axes_values[axis] for axis in self.axes)
+
+        # Create a meshgrid of the axes_values
+        axes_values_mesh_tuple = np.meshgrid(*axes_values_tuple, indexing="ij")
+
+        # Create a dictionary with flattened versions of the axes values
+        flattened_axes_values = {
+            axis: axes_values_mesh_tuple[axis_index].flatten()
+            for axis_index, axis in enumerate(self.axes)
+        }
+
+        return flattened_axes_values
+
     def get_sed(self, spectra_type):
         """
         Get the spectra grid as an Sed object.
