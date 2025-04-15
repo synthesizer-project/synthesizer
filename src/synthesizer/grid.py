@@ -1474,14 +1474,17 @@ class Grid:
         """
 
         # Create a tuple of the axes values
-        axes_values_tuple = (self.axes_values[axis] for axis in self.axes)
+        axes_values_tuple = (self._axes_values[axis] for axis in self.axes)
 
         # Create a meshgrid of the axes_values
         axes_values_mesh_tuple = np.meshgrid(*axes_values_tuple, indexing="ij")
 
         # Create a dictionary with flattened versions of the axes values
         flattened_axes_values = {
-            axis: axes_values_mesh_tuple[axis_index].flatten()
+            axis: unyt_array(
+                axes_values_mesh_tuple[axis_index].flatten(),
+                self._axes_units[axis],
+            )
             for axis_index, axis in enumerate(self.axes)
         }
 
