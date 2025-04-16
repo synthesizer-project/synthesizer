@@ -165,6 +165,16 @@ class PhotometryCollection:
         """
         return self._look_up.values()
 
+    def __len__(self):
+        """
+        Return the number of photometry filters in the collection.
+
+        Returns:
+            int
+                The number of filters in the collection.
+        """
+        return len(self._look_up)
+
     def items(self):
         """
         Enable dict.items() behaviour.
