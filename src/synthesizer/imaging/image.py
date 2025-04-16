@@ -306,6 +306,8 @@ class Image:
             )[0]
 
             self.arr /= norm_img
+            if self.units is not None:
+                self.units /= normalisation.units
 
         return self.arr * self.units if self.units is not None else self.arr
 
@@ -325,8 +327,8 @@ class Image:
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
-        calculate the image for each particle efficiently. Images can optionally
-        be normalised by a secondary property.
+        calculate the image for each particle efficiently. Images can
+        optionally be normalised by a secondary property.
 
         In the parametric case the signal is smoothed over a density grid. This
         density grid is an array defining the weight in each pixel.
@@ -468,8 +470,9 @@ class Image:
                 nthreads,
             )
 
-            # Divide out the normalisation contribution, handling zero contribution pixels
-            self.arr[self.arr > 0] /= norm_img.arr[norm_img.arr > 0]
+            # Divide out the normalisation contribution, handling zero
+            # contribution pixels
+            self.arr[self.arr > 0] /= norm_img[norm_img > 0]
 
         return self.arr * self.units if self.units is not None else self.arr
 

@@ -1428,36 +1428,51 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image
         """
-        # Get the SFR map
-        sfr_img = self.get_map_sfr(
-            resolution=resolution,
-            fov=fov,
-            img_type=img_type,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
-            age_bin=age_bin,
-            nthreads=nthreads,
-        )
+        # Convert the age bin if necessary
+        if isinstance(age_bin, unyt_quantity):
+            if age_bin.units != self.stars.ages.units:
+                age_bin = age_bin.to(self.stars.ages.units)
+        else:
+            age_bin *= self.stars.ages.units
 
-        mass_img = self.get_map_stellar_mass(
-            resolution=resolution,
-            fov=fov,
-            img_type=img_type,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
-            nthreads=nthreads,
-        )
+        # Get the mask for stellar particles in the age bin
+        mask = self.stars.ages < age_bin
 
-        # Convert the SFR map to sSFR
-        img = sfr_img.arr
-        img[img > 0] /= mass_img.arr[mass_img.arr > 0]
-        img.units = img.units / mass_img.units
+        #  Warn if we have stars to plot in this bin
+        if self.stars.ages[mask].size == 0:
+            warn("The SFR is 0! (there are 0 stars in the age bin)")
 
-        return Image(
-            resolution=resolution,
-            fov=fov,
-            img=img,
-        )
+        # Instantiate the Image object.
+        img = Image(resolution=resolution, fov=fov)
+
+        # Make the initial mass map, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_img_hist(
+                signal=self.stars.initial_masses[mask],
+                coordinates=self.stars.centered_coordinates[mask, :],
+                normalisation=self.stars.current_masses[mask] / age_bin,
+            )
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_img_smoothed(
+                signal=self.stars.initial_masses[mask],
+                coordinates=self.stars.centered_coordinates[mask, :],
+                smoothing_lengths=self.stars.smoothing_lengths[mask],
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                normalisation=self.stars.current_masses[mask] / age_bin,
+            )
+
+        else:
+            raise exceptions.UnknownImageType(
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
+            )
+
+        return img
 
     def get_data_cube(
         self,
