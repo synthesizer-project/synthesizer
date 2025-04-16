@@ -72,7 +72,7 @@ class PhotometryCollection:
         self.filter_codes = list(kwargs.keys())
 
         # Get the photometry
-        photometry = np.array(list(kwargs.values()), dtype=np.float64)
+        photometry = list(kwargs.values())
 
         # Ensure we have units, if not something terrible has happened
         if not isinstance(photometry[0], (unyt_quantity, unyt_array)):
@@ -81,7 +81,10 @@ class PhotometryCollection:
             )
 
         # Convert it from a list of unyt_quantities to a unyt_array
-        photometry = unyt_array(photometry, units=photometry[0].units)
+        photometry = unyt_array(
+            np.array(photometry, dtype=np.float64),
+            units=photometry[0].units,
+        )
 
         # Get the dimensions of a flux for testing
         flux_dimensions = default_units[
