@@ -35,8 +35,8 @@ def rotate(
             transformed coordinate array
     """
 
-    if len(coordinates.shape) == 1:
-        coordinates = np.array([coordinates])
+    # if len(coordinates.shape) == 1:
+    #     coordinates = np.array([coordinates])
 
     # Are we using angles?
     if rot_matrix is None:
