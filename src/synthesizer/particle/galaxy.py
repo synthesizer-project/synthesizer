@@ -1023,14 +1023,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             weighted_img.get_img_hist(
-                signal=self.stars.ages * self.stars.initial_masses,
+                signal=self.stars.ages,
+                normalisation=self.stars.initial_masses,
                 coordinates=self.stars.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             weighted_img.get_img_smoothed(
-                signal=self.stars.ages * self.stars.initial_masses,
+                signal=self.stars.ages,
+                normalisation=self.stars.initial_masses,
                 coordinates=self.stars.centered_coordinates,
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
@@ -1044,41 +1046,7 @@ class Galaxy(BaseGalaxy):
                 "'smoothed')" % img_type
             )
 
-        # Set up the initial mass image
-        mass_img = Image(
-            resolution=resolution,
-            fov=fov,
-        )
-
-        # Make the initial mass map
-        if img_type == "hist":
-            # Compute the image
-            mass_img.get_img_hist(
-                signal=self.stars.initial_masses,
-                coordinates=self.stars.centered_coordinates,
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            mass_img.get_img_smoothed(
-                signal=self.stars.initial_masses,
-                coordinates=self.stars.centered_coordinates,
-                smoothing_lengths=self.stars.smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
-
-        # Divide out the mass contribution, handling zero contribution pixels
-        img = weighted_img.arr
-        img[img > 0] /= mass_img.arr[mass_img.arr > 0]
-        img *= self.stars.ages.units
-
-        return Image(
-            resolution=resolution,
-            fov=fov,
-            img=img,
-        )
+        return weighted_img
 
     def get_map_stellar_metal_mass(
         self,
@@ -1343,7 +1311,7 @@ class Galaxy(BaseGalaxy):
         nthreads=1,
     ):
         """
-        Make a SFR map, either with or without smoothing.
+        Make a star formation rate map, either with or without smoothing.
 
         Only stars younger than age_bin are included in the map. This is
         calculated by computing the initial mass map for stars in the age bin
@@ -1430,7 +1398,8 @@ class Galaxy(BaseGalaxy):
         nthreads=1,
     ):
         """
-        Make a SFR map, either with or without smoothing.
+        Make a specific star formation rate map, either with or without
+        smoothing.
 
         Only stars younger than age_bin are included in the map. This is
         calculated by computing the initial mass map for stars in the age bin
@@ -1460,7 +1429,7 @@ class Galaxy(BaseGalaxy):
             Image
         """
         # Get the SFR map
-        img = self.get_map_sfr(
+        sfr_img = self.get_map_sfr(
             resolution=resolution,
             fov=fov,
             img_type=img_type,
@@ -1470,11 +1439,25 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
         )
 
-        # Convert the SFR map to sSFR
-        img.arr /= self.stellar_mass.value
-        img.units = img.units / self.stellar_mass.units
+        mass_img = self.get_map_stellar_mass(
+            resolution=resolution,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+        )
 
-        return img
+        # Convert the SFR map to sSFR
+        img = sfr_img.arr
+        img[img > 0] /= mass_img.arr[mass_img.arr > 0]
+        img.units = img.units / mass_img.units
+
+        return Image(
+            resolution=resolution,
+            fov=fov,
+            img=img,
+        )
 
     def get_data_cube(
         self,
