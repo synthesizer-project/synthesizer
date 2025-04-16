@@ -72,7 +72,7 @@ class PhotometryCollection:
         self.filter_codes = list(kwargs.keys())
 
         # Get the photometry
-        photometry = list(kwargs.values())
+        photometry = np.array(list(kwargs.values()), dtype=np.float64)
 
         # Ensure we have units, if not something terrible has happened
         if not isinstance(photometry[0], (unyt_quantity, unyt_array)):
