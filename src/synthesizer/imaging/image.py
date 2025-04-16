@@ -365,7 +365,7 @@ class Image:
 
         # Handle the parametric case
         if density_grid is not None:
-            # Multiply the density grid by the sed to get the IFU
+            # Multiply the density grid by the sed to get the image
             self.arr = density_grid[:, :] * signal
 
             return (
@@ -409,6 +409,7 @@ class Image:
             coordinates.shape[0],
             kernel_threshold,
             kernel.size,
+            1,
             nthreads,
         )
 

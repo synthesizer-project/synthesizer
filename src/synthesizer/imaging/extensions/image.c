@@ -36,8 +36,7 @@
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
  * @param smoothing_lengths: The stellar particle smoothing lengths.
- * @param xs: The x coordinates of the particles.
- * @param ys: The y coordinates of the particles.
+ * @param pos: The coordinates of the particles.
  * @param kernel: The kernel data (integrated along the z axis and softed by
  *               impact parameter).
  * @param res: The pixel resolution.
@@ -48,11 +47,13 @@
  * @param kdim: The number of elements in the kernel.
  * @param img: The image to be populated.
  */
-void populate_smoothed_image_serial(
-    const double *pix_values, const double *smoothing_lengths, const double *xs,
-    const double *ys, const double *kernel, const double res, const int npix_x,
-    const int npix_y, const int npart, const double threshold, const int kdim,
-    double *img, const int nimgs) {
+void populate_smoothed_image_serial(const double *pix_values,
+                                    const double *smoothing_lengths,
+                                    const double *pos, const double *kernel,
+                                    const double res, const int npix_x,
+                                    const int npix_y, const int npart,
+                                    const double threshold, const int kdim,
+                                    double *img, const int nimgs) {
 
   /* Find the maximum kernel_cdim we'll need. We need this to preallocate the
    * kernel we will populate for each particle. */
@@ -75,8 +76,8 @@ void populate_smoothed_image_serial(
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
-    const double x = xs[ind];
-    const double y = ys[ind];
+    const double x = pos[ind * 3 + 0];
+    const double y = pos[ind * 3 + 1];
 
     /* Calculate the pixel coordinates of this particle. */
     const int i = x / res;
@@ -189,8 +190,7 @@ void populate_smoothed_image_serial(
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
  * @param smoothing_lengths: The stellar particle smoothing lengths.
- * @param xs: The x coordinates of the particles.
- * @param ys: The y coordinates of the particles.
+ * @param pos: The coordinates of the particles.
  * @param kernel: The kernel data (integrated along the z axis and softed by
  *               impact parameter).
  * @param res: The pixel resolution.
@@ -203,8 +203,8 @@ void populate_smoothed_image_serial(
  */
 #ifdef WITH_OPENMP
 void populate_smoothed_image_parallel(
-    const double *pix_values, const double *smoothing_lengths, const double *xs,
-    const double *ys, const double *kernel, const double res, const int npix_x,
+    const double *pix_values, const double *smoothing_lengths,
+    const double *pos, const double *kernel, const double res, const int npix_x,
     const int npix_y, const int npart, const double threshold, const int kdim,
     double *img, const int nimgs, const int nthreads) {
 
@@ -233,8 +233,8 @@ void populate_smoothed_image_parallel(
 
       /* Get this particles smoothing length and position */
       const double smooth_length = smoothing_lengths[ind];
-      const double x = xs[ind];
-      const double y = ys[ind];
+      const double x = pos[ind * 3 + 0];
+      const double y = pos[ind * 3 + 1];
 
       /* Calculate the pixel coordinates of this particle. */
       const int i = x / res;
@@ -347,8 +347,7 @@ void populate_smoothed_image_parallel(
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
  * @param smoothing_lengths: The stellar particle smoothing lengths.
- * @param xs: The x coordinates of the particles.
- * @param ys: The y coordinates of the particles.
+ * @param pos: The coordinates of the particles.
  * @param kernel: The kernel data (integrated along the z axis and softed by
  *               impact parameter).
  * @param res: The pixel resolution.
@@ -361,27 +360,27 @@ void populate_smoothed_image_parallel(
  * @param nthreads: The number of threads to use.
  */
 void populate_smoothed_image(const double *pix_values,
-                             const double *smoothing_lengths, const double *xs,
-                             const double *ys, const double *kernel,
-                             const double res, const int npix_x,
-                             const int npix_y, const int npart,
-                             const double threshold, const int kdim,
-                             double *img, const int nimgs, const int nthreads) {
+                             const double *smoothing_lengths, const double *pos,
+                             const double *kernel, const double res,
+                             const int npix_x, const int npix_y,
+                             const int npart, const double threshold,
+                             const int kdim, double *img, const int nimgs,
+                             const int nthreads) {
 
   double start = tic();
 
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
-    populate_smoothed_image_parallel(pix_values, smoothing_lengths, xs, ys,
-                                     kernel, res, npix_x, npix_y, npart,
-                                     threshold, kdim, img, nimgs, nthreads);
+    populate_smoothed_image_parallel(pix_values, smoothing_lengths, pos, kernel,
+                                     res, npix_x, npix_y, npart, threshold,
+                                     kdim, img, nimgs, nthreads);
   } else {
-    populate_smoothed_image_serial(pix_values, smoothing_lengths, xs, ys,
-                                   kernel, res, npix_x, npix_y, npart,
-                                   threshold, kdim, img, nimgs);
+    populate_smoothed_image_serial(pix_values, smoothing_lengths, pos, kernel,
+                                   res, npix_x, npix_y, npart, threshold, kdim,
+                                   img, nimgs);
   }
 #else
-  populate_smoothed_image_serial(pix_values, smoothing_lengths, xs, ys, kernel,
+  populate_smoothed_image_serial(pix_values, smoothing_lengths, pos, kernel,
                                  res, npix_x, npix_y, npart, threshold, kdim,
                                  img, nimgs);
 #endif
@@ -402,8 +401,7 @@ void populate_smoothed_image(const double *pix_values,
  * @param np_pix_values: The particle data to be sorted into pixels
  *                       (luminosity/flux/mass etc.).
  * @param np_smoothing_lengths: The stellar particle smoothing lengths.
- * @param np_xs: The x coordinates of the particles.
- * @param np_ys: The y coordinates of the particles.
+ * @param np_pos: The coordinates of the particles.
  * @param np_kernel: The kernel data (integrated along the z axis and softed
  * by impact parameter).
  * @param res: The pixel resolution.
@@ -422,10 +420,10 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   double res, threshold;
   int npix_x, npix_y, npart, kdim, nthreads, nimgs;
   PyArrayObject *np_pix_values, *np_kernel;
-  PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
+  PyArrayObject *np_smoothing_lengths, *np_pos;
 
-  if (!PyArg_ParseTuple(args, "OOOOOdiiidii", &np_pix_values,
-                        &np_smoothing_lengths, &np_xs, &np_ys, &np_kernel, &res,
+  if (!PyArg_ParseTuple(args, "OOOOdiiidiii", &np_pix_values,
+                        &np_smoothing_lengths, &np_pos, &np_kernel, &res,
                         &npix_x, &npix_y, &npart, &threshold, &kdim, &nimgs,
                         &nthreads))
     return NULL;
@@ -434,8 +432,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   const double *pix_values = extract_data_double(np_pix_values, "pix_values");
   const double *smoothing_lengths =
       extract_data_double(np_smoothing_lengths, "smoothing_lengths");
-  const double *xs = extract_data_double(np_xs, "xs");
-  const double *ys = extract_data_double(np_ys, "ys");
+  const double *pos = extract_data_double(np_pos, "pos");
   const double *kernel = extract_data_double(np_kernel, "kernel");
 
   /* Allocate the image.. */
@@ -443,8 +440,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   double *img = synth_malloc(npix * sizeof(double), "image");
 
   /* Populate the image. */
-  populate_smoothed_image(pix_values, smoothing_lengths, xs, ys, kernel, res,
-                          npix_x, npix_y, npart, threshold, kdim, img,
+  populate_smoothed_image(pix_values, smoothing_lengths, pos, kernel, res,
+                          npix_x, npix_y, npart, threshold, kdim, img, nimgs,
                           nthreads);
 
   /* Construct a numpy python array to return the IFU. */

@@ -325,6 +325,31 @@ class ImageCollection:
             f"Filter code {filter_code} not found in ImageCollection"
         )
 
+    def __setitem__(self, filter_code, img):
+        """
+        Store the image at filter_code in the imgs dictionary.
+
+        This allows the user to store specific images with the following
+        syntax: ImageCollection["JWST/NIRCam.F150W"] = img.
+
+        Image can either be a numpy array or an Image object. If it is a numpy
+        array it is converted to an Image object.
+
+        Args:
+            filter_code (str)
+                The filter code of the desired photometry.
+            img (Image/array)
+                The image to be added to the collection.
+        """
+        # Do we need to convert the image to an Image object?
+        if not isinstance(img, Image):
+            # Convert the image to an Image object
+            img = Image(self.resolution, self.fov, img=img)
+
+        # Perform the look up
+        self.imgs[filter_code] = img
+        self.filter_codes.append(filter_code)
+
     def keys(self):
         """Enable dict.keys() behaviour."""
         return self.imgs.keys()
@@ -1049,32 +1074,32 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed":
-        # Compute the image
-        imgs.get_imgs_smoothed(
-            photometry=photometry,
-            nthreads=nthreads,
-            # Following args only applicable for particle components,
-            # They'll automatically be None otherwise
-            coordinates=getattr(
-                emitter,
-                "centered_coordinates",
-                None,
-            ),
-            smoothing_lengths=getattr(
-                emitter,
-                "smoothing_lengths",
-                None,
-            ),
-            kernel=kernel,
-            kernel_threshold=(kernel_threshold),
-            # Following args are only applicable for parametric
-            # components, they'll automatically be None otherwise
-            density_grid=emitter.morphology.get_density_grid(
-                instrument.resolution, imgs.npix
-            )
-            if hasattr(emitter, "morphology")
-            else None,
+        from .extensions.image import make_img
+
+        # How many images will we need to make?
+        nimgs = len(photometry)
+        print(f"Making {nimgs} images")
+
+        # Get the (Nimg, npix_x, npix_y) array of images
+        imgs_arr = make_img(
+            photometry.photometry,
+            emitter.smoothing_lengths,
+            emitter.centered_coordinates,
+            kernel,
+            instrument.resolution,
+            imgs.npix[0],
+            imgs.npix[1],
+            emitter.nparticles,
+            kernel_threshold,
+            kernel.size,
+            nimgs,
+            nthreads,
         )
+
+        # Store the image arrays on the image collection (this will
+        # automatically convert them to Image objects)
+        for fcode, img_arr in zip(photometry.filter_codes, imgs_arr):
+            imgs[fcode] = img_arr
 
     else:
         raise exceptions.UnknownImageType(
