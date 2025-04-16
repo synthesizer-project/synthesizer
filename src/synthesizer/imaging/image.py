@@ -232,6 +232,7 @@ class Image:
     def get_img_hist(
         self,
         signal,
+        normalisation=None,
         coordinates=None,
     ):
         """
@@ -243,6 +244,9 @@ class Image:
         Args:
             signal (array_like, float):
                 The signal to be sorted into the image.
+            normalisation (array_like, float):
+                The normalisation property. This is
+                multiplied by the signal before sorting, then normalised out.
             coordinates (unyt_array, float):
                 The coordinates of the particles.
 
@@ -267,6 +271,10 @@ class Image:
         # strip them off
         coordinates = coordinates.to(self.resolution.units).value
 
+        if normalisation is not None:
+            # Apply normalisation to original signal
+            signal *= normalisation.value
+
         self.arr = np.histogram2d(
             coordinates[:, 0],
             coordinates[:, 1],
@@ -281,11 +289,32 @@ class Image:
             weights=signal,
         )[0]
 
+        if normalisation is not None:
+            # Normalise the image by the normalisation property
+            norm_img = np.histogram2d(
+                coordinates[:, 0],
+                coordinates[:, 1],
+                bins=(
+                    np.linspace(
+                        -self._fov[0] / 2, self._fov[0] / 2, self.npix[0] + 1
+                    ),
+                    np.linspace(
+                        -self._fov[1] / 2, self._fov[1] / 2, self.npix[1] + 1
+                    ),
+                ),
+                weights=normalisation.value,
+            )[0]
+
+            self.arr /= norm_img
+            if self.units is not None:
+                self.units /= normalisation.units
+
         return self.arr * self.units if self.units is not None else self.arr
 
     def get_img_smoothed(
         self,
         signal,
+        normalisation=None,
         coordinates=None,
         smoothing_lengths=None,
         kernel=None,
@@ -298,7 +327,8 @@ class Image:
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
-        calculate the image for each particle efficiently.
+        calculate the image for each particle efficiently. Images can
+        optionally be normalised by a secondary property.
 
         In the parametric case the signal is smoothed over a density grid. This
         density grid is an array defining the weight in each pixel.
@@ -306,6 +336,10 @@ class Image:
         Args:
             signal (array_like, float):
                 The signal to be sorted into the image.
+            normalisation (array_like, float):
+                The normalisation property to be used for the signal. This is
+                multiplied by the signal before smoothing, then normalised out.
+                (particle case only).
             coordinates (unyt_array, float):
                 The coordinates of the particles. (particle case only)
             smoothing_lengths (unyt_array, float):
@@ -381,6 +415,10 @@ class Image:
 
         from .extensions.image import make_img
 
+        # Apply normalisation to original signal
+        if normalisation is not None:
+            signal *= normalisation.value  # ignore units
+
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
         coordinates = coordinates.to(self.resolution.units).value
@@ -411,6 +449,30 @@ class Image:
             kernel.size,
             nthreads,
         )
+
+        if normalisation is not None:
+            normalisation = np.ascontiguousarray(
+                normalisation.value, dtype=np.float64
+            )
+
+            norm_img = make_img(
+                normalisation,
+                smls,
+                xs,
+                ys,
+                kernel,
+                self._resolution,
+                self.npix[0],
+                self.npix[1],
+                coordinates.shape[0],
+                kernel_threshold,
+                kernel.size,
+                nthreads,
+            )
+
+            # Divide out the normalisation contribution, handling zero
+            # contribution pixels
+            self.arr[self.arr > 0] /= norm_img[norm_img > 0]
 
         return self.arr * self.units if self.units is not None else self.arr
 

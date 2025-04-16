@@ -12,6 +12,7 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, rad, s
 
 from synthesizer import exceptions
+from synthesizer.particle.utils import rotate
 from synthesizer.synth_warnings import deprecation
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
@@ -814,34 +815,13 @@ class Particles:
                 A new instance of the particles with the rotated coordinates,
                 if inplace is False.
         """
-        # Are we using angles?
-        if rot_matrix is None:
-            # Rotation matrix around z-axis (phi)
-            rot_matrix_z = np.array(
-                [
-                    [np.cos(phi), -np.sin(phi), 0],
-                    [np.sin(phi), np.cos(phi), 0],
-                    [0, 0, 1],
-                ]
-            )
-
-            # Rotation matrix around y-axis (theta)
-            rot_matrix_y = np.array(
-                [
-                    [np.cos(theta), 0, np.sin(theta)],
-                    [0, 1, 0],
-                    [-np.sin(theta), 0, np.cos(theta)],
-                ]
-            )
-
-            # Combined rotation matrix
-            rot_matrix = np.dot(rot_matrix_y, rot_matrix_z)
-
         # Are we rotating in place or returning a new instance?
         if inplace:
             # Rotate the coordinates
-            self.coordinates = np.dot(self.coordinates, rot_matrix.T)
-            self.velocities = np.dot(self.velocities, rot_matrix.T)
+            self.coordinates = rotate(self.coordinates, phi, theta, rot_matrix)
+            self.velocities = rotate(self.velocities, phi, theta, rot_matrix)
+            if self.centre is not None:
+                self.centre = rotate(self.centre, phi, theta, rot_matrix)
 
             return
 
@@ -849,8 +829,14 @@ class Particles:
         new_parts = copy.deepcopy(self)
 
         # Rotate the coordinates
-        new_parts.coordinates = np.dot(new_parts.coordinates, rot_matrix.T)
-        new_parts.velocities = np.dot(new_parts.velocities, rot_matrix.T)
+        new_parts.coordinates = rotate(
+            new_parts.coordinates, phi, theta, rot_matrix
+        )
+        new_parts.velocities = rotate(
+            new_parts.velocities, phi, theta, rot_matrix
+        )
+        if self.centre is not None:
+            new_parts.centre = rotate(new_parts.centre, phi, theta, rot_matrix)
 
         # Return the new one
         return new_parts

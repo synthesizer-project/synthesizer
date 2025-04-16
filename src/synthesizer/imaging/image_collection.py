@@ -435,7 +435,7 @@ class ImageCollection:
             img = Image(self.resolution, self.fov)
 
             # Get the image for this filter
-            img.get_img_hist(photometry[f], coordinates)
+            img.get_img_hist(photometry[f], coordinates=coordinates)
 
             # Store the image
             self.imgs[f] = img

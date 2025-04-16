@@ -1083,9 +1083,10 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
-            limit_to (str)
-                Optionally pass a single model label to limit image generation
-                to only that model.
+            limit_to (str, list)
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
             instrument (Instrument)
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
@@ -1104,6 +1105,9 @@ class BaseGalaxy:
         # If we haven't got an instrument create one
         if instrument is None:
             instrument = Instrument("place-holder", resolution=resolution)
+
+        # Convert `limit_to` to a list if it is a string
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
 
         # Get the images
         images = emission_model._get_images(
@@ -1132,7 +1136,7 @@ class BaseGalaxy:
         # Unpack the images to the right component
         for model in emission_model._models.values():
             # Are we limiting to a specific model?
-            if limit_to is not None and model.label != limit_to:
+            if limit_to is not None and model.label not in limit_to:
                 continue
 
             # Skip models we aren't saving
@@ -1173,7 +1177,7 @@ class BaseGalaxy:
 
         # If we are limiting to a specific image then return that
         if limit_to is not None:
-            return images[limit_to]
+            return images[limit_to[0]]  # return the first image in list
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
@@ -1232,9 +1236,10 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
-            limit_to (str)
-                Optionally pass a single model label to limit image generation
-                to only that model.
+            limit_to (str, list)
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
             instrument (Instrument)
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
@@ -1253,6 +1258,9 @@ class BaseGalaxy:
         # If we haven't got an instrument create one
         if instrument is None:
             instrument = Instrument("place-holder", resolution=resolution)
+
+        # Convert `limit_to` to a list if it is a string
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
 
         # Get the images
         images = emission_model._get_images(
@@ -1281,7 +1289,7 @@ class BaseGalaxy:
         # Unpack the images to the right component
         for model in emission_model._models.values():
             # Are we limiting to a specific model?
-            if limit_to is not None and model.label != limit_to:
+            if limit_to is not None and model.label not in limit_to:
                 continue
 
             # Skip models we aren't saving
@@ -1322,7 +1330,7 @@ class BaseGalaxy:
 
         # If we are limiting to a specific image then return that
         if limit_to is not None:
-            return images[limit_to]
+            return images[limit_to[0]]  # return the first image in list
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
