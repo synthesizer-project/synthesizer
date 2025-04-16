@@ -3,7 +3,12 @@
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.utils import depluralize, pluralize
+from synthesizer.utils import (
+    depluralize,
+    ensure_array_c_compatible_double,
+    get_attr_c_compatible_double,
+    pluralize,
+)
 
 _NO_DEFAULT = object()
 
@@ -49,15 +54,19 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
 
     # Check the model's fixed parameters first
     if model is not None and param in model.fixed_parameters:
-        value = model.fixed_parameters[param]
+        value = (
+            ensure_array_c_compatible_double(model.fixed_parameters[param])
+            if not isinstance(model.fixed_parameters[param], str)
+            else model.fixed_parameters[param]
+        )
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = getattr(emission, param)
+        value = get_attr_c_compatible_double(emission, param)
 
     # Finally check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = getattr(emitter, param)
+        value = get_attr_c_compatible_double(emitter, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
