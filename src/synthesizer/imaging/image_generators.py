@@ -412,6 +412,8 @@ def _generate_images_parametric_smoothed(
             signal=signal,
         )
 
+    return imgs
+
 
 def _generate_image_collection_generic(
     instrument,
@@ -508,7 +510,7 @@ def _generate_image_collection_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
-        imgs = _generate_images_particle_hist(
+        return _generate_images_particle_hist(
             imgs,
             coordinates=emitter.centered_coordinates,
             signals=photometry,
@@ -521,7 +523,7 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
-        imgs = _generate_images_particle_smoothed(
+        return _generate_images_particle_smoothed(
             imgs=imgs,
             signals=photometry.photometry,
             cent_coords=emitter.centered_coordinates,
@@ -533,10 +535,12 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed":
-        imgs = _generate_images_parametric_smoothed(
+        return _generate_images_parametric_smoothed(
             imgs,
-            density_grid=photometry.photometry,
-            signals=photometry.photometry,
+            density_grid=emitter.morphology.get_density_grid(
+                imgs.resolution, imgs.npix
+            ),
+            signals=photometry,
         )
 
     else:

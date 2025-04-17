@@ -471,9 +471,8 @@ class ImageCollection:
                 images.
         """
         # Generate the images
-        imgs = ImageCollection(resolution=self.resolution, fov=self.fov)
         return _generate_images_particle_hist(
-            imgs,
+            self,
             coordinates=coordinates,
             signals=photometry,
             normalisations=normalisations,
@@ -531,14 +530,11 @@ class ImageCollection:
             ImageCollection: The image collection containing the generated
                 images.
         """
-        # Instantiate the Image colection ready to make the image.
-        imgs = ImageCollection(resolution=self.resolution, fov=self.fov)
-
         # Call the correct image generation function (particle or parametric)
         if density_grid is not None and photometry is not None:
             # Generate the images for the parametric case
-            imgs = _generate_images_parametric_smoothed(
-                imgs,
+            return _generate_images_parametric_smoothed(
+                self,
                 density_grid=density_grid,
                 signals=photometry,
             )
@@ -550,8 +546,8 @@ class ImageCollection:
             and photometry is not None
         ):
             # Generate the images for the particle case
-            imgs = _generate_images_particle_smoothed(
-                imgs,
+            return _generate_images_particle_smoothed(
+                self,
                 photometry.photometry,
                 coordinates=coordinates,
                 smoothing_lengths=smoothing_lengths,
@@ -573,8 +569,6 @@ class ImageCollection:
                 f"kernel_threshold={type(kernel_threshold)}, "
                 f"photometry={type(photometry)})"
             )
-
-        return imgs
 
     def apply_psfs(self, psfs):
         """

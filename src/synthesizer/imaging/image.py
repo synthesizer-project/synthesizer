@@ -260,9 +260,8 @@ class Image:
                 A 2D array containing the pixel values sorted into the image.
                 (npix, npix)
         """
-        img = Image(resolution=self.resolution, fov=self.fov)
         return _generate_image_particle_hist(
-            img,
+            self,
             signal,
             coordinates,
             normalisation=normalisation,
@@ -321,13 +320,11 @@ class Image:
                 If conflicting particle and parametric arguments are passed
                 or any arguments are missing an error is raised.
         """
-        img = Image(resolution=self.resolution, fov=self.fov)
-
         # Call the correct image generation function (particle or parametric)
         if density_grid is not None and signal is not None:
             # Generate the images for the parametric case
-            img = _generate_image_parametric_smoothed(
-                img,
+            return _generate_image_parametric_smoothed(
+                self,
                 density_grid=density_grid,
                 signal=signal,
             )
@@ -339,8 +336,8 @@ class Image:
             and signal is not None
         ):
             # Generate the images for the particle case
-            img = _generate_image_particle_smoothed(
-                img,
+            return _generate_image_particle_smoothed(
+                self,
                 signal,
                 coordinates=coordinates,
                 smoothing_lengths=smoothing_lengths,
@@ -361,8 +358,6 @@ class Image:
                 f"kernel_threshold={type(kernel_threshold)}, "
                 f"signal={type(signal)})"
             )
-
-        return img
 
     def apply_psf(self, psf):
         """
