@@ -24,7 +24,7 @@ from scipy.ndimage import zoom
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.imaging.extensions.image import (
+from synthesizer.imaging.image_generators import (
     _generate_image_parametric_smoothed,
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,

@@ -14,14 +14,12 @@ user.
 """
 
 import numpy as np
-from sythesizer.particle import Particles
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
-    get_attr_c_compatible_double,
 )
 
 
@@ -123,7 +121,7 @@ def _generate_images_particle_hist(
         ImageCollection: An image collection containing the histogram images.
     """
     # Avoid cyclic imports
-    from synthesizer.imaging.image import Image
+    from synthesizer.imaging import Image
 
     # Loop over the signals and create the images
     for key, signal in signals.items():
@@ -184,7 +182,7 @@ def _generate_image_particle_smoothed(
         Image: The smoothed image.
     """
     # Avoid cyclic imports
-    from synthesizer.imaging.image import Image
+    from synthesizer.imaging import Image
 
     # Get the spatial units we'll work with
     spatial_units = img.resolution.units
@@ -291,7 +289,7 @@ def _generate_images_particle_smoothed(
         ImageCollection: An image collection containing the smoothed images.
     """
     # Avoid cyclic imports
-    from synthesizer.imaging.image import Image
+    from synthesizer.imaging import Image
 
     # Get the spatial units we'll work with
     spatial_units = imgs.resolution.units
@@ -400,7 +398,7 @@ def _generate_images_parametric_smoothed(
         ImageCollection: An image collection containing the smoothed images.
     """
     # Avoid cyclic imports
-    from synthesizer.imaging.image import Image
+    from synthesizer.imaging import Image
 
     # Loop over the signals and create the images
     for key, signal in signals.items():
@@ -468,7 +466,8 @@ def _generate_image_collection_generic(
             An image collection object containing the images.
     """
     # Avoid cyclic imports
-    from synthesizer.imaging.image import ImageCollection
+    from synthesizer.imaging import ImageCollection
+    from synthesizer.particle import Particles
 
     # Get the appropriate photometry (particle/integrated and
     # flux/luminosity)
@@ -511,9 +510,8 @@ def _generate_image_collection_generic(
     ):
         imgs = _generate_images_particle_hist(
             imgs,
-            coordinates=emitter.coordinates,
-            signals=photometry.photometry,
-            normalisations=photometry.smoothing_lengths,
+            coordinates=emitter.centered_coordinates,
+            signals=photometry,
         )
 
     elif img_type == "hist":
@@ -524,14 +522,14 @@ def _generate_image_collection_generic(
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
         imgs = _generate_images_particle_smoothed(
-            imgs,
-            photometry.photometry,
-            ensure_array_c_compatible_double(emitter.centred_coordinates),
-            get_attr_c_compatible_double(emitter, "smoothing_lengths"),
-            photometry.filter_codes,
-            kernel,
-            kernel_threshold,
-            nthreads,
+            imgs=imgs,
+            signals=photometry.photometry,
+            cent_coords=emitter.centered_coordinates,
+            smoothing_lengths=emitter.smoothing_lengths,
+            labels=photometry.filter_codes,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
         )
 
     elif img_type == "smoothed":
