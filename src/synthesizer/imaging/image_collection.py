@@ -49,6 +49,9 @@ from unyt import unyt_quantity
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
 from synthesizer.units import Quantity
+from synthesizer.utils import (
+    ensure_array_c_compatible_double,
+)
 
 
 class ImageCollection:
@@ -1078,15 +1081,21 @@ def _generate_image_collection_generic(
 
         # How many images will we need to make?
         nimgs = len(photometry)
-        print(f"Making {nimgs} images")
+
+        # Shift the centred coordinates by half the FOV
+        # (this is to ensure the image is centered on the emitter)
+        pos = emitter.centered_coordinates.to(imgs.resolution.units)
+        pos[:, 0] += imgs.fov[0].to(imgs.resolution.units) / 2.0
+        pos[:, 1] += imgs.fov[1].to(imgs.resolution.units) / 2.0
+        smls = emitter.smoothing_lengths.to(imgs.resolution.units)
 
         # Get the (Nimg, npix_x, npix_y) array of images
         imgs_arr = make_img(
             photometry.photometry,
-            emitter.smoothing_lengths,
-            emitter.centered_coordinates,
+            ensure_array_c_compatible_double(smls),
+            ensure_array_c_compatible_double(pos),
             kernel,
-            instrument.resolution,
+            imgs.resolution.value,
             imgs.npix[0],
             imgs.npix[1],
             emitter.nparticles,
@@ -1098,8 +1107,8 @@ def _generate_image_collection_generic(
 
         # Store the image arrays on the image collection (this will
         # automatically convert them to Image objects)
-        for fcode, img_arr in zip(photometry.filter_codes, imgs_arr):
-            imgs[fcode] = img_arr
+        for ind, fcode in enumerate(photometry.filter_codes):
+            imgs[fcode] = imgs_arr[ind, :, :] * photometry.photometry.units
 
     else:
         raise exceptions.UnknownImageType(

@@ -164,11 +164,12 @@ void populate_smoothed_image_serial(const double *pix_values,
         /* Add the pixel value to each of the images. */
         for (int nimg = 0; nimg < nimgs; nimg++) {
 
-          /* Get the pixel index in the image. */
-          const int pix_ind = nimg * npix_x * npix_y + jj + npix_y * ii;
+          /* Get the pixel index in the image (nimg, i, j). */
+          const int pix_ind = nimg * npix_x * npix_y + npix_y * ii + jj;
 
-          /* Add the pixel value to this image. */
-          img[pix_ind] += kvalue * pix_values[ind * nimgs + nimg];
+          /* Add the pixel value to this image, pixel values are (Nimg, Npart)
+           * in shape. */
+          img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
         }
       }
     }
@@ -447,7 +448,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   /* Construct a numpy python array to return the IFU. */
   npy_intp dims[3] = {nimgs, npix_x, npix_y};
   PyArrayObject *out_img =
-      (PyArrayObject *)PyArray_SimpleNewFromData(2, dims, NPY_FLOAT64, img);
+      (PyArrayObject *)PyArray_SimpleNewFromData(3, dims, NPY_FLOAT64, img);
 
   return Py_BuildValue("N", out_img);
 }
