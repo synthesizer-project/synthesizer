@@ -21,14 +21,14 @@ import numpy as np
 from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
-from syntherizer.imaging.extensions.image import (
+from unyt import unyt_array, unyt_quantity
+
+from synthesizer import exceptions
+from synthesizer.imaging.extensions.image import (
     _generate_image_parametric_smoothed,
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from unyt import unyt_array, unyt_quantity
-
-from synthesizer import exceptions
 from synthesizer.units import Quantity
 
 
