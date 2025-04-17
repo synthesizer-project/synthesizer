@@ -324,11 +324,11 @@ void populate_smoothed_image_parallel(
           for (int nimg = 0; nimg < nimgs; nimg++) {
 
             /* Get the pixel index in the image. */
-            const int pix_ind = nimg * npix_x * npix_y + jj + npix_y * ii;
+            const int pix_ind = nimg * npix_x * npix_y + npix_y * ii + jj;
 
             /* Add the pixel value to this image. */
 #pragma omp atomic
-            img[pix_ind] += kvalue * pix_values[ind * nimgs + nimg];
+            img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
           }
         }
       }
