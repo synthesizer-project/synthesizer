@@ -18,6 +18,7 @@ from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.extensions.image import make_img
+from synthesizer.kernel_functions import Kernel
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
 )
@@ -57,6 +58,13 @@ def _generate_image_particle_hist(
             "Signal and coordinates must be the same size"
             f" for a histogram image (got {signal.size} and "
             f"{coordinates.shape[0]})."
+        )
+
+    # Ensure coordinates have been centred
+    if not (coordinates.min() < 0 and coordinates.max() > 0):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be centered for imaging"
+            f" (got min={coordinates.min()} and max={coordinates.max()})."
         )
 
     # Strip off and store the units on the signal if they are present
@@ -224,6 +232,13 @@ def _generate_image_particle_smoothed(
             f"{smoothing_lengths.shape[0]})."
         )
 
+    # Ensure coordinates have been centred
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be centered for imaging"
+            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
+        )
+
     # Get the spatial units we'll work with
     spatial_units = img.resolution.units
 
@@ -366,6 +381,13 @@ def _generate_images_particle_smoothed(
             f"label (got {signals.shape[0]} and {len(labels)})."
         )
 
+    # Ensure coordinates have been centred
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be centered for imaging"
+            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
+        )
+
     # Get the spatial units we'll work with
     spatial_units = imgs.resolution.units
 
@@ -387,7 +409,7 @@ def _generate_images_particle_smoothed(
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        signals.value,
+        signals,
         ensure_array_c_compatible_double(smoothing_lengths),
         ensure_array_c_compatible_double(cent_coords),
         kernel,
@@ -590,7 +612,427 @@ def _generate_image_collection_generic(
     ):
         return _generate_images_particle_hist(
             imgs,
+            coordinates=emitter.centered_coordinates,
+            signals=photometry,
+        )
+
+    elif img_type == "hist":
+        raise exceptions.InconsistentArguments(
+            "Parametric images can only be made using the smoothed "
+            "image type."
+        )
+
+    elif img_type == "smoothed" and isinstance(emitter, Particles):
+        return _generate_images_particle_smoothed(
+            imgs=imgs,
+            signals=photometry.photometry,
             cent_coords=emitter.centered_coordinates,
+            smoothing_lengths=emitter.smoothing_lengths,
+            labels=photometry.filter_codes,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+        )
+
+    elif img_type == "smoothed":
+        return _generate_images_parametric_smoothed(
+            imgs,
+            density_grid=emitter.morphology.get_density_grid(
+                imgs.resolution, imgs.npix
+            ),
+            signals=photometry,
+        )
+
+    else:
+        raise exceptions.UnknownImageType(
+            f"Unknown img_type {img_type} for a {type(emitter)} emitter. "
+            " (Options are 'hist' (only for particle based emitters)"
+            " or 'smoothed')"
+        )
+
+    return imgs
+
+
+def _generate_ifu_particle_hist(
+    ifu,
+    sed,
+    quantity,
+    cent_coords,
+    nthreads,
+):
+    """
+    Generate a histogram IFU for a particle emitter.
+
+    Args:
+        ifu (SpectralCube):
+            The SpectralCube object to populate with the ifu.
+        sed (Sed):
+            The Sed containing the spectra to sort into the IFU. For a
+            particle emitter this should be a spectrum per particle, i.e.
+            a 2D array of spectra with shape (Nparticles, Nlam).
+        quantity (str):
+            The quantity to use for the spectra. This can be any valid
+            spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
+            'flux', etc.
+        cent_coords (unyt_array of float):
+            The centered coordinates of the particles.
+        nthreads (int):
+            The number of threads to use when smoothing the image.
+
+    Returns:
+        SpectralCube: The histogram image.
+    """
+    # Sample the spectra onto the wavelength grid
+    sed = sed.get_resampled_sed(new_lam=ifu.lam)
+
+    # Store the Sed and quantity
+    ifu.sed = sed
+    ifu.quantity = quantity
+
+    # Get the spectra we will be sorting into the spectral cube
+    spectra = getattr(sed, quantity, None)
+    if spectra is None:
+        raise exceptions.MissingSpectraType(
+            f"Can't make an image for {quantity},"
+            " it does not exist in the Sed."
+        )
+
+    # Strip off and store the units on the spectra for later
+    ifu.units = spectra.units
+    spectra = spectra.value.T
+
+    # Ensure the spectra is 2D with a spectra per particle
+    if spectra.ndim != 2:
+        raise exceptions.InconsistentArguments(
+            "Spectra must be a 2D array for an IFU image"
+            f" (got {spectra.ndim})."
+        )
+    if spectra.shape[1] != cent_coords.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Spectra and coordinates must be the same size"
+            f" for an IFU image (got {spectra.shape[0]} and "
+            f"{cent_coords.shape[0]})."
+        )
+
+    # Get the spatial units we'll work with
+    spatial_units = ifu.resolution.units
+
+    # Get some IFU properties we'll need
+    fov = ifu.fov.to_value(spatial_units)
+    res = ifu.resolution.to_value(spatial_units)
+
+    # Convert coordinates and smoothing lengths to the correct units and
+    # strip them off
+    cent_coords = cent_coords.to(spatial_units).value
+
+    # Ensure coordinates have been centred
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be centered for imaging"
+            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
+        )
+
+    # Prepare the inputs, we need to make sure we are passing C contiguous
+    # arrays.
+    spectra = np.ascontiguousarray(spectra, dtype=np.float64)
+    cent_coords[:, 0] += fov[0] / 2
+    cent_coords[:, 1] += fov[1] / 2
+    smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
+
+    # Get the kernel
+    # TODO: We should do away with this and write a histogram backend
+    kernel = Kernel().get_kernel()
+
+    ifu.arr = make_img(
+        spectra,
+        smls,
+        ensure_array_c_compatible_double(cent_coords),
+        kernel,
+        res,
+        ifu.npix[0],
+        ifu.npix[1],
+        cent_coords.shape[0],
+        1,
+        kernel.size,
+        sed.nlam,
+        nthreads,
+    ).T
+
+    return ifu
+
+
+def _generate_ifu_particle_smoothed(
+    ifu,
+    sed,
+    quantity,
+    cent_coords,
+    smoothing_lengths,
+    kernel,
+    kernel_threshold,
+    nthreads,
+):
+    """
+    Generate a histogram IFU for a particle emitter.
+
+    Args:
+        ifu (SpectralCube):
+            The SpectralCube object to populate with the ifu.
+        sed (Sed):
+            The Sed containing the spectra to sort into the IFU. For a
+            particle emitter this should be a spectrum per particle, i.e.
+            a 2D array of spectra with shape (Nparticles, Nlam).
+        quantity (str):
+            The quantity to use for the spectra. This can be any valid
+            spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
+            'flux', etc.
+        cent_coords (unyt_array of float):
+            The centered coordinates of the particles.
+        smoothing_lengths (unyt_array of float):
+            The smoothing lengths of the particles. These will be
+            converted to the image resolution units.
+        kernel (str):
+            The array describing the kernel. This is dervied from the
+            kernel_functions module.
+        kernel_threshold (float):
+            The threshold for the kernel. Particles with a kernel value
+            below this threshold are included in the image.
+        nthreads (int):
+            The number of threads to use when smoothing the image.
+
+    Returns:
+        SpectralCube: The histogram image.
+    """
+    # Sample the spectra onto the wavelength grid
+    sed = sed.get_resampled_sed(new_lam=ifu.lam)
+
+    # Store the Sed and quantity
+    ifu.sed = sed
+    ifu.quantity = quantity
+
+    # Get the spectra we will be sorting into the spectral cube
+    spectra = getattr(sed, quantity, None)
+    if spectra is None:
+        raise exceptions.MissingSpectraType(
+            f"Can't make an image for {quantity},"
+            " it does not exist in the Sed."
+        )
+
+    # Strip off and store the units on the spectra for later
+    ifu.units = spectra.units
+    spectra = spectra.value.T
+
+    # Ensure the spectra is 2D with a spectra per particle
+    if spectra.ndim != 2:
+        raise exceptions.InconsistentArguments(
+            f"Spectra must be a 2D array for an IFU (got {spectra.ndim})."
+        )
+    if spectra.shape[1] != cent_coords.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Spectra and coordinates must be the same size"
+            f" for an IFU (got {spectra.shape[0]} and "
+            f"{cent_coords.shape[0]})."
+        )
+
+    # Get the spatial units we'll work with
+    spatial_units = ifu.resolution.units
+
+    # Get some IFU properties we'll need
+    fov = ifu.fov.to_value(spatial_units)
+    res = ifu.resolution.to_value(spatial_units)
+
+    # Convert coordinates and smoothing lengths to the correct units and
+    # strip them off
+    cent_coords = cent_coords.to_value(spatial_units)
+
+    # Ensure coordinates have been centred
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be centered for imaging"
+            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
+        )
+
+    # Prepare the inputs, we need to make sure we are passing C contiguous
+    # arrays.
+    spectra = np.ascontiguousarray(spectra, dtype=np.float64)
+    cent_coords[:, 0] += fov[0] / 2
+    cent_coords[:, 1] += fov[1] / 2
+    smls = ensure_array_c_compatible_double(
+        smoothing_lengths.to_value(spatial_units)
+    )
+
+    # Generate the IFU
+    ifu.arr = make_img(
+        spectra,
+        smls,
+        ensure_array_c_compatible_double(cent_coords),
+        kernel,
+        res,
+        ifu.npix[0],
+        ifu.npix[1],
+        cent_coords.shape[0],
+        kernel_threshold,
+        kernel.size,
+        sed.nlam,
+        nthreads,
+    ).T
+
+    print(ifu.arr.shape)
+
+    return ifu
+
+
+def _generate_ifu_parametric_smoothed(
+    ifu,
+    sed,
+    quantity,
+    density_grid,
+):
+    """
+    Generate a smoothed IFU for a parametric emitter.
+
+    Args:
+        ifu (SpectralCube):
+            The SpectralCube object to populate with the ifu.
+        sed (Sed):
+            The Sed containing the spectra to sort into the IFU. For a
+            parametric emitter this should be a single integrated spectrum.
+        quantity (str):
+            The quantity to use for the spectra. This can be any valid
+            spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
+            'flux', etc.
+        density_grid (unyt_array of float):
+            The density grid to be smoothed over.
+    """
+    # Sample the spectra onto the wavelength grid if we need to
+    sed = sed.get_resampled_sed(new_lam=ifu.lam)
+
+    # Store the Sed and quantity
+    ifu.sed = sed
+    ifu.quantity = quantity
+
+    # Get the spectra we will be sorting into the spectral cube
+    spectra = getattr(sed, quantity, None)
+    if spectra is None:
+        raise exceptions.MissingSpectraType(
+            f"Can't make an image for {quantity},"
+            " it does not exist in the Sed."
+        )
+
+    # Strip off and store the units on the spectra for later
+    ifu.units = spectra.units
+    spectra = spectra.value
+
+    # Ensure the spectra is integrated, i.e. 1D
+    if spectra.ndim != 1:
+        raise exceptions.InconsistentArguments(
+            "Spectra must be a 1D array for a parametric IFU"
+            f" (got {spectra.ndim})."
+        )
+
+    # Multiply the density grid by the sed to get the IFU
+    ifu.arr = density_grid[:, :, None] * spectra
+
+    return ifu
+
+
+def _generate_ifu_generic(
+    instrument,
+    fov,
+    img_type,
+    do_flux,
+    per_particle,
+    kernel,
+    kernel_threshold,
+    nthreads,
+    label,
+    emitter,
+):
+    """
+    Generate an image collection for a generic emitter.
+
+    This function can be used to avoid repeating image generation code in
+    wrappers elsewhere in the code. It'll produce an image collection based
+    on the input photometry.
+
+    Particle based imaging can either be hist or smoothed, while parametric
+    imaging can only be smoothed.
+
+    Args:
+        instrument (Instrument)
+            The instrument to create the images for.
+        fov (unyt_quantity/tuple, unyt_quantity)
+            The width of the image.
+        img_type (str)
+            The type of image to create. Options are "hist" or "smoothed".
+        do_flux (bool)
+            Whether to create a flux image or a luminosity image.
+        per_particle (bool)
+            Whether to create an image per particle or not.
+        kernel (str)
+            The array describing the kernel. This is dervied from the
+            kernel_functions module. (Only applicable to particle imaging)
+        kernel_threshold (float)
+            The threshold for the kernel. Particles with a kernel value
+            below this threshold are included in the image. (Only
+            applicable to particle imaging)
+        nthreads (int)
+            The number of threads to use when smoothing the image. This
+            only applies to particle imaging.
+        label (str)
+            The label of the photometry to use.
+        emitter (Stars/BlackHoles/BlackHole)
+            The emitter object to create the images for.
+
+    Returns:
+        ImageCollection
+            An image collection object containing the images.
+    """
+    # Avoid cyclic imports
+    from synthesizer.imaging import ImageCollection
+    from synthesizer.particle import Particles
+
+    # Get the appropriate photometry (particle/integrated and
+    # flux/luminosity)
+    try:
+        if do_flux:
+            photometry = (
+                emitter.particle_photo_fnu[label]
+                if per_particle
+                else emitter.photo_fnu[label]
+            )
+        else:
+            photometry = (
+                emitter.particle_photo_lnu[label]
+                if per_particle
+                else emitter.photo_lnu[label]
+            )
+    except KeyError:
+        # Ok we are missing the photometry
+        raise exceptions.MissingSpectraType(
+            f"Can't make an image for {label} without the photometry. "
+            "Did you not save the spectra or produce the photometry?"
+        )
+
+    # Select only the photometry for this instrument
+    if instrument.filters is not None:
+        photometry = photometry.select(*instrument.filters.filter_codes)
+
+    # Create the image collection
+    imgs = ImageCollection(
+        resolution=instrument.resolution,
+        fov=fov,
+    )
+
+    # Make the image handling the different types of image creation
+    # NOTE: Black holes are always a histogram, safer to just hack this here
+    # since a user can set the "global" method as smoothed for a galaxy
+    # with both stars and black holes.
+    if (img_type == "hist" and isinstance(emitter, Particles)) or (
+        getattr(emitter, "name", None) == "Black Holes"
+    ):
+        return _generate_images_particle_hist(
+            imgs,
+            coordinates=emitter.centered_coordinates,
             signals=photometry,
         )
 
