@@ -244,7 +244,7 @@ def _generate_image_particle_smoothed(
 
     # Get the (npix_x, npix_y) image
     imgs_arr = make_img(
-        signal.value,
+        signal,
         ensure_array_c_compatible_double(smoothing_lengths),
         ensure_array_c_compatible_double(cent_coords),
         kernel,
@@ -259,8 +259,12 @@ def _generate_image_particle_smoothed(
     )
 
     # Store the image array into the image object
-    img.arr = imgs_arr
-    img.units = signal.units
+    img.arr = imgs_arr[0, :, :]
+    img.units = (
+        signal.units
+        if isinstance(signal, (unyt_quantity, unyt_array))
+        else None
+    )
 
     # Apply the normalisation if needed
     if normalisation is not None:
@@ -400,7 +404,10 @@ def _generate_images_particle_smoothed(
     # Store the image arrays on the image collection (this will
     # automatically convert them to Image objects)
     for ind, key in enumerate(labels):
-        imgs[key] = imgs_arr[ind, :, :] * signals.units
+        if isinstance(signals, (unyt_quantity, unyt_array)):
+            imgs[key] = imgs_arr[ind, :, :] * signals.units
+        else:
+            imgs[key] = imgs_arr[ind, :, :]
 
     # Apply normalisation if needed
     if normalisations is not None:
@@ -583,7 +590,7 @@ def _generate_image_collection_generic(
     ):
         return _generate_images_particle_hist(
             imgs,
-            coordinates=emitter.centered_coordinates,
+            cent_coords=emitter.centered_coordinates,
             signals=photometry,
         )
 

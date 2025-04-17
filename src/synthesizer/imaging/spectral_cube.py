@@ -38,9 +38,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
+from unyt import angstrom
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 
 
 class SpectralCube:
@@ -78,12 +79,12 @@ class SpectralCube:
     resolution = Quantity("spatial")
     fov = Quantity("spatial")
 
+    @accepts(lam=angstrom)
     def __init__(
         self,
         resolution,
-        lam,
         fov,
-        npix=None,
+        lam,
     ):
         """
         Intialise the SpectralCube.
@@ -93,42 +94,26 @@ class SpectralCube:
         Args:
             resolution (unyt_quantity, float):
                 The spatial resolution of the data cube.
-            lam (unyt_array, float):
-                The wavelengths of the data cube.
             fov (unyt_array, float/tuple):
                 The field of view of the data cube. If a single value is
                 given, the FOV is assumed to be square.
-            npix (unyt_array, int/tuple):
-                The number of pixels in the data cube. If a single value is
-                given, the number of pixels is assumed to be square.
+            lam (unyt_array, float):
+                The wavelengths of the data cube.
 
         """
-        # Attach resolution, fov, and npix
-        self.resolution = resolution
-        self.fov = fov
-        self.npix = npix
-
         # If fov isn't a array, make it one
         if self.fov is not None and self.fov.size == 1:
             self.fov = np.array((self.fov, self.fov))
 
-        # If npix isn't an array, make it one
-        if npix is not None and not isinstance(npix, np.ndarray):
-            if isinstance(npix, int):
-                self.npix = np.array((npix, npix))
-            else:
-                self.npix = np.array(npix)
+        # Attach resolution, fov, and npix
+        self.resolution = resolution
+        self.fov = fov
+        self._compute_npix()
 
         # Keep track of the input resolution and and npix so we can handle
         # super resolution correctly.
         self.orig_resolution = resolution
-        self.orig_npix = npix
-
-        # Handle the different input cases
-        if npix is None:
-            self._compute_npix()
-        else:
-            self._compute_fov()
+        self.orig_npix = self.npix
 
         # Store the wavelengths
         self.lam = lam
@@ -159,6 +144,23 @@ class SpectralCube:
         """
         return self.arr * self.units
 
+    @property
+    def ifu(self):
+        """
+        Return the IFU array.
+
+        An alias for the data cube.
+
+        This is a property to allow the IFU array to be accessed as an
+        attribute.
+
+        Returns:
+            array_like (float):
+                A 3D array containing the IFU array. (npix[0], npix[1],
+                lam.size)
+        """
+        return self.arr * self.units
+
     def _compute_npix(self):
         """
         Compute the number of pixels in the FOV.
@@ -172,16 +174,6 @@ class SpectralCube:
         if self.orig_npix is None:
             self.orig_npix = np.int32(np.ceil(self._fov / self._resolution))
 
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
-
-    def _compute_fov(self):
-        """
-        Compute the FOV, based on the number of pixels.
-
-        When resolution and npix are given, the FOV is computed using this
-        function.
-        """
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
 

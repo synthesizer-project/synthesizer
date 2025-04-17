@@ -344,7 +344,7 @@ class Image:
             return _generate_image_particle_smoothed(
                 self,
                 signal,
-                coordinates=coordinates,
+                cent_coords=coordinates,
                 smoothing_lengths=smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,

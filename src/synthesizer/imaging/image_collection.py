@@ -549,7 +549,7 @@ class ImageCollection:
             return _generate_images_particle_smoothed(
                 self,
                 photometry.photometry,
-                coordinates=coordinates,
+                cent_coords=coordinates,
                 smoothing_lengths=smoothing_lengths,
                 labels=photometry.filter_codes,
                 kernel=kernel,
