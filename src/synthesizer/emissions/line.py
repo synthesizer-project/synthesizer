@@ -790,8 +790,7 @@ class LineCollection:
         # Check for duplicates
         if len(lst_ids) != len(set_ids):
             raise exceptions.InconsistentArguments(
-                "LineCollections must contain different lines to be "
-                "combined"
+                "LineCollections must contain different lines to be combined"
             )
 
         # Extend the LineCollection
@@ -994,7 +993,7 @@ class LineCollection:
             axis=0,
         )
 
-        return float(numer_lum / denom_lum)
+        return numer_lum / denom_lum
 
     def get_ratio(self, ratio_id):
         """
