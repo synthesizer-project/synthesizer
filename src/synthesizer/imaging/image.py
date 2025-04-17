@@ -106,6 +106,11 @@ class Image:
         self.noise_arr = None
         self.weight_map = None
 
+    @property
+    def img(self):
+        """The image array with units."""
+        return self.arr * self.units if self.units is not None else self.arr
+
     def _compute_npix(self):
         """
         Compute the number of pixels in the FOV.

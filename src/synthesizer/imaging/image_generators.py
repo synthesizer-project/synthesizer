@@ -45,6 +45,20 @@ def _generate_image_particle_hist(
     Returns:
         Image: The histogram image.
     """
+    # Ensure the signal is a 1D array and is a compatible size with the
+    # coordinates
+    if signal.ndim != 1:
+        raise exceptions.InconsistentArguments(
+            "Signal must be a 1D array for a histogram image"
+            f" (got {signal.ndim})."
+        )
+    if signal.size != coordinates.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Signal and coordinates must be the same size"
+            f" for a histogram image (got {signal.size} and "
+            f"{coordinates.shape[0]})."
+        )
+
     # Strip off and store the units on the signal if they are present
     if isinstance(signal, (unyt_quantity, unyt_array)):
         img.units = signal.units
@@ -184,6 +198,32 @@ def _generate_image_particle_smoothed(
     # Avoid cyclic imports
     from synthesizer.imaging import Image
 
+    # Ensure the signal is a 1D array and is a compatible size with the
+    # coordinates and smoothing lengths
+    if signal.ndim != 1:
+        raise exceptions.InconsistentArguments(
+            "Signal must be a 1D array for a smoothed image"
+            f" (got {signal.ndim})."
+        )
+    if signal.size != cent_coords.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Signal and coordinates must be the same size"
+            f" for a smoothed image (got {signal.size} and "
+            f"{cent_coords.shape[0]})."
+        )
+    if signal.size != smoothing_lengths.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Signal and smoothing lengths must be the same size"
+            f" for a smoothed image (got {signal.size} and "
+            f"{smoothing_lengths.shape[0]})."
+        )
+    if cent_coords.shape[0] != smoothing_lengths.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Coordinates and smoothing lengths must be the same size"
+            f" for a smoothed image (got {cent_coords.shape[0]} and "
+            f"{smoothing_lengths.shape[0]})."
+        )
+
     # Get the spatial units we'll work with
     spatial_units = img.resolution.units
 
@@ -290,6 +330,37 @@ def _generate_images_particle_smoothed(
     """
     # Avoid cyclic imports
     from synthesizer.imaging import Image
+
+    # Ensure the signals are 2D arrays and are compatible sizes with the
+    # coordinates and smoothing lengths and the number of images
+    if signals.ndim != 2:
+        raise exceptions.InconsistentArguments(
+            "Signals must be a 2D array for a smoothed image"
+            f" (got {signals.ndim})."
+        )
+    if signals.shape[1] != cent_coords.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Signals and coordinates must be the same size"
+            f" for a smoothed image (got {signals.shape[1]} and "
+            f"{cent_coords.shape[0]})."
+        )
+    if signals.shape[1] != smoothing_lengths.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Signals and smoothing lengths must be the same size"
+            f" for a smoothed image (got {signals.shape[1]} and "
+            f"{smoothing_lengths.shape[0]})."
+        )
+    if cent_coords.shape[0] != smoothing_lengths.shape[0]:
+        raise exceptions.InconsistentArguments(
+            "Coordinates and smoothing lengths must be the same size"
+            f" for a smoothed image (got {cent_coords.shape[0]} and "
+            f"{smoothing_lengths.shape[0]})."
+        )
+    if signals.shape[0] != len(labels):
+        raise exceptions.InconsistentArguments(
+            "Signals should have an entry for each signal "
+            f"label (got {signals.shape[0]} and {len(labels)})."
+        )
 
     # Get the spatial units we'll work with
     spatial_units = imgs.resolution.units
