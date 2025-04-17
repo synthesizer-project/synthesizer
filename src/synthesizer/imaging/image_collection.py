@@ -354,15 +354,15 @@ class ImageCollection:
         self.filter_codes.append(filter_code)
 
     def keys(self):
-        """Enable dict.keys() behaviour."""
+        """Return the keys of the image collection."""
         return self.imgs.keys()
 
     def values(self):
-        """Enable dict.values() behaviour."""
+        """Return the images in the image collection."""
         return self.imgs.values()
 
     def items(self):
-        """Enables dict.items() behaviour."""
+        """Return the keys and images in the image collection."""
         return self.imgs.items()
 
     def __iter__(self):
@@ -450,6 +450,7 @@ class ImageCollection:
 
         Only applicable to particle based imaging.
 
+
         Args:
             photometry (PhotometryCollection)
                 A dictionary of photometry for each filter.
@@ -463,7 +464,10 @@ class ImageCollection:
             img = Image(self.resolution, self.fov)
 
             # Get the image for this filter
-            img.get_img_hist(photometry[f], coordinates=coordinates)
+            img.get_img_hist(
+                photometry[f],
+                coordinates=coordinates,
+            )
 
             # Store the image
             self.imgs[f] = img
@@ -512,25 +516,40 @@ class ImageCollection:
                 The number of threads to use when smoothing the image. This
                 only applies to particle imaging.
         """
-        # Loop over filters in the photometry making an image for each.
-        for f in photometry.filter_codes:
-            # Create an Image object for this filter
-            img = Image(self.resolution, self.fov)
+        # Instantiate the Image colection ready to make the image.
+        imgs = ImageCollection(resolution=self.resolution, fov=self.fov)
 
-            # Get the image for this filter
-            img.get_img_smoothed(
-                signal=photometry[f],
-                coordinates=coordinates,
-                smoothing_lengths=smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                density_grid=density_grid,
-                nthreads=nthreads,
-            )
-            self.filter_codes.append(f)
+        from .extensions.image import make_img
 
-            # Store the image
-            self.imgs[f] = img
+        # Shift the centred coordinates by half the FOV
+        # (this is to ensure the image is centered on the emitter)
+        pos = coordinates.to(imgs.resolution.units)
+        pos[:, 0] += imgs.fov[0].to(imgs.resolution.units) / 2.0
+        pos[:, 1] += imgs.fov[1].to(imgs.resolution.units) / 2.0
+        smls = smoothing_lengths.to(imgs.resolution.units)
+
+        # Get the (Nimg, npix_x, npix_y) array of images
+        imgs_arr = make_img(
+            photometry.photometry,
+            ensure_array_c_compatible_double(smls),
+            ensure_array_c_compatible_double(pos),
+            kernel,
+            imgs.resolution.value,
+            imgs.npix[0],
+            imgs.npix[1],
+            coordinates.shape[0],
+            kernel_threshold,
+            kernel.size,
+            len(photometry),
+            nthreads,
+        )
+
+        # Store the image arrays on the image collection (this will
+        # automatically convert them to Image objects)
+        for ind, fcode in enumerate(photometry.filter_codes):
+            imgs[fcode] = imgs_arr[ind, :, :] * photometry.photometry.units
+
+        return imgs
 
     def apply_psfs(self, psfs):
         """
