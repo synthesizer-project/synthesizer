@@ -232,8 +232,8 @@ class Image:
     def get_img_hist(
         self,
         signal,
+        coordinates,
         normalisation=None,
-        coordinates=None,
     ):
         """
         Calculate an image with no smoothing.
@@ -244,11 +244,11 @@ class Image:
         Args:
             signal (array_like, float):
                 The signal to be sorted into the image.
+            coordinates (unyt_array, float):
+                The coordinates of the particles.
             normalisation (array_like, float):
                 The normalisation property. This is
                 multiplied by the signal before sorting, then normalised out.
-            coordinates (unyt_array, float):
-                The coordinates of the particles.
 
         Returns:
             img (array_like, float)
@@ -314,12 +314,12 @@ class Image:
     def get_img_smoothed(
         self,
         signal,
-        normalisation=None,
         coordinates=None,
         smoothing_lengths=None,
         kernel=None,
         kernel_threshold=1,
         density_grid=None,
+        normalisation=None,
         nthreads=1,
     ):
         """
@@ -336,10 +336,6 @@ class Image:
         Args:
             signal (array_like, float):
                 The signal to be sorted into the image.
-            normalisation (array_like, float):
-                The normalisation property to be used for the signal. This is
-                multiplied by the signal before smoothing, then normalised out.
-                (particle case only).
             coordinates (unyt_array, float):
                 The coordinates of the particles. (particle case only)
             smoothing_lengths (unyt_array, float):
@@ -350,6 +346,10 @@ class Image:
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
+            normalisation (array_like, float):
+                The normalisation property to be used for the signal. This is
+                multiplied by the signal before smoothing, then normalised out.
+                (particle case only).
             nthreads (int):
                 The number of threads to use for the C extension. (particle
                 case only)
@@ -468,6 +468,7 @@ class Image:
                 coordinates.shape[0],
                 kernel_threshold,
                 kernel.size,
+                1,
                 nthreads,
             )
 
