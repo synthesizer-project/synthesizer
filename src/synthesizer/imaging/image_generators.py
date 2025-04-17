@@ -14,7 +14,7 @@ user.
 """
 
 import numpy as np
-from unyt import unyt_array, unyt_quantity
+from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.extensions.image import make_img
@@ -876,8 +876,6 @@ def _generate_ifu_particle_smoothed(
         nthreads,
     ).T
 
-    print(ifu.arr.shape)
-
     return ifu
 
 
@@ -938,8 +936,9 @@ def _generate_ifu_parametric_smoothed(
 def _generate_ifu_generic(
     instrument,
     fov,
+    lam,
     img_type,
-    do_flux,
+    quantity,
     per_particle,
     kernel,
     kernel_threshold,
@@ -948,11 +947,11 @@ def _generate_ifu_generic(
     emitter,
 ):
     """
-    Generate an image collection for a generic emitter.
+    Generate a spectral cube.
 
-    This function can be used to avoid repeating image generation code in
-    wrappers elsewhere in the code. It'll produce an image collection based
-    on the input photometry.
+    This function can be used to avoid repeating IFU generation code in
+    wrappers elsewhere in the code. It'll produce a SpectralCube based
+    on the input Sed.
 
     Particle based imaging can either be hist or smoothed, while parametric
     imaging can only be smoothed.
@@ -962,10 +961,14 @@ def _generate_ifu_generic(
             The instrument to create the images for.
         fov (unyt_quantity/tuple, unyt_quantity)
             The width of the image.
+        lam (unyt_array)
+            The wavelength array of the spectra.
         img_type (str)
             The type of image to create. Options are "hist" or "smoothed".
-        do_flux (bool)
-            Whether to create a flux image or a luminosity image.
+        quantity (str)
+            The quantity to use for the spectra. This can be any valid
+            spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
+            'flux', etc.
         per_particle (bool)
             Whether to create an image per particle or not.
         kernel (str)
@@ -984,85 +987,74 @@ def _generate_ifu_generic(
             The emitter object to create the images for.
 
     Returns:
-        ImageCollection
-            An image collection object containing the images.
+        SpectralCube: The generated spectral data cube.
     """
     # Avoid cyclic imports
-    from synthesizer.imaging import ImageCollection
+    from synthesizer.imaging import SpectralCube
     from synthesizer.particle import Particles
 
-    # Get the appropriate photometry (particle/integrated and
-    # flux/luminosity)
+    # Extract the Sed from the emitter
     try:
-        if do_flux:
-            photometry = (
-                emitter.particle_photo_fnu[label]
-                if per_particle
-                else emitter.photo_fnu[label]
-            )
-        else:
-            photometry = (
-                emitter.particle_photo_lnu[label]
-                if per_particle
-                else emitter.photo_lnu[label]
-            )
+        sed = (
+            emitter.particle_spectra[label]
+            if per_particle
+            else emitter.spectra[label]
+        )
     except KeyError:
         # Ok we are missing the photometry
         raise exceptions.MissingSpectraType(
-            f"Can't make an image for {label} without the photometry. "
+            f"Can't make a SpectralCube for {label} without an spectra. "
             "Did you not save the spectra or produce the photometry?"
         )
 
-    # Select only the photometry for this instrument
-    if instrument.filters is not None:
-        photometry = photometry.select(*instrument.filters.filter_codes)
-
-    # Create the image collection
-    imgs = ImageCollection(
+    # Create the IFU
+    ifu = SpectralCube(
         resolution=instrument.resolution,
+        lam=lam * angstrom,
         fov=fov,
     )
 
-    # Make the image handling the different types of image creation
+    # Make the IFU handling the different types of generation
     # NOTE: Black holes are always a histogram, safer to just hack this here
     # since a user can set the "global" method as smoothed for a galaxy
     # with both stars and black holes.
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
-        return _generate_images_particle_hist(
-            imgs,
-            coordinates=emitter.centered_coordinates,
-            signals=photometry,
+        return _generate_ifu_particle_hist(
+            ifu,
+            sed=sed,
+            quantity=quantity,
+            cent_coords=emitter.centered_coordinates,
+            nthreads=nthreads,
         )
 
     elif img_type == "hist":
         raise exceptions.InconsistentArguments(
-            "Parametric images can only be made using the smoothed "
-            "image type."
+            "Parametric IFU can only be made using the smoothed img type."
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
-        return _generate_images_particle_smoothed(
-            imgs=imgs,
-            signals=photometry.photometry,
+        return _generate_ifu_particle_smoothed(
+            ifu,
+            sed=sed,
+            quantity=quantity,
             cent_coords=emitter.centered_coordinates,
             smoothing_lengths=emitter.smoothing_lengths,
-            labels=photometry.filter_codes,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
         )
 
     elif img_type == "smoothed":
-        return _generate_images_parametric_smoothed(
-            imgs,
+        return _generate_ifu_parametric_smoothed(
+            ifu,
+            sed=sed,
+            quantity=quantity,
             density_grid=emitter.morphology.get_density_grid(
-                imgs.resolution, imgs.npix
+                ifu.resolution, ifu.npix
             ),
-            signals=photometry,
         )
-
     else:
         raise exceptions.UnknownImageType(
             f"Unknown img_type {img_type} for a {type(emitter)} emitter. "
@@ -1070,4 +1062,4 @@ def _generate_ifu_generic(
             " or 'smoothed')"
         )
 
-    return imgs
+    return ifu
