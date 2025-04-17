@@ -82,7 +82,7 @@ class SpectralCube:
         self,
         resolution,
         lam,
-        fov=None,
+        fov,
         npix=None,
     ):
         """
