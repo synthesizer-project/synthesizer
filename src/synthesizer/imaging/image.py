@@ -403,9 +403,16 @@ class Image:
             np.ndarray
                 The weight map, derived from 1 / std^2
         """
+        # Make sure the noise has units if we have them
+        if self.units is not None and not isinstance(noise_arr, unyt_array):
+            raise exceptions.InconsistentArguments(
+                "If the Image has units then the noise array must also be "
+                f"passed with units. (image.units = {self.units})"
+            )
+
         # Add the noise array to the image
         if self.units is not None:
-            noisy_img = self.arr * self.units + noise_arr
+            noisy_img = self.arr * self.units + noise_arr.to(self.units)
         else:
             noisy_img = self.arr + noise_arr
 
