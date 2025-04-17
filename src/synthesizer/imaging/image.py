@@ -470,12 +470,8 @@ class Image:
                 nthreads,
             )
 
-<<<<<<< Updated upstream
             # Divide out the normalisation contribution, handling zero
             # contribution pixels
-=======
-            # Divide out the normalisation contribution, handling zero contribution pixels
->>>>>>> Stashed changes
             self.arr[self.arr > 0] /= norm_img[norm_img > 0]
 
         return self.arr * self.units if self.units is not None else self.arr
