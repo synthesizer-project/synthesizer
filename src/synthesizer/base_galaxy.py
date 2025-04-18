@@ -1103,8 +1103,28 @@ class BaseGalaxy:
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introduced some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            if len(self.photo_lnu) > 0:
+                filters = self.photo_lnu[emission_model.label].filters
+            elif self.stars is not None and len(self.stars.photo_lnu) > 0:
+                filters = self.stars.photo_lnu[emission_model.label].filters
+            elif (
+                self.black_holes is not None
+                and len(self.black_holes.photo_lnu) > 0
+            ):
+                filters = self.black_holes.photo_lnu[
+                    emission_model.label
+                ].filters
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+                filters=filters,
+            )
 
         # Convert `limit_to` to a list if it is a string
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
@@ -1256,8 +1276,21 @@ class BaseGalaxy:
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introduced some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            if len(self.photo_fnu) > 0:
+                filters = self.photo_fnu[emission_model.label].filters
+            elif len(self.stars.photo_fnu) > 0:
+                filters = self.stars.photo_fnu[emission_model.label].filters
+            elif len(self.black_holes.photo_fnu) > 0:
+                filters = self.black_holes.photo_fnu[
+                    emission_model.label
+                ].filters
+            instrument = Instrument(
+                "place-holder", resolution=resolution, filters=filters
+            )
 
         # Convert `limit_to` to a list if it is a string
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to

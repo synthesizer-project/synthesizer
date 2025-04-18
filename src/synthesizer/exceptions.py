@@ -282,6 +282,22 @@ class MissingImage(Exception):
             return "Image not yet created!"
 
 
+class MissingIFU(Exception):
+    """Exception class for when an IFU has not yet been made."""
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        else:
+            return "IFU not yet created!"
+
+
 class WavelengthOutOfRange(Exception):
     """
     Exception class for when a wavelength is not accessible to

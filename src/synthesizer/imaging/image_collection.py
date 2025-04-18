@@ -48,6 +48,11 @@ from unyt import unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
+from synthesizer.imaging.image_generators import (
+    _generate_images_parametric_smoothed,
+    _generate_images_particle_hist,
+    _generate_images_particle_smoothed,
+)
 from synthesizer.units import Quantity
 
 
@@ -325,16 +330,41 @@ class ImageCollection:
             f"Filter code {filter_code} not found in ImageCollection"
         )
 
+    def __setitem__(self, filter_code, img):
+        """
+        Store the image at filter_code in the imgs dictionary.
+
+        This allows the user to store specific images with the following
+        syntax: ImageCollection["JWST/NIRCam.F150W"] = img.
+
+        Image can either be a numpy array or an Image object. If it is a numpy
+        array it is converted to an Image object.
+
+        Args:
+            filter_code (str)
+                The filter code of the desired photometry.
+            img (Image/array)
+                The image to be added to the collection.
+        """
+        if not isinstance(img, Image):
+            # Convert ndarray → Image
+            img = Image(self.resolution, self.fov, img=img)
+
+        # Insert / update while keeping filter_codes unique
+        self.imgs[filter_code] = img
+        if filter_code not in self.filter_codes:
+            self.filter_codes.append(filter_code)
+
     def keys(self):
-        """Enable dict.keys() behaviour."""
+        """Return the keys of the image collection."""
         return self.imgs.keys()
 
     def values(self):
-        """Enable dict.values() behaviour."""
+        """Return the images in the image collection."""
         return self.imgs.values()
 
     def items(self):
-        """Enables dict.items() behaviour."""
+        """Return the keys and images in the image collection."""
         return self.imgs.items()
 
     def __iter__(self):
@@ -416,30 +446,37 @@ class ImageCollection:
 
         return composite_img
 
-    def get_imgs_hist(self, photometry, coordinates):
+    def get_imgs_hist(
+        self,
+        photometry,
+        coordinates,
+        normalisations=None,
+    ):
         """
         Calculate an image with no smoothing.
 
         Only applicable to particle based imaging.
 
         Args:
-            photometry (PhotometryCollection)
+            photometry (PhotometryCollection):
                 A dictionary of photometry for each filter.
-            coordinates (unyt_array, float)
+            coordinates (unyt_array of float):
                 The coordinates of the particles.
+            normalisations (array_like, float):
+                The normalisation property for each image. This is multiplied
+                by the signal before sorting, then normalised out.
+
+        Returns:
+            ImageCollection: The image collection containing the generated
+                images.
         """
-        # Need to loop over filters, calculate photometry, and
-        # return a dictionary of images
-        for f in photometry.filter_codes:
-            # Create an Image object for this filter
-            img = Image(self.resolution, self.fov)
-
-            # Get the image for this filter
-            img.get_img_hist(photometry[f], coordinates=coordinates)
-
-            # Store the image
-            self.imgs[f] = img
-            self.filter_codes.append(f)
+        # Generate the images
+        return _generate_images_particle_hist(
+            self,
+            coordinates=coordinates,
+            signals=photometry,
+            normalisations=normalisations,
+        )
 
     def get_imgs_smoothed(
         self,
@@ -450,6 +487,7 @@ class ImageCollection:
         kernel_threshold=1,
         density_grid=None,
         nthreads=1,
+        normalisations=None,
     ):
         """
         Calculate an images from a smoothed distribution.
@@ -465,8 +503,8 @@ class ImageCollection:
             signal (unyt_array, float)
                 The signal of each particle to be sorted into pixels.
             coordinates (unyt_array, float)
-                The coordinates of the particles. (Only applicable to particle
-                imaging)
+                The centered coordinates of the particles. (Only applicable to
+                particle imaging)
             smoothing_lengths (unyt_array, float)
                 The smoothing lengths of the particles. (Only applicable to
                 particle imaging)
@@ -483,26 +521,55 @@ class ImageCollection:
             nthreads (int)
                 The number of threads to use when smoothing the image. This
                 only applies to particle imaging.
-        """
-        # Loop over filters in the photometry making an image for each.
-        for f in photometry.filter_codes:
-            # Create an Image object for this filter
-            img = Image(self.resolution, self.fov)
+            normalisations (array_like, float)
+                The normalisation property. This is multiplied by the signal
+                before sorting, then normalised out. (Only applicable to
+                particle imaging)
 
-            # Get the image for this filter
-            img.get_img_smoothed(
-                signal=photometry[f],
-                coordinates=coordinates,
+        Returns:
+            ImageCollection: The image collection containing the generated
+                images.
+        """
+        # Call the correct image generation function (particle or parametric)
+        if density_grid is not None and photometry is not None:
+            # Generate the images for the parametric case
+            return _generate_images_parametric_smoothed(
+                self,
+                density_grid=density_grid,
+                signals=photometry,
+            )
+        elif (
+            coordinates is not None
+            and smoothing_lengths is not None
+            and kernel is not None
+            and kernel_threshold is not None
+            and photometry is not None
+        ):
+            # Generate the images for the particle case
+            return _generate_images_particle_smoothed(
+                self,
+                photometry.photometry,
+                cent_coords=coordinates,
                 smoothing_lengths=smoothing_lengths,
+                labels=photometry.filter_codes,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
-                density_grid=density_grid,
                 nthreads=nthreads,
+                normalisations=normalisations,
             )
-            self.filter_codes.append(f)
-
-            # Store the image
-            self.imgs[f] = img
+        else:
+            raise exceptions.InconsistentArguments(
+                "Didn't find a valid set of arguments to generate images. "
+                "Please provide either a density grid and photometry for "
+                f"parametric imaging (found density_grid={type(density_grid)} "
+                f"photometry={type(photometry)}) or coordinates, smoothing "
+                f"lengths, kernel, and kernel_threshold for particle imaging "
+                f"(found coordinates={type(coordinates)}, "
+                f"smoothing_lengths={type(smoothing_lengths)}, "
+                f"kernel={type(kernel)}, "
+                f"kernel_threshold={type(kernel_threshold)}, "
+                f"photometry={type(photometry)})"
+            )
 
     def apply_psfs(self, psfs):
         """
@@ -951,135 +1018,3 @@ class ImageCollection:
             plt.show()
 
         return fig, ax, rgb_img
-
-
-def _generate_image_collection_generic(
-    instrument,
-    fov,
-    img_type,
-    do_flux,
-    per_particle,
-    kernel,
-    kernel_threshold,
-    nthreads,
-    label,
-    emitter,
-):
-    """
-    Generate an image collection for a generic emitter.
-
-    This function can be used to avoid repeating image generation code in
-    wrappers elsewhere in the code. It'll produce an image collection based
-    on the input photometry.
-
-    Particle based imaging can either be hist or smoothed, while parametric
-    imaging can only be smoothed.
-
-    Args:
-        instrument (Instrument)
-            The instrument to create the images for.
-        fov (unyt_quantity/tuple, unyt_quantity)
-            The width of the image.
-        img_type (str)
-            The type of image to create. Options are "hist" or "smoothed".
-        do_flux (bool)
-            Whether to create a flux image or a luminosity image.
-        per_particle (bool)
-            Whether to create an image per particle or not.
-        kernel (str)
-            The array describing the kernel. This is dervied from the
-            kernel_functions module. (Only applicable to particle imaging)
-        kernel_threshold (float)
-            The threshold for the kernel. Particles with a kernel value
-            below this threshold are included in the image. (Only
-            applicable to particle imaging)
-        nthreads (int)
-            The number of threads to use when smoothing the image. This
-            only applies to particle imaging.
-        label (str)
-            The label of the photometry to use.
-        emitter (Stars/BlackHoles/BlackHole)
-            The emitter object to create the images for.
-
-    Returns:
-        ImageCollection
-            An image collection object containing the images.
-    """
-    # Get the appropriate photometry (particle/integrated and
-    # flux/luminosity)
-    try:
-        if do_flux:
-            photometry = (
-                emitter.particle_photo_fnu[label]
-                if per_particle
-                else emitter.photo_fnu[label]
-            )
-        else:
-            photometry = (
-                emitter.particle_photo_lnu[label]
-                if per_particle
-                else emitter.photo_lnu[label]
-            )
-    except KeyError:
-        # Ok we are missing the photometry
-        raise exceptions.MissingSpectraType(
-            f"Can't make an image for {label} without the photometry. "
-            "Did you not save the spectra or produce the photometry?"
-        )
-
-    # Select only the photometry for this instrument
-    if instrument.filters is not None:
-        photometry = photometry.select(*instrument.filters.filter_codes)
-
-    # If the emitter is a particle BlackHoles object we can only make a hist
-    # image
-    if getattr(emitter, "name", None) == "Black Holes":
-        img_type = "hist"
-
-    # Instantiate the Image colection ready to make the image.
-    imgs = ImageCollection(resolution=instrument.resolution, fov=fov)
-
-    # Make the image handling the different types of image creation
-    if img_type == "hist":
-        # Compute the image (this method is only applicable to
-        # particle components)
-        imgs.get_imgs_hist(
-            photometry=photometry,
-            coordinates=emitter.centered_coordinates,
-        )
-
-    elif img_type == "smoothed":
-        # Compute the image
-        imgs.get_imgs_smoothed(
-            photometry=photometry,
-            nthreads=nthreads,
-            # Following args only applicable for particle components,
-            # They'll automatically be None otherwise
-            coordinates=getattr(
-                emitter,
-                "centered_coordinates",
-                None,
-            ),
-            smoothing_lengths=getattr(
-                emitter,
-                "smoothing_lengths",
-                None,
-            ),
-            kernel=kernel,
-            kernel_threshold=(kernel_threshold),
-            # Following args are only applicable for parametric
-            # components, they'll automatically be None otherwise
-            density_grid=emitter.morphology.get_density_grid(
-                instrument.resolution, imgs.npix
-            )
-            if hasattr(emitter, "morphology")
-            else None,
-        )
-
-    else:
-        raise exceptions.UnknownImageType(
-            f"Unknown img_type {img_type}. (Options are 'hist' or "
-            "'smoothed')"
-        )
-
-    return imgs

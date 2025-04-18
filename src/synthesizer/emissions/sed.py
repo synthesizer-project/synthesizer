@@ -577,6 +577,16 @@ class Sed:
         return self.lnu.shape
 
     @property
+    def nlam(self):
+        """
+        Get the number of wavelength elements.
+
+        Returns:
+            int: The number of wavelength elements.
+        """
+        return self.lam.size
+
+    @property
     def bolometric_luminosity(self):
         """
         Return the bolometric luminosity of the SED with units.
