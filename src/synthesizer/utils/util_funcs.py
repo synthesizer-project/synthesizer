@@ -191,7 +191,7 @@ def parse_grid_id(grid_id):
     if imf in ["salpeter", "135all"]:
         imf = "Salpeter (1955)"
     if imf.isnumeric():
-        imf = rf"$\alpha={float(imf)/100}$"
+        imf = rf"$\alpha={float(imf) / 100}$"
 
     return {
         "sps_model": sps_model,
@@ -298,7 +298,7 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
     return rgba
 
 
-def combine_arrays(arr1, arr2):
+def combine_arrays(arr1, arr2, verbose=True):
     """
     Combine two arrays into a single array.
 
@@ -325,7 +325,9 @@ def combine_arrays(arr1, arr2):
 
     # If one is None and the other is not then return None
     elif arr1 is None or arr2 is None:
-        warn("One of the arrays is None, one is not. Returning None.")
+        if verbose:
+            warn("One of the arrays is None, one is not. Returning None.")
+
         return None
 
     # Ensure both arrays aren't 0 dimensional
