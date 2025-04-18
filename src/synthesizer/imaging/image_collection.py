@@ -537,7 +537,6 @@ class ImageCollection:
                 self,
                 density_grid=density_grid,
                 signals=photometry,
-                normalisations=normalisations,
             )
         elif (
             coordinates is not None
