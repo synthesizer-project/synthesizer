@@ -74,6 +74,9 @@ class BaseGalaxy:
         self.images_lnu = {}
         self.images_fnu = {}
 
+        # Initialise the dictionary to hold instrument specific spectroscopy
+        self.spectroscopy = {}
+
         # Attach the components
         self.stars = stars
         self.gas = gas
@@ -1103,8 +1106,28 @@ class BaseGalaxy:
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introduced some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            if len(self.photo_lnu) > 0:
+                filters = self.photo_lnu[emission_model.label].filters
+            elif self.stars is not None and len(self.stars.photo_lnu) > 0:
+                filters = self.stars.photo_lnu[emission_model.label].filters
+            elif (
+                self.black_holes is not None
+                and len(self.black_holes.photo_lnu) > 0
+            ):
+                filters = self.black_holes.photo_lnu[
+                    emission_model.label
+                ].filters
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+                filters=filters,
+            )
 
         # Convert `limit_to` to a list if it is a string
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
@@ -1256,8 +1279,21 @@ class BaseGalaxy:
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introduced some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            if len(self.photo_fnu) > 0:
+                filters = self.photo_fnu[emission_model.label].filters
+            elif len(self.stars.photo_fnu) > 0:
+                filters = self.stars.photo_fnu[emission_model.label].filters
+            elif len(self.black_holes.photo_fnu) > 0:
+                filters = self.black_holes.photo_fnu[
+                    emission_model.label
+                ].filters
+            instrument = Instrument(
+                "place-holder", resolution=resolution, filters=filters
+            )
 
         # Convert `limit_to` to a list if it is a string
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
@@ -1335,6 +1371,61 @@ class BaseGalaxy:
         # Return the image at the root of the emission model
         return images[emission_model.label]
 
+    def get_spectroscopy(
+        self,
+        instrument,
+    ):
+        """
+        Get spectroscopy for the galaxy based on a specific instrument.
+
+        This will apply the instrument's wavelength array to each
+        spectra stored on the galaxy and its components.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use for the spectroscopy.
+
+        Returns:
+            dict
+                The spectroscopy for the galaxy.
+        """
+        # Check we have some spectra
+        nspec = len(self.spectra)
+        if self.stars is not None:
+            nspec += len(self.stars.spectra)
+            if hasattr(self.stars, "particle_spectra"):
+                nspec += len(self.stars.particle_spectra)
+        if self.black_holes is not None:
+            nspec += len(self.black_holes.spectra)
+            if hasattr(self.black_holes, "particle_spectra"):
+                nspec += len(self.black_holes.particle_spectra)
+        if nspec == 0:
+            raise exceptions.InconsistentArguments(
+                "No spectra found in galaxy or components."
+            )
+
+        # Create an entry for this instrument in the spectroscopy dictionary
+        # if it doesn't exist
+        if instrument.label not in self.spectroscopy:
+            self.spectroscopy[instrument.label] = {}
+
+        # Do the galaxy level spectra
+        for key, sed in self.spectra.items():
+            # Get the spectroscopy
+            self.spectroscopy[instrument.label][key] = (
+                sed.apply_instrument_lams(instrument)
+            )
+
+        # Do the stars level spectra
+        if self.stars is not None:
+            self.stars.get_spectroscopy(instrument)
+
+        # Do the black holes level spectra
+        if self.black_holes is not None:
+            self.black_holes.get_spectroscopy(instrument)
+
+        return self.spectroscopy[instrument.label]
+
     def clear_all_spectra(self):
         """
         Clear all spectra.
@@ -1349,6 +1440,21 @@ class BaseGalaxy:
             self.stars.clear_all_spectra()
         if self.black_holes is not None:
             self.black_holes.clear_all_spectra()
+
+    def clear_all_spectroscopy(self):
+        """
+        Clear all spectroscopy.
+
+        This method is a quick helper to clear all spectroscopy from the
+        galaxy object and its components. This will cover both integrated and
+        per particle spectroscopy if present.
+        """
+        # Clear spectroscopy
+        self.spectroscopy = {}
+        if self.stars is not None:
+            self.stars.clear_all_spectroscopy()
+        if self.black_holes is not None:
+            self.black_holes.clear_all_spectroscopy()
 
     def clear_all_lines(self):
         """
@@ -1398,6 +1504,9 @@ class BaseGalaxy:
         # Clear photometry
         self.clear_all_photometry()
 
+        # Clear spectroscopy
+        self.clear_all_spectroscopy()
+
     def clear_weights(self):
         """
         Clear all cached grid weights.
@@ -1412,3 +1521,401 @@ class BaseGalaxy:
         if self.black_holes is not None:
             if hasattr(self.black_holes, "_grid_weights"):
                 self._grid_weights = {"cic": {}, "ngp": {}}
+
+    def plot_spectroscopy(
+        self,
+        instrument_label,
+        combined_spectra=True,
+        stellar_spectra=False,
+        gas_spectra=False,
+        black_hole_spectra=False,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
+        quantity_to_plot="lnu",
+        fig=None,
+        ax=None,
+    ):
+        """
+        Plot an instrument's spectroscopy.
+
+        This will plot the spectroscopy for the galaxy and its components
+        using the instrument's wavelength array. The spectra are plotted
+        in the order they are stored in the spectroscopy dictionary.
+
+        Args:
+            instrument_label (str)
+                The label of the instrument whose spectroscopy to plot.
+            combined_spectra (bool/list, string/string)
+                The specific combined galaxy spectra to plot. (e.g "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            stellar_spectra (bool/list, string/string)
+                The specific stellar spectra to plot. (e.g. "incident")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            gas_spectra (bool/list, string/string)
+                The specific gas spectra to plot. (e.g. "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            black_hole_spectra (bool/list, string/string)
+                The specific black hole spectra to plot. (e.g "blr")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple)
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100)
+                times less than the peak of the spectrum for rest_frame
+                (observed) spectra.
+            xlimits (tuple)
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple)
+                Tuple with size 2 defining the figure size.
+            quantity_to_plot (string)
+                The sed property to plot. Can be "lnu", "luminosity" or "llam"
+                for rest frame spectra or "fnu", "flam" or "flux" for observed
+                spectra. Defaults to "lnu".
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object to plot on. If None a new
+                figure is created.
+            ax (matplotlib.axes)
+                The matplotlib axes object to plot on. If None a new
+                axes is created.
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        # We need to construct the dictionary of all spectra to plot for each
+        # component based on what we've been passed
+        spectra = {}
+
+        # Get the combined spectra
+        if combined_spectra:
+            if isinstance(combined_spectra, list):
+                spectra.update(
+                    {
+                        key: self.spectroscopy[instrument_label][key]
+                        for key in combined_spectra
+                    }
+                )
+            elif isinstance(combined_spectra, Sed):
+                spectra.update(
+                    {
+                        "combined_spectra": combined_spectra,
+                    }
+                )
+            else:
+                spectra.update(self.spectroscopy[instrument_label])
+
+        # Get the stellar spectra
+        if stellar_spectra:
+            if isinstance(stellar_spectra, list):
+                spectra.update(
+                    {
+                        "Stellar " + key: self.stars.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in stellar_spectra
+                    }
+                )
+            elif isinstance(stellar_spectra, Sed):
+                spectra.update(
+                    {
+                        "stellar_spectra": stellar_spectra,
+                    }
+                )
+            else:
+                spectra.update(
+                    {
+                        "Stellar " + key: self.stars.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in self.stars.spectroscopy[instrument_label]
+                    }
+                )
+
+        # Get the gas spectra
+        if gas_spectra:
+            if isinstance(gas_spectra, list):
+                spectra.update(
+                    {
+                        "Gas " + key: self.gas.spectroscopy[instrument_label][
+                            key
+                        ]
+                        for key in gas_spectra
+                    }
+                )
+            elif isinstance(gas_spectra, Sed):
+                spectra.update(
+                    {
+                        "gas_spectra": gas_spectra,
+                    }
+                )
+            else:
+                spectra.update(
+                    {
+                        "Gas " + key: self.gas.spectroscopy[instrument_label][
+                            key
+                        ]
+                        for key in self.gas.spectroscopy[instrument_label]
+                    }
+                )
+
+        # Get the black hole spectra
+        if black_hole_spectra:
+            if isinstance(black_hole_spectra, list):
+                spectra.update(
+                    {
+                        "Black Hole " + key: self.black_holes.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in black_hole_spectra
+                    }
+                )
+            elif isinstance(black_hole_spectra, Sed):
+                spectra.update(
+                    {
+                        "black_hole_spectra": black_hole_spectra,
+                    }
+                )
+            else:
+                spectra.update(
+                    {
+                        "Black Hole " + key: self.black_holes.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in self.black_holes.spectroscopy[
+                            instrument_label
+                        ]
+                    }
+                )
+
+        # Add the instrument to the key (label) of each spectra
+        old_keys = list(spectra.keys())
+        for key in old_keys:
+            spectra[f"{instrument_label}: {key}"] = spectra[key]
+            del spectra[key]
+
+        return plot_spectra(
+            spectra,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+            quantity_to_plot=quantity_to_plot,
+            fig=fig,
+            ax=ax,
+        )
+
+    def plot_observed_spectroscopy(
+        self,
+        instrument_label,
+        combined_spectra=True,
+        stellar_spectra=False,
+        gas_spectra=False,
+        black_hole_spectra=False,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
+        quantity_to_plot="fnu",
+        fig=None,
+        ax=None,
+    ):
+        """
+        Plot an instrument's spectroscopy.
+
+        This will plot the spectroscopy for the galaxy and its components
+        using the instrument's wavelength array. The spectra are plotted
+        in the order they are stored in the spectroscopy dictionary.
+
+        Args:
+            instrument_label (str)
+                The label of the instrument whose spectroscopy to plot.
+            combined_spectra (bool/list, string/string)
+                The specific combined galaxy spectroscopy to plot.
+                (e.g "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            stellar_spectra (bool/list, string/string)
+                The specific stellar spectroscopy to plot. (e.g. "incident")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            gas_spectra (bool/list, string/string)
+                The specific gas spectroscopy to plot. (e.g. "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            black_hole_spectra (bool/list, string/string)
+                The specific black hole spectroscopy to plot. (e.g "blr")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple)
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100)
+                times less than the peak of the spectrum for rest_frame
+                (observed) spectra.
+            xlimits (tuple)
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple)
+                Tuple with size 2 defining the figure size.
+            quantity_to_plot (string)
+                The sed property to plot. Can be "lnu", "luminosity" or "llam"
+                for rest frame spectra or "fnu", "flam" or "flux" for observed
+                spectra. Defaults to "lnu".
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object to plot on. If None a new
+                figure is created.
+            ax (matplotlib.axes)
+                The matplotlib axes object to plot on. If None a new
+                axes is created.
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        # We need to construct the dictionary of all spectra to plot for each
+        # component based on what we've been passed
+        spectra = {}
+
+        # Get the combined spectra
+        if combined_spectra:
+            if isinstance(combined_spectra, list):
+                spectra.update(
+                    {
+                        key: self.spectroscopy[instrument_label][key]
+                        for key in combined_spectra
+                    }
+                )
+            elif isinstance(combined_spectra, Sed):
+                spectra.update(
+                    {
+                        "combined_spectra": combined_spectra,
+                    }
+                )
+            else:
+                spectra.update(self.spectroscopy[instrument_label])
+
+        # Get the stellar spectra
+        if stellar_spectra:
+            if isinstance(stellar_spectra, list):
+                spectra.update(
+                    {
+                        "Stellar " + key: self.stars.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in stellar_spectra
+                    }
+                )
+            elif isinstance(stellar_spectra, Sed):
+                spectra.update(
+                    {
+                        "stellar_spectra": stellar_spectra,
+                    }
+                )
+            else:
+                spectra.update(
+                    {
+                        "Stellar " + key: self.stars.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in self.stars.spectroscopy[instrument_label]
+                    }
+                )
+
+        # Get the gas spectra
+        if gas_spectra:
+            if isinstance(gas_spectra, list):
+                spectra.update(
+                    {
+                        "Gas " + key: self.gas.spectroscopy[instrument_label][
+                            key
+                        ]
+                        for key in gas_spectra
+                    }
+                )
+            elif isinstance(gas_spectra, Sed):
+                spectra.update(
+                    {
+                        "gas_spectra": gas_spectra,
+                    }
+                )
+            else:
+                spectra.update(
+                    {
+                        "Gas " + key: self.gas.spectroscopy[instrument_label][
+                            key
+                        ]
+                        for key in self.gas.spectroscopy[instrument_label]
+                    }
+                )
+
+        # Get the black hole spectra
+        if black_hole_spectra:
+            if isinstance(black_hole_spectra, list):
+                spectra.update(
+                    {
+                        "Black Hole " + key: self.black_holes.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in black_hole_spectra
+                    }
+                )
+            elif isinstance(black_hole_spectra, Sed):
+                spectra.update(
+                    {
+                        "black_hole_spectra": black_hole_spectra,
+                    }
+                )
+            else:
+                spectra.update(
+                    {
+                        "Black Hole " + key: self.black_holes.spectroscopy[
+                            instrument_label
+                        ][key]
+                        for key in self.black_holes.spectroscopy[
+                            instrument_label
+                        ]
+                    }
+                )
+
+        # Add the instrument to the key (label) of each spectra
+        old_keys = list(spectra.keys())
+        for key in old_keys:
+            spectra[f"{instrument_label}: {key}"] = spectra[key]
+            del spectra[key]
+
+        return plot_observed_spectra(
+            spectra,
+            self.redshift,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+            quantity_to_plot=quantity_to_plot,
+            fig=fig,
+            ax=ax,
+        )
