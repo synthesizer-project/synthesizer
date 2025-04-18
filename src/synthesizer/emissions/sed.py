@@ -1541,7 +1541,7 @@ class Sed:
         fig=None,
         ax=None,
         show=False,
-        order="bolometric_luminosity",
+        order=None,
         quantity_to_plot="lnu",
         cmap="magma",
         vmin=None,
@@ -1576,9 +1576,9 @@ class Sed:
                 figure and axes.
             order (str/unyt_quantity):
                 The order to stack the spectra by. Can be "peak",
-                "bolometric_luminosity", or a wavelength with units. By
-                default the spectra are stacked in bolometric_luminosity
-                order.
+                "bolometric_luminosity", a wavelength with units, or None. By
+                default the spectra will be plotted with the same order they
+                have in the Sed object.
             quantity_to_plot (str):
                 The sed property to plot. Can be "lnu", "luminosity" or
                 "llam" for rest frame spectra or "fnu", "flam" or "flux"
@@ -1607,6 +1607,17 @@ class Sed:
             raise exceptions.InconsistentArguments(
                 "This Sed object does not contain multiple spectra and thus "
                 "cannot be stacked. Please use a Sed object with ndim > 1."
+            )
+
+        # Are we plotting in the rest_frame?
+        rest_frame = quantity_to_plot in ("lnu", "llam", "luminosity")
+
+        # If we aren't doing rest frame... check we actually have the
+        # observed spectra
+        if not rest_frame and self.fnu is None:
+            raise exceptions.InconsistentArguments(
+                "This Sed object does not contain observed spectra and thus "
+                "cannot be stacked. Please use a Sed object with fnu."
             )
 
         # Define the wavelength bins based on nbin
@@ -1640,7 +1651,7 @@ class Sed:
         if order == "peak":
             # Get the peak and it's index for each spectra
             peak_inds = np.argmax(low_res_sed._lnu, axis=-1)
-            peak_lams = low_res_sed.lam[peak_inds]
+            peak_lams = low_res_sed.lam[peak_inds].value
 
             # Sort the spectra by peak wavelength
             order = np.argsort(peak_lams)
@@ -1650,7 +1661,7 @@ class Sed:
 
         elif order == "bolometric_luminosity":
             # Get the bolometric luminosity for each spectra
-            bolometric_luminosity = low_res_sed.bolometric_luminosity
+            bolometric_luminosity = low_res_sed.bolometric_luminosity.value
 
             # Sort the spectra by bolometric luminosity
             order = np.argsort(bolometric_luminosity)
@@ -1668,7 +1679,7 @@ class Sed:
                 )
 
             # Get the luminosity at the requested wavelength for each spectra
-            lum_at_lam = low_res_sed.get_lnu_at_lam(order)
+            lum_at_lam = low_res_sed.get_lnu_at_lam(order).value
 
             # Sort the spectra by luminosity at the requested wavelength
             order = np.argsort(lum_at_lam)
@@ -1676,24 +1687,31 @@ class Sed:
             # Limit to the top nbin spectra
             order = order[:nbin]
 
+        elif order is None:
+            # If no order is provided just use the first nbin spectra
+            order = np.arange(nbin)
+
         else:
             raise exceptions.InconsistentArguments(
                 f"Unrecognised order ({order}). Options are 'peak', "
                 "'bolometric_luminosity', or a wavelength with units."
             )
 
-        # Are we plotting in the rest_frame?
-        rest_frame = quantity_to_plot in ("lnu", "llam", "luminosity")
-
         # Get the spectra to plot
         spectra = getattr(low_res_sed, quantity_to_plot)[order]
 
         # Set up the array that will hold the stacked spectra
-        stacked_spectra = np.zeros((nbin, nbin), dtype=spectra.dtype)
+        stacked_spectra = (
+            np.zeros((nbin, nbin), dtype=spectra.dtype) * spectra.units
+        )
 
         # Loop over the resampled spectra and populate the grid from bottom
         # to top
-        for i in range(nbin):
+        for row, i in enumerate(order):
+            # Ensure we aren't trying to extract a spectra that doesn't exist
+            if i >= spectra.shape[0]:
+                continue
+
             # Populate the grid with the spectra
             stacked_spectra[-i - 1, :] = spectra[i, :]
 
