@@ -2975,10 +2975,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 Are we generating related model lines? If so we don't want
                 to apply any post processing functions or delete any lines,
                 this will be done outside the recursive call.
-            limit_to (str)
-                If not None, defines a specifical model to limit the image
-                generation to. Otherwise, all models with saved spectra will
-                have images generated.
+            limit_to (str, list)
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
             do_flux (bool)
                 If True, the images will be generated from fluxes, if False
                 they will be generated from luminosities.
@@ -3008,6 +3008,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if images is None:
             images = {}
 
+        # Convert `limit_to` to a list if it is a string
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+
         # Get all the images at the extraction leaves of the tree
         for label in emission_model._extract_keys.keys():
             # Skip it if we happen to already have the images
@@ -3015,7 +3018,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 continue
 
             # If we are limiting to a specific model, skip all others
-            if limit_to is not None and label != limit_to:
+            if limit_to is not None and label not in limit_to:
                 continue
 
             # Also skip any models we didn't save
@@ -3035,7 +3038,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     kernel,
                     kernel_threshold,
                     nthreads,
-                    limit_to,
                 )
             except Exception as e:
                 if sys.version_info >= (3, 11):
@@ -3050,7 +3052,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # images as we go
         for label in emission_model._bottom_to_top:
             # If we are limiting to a specific model, skip all others
-            if limit_to is not None and label != limit_to:
+            if limit_to is not None and label not in limit_to:
                 continue
 
             # Get this model

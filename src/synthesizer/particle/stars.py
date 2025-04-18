@@ -334,7 +334,7 @@ class Stars(Particles, StarsComponent):
             log10ages (array)
                 log10 stellar ages
         """
-        return np.log10(self.ages) * dimensionless
+        return np.log10(self.ages, dtype=np.float64) * dimensionless
 
     def _check_star_args(self):
         """

@@ -12,9 +12,10 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, rad, s
 
 from synthesizer import exceptions
+from synthesizer.particle.utils import rotate
 from synthesizer.synth_warnings import deprecation
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
 
 
@@ -110,8 +111,8 @@ class Particles:
                 The name of the particle type.
         """
         # Set phase space coordinates
-        self.coordinates = coordinates
-        self.velocities = velocities
+        self.coordinates = ensure_array_c_compatible_double(coordinates)
+        self.velocities = ensure_array_c_compatible_double(velocities)
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
@@ -126,10 +127,12 @@ class Particles:
         # Set unit information
 
         # Set the softening length
-        self.softening_lengths = softening_lengths
+        self.softening_lengths = ensure_array_c_compatible_double(
+            softening_lengths
+        )
 
         # Set the particle masses
-        self.masses = masses
+        self.masses = ensure_array_c_compatible_double(masses)
 
         # Set the redshift of the particles
         self.redshift = redshift
@@ -138,7 +141,7 @@ class Particles:
         self.nparticles = nparticles
 
         # Set the centre of the particle distribution
-        self.centre = centre
+        self.centre = ensure_array_c_compatible_double(centre)
 
         # Set the radius to None, this will be populated when needed and
         # can then be subsequently accessed
@@ -208,7 +211,7 @@ class Particles:
         mets = self.metallicities
         mets[mets == 0.0] = self.metallicity_floor
 
-        return np.log10(mets)
+        return np.log10(mets, dtype=np.float64)
 
     def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
@@ -823,34 +826,13 @@ class Particles:
                 A new instance of the particles with the rotated coordinates,
                 if inplace is False.
         """
-        # Are we using angles?
-        if rot_matrix is None:
-            # Rotation matrix around z-axis (phi)
-            rot_matrix_z = np.array(
-                [
-                    [np.cos(phi), -np.sin(phi), 0],
-                    [np.sin(phi), np.cos(phi), 0],
-                    [0, 0, 1],
-                ]
-            )
-
-            # Rotation matrix around y-axis (theta)
-            rot_matrix_y = np.array(
-                [
-                    [np.cos(theta), 0, np.sin(theta)],
-                    [0, 1, 0],
-                    [-np.sin(theta), 0, np.cos(theta)],
-                ]
-            )
-
-            # Combined rotation matrix
-            rot_matrix = np.dot(rot_matrix_y, rot_matrix_z)
-
         # Are we rotating in place or returning a new instance?
         if inplace:
             # Rotate the coordinates
-            self.coordinates = np.dot(self.coordinates, rot_matrix.T)
-            self.velocities = np.dot(self.velocities, rot_matrix.T)
+            self.coordinates = rotate(self.coordinates, phi, theta, rot_matrix)
+            self.velocities = rotate(self.velocities, phi, theta, rot_matrix)
+            if self.centre is not None:
+                self.centre = rotate(self.centre, phi, theta, rot_matrix)
 
             return
 
@@ -858,8 +840,14 @@ class Particles:
         new_parts = copy.deepcopy(self)
 
         # Rotate the coordinates
-        new_parts.coordinates = np.dot(new_parts.coordinates, rot_matrix.T)
-        new_parts.velocities = np.dot(new_parts.velocities, rot_matrix.T)
+        new_parts.coordinates = rotate(
+            new_parts.coordinates, phi, theta, rot_matrix
+        )
+        new_parts.velocities = rotate(
+            new_parts.velocities, phi, theta, rot_matrix
+        )
+        if self.centre is not None:
+            new_parts.centre = rotate(new_parts.centre, phi, theta, rot_matrix)
 
         # Return the new one
         return new_parts

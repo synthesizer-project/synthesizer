@@ -320,7 +320,6 @@ class Extraction:
         kernel,
         kernel_threshold,
         nthreads,
-        limit_to,
     ):
         """
         Create an image for an extraction key.
