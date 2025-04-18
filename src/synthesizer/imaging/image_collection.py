@@ -348,7 +348,7 @@ class ImageCollection:
         """
         if not isinstance(img, Image):
             # Convert ndarray → Image
-            img = Image(self.resolution, self.fov, arr=img)
+            img = Image(self.resolution, self.fov, img=img)
 
         # Insert / update while keeping filter_codes unique
         self.imgs[filter_code] = img
