@@ -834,8 +834,8 @@ def _generate_ifu_particle_smoothed(
 
     # Shift the centred coordinates by half the FOV to lie in the
     # range [0, FOV]
-    cent_coords[:, 0] += fov[0] / 2
-    cent_coords[:, 1] += fov[1] / 2
+    _coords[:, 0] += fov[0] / 2
+    _coords[:, 1] += fov[1] / 2
 
     # Generate the IFU
     ifu.arr = make_img(
