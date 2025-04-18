@@ -1534,6 +1534,26 @@ class Sed:
         """
         return plot_spectra_as_rainbow(self, **kwargs)
 
+    def plot_spectra_stack(
+        self,
+        nbin=100,
+        fig=None,
+        ax=None,
+        show=False,
+        order="peak",
+    ):
+        """
+        Plot a stack of the top nbin spectra in a multi-spectra sed.
+
+        This is only applicable for Sed object with ndim >1. It will plot
+        bin the top nbin spectra into nbin wavelength bins, populate a grid
+        where x is the wavelength and each y row is one of the spectra, and
+        then plot this grid as an image.
+
+        This stack can optionally be ordered
+        """
+        pass
+
 
 def plot_spectra(
     spectra,
