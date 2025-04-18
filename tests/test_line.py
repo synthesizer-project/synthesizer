@@ -356,7 +356,7 @@ class TestLineRatiosAndDiagrams:
         if len(lines.available_ratios) > 0:
             ratio_id = lines.available_ratios[0]
             ratio = lines.get_ratio(ratio_id)
-            assert isinstance(ratio, float)
+            assert isinstance(ratio, np.ndarray)
 
         # Test custom ratio
         if "O III 5007 A" in lines.line_ids and "H 1 4861 A" in lines.line_ids:
@@ -384,7 +384,7 @@ class TestLineRatiosAndDiagrams:
             diagram = lines.get_diagram(diagram_id)
             assert isinstance(diagram, tuple)
             assert len(diagram) == 2
-            assert all(isinstance(value, float) for value in diagram)
+            assert all(isinstance(value, np.ndarray) for value in diagram)
 
 
 class TestLineCollectionManipulation:
