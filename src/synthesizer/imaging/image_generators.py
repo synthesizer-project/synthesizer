@@ -256,7 +256,7 @@ def _generate_image_particle_smoothed(
     _coords = cent_coords.to(spatial_units).value
     _coords[:, 0] += fov[0] / 2.0
     _coords[:, 1] += fov[1] / 2.0
-    smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
     # Apply normalisation to original signal if needed
     if normalisation is not None:
@@ -268,7 +268,7 @@ def _generate_image_particle_smoothed(
     # Get the (npix_x, npix_y) image
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signal),
-        ensure_array_c_compatible_double(smoothing_lengths),
+        ensure_array_c_compatible_double(_smoothing_lengths),
         ensure_array_c_compatible_double(_coords),
         kernel,
         res,
@@ -408,7 +408,7 @@ def _generate_images_particle_smoothed(
     _coords = cent_coords.to(spatial_units).value
     _coords[:, 0] += fov[0] / 2.0
     _coords[:, 1] += fov[1] / 2.0
-    smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
     # Apply normalisation to original signal if needed
     if normalisations is not None:
@@ -423,7 +423,7 @@ def _generate_images_particle_smoothed(
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signals),
-        ensure_array_c_compatible_double(smoothing_lengths),
+        ensure_array_c_compatible_double(_smoothing_lengths),
         ensure_array_c_compatible_double(_coords),
         kernel,
         res,
