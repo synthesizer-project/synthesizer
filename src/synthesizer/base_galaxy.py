@@ -74,6 +74,9 @@ class BaseGalaxy:
         self.images_lnu = {}
         self.images_fnu = {}
 
+        # Initialise the dictionary to hold instrument specific spectroscopy
+        self.spectroscopy = {}
+
         # Attach the components
         self.stars = stars
         self.gas = gas
@@ -1334,6 +1337,61 @@ class BaseGalaxy:
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
+
+    def get_spectroscopy(
+        self,
+        instrument,
+    ):
+        """
+        Get spectroscopy for the galaxy based on a specific instrument.
+
+        This will apply the instrument's wavelength array to each
+        spectra stored on the galaxy and its components.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use for the spectroscopy.
+
+        Returns:
+            dict
+                The spectroscopy for the galaxy.
+        """
+        # Check we have some spectra
+        nspec = len(self.spectra)
+        if self.stars is not None:
+            nspec += len(self.stars.spectra)
+            if hasattr(self.stars, "particle_spectra"):
+                nspec += len(self.stars.particle_spectra)
+        if self.black_holes is not None:
+            nspec += len(self.black_holes.spectra)
+            if hasattr(self.black_holes, "particle_spectra"):
+                nspec += len(self.black_holes.particle_spectra)
+        if nspec == 0:
+            raise exceptions.InconsistentArguments(
+                "No spectra found in galaxy or components."
+            )
+
+        # Create an entry for this instrument in the spectroscopy dictionary
+        # if it doesn't exist
+        if instrument.label not in self.spectroscopy:
+            self.spectroscopy[instrument.label] = {}
+
+        # Do the galaxy level spectra
+        for key, sed in self.spectra.items():
+            # Get the spectroscopy
+            self.spectroscopy[instrument.label][key] = sed.get_spectroscopy(
+                instrument
+            )
+
+        # Do the stars level spectra
+        if self.stars is not None:
+            self.stars.get_spectroscopy(instrument)
+
+        # Do the black holes level spectra
+        if self.black_holes is not None:
+            self.black_holes.get_spectroscopy(instrument)
+
+        return self.spectroscopy[instrument.label]
 
     def clear_all_spectra(self):
         """

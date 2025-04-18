@@ -77,6 +77,10 @@ class Component(ABC):
         self.images_lnu = {}
         self.images_fnu = {}
 
+        # Define the dictionaries to hold instrument specific spectroscopy
+        self.spectroscopy = {}
+        self.particle_spectroscopy = {}
+
         # Attach a default escape fraction
         self.fesc = fesc if fesc is not None else 0.0
 
@@ -632,6 +636,49 @@ class Component(ABC):
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
+
+    def get_spectroscopy(
+        self,
+        instrument,
+    ):
+        """
+        Get spectroscopy for the component based on a specific instrument.
+
+        This will apply the instrument's wavelength array to each
+        spectra stored on the component.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use for the spectroscopy.
+
+        Returns:
+            dict
+                The spectroscopy for the galaxy.
+        """
+        # Create an entry for the instrument in the spectroscopy
+        # dictionary if it doesn't exist
+        if instrument.name not in self.spectroscopy:
+            self.spectroscopy[instrument.label] = {}
+
+        # Loop over the spectra in the component and apply the instrument
+        for key, sed in self.spectra.items():
+            self.spectroscopy[instrument.label][key] = sed.get_spectroscopy(
+                instrument
+            )
+
+        # If we have particle spectra then do the same for them
+        if len(self.particle_spectra) > 0:
+            if instrument.name not in self.particle_spectroscopy:
+                self.particle_spectroscopy[instrument.label] = {}
+
+            # Loop over the spectra in the component and apply the instrument
+            for key, sed in self.particle_spectra.items():
+                self.particle_spectroscopy[instrument.label][key] = (
+                    sed.get_spectroscopy(instrument)
+                )
+
+        # Return the spectroscopy for the component
+        return self.spectroscopy[instrument.name]
 
     def plot_spectra(
         self,
