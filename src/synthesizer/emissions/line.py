@@ -993,6 +993,11 @@ class LineCollection:
             axis=0,
         )
 
+        # Return a single float if we have a single line
+        if numer_lum.ndim == 1:
+            return float(numer_lum / denom_lum)
+
+        # Otherwise return the ratio array
         return numer_lum / denom_lum
 
     def get_ratio(self, ratio_id):
