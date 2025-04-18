@@ -3073,7 +3073,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             # Include this photometry in the list
             for key, phot in this_phot.items():
-                photometry[this_model.emitter][f"{label}-{key}"] = phot
+                photometry[this_model.emitter][f"{label}--{key}"] = phot
 
         # With everything collected, we can now generate the images for each
         # emitter in one go
@@ -3107,7 +3107,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             individual_imgs = {}
             for key in _imgs.keys():
                 # Get the model label
-                model_label, fcode = key.split("-")
+                model_label, fcode = key.split("--", 1)
 
                 # Create the entry for this model if needed
                 individual_imgs.setdefault(model_label, {})
