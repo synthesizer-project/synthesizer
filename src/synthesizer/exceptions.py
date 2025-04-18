@@ -284,7 +284,7 @@ class MissingImage(Exception):
 
 class MissingModelSettings(Exception):
     """Exception class for when a model is missing settings."""
-    
+
     def __init__(self, *args):
         if args:
             self.message = args[0]
@@ -294,7 +294,7 @@ class MissingModelSettings(Exception):
     def __str__(self):
         return "Model is missing settings!"
 
-    
+
 class MissingIFU(Exception):
     """Exception class for when an IFU has not yet been made."""
 
