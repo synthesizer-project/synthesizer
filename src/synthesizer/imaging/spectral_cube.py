@@ -148,6 +148,12 @@ class SpectralCube:
                 A 3D array containing the data cube. (npix[0], npix[1],
                 lam.size)
         """
+        # Not applicable when the IFU hasn't been generated yet
+        if self.arr is None:
+            raise exceptions.MissingIFU(
+                "The IFU array hasn't been generated yet. Please call "
+                "get_data_cube_hist or get_data_cube_smoothed first."
+            )
         return self.arr * self.units
 
     @property
@@ -165,6 +171,12 @@ class SpectralCube:
                 A 3D array containing the IFU array. (npix[0], npix[1],
                 lam.size)
         """
+        # Not applicable when the IFU hasn't been generated yet
+        if self.arr is None:
+            raise exceptions.MissingIFU(
+                "The IFU array hasn't been generated yet. Please call "
+                "get_data_cube_hist or get_data_cube_smoothed first."
+            )
         return self.arr * self.units
 
     def _compute_npix(self):

@@ -346,14 +346,14 @@ class ImageCollection:
             img (Image/array)
                 The image to be added to the collection.
         """
-        # Do we need to convert the image to an Image object?
         if not isinstance(img, Image):
-            # Convert the image to an Image object
-            img = Image(self.resolution, self.fov, img=img)
+            # Convert ndarray → Image
+            img = Image(self.resolution, self.fov, arr=img)
 
-        # Perform the look up
+        # Insert / update while keeping filter_codes unique
         self.imgs[filter_code] = img
-        self.filter_codes.append(filter_code)
+        if filter_code not in self.filter_codes:
+            self.filter_codes.append(filter_code)
 
     def keys(self):
         """Return the keys of the image collection."""
@@ -537,6 +537,7 @@ class ImageCollection:
                 self,
                 density_grid=density_grid,
                 signals=photometry,
+                normalisations=normalisations,
             )
         elif (
             coordinates is not None
@@ -555,6 +556,7 @@ class ImageCollection:
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
+                normalisations=normalisations,
             )
         else:
             raise exceptions.InconsistentArguments(

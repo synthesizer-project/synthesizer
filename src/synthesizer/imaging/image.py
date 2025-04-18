@@ -109,6 +109,12 @@ class Image:
     @property
     def img(self):
         """The image array with units."""
+        if self.arr is None:
+            raise exceptions.MissingImage(
+                "The image array hasn't been generated yet. Please run "
+                "get_img_hist() or get_img_smoothed() before accessing the "
+                "image."
+            )
         return self.arr * self.units if self.units is not None else self.arr
 
     def _compute_npix(self):
@@ -332,6 +338,7 @@ class Image:
                 self,
                 density_grid=density_grid,
                 signal=signal,
+                normalisation=normalisation,
             )
         elif (
             coordinates is not None
@@ -349,6 +356,7 @@ class Image:
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
+                normalisation=normalisation,
             )
         else:
             raise exceptions.InconsistentArguments(

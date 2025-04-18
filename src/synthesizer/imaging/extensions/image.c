@@ -439,6 +439,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   /* Allocate the image.. */
   const int npix = npix_x * npix_y * nimgs;
   double *img = synth_malloc(npix * sizeof(double), "image");
+  memset(img, 0, npix * sizeof(double));
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, smoothing_lengths, pos, kernel, res,

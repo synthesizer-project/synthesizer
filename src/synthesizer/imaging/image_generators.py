@@ -84,6 +84,9 @@ def _generate_image_particle_hist(
     # Include normalisation in the original signal if we have one
     # (we'll divide by it later)
     if normalisation is not None:
+        # Make sure we are working on a copy of the signal so as not to
+        # modify the original
+        signal = signal.copy()
         signal *= normalisation.value
 
     img.arr = np.histogram2d(
@@ -105,7 +108,9 @@ def _generate_image_particle_hist(
                 np.linspace(
                     -img._fov[0] / 2, img._fov[0] / 2, img.npix[0] + 1
                 ),
-                np.linspace(img._fov[1] / 2, img._fov[1] / 2, img.npix[1] + 1),
+                np.linspace(
+                    -img._fov[1] / 2, img._fov[1] / 2, img.npix[1] + 1
+                ),
             ),
             weights=normalisation.value,
         )[0]
@@ -248,20 +253,23 @@ def _generate_image_particle_smoothed(
 
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
-    cent_coords = cent_coords.to(spatial_units).value
-    cent_coords[:, 0] += fov[0] / 2.0
-    cent_coords[:, 1] += fov[1] / 2.0
+    _coords = cent_coords.to(spatial_units).value
+    _coords[:, 0] += fov[0] / 2.0
+    _coords[:, 1] += fov[1] / 2.0
     smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
     # Apply normalisation to original signal if needed
     if normalisation is not None:
+        # Make sure we are working on a copy of the signal so as not to
+        # modify the original
+        signal = signal.copy()
         signal *= normalisation.value
 
     # Get the (npix_x, npix_y) image
     imgs_arr = make_img(
-        signal,
+        ensure_array_c_compatible_double(signal),
         ensure_array_c_compatible_double(smoothing_lengths),
-        ensure_array_c_compatible_double(cent_coords),
+        ensure_array_c_compatible_double(_coords),
         kernel,
         res,
         img.npix[0],
@@ -397,21 +405,26 @@ def _generate_images_particle_smoothed(
 
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
-    cent_coords = cent_coords.to(spatial_units).value
-    cent_coords[:, 0] += fov[0] / 2.0
-    cent_coords[:, 1] += fov[1] / 2.0
+    _coords = cent_coords.to(spatial_units).value
+    _coords[:, 0] += fov[0] / 2.0
+    _coords[:, 1] += fov[1] / 2.0
     smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
     # Apply normalisation to original signal if needed
     if normalisations is not None:
+        # Make sure we are working on a copy of the signals so as not to
+        # modify the original
+        signals = signals.copy()
+
+        # Apply the normalisation to the corresponding signal
         for ind, key in enumerate(labels):
             signals[ind, :] *= normalisations[key].value
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        signals,
+        ensure_array_c_compatible_double(signals),
         ensure_array_c_compatible_double(smoothing_lengths),
-        ensure_array_c_compatible_double(cent_coords),
+        ensure_array_c_compatible_double(_coords),
         kernel,
         res,
         imgs.npix[0],
@@ -692,20 +705,19 @@ def _generate_ifu_particle_hist(
 
     # Convert coordinates and smoothing lengths to the correct units and
     # strip them off
-    cent_coords = cent_coords.to(spatial_units).value
+    _coords = cent_coords.to(spatial_units).value
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+    if not (_coords.min() < 0 and _coords.max() > 0):
         raise exceptions.InconsistentArguments(
             "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
+            f" (got min={_coords.min()} and max={_coords.max()})."
         )
 
     # Prepare the inputs, we need to make sure we are passing C contiguous
     # arrays.
-    spectra = np.ascontiguousarray(spectra, dtype=np.float64)
-    cent_coords[:, 0] += fov[0] / 2
-    cent_coords[:, 1] += fov[1] / 2
+    _coords[:, 0] += fov[0] / 2
+    _coords[:, 1] += fov[1] / 2
     smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
 
     # Get the kernel
@@ -713,9 +725,9 @@ def _generate_ifu_particle_hist(
     kernel = Kernel().get_kernel()
 
     ifu.arr = make_img(
-        spectra,
+        ensure_array_c_compatible_double(spectra),
         smls,
-        ensure_array_c_compatible_double(cent_coords),
+        ensure_array_c_compatible_double(_coords),
         kernel,
         res,
         ifu.npix[0],
@@ -811,29 +823,27 @@ def _generate_ifu_particle_smoothed(
 
     # Convert coordinates and smoothing lengths to the correct units and
     # strip them off
-    cent_coords = cent_coords.to_value(spatial_units)
+    _coords = cent_coords.to_value(spatial_units)
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+    if not (_coords.min() < 0 and _coords.max() > 0):
         raise exceptions.InconsistentArguments(
             "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
+            f" (got min={_coords.min()} and max={_coords.max()})."
         )
 
-    # Prepare the inputs, we need to make sure we are passing C contiguous
-    # arrays.
-    spectra = np.ascontiguousarray(spectra, dtype=np.float64)
+    # Shift the centred coordinates by half the FOV to lie in the
+    # range [0, FOV]
     cent_coords[:, 0] += fov[0] / 2
     cent_coords[:, 1] += fov[1] / 2
-    smls = ensure_array_c_compatible_double(
-        smoothing_lengths.to_value(spatial_units)
-    )
 
     # Generate the IFU
     ifu.arr = make_img(
         spectra,
-        smls,
-        ensure_array_c_compatible_double(cent_coords),
+        ensure_array_c_compatible_double(
+            smoothing_lengths.to_value(spatial_units)
+        ),
+        ensure_array_c_compatible_double(_coords),
         kernel,
         res,
         ifu.npix[0],
