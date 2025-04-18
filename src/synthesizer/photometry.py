@@ -77,7 +77,8 @@ class PhotometryCollection:
         # Ensure we have units, if not something terrible has happened
         if not isinstance(photometry[0], (unyt_quantity, unyt_array)):
             raise exceptions.InconsistentArguments(
-                "Photometry must be passed as a dict of unyt_quantities."
+                "Photometry must be passed as a dict of unyt_quantities "
+                f"or unyt_arrays. Got {type(photometry[0])} instead."
             )
 
         # Convert it from a list of unyt_quantities to a unyt_array

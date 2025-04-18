@@ -499,8 +499,18 @@ class Component(ABC):
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introcued some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            filters = self.photo_lnu[emission_model.label].filters
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+                filters=filters,
+            )
 
         # Get the images
         images = emission_model._get_images(
@@ -604,8 +614,18 @@ class Component(ABC):
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introcued some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            filters = self.photo_lnu[emission_model.label].filters
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+                filters=filters,
+            )
 
         # Get the images
         images = emission_model._get_images(

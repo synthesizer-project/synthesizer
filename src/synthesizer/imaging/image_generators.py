@@ -517,14 +517,12 @@ def _generate_images_parametric_smoothed(
 
 def _generate_image_collection_generic(
     instrument,
+    photometry,
     fov,
     img_type,
-    do_flux,
-    per_particle,
     kernel,
     kernel_threshold,
     nthreads,
-    label,
     emitter,
 ):
     """
@@ -540,14 +538,13 @@ def _generate_image_collection_generic(
     Args:
         instrument (Instrument)
             The instrument to create the images for.
+        photometry (PhotometryCollection)
+            The photometry to use for the images. This should be a a collection
+            of 2D arrays of photometry with shape (Nfilters, Nparticles).
         fov (unyt_quantity/tuple, unyt_quantity)
             The width of the image.
         img_type (str)
             The type of image to create. Options are "hist" or "smoothed".
-        do_flux (bool)
-            Whether to create a flux image or a luminosity image.
-        per_particle (bool)
-            Whether to create an image per particle or not.
         kernel (str)
             The array describing the kernel. This is dervied from the
             kernel_functions module. (Only applicable to particle imaging)
@@ -558,8 +555,6 @@ def _generate_image_collection_generic(
         nthreads (int)
             The number of threads to use when smoothing the image. This
             only applies to particle imaging.
-        label (str)
-            The label of the photometry to use.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
 
@@ -570,32 +565,6 @@ def _generate_image_collection_generic(
     # Avoid cyclic imports
     from synthesizer.imaging import ImageCollection
     from synthesizer.particle import Particles
-
-    # Get the appropriate photometry (particle/integrated and
-    # flux/luminosity)
-    try:
-        if do_flux:
-            photometry = (
-                emitter.particle_photo_fnu[label]
-                if per_particle
-                else emitter.photo_fnu[label]
-            )
-        else:
-            photometry = (
-                emitter.particle_photo_lnu[label]
-                if per_particle
-                else emitter.photo_lnu[label]
-            )
-    except KeyError:
-        # Ok we are missing the photometry
-        raise exceptions.MissingSpectraType(
-            f"Can't make an image for {label} without the photometry. "
-            "Did you not save the spectra or produce the photometry?"
-        )
-
-    # Select only the photometry for this instrument
-    if instrument.filters is not None:
-        photometry = photometry.select(*instrument.filters.filter_codes)
 
     # Create the image collection
     imgs = ImageCollection(
