@@ -667,7 +667,10 @@ class Component(ABC):
             )
 
         # If we have particle spectra then do the same for them
-        if len(self.particle_spectra) > 0:
+        if (
+            hasattr(self, "particle_spectra")
+            and len(self.particle_spectra) > 0
+        ):
             if instrument.label not in self.particle_spectroscopy:
                 self.particle_spectroscopy[instrument.label] = {}
 
