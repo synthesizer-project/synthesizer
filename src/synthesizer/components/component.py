@@ -500,7 +500,7 @@ class Component(ABC):
 
         # If we haven't got an instrument create one
         # TODO: we need to eventually fully pivot to taking only an instrument
-        # this will be done when we introcued some premade instruments
+        # this will be done when we introduced some premade instruments
         if instrument is None:
             # Get the filters from the emitters
             filters = self.photo_lnu[emission_model.label].filters
@@ -615,7 +615,7 @@ class Component(ABC):
 
         # If we haven't got an instrument create one
         # TODO: we need to eventually fully pivot to taking only an instrument
-        # this will be done when we introcued some premade instruments
+        # this will be done when we introduced some premade instruments
         if instrument is None:
             # Get the filters from the emitters
             filters = self.photo_lnu[emission_model.label].filters
