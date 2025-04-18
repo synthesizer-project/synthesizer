@@ -577,6 +577,16 @@ class Sed:
         return self.lnu.shape
 
     @property
+    def nlam(self):
+        """
+        Get the number of wavelength elements.
+
+        Returns:
+            int: The number of wavelength elements.
+        """
+        return self.lam.size
+
+    @property
     def bolometric_luminosity(self):
         """
         Return the bolometric luminosity of the SED with units.
@@ -1385,6 +1395,34 @@ class Sed:
         toc("Resampling Sed", start)
 
         return sed
+
+    def apply_instrument_lams(self, instrument, nthreads=1):
+        """
+        Apply an instrument to the spectra.
+
+        This will resample a Sed object on to the instrument's wavelength
+        array. It is actually just an intuitive wrapper around
+        get_resampled_sed which will handle the actual resampling of
+        both lnu and fnu (if applicable) using the instrument's
+        wavelength array.
+
+        Args:
+            instrument (Instrument)
+                An instance of the Instrument class.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
+
+        Returns:
+            Sed
+                A new Sed with the instrument applied.
+        """
+        # Ensure the instrument can actually do spectroscopy
+        if not instrument.can_do_spectroscopy:
+            raise exceptions.InconsistentArguments(
+                f"{instrument.label} Instrument cannot do spectroscopy"
+            )
+        return self.get_resampled_sed(new_lam=instrument.lam)
 
     def apply_attenuation(
         self,

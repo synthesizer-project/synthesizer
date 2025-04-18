@@ -77,11 +77,15 @@ class PhotometryCollection:
         # Ensure we have units, if not something terrible has happened
         if not isinstance(photometry[0], (unyt_quantity, unyt_array)):
             raise exceptions.InconsistentArguments(
-                "Photometry must be passed as a dict of unyt_quantities."
+                "Photometry must be passed as a dict of unyt_quantities "
+                f"or unyt_arrays. Got {type(photometry[0])} instead."
             )
 
         # Convert it from a list of unyt_quantities to a unyt_array
-        photometry = unyt_array(photometry, units=photometry[0].units)
+        photometry = unyt_array(
+            np.array(photometry, dtype=np.float64),
+            units=photometry[0].units,
+        )
 
         # Get the dimensions of a flux for testing
         flux_dimensions = default_units[
@@ -167,6 +171,16 @@ class PhotometryCollection:
                 A dict_values object containing the photometry.
         """
         return self._look_up.values()
+
+    def __len__(self):
+        """
+        Return the number of photometry filters in the collection.
+
+        Returns:
+            int
+                The number of filters in the collection.
+        """
+        return len(self._look_up)
 
     def items(self):
         """

@@ -20,7 +20,7 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Template
-from synthesizer.imaging.image_collection import (
+from synthesizer.imaging.image_generators import (
     _generate_image_collection_generic,
 )
 from synthesizer.parametric import BlackHole

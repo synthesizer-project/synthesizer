@@ -24,6 +24,11 @@ from scipy.ndimage import zoom
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.imaging.image_generators import (
+    _generate_image_parametric_smoothed,
+    _generate_image_particle_hist,
+    _generate_image_particle_smoothed,
+)
 from synthesizer.units import Quantity
 
 
@@ -100,6 +105,17 @@ class Image:
         # Set up the noise array and weight map
         self.noise_arr = None
         self.weight_map = None
+
+    @property
+    def img(self):
+        """The image array with units."""
+        if self.arr is None:
+            raise exceptions.MissingImage(
+                "The image array hasn't been generated yet. Please run "
+                "get_img_hist() or get_img_smoothed() before accessing the "
+                "image."
+            )
+        return self.arr * self.units if self.units is not None else self.arr
 
     def _compute_npix(self):
         """
@@ -232,8 +248,8 @@ class Image:
     def get_img_hist(
         self,
         signal,
+        coordinates,
         normalisation=None,
-        coordinates=None,
     ):
         """
         Calculate an image with no smoothing.
@@ -244,82 +260,33 @@ class Image:
         Args:
             signal (array_like, float):
                 The signal to be sorted into the image.
+            coordinates (unyt_array, float):
+                The coordinates of the particles.
             normalisation (array_like, float):
                 The normalisation property. This is
                 multiplied by the signal before sorting, then normalised out.
-            coordinates (unyt_array, float):
-                The coordinates of the particles.
 
         Returns:
             img (array_like, float)
                 A 2D array containing the pixel values sorted into the image.
                 (npix, npix)
         """
-        # Strip off and store the units on the signal if they are present
-        if isinstance(signal, (unyt_quantity, unyt_array)):
-            self.units = signal.units
-            signal = signal.value
-
-        # Return an empty image if there are no particles
-        if signal.size == 0:
-            self.arr = np.zeros(self.npix)
-            return (
-                self.arr * self.units if self.units is not None else self.arr
-            )
-
-        # Convert coordinates and smoothing lengths to the correct units and
-        # strip them off
-        coordinates = coordinates.to(self.resolution.units).value
-
-        if normalisation is not None:
-            # Apply normalisation to original signal
-            signal *= normalisation.value
-
-        self.arr = np.histogram2d(
-            coordinates[:, 0],
-            coordinates[:, 1],
-            bins=(
-                np.linspace(
-                    -self._fov[0] / 2, self._fov[0] / 2, self.npix[0] + 1
-                ),
-                np.linspace(
-                    -self._fov[1] / 2, self._fov[1] / 2, self.npix[1] + 1
-                ),
-            ),
-            weights=signal,
-        )[0]
-
-        if normalisation is not None:
-            # Normalise the image by the normalisation property
-            norm_img = np.histogram2d(
-                coordinates[:, 0],
-                coordinates[:, 1],
-                bins=(
-                    np.linspace(
-                        -self._fov[0] / 2, self._fov[0] / 2, self.npix[0] + 1
-                    ),
-                    np.linspace(
-                        -self._fov[1] / 2, self._fov[1] / 2, self.npix[1] + 1
-                    ),
-                ),
-                weights=normalisation.value,
-            )[0]
-
-            self.arr /= norm_img
-            if self.units is not None:
-                self.units /= normalisation.units
-
-        return self.arr * self.units if self.units is not None else self.arr
+        return _generate_image_particle_hist(
+            self,
+            signal,
+            coordinates,
+            normalisation=normalisation,
+        )
 
     def get_img_smoothed(
         self,
         signal,
-        normalisation=None,
         coordinates=None,
         smoothing_lengths=None,
         kernel=None,
         kernel_threshold=1,
         density_grid=None,
+        normalisation=None,
         nthreads=1,
     ):
         """
@@ -336,10 +303,6 @@ class Image:
         Args:
             signal (array_like, float):
                 The signal to be sorted into the image.
-            normalisation (array_like, float):
-                The normalisation property to be used for the signal. This is
-                multiplied by the signal before smoothing, then normalised out.
-                (particle case only).
             coordinates (unyt_array, float):
                 The coordinates of the particles. (particle case only)
             smoothing_lengths (unyt_array, float):
@@ -350,6 +313,10 @@ class Image:
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
+            normalisation (array_like, float):
+                The normalisation property to be used for the signal. This is
+                multiplied by the signal before smoothing, then normalised out.
+                (particle case only).
             nthreads (int):
                 The number of threads to use for the C extension. (particle
                 case only)
@@ -364,117 +331,46 @@ class Image:
                 If conflicting particle and parametric arguments are passed
                 or any arguments are missing an error is raised.
         """
-        # Strip off and store the units on the signal if they are present
-        if isinstance(signal, (unyt_quantity, unyt_array)):
-            self.units = signal.units
-            signal = signal.value
-
-        # Ensure we have the right arguments
-        if density_grid is not None and (
+        # Call the correct image generation function (particle or parametric)
+        if density_grid is not None and signal is not None:
+            # Generate the images for the parametric case
+            return _generate_image_parametric_smoothed(
+                self,
+                density_grid=density_grid,
+                signal=signal,
+                normalisation=normalisation,
+            )
+        elif (
             coordinates is not None
-            or smoothing_lengths is not None
-            or kernel is not None
+            and smoothing_lengths is not None
+            and kernel is not None
+            and kernel_threshold is not None
+            and signal is not None
         ):
+            # Generate the images for the particle case
+            return _generate_image_particle_smoothed(
+                self,
+                signal,
+                cent_coords=coordinates,
+                smoothing_lengths=smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                normalisation=normalisation,
+            )
+        else:
             raise exceptions.InconsistentArguments(
-                "Parametric smoothed images only require a density grid. You "
-                "Shouldn't have particle based quantities in conjunction with "
-                "parametric properties, what are you doing?"
+                "Didn't find a valid set of arguments to generate images. "
+                "Please provide either a density grid and a signal for "
+                f"parametric imaging (found density_grid={type(density_grid)} "
+                f"signal={type(signal)}) or coordinates, smoothing "
+                f"lengths, kernel, and kernel_threshold for particle imaging "
+                f"(found coordinates={type(coordinates)}, "
+                f"smoothing_lengths={type(smoothing_lengths)}, "
+                f"kernel={type(kernel)}, "
+                f"kernel_threshold={type(kernel_threshold)}, "
+                f"signal={type(signal)})"
             )
-        if density_grid is None and (
-            coordinates is None or smoothing_lengths is None or kernel is None
-        ):
-            got_coords = "None" if coordinates is None else type(coordinates)
-            got_smls = (
-                "None"
-                if smoothing_lengths is None
-                else type(smoothing_lengths)
-            )
-            got_kernel = "None" if kernel is None else type(kernel)
-            raise exceptions.InconsistentArguments(
-                "Particle based smoothed images require the coordinates"
-                f"({got_coords}), "
-                f"smoothing_lengths ({got_smls}), and kernel arguments "
-                f"({got_kernel}) to be passed."
-            )
-
-        # Handle the parametric case
-        if density_grid is not None:
-            # Multiply the density grid by the sed to get the IFU
-            self.arr = density_grid[:, :] * signal
-
-            return (
-                self.arr * self.units if self.units is not None else self.arr
-            )
-
-        # Return an empty image if there are no particles
-        if signal.size == 0:
-            self.arr = np.zeros(self.npix)
-            return (
-                self.arr * self.units if self.units is not None else self.arr
-            )
-
-        from .extensions.image import make_img
-
-        # Apply normalisation to original signal
-        if normalisation is not None:
-            signal *= normalisation.value  # ignore units
-
-        # Convert coordinates and smoothing lengths to the correct units and
-        # strip them off
-        coordinates = coordinates.to(self.resolution.units).value
-        smoothing_lengths = smoothing_lengths.to(self.resolution.units).value
-
-        # Prepare the inputs, we need to make sure we are passing C contiguous
-        # arrays.
-        signal = np.ascontiguousarray(signal, dtype=np.float64)
-        smls = np.ascontiguousarray(smoothing_lengths, dtype=np.float64)
-        xs = np.ascontiguousarray(
-            coordinates[:, 0] + (self._fov[0] / 2), dtype=np.float64
-        )
-        ys = np.ascontiguousarray(
-            coordinates[:, 1] + (self._fov[1] / 2), dtype=np.float64
-        )
-
-        self.arr = make_img(
-            signal,
-            smls,
-            xs,
-            ys,
-            kernel,
-            self._resolution,
-            self.npix[0],
-            self.npix[1],
-            coordinates.shape[0],
-            kernel_threshold,
-            kernel.size,
-            nthreads,
-        )
-
-        if normalisation is not None:
-            normalisation = np.ascontiguousarray(
-                normalisation.value, dtype=np.float64
-            )
-
-            norm_img = make_img(
-                normalisation,
-                smls,
-                xs,
-                ys,
-                kernel,
-                self._resolution,
-                self.npix[0],
-                self.npix[1],
-                coordinates.shape[0],
-                kernel_threshold,
-                kernel.size,
-                nthreads,
-            )
-
-            # Divide out the normalisation contribution, handling zero
-            # contribution pixels
-            self.arr[self.arr > 0] /= norm_img[norm_img > 0]
-
-        return self.arr * self.units if self.units is not None else self.arr
 
     def apply_psf(self, psf):
         """
@@ -515,9 +411,16 @@ class Image:
             np.ndarray
                 The weight map, derived from 1 / std^2
         """
+        # Make sure the noise has units if we have them
+        if self.units is not None and not isinstance(noise_arr, unyt_array):
+            raise exceptions.InconsistentArguments(
+                "If the Image has units then the noise array must also be "
+                f"passed with units. (image.units = {self.units})"
+            )
+
         # Add the noise array to the image
         if self.units is not None:
-            noisy_img = self.arr * self.units + noise_arr
+            noisy_img = self.arr * self.units + noise_arr.to(self.units)
         else:
             noisy_img = self.arr + noise_arr
 
