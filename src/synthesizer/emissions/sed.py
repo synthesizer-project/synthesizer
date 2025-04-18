@@ -1654,7 +1654,7 @@ class Sed:
             peak_lams = low_res_sed.lam[peak_inds].value
 
             # Sort the spectra by peak wavelength
-            order = np.argsort(peak_lams)
+            order = np.argsort(peak_lams)[::-1]
 
             # Limit to the top nbin spectra
             order = order[:nbin]
@@ -1664,7 +1664,7 @@ class Sed:
             bolometric_luminosity = low_res_sed.bolometric_luminosity.value
 
             # Sort the spectra by bolometric luminosity
-            order = np.argsort(bolometric_luminosity)
+            order = np.argsort(bolometric_luminosity)[::-1]
 
             # Limit to the top nbin spectra
             order = order[:nbin]
@@ -1682,7 +1682,7 @@ class Sed:
             lum_at_lam = low_res_sed.get_lnu_at_lam(order).value
 
             # Sort the spectra by luminosity at the requested wavelength
-            order = np.argsort(lum_at_lam)
+            order = np.argsort(lum_at_lam)[::-1]
 
             # Limit to the top nbin spectra
             order = order[:nbin]
@@ -1698,7 +1698,7 @@ class Sed:
             )
 
         # Get the spectra to plot
-        spectra = getattr(low_res_sed, quantity_to_plot)[order]
+        spectra = getattr(low_res_sed, quantity_to_plot)
 
         # Set up the array that will hold the stacked spectra
         stacked_spectra = (
@@ -1713,7 +1713,7 @@ class Sed:
                 continue
 
             # Populate the grid with the spectra
-            stacked_spectra[-i - 1, :] = spectra[i, :]
+            stacked_spectra[row, :] = spectra[i, :]
 
         # Define a sensible normalisation for the color scale if not provided
         if vmin is None:
