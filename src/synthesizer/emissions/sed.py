@@ -1540,7 +1540,7 @@ class Sed:
         fig=None,
         ax=None,
         show=False,
-        order="peak",
+        order="bolometric_luminosity",
     ):
         """
         Plot a stack of the top nbin spectra in a multi-spectra sed.
@@ -1550,9 +1550,30 @@ class Sed:
         where x is the wavelength and each y row is one of the spectra, and
         then plot this grid as an image.
 
-        This stack can optionally be ordered
+        This stack can optionally be ordered by their peak (from bluest
+        peak to reddest peak), by their bolometric_luminosity (from dimmest to
+        brightest), or by their luminosity at a specific wavelength (from
+        dimmest to brightest). This is defined by the order keyword, "peak",
+        "bolometric_luminosity", or a wavelength in angstroms respectively.
+
+        Args:
+            nbin (int)
+                The number of bins to use for the stacking.
+            fig (matplotlib.pyplot.figure)
+                The figure containing the axis. By default one is created in
+                this function.
+            ax (matplotlib.axes)
+                The axis to plot the data on. By default one is created in
+                this function.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            order (str)
+                The order to stack the spectra by. Can be "peak",
+                "bolometric_luminosity", or a wavelength in angstroms. By
+                default the spectra are stacked in bolometric_luminosity
+                order.
         """
-        pass
 
 
 def plot_spectra(
