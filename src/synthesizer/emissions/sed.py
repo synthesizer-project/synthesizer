@@ -1692,7 +1692,7 @@ class Sed:
             peak_lams = low_res_sed.lam[peak_inds].value
 
             # Sort the spectra by peak wavelength
-            order = np.argsort(peak_lams)[::-1]
+            order = np.argsort(peak_lams)
 
             # Limit to the top nbin spectra
             order = order[:nbin]
