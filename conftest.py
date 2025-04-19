@@ -324,7 +324,7 @@ def random_particle_gas():
     redshift = np.random.randint(0, 10)
     coordinates = (
         np.random.normal(
-            0,
+            0.1,
             np.random.rand(1) * 100,
             (ngas, 3),
         )
@@ -398,7 +398,7 @@ def random_particle_black_hole():
     redshift = np.random.randint(0, 10)
     coordinates = (
         np.random.normal(
-            0,
+            0.1,
             np.random.rand(1) * 100,
             (nblackholes, 3),
         )
