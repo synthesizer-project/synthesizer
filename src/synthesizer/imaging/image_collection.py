@@ -229,6 +229,19 @@ class ImageCollection:
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
 
+    @property
+    def shape(self):
+        """
+        Return the shape of the image collection.
+
+        Returns:
+            tuple: A tuple containing (number of images, height, width) if
+                  images exist, or an empty tuple if no images are present.
+        """
+        if self.imgs is None:
+            return ()
+        return (len(self.imgs), self.npix[0], self.npix[1])
+
     def downsample(self, factor):
         """
         Supersamples all images contained within this instance.
@@ -787,6 +800,8 @@ class ImageCollection:
         vmax=None,
         scaling_func=None,
         cmap="Greys_r",
+        filters=None,
+        ncols=4,
     ):
         """
         Plot all images.
@@ -817,6 +832,11 @@ class ImageCollection:
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
+            filters (list)
+                A list of filter codes to plot. If None, all filters will
+                be plotted.
+            ncols (int)
+                The number of columns to use when plotting multiple images.
 
         Returns:
             matplotlib.pyplot.figure
@@ -839,23 +859,35 @@ class ImageCollection:
         unique_norm_min = vmin is None
         unique_norm_max = vmax is None
 
+        # Are we looping over a specified set of filters?
+        if filters is not None:
+            filter_codes = filters
+        else:
+            filter_codes = self.filter_codes
+
         # Set up the figure
         fig = plt.figure(
-            figsize=(4 * 3.5, int(np.ceil(len(self.filter_codes) / 4)) * 3.5)
+            figsize=(
+                ncols * 3.5,
+                int(np.ceil(len(filter_codes) / ncols)) * 3.5,
+            )
         )
 
         # Create a gridspec grid
         gs = gridspec.GridSpec(
-            int(np.ceil(len(self.filter_codes) / 4)), 4, hspace=0.0, wspace=0.0
+            int(np.ceil(len(filter_codes) / ncols)),
+            ncols,
+            hspace=0.0,
+            wspace=0.0,
         )
 
         # Loop over filters making each image
-        for ind, f in enumerate(self.filter_codes):
+        for ind, f in enumerate(filter_codes):
             # Get the image
             img = self.imgs[f].arr
 
             # Create the axis
-            ax = fig.add_subplot(gs[int(np.floor(ind / 4)), ind % 4])
+            ax = fig.add_subplot(gs[int(np.floor(ind / ncols)), ind % ncols])
 
             # Set up minima and maxima
             if unique_norm_min:

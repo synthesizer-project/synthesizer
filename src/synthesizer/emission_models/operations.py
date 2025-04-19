@@ -23,7 +23,7 @@ from synthesizer.grid import Template
 from synthesizer.imaging.image_generators import (
     _generate_image_collection_generic,
 )
-from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.parametric import BlackHole
 
 
 class Extraction:
@@ -112,14 +112,6 @@ class Extraction:
         # Get the emitter
         emitter = emitters[this_model.emitter]
 
-        # Are we doing a parametric Stars object? If so we have a special
-        # case (TODO: In the future we should make this work without
-        # needing to do this)
-        if isinstance(emitter, ParametricStars):
-            parametric_stars = True
-        else:
-            parametric_stars = False
-
         # Do we have to define a property mask?
         this_mask = None
         for mask_dict in this_model.masks:
@@ -141,7 +133,7 @@ class Extraction:
                 this_model.grid,
                 this_model.extract,
             )
-        elif parametric_stars:
+        elif emitter.is_parametric and not isinstance(emitter, BlackHole):
             extractor = IntegratedParametricExtractor(
                 this_model.grid,
                 this_model.extract,
@@ -240,14 +232,6 @@ class Extraction:
         # Get the emitter
         emitter = emitters[this_model.emitter]
 
-        # Are we doing a parametric Stars object? If so we have a special
-        # case (TODO: In the future we should make this work without
-        # needing to do this)
-        if isinstance(emitter, ParametricStars):
-            parametric_stars = True
-        else:
-            parametric_stars = False
-
         # Do we have to define a property mask?
         this_mask = None
         for mask_dict in this_model.masks:
@@ -269,7 +253,7 @@ class Extraction:
                 this_model.grid,
                 this_model.extract,
             )
-        elif parametric_stars:
+        elif emitter.is_parametric and not isinstance(emitter, BlackHole):
             extractor = IntegratedParametricExtractor(
                 this_model.grid,
                 this_model.extract,
@@ -373,6 +357,17 @@ class Extraction:
 
         # Get the emitter
         emitter = emitters[this_model.emitter]
+
+        # To make images for a particle based emitter we need to have generated
+        # per particle emissions first, make sure this is the case (note that
+        # parametric emitters don't since they smooth integrated emission
+        # over a density grid defined by their morphology)
+        if emitter.is_particle and not this_model.per_particle:
+            raise exceptions.MissingModelSetting(
+                "To generate images for a particle based emitter the model "
+                "must be set to per_particle. (pass per_particle=True when "
+                "initialising the model or call model.set_per_particle(True))"
+            )
 
         # Store the resulting image collection
         images[label] = _generate_image_collection_generic(
@@ -696,6 +691,17 @@ class Generation:
                 The dictionary of image collections now containing the
                 generated images.
         """
+        # To make images for a particle based emitter we need to have generated
+        # per particle emissions first, make sure this is the case (note that
+        # parametric emitters don't since they smooth integrated emission
+        # over a density grid defined by their morphology)
+        if emitter.is_particle and not this_model.per_particle:
+            raise exceptions.MissingModelSetting(
+                "To generate images for a particle based emitter the model "
+                "must be set to per_particle. (pass per_particle=True when "
+                "initialising the model or call model.set_per_particle(True))"
+            )
+
         # Store the resulting image collection
         images[this_model.label] = _generate_image_collection_generic(
             instrument,
@@ -889,6 +895,17 @@ class Transformation:
                 The dictionary of image collections now containing the
                 generated images.
         """
+        # To make images for a particle based emitter we need to have generated
+        # per particle emissions first, make sure this is the case (note that
+        # parametric emitters don't since they smooth integrated emission
+        # over a density grid defined by their morphology)
+        if emitter.is_particle and not this_model.per_particle:
+            raise exceptions.MissingModelSetting(
+                "To generate images for a particle based emitter the model "
+                "must be set to per_particle. (pass per_particle=True when "
+                "initialising the model or call model.set_per_particle(True))"
+            )
+
         # Store the resulting image collection
         images[this_model.label] = _generate_image_collection_generic(
             instrument,
@@ -1112,6 +1129,22 @@ class Combination:
         # Ok, we don't have the models so we have no choice but to generate
         # the image directly from the spectra
         if len(missing) > 0 and this_model.emitter != "galaxy":
+            # To make images for a particle based emitter we need to
+            # have generated per particle emissions first, make sure this
+            # is the case (note that parametric emitters don't since they
+            # smooth integrated emission over a density grid defined by
+            # their morphology)
+            if (
+                emitters[this_model.emitter].is_particle
+                and not this_model.per_particle
+            ):
+                raise exceptions.MissingModelSetting(
+                    "To generate images for a particle based emitter"
+                    " the model must be set to per_particle. (pass "
+                    "per_particle=True when initialising the model or call "
+                    "model.set_per_particle(True))"
+                )
+
             images[this_model.label] = _generate_image_collection_generic(
                 instrument,
                 fov,
