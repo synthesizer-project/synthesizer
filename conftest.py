@@ -233,7 +233,7 @@ def random_part_stars():
     tau_v = np.random.uniform(0.1, 0.9, nstars)
     coordinates = (
         np.random.normal(
-            0,
+            0.1,
             np.random.rand(1) * 100,
             (nstars, 3),
         )
