@@ -2,9 +2,10 @@
 name: Documentation
 
 on:
-  # Runs on pushes targeting the default branch
+  # Runs on releases to enure docs are in step with PyPI deployment
   push:
-    branches: ["main"]
+    tags:
+      - "v*.*.*" # Matches version tags like v1.0.0, v2.1.3, etc.
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
