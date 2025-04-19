@@ -8,6 +8,7 @@ The GitHub workflow will automatically run [Ruff](https://github.com/astral-sh/r
 - [Setting up your development environment](#setting-up-your-development-environment)
 - [Using Ruff](#using-ruff)
 - [Style guide](#style-guide)
+- [Development Documentation](#development-documentation)
 - [Contributing to the Documentation](#contributing-to-the-documentation)
   - [Getting set up](#getting-set-up)
   - [Adding notebooks](#adding-notebooks)
