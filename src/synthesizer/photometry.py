@@ -112,6 +112,9 @@ class PhotometryCollection:
             )
         }
 
+        # Attach the units for convenience
+        self.units = self.photometry.units
+
     def __getitem__(self, filter_code):
         """
         Enable dictionary key look up syntax to extract specific photometry.
@@ -189,6 +192,38 @@ class PhotometryCollection:
                 photometry.
         """
         return self._look_up.items()
+
+    def __len__(self):
+        """
+        Enable len() behaviour.
+
+        Returns:
+            int
+                The number of filter codes.
+        """
+        return len(self._look_up)
+
+    @property
+    def shape(self):
+        """
+        Return the shape of the photometry array.
+
+        Returns:
+            tuple
+                The shape of the photometry array.
+        """
+        return self.photometry.shape
+
+    @property
+    def ndim(self):
+        """
+        Return the number of dimensions of the photometry array.
+
+        Returns:
+            int
+                The number of dimensions of the photometry array.
+        """
+        return self.photometry.ndim
 
     def __iter__(self):
         """

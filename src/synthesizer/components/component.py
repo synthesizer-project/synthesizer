@@ -131,6 +131,32 @@ class Component(ABC):
         """Return the weighted attribute."""
         pass
 
+    @property
+    def is_parametric(self):
+        """
+        Return whether the component is parametric.
+
+        Returns:
+            bool
+                Whether the component is parametric.
+        """
+        # Import here to avoid circular imports
+        from synthesizer.parametric import BlackHole as ParametricBlackHole
+        from synthesizer.parametric import Stars as ParametricStars
+
+        return isinstance(self, (ParametricStars, ParametricBlackHole))
+
+    @property
+    def is_particle(self):
+        """
+        Return whether the component is particle based.
+
+        Returns:
+            bool
+                Whether the component is particle based.
+        """
+        return not self.is_parametric
+
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.

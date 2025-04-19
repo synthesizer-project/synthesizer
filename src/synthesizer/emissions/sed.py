@@ -1119,7 +1119,11 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            self._fnu *= igm().get_transmission(z, self.obslam)
+            # Support bot class references and instantiated objects
+            if callable(igm):
+                self._fnu *= igm().get_transmission(z, self.obslam)
+            else:
+                self._fnu *= igm.get_transmission(z, self.obslam)
 
         return self.fnu
 

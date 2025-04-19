@@ -819,6 +819,11 @@ class Stars(StarsComponent):
         """
         return self.sf_hist
 
+    @property
+    def sfh(self):
+        """Alias for get_sfh."""
+        return self.get_sfh()
+
     def plot_sfh(
         self,
         xlimits=(),
