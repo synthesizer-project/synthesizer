@@ -47,13 +47,13 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_generators import (
     _generate_images_parametric_smoothed,
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
-from synthesizer.imaging.imaging_base import ImagingBase
 from synthesizer.utils import TableFormatter
 
 

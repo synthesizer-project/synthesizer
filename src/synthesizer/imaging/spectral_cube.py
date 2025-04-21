@@ -41,12 +41,12 @@ from matplotlib.colors import Normalize
 from unyt import angstrom
 
 from synthesizer import exceptions
+from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
     _generate_ifu_parametric_smoothed,
     _generate_ifu_particle_hist,
     _generate_ifu_particle_smoothed,
 )
-from synthesizer.imaging.imaging_base import ImagingBase
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 
