@@ -55,6 +55,10 @@ class Image(ImagingBase):
             The array containing the image.
         units (unyt.Units):
             The units of the image.
+        noise_arr (array_like, float):
+            The noise array added to the image.
+        weight_map (array_like, float):
+            The weight map derived from the noise array.
     """
 
     def __init__(

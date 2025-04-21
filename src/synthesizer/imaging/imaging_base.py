@@ -22,6 +22,10 @@ class ImagingBase(ABC):
     """
     A base class to encompass common functionality for all imaging classes.
 
+    This base classes handles the common geometry operations and related
+    information. Of particular importance is the abstraction of
+    angular vs cartesian unit systems.
+
     Attributes:
         cart_resolution (unyt_quantity): The spatial resolution of the image
             in Cartesian coordinates. If the image is in angular coordinates,
@@ -34,7 +38,24 @@ class ImagingBase(ABC):
         ang_fov (unyt_quantity): The field of view of the image in angular
             coordinates. If the image is in Cartesian coordinates, this is
             None.
-
+        npix (np.ndarray): The number of pixels in the image. This is a 2D
+            array with the number of pixels in each dimension.
+        orig_resolution (unyt_quantity): The original resolution of the image
+            in the units of the image. This is used to keep track of the
+            original resolution when resampling the image.
+        orig_npix (np.ndarray): The original number of pixels in the image.
+            This is used to keep track of the original number of pixels when
+            resampling the image.
+        has_cartesian_units (bool): True if the image has Cartesian units,
+            False otherwise.
+        has_angular_units (bool): True if the image has angular units, False
+            otherwise.
+        fov (unyt_quantity): The field of view of the image in the units of
+            the image. This is a property that returns the field of view in
+            the units of the image.
+        resolution (unyt_quantity): The resolution of the image in the units
+            of the image. This is a property that returns the resolution in
+            the units of the image.
     """
 
     # Define quantities
