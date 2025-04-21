@@ -256,6 +256,16 @@ def _generate_image_particle_smoothed(
             f" (got {cent_coords.units} and {img.resolution.units})."
         )
 
+    # Ensure the smoothing lengths are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(smoothing_lengths, img.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Smoothing lengths must be compatible with the image resolution "
+            f"units (got {smoothing_lengths.units} and "
+            f"{img.resolution.units})."
+        )
+
     # Ensure coordinates have been centred
     if not (cent_coords.min() < 0 and cent_coords.max() > 0):
         raise exceptions.InconsistentArguments(
@@ -415,6 +425,16 @@ def _generate_images_particle_smoothed(
         raise exceptions.InconsistentArguments(
             "Coordinates must be compatible with the image resolution units"
             f" (got {cent_coords.units} and {imgs.resolution.units})."
+        )
+
+    # Ensure the smoothing lengths are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(smoothing_lengths, imgs.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Smoothing lengths must be compatible with the image resolution "
+            f"units (got {smoothing_lengths.units} and "
+            f"{imgs.resolution.units})."
         )
 
     # Ensure coordinates have been centred
@@ -858,6 +878,16 @@ def _generate_ifu_particle_smoothed(
         raise exceptions.InconsistentArguments(
             "Coordinates must be compatible with the IFU resolution units"
             f" (got {cent_coords.units} and {ifu.resolution.units})."
+        )
+
+    # Ensure the smoothing lengths are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(smoothing_lengths, ifu.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Smoothing lengths must be compatible with the IFU resolution "
+            f"units (got {smoothing_lengths.units} and "
+            f"{ifu.resolution.units})."
         )
 
     # Get the spatial units we'll work with
