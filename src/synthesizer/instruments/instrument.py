@@ -136,7 +136,9 @@ class Instrument:
         ):
             self.resolution = resolution
         else:
-            raise exceptions.InconsistentUnits("Resolution must have units.")
+            raise exceptions.InconsistentArguments(
+                "Resolution must have units."
+            )
 
         # Set the wavelength array for the Instrument (applicable for
         # spectroscopy)
