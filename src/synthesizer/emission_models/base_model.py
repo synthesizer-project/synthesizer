@@ -46,7 +46,7 @@ import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import kpc, unyt_quantity
+from unyt import arcsecond, kpc, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.operations import (
@@ -2933,7 +2933,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return lines, particle_lines
 
-    @accepts(resolution=kpc, fov=kpc)
+    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
     def _get_images(
         self,
         instrument,

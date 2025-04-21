@@ -680,7 +680,7 @@ def _check_arg(units, name, value):
             # more informative error message for this situation
             try:
                 return _raise_or_convert(unit, name, value)
-            except UnitConversionError:
+            except (UnitConversionError, exceptions.IncorrectUnits):
                 continue  # we'll raise below
 
         # If we get here then none of the units worked so raise an error
