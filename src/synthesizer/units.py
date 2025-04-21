@@ -85,7 +85,7 @@ def unit_is_compatible(value, unit):
     """
     Check if two values have compatible units.
 
-    This function checks that a unyt_quantity or unyt_array is
+    This function checks that a unyt_quantity or unyt_array or another Unit is
     compatible with a unit, i.e. it has the same dimensions.
     If they are not compatible, it raises an exception.
 
@@ -96,17 +96,22 @@ def unit_is_compatible(value, unit):
     I might have missed a method in unyt for this but I couldn't find one.
 
     Args:
-        value (unyt_quantity/unyt_array)
+        value (unyt_quantity/unyt_array/Unit)
             The value to check.
-        unit (unyt.unit_object.Unit)
+        unit (Unit)
             The unit to check against.
 
     Returns:
         bool
             True if the values have compatible units, False otherwise.
     """
+    # Handle the unyt_array/unyt_quantity cases
     if isinstance(value, (unyt_quantity, unyt_array)):
         return value.units.dimensions == unit.dimensions
+
+    # Handle the Unit case
+    elif isinstance(value, Unit):
+        return value.dimensions == unit.dimensions
 
     # If we get here then we didn't get two unyt quantities or arrays
     raise exceptions.InconsistentArguments(
