@@ -453,16 +453,26 @@ class Pipeline:
 
     def _report_instruments(self):
         """Print a report containing the instruments setup."""
+        # Unpack the instruments to collect together all the unique instruments
+        unique_instruments = {}
+        for insts in self.instruments.values():
+            for inst in insts:
+                unique_instruments[inst.label] = inst
+        ninstruments = len(unique_instruments)
+
         # Print the number of instruments we have
-        self._print(f"Using {len(self.instruments)} instruments.")
+        self._print(f"Using {ninstruments} instruments.")
 
         # Print the number of filters we have
-        self._print(f"Instruments have {len(self.filters)} filters in total.")
+        nfilters = 0
+        for inst in unique_instruments.values():
+            nfilters += len(inst.filters)
+        self._print(f"Instruments have {nfilters} filters in total.")
 
         # Make a breakdown of the instruments
         self._print(
             "Included instruments:",
-            ", ".join(list(self.instruments.instruments.keys())),
+            ", ".join(list(unique_instruments.keys())),
         )
         self._print("Instruments split by capability:")
         label_width = max(
@@ -472,18 +482,30 @@ class Pipeline:
             len("   - resolved spectroscopy"),
         )
         nphot_inst = len(
-            [inst for inst in self.instruments if inst.can_do_photometry]
+            [
+                inst
+                for inst in unique_instruments.values()
+                if inst.can_do_photometry
+            ]
         )
         nspec_inst = len(
-            [inst for inst in self.instruments if inst.can_do_spectroscopy]
+            [
+                inst
+                for inst in unique_instruments.values()
+                if inst.can_do_spectroscopy
+            ]
         )
         nimg_inst = len(
-            [inst for inst in self.instruments if inst.can_do_imaging]
+            [
+                inst
+                for inst in unique_instruments.values()
+                if inst.can_do_imaging
+            ]
         )
         nresspec_inst = len(
             [
                 inst
-                for inst in self.instruments
+                for inst in unique_instruments.values()
                 if inst.can_do_resolved_spectroscopy
             ]
         )
@@ -1905,7 +1927,7 @@ class Pipeline:
             "kernel": kernel,
             "kernel_threshold": kernel_threshold,
             "spectra_type": spectra_type
-            if isinstance(spectra_type, (list, tuple))
+            if isinstance(spectra_type, (list, tuple)) or spectra_type is None
             else [spectra_type],
         }
 
@@ -2127,6 +2149,7 @@ class Pipeline:
             self._operation_kwargs["get_images_luminosity"]["spectra_type"] = (
                 spectra_type
                 if isinstance(spectra_type, (list, tuple))
+                or spectra_type is None
                 else [spectra_type]
             )
 
@@ -2336,7 +2359,7 @@ class Pipeline:
             "kernel": kernel,
             "kernel_threshold": kernel_threshold,
             "spectra_type": spectra_type
-            if isinstance(spectra_type, (list, tuple))
+            if isinstance(spectra_type, (list, tuple)) or spectra_type is None
             else [spectra_type],
         }
 
@@ -2581,6 +2604,7 @@ class Pipeline:
             self._operation_kwargs["get_images_flux"]["spectra_type"] = (
                 spectra_type
                 if isinstance(spectra_type, (list, tuple))
+                or spectra_type is None
                 else [spectra_type]
             )
 
