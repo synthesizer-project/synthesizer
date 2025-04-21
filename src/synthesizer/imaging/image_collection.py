@@ -714,6 +714,7 @@ class ImageCollection(ImagingBase):
         cmap="Greys_r",
         filters=None,
         ncols=4,
+        individual_norm=False,
     ):
         """
         Plot all images.
@@ -749,6 +750,11 @@ class ImageCollection(ImagingBase):
                 be plotted.
             ncols (int)
                 The number of columns to use when plotting multiple images.
+            individual_norm (bool)
+                If True, each image will be normalised individually. If
+                False, and vmin and vmax are not provided, the images will be
+                normalised to the global min and max of all images.
+                Defaults to False.
 
         Returns:
             matplotlib.pyplot.figure
@@ -768,8 +774,22 @@ class ImageCollection(ImagingBase):
                 return x
 
         # Do we need to find the normalisation for each filter?
-        unique_norm_min = vmin is None
-        unique_norm_max = vmax is None
+        unique_norm_min = vmin is None and individual_norm
+        unique_norm_max = vmax is None and individual_norm
+
+        # Set up the minima and maxima
+        if vmin is None and not unique_norm_min:
+            vmin = np.inf
+            for f in self.imgs:
+                minimum = np.percentile(self.imgs[f].arr, 32)
+                if minimum < vmin:
+                    vmin = minimum
+        if vmax is None and not unique_norm_max:
+            vmax = -np.inf
+            for f in self.imgs:
+                maximum = np.percentile(self.imgs[f].arr, 99.9)
+                if maximum > vmax:
+                    vmax = maximum
 
         # Are we looping over a specified set of filters?
         if filters is not None:
@@ -807,14 +827,24 @@ class ImageCollection(ImagingBase):
             if unique_norm_max:
                 vmax = np.max(img)
 
-            # Normalise the image.
-            img = (img - vmin) / (vmax - vmin)
-
             # Scale the image
             img = scaling_func(img)
 
+            # Define the normalisation
+            norm = plt.Normalize(
+                vmin=scaling_func(vmin),
+                vmax=scaling_func(vmax),
+                clip=True,
+            )
+
             # Plot the image and remove the surrounding axis
-            ax.imshow(img, origin="lower", interpolation="nearest", cmap=cmap)
+            ax.imshow(
+                img,
+                origin="lower",
+                interpolation="nearest",
+                cmap=cmap,
+                norm=norm,
+            )
             ax.axis("off")
 
             # Place a label for which filter this ised_ASCII
