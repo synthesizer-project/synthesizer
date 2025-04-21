@@ -90,6 +90,26 @@ class InstrumentCollection:
         if filepath:
             self.load_instruments(filepath)
 
+    @property
+    def filters(self):
+        """
+        Return all filters in the collection.
+
+        Returns:
+            list:
+                The filters in the collection.
+        """
+        # Avoid circular imports
+        from synthesizer.instruments import FilterCollection
+
+        # Create an empty FilterCollection to combine the filters into
+        filters = FilterCollection()
+        for inst in self.instruments.values():
+            if inst.can_do_photometry:
+                filters += inst.filters
+
+        return filters
+
     def load_instruments(self, filepath):
         """
         Load instruments from a file.
