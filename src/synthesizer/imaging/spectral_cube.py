@@ -197,16 +197,16 @@ class SpectralCube:
 
     def __str__(self):
         """
-        Return a string representation of the SED object.
+        Return a string representation of the SpectralCube object.
 
         Returns:
             table (str)
-                A string representation of the SED object.
+                A string representation of the SpectralCube object.
         """
         # Intialise the table formatter
         formatter = TableFormatter(self)
 
-        return formatter.get_table("SED")
+        return formatter.get_table("SpectralCube")
 
     def __add__(self, other):
         """
