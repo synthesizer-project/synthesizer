@@ -615,7 +615,7 @@ def _raise_or_convert(expected_unit, name, value):
             # Convert to the expected units
             elif v.units != expected_unit:
                 try:
-                    converted[j] = _raise_or_convert(expected_unit[j], name, v)
+                    converted[j] = _raise_or_convert(expected_unit, name, v)
                 except UnitConversionError:
                     raise exceptions.IncorrectUnits(
                         f"{name}@{j} passed with "
