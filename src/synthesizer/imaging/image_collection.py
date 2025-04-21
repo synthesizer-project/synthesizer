@@ -44,7 +44,7 @@ Example usage::
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import unyt_quantity
+from unyt import kpc, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
@@ -53,7 +53,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, unit_is_compatible
 
 
 class ImageCollection:
@@ -92,8 +92,7 @@ class ImageCollection:
     def __init__(
         self,
         resolution,
-        fov=None,
-        npix=None,
+        fov,
         imgs=None,
     ):
         """Initialize the image collection.
@@ -111,9 +110,6 @@ class ImageCollection:
             fov (unyt_quantity/tuple, unyt_quantity)
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
-            npix (int/tuple, int)
-                The number of pixels in the image. If a single value is given
-                then the image is assumed to be square.
             imgs (dict)
                 A dictionary of images to be turned into a collection.
             noise_maps (dict)
@@ -121,35 +117,36 @@ class ImageCollection:
             weight_maps (dict)
                 A dictionary of weight maps associated to imgs.
         """
-        # Check the arguments
-        self._check_args(resolution, fov, npix)
+        # Set the imaging quantities based on whether they are angular or
+        # Cartesian
+        if unit_is_compatible(resolution, kpc):
+            self.cart_resolution = resolution
+            self.ang_resolution = None
+        else:
+            self.cart_resolution = None
+            self.ang_resolution = resolution
+        if unit_is_compatible(fov, kpc):
+            self.cart_fov = fov
+            self.ang_fov = None
+        else:
+            self.cart_fov = None
+            self.ang_fov = fov
 
-        # Attach resolution, fov, and npix
+        # Set the friendly names for the resolution and fov
         self.resolution = resolution
         self.fov = fov
-        self.npix = npix
 
         # If fov isn't a array, make it one
-        if self.fov is not None and self.fov.size == 1:
+        if self.fov.size == 1:
             self.fov = np.array((self.fov, self.fov))
 
-        # If npix isn't an array, make it one
-        if npix is not None and not isinstance(npix, np.ndarray):
-            if isinstance(npix, int):
-                self.npix = np.array((npix, npix))
-            else:
-                self.npix = np.array(npix)
+        # Compute the number of pixels in the FOV
+        self._compute_npix()
 
         # Keep track of the input resolution and and npix so we can handle
         # super resolution correctly.
-        self.orig_resolution = resolution
-        self.orig_npix = npix
-
-        # Handle the different input cases
-        if npix is None:
-            self._compute_npix()
-        else:
-            self._compute_fov()
+        self.orig_resolution = resolution.copy()
+        self.orig_npix = self.npix.copy()
 
         # Container for images (populated when image creation methods are
         # called)
@@ -174,35 +171,6 @@ class ImageCollection:
                 self.imgs[f] = img
                 self.filter_codes.append(f)
 
-    def _check_args(self, resolution, fov, npix):
-        """
-        Ensure we have a valid combination of inputs.
-
-        Args:
-            resolution (unyt_quantity)
-                The size of a pixel.
-            fov (unyt_quantity)
-                The width of the image.
-            npix (int)
-                The number of pixels in the image.
-
-        Raises:
-            InconsistentArguments
-               Errors when an incorrect combination of arguments is passed.
-        """
-        # Missing units on resolution
-        if isinstance(resolution, float):
-            raise exceptions.InconsistentArguments(
-                "Resolution is missing units! Please include unyt unit "
-                "information (e.g. resolution * arcsec or resolution * kpc)"
-            )
-
-        # Missing image size
-        if fov is None and npix is None:
-            raise exceptions.InconsistentArguments(
-                "Either fov or npix must be specified!"
-            )
-
     def _compute_npix(self):
         """
         Compute the number of pixels in the FOV.
@@ -213,19 +181,7 @@ class ImageCollection:
         """
         # Compute how many pixels fall in the FOV
         self.npix = np.int32(np.ceil(self._fov / self._resolution))
-        if self.orig_npix is None:
-            self.orig_npix = np.int32(np.ceil(self._fov / self._resolution))
 
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
-
-    def _compute_fov(self):
-        """
-        Compute the FOV, based on the number of pixels.
-
-        When resolution and npix are given, the FOV is computed using this
-        function.
-        """
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
 
@@ -443,7 +399,6 @@ class ImageCollection:
         # Initialise the composite image with the right type
         composite_img = ImageCollection(
             resolution=self.resolution,
-            npix=None,
             fov=self.fov,
         )
 
@@ -629,7 +584,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=psfed_imgs,
         )
 
@@ -674,7 +629,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -720,7 +675,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -789,7 +744,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 

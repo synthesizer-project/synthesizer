@@ -100,7 +100,7 @@ class Image:
             self.cart_fov = None
             self.ang_fov = fov
 
-        # Set the resolution and fov
+        # Set the friendly names for the resolution and fov
         self.resolution = resolution
         self.fov = fov
 
@@ -146,6 +146,26 @@ class Image:
             )
         return self.arr * self.units if self.units is not None else self.arr
 
+    @img.setter
+    def img(self, value):
+        """Set the image array and units."""
+        if isinstance(value, unyt_array):
+            self.arr = value.value
+            self.units = value.units
+        else:
+            self.arr = value
+            self.units = None
+
+    @property
+    def has_angular_units(self):
+        """Check if the image has angular units."""
+        return self.ang_resolution is not None and self.ang_fov is not None
+
+    @property
+    def has_cartesian_units(self):
+        """Check if the image has Cartesian units."""
+        return self.cart_resolution is not None and self.cart_fov is not None
+
     def _compute_npix(self):
         """
         Compute the number of pixels in the FOV.
@@ -157,16 +177,6 @@ class Image:
         # Compute how many pixels fall in the FOV
         self.npix = np.int32(np.ceil(self._fov / self._resolution))
 
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
-
-    def _compute_fov(self):
-        """
-        Compute the FOV, based on the number of pixels.
-
-        When resolution and npix are given, the FOV is computed using this
-        function.
-        """
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
 
