@@ -11,6 +11,8 @@ respectively.
 
 from abc import ABC, abstractmethod
 
+from unyt import kpc, pc
+
 from synthesizer import exceptions
 from synthesizer.emissions import plot_spectra
 from synthesizer.instruments import Instrument
@@ -156,6 +158,48 @@ class Component(ABC):
                 Whether the component is particle based.
         """
         return not self.is_parametric
+
+    def luminosity_distance(self, cosmo):
+        """
+        Get the luminosity distance of the component.
+
+        This requires the redshift to be set on the component.
+
+        This will use the astropy cosmology module to calculate the
+        luminosity distance. If the redshift is 0, the distance will be set to
+        10 pc to avoid any issues with 0s.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation.
+
+        Returns:
+            unyt_quantity:
+                The luminosity distance of the component in kpc.
+        """
+        # If we don't have a redshift then we can't calculate the
+        # luminosity distance
+        if not hasattr(self, "redshift"):
+            raise exceptions.InconsistentArguments(
+                "The component does not have a redshift set."
+            )
+
+        # Check redshift is set
+        if self.redshift is None:
+            raise exceptions.InconsistentArguments(
+                "The component must have a redshift set to calculate the "
+                "luminosity distance."
+            )
+
+        # At redshift > 0 we can calculate the luminosity distance explicitly
+        if self.redshift > 0:
+            return (
+                cosmo.luminosity_distance(self.redshift).to("kpc").value * kpc
+            )
+
+        # At redshift 0 just place the component at 10 pc to
+        # avoid any issues with 0s
+        return (10 * pc).to(kpc)
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
