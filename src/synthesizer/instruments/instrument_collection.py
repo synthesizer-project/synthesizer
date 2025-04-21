@@ -303,6 +303,20 @@ class InstrumentCollection:
 
         return self
 
+    def __contains__(self, key):
+        """
+        Check if an instrument is in the collection.
+
+        Args:
+            key (str):
+                The label of the instrument to check for.
+
+        Returns:
+            bool:
+                True if the instrument is in the collection, False otherwise.
+        """
+        return key in self.instruments
+
     def items(self):
         """
         Get the items in the InstrumentCollection.
