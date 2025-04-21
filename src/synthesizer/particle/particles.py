@@ -9,7 +9,7 @@ import copy
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import Mpc, Msun, km, rad, s
+from unyt import Mpc, Msun, km, pc, rad, s
 
 from synthesizer import exceptions
 from synthesizer.particle.utils import rotate
@@ -212,6 +212,63 @@ class Particles:
         mets[mets == 0.0] = self.metallicity_floor
 
         return np.log10(mets, dtype=np.float64)
+
+    def get_projected_angular_coordinates(self, cosmo):
+        """
+        Get the projected angular coordinates of the particles in radians.
+
+        This will return the angular coordinates of the particles in radians
+        projected along the line of sight axis (always the z-axis). The
+        coordinates along the line of sight axis will be set to 0.0, to
+        maintain the shape of coordinates array.
+
+        The coordinates will be centred on the centre of the particle
+        distribution before calculating the angular coordinates. If the centre
+        is not set then an error will be raised.
+
+        Note that a redshift is required to convert the coordinates to
+        angular coordinates. If this redshift is 0.0 then the particles
+        will be treated as if they are at 10 pc (minimum distance) from the
+        observer.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the luminosity
+                distance.
+
+        Returns:
+            unyt_array: The projected angular coordinates of the particles
+                in radians.
+        """
+        # Get the luminosity distance
+        lum_dist = self.get_luminosity_distance(cosmo)
+
+        # Get the centered coordinates
+        cent_coords = self.centered_coordinates
+
+        # Combine the luminosity distance with the line of sight distance
+        # (along the z-axis)
+        dists = lum_dist + cent_coords[:, 2]
+
+        # If we are at redshift 0.0 then we need to shift things to
+        # put the closest particle at 10 pc
+        if self.redshift == 0.0:
+            dists += np.abs(np.min(cent_coords[:, 2])) + 10 * pc
+
+        # Get the angular coordinates in radians
+        theta = np.arctan2(cent_coords[:, 1], cent_coords[:, 0])
+        phi = np.arctan2(cent_coords[:, 2], dists)
+
+        # Compose into a (N, 3) array
+        coords = np.zeros((self.nparticles, 3), dtype=np.float64)
+        coords[:, 0] = theta
+        coords[:, 1] = phi
+        coords[:, 2] = 0.0
+
+        # Ensure the array is C-contiguous
+        coords = ensure_array_c_compatible_double(coords)
+
+        return coords * rad
 
     def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
