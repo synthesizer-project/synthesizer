@@ -3016,6 +3016,21 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Convert `limit_to` to a list if it is a string
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
 
+        # If we are limiting to a specific model/s and these are a combination
+        # model, we need to make sure we include the models they are
+        # combining.
+        _orig_limit_to = limit_to
+        if limit_to is not None:
+            _orig_limit_to = limit_to.copy()
+            for label in limit_to:
+                # Get this model
+                this_model = emission_model._models[label]
+
+                # If this is a combination model, add the models it is
+                # combining to the list
+                if this_model._is_combining:
+                    limit_to += this_model._combining_models
+
         # Set up the list to collect all the photometry into so we can generate
         # images for all models at once
         photometry = {e: {} for e in emitters.keys()}
@@ -3163,6 +3178,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         raise type(e)(
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
+
+        # If we are limiting to a specific model, we might might have generated
+        # images for models we don't want to hold on to. Through them away
+        # if we are limiting to a specific model
+        if limit_to is not None:
+            for key in images.keys():
+                if key not in _orig_limit_to:
+                    del images[key]
 
         return images
 
