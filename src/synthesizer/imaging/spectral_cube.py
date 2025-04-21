@@ -46,11 +46,12 @@ from synthesizer.imaging.image_generators import (
     _generate_ifu_particle_hist,
     _generate_ifu_particle_smoothed,
 )
+from synthesizer.imaging.imaging_base import ImagingBase
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 
 
-class SpectralCube:
+class SpectralCube(ImagingBase):
     """
     The Spectral data cube object.
 
@@ -82,8 +83,6 @@ class SpectralCube:
 
     # Define quantities
     lam = Quantity("wavelength")
-    resolution = Quantity("spatial")
-    fov = Quantity("spatial")
 
     @accepts(lam=angstrom)
     def __init__(
@@ -107,19 +106,8 @@ class SpectralCube:
                 The wavelengths of the data cube.
 
         """
-        # If fov isn't a array, make it one
-        self.fov = fov
-        if self.fov is not None and self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # Keep track of the input resolution and and npix so we can handle
-        # super resolution correctly.
-        self.orig_resolution = resolution
-        self.orig_npix = None
-
-        # Attach resolution, fov, and npix
-        self.resolution = resolution
-        self._compute_npix()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Store the wavelengths
         self.lam = lam
@@ -178,22 +166,6 @@ class SpectralCube:
                 "get_data_cube_hist or get_data_cube_smoothed first."
             )
         return self.arr * self.units
-
-    def _compute_npix(self):
-        """
-        Compute the number of pixels in the FOV.
-
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
-        """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self.fov / self.resolution))
-        if self.orig_npix is None:
-            self.orig_npix = np.int32(np.ceil(self.fov / self.resolution))
-
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
 
     def __str__(self):
         """

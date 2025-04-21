@@ -21,7 +21,7 @@ import numpy as np
 from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
-from unyt import arcsecond, kpc, unyt_array, unyt_quantity
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image_generators import (
@@ -29,10 +29,11 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from synthesizer.units import Quantity, accepts, unit_is_compatible
+from synthesizer.imaging.imaging_base import ImagingBase
+from synthesizer.utils import TableFormatter
 
 
-class Image:
+class Image(ImagingBase):
     """
     A class for generating images.
 
@@ -56,15 +57,6 @@ class Image:
             The units of the image.
     """
 
-    # Define quantities
-    cart_resolution = Quantity("spatial")
-    ang_resolution = Quantity("angle")
-    cart_fov = Quantity("spatial")
-    ang_fov = Quantity("angle")
-    fov = Quantity("spatial")
-    resolution = Quantity("spatial")
-
-    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
     def __init__(
         self,
         resolution,
@@ -85,40 +77,8 @@ class Image:
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
-        # Set the imaging quantities based on whether they are angular or
-        # Cartesian
-        if unit_is_compatible(resolution, kpc):
-            self.cart_resolution = resolution
-            self.ang_resolution = None
-        else:
-            self.cart_resolution = None
-            self.ang_resolution = resolution
-        if unit_is_compatible(fov, kpc):
-            self.cart_fov = fov
-            self.ang_fov = None
-        else:
-            self.cart_fov = None
-            self.ang_fov = fov
-
-        # Set the friendly names for the resolution and fov
-        self.resolution = resolution
-        self.fov = fov
-
-        # Ensure that the resolution and foc are compatible (i.e. both
-        # are angular or both are Cartesian)
-        if not unit_is_compatible(self.resolution, self.fov.units):
-            raise exceptions.InconsistentArguments(
-                "The resolution and FOV must be in compatible units. "
-                f"Found resolution={self.resolution.units}, "
-                f"and fov={self.fov.units}."
-            )
-
-        # If fov isn't a array, make it one
-        if self.fov is not None and self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # Calculate the shape of the image
-        self._compute_npix()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Attribute to hold the image array itself
         self.arr = None
@@ -156,29 +116,15 @@ class Image:
             self.arr = value
             self.units = None
 
-    @property
-    def has_angular_units(self):
-        """Check if the image has angular units."""
-        return self.ang_resolution is not None and self.ang_fov is not None
-
-    @property
-    def has_cartesian_units(self):
-        """Check if the image has Cartesian units."""
-        return self.cart_resolution is not None and self.cart_fov is not None
-
-    def _compute_npix(self):
+    def shape(self):
         """
-        Compute the number of pixels in the FOV.
+        Return the shape of the image.
 
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
+        Returns:
+            tuple
+                The shape of the image.
         """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self._fov / self._resolution))
-
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
+        return self.npix
 
     def resample(self, factor):
         """
@@ -189,9 +135,9 @@ class Image:
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
         """
-        # Perform the conversion on the basic image properties
-        self.resolution /= factor
-        self._compute_npix()
+        # Resample the resoltion, this will also update the npix and fov (if
+        # necessary)
+        self._resample_resolution(factor)
 
         # Resample the image.
         # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
@@ -208,8 +154,7 @@ class Image:
         # Handle the edge case where the conversion between resolutions has
         # messed with the FOV.
         if self.npix[0] != new_shape[0] or self.npix[1] != new_shape[1]:
-            self.npix = new_shape
-            self._compute_fov()
+            self.set_npix(new_shape)
 
     def __add__(self, other_img):
         """
@@ -260,6 +205,19 @@ class Image:
                 f"({self.units if self.units is not None else s}, "
                 f"{other_img.units if other_img.units is not None else s})."
             )
+
+    def __str__(self):
+        """
+        Return a string representation of the Image object.
+
+        Returns:
+            table (str)
+                A string representation of the Image object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Image")
 
     def __mul__(self, mult):
         """
@@ -765,8 +723,10 @@ class Image:
         title="SYNTHESIZER",
     ):
         """
-        Create a representation of an image similar in style to Joy Division's
-        seminal 1979 album Unknown Pleasures.
+        Plot the image in the style of Unknown Pleasures.
+
+        Creates a representation of an image similar in style to Joy
+        Division's seminal 1979 album Unknown Pleasures.
 
         Borrows some code from this matplotlib examples:
         https://matplotlib.org/stable/gallery/animation/unchained.html
@@ -777,7 +737,6 @@ class Image:
             target_lines (int)
                 The target number of individual lines to use.
         """
-
         # extract data
         data = 1 * self.arr
 

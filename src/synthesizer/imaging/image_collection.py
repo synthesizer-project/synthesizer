@@ -44,7 +44,7 @@ Example usage::
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import kpc, unyt_quantity
+from unyt import unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
@@ -53,10 +53,11 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
-from synthesizer.units import Quantity, unit_is_compatible
+from synthesizer.imaging.imaging_base import ImagingBase
+from synthesizer.utils import TableFormatter
 
 
-class ImageCollection:
+class ImageCollection(ImagingBase):
     """
     A collection of Image objects.
 
@@ -66,31 +67,17 @@ class ImageCollection:
     Both parametric and particle based imaging uses this class.
 
     Attributes:
-        resolution (unyt_quantity)
-            The size of a pixel.
-        fov (unyt_quantity/tuple, unyt_quantity)
-            The width of the image.
-        npix (int/tuple, int)
-            The number of pixels in the image.
         imgs (dict)
-            A dictionary of images.
+            A dictionary of images to be turned into a collection.
         noise_maps (dict)
-            A dictionary of noise maps associated to imgs.
+            A dictionary of noise maps to be applied to the images.
         weight_maps (dict)
-            A dictionary of weight maps associated to imgs.
+            A dictionary of weight maps to be applied to the images.
         filter_codes (list)
-            A list of the filter codes of the images.
+            A list of filter codes for each image in the collection.
         rgb_img (np.ndarray)
             The RGB image array.
     """
-
-    # Define quantities
-    cart_resolution = Quantity("spatial")
-    ang_resolution = Quantity("angle")
-    cart_fov = Quantity("spatial")
-    ang_fov = Quantity("angle")
-    fov = Quantity("spatial")
-    resolution = Quantity("spatial")
 
     def __init__(
         self,
@@ -115,41 +102,9 @@ class ImageCollection:
                 image is assumed to be square.
             imgs (dict)
                 A dictionary of images to be turned into a collection.
-            noise_maps (dict)
-                A dictionary of noise maps associated to imgs.
-            weight_maps (dict)
-                A dictionary of weight maps associated to imgs.
         """
-        # Set the imaging quantities based on whether they are angular or
-        # Cartesian
-        if unit_is_compatible(resolution, kpc):
-            self.cart_resolution = resolution
-            self.ang_resolution = None
-        else:
-            self.cart_resolution = None
-            self.ang_resolution = resolution
-        if unit_is_compatible(fov, kpc):
-            self.cart_fov = fov
-            self.ang_fov = None
-        else:
-            self.cart_fov = None
-            self.ang_fov = fov
-
-        # Set the friendly names for the resolution and fov
-        self.resolution = resolution
-        self.fov = fov
-
-        # If fov isn't a array, make it one
-        if self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # Compute the number of pixels in the FOV
-        self._compute_npix()
-
-        # Keep track of the input resolution and and npix so we can handle
-        # super resolution correctly.
-        self.orig_resolution = resolution.copy()
-        self.orig_npix = self.npix.copy()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Container for images (populated when image creation methods are
         # called)
@@ -173,20 +128,6 @@ class ImageCollection:
             for f, img in imgs.items():
                 self.imgs[f] = img
                 self.filter_codes.append(f)
-
-    def _compute_npix(self):
-        """
-        Compute the number of pixels in the FOV.
-
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
-        """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self._fov / self._resolution))
-
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
 
     @property
     def shape(self):
@@ -264,6 +205,19 @@ class ImageCollection:
     def __len__(self):
         """Overload the len operator to return how many images there are."""
         return len(self.imgs)
+
+    def __str__(self):
+        """
+        Return a string representation of the ImageCollection.
+
+        Returns:
+            table (str)
+                A string representation of the ImageCollection.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("ImageCollection")
 
     def __getitem__(self, filter_code):
         """
