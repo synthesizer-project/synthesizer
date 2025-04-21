@@ -159,7 +159,7 @@ class Component(ABC):
         """
         return not self.is_parametric
 
-    def luminosity_distance(self, cosmo):
+    def get_luminosity_distance(self, cosmo):
         """
         Get the luminosity distance of the component.
 
