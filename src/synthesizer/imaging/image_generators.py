@@ -585,6 +585,7 @@ def _generate_image_collection_generic(
     kernel_threshold,
     nthreads,
     emitter,
+    cosmo,
 ):
     """
     Generate an image collection for a generic emitter.
@@ -618,6 +619,10 @@ def _generate_image_collection_generic(
             only applies to particle imaging.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
+        cosmo (astropy.cosmology.Cosmology)
+            A cosmology object defining the cosmology to use for the images.
+            This is only relevant for angular images where a conversion to
+            projected angular coordinates is needed.
 
     Returns:
         ImageCollection
@@ -640,9 +645,21 @@ def _generate_image_collection_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
+        # Get the correct coordinates for the particles (i.e. angular
+        # or cartesian)
+        if imgs.has_angular_units and cosmo is not None:
+            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
+        elif imgs.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+
         return _generate_images_particle_hist(
             imgs,
-            coordinates=emitter.centered_coordinates,
+            coordinates=coords,
             signals=photometry,
         )
 
@@ -653,11 +670,26 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
+        # Get the correct coordinates and smoothing lengths for the
+        # particles (i.e. angular or cartesian)
+        if imgs.has_angular_units and cosmo is not None:
+            coords, smls = emitter.get_projected_angular_imaging_props(
+                cosmo=cosmo
+            )
+        elif imgs.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+            smls = emitter.smoothing_lengths
+
         return _generate_images_particle_smoothed(
             imgs=imgs,
             signals=photometry.photometry,
-            cent_coords=emitter.centered_coordinates,
-            smoothing_lengths=emitter.smoothing_lengths,
+            cent_coords=coords,
+            smoothing_lengths=smls,
             labels=photometry.filter_codes,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
@@ -665,6 +697,8 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed":
+        # FYI, the parametric imaging handles the angular vs cartesian
+        # image properties internally so we don't need to worry about it here
         return _generate_images_parametric_smoothed(
             imgs,
             density_grid=emitter.morphology.get_density_grid(
@@ -1000,6 +1034,7 @@ def _generate_ifu_generic(
     nthreads,
     label,
     emitter,
+    cosmo,
 ):
     """
     Generate a spectral cube.
@@ -1040,6 +1075,10 @@ def _generate_ifu_generic(
             The label of the photometry to use.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
+        cosmo (astropy.cosmology.Cosmology)
+            A cosmology object defining the cosmology to use for the IFU.
+            This is only relevant for angular IFUs where a conversion to
+            projected angular coordinates is needed.
 
     Returns:
         SpectralCube: The generated spectral data cube.
@@ -1076,11 +1115,23 @@ def _generate_ifu_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
+        # Get the correct coordinates for the particles (i.e. angular
+        # or cartesian)
+        if ifu.has_angular_units and cosmo is not None:
+            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
+        elif ifu.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+
         return _generate_ifu_particle_hist(
             ifu,
             sed=sed,
             quantity=quantity,
-            cent_coords=emitter.centered_coordinates,
+            cent_coords=coords,
             nthreads=nthreads,
         )
 
@@ -1090,18 +1141,35 @@ def _generate_ifu_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
+        # Get the correct coordinates and smoothing lengths for the
+        # particles (i.e. angular or cartesian)
+        if ifu.has_angular_units and cosmo is not None:
+            coords, smls = emitter.get_projected_angular_imaging_props(
+                cosmo=cosmo
+            )
+        elif ifu.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+            smls = emitter.smoothing_lengths
+
         return _generate_ifu_particle_smoothed(
             ifu,
             sed=sed,
             quantity=quantity,
-            cent_coords=emitter.centered_coordinates,
-            smoothing_lengths=emitter.smoothing_lengths,
+            cent_coords=coords,
+            smoothing_lengths=smls,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
         )
 
     elif img_type == "smoothed":
+        # FYI, the parametric imaging handles the angular vs cartesian
+        # image properties internally so we don't need to worry about it here
         return _generate_ifu_parametric_smoothed(
             ifu,
             sed=sed,
