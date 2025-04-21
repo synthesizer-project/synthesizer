@@ -21,7 +21,7 @@ UnitCategories:
 
   # Angles (e.g. inclinations)
   angle:
-    unit: deg
+    unit: arcsecond
 
   # Wavelengths
   wavelength:
