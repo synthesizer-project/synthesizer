@@ -121,6 +121,7 @@ class Image(ImagingBase):
             self.arr = value
             self.units = None
 
+    @property
     def shape(self):
         """
         Return the shape of the image.

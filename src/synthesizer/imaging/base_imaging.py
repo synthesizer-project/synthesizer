@@ -85,7 +85,7 @@ class ImagingBase(ABC):
         # Ensure the fov has an entry for each axis if it doesn't already
         # (e.g. if it is a single value)
         if fov.size == 1:
-            fov = unyt_array((fov, fov), fov.units)
+            fov = unyt_array((fov.value, fov.value), fov.units)
 
         # Set the imaging quantities based on whether they are angular or
         # Cartesian
@@ -274,6 +274,10 @@ class ImagingBase(ABC):
         if isinstance(npix, int):
             npix = np.array((npix, npix), dtype=np.int32)
         elif isinstance(npix, tuple):
+            if len(npix) != 2:
+                raise exceptions.InconsistentArguments(
+                    "npix must contain exactly two elements (nx, ny)."
+                )
             npix = np.array(npix, dtype=np.int32)
         else:
             raise exceptions.InconsistentArguments(
