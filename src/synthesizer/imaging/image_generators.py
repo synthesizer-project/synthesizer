@@ -19,6 +19,7 @@ from unyt import angstrom, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
+from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
 )
@@ -58,6 +59,15 @@ def _generate_image_particle_hist(
             "Signal and coordinates must be the same size"
             f" for a histogram image (got {signal.size} and "
             f"{coordinates.shape[0]})."
+        )
+
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(coordinates, img.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the image resolution units"
+            f" (got {coordinates.units} and {img.resolution.units})."
         )
 
     # Ensure coordinates have been centred
@@ -237,6 +247,15 @@ def _generate_image_particle_smoothed(
             f"{smoothing_lengths.shape[0]})."
         )
 
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, img.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the image resolution units"
+            f" (got {cent_coords.units} and {img.resolution.units})."
+        )
+
     # Ensure coordinates have been centred
     if not (cent_coords.min() < 0 and cent_coords.max() > 0):
         raise exceptions.InconsistentArguments(
@@ -387,6 +406,15 @@ def _generate_images_particle_smoothed(
         raise exceptions.InconsistentArguments(
             "Signals should have an entry for each signal "
             f"label (got {signals.shape[0]} and {len(labels)})."
+        )
+
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, imgs.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the image resolution units"
+            f" (got {cent_coords.units} and {imgs.resolution.units})."
         )
 
     # Ensure coordinates have been centred
@@ -696,6 +724,15 @@ def _generate_ifu_particle_hist(
             f"{cent_coords.shape[0]})."
         )
 
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, ifu.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the IFU resolution units"
+            f" (got {cent_coords.units} and {ifu.resolution.units})."
+        )
+
     # Get the spatial units we'll work with
     spatial_units = ifu.resolution.units
 
@@ -812,6 +849,15 @@ def _generate_ifu_particle_smoothed(
             "Spectra and coordinates must be the same size"
             f" for an IFU (got {spectra.shape[0]} and "
             f"{cent_coords.shape[0]})."
+        )
+
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, ifu.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the IFU resolution units"
+            f" (got {cent_coords.units} and {ifu.resolution.units})."
         )
 
     # Get the spatial units we'll work with
