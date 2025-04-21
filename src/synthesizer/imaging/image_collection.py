@@ -8,7 +8,10 @@ particle.imaging.Images and parametric.imaging.Images classes.
 Example usage::
 
     # Create an image collection
-    img_coll = ImageCollection(resolution=0.1 * unyt.arcsec, npix=100)
+    img_coll = ImageCollection(
+        resolution=0.1 * unyt.arcsec,
+        fov=(10, 10) * unyt.arcsec,
+    )
 
     # Get histograms of the particle distribution
     img_coll.get_imgs_hist(photometry, coordinates)
@@ -86,8 +89,6 @@ class ImageCollection(ImagingBase):
         imgs=None,
     ):
         """Initialize the image collection.
-
-        Either fov or npix must be specified.
 
         An ImageCollection can either generate images or be initialised with
         an image dictionary, and optionally noise and weight maps. In practice

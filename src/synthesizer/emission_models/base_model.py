@@ -3039,6 +3039,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 if this_model._is_combining:
                     limit_to.extend([m.label for m in this_model.combine])
 
+            # Remove duplicates
+            limit_to = list(set(limit_to))
+
         # Set up the list to collect all the photometry into so we can generate
         # images for all models at once
         photometry = {e: {} for e in emitters.keys()}
@@ -3194,10 +3197,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # call otherwise we might delete images we need for the combination
         # models)
         if limit_to is not None and not _is_related:
-            old_keys = list(images.keys())
-            for key in old_keys:
-                if key not in _orig_limit_to:
-                    del images[key]
+            for key in set(images) - set(_orig_limit_to):
+                del images[key]
 
         return images
 
