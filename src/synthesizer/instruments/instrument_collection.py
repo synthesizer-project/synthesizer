@@ -164,7 +164,7 @@ class InstrumentCollection:
 
             # Ensure the label doesn't already exist in the Collection
             if instrument.label in self.instruments:
-                raise exceptions.DuplicateInstrument(
+                raise exceptions.InconsistentArguments(
                     f"Instrument {instrument.label} already exists."
                 )
 
