@@ -87,9 +87,13 @@ def _generate_image_particle_hist(
         img.arr = np.zeros(img.npix)
         return img.arr * img.units if img.units is not None else img.arr
 
+    # Unpack the image properties and ensure we agree on the units
+    spatial_units = img.resolution.units
+    fov = img.fov.to_value(spatial_units)
+
     # Convert coordinates and smoothing lengths to the correct units and
     # strip them off
-    coordinates = coordinates.to(img.resolution.units).value
+    coordinates = coordinates.to_value(spatial_units)
 
     # Include normalisation in the original signal if we have one
     # (we'll divide by it later)
@@ -103,8 +107,8 @@ def _generate_image_particle_hist(
         coordinates[:, 0],
         coordinates[:, 1],
         bins=(
-            np.linspace(-img._fov[0] / 2, img._fov[0] / 2, img.npix[0] + 1),
-            np.linspace(-img._fov[1] / 2, img._fov[1] / 2, img.npix[1] + 1),
+            np.linspace(-fov[0] / 2, fov[0] / 2, img.npix[0] + 1),
+            np.linspace(-fov[1] / 2, fov[1] / 2, img.npix[1] + 1),
         ),
         weights=signal,
     )[0]
@@ -115,12 +119,8 @@ def _generate_image_particle_hist(
             coordinates[:, 0],
             coordinates[:, 1],
             bins=(
-                np.linspace(
-                    -img._fov[0] / 2, img._fov[0] / 2, img.npix[0] + 1
-                ),
-                np.linspace(
-                    -img._fov[1] / 2, img._fov[1] / 2, img.npix[1] + 1
-                ),
+                np.linspace(-fov[0] / 2, fov[0] / 2, img.npix[0] + 1),
+                np.linspace(-fov[1] / 2, fov[1] / 2, img.npix[1] + 1),
             ),
             weights=normalisation.value,
         )[0]

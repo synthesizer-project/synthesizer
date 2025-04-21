@@ -60,7 +60,7 @@ class ImagingBase(ABC):
 
     # Define quantities
     cart_resolution = Quantity("spatial")
-    ang_resolution = Quantity("angle")
+    ang_resolution = Quantity("angular_resolution")
     cart_fov = Quantity("spatial")
     ang_fov = Quantity("angle")
 
@@ -128,7 +128,7 @@ class ImagingBase(ABC):
                 resolution and new npix. Defaults to True.
         """
         # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self._fov / self._resolution))
+        self.npix = np.int32(np.ceil(self.fov / self.resolution))
 
         # Redefine the FOV based on npix
         if compute_fov:
