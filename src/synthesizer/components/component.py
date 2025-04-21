@@ -11,12 +11,13 @@ respectively.
 
 from abc import ABC, abstractmethod
 
-from unyt import kpc, pc
+from unyt import arcsecond, kpc, pc
 
 from synthesizer import exceptions
 from synthesizer.emissions import plot_spectra
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
+from synthesizer.units import unit_is_compatible
 
 
 class Component(ABC):
@@ -591,6 +592,21 @@ class Component(ABC):
                 filters=filters,
             )
 
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
+
         # Get the images
         images = emission_model._get_images(
             instrument=instrument,
@@ -711,6 +727,21 @@ class Component(ABC):
                 resolution=resolution,
                 filters=filters,
             )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
 
         # Get the images
         images = emission_model._get_images(

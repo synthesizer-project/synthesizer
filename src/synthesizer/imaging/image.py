@@ -241,7 +241,7 @@ class Image(ImagingBase):
         new_img = Image(self.resolution, self.fov)
 
         # Associate the image array and units
-        new_img.arr = self.arr
+        new_img.arr = self.arr.copy()
         new_img.units = self.units
 
         # Multiply the image array

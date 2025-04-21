@@ -242,7 +242,7 @@ class ImageCollection(ImagingBase):
         # We may be being asked for all the images for an observatory, e.g.
         # "JWST", in which case we should return a new ImageCollection with
         # just those images.
-        out = ImageCollection(resolution=self.resolution, npix=self.npix)
+        out = ImageCollection(resolution=self.resolution, fov=self.fov)
         for f in self.imgs:
             if filter_code in f:
                 out.imgs[f.replace(filter_code + "/", "")] = self.imgs[f]

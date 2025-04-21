@@ -2933,7 +2933,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return lines, particle_lines
 
-    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
+    @accepts(fov=(kpc, arcsecond))
     def _get_images(
         self,
         instrument,
