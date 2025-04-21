@@ -167,6 +167,20 @@ class SpectralCube(ImagingBase):
             )
         return self.arr * self.units
 
+    @property
+    def shape(self):
+        """
+        Return the shape of the data cube.
+
+        Returns:
+            tuple (int):
+                The shape of the data cube. (npix[0], npix[1], lam.size)
+        """
+        # Not applicable when the IFU hasn't been generated yet
+        if self.arr is None:
+            return ()
+        return self.arr.shape
+
     def __str__(self):
         """
         Return a string representation of the SpectralCube object.
