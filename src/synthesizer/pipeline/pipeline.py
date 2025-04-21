@@ -1487,18 +1487,26 @@ class Pipeline:
                 "Pass instruments to the get_photometry_luminosities method."
             )
 
-        # Check that the instruments can do photometry
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do photometry
+        for inst in _instruments:
             if not inst.can_do_photometry:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate photometry with {inst.name}!"
+                    f"Cannot generate photometry with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_photometry_luminosities",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
     def _get_photometry_luminosities(self, galaxy):
         """
@@ -1535,7 +1543,12 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Luminosities"] += time.perf_counter() - start
 
-    def get_photometry_fluxes(self, *instruments, cosmo=None, igm=None):
+    def get_photometry_fluxes(
+        self,
+        *instruments,
+        cosmo=None,
+        igm=None,
+    ):
         """
         Flag that the Pipeline should compute the photometric fluxes.
 
@@ -1599,18 +1612,26 @@ class Pipeline:
                 "Pass instruments to the get_photometry_fluxes method."
             )
 
-        # Check that the instruments can do photometry
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do photometry
+        for inst in _instruments:
             if not inst.can_do_photometry:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate photometry with {inst.name}!"
+                    f"Cannot generate photometry with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_photometry_fluxes",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
     def _get_photometry_fluxes(self, galaxy):
         """
@@ -1909,25 +1930,43 @@ class Pipeline:
                 "Pass instruments to the get_images_luminosity method."
             )
 
-        # Check that the instruments can do imaging
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do imaging
+        for inst in _instruments:
             if not inst.can_do_imaging:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate images with {inst.name}!"
+                    f"Cannot generate images with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_images_luminosity",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
         # We also need to include these instruments in the instrument
-        # collection for the luminosities
+        # collection for the luminosities (but only if they are not already)
+        phot_lum_insts = self.instruments.get(
+            "get_photometry_luminosities",
+            InstrumentCollection(),
+        )
         self.instruments.setdefault(
             "get_photometry_luminosities",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(
+            *[
+                inst
+                for inst in _instruments
+                if inst.label not in phot_lum_insts
+            ]
+        )
 
     def _get_images_luminosity(self, galaxy):
         """
@@ -2104,29 +2143,53 @@ class Pipeline:
                 "Pass instruments to the get_images_luminosity_psfs method."
             )
 
-        # Check that the instruments can do imaging
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do imaging
+        for inst in _instruments:
             if not inst.can_do_psf_imaging:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate images and PSF them with {inst.name}!"
+                    f"Cannot generate images and PSF them with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_images_luminosity_psfs",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
         # We also need to include these instruments in the instrument
         # collection for the luminosities and luminosity images
+        phot_lum_insts = self.instruments.get(
+            "get_photometry_luminosities",
+            InstrumentCollection(),
+        )
         self.instruments.setdefault(
             "get_photometry_luminosities",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(
+            *[
+                inst
+                for inst in _instruments
+                if inst.label not in phot_lum_insts
+            ]
+        )
+        img_lum_insts = self.instruments.get(
+            "get_images_luminosity",
+            InstrumentCollection(),
+        )
         self.instruments.setdefault(
             "get_images_luminosity",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(
+            *[inst for inst in _instruments if inst.label not in img_lum_insts]
+        )
 
     def _get_images_luminosity_psfs(self, galaxy):
         """
@@ -2315,25 +2378,43 @@ class Pipeline:
                 "Pass instruments to the get_images_flux method."
             )
 
-        # Check that the instruments can do imaging
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do imaging
+        for inst in _instruments:
             if not inst.can_do_imaging:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate images with {inst.name}!"
+                    f"Cannot generate images with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_images_flux",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
         # We also need to include these instruments in the instrument
         # collection for the fluxes
+        phot_flux_insts = self.instruments.get(
+            "get_photometry_fluxes",
+            InstrumentCollection(),
+        )
         self.instruments.setdefault(
             "get_photometry_fluxes",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(
+            *[
+                inst
+                for inst in _instruments
+                if inst.label not in phot_flux_insts
+            ]
+        )
 
     def _get_images_flux(self, galaxy):
         """
@@ -2532,29 +2613,57 @@ class Pipeline:
                 "Pass instruments to the get_images_flux_psfs method."
             )
 
-        # Check that the instruments can do imaging
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do imaging
+        for inst in _instruments:
             if not inst.can_do_psf_imaging:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate images and PSF them with {inst.name}!"
+                    f"Cannot generate images and PSF them with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_images_flux_psfs",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
         # We also need to include these instruments in the instrument
         # collection for the fluxes and flux images
+        phot_flux_insts = self.instruments.get(
+            "get_photometry_fluxes",
+            InstrumentCollection(),
+        )
         self.instruments.setdefault(
             "get_photometry_fluxes",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(
+            *[
+                inst
+                for inst in _instruments
+                if inst.label not in phot_flux_insts
+            ]
+        )
+        img_flux_insts = self.instruments.get(
+            "get_images_flux",
+            InstrumentCollection(),
+        )
         self.instruments.setdefault(
             "get_images_flux",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(
+            *[
+                inst
+                for inst in _instruments
+                if inst.label not in img_flux_insts
+            ]
+        )
 
     def _get_images_flux_psfs(self, galaxy):
         """
@@ -2697,18 +2806,26 @@ class Pipeline:
                 "method."
             )
 
-        # Check that the instruments can do spectroscopy
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do spectroscopy
+        for inst in _instruments:
             if not inst.can_do_spectroscopy:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate spectroscopy with {inst.name}!"
+                    f"Cannot generate spectroscopy with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_spectroscopy_lnu",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
     def _get_spectroscopy_lnu(self, galaxy):
         pass
@@ -2747,18 +2864,26 @@ class Pipeline:
                 "method."
             )
 
-        # Check that the instruments can do spectroscopy
+        # Unpack any instrument collections into the instruments list
+        _instruments = []
         for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Check that the instruments can do spectroscopy
+        for inst in _instruments:
             if not inst.can_do_spectroscopy:
                 raise exceptions.PipelineNotReady(
-                    f"Cannot generate spectroscopy with {inst.name}!"
+                    f"Cannot generate spectroscopy with {inst.label}!"
                 )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_spectroscopy_fnu",
             InstrumentCollection(),
-        ).add_instruments(*instruments)
+        ).add_instruments(*_instruments)
 
     def _get_spectroscopy_fnu(self, galaxy):
         pass
