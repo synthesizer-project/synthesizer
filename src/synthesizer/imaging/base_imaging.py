@@ -130,6 +130,10 @@ class ImagingBase(ABC):
         # Compute how many pixels fall in the FOV
         self.npix = np.int32(np.ceil(self.fov / self.resolution))
 
+        # Ensure that the npix is an array of 2 values
+        if self.npix.size == 1:
+            self.npix = np.array((self.npix, self.npix), dtype=np.int32)
+
         # Redefine the FOV based on npix
         if compute_fov:
             self._compute_fov(compute_npix=False)
@@ -193,7 +197,7 @@ class ImagingBase(ABC):
         """
         # Ensure we have units
         if not isinstance(resolution, (unyt_array, unyt_quantity)):
-            raise exceptions.InvalidArgument(
+            raise exceptions.InconsistentArguments(
                 "The resolution must be given with units."
             )
 
@@ -232,7 +236,7 @@ class ImagingBase(ABC):
         """
         # Ensure we have units
         if not isinstance(fov, (unyt_array, unyt_quantity)):
-            raise exceptions.InvalidArgument(
+            raise exceptions.InconsistentArguments(
                 "The fov must be given with units."
             )
 
@@ -272,7 +276,7 @@ class ImagingBase(ABC):
         elif isinstance(npix, tuple):
             npix = np.array(npix, dtype=np.int32)
         else:
-            raise exceptions.InvalidArgument(
+            raise exceptions.InconsistentArguments(
                 "The npix must be given as an int or tuple."
             )
 
