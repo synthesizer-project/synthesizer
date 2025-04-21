@@ -21,7 +21,7 @@ import numpy as np
 from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
-from unyt import unyt_array, unyt_quantity
+from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image_generators import (
@@ -29,7 +29,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts, unit_is_compatible
 
 
 class Image:
@@ -57,9 +57,14 @@ class Image:
     """
 
     # Define quantities
-    resolution = Quantity("spatial")
+    cart_resolution = Quantity("spatial")
+    ang_resolution = Quantity("angle")
+    cart_fov = Quantity("spatial")
+    ang_fov = Quantity("angle")
     fov = Quantity("spatial")
+    resolution = Quantity("spatial")
 
+    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
     def __init__(
         self,
         resolution,
@@ -80,9 +85,33 @@ class Image:
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
-        # Set the quantities
+        # Set the imaging quantities based on whether they are angular or
+        # Cartesian
+        if unit_is_compatible(resolution, kpc):
+            self.cart_resolution = resolution
+            self.ang_resolution = None
+        else:
+            self.cart_resolution = None
+            self.ang_resolution = resolution
+        if unit_is_compatible(fov, kpc):
+            self.cart_fov = fov
+            self.ang_fov = None
+        else:
+            self.cart_fov = None
+            self.ang_fov = fov
+
+        # Set the resolution and fov
         self.resolution = resolution
         self.fov = fov
+
+        # Ensure that the resolution and foc are compatible (i.e. both
+        # are angular or both are Cartesian)
+        if not unit_is_compatible(self.resolution, self.fov.units):
+            raise exceptions.InconsistentArguments(
+                "The resolution and FOV must be in compatible units. "
+                f"Found resolution={self.resolution.units}, "
+                f"and fov={self.fov.units}."
+            )
 
         # If fov isn't a array, make it one
         if self.fov is not None and self.fov.size == 1:
