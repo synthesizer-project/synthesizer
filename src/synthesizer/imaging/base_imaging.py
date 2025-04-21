@@ -1,4 +1,4 @@
-"""A base class to encompass commmon functionality for all imaging classes.
+"""A base class to encompass common functionality for all imaging classes.
 
 This class is not intended to be used directly, but rather as a base class for
 other imaging classes. It provides a common interface and shared functionality
@@ -178,6 +178,16 @@ class ImagingBase(ABC):
         Args:
             factor (float): The factor to resample the resolution by.
         """
+        # If the factor is 1, do nothing
+        if factor == 1:
+            return
+
+        # Ensure the factor is a positive number
+        if factor <= 0:
+            raise exceptions.InconsistentArguments(
+                "The factor must be a positive number."
+            )
+
         # Resample the resolution and npix
         if self.has_cartesian_units:
             self.cart_resolution = self.cart_resolution / factor
