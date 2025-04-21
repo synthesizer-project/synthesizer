@@ -1134,6 +1134,7 @@ class BaseGalaxy:
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -1191,6 +1192,10 @@ class BaseGalaxy:
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
                 the images by instrument.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -1245,6 +1250,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=False,
+            cosmo=cosmo,
         )
 
         # Get the instrument name if we have one
@@ -1313,6 +1319,7 @@ class BaseGalaxy:
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -1364,6 +1371,10 @@ class BaseGalaxy:
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
                 the images by instrument.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -1411,6 +1422,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=True,
+            cosmo=cosmo,
         )
 
         # Get the instrument name if we have one

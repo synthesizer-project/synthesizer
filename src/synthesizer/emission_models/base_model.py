@@ -2946,6 +2946,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         do_flux=False,
         kernel=None,
         kernel_threshold=1.0,
+        cosmo=None,
         nthreads=1,
         **kwargs,
     ):
@@ -2992,6 +2993,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 None, no convolution will be applied.
             kernel_threshold (float)
                 The threshold for the convolution kernel.
+            cosmo (astropy.cosmology.Cosmology)
+                The cosmology to use for the image generation. This is only
+                needed for doing cartesian to angular conversions internally.
+                By default this is None and won't be needed.
             nthreads (int)
                 The number of threads to use for the image generation.
             kwargs (dict)
@@ -3014,7 +3019,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             images = {}
 
         # Convert `limit_to` to a list if it is a string
-        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+        if limit_to is not None:
+            limit_to = (
+                [limit_to] if isinstance(limit_to, str) else limit_to.copy()
+            )
 
         # If we are limiting to a specific model/s and these are a combination
         # model, we need to make sure we include the models they are
@@ -3029,7 +3037,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 # If this is a combination model, add the models it is
                 # combining to the list
                 if this_model._is_combining:
-                    limit_to += this_model._combining_models
+                    limit_to.extend([m.label for m in this_model.combine])
 
         # Set up the list to collect all the photometry into so we can generate
         # images for all models at once
@@ -3115,6 +3123,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
                 emitter=emitters[emitter],
+                cosmo=cosmo,
             )
 
             # Now we need to loop over the imgs we've create and split them
@@ -3180,10 +3189,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
 
         # If we are limiting to a specific model, we might might have generated
-        # images for models we don't want to hold on to. Through them away
-        # if we are limiting to a specific model
-        if limit_to is not None:
-            for key in images.keys():
+        # images for models we don't want to hold on to. Throw them away
+        # if we are limiting to a specific model (but only if not a related
+        # call otherwise we might delete images we need for the combination
+        # models)
+        if limit_to is not None and not _is_related:
+            old_keys = list(images.keys())
+            for key in old_keys:
                 if key not in _orig_limit_to:
                     del images[key]
 

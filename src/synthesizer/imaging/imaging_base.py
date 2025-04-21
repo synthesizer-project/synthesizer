@@ -160,9 +160,9 @@ class ImagingBase(ABC):
                 resolution and new npix. Defaults to True.
         """
         if self.has_cartesian_units:
-            self.cart_resolution = self.cart_fov / self.npix
+            self.cart_resolution = self.cart_fov[0] / self.npix[0]
         else:
-            self.ang_resolution = self.ang_fov / self.npix
+            self.ang_resolution = self.ang_fov[0] / self.npix[0]
 
         # Redefine the fov based on npix
         if compute_fov:

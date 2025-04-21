@@ -213,7 +213,11 @@ class Particles:
 
         return np.log10(mets, dtype=np.float64)
 
-    def get_projected_angular_coordinates(self, cosmo=None, los_dists=None):
+    def get_projected_angular_coordinates(
+        self,
+        cosmo=None,
+        los_dists=None,
+    ):
         """
         Get the projected angular coordinates in radians.
 
@@ -292,7 +296,11 @@ class Particles:
 
         return coords * rad
 
-    def get_projected_angular_smoothing_lengths(self, cosmo, los_dists=None):
+    def get_projected_angular_smoothing_lengths(
+        self,
+        cosmo=None,
+        los_dists=None,
+    ):
         """
         Get the projected angular smoothing lengths in radians.
 

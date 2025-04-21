@@ -508,6 +508,7 @@ class Component(ABC):
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """
         Make an ImageCollection from component luminosities.
@@ -559,6 +560,10 @@ class Component(ABC):
                 The number of threads to use in the tree search. Default is 1.
             instrument (Instrument)
                 The instrument to use to generate the images.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -600,6 +605,7 @@ class Component(ABC):
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=False,
+            cosmo=cosmo,
         )
 
         # Store the images
@@ -623,6 +629,7 @@ class Component(ABC):
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -674,6 +681,10 @@ class Component(ABC):
                 The number of threads to use in the tree search. Default is 1.
             instrument (Instrument)
                 The instrument to use to generate the images.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -715,6 +726,7 @@ class Component(ABC):
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=True,
+            cosmo=cosmo,
         )
 
         # Store the images

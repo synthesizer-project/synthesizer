@@ -21,7 +21,7 @@ import numpy as np
 from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
-from unyt import unyt_array, unyt_quantity
+from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image_generators import (
@@ -30,6 +30,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_smoothed,
 )
 from synthesizer.imaging.imaging_base import ImagingBase
+from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 
 
@@ -485,6 +486,7 @@ class Image(ImagingBase):
 
         return new_img
 
+    @accepts(aperture_radius=(kpc, arcsecond))
     def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
         """
         Apply noise derived from a SNR and depth.
@@ -495,6 +497,14 @@ class Image(ImagingBase):
         This assumes the SNR is defined as SNR = S / sqrt(noise_std)
 
         Args:
+            snr (float):
+                The signal to noise ratio of the image.
+            depth (float):
+                The depth of the image, i.e. the minimum signal strength
+                detectable at the given SNR.
+            aperture_radius (unyt_quantity):
+                The radius of the aperture. If None then a point source is
+                assumed.
 
         Returns:
             Image
@@ -506,6 +516,13 @@ class Image(ImagingBase):
         """
         # Convert aperture radius to consistent units if we have it
         if aperture_radius is not None:
+            # Check the aperture is compatible with the resolution
+            if not unit_is_compatible(aperture_radius, self.resolution.units):
+                raise exceptions.InconsistentArguments(
+                    "The aperture radius must be compatible with the "
+                    f"resolution units. (aperture_radius = {aperture_radius}, "
+                    f"resolution = {self.resolution})"
+                )
             aperture_radius = aperture_radius.to(self.resolution.units).value
 
         # Ensure we have units if we need them
