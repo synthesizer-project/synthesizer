@@ -365,7 +365,7 @@ class Particles:
 
         return projected_smoothing_lengths * rad
 
-    def get_projected_angular_imaging_properties(self, cosmo):
+    def get_projected_angular_imaging_props(self, cosmo):
         """
         Get the projected angular imaging properties.
 
