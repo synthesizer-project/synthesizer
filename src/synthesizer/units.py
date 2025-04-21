@@ -81,6 +81,40 @@ def _load_and_convert_unit_categories() -> dict:
 UNIT_CATEGORIES = _load_and_convert_unit_categories()
 
 
+def unit_is_compatible(value, unit):
+    """
+    Check if two values have compatible units.
+
+    This function checks that a unyt_quantity or unyt_array is
+    compatible with a unit, i.e. it has the same dimensions.
+    If they are not compatible, it raises an exception.
+
+    This could also be done wrapping a conversion attempt in a try/except
+    block but this is more efficient as it avoids the overhead of
+    unyt's conversion system.
+
+    I might have missed a method in unyt for this but I couldn't find one.
+
+    Args:
+        value (unyt_quantity/unyt_array)
+            The value to check.
+        unit (unyt.unit_object.Unit)
+            The unit to check against.
+
+    Returns:
+        bool
+            True if the values have compatible units, False otherwise.
+    """
+    if isinstance(value, (unyt_quantity, unyt_array)):
+        return value.units.dimensions == unit.dimensions
+
+    # If we get here then we didn't get two unyt quantities or arrays
+    raise exceptions.InconsistentArguments(
+        "Can only check values with units for compatibility, "
+        f"not {type(value)} and {type(unit)}."
+    )
+
+
 class DefaultUnits:
     """
     The DefaultUnits class is a container for the default unit system.
