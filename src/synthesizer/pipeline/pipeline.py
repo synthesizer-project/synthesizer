@@ -2689,6 +2689,21 @@ class Pipeline:
         # to write it out)
         self._write_spectroscopy_lnu = True
 
+        # Check that we have instruments to compute the spectroscopy for
+        if len(instruments) == 0:
+            raise exceptions.PipelineNotReady(
+                "Cannot generate spectroscopy without instruments with "
+                "spectroscopy! Pass instruments to the get_spectroscopy_lnu "
+                "method."
+            )
+
+        # Check that the instruments can do spectroscopy
+        for inst in instruments:
+            if not inst.can_do_spectroscopy:
+                raise exceptions.PipelineNotReady(
+                    f"Cannot generate spectroscopy with {inst.name}!"
+                )
+
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_spectroscopy_lnu",
@@ -2723,6 +2738,21 @@ class Pipeline:
         # (calling the get_spectroscopy_fnu method is considered the intent
         # to write it out)
         self._write_spectroscopy_fnu = True
+
+        # Check that we have instruments to compute the spectroscopy for
+        if len(instruments) == 0:
+            raise exceptions.PipelineNotReady(
+                "Cannot generate spectroscopy without instruments with "
+                "spectroscopy! Pass instruments to the get_spectroscopy_fnu "
+                "method."
+            )
+
+        # Check that the instruments can do spectroscopy
+        for inst in instruments:
+            if not inst.can_do_spectroscopy:
+                raise exceptions.PipelineNotReady(
+                    f"Cannot generate spectroscopy with {inst.name}!"
+                )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
