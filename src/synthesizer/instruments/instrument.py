@@ -177,7 +177,7 @@ class Instrument:
             float:
                 The resolution of the Instrument.
         """
-        return self.resolution.value
+        return None if self.resolution is None else self.resolution.value
 
     @property
     def can_do_photometry(self):
