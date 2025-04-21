@@ -159,7 +159,7 @@ class InstrumentCollection:
             # Ensure the object is an Instrument
             if not isinstance(instrument, Instrument):
                 raise exceptions.InconsistentArguments(
-                    f"Object {instrument} is not an Instrument."
+                    f"Object {type(instrument)} is not an Instrument."
                 )
 
             # Ensure the label doesn't already exist in the Collection
