@@ -515,7 +515,7 @@ class Calzetti2000(AttenuationLaw):
         lam_v = 0.55
 
         k_v = 4.05 + 2.659 * (
-        -2.156 + (1.509 / lam_v) - (0.198 / lam_v**2) + (0.011 / lam_v**3)
+            -2.156 + (1.509 / lam_v) - (0.198 / lam_v**2) + (0.011 / lam_v**3)
         )
 
         return k_v * tau_x_v
@@ -903,4 +903,3 @@ class ParametricLi08(AttenuationLaw):
             "for the different models, so does not make sense to have this"
             "function. Use other attenuation curve models to get tau_v or Av"
         )
-
