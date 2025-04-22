@@ -503,6 +503,16 @@ def nircam_instrument(nircam_filters):
 
 
 @pytest.fixture
+def nircam_instrument_no_psf(nircam_filters):
+    """Return a NIRCAM instrument object without PSF."""
+    return Instrument(
+        "JWST",
+        filters=nircam_filters,
+        resolution=1 * Mpc,
+    )
+
+
+@pytest.fixture
 def spectroscopy_instrument(test_grid):
     """Return a generic spectroscopy instrument object."""
     return Instrument("GenericSpec", lam=test_grid.lam)
@@ -530,11 +540,10 @@ def uvj_nircam_insts(uvj_instrument, nircam_instrument):
 
 
 @pytest.fixture
-def base_pipeline(uvj_nircam_insts, nebular_emission_model):
+def base_pipeline(nebular_emission_model):
     """Return an empty pipeline."""
     return Pipeline(
         emission_model=nebular_emission_model,
-        instruments=uvj_nircam_insts,
         nthreads=1,
         verbose=0,
     )
@@ -542,14 +551,12 @@ def base_pipeline(uvj_nircam_insts, nebular_emission_model):
 
 @pytest.fixture
 def pipeline_with_galaxies(
-    uvj_nircam_insts,
     nebular_emission_model,
     list_of_random_particle_galaxies,
 ):
     """Return an empty pipeline."""
     p = Pipeline(
         emission_model=nebular_emission_model,
-        instruments=uvj_nircam_insts,
         nthreads=1,
         verbose=0,
     )
@@ -559,7 +566,6 @@ def pipeline_with_galaxies(
 
 @pytest.fixture
 def pipeline_with_galaxies_per_particle(
-    uvj_nircam_insts,
     nebular_emission_model,
     list_of_random_particle_galaxies,
 ):
@@ -568,7 +574,6 @@ def pipeline_with_galaxies_per_particle(
     nebular_emission_model.set_per_particle(True)
     p = Pipeline(
         emission_model=nebular_emission_model,
-        instruments=uvj_nircam_insts,
         nthreads=1,
         verbose=0,
     )

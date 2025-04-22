@@ -748,7 +748,7 @@ class Component(ABC):
                 imgs.supersample(psf_resample_factor)
 
             # Apply the PSF
-            self.images_psf_lnu[instrument.label][key] = imgs.apply_psf(
+            self.images_psf_lnu[instrument.label][key] = imgs.apply_psfs(
                 instrument.psfs
             )
 
@@ -819,7 +819,7 @@ class Component(ABC):
                 imgs.supersample(psf_resample_factor)
 
             # Apply the PSF
-            self.images_psf_fnu[instrument.label][key] = imgs.apply_psf(
+            self.images_psf_fnu[instrument.label][key] = imgs.apply_psfs(
                 instrument.psfs
             )
 

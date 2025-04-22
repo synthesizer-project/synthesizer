@@ -1512,21 +1512,22 @@ class BaseGalaxy:
                 f"Instrument ({instrument.label}) does not have PSFs."
             )
 
-        # Ensure we have images for this instrument
-        if instrument.label not in self.images_lnu:
-            raise exceptions.InconsistentArguments(
-                "No images found in images_lnu for instrument"
-                f" {instrument.label}."
-            )
+        # Get the images we are applying the PSF to
+        if instrument.label in self.images_lnu:
+            images = self.images_lnu[instrument.label]
+        else:
+            # If it's not either dict we just don't have any images on the
+            # galaxy but we might on the component, so no error!
+            images = {}
 
         # Do the galaxy level images
-        for key in self.images_lnu[instrument.label]:
+        for key in images:
             # Are we limiting to a specific model?
             if limit_to is not None and key not in limit_to:
                 continue
 
             # Unpack the image
-            imgs = self.images_lnu[instrument.label][key]
+            imgs = images[key]
 
             # If requested, do the resampling
             if psf_resample_factor > 1:
@@ -1544,7 +1545,10 @@ class BaseGalaxy:
                 )
 
         # If we have stars, do those
-        if self.stars is not None:
+        if (
+            self.stars is not None
+            and instrument.label in self.stars.images_lnu
+        ):
             self.stars.apply_psf_to_images_lnu(
                 instrument,
                 psf_resample_factor=psf_resample_factor,
@@ -1552,7 +1556,10 @@ class BaseGalaxy:
             )
 
         # If we have black holes, do those
-        if self.black_holes is not None:
+        if (
+            self.black_holes is not None
+            and instrument.label in self.black_holes.images_lnu
+        ):
             self.black_holes.apply_psf_to_images_lnu(
                 instrument,
                 psf_resample_factor=psf_resample_factor,
@@ -1599,21 +1606,22 @@ class BaseGalaxy:
                 f"Instrument ({instrument.label}) does not have PSFs."
             )
 
-        # Ensure we have images for this instrument
-        if instrument.label not in self.images_fnu:
-            raise exceptions.InconsistentArguments(
-                "No images found in images_fnu for instrument"
-                f" {instrument.label}."
-            )
+        # Get the images we are applying the PSF to
+        if instrument.label in self.images_fnu:
+            images = self.images_fnu[instrument.label]
+        else:
+            # If it's not either dict we just don't have any images on the
+            # galaxy but we might on the component, so no error!
+            images = {}
 
         # Do the galaxy level images
-        for key in self.images_fnu[instrument.label]:
+        for key in images:
             # Are we limiting to a specific model?
             if limit_to is not None and key not in limit_to:
                 continue
 
             # Unpack the image
-            imgs = self.images_fnu[instrument.label][key]
+            imgs = images[key]
 
             # If requested, do the resampling
             if psf_resample_factor > 1:
@@ -1631,7 +1639,10 @@ class BaseGalaxy:
                 )
 
         # If we have stars, do those
-        if self.stars is not None:
+        if (
+            self.stars is not None
+            and instrument.label in self.stars.images_fnu
+        ):
             self.stars.apply_psf_to_images_fnu(
                 instrument,
                 psf_resample_factor=psf_resample_factor,
@@ -1639,7 +1650,10 @@ class BaseGalaxy:
             )
 
         # If we have black holes, do those
-        if self.black_holes is not None:
+        if (
+            self.black_holes is not None
+            and instrument.label in self.black_holes.images_fnu
+        ):
             self.black_holes.apply_psf_to_images_fnu(
                 instrument,
                 psf_resample_factor=psf_resample_factor,
@@ -1680,15 +1694,9 @@ class BaseGalaxy:
         elif instrument.label in self.images_lnu:
             images = self.images_lnu[instrument.label]
         else:
-            if apply_to_psf:
-                raise exceptions.InconsistentArguments(
-                    "No images found in images_psf_lnu for instrument"
-                    f" {instrument.label}."
-                )
-            raise exceptions.InconsistentArguments(
-                "No images found in images_lnu  for instrument"
-                f" {instrument.label}."
-            )
+            # If it's not either dict we just don't have any images on the
+            # galaxy but we might on the component, so no error!
+            images = {}
 
         # Do the galaxy level images
         for key in images:
@@ -1721,14 +1729,23 @@ class BaseGalaxy:
                 )
 
         # If we have stars, do those
-        if self.stars is not None:
+        if self.stars is not None and (
+            instrument.label in self.stars.images_lnu
+            or (apply_to_psf and instrument.label in self.stars.images_psf_lnu)
+        ):
             self.stars.apply_noise_to_images_lnu(
                 instrument,
                 limit_to=limit_to,
             )
 
         # If we have black holes, do those
-        if self.black_holes is not None:
+        if self.black_holes is not None and (
+            instrument.label in self.black_holes.images_lnu
+            or (
+                apply_to_psf
+                and instrument.label in self.black_holes.images_psf_lnu
+            )
+        ):
             self.black_holes.apply_noise_to_images_lnu(
                 instrument,
                 limit_to=limit_to,
@@ -1768,15 +1785,9 @@ class BaseGalaxy:
         elif instrument.label in self.images_fnu:
             images = self.images_fnu[instrument.label]
         else:
-            if apply_to_psf:
-                raise exceptions.InconsistentArguments(
-                    "No images found in images_psf_fnu for instrument"
-                    f" {instrument.label}."
-                )
-            raise exceptions.InconsistentArguments(
-                "No images found in images_fnu for instrument"
-                f" {instrument.label}."
-            )
+            # If it's not either dict we just don't have any images on the
+            # galaxy but we might on the component, so no error!
+            images = {}
 
         # Do the galaxy level images
         for key in images:
@@ -1809,14 +1820,23 @@ class BaseGalaxy:
                 )
 
         # If we have stars, do those
-        if self.stars is not None:
+        if self.stars is not None and (
+            instrument.label in self.stars.images_fnu
+            or (apply_to_psf and instrument.label in self.stars.images_psf_fnu)
+        ):
             self.stars.apply_noise_to_images_fnu(
                 instrument,
                 limit_to=limit_to,
             )
 
         # If we have black holes, do those
-        if self.black_holes is not None:
+        if self.black_holes is not None and (
+            instrument.label in self.black_holes.images_fnu
+            or (
+                apply_to_psf
+                and instrument.label in self.black_holes.images_psf_fnu
+            )
+        ):
             self.black_holes.apply_noise_to_images_fnu(
                 instrument,
                 limit_to=limit_to,

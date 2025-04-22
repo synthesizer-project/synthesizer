@@ -5,11 +5,10 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
-from unyt import Mpc, unyt_array
+from unyt import Mpc, kpc, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
-from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
     cached_split,
@@ -412,29 +411,11 @@ class TestPipelineInit:
         """Test initializing the Pipeline with valid inputs."""
         pipeline = Pipeline(
             emission_model=nebular_emission_model,
-            instruments=uvj_nircam_insts,
             verbose=0,
         )
 
         assert pipeline.emission_model is nebular_emission_model
-        assert pipeline.instruments == uvj_nircam_insts
         assert pipeline.nthreads == 1  # Default value
-
-    def test_init_pipeline_single_inst(
-        self,
-        nebular_emission_model,
-        nircam_instrument,
-    ):
-        """Test initializing the Pipeline with a single instrument."""
-        pipeline = Pipeline(
-            emission_model=nebular_emission_model,
-            instruments=nircam_instrument,
-            verbose=0,
-        )
-
-        assert isinstance(
-            pipeline.instruments, InstrumentCollection
-        ), "Single instrument should be wrapped in an InstrumentCollection"
 
 
 class TestPipelineNotReady:
@@ -455,21 +436,24 @@ class TestPipelineNotReady:
         # Create a pipeline with an instrument that cannot supply filters.
         pipeline = Pipeline(
             emission_model=nebular_emission_model,
-            instruments=spectroscopy_instruments,
             verbose=0,
         )
         with pytest.raises(exceptions.PipelineNotReady) as excinfo:
-            pipeline.get_photometry_luminosities()
-        assert "without instruments with filters" in str(excinfo.value).lower()
+            pipeline.get_photometry_luminosities(spectroscopy_instruments)
+        assert "cannot generate photometry " in str(excinfo.value).lower()
 
-    def test_get_photometry_fluxes_without_cosmo(self, base_pipeline):
+    def test_get_photometry_fluxes_without_cosmo(
+        self,
+        base_pipeline,
+        uvj_nircam_insts,
+    ):
         """
         Test that calling get_photometry_fluxes without providing a cosmology
         (and with no prior call to get_observed_spectra)
         raises PipelineNotReady.
         """
         with pytest.raises(exceptions.PipelineNotReady) as excinfo:
-            base_pipeline.get_photometry_fluxes(cosmo=None)
+            base_pipeline.get_photometry_fluxes(uvj_nircam_insts, cosmo=None)
         assert (
             "without an astropy.cosmology object" in str(excinfo.value).lower()
         )
@@ -488,26 +472,42 @@ class TestPipelineNotReady:
         assert "without line ids" in str(excinfo.value).lower()
 
     def test_get_images_luminosity_psfs_without_required_args(
-        self, base_pipeline
+        self,
+        base_pipeline,
+        nircam_instrument,
     ):
         """
         Test that calling get_images_luminosity_psfs without required
         arguments (fov, img_type, kernel, kernel_threshold)
         when get_images_luminosity has not been called raises PipelineNotReady.
         """
-        with pytest.raises(exceptions.PipelineNotReady) as excinfo:
-            base_pipeline.get_images_luminosity_psfs(fov=None)
+        with pytest.raises(exceptions.InconsistentArguments) as excinfo:
+            base_pipeline.get_images_luminosity(nircam_instrument, fov=None)
         assert "without a field of view" in str(excinfo.value).lower()
 
-    def test_get_images_flux_psfs_without_required_args(self, base_pipeline):
+    def test_get_images_flux_psfs_without_required_args(
+        self,
+        base_pipeline,
+        nircam_instrument,
+    ):
         """
         Test that calling get_images_flux_psfs without required arguments
         (fov, img_type, kernel, kernel_threshold)
         when get_images_flux has not been called raises PipelineNotReady.
         """
-        with pytest.raises(exceptions.PipelineNotReady) as excinfo:
-            base_pipeline.get_images_flux_psfs(fov=None)
+        with pytest.raises(exceptions.InconsistentArguments) as excinfo:
+            base_pipeline.get_images_flux(
+                nircam_instrument, fov=None, cosmo=None
+            )
         assert "without a field of view" in str(excinfo.value).lower()
+
+        with pytest.raises(exceptions.PipelineNotReady) as excinfo:
+            base_pipeline.get_images_flux(
+                nircam_instrument, fov=30 * kpc, cosmo=None
+            )
+        assert (
+            "without an astropy.cosmology object" in str(excinfo.value).lower()
+        )
 
     def test_run_with_no_operations(
         self, base_pipeline, list_of_random_particle_galaxies
@@ -585,10 +585,11 @@ class TestPipelineOperations:
     def test_run_pipeline_photometry_lums(
         self,
         pipeline_with_galaxies,
+        uvj_nircam_insts,
     ):
         """Test running the pipeline with photometry."""
         # Add dummy galaxies
-        pipeline_with_galaxies.get_photometry_luminosities()
+        pipeline_with_galaxies.get_photometry_luminosities(uvj_nircam_insts)
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
@@ -606,10 +607,13 @@ class TestPipelineOperations:
     def test_run_pipeline_photometry_fluxes(
         self,
         pipeline_with_galaxies,
+        uvj_nircam_insts,
     ):
         """Test running the pipeline with photometry."""
         # Add dummy galaxies
-        pipeline_with_galaxies.get_photometry_fluxes(cosmo=cosmo)
+        pipeline_with_galaxies.get_photometry_fluxes(
+            uvj_nircam_insts, cosmo=cosmo
+        )
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
@@ -732,10 +736,12 @@ class TestPipelineOperations:
         self,
         kernel,
         pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
     ):
         """Test running the pipeline with images."""
         # Add dummy galaxies
         pipeline_with_galaxies_per_particle.get_images_luminosity(
+            nircam_instrument_no_psf,
             fov=100 * Mpc,
             kernel=kernel,
         )
@@ -759,10 +765,12 @@ class TestPipelineOperations:
         self,
         kernel,
         pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
     ):
         """Test running the pipeline with images."""
         # Add dummy galaxies
         pipeline_with_galaxies_per_particle.get_images_flux(
+            nircam_instrument_no_psf,
             fov=100 * Mpc,
             kernel=kernel,
             cosmo=cosmo,
@@ -788,10 +796,12 @@ class TestPipelineOperations:
         self,
         kernel,
         pipeline_with_galaxies_per_particle,
+        nircam_instrument,
     ):
         """Test running the pipeline with images."""
         # Add dummy galaxies
-        pipeline_with_galaxies_per_particle.get_images_luminosity_psfs(
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            nircam_instrument,
             fov=100 * Mpc,
             kernel=kernel,
         )
@@ -810,15 +820,23 @@ class TestPipelineOperations:
             )
             > 0
         ), "No images were calculated"
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_lum
+            )
+            == 0
+        ), "PSFless images were not removed"
 
     def test_run_pipeline_images_flux_psfs(
         self,
         kernel,
         pipeline_with_galaxies_per_particle,
+        nircam_instrument,
     ):
         """Test running the pipeline with images."""
         # Add dummy galaxies
-        pipeline_with_galaxies_per_particle.get_images_flux_psfs(
+        pipeline_with_galaxies_per_particle.get_images_flux(
+            nircam_instrument,
             fov=100 * Mpc,
             kernel=kernel,
             cosmo=cosmo,
@@ -838,6 +856,12 @@ class TestPipelineOperations:
             )
             > 0
         ), "No images were calculated"
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_flux
+            )
+            == 0
+        ), "PSFless images were not removed"
 
     def test_run_pipeline_sfzh(
         self,
