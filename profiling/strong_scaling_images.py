@@ -33,13 +33,12 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def part_spectra_strong_scaling(
+def images_strong_scaling(
     basename,
     out_dir,
     max_threads,
     nstars,
     average_over,
-    gam,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     # Define the grid
@@ -124,11 +123,11 @@ def part_spectra_strong_scaling(
 
     # Define the log and plot output paths
     log_outpath = (
-        f"{out_dir}/{basename}_images_{gam}_"
+        f"{out_dir}/{basename}_images_"
         f"totThreads{max_threads}_nstars{nstars}.log"
     )
     plot_outpath = (
-        f"{out_dir}/{basename}_images_{gam}_"
+        f"{out_dir}/{basename}_images_"
         f"totThreads{max_threads}_nstars{nstars}.png"
     )
 
@@ -205,11 +204,10 @@ if __name__ == "__main__":
 
     args = args.parse_args()
 
-    part_spectra_strong_scaling(
+    images_strong_scaling(
         args.basename,
         args.out_dir,
         args.max_threads,
         args.nstars,
         args.average_over,
-        args.grid_assign,
     )
