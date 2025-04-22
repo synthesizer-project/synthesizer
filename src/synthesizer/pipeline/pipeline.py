@@ -227,8 +227,10 @@ class Pipeline:
         self._write_flux_lines = False
         self._write_images_lum = False
         self._write_images_lum_psf = False
+        self._write_images_lum_noise = False
         self._write_images_flux = False
         self._write_images_flux_psf = False
+        self._write_images_flux_noise = False
         self._write_lnu_data_cubes = False
         self._write_fnu_data_cubes = False
         self._write_spectroscopy = False
@@ -1952,11 +1954,6 @@ class Pipeline:
         self._do_luminosities = True
         self._do_lnu_spectra = True
 
-        # Flag that we will want to write out the luminosity images (calling
-        # the get_images_luminosity method is considered the intent to write
-        # it out)
-        self._write_images_lum = True
-
         # Ensure we have a field of view if we need to compute the images
         if fov is None:
             raise exceptions.InconsistentArguments(
@@ -2008,6 +2005,15 @@ class Pipeline:
                 if inst.label not in phot_lum_insts
             ]
         )
+
+        # Based on the instruments we have, set the appropriate writing flags
+        for inst in _instruments:
+            if inst.can_do_noisy_imaging:
+                self._write_images_lum_noise = True
+            elif inst.can_do_psf_imaging:
+                self._write_images_lum_psf = True
+            else:
+                self._write_images_lum = True
 
     def _get_images_luminosity(self, galaxy):
         """
@@ -2069,7 +2075,18 @@ class Pipeline:
 
                 # Remove the psfless images (we don't want to carry around
                 # duplicates)
-                del galaxy.images_lnu[inst.label]
+                if inst.label in galaxy.images_lnu:
+                    del galaxy.images_lnu[inst.label]
+                if (
+                    galaxy.stars is not None
+                    and inst.label in galaxy.stars.images_lnu
+                ):
+                    del galaxy.stars.images_lnu[inst.label]
+                if (
+                    galaxy.black_holes is not None
+                    and inst.label in galaxy.black_holes.images_lnu
+                ):
+                    del galaxy.black_holes.images_lnu[inst.label]
 
             # Apply the instrument noise if applicable to the instrument
             if inst.can_do_noisy_imaging:
@@ -2089,6 +2106,16 @@ class Pipeline:
                     del galaxy.images_lnu[inst.label]
                 if inst.label in galaxy.images_psf_lnu:
                     del galaxy.images_psf_lnu[inst.label]
+                if galaxy.stars is not None:
+                    if inst.label in galaxy.stars.images_lnu:
+                        del galaxy.stars.images_lnu[inst.label]
+                    if inst.label in galaxy.stars.images_psf_lnu:
+                        del galaxy.stars.images_psf_lnu[inst.label]
+                if galaxy.black_holes is not None:
+                    if inst.label in galaxy.black_holes.images_lnu:
+                        del galaxy.black_holes.images_lnu[inst.label]
+                    if inst.label in galaxy.black_holes.images_psf_lnu:
+                        del galaxy.black_holes.images_psf_lnu[inst.label]
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -2287,6 +2314,15 @@ class Pipeline:
             ]
         )
 
+        # Based on the instruments we have, set the appropriate writing flags
+        for inst in _instruments:
+            if inst.can_do_noisy_imaging:
+                self._write_images_flux_noise = True
+            elif inst.can_do_psf_imaging:
+                self._write_images_flux_psf = True
+            else:
+                self._write_images_flux = True
+
     def _get_images_flux(self, galaxy):
         """
         Compute the flux images for the galaxies.
@@ -2343,7 +2379,18 @@ class Pipeline:
 
                 # Remove the psfless images (we don't want to carry around
                 # duplicates)
-                del galaxy.images_fnu[inst.label]
+                if inst.label in galaxy.images_fnu:
+                    del galaxy.images_fnu[inst.label]
+                if (
+                    galaxy.stars is not None
+                    and inst.label in galaxy.stars.images_fnu
+                ):
+                    del galaxy.stars.images_fnu[inst.label]
+                if (
+                    galaxy.black_holes is not None
+                    and inst.label in galaxy.black_holes.images_fnu
+                ):
+                    del galaxy.black_holes.images_fnu[inst.label]
 
             # Apply the instrument noise if applicable to the instrument
             if inst.can_do_noisy_imaging:
@@ -2361,6 +2408,18 @@ class Pipeline:
                 # duplicates)
                 if inst.label in galaxy.images_fnu:
                     del galaxy.images_fnu[inst.label]
+                if inst.label in galaxy.images_psf_fnu:
+                    del galaxy.images_psf_fnu[inst.label]
+                if galaxy.stars is not None:
+                    if inst.label in galaxy.stars.images_fnu:
+                        del galaxy.stars.images_fnu[inst.label]
+                    if inst.label in galaxy.stars.images_psf_fnu:
+                        del galaxy.stars.images_psf_fnu[inst.label]
+                if galaxy.black_holes is not None:
+                    if inst.label in galaxy.black_holes.images_fnu:
+                        del galaxy.black_holes.images_fnu[inst.label]
+                    if inst.label in galaxy.black_holes.images_psf_fnu:
+                        del galaxy.black_holes.images_psf_fnu[inst.label]
 
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
