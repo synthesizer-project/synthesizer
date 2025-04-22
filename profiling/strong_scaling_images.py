@@ -105,7 +105,7 @@ def images_strong_scaling(
     )
 
     # Get photometry
-    stars.get_photo_lnu(
+    stars.get_particle_photo_lnu(
         filters=webb_inst.filters,
         nthreads=max_threads,
     )
