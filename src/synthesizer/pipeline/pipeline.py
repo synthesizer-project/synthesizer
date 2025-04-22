@@ -282,9 +282,11 @@ class Pipeline:
             "Emission Line Luminosities": 0.0,
             "Emission Line Fluxes": 0.0,
             "Luminosity Images": 0.0,
-            "Luminosity Images (with PSF)": 0.0,
+            "Luminosity Images (With PSF)": 0.0,
+            "Luminosity Images (With Noise)": 0.0,
             "Flux Images": 0.0,
             "Flux Images (With PSF)": 0.0,
+            "Flux Images (With Noise)": 0.0,
             "Lnu Data Cubes": 0.0,
             "Fnu Data Cubes": 0.0,
             "Spectroscopy": 0.0,
@@ -304,9 +306,11 @@ class Pipeline:
             "Emission Line Luminosities": 0,
             "Emission Line Fluxes": 0,
             "Luminosity Images": 0,
-            "Luminosity Images (with PSF)": 0,
+            "Luminosity Images (With PSF)": 0,
+            "Luminosity Images (With Noise)": 0,
             "Flux Images": 0,
             "Flux Images (With PSF)": 0,
+            "Flux Images (With Noise)": 0,
             "Lnu Data Cubes": 0,
             "Fnu Data Cubes": 0,
             "Spectroscopy": 0,
@@ -961,7 +965,7 @@ class Pipeline:
             + str(self._write_images_lum).rjust(15)
         )
         self._print(
-            "Luminosity Images (with PSF)".ljust(30)
+            "Luminosity Images (With PSF)".ljust(30)
             + str(self._do_images_lum_psf).rjust(15)
             + str(self._write_images_lum_psf).rjust(15)
         )
@@ -971,7 +975,7 @@ class Pipeline:
             + str(self._write_images_flux).rjust(15)
         )
         self._print(
-            "Flux Images (with PSF)".ljust(30)
+            "Flux Images (With PSF)".ljust(30)
             + str(self._do_images_flux_psf).rjust(15)
             + str(self._write_images_flux_psf).rjust(15)
         )
@@ -1887,7 +1891,6 @@ class Pipeline:
         kernel_threshold=1.0,
         spectra_type=None,
         psf_resample_factor=1,
-        write=True,
     ):
         """
         Flag that the Pipeline should compute the luminosity images.
@@ -1928,8 +1931,6 @@ class Pipeline:
                 simplification we make for performance reasons (the
                 effects are sufficiently small that this simplifications is
                 justified).
-            write (bool):
-                Whether to write the images to disk. Default is True.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_luminosity"] = {
@@ -1954,8 +1955,7 @@ class Pipeline:
         # Flag that we will want to write out the luminosity images (calling
         # the get_images_luminosity method is considered the intent to write
         # it out)
-        if write:
-            self._write_images_lum = True
+        self._write_images_lum = True
 
         # Check that we have instruments to compute the images for
         if len(instruments) == 0:
@@ -2016,6 +2016,10 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # We want to time PSF application and noise application separately
+        psf_time = 0
+        noise_time = 0
+
         # Unpack the instruments for this operation
         instruments = self.instruments["get_images_luminosity"]
 
@@ -2044,6 +2048,7 @@ class Pipeline:
 
             # Apply the PSF if applicable to the instrument
             if inst.can_do_psf_imaging:
+                psf_start = time.perf_counter()
                 galaxy.apply_psf_to_images_lnu(
                     instrument=inst,
                     psf_resample_factor=self._operation_kwargs[
@@ -2053,10 +2058,18 @@ class Pipeline:
                         "spectra_type"
                     ],
                 )
+                psf_time += time.perf_counter() - psf_start
 
             # Apply the instrument noise if applicable to the instrument
             if inst.can_do_noisy_imaging:
-                pass
+                noise_start = time.perf_counter()
+                galaxy.apply_noise_to_images_lnu(
+                    instrument=inst,
+                    limit_to=self._operation_kwargs["get_images_luminosity"][
+                        "spectra_type"
+                    ],
+                )
+                noise_time += time.perf_counter() - noise_start
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -2094,7 +2107,11 @@ class Pipeline:
             )
 
         # Record the time taken
-        self._op_timing["Luminosity Images"] += time.perf_counter() - start
+        self._op_timing["Luminosity Images"] += (
+            time.perf_counter() - start - psf_time - noise_time
+        )
+        self._op_timing["Luminosity Images (With PSF)"] += psf_time
+        self._op_timing["Luminosity Images (With Noise)"] += noise_time
 
     def get_images_flux(
         self,
@@ -2107,7 +2124,6 @@ class Pipeline:
         igm=None,
         spectra_type=None,
         psf_resample_factor=1,
-        write=True,
     ):
         """
         Flag that the Pipeline should compute the flux images.
@@ -2157,8 +2173,6 @@ class Pipeline:
                 simplification we make for performance reasons (the
                 effects are sufficiently small that this simplifications is
                 justified).
-            write (bool):
-                Whether to write the images to disk. Default is True.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_images_flux"] = {
@@ -2181,6 +2195,10 @@ class Pipeline:
         self._do_lnu_spectra = True
         self._do_fnu_spectra = True
 
+        # Flag that we will want to write out the flux images (calling the
+        # get_images_flux method is considered the intent to write it out)
+        self._write_images_flux = True
+
         # Ensure we have a cosmology if we need to compute the observed spectra
         # and get_spectra_observed has not been called
         if (
@@ -2197,11 +2215,6 @@ class Pipeline:
                 "cosmo": cosmo,
                 "igm": igm,
             }
-
-        # Flag that we will want to write out the flux images (calling the
-        # get_images_flux method is considered the intent to write it out)
-        if write:
-            self._write_images_flux = True
 
         # Check that we have instruments to compute the images for
         if len(instruments) == 0:
@@ -2262,6 +2275,10 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # We want to time PSF application and noise application separately
+        psf_time = 0
+        noise_time = 0
+
         # Unpack the instruments for this operation
         instruments = self.instruments["get_images_flux"]
 
@@ -2286,6 +2303,7 @@ class Pipeline:
 
             # Apply the PSF if applicable to the instrument
             if inst.can_do_psf_imaging:
+                psf_start = time.perf_counter()
                 galaxy.apply_psf_to_images_fnu(
                     instrument=inst,
                     psf_resample_factor=self._operation_kwargs[
@@ -2295,10 +2313,18 @@ class Pipeline:
                         "spectra_type"
                     ],
                 )
+                psf_time += time.perf_counter() - psf_start
 
             # Apply the instrument noise if applicable to the instrument
             if inst.can_do_noisy_imaging:
-                pass
+                noise_start = time.perf_counter()
+                galaxy.apply_noise_to_images_fnu(
+                    instrument=inst,
+                    limit_to=self._operation_kwargs["get_images_flux"][
+                        "spectra_type"
+                    ],
+                )
+                noise_time += time.perf_counter() - noise_start
 
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
@@ -2336,7 +2362,11 @@ class Pipeline:
             )
 
         # Record the time taken
-        self._op_timing["Flux Images"] += time.perf_counter() - start
+        self._op_timing["Flux Images"] += (
+            time.perf_counter() - start - psf_time - noise_time
+        )
+        self._op_timing["Flux Images (With PSF)"] += psf_time
+        self._op_timing["Flux Images (With Noise)"] += noise_time
 
     def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
@@ -2726,7 +2756,7 @@ class Pipeline:
                                 spec_type, {}
                             ).setdefault(f, []).append(img.arr * img.units)
 
-        # Do we need to unpack the luminosity images with PSFs?
+        # Do we need to unpack the luminosity images With PSFs?
         if self._write_images_lum_psf:
             for d in galaxy.images_psf_lnu.values():
                 for spec_type, imgs in d.items():
@@ -2749,7 +2779,7 @@ class Pipeline:
                                 spec_type, {}
                             ).setdefault(f, []).append(img.arr * img.units)
 
-        # Do we need to unpack the flux images with PSFs?
+        # Do we need to unpack the flux images With PSFs?
         if self._write_images_flux_psf:
             for d in galaxy.images_psf_fnu.values():
                 for spec_type, imgs in d.items():
