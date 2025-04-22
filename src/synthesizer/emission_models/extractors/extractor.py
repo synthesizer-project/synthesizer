@@ -159,12 +159,9 @@ class Extractor(ABC):
                 not log
                 and units != "dimensionless"
                 and isinstance(value, (unyt_array, unyt_quantity))
+                and value.units != units
             ):
-                value = value.to(units).value
-
-            # We need these values to be arrays for the C code
-            if not isinstance(value, np.ndarray):
-                value = np.array(value)
+                value = value.to_value(units)
 
             # Append the extracted value to the list
             extracted.append(value)
