@@ -168,7 +168,7 @@ def parse_and_collect_runtimes(
 
             # Average every n_repeats runs
             atomic_runtimes[key] = [
-                np.mean(atomic_runtimes[key][i : i + n_repeats])
+                np.sum(atomic_runtimes[key][i : i + n_repeats])
                 for i in range(0, len(atomic_runtimes[key]), n_repeats)
             ]
 
