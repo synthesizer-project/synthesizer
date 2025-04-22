@@ -75,10 +75,10 @@ class BaseGalaxy:
         # between images with and without a PSF and/or noise)
         self.images_lnu = {}
         self.images_fnu = {}
-        self.images_lnu_psf = {}
-        self.images_fnu_psf = {}
-        self.images_lnu_noise = {}
-        self.images_fnu_noise = {}
+        self.images_psf_lnu = {}
+        self.images_psf_fnu = {}
+        self.images_noise_lnu = {}
+        self.images_noise_fnu = {}
 
         # Initialise the dictionary to hold instrument specific spectroscopy
         self.spectroscopy = {}
@@ -1473,6 +1473,286 @@ class BaseGalaxy:
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
+
+    def apply_psf_to_images_lnu(
+        self,
+        instrument,
+        psf_resample_factor=1,
+        limit_to=None,
+    ):
+        """
+        Apply an instrument's PSFs this galaxy's and its component's images.
+
+        Args:
+            instrument (Instrument):
+                The instrument with the PSF to apply.
+            psf_resample_factor (int):
+                The resample factor for the PSF. This should be a value greater
+                than 1. The image will be resampled by this factor before the
+                PSF is applied and then downsampled back to the original
+                after convolution. This can help minimize the effects of
+                using a generic PSF centred on the galaxy centre, a
+                simplification we make for performance reasons (the
+                effects are sufficiently small that this simplifications is
+                justified).
+            limit_to (str/list):
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
+
+        Returns:
+            dict The images with the PSF applied.
+        """
+        # Ensure limit_to is a list
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+
+        # Sanity check that we have a PSF
+        if instrument.psfs is None:
+            raise exceptions.InconsistentArguments(
+                f"Instrument ({instrument.label}) does not have PSFs."
+            )
+
+        # Do the galaxy level images
+        for key in self.images_lnu:
+            # Are we limiting to a specific model?
+            if limit_to is not None and key not in limit_to:
+                continue
+
+            # Unpack the image
+            imgs = self.images_lnu[key]
+
+            # If requested, do the resampling
+            if psf_resample_factor > 1:
+                imgs.supersample(psf_resample_factor)
+
+            # Apply the PSF
+            self.images_psf_lnu[key] = imgs.apply_psf(instrument.psfs)
+
+            # Undo the resampling (if needed)
+            if psf_resample_factor > 1:
+                self.images_psf_lnu[key].downsample(1 / psf_resample_factor)
+
+        # If we have stars, do those
+        if self.stars is not None:
+            self.stars.apply_psf_to_images_lnu(
+                instrument,
+                psf_resample_factor=psf_resample_factor,
+                limit_to=limit_to,
+            )
+
+        # If we have black holes, do those
+        if self.black_holes is not None:
+            self.black_holes.apply_psf_to_images_lnu(
+                instrument,
+                psf_resample_factor=psf_resample_factor,
+                limit_to=limit_to,
+            )
+
+        return self.images_psf_lnu
+
+    def apply_psf_to_images_fnu(
+        self,
+        instrument,
+        psf_resample_factor=1,
+        limit_to=None,
+    ):
+        """
+        Apply an instrument's PSFs this galaxy's and its component's images.
+
+        Args:
+            instrument (Instrument):
+                The instrument with the PSF to apply.
+            psf_resample_factor (int):
+                The resample factor for the PSF. This should be a value greater
+                than 1. The image will be resampled by this factor before the
+                PSF is applied and then downsampled back to the original
+                after convolution. This can help minimize the effects of
+                using a generic PSF centred on the galaxy centre, a
+                simplification we make for performance reasons (the
+                effects are sufficiently small that this simplifications is
+                justified).
+            limit_to (str/list):
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
+
+        Returns:
+            dict The images with the PSF applied.
+        """
+        # Ensure limit_to is a list
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+
+        # Sanity check that we have a PSF
+        if instrument.psfs is None:
+            raise exceptions.InconsistentArguments(
+                f"Instrument ({instrument.label}) does not have PSFs."
+            )
+
+        # Do the galaxy level images
+        for key in self.images_fnu:
+            # Are we limiting to a specific model?
+            if limit_to is not None and key not in limit_to:
+                continue
+
+            # Unpack the image
+            imgs = self.images_fnu[key]
+
+            # If requested, do the resampling
+            if psf_resample_factor > 1:
+                imgs.supersample(psf_resample_factor)
+
+            # Apply the PSF
+            self.images_psf_fnu[key] = imgs.apply_psf(instrument.psfs)
+
+            # Undo the resampling (if needed)
+            if psf_resample_factor > 1:
+                self.images_psf_fnu[key].downsample(1 / psf_resample_factor)
+
+        # If we have stars, do those
+        if self.stars is not None:
+            self.stars.apply_psf_to_images_fnu(
+                instrument,
+                psf_resample_factor=psf_resample_factor,
+                limit_to=limit_to,
+            )
+
+        # If we have black holes, do those
+        if self.black_holes is not None:
+            self.black_holes.apply_psf_to_images_fnu(
+                instrument,
+                psf_resample_factor=psf_resample_factor,
+                limit_to=limit_to,
+            )
+
+        return self.images_psf_fnu
+
+    def apply_noise_to_images_lnu(
+        self,
+        instrument,
+        limit_to=None,
+    ):
+        """
+        Apply instrument noise to this galaxy's and its component's images.
+
+        Args:
+            instrument (Instrument):
+                The instrument with the noise to apply.
+            limit_to (str/list):
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
+
+        Returns:
+            dict The images with the noise applied.
+        """
+        # Ensure limit_to is a list
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+
+        # Do the galaxy level images
+        for key in self.images_lnu:
+            # Are we limiting to a specific model?
+            if limit_to is not None and key not in limit_to:
+                continue
+
+            # Unpack the image
+            imgs = self.images_lnu[key]
+
+            # Apply the noise using the correct method
+            if instrument.noise_maps is not None:
+                self.images_noise_lnu[key] = imgs.apply_noise_arrays(
+                    instrument.noise_maps,
+                )
+            elif instrument.snrs is not None:
+                self.images_noise_lnu[key] = imgs.apply_noise_from_snrs(
+                    snrs=instrument.snrs,
+                    depths=instrument.depth,
+                    aperture_radius=instrument.depth_aperture_radius,
+                )
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Instrument ({instrument.label}) cannot be used "
+                    "for applying noise."
+                )
+
+        # If we have stars, do those
+        if self.stars is not None:
+            self.stars.apply_noise_to_images_lnu(
+                instrument,
+                limit_to=limit_to,
+            )
+
+        # If we have black holes, do those
+        if self.black_holes is not None:
+            self.black_holes.apply_noise_to_images_lnu(
+                instrument,
+                limit_to=limit_to,
+            )
+
+        return self.images_noise_lnu
+
+    def apply_noise_to_images_fnu(
+        self,
+        instrument,
+        limit_to=None,
+    ):
+        """
+        Apply instrument noise to this galaxy's and its component's images.
+
+        Args:
+            instrument (Instrument):
+                The instrument with the noise to apply.
+            limit_to (str/list):
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
+
+        Returns:
+            dict The images with the noise applied.
+        """
+        # Ensure limit_to is a list
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+
+        # Do the galaxy level images
+        for key in self.images_fnu:
+            # Are we limiting to a specific model?
+            if limit_to is not None and key not in limit_to:
+                continue
+
+            # Unpack the image
+            imgs = self.images_fnu[key]
+
+            # Apply the noise using the correct method
+            if instrument.noise_maps is not None:
+                self.images_noise_fnu[key] = imgs.apply_noise_arrays(
+                    instrument.noise_maps,
+                )
+            elif instrument.snrs is not None:
+                self.images_noise_fnu[key] = imgs.apply_noise_from_snrs(
+                    snrs=instrument.snrs,
+                    depths=instrument.depth,
+                    aperture_radius=instrument.depth_aperture_radius,
+                )
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Instrument ({instrument.label}) cannot be used "
+                    "for applying noise."
+                )
+
+        # If we have stars, do those
+        if self.stars is not None:
+            self.stars.apply_noise_to_images_fnu(
+                instrument,
+                limit_to=limit_to,
+            )
+
+        # If we have black holes, do those
+        if self.black_holes is not None:
+            self.black_holes.apply_noise_to_images_fnu(
+                instrument,
+                limit_to=limit_to,
+            )
+
+        return self.images_noise_fnu
 
     def get_spectroscopy(
         self,
