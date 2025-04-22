@@ -60,7 +60,14 @@ class AttenuationLaw(Transformer):
         Transformer.__init__(self, required_params=("tau_v",))
 
     def get_tau(self, *args):
-        """Compute the optical depth."""
+        """Compute the V-band normalised optical depth."""
+        raise exceptions.UnimplementedFunctionality(
+            "AttenuationLaw should not be instantiated directly!"
+            " Instead use one to child models (" + ", ".join(__all__) + ")"
+        )
+
+    def get_tau_at_lam(self, *args):
+        """Compute the optical depth at wavelength."""
         raise exceptions.UnimplementedFunctionality(
             "AttenuationLaw should not be instantiated directly!"
             " Instead use one to child models (" + ", ".join(__all__) + ")"
@@ -676,7 +683,7 @@ class GrainsWD01(AttenuationLaw):
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam, interp="slinear"):
         """
-        Calculate V-band normalised optical depth.
+        Calculate optical depth at a wavelength.
 
         Args:
             lam (float/array-like, float)
@@ -863,7 +870,7 @@ class ParametricLi08(AttenuationLaw):
 
         Returns:
             float/array-like, float
-                The optical depth.
+                The V-band normalised optical depth.
         """
         return Li08(
             lam=lam,
@@ -873,3 +880,27 @@ class ParametricLi08(AttenuationLaw):
             bump=self.bump,
             model=self.model,
         )
+
+    @accepts(lam=angstrom)
+    def get_tau_at_lam(self, lam):
+        """
+        Calculate optical depth at a wavelength.
+
+        (Uses the Li_08 function defined above.)
+
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/array-like, float
+                The optical depth.
+        """
+
+        raise exceptions.UnimplementedFunctionality(
+            "ParametricLi08 form is fit to the normalised Alam/Av values"
+            "for the different models, so does not make sense to have this"
+            "function. Use other attenuation curve models to get tau_v or Av"
+        )
+
