@@ -1520,6 +1520,11 @@ class BaseGalaxy:
             # galaxy but we might on the component, so no error!
             images = {}
 
+        # Make an entry for this instrument in the images_psf_lnu dict
+        # if it doesn't exist
+        if instrument.label not in self.images_psf_lnu:
+            self.images_psf_lnu[instrument.label] = {}
+
         # Do the galaxy level images
         for key in images:
             # Are we limiting to a specific model?
@@ -1614,6 +1619,11 @@ class BaseGalaxy:
             # galaxy but we might on the component, so no error!
             images = {}
 
+        # Make an entry for this instrument in the images_psf_fnu dict
+        # if it doesn't exist
+        if instrument.label not in self.images_psf_fnu:
+            self.images_psf_fnu[instrument.label] = {}
+
         # Do the galaxy level images
         for key in images:
             # Are we limiting to a specific model?
@@ -1697,6 +1707,11 @@ class BaseGalaxy:
             # If it's not either dict we just don't have any images on the
             # galaxy but we might on the component, so no error!
             images = {}
+
+        # Make an entry for this instrument in the images_noise_lnu dict
+        # if it doesn't exist
+        if instrument.label not in self.images_noise_lnu:
+            self.images_noise_lnu[instrument.label] = {}
 
         # Do the galaxy level images
         for key in images:
@@ -1788,6 +1803,11 @@ class BaseGalaxy:
             # If it's not either dict we just don't have any images on the
             # galaxy but we might on the component, so no error!
             images = {}
+
+        # Make an entry for this instrument in the images_noise_fnu dict
+        # if it doesn't exist
+        if instrument.label not in self.images_noise_fnu:
+            self.images_noise_fnu[instrument.label] = {}
 
         # Do the galaxy level images
         for key in images:

@@ -734,6 +734,11 @@ class Component(ABC):
                 f" {instrument.label}."
             )
 
+        # Create an entry for the instrument in the PSF images
+        # dictionary if it doesn't exist
+        if instrument.label not in self.images_psf_lnu:
+            self.images_psf_lnu[instrument.label] = {}
+
         # Loop over the images in the component
         for key in self.images_lnu[instrument.label]:
             # Are we limiting to a specific model?
@@ -805,6 +810,11 @@ class Component(ABC):
                 f" {instrument.label}."
             )
 
+        # Create an entry for the instrument in the PSF images
+        # dictionary if it doesn't exist
+        if instrument.label not in self.images_psf_fnu:
+            self.images_psf_fnu[instrument.label] = {}
+
         # Loop over the images in the component
         for key in self.images_fnu[instrument.label]:
             # Are we limiting to a specific model?
@@ -872,6 +882,11 @@ class Component(ABC):
                 "No images found in images_lnu  for instrument"
                 f" {instrument.label}."
             )
+
+        # Create an entry for the instrument in the noise images
+        # dictionary if it doesn't exist
+        if instrument.label not in self.images_noise_lnu:
+            self.images_noise_lnu[instrument.label] = {}
 
         # Loop over the images in the component
         for key in images:
@@ -946,6 +961,11 @@ class Component(ABC):
                 "No images found in images_fnu for instrument"
                 f" {instrument.label}."
             )
+
+        # Create an entry for the instrument in the noise images
+        # dictionary if it doesn't exist
+        if instrument.label not in self.images_noise_fnu:
+            self.images_noise_fnu[instrument.label] = {}
 
         # Loop over the images in the component
         for key in images:
