@@ -727,27 +727,38 @@ class Component(ABC):
                 f"Instrument ({instrument.label}) does not have PSFs."
             )
 
+        # Ensure we have images for this instrument
+        if instrument.label not in self.images_lnu:
+            raise exceptions.InconsistentArguments(
+                "No images found in images_lnu for instrument"
+                f" {instrument.label}."
+            )
+
         # Loop over the images in the component
-        for key in self.images_lnu:
+        for key in self.images_lnu[instrument.label]:
             # Are we limiting to a specific model?
             if limit_to is not None and key not in limit_to:
                 continue
 
             # Unpack the image
-            imgs = self.images_lnu[key]
+            imgs = self.images_lnu[instrument.label][key]
 
             # If requested, do the resampling
             if psf_resample_factor > 1:
                 imgs.supersample(psf_resample_factor)
 
             # Apply the PSF
-            self.images_psf_lnu[key] = imgs.apply_psf(instrument.psfs)
+            self.images_psf_lnu[instrument.label][key] = imgs.apply_psf(
+                instrument.psfs
+            )
 
             # Undo the resampling (if needed)
             if psf_resample_factor > 1:
-                self.images_psf_lnu[key].downsample(1 / psf_resample_factor)
+                self.images_psf_lnu[instrument.label][key].downsample(
+                    1 / psf_resample_factor
+                )
 
-        return self.images_psf_lnu
+        return self.images_psf_lnu[instrument.label]
 
     def apply_psf_to_images_fnu(
         self,
@@ -787,32 +798,44 @@ class Component(ABC):
                 f"Instrument ({instrument.label}) does not have PSFs."
             )
 
+        # Ensure we have images for this instrument
+        if instrument.label not in self.images_fnu:
+            raise exceptions.InconsistentArguments(
+                "No images found in images_fnu for instrument"
+                f" {instrument.label}."
+            )
+
         # Loop over the images in the component
-        for key in self.images_fnu:
+        for key in self.images_fnu[instrument.label]:
             # Are we limiting to a specific model?
             if limit_to is not None and key not in limit_to:
                 continue
 
             # Unpack the image
-            imgs = self.images_fnu[key]
+            imgs = self.images_fnu[instrument.label][key]
 
             # If requested, do the resampling
             if psf_resample_factor > 1:
                 imgs.supersample(psf_resample_factor)
 
             # Apply the PSF
-            self.images_psf_fnu[key] = imgs.apply_psf(instrument.psfs)
+            self.images_psf_fnu[instrument.label][key] = imgs.apply_psf(
+                instrument.psfs
+            )
 
             # Undo the resampling (if needed)
             if psf_resample_factor > 1:
-                self.images_psf_fnu[key].downsample(1 / psf_resample_factor)
+                self.images_psf_fnu[instrument.label][key].downsample(
+                    1 / psf_resample_factor
+                )
 
-        return self.images_psf_fnu
+        return self.images_psf_fnu[instrument.label]
 
     def apply_noise_to_images_lnu(
         self,
         instrument,
         limit_to=None,
+        apply_to_psf=True,
     ):
         """
         Apply instrument noise to this component's images.
@@ -824,6 +847,9 @@ class Component(ABC):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
                 spectra will have images generated.
+            apply_to_psf (bool):
+                If True, apply the noise to the PSF images.
+                Otherwise, apply to the non-PSF images.
 
         Returns:
             dict The images with the noise applied.
@@ -831,25 +857,45 @@ class Component(ABC):
         # Ensure limit_to is a list
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
 
+        # Get the images we are applying the noise to
+        if apply_to_psf and instrument.label in self.images_psf_lnu:
+            images = self.images_psf_lnu[instrument.label]
+        elif instrument.label in self.images_lnu:
+            images = self.images_lnu[instrument.label]
+        else:
+            if apply_to_psf:
+                raise exceptions.InconsistentArguments(
+                    "No images found in images_psf_lnu for instrument"
+                    f" {instrument.label}."
+                )
+            raise exceptions.InconsistentArguments(
+                "No images found in images_lnu  for instrument"
+                f" {instrument.label}."
+            )
+
         # Loop over the images in the component
-        for key in self.images_lnu:
+        for key in images:
             # Are we limiting to a specific model?
             if limit_to is not None and key not in limit_to:
                 continue
 
             # Unpack the image
-            imgs = self.images_lnu[key]
+            imgs = images[key]
 
             # Apply the noise using the correct method
             if instrument.noise_maps is not None:
-                self.images_noise_lnu[key] = imgs.apply_noise_arrays(
-                    instrument.noise_maps,
+                self.images_noise_lnu[instrument.label][key] = (
+                    imgs.apply_noise_arrays(
+                        instrument.noise_maps,
+                    )
                 )
             elif instrument.snrs is not None:
-                self.images_noise_lnu[key] = imgs.apply_noise_from_snrs(
-                    snrs=instrument.snrs,
-                    depths=instrument.depth,
-                    aperture_radius=instrument.depth_aperture_radius,
+                self.images_noise_lnu[instrument.label][key] = (
+                    imgs.apply_noise_from_snrs(
+                        snrs=instrument.snrs,
+                        depths=instrument.depth,
+                        aperture_radius=instrument.depth_aperture_radius,
+                    )
                 )
             else:
                 raise exceptions.InconsistentArguments(
@@ -857,12 +903,13 @@ class Component(ABC):
                     "for applying noise."
                 )
 
-        return self.images_noise_lnu
+        return self.images_noise_lnu[instrument.label]
 
     def apply_noise_to_images_fnu(
         self,
         instrument,
         limit_to=None,
+        apply_to_psf=True,
     ):
         """
         Apply instrument noise to this component's images.
@@ -874,6 +921,9 @@ class Component(ABC):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
                 spectra will have images generated.
+            apply_to_psf (bool):
+                If True, apply the noise to the PSF images.
+                Otherwise, apply to the non-PSF images.
 
         Returns:
             dict The images with the noise applied.
@@ -881,25 +931,45 @@ class Component(ABC):
         # Ensure limit_to is a list
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
 
+        # Get the images we are applying the noise to
+        if apply_to_psf and instrument.label in self.images_psf_fnu:
+            images = self.images_psf_fnu[instrument.label]
+        elif instrument.label in self.images_fnu:
+            images = self.images_fnu[instrument.label]
+        else:
+            if apply_to_psf:
+                raise exceptions.InconsistentArguments(
+                    "No images found in images_psf_fnu for instrument"
+                    f" {instrument.label}."
+                )
+            raise exceptions.InconsistentArguments(
+                "No images found in images_fnu for instrument"
+                f" {instrument.label}."
+            )
+
         # Loop over the images in the component
-        for key in self.images_fnu:
+        for key in images:
             # Are we limiting to a specific model?
             if limit_to is not None and key not in limit_to:
                 continue
 
             # Unpack the image
-            imgs = self.images_fnu[key]
+            imgs = images[key]
 
             # Apply the noise using the correct method
             if instrument.noise_maps is not None:
-                self.images_noise_fnu[key] = imgs.apply_noise_arrays(
-                    instrument.noise_maps,
+                self.images_noise_fnu[instrument.label][key] = (
+                    imgs.apply_noise_arrays(
+                        instrument.noise_maps,
+                    )
                 )
             elif instrument.snrs is not None:
-                self.images_noise_fnu[key] = imgs.apply_noise_from_snrs(
-                    snrs=instrument.snrs,
-                    depths=instrument.depth,
-                    aperture_radius=instrument.depth_aperture_radius,
+                self.images_noise_fnu[instrument.label][key] = (
+                    imgs.apply_noise_from_snrs(
+                        snrs=instrument.snrs,
+                        depths=instrument.depth,
+                        aperture_radius=instrument.depth_aperture_radius,
+                    )
                 )
             else:
                 raise exceptions.InconsistentArguments(
@@ -907,7 +977,7 @@ class Component(ABC):
                     "for applying noise."
                 )
 
-        return self.images_noise_fnu
+        return self.images_noise_fnu[instrument.label]
 
     def get_spectroscopy(
         self,
