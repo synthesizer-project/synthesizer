@@ -205,9 +205,7 @@ class Pipeline:
         self._do_lum_lines = False
         self._do_flux_lines = False
         self._do_images_lum = False
-        self._do_images_lum_psf = False
         self._do_images_flux = False
-        self._do_images_flux_psf = False
         self._do_lnu_data_cubes = False
         self._do_fnu_data_cubes = False
         self._do_spectroscopy = False
@@ -474,7 +472,8 @@ class Pipeline:
         # Print the number of filters we have
         nfilters = 0
         for inst in unique_instruments.values():
-            nfilters += len(inst.all_filters)
+            if getattr(inst, "filters", None) is not None:
+                nfilters += len(inst.filters)
         self._print(f"Instruments have {nfilters} filters in total.")
 
         # Make a breakdown of the instruments
@@ -969,19 +968,9 @@ class Pipeline:
             + str(self._write_images_lum).rjust(15)
         )
         self._print(
-            "Luminosity Images (With PSF)".ljust(30)
-            + str(self._do_images_lum_psf).rjust(15)
-            + str(self._write_images_lum_psf).rjust(15)
-        )
-        self._print(
             "Flux Images".ljust(30)
             + str(self._do_images_flux).rjust(15)
             + str(self._write_images_flux).rjust(15)
-        )
-        self._print(
-            "Flux Images (With PSF)".ljust(30)
-            + str(self._do_images_flux_psf).rjust(15)
-            + str(self._write_images_flux_psf).rjust(15)
         )
         # Coming soon...
         # self._print(
@@ -2991,9 +2980,7 @@ class Pipeline:
             self._do_lum_lines,
             self._do_flux_lines,
             self._do_images_lum,
-            self._do_images_lum_psf,
             self._do_images_flux,
-            self._do_images_flux_psf,
             self._do_lnu_data_cubes,
             self._do_fnu_data_cubes,
             self._do_spectroscopy,
@@ -3065,14 +3052,6 @@ class Pipeline:
             # Are we generating flux images?
             if self._do_images_flux:
                 self._get_images_flux(gal)
-
-            # Are we applying PSFs to the luminosity images?
-            if self._do_images_lum_psf:
-                self._get_images_luminosity_psfs(gal)
-
-            # Are we applying PSFs to the flux images?
-            if self._do_images_flux_psf:
-                self._get_images_flux_psfs(gal)
 
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
