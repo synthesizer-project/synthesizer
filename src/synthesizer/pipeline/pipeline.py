@@ -1886,6 +1886,7 @@ class Pipeline:
         kernel=None,
         kernel_threshold=1.0,
         spectra_type=None,
+        psf_resample_factor=1,
         write=True,
     ):
         """
@@ -1917,6 +1918,16 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all spectra types will be used. This can either
                 be a list of strings or a single string.
+            psf_resample_factor (int):
+                (Only applicable for instruments with a PSF.) The resample
+                factor for the PSF. This should be a value greater than 1.
+                The image will be resampled by this factor before the
+                PSF is applied and then downsampled back to the original
+                after convolution. This can help minimize the effects of
+                using a generic PSF centred on the galaxy centre, a
+                simplification we make for performance reasons (the
+                effects are sufficiently small that this simplifications is
+                justified).
             write (bool):
                 Whether to write the images to disk. Default is True.
         """
@@ -1929,6 +1940,7 @@ class Pipeline:
             "spectra_type": spectra_type
             if isinstance(spectra_type, (list, tuple)) or spectra_type is None
             else [spectra_type],
+            "psf_resample_factor": psf_resample_factor,
         }
 
         # Flag that we will compute the luminosity images
@@ -2030,274 +2042,59 @@ class Pipeline:
                 ],
             )
 
+            # Apply the PSF if applicable to the instrument
+            if inst.can_do_psf_imaging:
+                galaxy.apply_psf_to_images_lnu(
+                    instrument=inst,
+                    psf_resample_factor=self._operation_kwargs[
+                        "get_images_luminosity"
+                    ]["psf_resample_factor"],
+                    limit_to=self._operation_kwargs["get_images_luminosity"][
+                        "spectra_type"
+                    ],
+                )
+
+            # Apply the instrument noise if applicable to the instrument
+            if inst.can_do_noisy_imaging:
+                pass
+
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
             galaxy.images_lnu
         )
+        self._op_counts["Luminosity Images (With PSF)"] += (
+            count_and_check_dict_recursive(galaxy.images_psf_lnu)
+        )
+        self._op_counts["Luminosity Images (With Noise)"] += (
+            count_and_check_dict_recursive(galaxy.images_noise_lnu)
+        )
         if galaxy.stars is not None:
             self._op_counts["Luminosity Images"] += (
                 count_and_check_dict_recursive(galaxy.stars.images_lnu)
             )
+            self._op_counts["Luminosity Images (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_psf_lnu)
+            )
+            self._op_counts["Luminosity Images (With Noise)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_noise_lnu)
+            )
         if galaxy.black_holes is not None:
             self._op_counts["Luminosity Images"] += (
                 count_and_check_dict_recursive(galaxy.black_holes.images_lnu)
+            )
+            self._op_counts["Luminosity Images (With PSF)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.images_psf_lnu
+                )
+            )
+            self._op_counts["Luminosity Images (With Noise)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.images_noise_lnu
+                )
             )
 
         # Record the time taken
         self._op_timing["Luminosity Images"] += time.perf_counter() - start
-
-    def get_images_luminosity_psfs(
-        self,
-        *instruments,
-        fov=None,
-        img_type="smoothed",
-        kernel=None,
-        kernel_threshold=1.0,
-        spectra_type=None,
-        write=True,
-    ):
-        """
-        Flag that the Pipeline should apply the instrument PSFs to images.
-
-        This will signal the Pipeline to apply the instrument PSFs to the
-        luminosity images for each galaxy when the run method is called.
-
-        The PSFs are applied to the luminosity images generated in the
-        get_images_luminosity method.
-
-        Instruments must have PSFs defined on them for this method to do
-        anything.
-
-        Args:
-            instruments (Instrument/InstrumentCollection):
-                The instruments to use for the luminosity images. This can be
-                any number of instruments or instrument collections, they will
-                all be combined into a single InstrumentCollection for this
-                operation.
-            fov (unyt_quantity):
-                If get_images_luminosity has not been called explicitly, then
-                we will need the field of view of the image with units. Default
-                is None.
-            img_type (str):
-                If get_images_luminosity has not been called explicitly, then
-                we will need the type of image to generate. Options are
-                'smoothed' or 'hist'. Default is 'smoothed'.
-            kernel (array-like):
-                If get_images_luminosity has not been called explicitly, then
-                we will need the kernel to use for smoothing the image. Default
-                is None. Required for 'smoothed' images from a particle
-                distribution.
-            kernel_threshold (float):
-                If get_images_luminosity has not been called explicitly, then
-                we will need the threshold of the kernel. Default is 1.0.
-            spectra_type (list/str):
-                The type of spectra to generate images for. By default this
-                is None and all spectra types will be used. This can either
-                be a list of strings or a single string.
-            write (bool):
-                Whether to write the images to disk. Default is True.
-        """
-        # Flag that we will apply the PSFs to the luminosity images
-        self._do_images_lum_psf = True
-
-        # To apply the PSFs to the luminosity images we need to have already
-        # computed the luminosity images which themselves require the
-        # luminosities, and therefore also the lnu spectra
-        self._do_images_lum = True
-        self._do_luminosities = True
-        self._do_lnu_spectra = True
-
-        # Ensure we have the arguments for the operation if
-        # get_images_luminosity has not been called
-        if "get_images_luminosity" not in self._operation_kwargs:
-            self._operation_kwargs["get_images_luminosity"] = {}
-            if fov is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without a field of view, please pass "
-                    "one to the fov argument of get_images_luminosity_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_luminosity"]["fov"] = fov
-            if img_type is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without an image type, please pass one "
-                    "to the img_type argument of get_images_luminosity_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_luminosity"]["img_type"] = (
-                    img_type
-                )
-            if kernel is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without a kernel, please pass one to "
-                    "the kernel argument of get_images_luminosity_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_luminosity"]["kernel"] = (
-                    kernel
-                )
-            if kernel_threshold is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without a kernel threshold, please"
-                    " pass one to the kernel_threshold argument of "
-                    "get_images_luminosity_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_luminosity"][
-                    "kernel_threshold"
-                ] = kernel_threshold
-            self._operation_kwargs["get_images_luminosity"]["spectra_type"] = (
-                spectra_type
-                if isinstance(spectra_type, (list, tuple))
-                or spectra_type is None
-                else [spectra_type]
-            )
-
-        # Flag that we will want to write out the luminosity images with PSFs
-        # (calling the get_images_luminosity_psfs method is considered the
-        # intent to write it out)
-        if write:
-            self._write_images_lum_psf = True
-
-        # Check that we have instruments to compute the images for
-        if len(instruments) == 0:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate images without instruments with filters! "
-                "Pass instruments to the get_images_luminosity_psfs method."
-            )
-
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
-
-        # Check that the instruments can do imaging
-        for inst in _instruments:
-            if not inst.can_do_psf_imaging:
-                raise exceptions.PipelineNotReady(
-                    f"Cannot generate images and PSF them with {inst.label}!"
-                )
-
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
-            "get_images_luminosity_psfs",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
-
-        # We also need to include these instruments in the instrument
-        # collection for the luminosities and luminosity images
-        phot_lum_insts = self.instruments.get(
-            "get_photometry_luminosities",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_photometry_luminosities",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[
-                inst
-                for inst in _instruments
-                if inst.label not in phot_lum_insts
-            ]
-        )
-        img_lum_insts = self.instruments.get(
-            "get_images_luminosity",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_images_luminosity",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[inst for inst in _instruments if inst.label not in img_lum_insts]
-        )
-
-    def _get_images_luminosity_psfs(self, galaxy):
-        """
-        Apply any instrument PSFs to the luminosity images.
-
-        Args:
-            galaxy (Galaxy):
-                The galaxy to apply the PSFs to the luminosity images for.
-        """
-        start = time.perf_counter()
-
-        # Unpack the instruments for this operation
-        instruments = self.instruments["get_images_luminosity_psfs"]
-
-        # Loop over instruments and perform any imaging they define
-        for inst in instruments:
-            # Unlike the other operations we need a container to hold the
-            # PSF applied images, if it doesn't exist we'll create it here
-            # and add the appropriate keys
-            if not hasattr(galaxy, "images_psf_lnu"):
-                galaxy.images_psf_lnu = {}
-            galaxy.images_psf_lnu.setdefault(inst.label, {})
-            if galaxy.stars is not None:
-                if not hasattr(galaxy.stars, "images_psf_lnu"):
-                    galaxy.stars.images_psf_lnu = {}
-                galaxy.stars.images_psf_lnu.setdefault(inst.label, {})
-            if galaxy.black_holes is not None:
-                if not hasattr(galaxy.black_holes, "images_psf_lnu"):
-                    galaxy.black_holes.images_psf_lnu = {}
-                galaxy.black_holes.images_psf_lnu.setdefault(inst.label, {})
-
-            # Apply PSFs to the galaxy level images
-            if inst.label in galaxy.images_lnu:
-                for spec_type, imgs in galaxy.images_lnu[inst.label].items():
-                    galaxy.images_psf_lnu[inst.label][spec_type] = (
-                        imgs.apply_psfs(
-                            inst.psfs,
-                        )
-                    )
-
-            # Apply PSFs to the stars level images
-            if (
-                galaxy.stars is not None
-                and inst.label in galaxy.stars.images_lnu
-            ):
-                for spec_type, imgs in galaxy.stars.images_lnu[
-                    inst.label
-                ].items():
-                    galaxy.stars.images_psf_lnu[inst.label][spec_type] = (
-                        imgs.apply_psfs(
-                            inst.psfs,
-                        )
-                    )
-
-            # Apply PSFs to the black hole level images
-            if (
-                galaxy.black_holes is not None
-                and inst.label in galaxy.black_holes.images_lnu
-            ):
-                for spec_type, imgs in galaxy.black_holes.images_lnu[
-                    inst.label
-                ].items():
-                    galaxy.black_holes.images_psf_lnu[inst.label][
-                        spec_type
-                    ] = imgs.apply_psfs(
-                        inst.psfs,
-                    )
-
-        # Count the number of images we have generated
-        self._op_counts["Luminosity Images (with PSF)"] += (
-            count_and_check_dict_recursive(galaxy.images_lnu)
-        )
-        if galaxy.stars is not None:
-            self._op_counts["Luminosity Images (with PSF)"] += (
-                count_and_check_dict_recursive(galaxy.stars.images_lnu)
-            )
-        if galaxy.black_holes is not None:
-            self._op_counts["Luminosity Images (with PSF)"] += (
-                count_and_check_dict_recursive(galaxy.black_holes.images_lnu)
-            )
-
-        # Record the time taken
-        self._op_timing["Luminosity Images (with PSF)"] += (
-            time.perf_counter() - start
-        )
 
     def get_images_flux(
         self,
@@ -2309,6 +2106,7 @@ class Pipeline:
         cosmo=None,
         igm=None,
         spectra_type=None,
+        psf_resample_factor=1,
         write=True,
     ):
         """
@@ -2349,6 +2147,16 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all spectra types will be used. This can either
                 be a list of strings or a single string.
+            psf_resample_factor (int):
+                (Only applicable for instruments with a PSF.) The resample
+                factor for the PSF. This should be a value greater than 1.
+                The image will be resampled by this factor before the
+                PSF is applied and then downsampled back to the original
+                after convolution. This can help minimize the effects of
+                using a generic PSF centred on the galaxy centre, a
+                simplification we make for performance reasons (the
+                effects are sufficiently small that this simplifications is
+                justified).
             write (bool):
                 Whether to write the images to disk. Default is True.
         """
@@ -2361,6 +2169,7 @@ class Pipeline:
             "spectra_type": spectra_type
             if isinstance(spectra_type, (list, tuple)) or spectra_type is None
             else [spectra_type],
+            "psf_resample_factor": psf_resample_factor,
         }
 
         # Flag that we will compute the flux images
@@ -2475,304 +2284,59 @@ class Pipeline:
                 ],
             )
 
+            # Apply the PSF if applicable to the instrument
+            if inst.can_do_psf_imaging:
+                galaxy.apply_psf_to_images_fnu(
+                    instrument=inst,
+                    psf_resample_factor=self._operation_kwargs[
+                        "get_images_flux"
+                    ]["psf_resample_factor"],
+                    limit_to=self._operation_kwargs["get_images_flux"][
+                        "spectra_type"
+                    ],
+                )
+
+            # Apply the instrument noise if applicable to the instrument
+            if inst.can_do_noisy_imaging:
+                pass
+
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
             galaxy.images_fnu
+        )
+        self._op_counts["Flux Images (With PSF)"] += (
+            count_and_check_dict_recursive(galaxy.images_psf_fnu)
+        )
+        self._op_counts["Flux Images (With Noise)"] += (
+            count_and_check_dict_recursive(galaxy.images_noise_fnu)
         )
         if galaxy.stars is not None:
             self._op_counts["Flux Images"] += count_and_check_dict_recursive(
                 galaxy.stars.images_fnu
             )
+            self._op_counts["Flux Images (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_psf_fnu)
+            )
+            self._op_counts["Flux Images (With Noise)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_noise_fnu)
+            )
         if galaxy.black_holes is not None:
             self._op_counts["Flux Images"] += count_and_check_dict_recursive(
                 galaxy.black_holes.images_fnu
             )
+            self._op_counts["Flux Images (With PSF)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.images_psf_fnu
+                )
+            )
+            self._op_counts["Flux Images (With Noise)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.images_noise_fnu
+                )
+            )
 
         # Record the time taken
         self._op_timing["Flux Images"] += time.perf_counter() - start
-
-    def get_images_flux_psfs(
-        self,
-        *instruments,
-        fov=None,
-        img_type="smoothed",
-        kernel=None,
-        kernel_threshold=1.0,
-        cosmo=None,
-        igm=None,
-        spectra_type=None,
-        write=True,
-    ):
-        """
-        Flag that the Pipeline should apply the instrument PSFs to images.
-
-        This will signal the Pipeline to apply the instrument PSFs to the flux
-        images for each galaxy when the run method is called.
-
-        The PSFs are applied to the flux images generated in the
-        get_images_flux method.
-
-        Instruments must have PSFs defined on them for this method to do
-        anything.
-
-        Args:
-            instruments (Instrument/InstrumentCollection):
-                The instruments to use for the flux images. This can be any
-                number of instruments or instrument collections, they will
-                all be combined into a single InstrumentCollection for this
-                operation.
-            fov (unyt_quantity):
-                If get_images_flux has not been called explicitly, then we will
-                need the field of view of the image with units. Default is
-                None.
-            img_type (str):
-                If get_images_flux has not been called explicitly, then we will
-                need the type of image to generate. Options are 'smoothed' or
-                'hist'. Default is 'smoothed'.
-            kernel (array-like):
-                If get_images_flux has not been called explicitly, then we will
-                need the kernel to use for smoothing the image. Default is
-                None.
-                Required for 'smoothed' images from a particle distribution.
-            kernel_threshold (float):
-                If get_images_flux has not been called explicitly, then we will
-                need the threshold of the kernel. Default is 1.0.
-            cosmo (astropy.cosmology.Cosmology):
-                If get_spectra_observed has not been called explicitly, then we
-                will need the cosmology to compute the observed spectra first.
-                Default is None.
-            igm (IGMBase):
-                If get_spectra_observed has not been called explicitly, then we
-                will need the IGM model to compute the observed spectra first.
-                Unlike the cosmology, this is not required if IGM attenuation
-                is not needed. Default is None.
-            spectra_type (str):
-                The type of spectra to generate images for. By default this is
-                None and all spectra types will be used. This can either be a
-                single string or a list of strings.
-            write (bool):
-                Whether to write out the images with PSFs. Default is True.
-        """
-        # Flag that we will apply the PSFs to the flux images
-        self._do_images_flux_psf = True
-
-        # To apply the PSFs to the flux images we need to have already computed
-        # the flux images which themselves require the fluxes, and therefore
-        # also the fnu spectra
-        self._do_images_flux = True
-        self._do_fluxes = True
-        self._do_lnu_spectra = True
-        self._do_fnu_spectra = True
-
-        # Ensure we have the arguments for the operation if get_images_flux has
-        # not been called
-        if "get_images_flux" not in self._operation_kwargs:
-            self._operation_kwargs["get_images_flux"] = {}
-            if fov is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without a field of view, please pass "
-                    "one to the fov argument of get_images_flux_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_flux"]["fov"] = fov
-            if img_type is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without an image type, please pass one "
-                    "to the img_type argument of get_images_flux_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_flux"]["img_type"] = (
-                    img_type
-                )
-            if kernel is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without a kernel, please pass one to "
-                    "the kernel argument of get_images_flux_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_flux"]["kernel"] = kernel
-            if kernel_threshold is None:
-                raise exceptions.PipelineNotReady(
-                    "Cannot apply PSFs without a kernel threshold, please"
-                    " pass one to the kernel_threshold argument of "
-                    "get_images_flux_psfs."
-                )
-            else:
-                self._operation_kwargs["get_images_flux"][
-                    "kernel_threshold"
-                ] = kernel_threshold
-            self._operation_kwargs["get_images_flux"]["spectra_type"] = (
-                spectra_type
-                if isinstance(spectra_type, (list, tuple))
-                or spectra_type is None
-                else [spectra_type]
-            )
-
-        # Ensure we have a cosmology if we need to compute the observed spectra
-        # and get_spectra_observed has not been called
-        if (
-            "get_observed_spectra" not in self._operation_kwargs
-            and cosmo is None
-        ):
-            raise exceptions.PipelineNotReady(
-                "Cannot generate flux images without an astropy.cosmology"
-                " object, please pass one to the cosmo argument of "
-                "get_images_flux_psfs."
-            )
-        elif "get_observed_spectra" not in self._operation_kwargs:
-            self._operation_kwargs["get_observed_spectra"] = {
-                "cosmo": cosmo,
-                "igm": igm,
-            }
-
-        # Flag that we will want to write out the flux images (calling the
-        # get_images_flux_psfs method is considered the intent to write it out)
-        if write:
-            self._write_images_flux_psf = True
-
-        # Check that we have instruments to compute the images for
-        if len(instruments) == 0:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate images without instruments with filters! "
-                "Pass instruments to the get_images_flux_psfs method."
-            )
-
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
-
-        # Check that the instruments can do imaging
-        for inst in _instruments:
-            if not inst.can_do_psf_imaging:
-                raise exceptions.PipelineNotReady(
-                    f"Cannot generate images and PSF them with {inst.label}!"
-                )
-
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
-            "get_images_flux_psfs",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
-
-        # We also need to include these instruments in the instrument
-        # collection for the fluxes and flux images
-        phot_flux_insts = self.instruments.get(
-            "get_photometry_fluxes",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_photometry_fluxes",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[
-                inst
-                for inst in _instruments
-                if inst.label not in phot_flux_insts
-            ]
-        )
-        img_flux_insts = self.instruments.get(
-            "get_images_flux",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_images_flux",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[
-                inst
-                for inst in _instruments
-                if inst.label not in img_flux_insts
-            ]
-        )
-
-    def _get_images_flux_psfs(self, galaxy):
-        """
-        Apply any instrument PSFs to the flux images.
-
-        Args:
-            galaxy (Galaxy):
-                The galaxy to apply the PSFs to the flux images for.
-        """
-        start = time.perf_counter()
-
-        # Unpack the instruments for this operation
-        instruments = self.instruments["get_images_flux_psfs"]
-
-        # Loop over instruments and perform any imaging they define
-        for inst in instruments:
-            # Unlike the other operations we need a container to hold the
-            # PSF applied images, if it doesn't exist we'll create it here
-            # and add the appropriate keys
-            if not hasattr(galaxy, "images_psf_fnu"):
-                galaxy.images_psf_fnu = {}
-            galaxy.images_psf_fnu.setdefault(inst.label, {})
-            if galaxy.stars is not None:
-                if not hasattr(galaxy.stars, "images_psf_fnu"):
-                    galaxy.stars.images_psf_fnu = {}
-                galaxy.stars.images_psf_fnu.setdefault(inst.label, {})
-            if galaxy.black_holes is not None:
-                if not hasattr(galaxy.black_holes, "images_psf_fnu"):
-                    galaxy.black_holes.images_psf_fnu = {}
-                galaxy.black_holes.images_psf_fnu.setdefault(inst.label, {})
-
-            # Apply PSFs to the galaxy level images
-            if inst.label in galaxy.images_fnu:
-                for spec_type, imgs in galaxy.images_fnu[inst.label].items():
-                    galaxy.images_psf_fnu[inst.label][spec_type] = (
-                        imgs.apply_psfs(
-                            inst.psfs,
-                        )
-                    )
-
-            # Apply PSFs to the stars level images
-            if (
-                galaxy.stars is not None
-                and inst.label in galaxy.stars.images_fnu
-            ):
-                for spec_type, imgs in galaxy.stars.images_fnu[
-                    inst.label
-                ].items():
-                    galaxy.stars.images_psf_fnu[inst.label][spec_type] = (
-                        imgs.apply_psfs(
-                            inst.psfs,
-                        )
-                    )
-
-            # Apply PSFs to the black hole level images
-            if (
-                galaxy.black_holes is not None
-                and inst.label in galaxy.black_holes.images_fnu
-            ):
-                for spec_type, imgs in galaxy.black_holes.images_fnu[
-                    inst.label
-                ].items():
-                    galaxy.black_holes.images_psf_fnu[inst.label][
-                        spec_type
-                    ] = imgs.apply_psfs(
-                        inst.psfs,
-                    )
-
-        # Count the number of images we have generated
-        self._op_counts["Flux Images (With PSF)"] += (
-            count_and_check_dict_recursive(galaxy.images_fnu)
-        )
-        if galaxy.stars is not None:
-            self._op_counts["Flux Images (With PSF)"] += (
-                count_and_check_dict_recursive(galaxy.stars.images_fnu)
-            )
-        if galaxy.black_holes is not None:
-            self._op_counts["Flux Images (With PSF)"] += (
-                count_and_check_dict_recursive(galaxy.black_holes.images_fnu)
-            )
-
-        # Record the time taken
-        self._op_timing["Flux Images (With PSF)"] += (
-            time.perf_counter() - start
-        )
 
     def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
