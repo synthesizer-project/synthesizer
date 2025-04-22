@@ -1957,7 +1957,14 @@ class Pipeline:
         # it out)
         self._write_images_lum = True
 
-        # Check that we have instruments to compute the images for
+        # Ensure we have a field of view if we need to compute the images
+        if fov is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate images without a field of view, please pass "
+                "one to the fov argument of get_images_luminosity."
+            )
+
+        # Check that we have instruments to computethe images for
         if len(instruments) == 0:
             raise exceptions.PipelineNotReady(
                 "Cannot generate images without instruments with filters! "
@@ -2072,6 +2079,7 @@ class Pipeline:
                     limit_to=self._operation_kwargs["get_images_luminosity"][
                         "spectra_type"
                     ],
+                    apply_to_psf=inst.can_do_psf_imaging,
                 )
                 noise_time += time.perf_counter() - noise_start
 
@@ -2210,6 +2218,13 @@ class Pipeline:
         # get_images_flux method is considered the intent to write it out)
         self._write_images_flux = True
 
+        # Ensure we have a field of view if we need to compute the images
+        if fov is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate images without a field of view, please "
+                "pass one to the fov argument of get_images_flux."
+            )
+
         # Ensure we have a cosmology if we need to compute the observed spectra
         # and get_spectra_observed has not been called
         if (
@@ -2338,6 +2353,7 @@ class Pipeline:
                     limit_to=self._operation_kwargs["get_images_flux"][
                         "spectra_type"
                     ],
+                    apply_to_psf=inst.can_do_psf_imaging,
                 )
                 noise_time += time.perf_counter() - noise_start
 
