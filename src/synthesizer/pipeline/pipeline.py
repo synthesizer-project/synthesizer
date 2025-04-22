@@ -2060,6 +2060,10 @@ class Pipeline:
                 )
                 psf_time += time.perf_counter() - psf_start
 
+                # Remove the psfless images (we don't want to carry around
+                # duplicates)
+                del galaxy.images_lnu[inst.label]
+
             # Apply the instrument noise if applicable to the instrument
             if inst.can_do_noisy_imaging:
                 noise_start = time.perf_counter()
@@ -2070,6 +2074,13 @@ class Pipeline:
                     ],
                 )
                 noise_time += time.perf_counter() - noise_start
+
+                # Remove the noiseless images (we don't want to carry around
+                # duplicates)
+                if inst.label in galaxy.images_lnu:
+                    del galaxy.images_lnu[inst.label]
+                if inst.label in galaxy.images_psf_lnu:
+                    del galaxy.images_psf_lnu[inst.label]
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -2315,6 +2326,10 @@ class Pipeline:
                 )
                 psf_time += time.perf_counter() - psf_start
 
+                # Remove the psfless images (we don't want to carry around
+                # duplicates)
+                del galaxy.images_fnu[inst.label]
+
             # Apply the instrument noise if applicable to the instrument
             if inst.can_do_noisy_imaging:
                 noise_start = time.perf_counter()
@@ -2325,6 +2340,11 @@ class Pipeline:
                     ],
                 )
                 noise_time += time.perf_counter() - noise_start
+
+                # Remove the noiseless images (we don't want to carry around
+                # duplicates)
+                if inst.label in galaxy.images_fnu:
+                    del galaxy.images_fnu[inst.label]
 
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
