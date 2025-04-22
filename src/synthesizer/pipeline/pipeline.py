@@ -264,8 +264,10 @@ class Pipeline:
         self.line_obs_lams = None
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.images_lum_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.images_flux_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.lnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.spectroscopy = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -472,7 +474,7 @@ class Pipeline:
         # Print the number of filters we have
         nfilters = 0
         for inst in unique_instruments.values():
-            nfilters += len(inst.filters)
+            nfilters += len(inst.all_filters)
         self._print(f"Instruments have {nfilters} filters in total.")
 
         # Make a breakdown of the instruments
@@ -1551,7 +1553,7 @@ class Pipeline:
 
         # Get the photometry.
         galaxy.get_photo_lnu(
-            filters=instruments.filters,
+            filters=instruments.all_filters,
             nthreads=self.nthreads,
         )
 
@@ -1676,7 +1678,7 @@ class Pipeline:
 
         # Get the photometry.
         galaxy.get_photo_fnu(
-            filters=instruments.filters,
+            filters=instruments.all_filters,
             nthreads=self.nthreads,
         )
 
@@ -2897,6 +2899,52 @@ class Pipeline:
                                 spec_type, {}
                             ).setdefault(f, []).append(img.arr * img.units)
 
+        # Do we need to unpack the luminosity images With Noise?
+        if self._write_images_lum_noise:
+            for d in galaxy.images_noise_lnu.values():
+                for spec_type, imgs in d.items():
+                    for f, img in imgs.items():
+                        self.images_lum_noise["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.stars is not None:
+                for d in galaxy.stars.images_noise_lnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_lum_noise["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.black_holes is not None:
+                for d in galaxy.black_holes.images_noise_lnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_lum_noise["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Do we need to unpack the flux images With Noise?
+        if self._write_images_flux_noise:
+            for d in galaxy.images_noise_fnu.values():
+                for spec_type, imgs in d.items():
+                    for f, img in imgs.items():
+                        self.images_flux_noise["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.stars is not None:
+                for d in galaxy.stars.images_noise_fnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_flux_noise["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.black_holes is not None:
+                for d in galaxy.black_holes.images_noise_fnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_flux_noise["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
         # Do we need to unpack the extra analysis results?
         if hasattr(galaxy, "_extra_analysis_results"):
             for key, res in galaxy._extra_analysis_results.items():
@@ -3179,6 +3227,34 @@ class Pipeline:
                     img
                 )
 
+        # Convert the lists of noise luminosity images to unyt arrays
+        for spec_type, imgs in self.images_lum_noise["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_lum_noise["Galaxy"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum_noise["Stars"].items():
+            for f, img in imgs.items():
+                self.images_lum_noise["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum_noise["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_lum_noise["BlackHole"][spec_type][f] = unyt_array(
+                    img
+                )
+
+        # Convert the lists of noise flux images to unyt arrays
+        for spec_type, imgs in self.images_flux_noise["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_flux_noise["Galaxy"][spec_type][f] = unyt_array(
+                    img
+                )
+        for spec_type, imgs in self.images_flux_noise["Stars"].items():
+            for f, img in imgs.items():
+                self.images_flux_noise["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux_noise["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_flux_noise["BlackHole"][spec_type][f] = unyt_array(
+                    img
+                )
+
         # Convert the lists of extra analysis results to unyt arrays
         # Unlike the previous data we need to do some checks here to ensure
         # that the data is in a consistent format. This is because the user
@@ -3447,6 +3523,24 @@ class Pipeline:
                 galaxy_indices,
             )
 
+        # Write noise luminosity images
+        if self._write_images_lum_noise:
+            self.io_helper.write_data(
+                self.images_lum_noise["Galaxy"],
+                "Galaxies/NoiseImages/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.images_lum_noise["Stars"],
+                "Galaxies/Stars/NoiseImages/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.images_lum_noise["BlackHole"],
+                "Galaxies/BlackHoles/NoiseImages/Luminosity",
+                galaxy_indices,
+            )
+
         # Write flux images
         if self._write_images_flux:
             self.io_helper.write_data(
@@ -3480,6 +3574,24 @@ class Pipeline:
             self.io_helper.write_data(
                 self.images_flux_psf["BlackHole"],
                 "Galaxies/BlackHoles/PSFImages/Flux",
+                galaxy_indices,
+            )
+
+        # Write noise flux images
+        if self._write_images_flux_noise:
+            self.io_helper.write_data(
+                self.images_flux_noise["Galaxy"],
+                "Galaxies/NoiseImages/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.images_flux_noise["Stars"],
+                "Galaxies/Stars/NoiseImages/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.images_flux_noise["BlackHole"],
+                "Galaxies/BlackHoles/NoiseImages/Flux",
                 galaxy_indices,
             )
 

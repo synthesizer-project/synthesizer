@@ -1539,7 +1539,7 @@ class BaseGalaxy:
                 imgs.supersample(psf_resample_factor)
 
             # Apply the PSF
-            self.images_psf_lnu[instrument.label][key] = imgs.apply_psf(
+            self.images_psf_lnu[instrument.label][key] = imgs.apply_psfs(
                 instrument.psfs
             )
 
@@ -1638,7 +1638,7 @@ class BaseGalaxy:
                 imgs.supersample(psf_resample_factor)
 
             # Apply the PSF
-            self.images_psf_fnu[instrument.label][key] = imgs.apply_psf(
+            self.images_psf_fnu[instrument.label][key] = imgs.apply_psfs(
                 instrument.psfs
             )
 
@@ -1751,6 +1751,7 @@ class BaseGalaxy:
             self.stars.apply_noise_to_images_lnu(
                 instrument,
                 limit_to=limit_to,
+                apply_to_psf=apply_to_psf,
             )
 
         # If we have black holes, do those
@@ -1764,6 +1765,7 @@ class BaseGalaxy:
             self.black_holes.apply_noise_to_images_lnu(
                 instrument,
                 limit_to=limit_to,
+                apply_to_psf=apply_to_psf,
             )
 
         return self.images_noise_lnu[instrument.label]
@@ -1847,6 +1849,7 @@ class BaseGalaxy:
             self.stars.apply_noise_to_images_fnu(
                 instrument,
                 limit_to=limit_to,
+                apply_to_psf=apply_to_psf,
             )
 
         # If we have black holes, do those
@@ -1860,6 +1863,7 @@ class BaseGalaxy:
             self.black_holes.apply_noise_to_images_fnu(
                 instrument,
                 limit_to=limit_to,
+                apply_to_psf=apply_to_psf,
             )
 
         return self.images_noise_fnu[instrument.label]

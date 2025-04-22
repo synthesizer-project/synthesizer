@@ -91,7 +91,7 @@ class InstrumentCollection:
             self.load_instruments(filepath)
 
     @property
-    def filters(self):
+    def all_filters(self):
         """
         Return all filters in the collection.
 
