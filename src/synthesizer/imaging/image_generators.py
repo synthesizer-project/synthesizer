@@ -71,7 +71,9 @@ def _generate_image_particle_hist(
         )
 
     # Ensure coordinates have been centred
-    if not (coordinates.min() < 0 and coordinates.max() > 0):
+    if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
+        np.isclose(coordinates, 0)
+    ):
         raise exceptions.InconsistentArguments(
             "Coordinates must be centered for imaging"
             f" (got min={coordinates.min()} and max={coordinates.max()})."
@@ -267,7 +269,9 @@ def _generate_image_particle_smoothed(
         )
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
+        np.isclose(cent_coords, 0)
+    ):
         raise exceptions.InconsistentArguments(
             "Coordinates must be centered for imaging"
             f" (got min={cent_coords.min()} and max={cent_coords.max()})."
@@ -438,7 +442,9 @@ def _generate_images_particle_smoothed(
         )
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0):
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
+        np.isclose(cent_coords, 0)
+    ):
         raise exceptions.InconsistentArguments(
             "Coordinates must be centered for imaging"
             f" (got min={cent_coords.min()} and max={cent_coords.max()})."
@@ -799,10 +805,12 @@ def _generate_ifu_particle_hist(
     _coords = cent_coords.to(spatial_units).value
 
     # Ensure coordinates have been centred
-    if not (_coords.min() < 0 and _coords.max() > 0):
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
+        np.isclose(cent_coords, 0)
+    ):
         raise exceptions.InconsistentArguments(
             "Coordinates must be centered for imaging"
-            f" (got min={_coords.min()} and max={_coords.max()})."
+            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
         )
 
     # Prepare the inputs, we need to make sure we are passing C contiguous
@@ -936,10 +944,12 @@ def _generate_ifu_particle_smoothed(
     _coords = cent_coords.to_value(spatial_units)
 
     # Ensure coordinates have been centred
-    if not (_coords.min() < 0 and _coords.max() > 0):
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
+        np.isclose(cent_coords, 0)
+    ):
         raise exceptions.InconsistentArguments(
             "Coordinates must be centered for imaging"
-            f" (got min={_coords.min()} and max={_coords.max()})."
+            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
         )
 
     # Shift the centred coordinates by half the FOV to lie in the
