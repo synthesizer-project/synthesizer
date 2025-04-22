@@ -117,7 +117,7 @@ class FilterCollection:
         path=None,
         new_lam=None,
         fill_gaps=True,
-        verbose=True,
+        verbose=False,
     ):
         """
         Intialise the FilterCollection.
@@ -1381,7 +1381,7 @@ class Filter:
             FilterCollection: The new FilterCollection containing both filters.
         """
         # Create a new FilterCollection with the two filters
-        return FilterCollection(filters=[self, other_filter], new_lam=self.lam)
+        return FilterCollection(filters=[self, other_filter])
 
     def __str__(self):
         """

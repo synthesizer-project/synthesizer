@@ -81,6 +81,10 @@ class InstrumentCollection:
         self.instruments = {}
         self.instrument_labels = []
 
+        # Create a helper attribute for getting all filters in the collection
+        # without having to iterate over the collection
+        self.all_filters = None
+
         # Variables to keep track of the current instrument when iterating
         # over the collection
         self._current_ind = 0
@@ -89,31 +93,6 @@ class InstrumentCollection:
         # Load instruments from a file if a path is provided
         if filepath:
             self.load_instruments(filepath)
-
-    @property
-    def all_filters(self):
-        """
-        Return all filters in the collection.
-
-        Returns:
-            list:
-                The filters in the collection.
-        """
-        # Collect the individual filters from each instrument
-        # NOTE: we do this instead of adding the filters to an empty
-        # FilterCollection to avoid circular imports when we can just
-        # use simple addition
-        filter_lst = []
-        for inst in self.instruments.values():
-            if inst.can_do_photometry:
-                filter_lst.extend(list(inst.filters.filters.values()))
-
-        # Collect instruments
-        all_filters = filter_lst[0]
-        for f in filter_lst[1:]:
-            all_filters += f
-
-        return all_filters
 
     def load_instruments(self, filepath):
         """
@@ -177,6 +156,13 @@ class InstrumentCollection:
             self.instruments[instrument.label] = instrument
             self.instrument_labels.append(instrument.label)
             self.ninstruments += 1
+
+            # Add the filters to the collection
+            if instrument.can_do_photometry:
+                if self.all_filters is None:
+                    self.all_filters = instrument.filters
+                else:
+                    self.all_filters += instrument.filters
 
     def write_instruments(self, filepath):
         """
