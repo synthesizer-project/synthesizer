@@ -933,7 +933,7 @@ class FilterCollection:
                 filter in the same order as self.filter_codes.
         """
         # Calculate each filters pivot wavelength
-        pivot_lams = np.zeros(len(self))
+        pivot_lams = np.zeros(len(self)) * self.lam.units
         for ind, f in enumerate(self):
             pivot_lams[ind] = f.pivwv()
 
@@ -949,7 +949,7 @@ class FilterCollection:
                 filter in the same order as self.filter_codes.
         """
         # Calculate each filters pivot wavelength
-        mean_lams = np.zeros(len(self))
+        mean_lams = np.zeros(len(self)) * self.lam.units
         for ind, f in enumerate(self):
             mean_lams[ind] = f.meanwv()
 
