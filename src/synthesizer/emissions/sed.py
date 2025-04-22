@@ -17,6 +17,7 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LogNorm
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
@@ -1575,6 +1576,259 @@ class Sed:
         A wrapper for synthesizer.emissions.plot_spectra_as_rainbow()
         """
         return plot_spectra_as_rainbow(self, **kwargs)
+
+    def plot_spectra_stack(
+        self,
+        nbin=100,
+        fig=None,
+        ax=None,
+        show=False,
+        order=None,
+        quantity_to_plot="lnu",
+        cmap="magma",
+        vmin=None,
+        vmax=None,
+        xlimits=(),
+    ):
+        """
+        Plot a stack of the top nbin spectra in a multi-spectra sed.
+
+        This is only applicable for Sed object with ndim == 2. It will plot
+        bin the top nbin spectra into nbin wavelength bins, populate a grid
+        where x is the wavelength and each y row is one of the spectra, and
+        then plot this grid as an image.
+
+        This stack can optionally be ordered by their peak (from bluest
+        peak to reddest peak), by their bolometric_luminosity (from dimmest to
+        brightest), or by their luminosity at a specific wavelength (from
+        dimmest to brightest). This is defined by the order keyword, "peak",
+        "bolometric_luminosity", or a wavelength with units respectively.
+
+        Args:
+            nbin (int):
+                The number of bins to use for the stacking.
+            fig (matplotlib.pyplot.figure)
+                The figure containing the axis. By default one is created in
+                this function.
+            ax (matplotlib.axes):
+                The axis to plot the data on. By default one is created in
+                this function.
+            show (bool):
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            order (str/unyt_quantity):
+                The order to stack the spectra by. Can be "peak",
+                "bolometric_luminosity", a wavelength with units, or None. By
+                default the spectra will be plotted with the same order they
+                have in the Sed object.
+            quantity_to_plot (str):
+                The sed property to plot. Can be "lnu", "luminosity" or
+                "llam" for rest frame spectra or "fnu", "flam" or "flux"
+                for observed spectra. Defaults to "lnu".
+            cmap (str):
+                The matplotlib colormap to use for the plot. Defaults to
+                "magma".
+            vmin (float):
+                The minimum value for the color scale. If None, then we will
+                use 3 orders of magntitude below the maximum value.
+            vmax (float):
+                The maximum value for the color scale. If None, then we will
+                use the maximum value of the spectra.
+            xlimits (tuple of unyt_quantity):
+                The limits for the x axis. If None, then we will use the
+                minimum and maximum wavelength of the spectra.
+
+        Returns:
+            fig (matplotlib.pyplot.figure):
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes):
+                The matplotlib axes object containing the plotted data.
+        """
+        # First ensure we have a valid Sed object to work with
+        if self.ndim != 2:
+            raise exceptions.InconsistentArguments(
+                "This Sed object does not contain multiple spectra and thus "
+                "cannot be stacked. Please use a Sed object with ndim > 1."
+            )
+
+        # Are we plotting in the rest_frame?
+        rest_frame = quantity_to_plot in ("lnu", "llam", "luminosity")
+
+        # If we aren't doing rest frame... check we actually have the
+        # observed spectra
+        if not rest_frame and self.fnu is None:
+            raise exceptions.InconsistentArguments(
+                "This Sed object does not contain observed spectra and thus "
+                "cannot be stacked. Please use a Sed object with fnu."
+            )
+
+        # Define the wavelength bins based on nbin
+        if len(xlimits) == 0:
+            xlimits = (self.lam.min(), self.lam.max())
+        elif len(xlimits) != 2:
+            raise exceptions.InconsistentArguments(
+                "xlimits must be a tuple of length 2!"
+            )
+        if not isinstance(xlimits[0], unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "xlimits must be a tuple of unyt_quantity!"
+            )
+        if not isinstance(xlimits[1], unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "xlimits must be a tuple of unyt_quantity!"
+            )
+        new_lams = (
+            np.logspace(
+                np.log10(xlimits[0]),
+                np.log10(xlimits[1]),
+                nbin,
+            )
+            * xlimits[0].units
+        )
+
+        # Resample the spectra to the new wavelength grid
+        low_res_sed = self.get_resampled_sed(new_lam=new_lams)
+
+        # Get the order of the spectra to stack
+        if order == "peak":
+            # Get the peak and it's index for each spectra
+            peak_inds = np.argmax(low_res_sed._lnu, axis=-1)
+            peak_lams = low_res_sed.lam[peak_inds].value
+
+            # Sort the spectra by peak wavelength
+            order = np.argsort(peak_lams)
+
+            # Limit to the top nbin spectra
+            order = order[:nbin]
+
+        elif order == "bolometric_luminosity":
+            # Get the bolometric luminosity for each spectra
+            bolometric_luminosity = low_res_sed.bolometric_luminosity.value
+
+            # Sort the spectra by bolometric luminosity
+            order = np.argsort(bolometric_luminosity)[::-1]
+
+            # Limit to the top nbin spectra
+            order = order[:nbin]
+
+        elif isinstance(order, unyt_quantity):
+            # Ensure the wavelength is within the spectra range
+            if order < low_res_sed.lam.min() or order > low_res_sed.lam.max():
+                raise exceptions.InconsistentArguments(
+                    f"Requested wavelength ({order}) is outside the "
+                    f"range of the spectra ({low_res_sed.lam.min()}, "
+                    f"{low_res_sed.lam.max()})"
+                )
+
+            # Get the luminosity at the requested wavelength for each spectra
+            lum_at_lam = low_res_sed.get_lnu_at_lam(order).value
+
+            # Sort the spectra by luminosity at the requested wavelength
+            order = np.argsort(lum_at_lam)[::-1]
+
+            # Limit to the top nbin spectra
+            order = order[:nbin]
+
+        elif order is None:
+            # If no order is provided just use the first nbin spectra
+            order = np.arange(nbin)
+
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Unrecognised order ({order}). Options are 'peak', "
+                "'bolometric_luminosity', or a wavelength with units."
+            )
+
+        # Get the spectra to plot
+        spectra = getattr(low_res_sed, quantity_to_plot)
+
+        # Set up the array that will hold the stacked spectra
+        stacked_spectra = (
+            np.zeros((nbin, nbin), dtype=spectra.dtype) * spectra.units
+        )
+
+        # Loop over the resampled spectra and populate the grid from bottom
+        # to top
+        for row, i in enumerate(order):
+            # Ensure we aren't trying to extract a spectra that doesn't exist
+            if i >= spectra.shape[0]:
+                continue
+
+            # Populate the grid with the spectra
+            stacked_spectra[row, :] = spectra[i, :]
+
+        # Define a sensible normalisation for the color scale if not provided
+        if vmin is None:
+            vmin = stacked_spectra.max() / 1000.0
+        if vmax is None:
+            vmax = stacked_spectra.max()
+
+        # If we don't already have a figure, make one
+        if fig is None:
+            # Set up the figure
+            fig = plt.figure(figsize=(3.5, 3.5))
+
+        # If we don't already have an axis, make one
+        if ax is None:
+            # Create the axes
+            ax = fig.add_subplot(111)
+
+        # Plot the stacked spectra as a heatmap
+        im = ax.pcolormesh(
+            new_lams,
+            np.arange(nbin),
+            stacked_spectra,
+            shading="auto",
+            cmap=cmap,
+            norm=LogNorm(vmin=vmin, vmax=vmax, clip=True),
+        )
+
+        # Set the x scale to log
+        ax.set_xscale("log")
+
+        # Parse the units for the labels and make them pretty
+        x_units = self.lam.units.latex_repr
+        y_units = spectra.units.latex_repr
+
+        # Replace any \frac with a \ division
+        pattern = r"\{(.*?)\}\{(.*?)\}"
+        replacement = r"\1 \ / \ \2"
+        x_units = re.sub(pattern, replacement, x_units).replace(r"\frac", "")
+        y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
+
+        # Label the x axis
+        if rest_frame:
+            ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
+        else:
+            ax.set_xlabel(
+                r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$"
+            )
+
+        # Set the aspect ratio to be equal
+        ax.set_aspect("auto")
+
+        # Create a colorbar
+        cbar = fig.colorbar(im, ax=ax)
+
+        # Label the colorbar handling all possibilities
+        if quantity_to_plot == "lnu":
+            cbar.set_label(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "llam":
+            cbar.set_label(r"$L_{\lambda}/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "luminosity":
+            cbar.set_label(r"$L/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "fnu":
+            cbar.set_label(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "flam":
+            cbar.set_label(r"$F_{\lambda}/[\mathrm{" + y_units + r"}]$")
+        else:
+            cbar.set_label(r"$F/[\mathrm{" + y_units + r"}]$")
+
+        # Are we showing the plot?
+        if show:
+            plt.show()
+
+        return fig, ax
 
 
 def plot_spectra(
