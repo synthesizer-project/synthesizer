@@ -55,7 +55,7 @@ def run_scaling_test(
             print(f"=== Testing with {nthreads} threads ===")
             for i in range(average_over):
                 spec_start = time.time()
-                operation_function(**kwargs)
+                operation_function(**kwargs, nthreads=nthreads)
                 execution_time = time.time() - spec_start
 
                 print(f"[Total] {total_msg}:", execution_time)
@@ -70,7 +70,7 @@ def run_scaling_test(
                 print(f"=== Testing with {max_threads} threads ===")
                 for i in range(average_over):
                     spec_start = time.time()
-                    operation_function(**kwargs)
+                    operation_function(**kwargs, nthreads=max_threads)
                     execution_time = time.time() - spec_start
 
                     print(f"[Total] {total_msg}:", execution_time)
@@ -158,6 +158,20 @@ def parse_and_collect_runtimes(
             for i in range(0, len(atomic_runtimes[key]), average_over)
         ]
 
+    # Some operations get repeated multiple times these will have
+    # more entries in atomic_runtimes lets split them
+    # into their own list
+    for key in atomic_runtimes.keys():
+        if len(atomic_runtimes[key]) > len(threads):
+            # How many times is it repeated
+            n_repeats = len(atomic_runtimes[key]) // len(threads)
+
+            # Average every n_repeats runs
+            atomic_runtimes[key] = [
+                np.mean(atomic_runtimes[key][i : i + n_repeats])
+                for i in range(0, len(atomic_runtimes[key]), n_repeats)
+            ]
+
     # Compute the overhead
     overhead = [
         atomic_runtimes["Total"][i]
@@ -181,7 +195,6 @@ def parse_and_collect_runtimes(
     header = ", ".join(atomic_runtimes.keys())
 
     # Save to a text file
-    print(log_outpath)
     np.savetxt(
         log_outpath,
         values,

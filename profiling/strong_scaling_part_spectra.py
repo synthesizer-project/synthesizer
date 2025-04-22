@@ -45,6 +45,7 @@ def part_spectra_strong_scaling(
 
     # Get the emission model
     model = IncidentEmission(grid)
+    model.set_per_particle(True)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
@@ -89,7 +90,6 @@ def part_spectra_strong_scaling(
         stars.get_spectra,
         {
             "emission_model": model,
-            "nthreads": max_threads,
             "grid_assignment_method": gam,
         },
         total_msg="Generating spectra",
