@@ -96,6 +96,7 @@ def images_strong_scaling(
         coordinates=coords,
         smoothing_lengths=smls,
         redshift=1,
+        centre=np.array([50, 50, 50]) * kpc,
     )
 
     # Get the spectra
