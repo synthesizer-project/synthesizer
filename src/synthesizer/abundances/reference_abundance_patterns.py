@@ -172,7 +172,7 @@ class Gutkin2016:
     bibcode: str = "2016MNRAS.462.1757G"
 
     # total metallicity
-    metallicity: str = 0.01524
+    metallicity: float = 0.01524
 
     # logarithmic abundances, i.e. log10(N_element/N_H)
     abundance: dict = field(
