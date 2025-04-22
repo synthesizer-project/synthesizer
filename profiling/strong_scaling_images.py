@@ -62,7 +62,7 @@ def part_spectra_strong_scaling(
     )
 
     # Instatiate the instruments
-    webb_inst = Instrument("JWST", filters=webb_filters, resolution=1 * kpc)
+    webb_inst = Instrument("JWST", filters=webb_filters, resolution=0.1 * kpc)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
