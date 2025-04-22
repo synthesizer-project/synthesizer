@@ -897,7 +897,6 @@ class ParametricLi08(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-
         raise exceptions.UnimplementedFunctionality(
             "ParametricLi08 form is fit to the normalised Alam/Av values"
             "for the different models, so does not make sense to have this"
