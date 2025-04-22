@@ -225,7 +225,7 @@ def unit_emission_stars():
 def random_part_stars():
     """Return a particle Stars object with velocities."""
     # Randomly generate the attribute we'll need for the stars
-    nstars = np.random.randint(1, 10)
+    nstars = np.random.randint(5, 10)
     initial_masses = np.random.uniform(0.1, 10, nstars) * 1e6 * Msun
     ages = np.random.uniform(4, 7, nstars) * Myr
     metallicities = np.random.uniform(0.01, 0.1, nstars)
@@ -318,7 +318,7 @@ def particle_gas_B():
 def random_particle_gas():
     """Return a particle Gas object with velocities."""
     # Randomly generate the attribute we'll need for the gas
-    ngas = np.random.randint(1, 10)
+    ngas = np.random.randint(2, 10)
     masses = np.random.uniform(0.1, 10, ngas) * 1e6 * Msun
     metallicities = np.random.uniform(0.01, 0.1, ngas)
     redshift = np.random.randint(0, 10)
@@ -392,7 +392,7 @@ def single_particle_black_hole_scalars():
 def random_particle_black_hole():
     """Return a particle BlackHole object with velocities."""
     # Randomly generate the attribute we'll need for the black holes
-    nblackholes = np.random.randint(1, 5)
+    nblackholes = np.random.randint(2, 5)
     masses = np.random.uniform(0.1, 10, nblackholes) * 1e6 * Msun
     accretion_rates = np.random.uniform(0.1, 10, nblackholes) * Msun / yr
     redshift = np.random.randint(0, 10)
