@@ -533,7 +533,7 @@ class Component(ABC):
         # this will be done when we introduced some premade instruments
         if instrument is None:
             # Get the filters from the emitters
-            filters = self.photo_lnu[emission_model.label].filters
+            filters = self.particle_photo_lnu[emission_model.label].filters
 
             # Make the place holder instrument
             instrument = Instrument(
@@ -648,7 +648,7 @@ class Component(ABC):
         # this will be done when we introduced some premade instruments
         if instrument is None:
             # Get the filters from the emitters
-            filters = self.photo_lnu[emission_model.label].filters
+            filters = self.particle_photo_lnu[emission_model.label].filters
 
             # Make the place holder instrument
             instrument = Instrument(
