@@ -20,6 +20,7 @@ from synthesizer import Grid
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.particles import CoordinateGenerator
@@ -111,6 +112,9 @@ def images_strong_scaling(
         nthreads=max_threads,
     )
 
+    # Get the kernel
+    kernel = Kernel().get_kernel()
+
     # Get images in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial imaging spectra calculation")
@@ -118,6 +122,7 @@ def images_strong_scaling(
         webb_inst.resolution,
         30 * kpc,
         model,
+        kernel=kernel,
         nthreads=max_threads,
     )
     print()
@@ -142,6 +147,7 @@ def images_strong_scaling(
             "resolution": webb_inst.resolution,
             "fov": 30 * kpc,
             "emission_model": model,
+            "kernel": kernel,
         },
         total_msg="Generating images",
     )
