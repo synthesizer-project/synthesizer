@@ -123,11 +123,11 @@ def los_surface_density_strong_scaling(
     # Define the log and plot output paths
     log_outpath = (
         f"{out_dir}/{basename}_los_column_density_"
-        f"totThreads{max_threads}_nstars{nstars}.log"
+        f"totThreads{max_threads}_nstars{nstars}_ngas{ngas}.log"
     )
     plot_outpath = (
         f"{out_dir}/{basename}_los_column_density_"
-        f"totThreads{max_threads}_nstars{nstars}.png"
+        f"totThreads{max_threads}_nstars{nstars}_ngas{ngas}.png"
     )
 
     # Run the scaling test
@@ -140,7 +140,7 @@ def los_surface_density_strong_scaling(
             "kappa": 0.075,
             "kernel": kernel,
         },
-        total_msg="Generating spectra",
+        total_msg="Calculating LOS surface density",
     )
 
     # Parse the output
