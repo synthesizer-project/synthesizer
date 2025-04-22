@@ -99,16 +99,21 @@ class InstrumentCollection:
             list:
                 The filters in the collection.
         """
-        # Avoid circular imports
-        from synthesizer.instruments import FilterCollection
-
-        # Create an empty FilterCollection to combine the filters into
-        filters = FilterCollection()
+        # Collect the individual filters from each instrument
+        # NOTE: we do this instead of adding the filters to an empty
+        # FilterCollection to avoid circular imports when we can just
+        # use simple addition
+        filter_lst = []
         for inst in self.instruments.values():
             if inst.can_do_photometry:
-                filters += inst.filters
+                filter_lst.extend(list(inst.filters.filters.values()))
 
-        return filters
+        # Collect instruments
+        all_filters = filter_lst[0]
+        for f in filter_lst[1:]:
+            all_filters += f
+
+        return all_filters
 
     def load_instruments(self, filepath):
         """
