@@ -73,9 +73,15 @@ class Component(ABC):
         self.photo_lnu = {}
         self.photo_fnu = {}
 
-        # Define the dictionaries to hold the images
+        # Define the dictionaries to hold the images (we carry 3 different
+        # distionaries for both lnu and fnu images to draw a distinction
+        # between images with and without a PSF and/or noise)
         self.images_lnu = {}
         self.images_fnu = {}
+        self.images_lnu_psf = {}
+        self.images_fnu_psf = {}
+        self.images_lnu_noise = {}
+        self.images_fnu_noise = {}
 
         # Define the dictionaries to hold instrument specific spectroscopy
         self.spectroscopy = {}
