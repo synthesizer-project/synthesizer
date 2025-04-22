@@ -477,7 +477,7 @@ class Calzetti2000(AttenuationLaw):
             ampl=self.ampl,
             gamma=self.gamma,
         )
-        
+
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam):
         """
@@ -494,7 +494,7 @@ class Calzetti2000(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        
+
         tau_x_v = N09Tau(
             lam=lam,
             slope=self.slope,
@@ -502,15 +502,15 @@ class Calzetti2000(AttenuationLaw):
             ampl=self.ampl,
             gamma=self.gamma,
         )
-        
+
         # V-band wavelength in micron
         # Since the N09Tau funciton uses micron
         lam_v = 0.55
-        
+
         k_v = 4.05 + 2.659 * (
         -2.156 + (1.509 / lam_v) - (0.198 / lam_v**2) + (0.011 / lam_v**3)
         )
-        
+
         return k_v * tau_x_v
 
 
@@ -566,7 +566,7 @@ class MWN18(AttenuationLaw):
             fill_value="extrapolate",
         )
         return func(lam) / self.tau_lam_v
-    
+
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam, interp="cubic"):
         """
@@ -672,7 +672,7 @@ class GrainsWD01(AttenuationLaw):
             out[(lam > lam_lims[-1])] = func(lam_lims[-1])
 
         return out
-    
+
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam, interp="slinear"):
         """
