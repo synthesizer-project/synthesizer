@@ -9,7 +9,7 @@ import copy
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import Mpc, Msun, km, rad, s
+from unyt import Mpc, Msun, km, pc, rad, s
 
 from synthesizer import exceptions
 from synthesizer.particle.utils import rotate
@@ -212,6 +212,218 @@ class Particles:
         mets[mets == 0.0] = self.metallicity_floor
 
         return np.log10(mets, dtype=np.float64)
+
+    def get_projected_angular_coordinates(
+        self,
+        cosmo=None,
+        los_dists=None,
+    ):
+        """
+        Get the projected angular coordinates in radians.
+
+        This will return the angular coordinates of the particles in radians
+        projected along the line of sight axis (always the z-axis). The
+        coordinates along the line of sight axis will be set to 0.0, to
+        maintain the shape of coordinates array.
+
+        The coordinates will be centred on the centre of the particle
+        distribution before calculating the angular coordinates. If the centre
+        is not set then an error will be raised.
+
+        Note that a redshift is required if the los_dists aren't given to
+        convert the coordinates to angular coordinates. If this redshift
+        is 0.0 then the particles will be treated as if they are at 10 pc
+        (minimum distance) from the observer.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the luminosity
+                distance.
+            los_dists (unyt_quantity):
+                The line of sight distances to the particles. If None, this
+                will be calculated using the redshift and cosmology object.
+
+        Returns:
+            unyt_array: The projected angular coordinates of the particles
+                in radians.
+        """
+        # Either cosmo or los_dists must be provided
+        if cosmo is None and los_dists is None:
+            raise exceptions.InconsistentArguments(
+                "Either cosmo or los_dists must be provided to get "
+                "projected angular coordinates."
+            )
+
+        # Get the centered coordinates
+        cent_coords = self.centered_coordinates
+
+        # If we don't have the LOS distances then we need to calculate them
+        if los_dists is None:
+            # Get the luminosity distance
+            lum_dist = self.get_luminosity_distance(cosmo)
+
+            # Combine the luminosity distance with the line of sight distance
+            # (along the z-axis)
+            los_dists = lum_dist + cent_coords[:, 2]
+
+            # If we are at redshift 0.0 then we need to shift things to
+            # put the closest particle at 10 pc
+            if self.redshift == 0.0:
+                z_min = np.min(cent_coords[:, 2])
+                los_dists += np.abs(z_min) + 10 * pc
+        else:
+            # Ok, we have been handed LOS distances, make sure they are the
+            # right shape
+            if los_dists.size != self.nparticles:
+                raise exceptions.InconsistentArguments(
+                    "The LOS distances must be the same shape as the "
+                    f"coordinates. Got {los_dists.size} but expected "
+                    f"{self.nparticles}."
+                )
+
+        # Ensure the distances are in the right units
+        x = cent_coords[:, 0].value
+        y = cent_coords[:, 1].value
+        d = los_dists.to_value(cent_coords.units)
+
+        # Get the angular coordinates and store them in a (N, 3) array
+        coords = np.zeros((self.nparticles, 3), dtype=np.float64)
+        coords[:, 0] = np.arctan2(x, d)
+        coords[:, 1] = np.arctan2(y, d)
+
+        # Ensure the array is C-contiguous
+        coords = ensure_array_c_compatible_double(coords)
+
+        return coords * rad
+
+    def get_projected_angular_smoothing_lengths(
+        self,
+        cosmo=None,
+        los_dists=None,
+    ):
+        """
+        Get the projected angular smoothing lengths in radians.
+
+        This will return the angular smoothing lengths of the particles in
+        radians projected along the line of sight axis (always the z-axis). The
+        coordinates along the line of sight axis will be set to 0.0, to
+        maintain the shape of coordinates array.
+
+        Note that a redshift is required if the los_dists aren't given to
+        convert the coordinates to angular coordinates. If this redshift
+        is 0.0 then the particles will be treated as if they are at 10 pc
+        (minimum distance) from the observer.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the luminosity
+                distance.
+            los_dists (unyt_quantity):
+                The line of sight distances to the particles. If None, this
+                will be calculated using the redshift and cosmology object.
+
+        Returns:
+            unyt_array: The projected angular smoothing lengths of the
+                particles in radians.
+        """
+        # Either cosmo or los_dists must be provided
+        if cosmo is None and los_dists is None:
+            raise exceptions.InconsistentArguments(
+                "Either cosmo or los_dists must be provided to get "
+                "projected angular smoothing lengths."
+            )
+
+        # Get the centered coordinates
+        cent_coords = self.centered_coordinates
+
+        # If we don't have the LOS distances then we need to calculate them
+        if los_dists is None:
+            # Get the luminosity distance
+            lum_dist = self.get_luminosity_distance(cosmo)
+
+            # Combine the luminosity distance with the line of sight distance
+            # (along the z-axis)
+            los_dists = lum_dist + cent_coords[:, 2]
+
+            # If we are at redshift 0.0 then we need to shift things to
+            # put the closest particle at 10 pc
+            if self.redshift == 0.0:
+                z_min = np.min(cent_coords[:, 2])
+                los_dists += np.abs(z_min) + 10 * pc
+        else:
+            # Ok, we have been handed LOS distances, make sure they are the
+            # right shape
+            if los_dists.size != self.nparticles:
+                raise exceptions.InconsistentArguments(
+                    "The LOS distances must be the same shape as the "
+                    f"coordinates. Got {los_dists.size} but expected "
+                    f"{self.nparticles}."
+                )
+
+        # Ensure the distances are in the right units
+        d = los_dists.to_value(self.smoothing_lengths.units)
+
+        # Calculate and return the projected angular smoothing lengths
+        projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
+
+        # Ensure the array is C-contiguous
+        projected_smoothing_lengths = ensure_array_c_compatible_double(
+            projected_smoothing_lengths
+        )
+
+        return projected_smoothing_lengths * rad
+
+    def get_projected_angular_imaging_props(self, cosmo):
+        """
+        Get the projected angular imaging properties.
+
+        This is a convenience method to reduce repeated calculations when
+        getting angular coordinates and smoothing lengths since they both
+        require similar calculations. This method will return the
+        projected angular coordinates and projected angular smoothing
+        lengths of the particles in radians projected along the line of
+        sight axis (always the z-axis). The coordinates along the line of
+        sight axis will be set to 0.0, to maintain the shape of coordinates
+        array.
+
+        Arguments:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the luminosity
+                distance.
+
+        Returns:
+            tuple: A tuple containing the projected angular coordinates and
+                projected angular smoothing lengths of the particles in
+                radians.
+        """
+        # Get the centered coordinates
+        cent_coords = self.centered_coordinates
+
+        # Get the luminosity distance
+        lum_dist = self.get_luminosity_distance(cosmo)
+
+        # Combine the luminosity distance with the line of sight distance
+        # (along the z-axis)
+        los_dists = lum_dist + cent_coords[:, 2]
+
+        # If we are at redshift 0.0 then we need to shift things to
+        # put the closest particle at 10 pc
+        if self.redshift == 0.0:
+            z_min = np.min(cent_coords[:, 2])
+            los_dists += np.abs(z_min) + 10 * pc
+
+        # Compute the projected angular properties
+        projected_angular_coords = self.get_projected_angular_coordinates(
+            los_dists=los_dists,
+        )
+        projected_angular_smls = self.get_projected_angular_smoothing_lengths(
+            los_dists=los_dists,
+        )
+
+        return (
+            projected_angular_coords,
+            projected_angular_smls,
+        )
 
     def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
         """

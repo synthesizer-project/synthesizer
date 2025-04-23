@@ -21,18 +21,20 @@ import numpy as np
 from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
-from unyt import unyt_array, unyt_quantity
+from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
     _generate_image_parametric_smoothed,
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from synthesizer.units import Quantity
+from synthesizer.units import accepts, unit_is_compatible
+from synthesizer.utils import TableFormatter
 
 
-class Image:
+class Image(ImagingBase):
     """
     A class for generating images.
 
@@ -54,11 +56,11 @@ class Image:
             The array containing the image.
         units (unyt.Units):
             The units of the image.
+        noise_arr (array_like, float):
+            The noise array added to the image.
+        weight_map (array_like, float):
+            The weight map derived from the noise array.
     """
-
-    # Define quantities
-    resolution = Quantity("spatial")
-    fov = Quantity("spatial")
 
     def __init__(
         self,
@@ -80,16 +82,8 @@ class Image:
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
-        # Set the quantities
-        self.resolution = resolution
-        self.fov = fov
-
-        # If fov isn't a array, make it one
-        if self.fov is not None and self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # Calculate the shape of the image
-        self._compute_npix()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Attribute to hold the image array itself
         self.arr = None
@@ -117,29 +111,26 @@ class Image:
             )
         return self.arr * self.units if self.units is not None else self.arr
 
-    def _compute_npix(self):
-        """
-        Compute the number of pixels in the FOV.
+    @img.setter
+    def img(self, value):
+        """Set the image array and units."""
+        if isinstance(value, unyt_array):
+            self.arr = value.value
+            self.units = value.units
+        else:
+            self.arr = value
+            self.units = None
 
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
+    @property
+    def shape(self):
         """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self._fov / self._resolution))
+        Return the shape of the image.
 
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
-
-    def _compute_fov(self):
+        Returns:
+            tuple
+                The shape of the image.
         """
-        Compute the FOV, based on the number of pixels.
-
-        When resolution and npix are given, the FOV is computed using this
-        function.
-        """
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
+        return self.npix
 
     def resample(self, factor):
         """
@@ -150,9 +141,9 @@ class Image:
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
         """
-        # Perform the conversion on the basic image properties
-        self.resolution /= factor
-        self._compute_npix()
+        # Resample the resoltion, this will also update the npix and fov (if
+        # necessary)
+        self._resample_resolution(factor)
 
         # Resample the image.
         # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
@@ -169,8 +160,7 @@ class Image:
         # Handle the edge case where the conversion between resolutions has
         # messed with the FOV.
         if self.npix[0] != new_shape[0] or self.npix[1] != new_shape[1]:
-            self.npix = new_shape
-            self._compute_fov()
+            self.set_npix(new_shape)
 
     def __add__(self, other_img):
         """
@@ -222,6 +212,19 @@ class Image:
                 f"{other_img.units if other_img.units is not None else s})."
             )
 
+    def __str__(self):
+        """
+        Return a string representation of the Image object.
+
+        Returns:
+            table (str)
+                A string representation of the Image object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Image")
+
     def __mul__(self, mult):
         """
         Multiply the image by a multiplier.
@@ -238,7 +241,7 @@ class Image:
         new_img = Image(self.resolution, self.fov)
 
         # Associate the image array and units
-        new_img.arr = self.arr
+        new_img.arr = self.arr.copy()
         new_img.units = self.units
 
         # Multiply the image array
@@ -484,6 +487,7 @@ class Image:
 
         return new_img
 
+    @accepts(aperture_radius=(kpc, arcsecond))
     def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
         """
         Apply noise derived from a SNR and depth.
@@ -494,6 +498,14 @@ class Image:
         This assumes the SNR is defined as SNR = S / sqrt(noise_std)
 
         Args:
+            snr (float):
+                The signal to noise ratio of the image.
+            depth (float):
+                The depth of the image, i.e. the minimum signal strength
+                detectable at the given SNR.
+            aperture_radius (unyt_quantity):
+                The radius of the aperture. If None then a point source is
+                assumed.
 
         Returns:
             Image
@@ -505,6 +517,13 @@ class Image:
         """
         # Convert aperture radius to consistent units if we have it
         if aperture_radius is not None:
+            # Check the aperture is compatible with the resolution
+            if not unit_is_compatible(aperture_radius, self.resolution.units):
+                raise exceptions.InconsistentArguments(
+                    "The aperture radius must be compatible with the "
+                    f"resolution units. (aperture_radius = {aperture_radius}, "
+                    f"resolution = {self.resolution})"
+                )
             aperture_radius = aperture_radius.to(self.resolution.units).value
 
         # Ensure we have units if we need them
@@ -726,8 +745,10 @@ class Image:
         title="SYNTHESIZER",
     ):
         """
-        Create a representation of an image similar in style to Joy Division's
-        seminal 1979 album Unknown Pleasures.
+        Plot the image in the style of Unknown Pleasures.
+
+        Creates a representation of an image similar in style to Joy
+        Division's seminal 1979 album Unknown Pleasures.
 
         Borrows some code from this matplotlib examples:
         https://matplotlib.org/stable/gallery/animation/unchained.html
@@ -738,7 +759,6 @@ class Image:
             target_lines (int)
                 The target number of individual lines to use.
         """
-
         # extract data
         data = 1 * self.arr
 

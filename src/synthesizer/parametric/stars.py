@@ -469,11 +469,11 @@ class Stars(StarsComponent):
         # Broadcast the mask to get a mask for SFZH bins
         if new_mask.size == self.sfzh.shape[0]:
             new_mask = np.outer(
-                new_mask, np.ones(self.sfzh.shape[1], dtype=int)
+                new_mask, np.ones(self.sfzh.shape[1], dtype=bool)
             )
         elif new_mask.size == self.sfzh.shape[1]:
             new_mask = np.outer(
-                np.ones(self.sfzh.shape[0], dtype=int), new_mask
+                np.ones(self.sfzh.shape[0], dtype=bool), new_mask
             )
         elif new_mask.shape == self.sfzh.shape:
             pass  # nothing to do here
