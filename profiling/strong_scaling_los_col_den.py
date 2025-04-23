@@ -127,7 +127,7 @@ def los_surface_density_strong_scaling(
     )
 
     # Run the scaling test
-    output, threads = run_scaling_test(
+    run_scaling_test(
         max_threads,
         average_over,
         log_outpath,

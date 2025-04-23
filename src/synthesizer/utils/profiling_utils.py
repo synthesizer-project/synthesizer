@@ -217,7 +217,7 @@ def parse_and_collect_runtimes(
 
     # Remove any entries which are taking a tiny fraction of the time
     # and are not the total
-    minimum_time = atomic_runtimes["Total"][-1] * 0.001
+    minimum_time = atomic_runtimes["Total"][-1] * 0.0001
     old_keys = list(atomic_runtimes.keys())
     for key in old_keys:
         if key == "Total":
