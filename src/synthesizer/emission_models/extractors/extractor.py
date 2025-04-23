@@ -175,7 +175,7 @@ class Extractor(ABC):
 
         # Remove the units from the weight if necessary
         if isinstance(weight, (unyt_array, unyt_quantity)):
-            weight = weight.value
+            weight = weight.ndview
 
         toc("Preparing particle data for extraction", start)
 
@@ -548,7 +548,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             self._grid_nlam,
             grid_assignment_method.lower(),
             nthreads,
-            c.to(vel_units).value,
+            c.to(vel_units).ndview,
             mask,
             lam_mask,
         )
@@ -659,7 +659,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             self._grid_nlam,
             grid_assignment_method.lower(),
             nthreads,
-            c.to(vel_units).value,
+            c.to(vel_units).ndview,
             mask,
             lam_mask,
         )

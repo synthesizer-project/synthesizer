@@ -117,7 +117,7 @@ def scalar_to_array(value):
     # Do we have units? If so strip them away for now for simplicity
     if isinstance(value, (unyt_quantity, unyt_array)):
         units = value.units
-        value = value.value
+        value = value.ndview
     else:
         units = None
 
@@ -287,7 +287,7 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
     # If wavelengths provided as a unyt_array convert to nm otherwise assume
     # in Angstrom and convert.
     if isinstance(wavelengths, unyt_array):
-        wavelengths_ = wavelengths.to("nm").value
+        wavelengths_ = wavelengths.to("nm").ndview
     else:
         wavelengths_ = wavelengths / 10.0
 
@@ -488,7 +488,7 @@ def ensure_array_c_compatible_double(arr):
     units = None
     if isinstance(arr, (unyt_array, unyt_quantity)):
         units = arr.units
-        arr = arr.value
+        arr = arr.ndview
 
     # If its a scalar then just return it as a double
     if np.isscalar(arr):

@@ -495,9 +495,9 @@ class Quantity:
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
             if value.units != self.unit and value.units != dimensionless:
-                value = value.to(self.unit).value
+                value = value.to(self.unit).ndview
             else:
-                value = value.value
+                value = value.ndview
 
         # Set the attribute
         setattr(obj, self.private_name, value)
