@@ -111,32 +111,25 @@ class ImagingBase(ABC):
                 f"and fov={self.fov.units}."
             )
 
-        # Compute the number of pixels in the FOV
-        self._compute_npix()
-
         # Keep track of the input resolution and and npix so we can handle
         # super resolution correctly.
         self.orig_resolution = resolution.copy()
-        self.orig_npix = self.npix.copy()
 
-    def _compute_npix(self, compute_fov=True):
+    @property
+    def npix(self):
+        """The number of pixels in the image.
+
+        This is a 2D array with the number of pixels in each dimension.
         """
-        Compute the number of pixels given the resolution and fov.
+        return np.int64(np.ceil(self.fov / self.resolution))
 
-        Args:
-            compute_fov (bool): If True, compute the fov based on the
-                resolution and new npix. Defaults to True.
+    @property
+    def orig_npix(self):
+        """The original number of pixels in the image.
+
+        This is a 2D array with the number of pixels in each dimension.
         """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self.fov / self.resolution))
-
-        # Ensure that the npix is an array of 2 values
-        if self.npix.size == 1:
-            self.npix = np.array((self.npix, self.npix), dtype=np.int32)
-
-        # Redefine the FOV based on npix
-        if compute_fov:
-            self._compute_fov(compute_npix=False)
+        return np.int64(np.ceil(self.fov / self.orig_resolution))
 
     def _compute_fov(self, compute_npix=True):
         """
