@@ -14,7 +14,7 @@ from unyt import Mpc, Msun, km, pc, rad, s
 from synthesizer import exceptions
 from synthesizer.particle.utils import rotate
 from synthesizer.synth_warnings import deprecation
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, unyt_to_ndview
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
 
@@ -282,9 +282,9 @@ class Particles:
                 )
 
         # Ensure the distances are in the right units
-        x = cent_coords[:, 0].value
-        y = cent_coords[:, 1].value
-        d = los_dists.to_value(cent_coords.units)
+        x = unyt_to_ndview(cent_coords[:, 0])
+        y = unyt_to_ndview(cent_coords[:, 1])
+        d = unyt_to_ndview(los_dists, cent_coords.units)
 
         # Get the angular coordinates and store them in a (N, 3) array
         coords = np.zeros((self.nparticles, 3), dtype=np.float64)
@@ -361,7 +361,7 @@ class Particles:
                 )
 
         # Ensure the distances are in the right units
-        d = los_dists.to_value(self.smoothing_lengths.units)
+        d = unyt_to_ndview(los_dists, self.smoothing_lengths.units)
 
         # Calculate and return the projected angular smoothing lengths
         projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
@@ -642,11 +642,11 @@ class Particles:
         if frac == 0:
             return 0 * self.radii.units
         elif frac == 1:
-            return np.max(self.radii.value) * self.radii.units
+            return np.max(self.radii.ndview) * self.radii.units
         elif self.nparticles == 0:
             return 0 * self.radii.units
         elif self.nparticles == 1:
-            return self.radii[0].value * frac * self.radii.units
+            return self.radii[0].ndview * frac * self.radii.units
         elif np.sum(weights) == 0:
             return 0 * self.radii.units
 
@@ -656,7 +656,7 @@ class Particles:
 
         # Strip units off the weights if they have them
         if hasattr(weights, "units"):
-            weights = weights.value
+            weights = weights.ndview
 
         # Sort the weights and radii by radius
         sinds = np.argsort(self.radii)
@@ -1097,10 +1097,15 @@ class Particles:
         )
 
         # Cross product of position and velocity, weighted by mass
-        return np.sum(
+        ang_mom = np.sum(
             np.cross(self.coordinates, self.velocities) * self.masses[:, None],
             axis=0,
-        ).to(ang_mom_unit)
+        )
+
+        # Convert to the correct units in place
+        ang_mom.convert_to_units(ang_mom_unit)
+
+        return ang_mom
 
     def rotate_edge_on(self, inplace=True):
         """
@@ -1185,7 +1190,7 @@ class Particles:
         # Strip units off the weights if they have them, this can confuse
         # things
         if hasattr(weights_vals, "units"):
-            weights_vals = weights_vals.value
+            weights_vals = weights_vals.ndview
 
         return np.average(attr_vals, weights=weights_vals, axis=axis)
 
