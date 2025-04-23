@@ -304,23 +304,26 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
  */
 #ifdef WITH_OPENMP
 static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
-                                 double *spectra, int nthreads) {
+                                 double *restrict spectra, int nthreads) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
   int ndim = grid->ndim;
   int nlam = grid->nlam;
   double **grid_props = grid->props;
-  double *grid_spectra = grid->spectra;
+  double *restrict grid_spectra = grid->spectra;
 
   /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
+  double *restrict part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
-  npy_bool *mask = parts->mask;
+  npy_bool *restrict mask = parts->mask;
 
+  /* How many cells are there in a single "subset" of the grid? */
+  int ncells = 1 << ndim;
+
+/* Loop over particles. */
 #pragma omp parallel for schedule(static) num_threads(nthreads)
-  /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
     /* Skip masked particles. */
@@ -339,63 +342,48 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
                           part_props, p);
 
-    /* To combine fractions we will need an array of dimensions for the
-     * subset. These are always two in size, one for the low and one for high
-     * grid point. */
-    int sub_dims[ndim];
-    for (int idim = 0; idim < ndim; idim++) {
-      sub_dims[idim] = 2;
-    }
-
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
-    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    for (int icell = 0; icell < ncells; icell++) {
 
-      /* Set up some index arrays we'll need. */
-      int subset_ind[ndim];
+      /* Build frac_ind[] and combined frac via bit‑twiddling */
+      double frac = 1.0;
       int frac_ind[ndim];
-
-      /* Get the multi-dimensional version of icell. */
-      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-      /* Multiply all contributing fractions and get the fractions index
-       * in the grid. */
-      double frac = 1;
       for (int idim = 0; idim < ndim; idim++) {
-        if (subset_ind[idim] == 0) {
-          frac *= (1 - axis_fracs[idim]);
+        int bit = (icell >> idim) & 1;
+        if (bit == 0) {
+          frac *= (1.0 - axis_fracs[idim]);
           frac_ind[idim] = part_indices[idim] - 1;
         } else {
           frac *= axis_fracs[idim];
           frac_ind[idim] = part_indices[idim];
         }
       }
-
-      if (frac == 0) {
+      if (frac == 0.0) {
         continue;
       }
 
       /* Define the weight. */
       double weight = frac * mass;
 
-      /* Get the weight's index. */
-      const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+      /* Compute the flat grid index directly (row‑major) */
+      int grid_ind = frac_ind[0];
+      int stride = dims[0];
+      for (int idim = 1; idim < ndim; idim++) {
+        grid_ind += frac_ind[idim] * stride;
+        stride *= dims[idim];
+      }
 
-      /* Get the spectra ind. */
-      int unraveled_ind[ndim + 1];
-      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-      unraveled_ind[ndim] = 0;
-      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+      /* Compute the spectra offset: each grid cell has nlam entries */
+      int spectra_ind = grid_ind * nlam;
 
-      /* Add this grid cell's contribution to the spectra */
+/* Add this grid cell's contribution to the spectra */
+#pragma omp simd
       for (int ilam = 0; ilam < nlam; ilam++) {
-
         /* Skip if this wavelength is masked. */
         if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
           continue;
         }
-
-        /* Add the contribution to this wavelength. */
         spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
       }
     }
