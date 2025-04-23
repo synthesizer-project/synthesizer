@@ -597,9 +597,14 @@ def unyt_to_ndview(arr, unit=None):
     if unit is None:
         return arr.ndview
 
-    # Ok, we have a unit, do the conversion in place and return it
-    arr.convert_to_units(unit)
-    return arr.ndview
+    # If the units are the same then just return the ndview
+    if arr.units == unit:
+        return arr.ndview
+
+    # Ok, we do need to do a conversion, this sucks but the best thing we
+    # can do to avoid precision issues and many other problems is to
+    # just do the conversion normally and cry about it later
+    return arr.to(unit).ndview
 
 
 def _raise_or_convert(expected_unit, name, value):
