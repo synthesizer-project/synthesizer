@@ -36,6 +36,7 @@ def los_surface_density_strong_scaling(
     nstars,
     ngas,
     average_over,
+    low_thresh,
 ):
     """Profile the cpu time usage of the LOS surface density calculation."""
     # Define the grid
@@ -138,6 +139,7 @@ def los_surface_density_strong_scaling(
             "kernel": kernel,
         },
         total_msg="Calculating LOS surface density",
+        low_thresh=low_thresh,
     )
 
 
@@ -188,6 +190,14 @@ if __name__ == "__main__":
         help="The number of times to average over.",
     )
 
+    args.add_argument(
+        "--low_thresh",
+        type=float,
+        default=0.1,
+        help="the lower threshold on time for an operation to "
+        "be included in the scaling test plot.",
+    )
+
     args = args.parse_args()
 
     los_surface_density_strong_scaling(
@@ -197,4 +207,5 @@ if __name__ == "__main__":
         args.nstars,
         args.ngas,
         args.average_over,
+        args.low_thresh,
     )

@@ -101,6 +101,7 @@ def parse_and_collect_runtimes(
     threads,
     average_over,
     log_outpath,
+    low_thresh,
 ):
     """
     Parse the output from the scaling test and collect runtimes.
@@ -217,7 +218,7 @@ def parse_and_collect_runtimes(
 
     # Remove any entries which are taking a tiny fraction of the time
     # and are not the total
-    minimum_time = atomic_runtimes["Total"][-1] * 0.0001
+    minimum_time = atomic_runtimes["Total"][-1] * low_thresh
     old_keys = list(atomic_runtimes.keys())
     for key in old_keys:
         if key == "Total":
@@ -340,6 +341,7 @@ def run_scaling_test(
     operation_function,
     kwargs,
     total_msg,
+    low_thresh,
 ):
     """
     Run a scaling test for the Synthesizer package.
@@ -355,6 +357,7 @@ def run_scaling_test(
         operation_function (function): The function to test.
         kwargs (dict): The keyword arguments to pass to the function.
         total_msg (str): The message to print for the total time.
+        low_thresh (float): The threshold for low runtimes.
     """
     # Run the scaling test itself
     output, threads = _run_averaged_scaling_test(
@@ -372,6 +375,7 @@ def run_scaling_test(
         threads,
         average_over,
         log_outpath,
+        low_thresh,
     )
 
     # Plot the results

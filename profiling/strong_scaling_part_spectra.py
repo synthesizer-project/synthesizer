@@ -32,6 +32,7 @@ def part_spectra_strong_scaling(
     nstars,
     average_over,
     gam,
+    low_thresh,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     # Define the grid
@@ -90,6 +91,7 @@ def part_spectra_strong_scaling(
             "grid_assignment_method": gam,
         },
         total_msg="Generating spectra",
+        low_thresh=low_thresh,
     )
 
 
@@ -140,6 +142,14 @@ if __name__ == "__main__":
         help="The grid assignment method (cic or ngp).",
     )
 
+    args.add_argument(
+        "--low_thresh",
+        type=float,
+        default=0.1,
+        help="the lower threshold on time for an operation to "
+        "be included in the scaling test plot.",
+    )
+
     args = args.parse_args()
 
     part_spectra_strong_scaling(
@@ -149,4 +159,5 @@ if __name__ == "__main__":
         args.nstars,
         args.average_over,
         args.grid_assign,
+        args.low_thresh,
     )

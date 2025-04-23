@@ -36,6 +36,7 @@ def images_strong_scaling(
     max_threads,
     nstars,
     average_over,
+    low_thresh,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     # Define the grid
@@ -147,6 +148,7 @@ def images_strong_scaling(
             "kernel": kernel,
         },
         total_msg="Generating images",
+        low_thresh=low_thresh,
     )
 
 
@@ -190,6 +192,14 @@ if __name__ == "__main__":
         help="The number of times to average over.",
     )
 
+    args.add_argument(
+        "--low_thresh",
+        type=float,
+        default=0.1,
+        help="the lower threshold on time for an operation to "
+        "be included in the scaling test plot.",
+    )
+
     args = args.parse_args()
 
     images_strong_scaling(
@@ -198,4 +208,5 @@ if __name__ == "__main__":
         args.max_threads,
         args.nstars,
         args.average_over,
+        args.low_thresh,
     )
