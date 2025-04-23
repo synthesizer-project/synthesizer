@@ -50,6 +50,7 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.extensions import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_generators import (
@@ -104,6 +105,7 @@ class ImageCollection(ImagingBase):
             imgs (dict)
                 A dictionary of images to be turned into a collection.
         """
+        start = tic()
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
 
@@ -129,6 +131,8 @@ class ImageCollection(ImagingBase):
             for f, img in imgs.items():
                 self.imgs[f] = img
                 self.filter_codes.append(f)
+
+        toc("Creating ImageCollection", start)
 
     @property
     def shape(self):

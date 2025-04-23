@@ -414,6 +414,9 @@ void populate_smoothed_image(const double *pix_values,
  */
 PyObject *make_img(PyObject *self, PyObject *args) {
 
+  double start_time = tic();
+  double setup_start = tic();
+
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
   (void)self;
@@ -441,6 +444,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   double *img = synth_malloc(npix * sizeof(double), "image");
   memset(img, 0, npix * sizeof(double));
 
+  toc("Extracting Python data", setup_start);
+
   /* Populate the image. */
   populate_smoothed_image(pix_values, smoothing_lengths, pos, kernel, res,
                           npix_x, npix_y, npart, threshold, kdim, img, nimgs,
@@ -450,6 +455,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   npy_intp dims[3] = {nimgs, npix_x, npix_y};
   PyArrayObject *out_img =
       (PyArrayObject *)PyArray_SimpleNewFromData(3, dims, NPY_FLOAT64, img);
+
+  toc("Computing smoothed image", start_time);
 
   return Py_BuildValue("N", out_img);
 }
