@@ -534,7 +534,7 @@ class Quantity:
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
             if value.units != self.unit and value.units != dimensionless:
-                value = value.to(self.unit).ndview
+                value = unyt_to_ndview(value, self.unit)
             else:
                 value = value.ndview
 
@@ -563,6 +563,45 @@ def has_units(x):
     return False
 
 
+def unyt_to_ndview(arr, unit=None):
+    """
+    Extract a the underlying data from a unyt_array or unyt_quantity.
+
+    An ndview is a pointer to the underlying data of a unyt_array or
+    unyt_quantity.
+
+    This is a helper function to enable the extraction of the underlying data
+    from a unyt_array or unyt_quantity WITHOUT making a copy of the data.
+    This is possible with the nview property on a unyt_array or unyt_quantity,
+    however, this is not implemented with an inplace unit conversion.
+
+    This function can either be used to extract the underlying data in the
+    existing units or to convert inplace to a new unit and then return the
+    view (an operation not implemented in unyt as far as I can tell).
+
+    Args:
+        arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to
+            extract the data from.
+        unit (unyt.unit_object.Unit): The unit to convert to. If None, the
+            existing unit is used. If the unit is not compatible with the
+            existing unit, an error will be raised.
+
+    Returns:
+        np.ndarray: The underlying data as a numpy array WITHOUT doing a copy.
+
+    Raises:
+        UnitConversionError: If the unit is not compatible with the existing
+            unit.
+    """
+    # If we don't have a unit then just return the ndview
+    if unit is None:
+        return arr.ndview
+
+    # Ok, we have a unit, do the conversion in place and return it
+    arr.convert_to_units(unit)
+    return arr.ndview
+
+
 def _raise_or_convert(expected_unit, name, value):
     """
     Ensure we have been passed compatible units and convert if needed.
@@ -585,16 +624,14 @@ def _raise_or_convert(expected_unit, name, value):
         # We know we have units but are they compatible?
         if value.units != expected_unit:
             try:
-                return value.to(expected_unit)
+                value.convert_to_units(expected_unit)
             except UnitConversionError:
                 raise exceptions.IncorrectUnits(
                     f"{name} passed with incompatible units. "
                     f"Expected {expected_unit} (or equivalent) but "
                     f"got {value.units}."
                 )
-        else:
-            # Otherwise the value is in the expected units
-            return value
+        return value
 
     # Handle the list/tuple case
     elif isinstance(value, (list, tuple)):
