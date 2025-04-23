@@ -60,6 +60,11 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
   int npart = parts->npart;
   npy_bool *mask = parts->mask;
 
+  /* Allocate the shifted wavelengths array and the mapped indices array. */
+  double *shifted_wavelengths =
+      synth_malloc(nlam * sizeof(double), "shifted wavelengths");
+  int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
+
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
@@ -79,8 +84,6 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
      * do this for each element because there is no guarantee the input
      * wavelengths will be evenly spaced but we also don't want to repeat
      * the nearest bin search too many times. */
-    double shifted_wavelengths[nlam];
-    int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
@@ -181,6 +184,10 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
       }
     }
   }
+
+  /* Free the allocated arrays. */
+  free(shifted_wavelengths);
+  free(mapped_indices);
 }
 
 /**
@@ -342,43 +349,55 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
                           part_props, p);
 
+    /* To combine fractions we will need an array of dimensions for the
+     * subset. These are always two in size, one for the low and one for high
+     * grid point. */
+    int sub_dims[ndim];
+    for (int idim = 0; idim < ndim; idim++) {
+      sub_dims[idim] = 2;
+    }
+
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
     for (int icell = 0; icell < ncells; icell++) {
 
-      /* Build frac_ind[] and combined frac via bit‑twiddling */
-      double frac = 1.0;
+      /* Set up some index arrays we'll need. */
+      int subset_ind[ndim];
       int frac_ind[ndim];
+
+      /* Get the multi-dimensional version of icell. */
+      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+      /* Multiply all contributing fractions and get the fractions index
+       * in the grid. */
+      double frac = 1;
       for (int idim = 0; idim < ndim; idim++) {
-        int bit = (icell >> idim) & 1;
-        if (bit == 0) {
-          frac *= (1.0 - axis_fracs[idim]);
+        if (subset_ind[idim] == 0) {
+          frac *= (1 - axis_fracs[idim]);
           frac_ind[idim] = part_indices[idim] - 1;
         } else {
           frac *= axis_fracs[idim];
           frac_ind[idim] = part_indices[idim];
         }
       }
-      if (frac == 0.0) {
+
+      if (frac == 0) {
         continue;
       }
 
       /* Define the weight. */
       double weight = frac * mass;
 
-      /* Compute the flat grid index directly (row‑major) */
-      int grid_ind = frac_ind[0];
-      int stride = dims[0];
-      for (int idim = 1; idim < ndim; idim++) {
-        grid_ind += frac_ind[idim] * stride;
-        stride *= dims[idim];
-      }
+      /* Get the weight's index. */
+      const int grid_ind = get_flat_index(frac_ind, dims, ndim);
 
-      /* Compute the spectra offset: each grid cell has nlam entries */
-      int spectra_ind = grid_ind * nlam;
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
 
-/* Add this grid cell's contribution to the spectra */
-#pragma omp simd
+      /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
         /* Skip if this wavelength is masked. */
         if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
@@ -424,6 +443,11 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
   int npart = parts->npart;
   npy_bool *mask = parts->mask;
 
+  /* Allocate the shifted wavelengths array and the mapped indices array. */
+  double *shifted_wavelengths =
+      synth_malloc(nlam * sizeof(double), "shifted wavelengths");
+  int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
+
   /* Loop over particles. */
 #pragma omp parallel for schedule(static) num_threads(nthreads)
   for (int p = 0; p < npart; p++) {
@@ -444,8 +468,6 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
      * do this for each element because there is no guarantee the input
      * wavelengths will be evenly spaced but we also don't want to repeat
      * the nearest bin search too many times. */
-    double shifted_wavelengths[nlam];
-    int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
@@ -545,6 +567,10 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
       }
     }
   }
+
+  /* Free the allocated arrays. */
+  free(shifted_wavelengths);
+  free(mapped_indices);
 }
 #endif
 
@@ -724,6 +750,11 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
   int npart = parts->npart;
   npy_bool *mask = parts->mask;
 
+  /* Allocate the shifted wavelengths array and the mapped indices array. */
+  double *shifted_wavelengths =
+      synth_malloc(nlam * sizeof(double), "shifted wavelengths");
+  int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
+
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
@@ -743,8 +774,6 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
      * do this for each element because there is no guarantee the input
      * wavelengths will be evenly spaced but we also don't want to repeat
      * the nearest bin search too many times. */
-    double shifted_wavelengths[nlam];
-    int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
@@ -802,6 +831,10 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
       spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
     }
   }
+
+  /* Free the allocated arrays. */
+  free(shifted_wavelengths);
+  free(mapped_indices);
 }
 
 /**
@@ -956,6 +989,11 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
     }
 #endif
 
+    /* Allocate the shifted wavelengths array and the mapped indices array. */
+    double *shifted_wavelengths =
+        synth_malloc(nlam * sizeof(double), "shifted wavelengths");
+    int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
+
     /* Loop over particles. */
     for (int p = start; p < end; p++) {
 
@@ -975,8 +1013,6 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
        * do this for each element because there is no guarantee the input
        * wavelengths will be evenly spaced but we also don't want to repeat
        * the nearest bin search too many times. */
-      double shifted_wavelengths[nlam];
-      int mapped_indices[nlam];
       for (int ilam = 0; ilam < nlam; ilam++) {
         shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
         mapped_indices[ilam] =
@@ -1034,6 +1070,9 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
         spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
       }
     }
+    /* Free the allocated arrays. */
+    free(shifted_wavelengths);
+    free(mapped_indices);
   }
 }
 #endif
