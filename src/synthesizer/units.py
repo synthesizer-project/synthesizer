@@ -602,26 +602,6 @@ def unyt_to_ndview(arr, unit=None):
     return arr.ndview
 
 
-def to_unit_nocopy(arr, unit):
-    """
-    Convert a unyt_array or unyt_quantity to a new unit WITHOUT copying.
-
-    This is a helper function to enable the conversion of a unyt_array or
-    unyt_quantity to a new unit inplace. This is just an abstraction to
-    turn an unweildy 2 line call into a single line.
-
-    Args:
-        arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to
-            convert.
-        unit (unyt.unit_object.Unit): The unit to convert to.
-
-    Returns:
-        None: The unyt_array or unyt_quantity is converted inplace.
-    """
-    arr.convert_to_units(unit)
-    return arr
-
-
 def _raise_or_convert(expected_unit, name, value):
     """
     Ensure we have been passed compatible units and convert if needed.
