@@ -60,6 +60,9 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
   int npart = parts->npart;
   npy_bool *mask = parts->mask;
 
+  /* Calculate the number of cell in a patch of the grid. */
+  int ncells = 1 << ndim;
+
   /* Allocate the shifted wavelengths array and the mapped indices array. */
   double *shifted_wavelengths =
       synth_malloc(nlam * sizeof(double), "shifted wavelengths");
@@ -108,7 +111,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
 
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
-    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    for (int icell = 0; icell < ncells; icell++) {
 
       /* Set up some index arrays we'll need. */
       int subset_ind[ndim];
@@ -215,6 +218,9 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
   int npart = parts->npart;
   npy_bool *mask = parts->mask;
 
+  /* Calculate the number of cell in a patch of the grid. */
+  int ncells = 1 << ndim;
+
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
@@ -244,7 +250,7 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
 
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
-    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    for (int icell = 0; icell < ncells; icell++) {
 
       /* Set up some index arrays we'll need. */
       int subset_ind[ndim];
@@ -326,7 +332,7 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
   int npart = parts->npart;
   npy_bool *restrict mask = parts->mask;
 
-  /* How many cells are there in a single "subset" of the grid? */
+  /* Calculate the number of cell in a patch of the grid. */
   int ncells = 1 << ndim;
 
 /* Loop over particles. */
@@ -399,10 +405,12 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
 
       /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
+
         /* Skip if this wavelength is masked. */
         if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
           continue;
         }
+
         spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
       }
     }
@@ -442,6 +450,9 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
   double *velocity = parts->velocities;
   int npart = parts->npart;
   npy_bool *mask = parts->mask;
+
+  /* Calculate the number of cell in a patch of the grid. */
+  int ncells = 1 << ndim;
 
   /* Allocate the shifted wavelengths array and the mapped indices array. */
   double *shifted_wavelengths =
@@ -492,7 +503,7 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
 
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
-    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    for (int icell = 0; icell < ncells; icell++) {
 
       /* Set up some index arrays we'll need. */
       int subset_ind[ndim];
