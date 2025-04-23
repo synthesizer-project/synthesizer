@@ -9,11 +9,6 @@ import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
-from profiling_utils import (
-    parse_and_collect_runtimes,
-    plot_speed_up_plot,
-    run_scaling_test,
-)
 from unyt import Msun, Myr, kpc
 
 from synthesizer import Grid
@@ -25,6 +20,7 @@ from synthesizer.particle.gas import Gas
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfzh
 from synthesizer.particle.utils import calculate_smoothing_lengths
+from synthesizer.utils.profiling_utils import run_scaling_test
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -135,28 +131,13 @@ def los_surface_density_strong_scaling(
         max_threads,
         average_over,
         log_outpath,
+        plot_outpath,
         galaxy.get_stellar_los_tau_v,
         {
             "kappa": 0.075,
             "kernel": kernel,
         },
         total_msg="Calculating LOS surface density",
-    )
-
-    # Parse the output
-    runtimes, linestyles = parse_and_collect_runtimes(
-        output,
-        threads,
-        average_over,
-        log_outpath,
-    )
-
-    # Plot the results
-    plot_speed_up_plot(
-        runtimes,
-        threads,
-        linestyles,
-        plot_outpath,
     )
 
 

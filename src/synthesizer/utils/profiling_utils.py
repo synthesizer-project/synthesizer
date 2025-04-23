@@ -1,4 +1,10 @@
-"""A script containing some utility functions for profiling Synthesizer."""
+"""A submodule containing some utility functions for profiling Synthesizer.
+
+This module defines a set of helper functions for running different types
+of "onboard" performance tests on the Synthesizer package.
+
+For further details see the documentation on the functions below.
+"""
 
 import os
 import sys
@@ -16,7 +22,7 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def run_scaling_test(
+def _run_averaged_scaling_test(
     max_threads,
     average_over,
     log_outpath,
@@ -25,7 +31,7 @@ def run_scaling_test(
     total_msg,
 ):
     """
-    Run a scaling test for the Synthesizer package.
+    Run a scaling test and average the result at each thread count.
 
     Args:
         max_threads (int): The maximum number of threads to test.
@@ -209,6 +215,17 @@ def parse_and_collect_runtimes(
     # Remove the threads from the dictionary
     atomic_runtimes.pop("Threads")
 
+    # Remove any entries which are taking a tiny fraction of the time
+    # and are not the total
+    minimum_time = atomic_runtimes["Total"][-1] * 0.001
+    old_keys = list(atomic_runtimes.keys())
+    for key in old_keys:
+        if key == "Total":
+            continue
+        if np.mean(atomic_runtimes[key]) < minimum_time:
+            atomic_runtimes.pop(key)
+            linestyles.pop(key)
+
     # Return the runtimes and linestyles
     return atomic_runtimes, linestyles
 
@@ -313,3 +330,54 @@ def plot_speed_up_plot(
         bbox_inches="tight",
     )
     plt.show()
+
+
+def run_scaling_test(
+    max_threads,
+    average_over,
+    log_outpath,
+    plot_outpath,
+    operation_function,
+    kwargs,
+    total_msg,
+):
+    """
+    Run a scaling test for the Synthesizer package.
+
+    For this to deliver the full profiling potential Synthesizer should be
+    installed with the ATOMIC_TIMING configuration option.
+
+    Args:
+        max_threads (int): The maximum number of threads to test.
+        average_over (int): The number of times to average the test over.
+        log_outpath (str): The path to save the log file.
+        plot_outpath (str): The path to save the plot.
+        operation_function (function): The function to test.
+        kwargs (dict): The keyword arguments to pass to the function.
+        total_msg (str): The message to print for the total time.
+    """
+    # Run the scaling test itself
+    output, threads = run_scaling_test(
+        max_threads,
+        average_over,
+        log_outpath,
+        operation_function,
+        kwargs,
+        total_msg,
+    )
+
+    # Parse the output
+    runtimes, linestyles = parse_and_collect_runtimes(
+        output,
+        threads,
+        average_over,
+        log_outpath,
+    )
+
+    # Plot the results
+    plot_speed_up_plot(
+        runtimes,
+        threads,
+        linestyles,
+        plot_outpath,
+    )

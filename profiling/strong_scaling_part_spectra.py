@@ -9,11 +9,6 @@ import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
-from profiling_utils import (
-    parse_and_collect_runtimes,
-    plot_speed_up_plot,
-    run_scaling_test,
-)
 from unyt import Msun, Myr
 
 from synthesizer.emission_models import IncidentEmission
@@ -21,6 +16,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
+from synthesizer.utils.profiling_utils import run_scaling_test
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -87,28 +83,13 @@ def part_spectra_strong_scaling(
         max_threads,
         average_over,
         log_outpath,
+        plot_outpath,
         stars.get_spectra,
         {
             "emission_model": model,
             "grid_assignment_method": gam,
         },
         total_msg="Generating spectra",
-    )
-
-    # Parse the output
-    runtimes, linestyles = parse_and_collect_runtimes(
-        output,
-        threads,
-        average_over,
-        log_outpath,
-    )
-
-    # Plot the results
-    plot_speed_up_plot(
-        runtimes,
-        threads,
-        linestyles,
-        plot_outpath,
     )
 
 

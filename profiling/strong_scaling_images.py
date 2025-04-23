@@ -9,11 +9,6 @@ import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
-from profiling_utils import (
-    parse_and_collect_runtimes,
-    plot_speed_up_plot,
-    run_scaling_test,
-)
 from unyt import Msun, Myr, angstrom, kpc
 
 from synthesizer import Grid
@@ -26,6 +21,7 @@ from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfzh
 from synthesizer.particle.utils import calculate_smoothing_lengths
+from synthesizer.utils.profiling_utils import run_scaling_test
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -142,6 +138,7 @@ def images_strong_scaling(
         max_threads,
         average_over,
         log_outpath,
+        plot_outpath,
         stars.get_images_luminosity,
         {
             "resolution": webb_inst.resolution,
@@ -150,22 +147,6 @@ def images_strong_scaling(
             "kernel": kernel,
         },
         total_msg="Generating images",
-    )
-
-    # Parse the output
-    runtimes, linestyles = parse_and_collect_runtimes(
-        output,
-        threads,
-        average_over,
-        log_outpath,
-    )
-
-    # Plot the results
-    plot_speed_up_plot(
-        runtimes,
-        threads,
-        linestyles,
-        plot_outpath,
     )
 
 
