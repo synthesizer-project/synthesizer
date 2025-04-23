@@ -164,6 +164,12 @@ class Extractor(ABC):
             ):
                 value = unyt_to_ndview(value, units)
 
+            # We know that the extracted values must be arrays, this can not be
+            # the case when we only have 1 value (i.e. a single particle, or
+            # singular valued parametric property) so here we make sure that
+            # we have a 1D array for everything we are returning
+            value = np.atleast_1d(value)
+
             # Append the extracted value to the list
             extracted.append(value)
 
