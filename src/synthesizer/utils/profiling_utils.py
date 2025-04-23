@@ -357,7 +357,7 @@ def run_scaling_test(
         total_msg (str): The message to print for the total time.
     """
     # Run the scaling test itself
-    output, threads = run_scaling_test(
+    output, threads = _run_averaged_scaling_test(
         max_threads,
         average_over,
         log_outpath,
