@@ -19,6 +19,7 @@ from unyt import angstrom, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
+from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
 )
@@ -60,6 +61,15 @@ def _generate_image_particle_hist(
             f"{coordinates.shape[0]})."
         )
 
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(coordinates, img.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the image resolution units"
+            f" (got {coordinates.units} and {img.resolution.units})."
+        )
+
     # Ensure coordinates have been centred
     if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
         np.isclose(coordinates, 0)
@@ -79,9 +89,13 @@ def _generate_image_particle_hist(
         img.arr = np.zeros(img.npix)
         return img.arr * img.units if img.units is not None else img.arr
 
+    # Unpack the image properties and ensure we agree on the units
+    spatial_units = img.resolution.units
+    fov = img.fov.to_value(spatial_units)
+
     # Convert coordinates and smoothing lengths to the correct units and
     # strip them off
-    coordinates = coordinates.to(img.resolution.units).value
+    coordinates = coordinates.to_value(spatial_units)
 
     # Include normalisation in the original signal if we have one
     # (we'll divide by it later)
@@ -95,8 +109,8 @@ def _generate_image_particle_hist(
         coordinates[:, 0],
         coordinates[:, 1],
         bins=(
-            np.linspace(-img._fov[0] / 2, img._fov[0] / 2, img.npix[0] + 1),
-            np.linspace(-img._fov[1] / 2, img._fov[1] / 2, img.npix[1] + 1),
+            np.linspace(-fov[0] / 2, fov[0] / 2, img.npix[0] + 1),
+            np.linspace(-fov[1] / 2, fov[1] / 2, img.npix[1] + 1),
         ),
         weights=signal,
     )[0]
@@ -107,12 +121,8 @@ def _generate_image_particle_hist(
             coordinates[:, 0],
             coordinates[:, 1],
             bins=(
-                np.linspace(
-                    -img._fov[0] / 2, img._fov[0] / 2, img.npix[0] + 1
-                ),
-                np.linspace(
-                    -img._fov[1] / 2, img._fov[1] / 2, img.npix[1] + 1
-                ),
+                np.linspace(-fov[0] / 2, fov[0] / 2, img.npix[0] + 1),
+                np.linspace(-fov[1] / 2, fov[1] / 2, img.npix[1] + 1),
             ),
             weights=normalisation.value,
         )[0]
@@ -237,6 +247,25 @@ def _generate_image_particle_smoothed(
             "Coordinates and smoothing lengths must be the same size"
             f" for a smoothed image (got {cent_coords.shape[0]} and "
             f"{smoothing_lengths.shape[0]})."
+        )
+
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, img.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the image resolution units"
+            f" (got {cent_coords.units} and {img.resolution.units})."
+        )
+
+    # Ensure the smoothing lengths are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(smoothing_lengths, img.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Smoothing lengths must be compatible with the image resolution "
+            f"units (got {smoothing_lengths.units} and "
+            f"{img.resolution.units})."
         )
 
     # Ensure coordinates have been centred
@@ -393,6 +422,25 @@ def _generate_images_particle_smoothed(
             f"label (got {signals.shape[0]} and {len(labels)})."
         )
 
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, imgs.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the image resolution units"
+            f" (got {cent_coords.units} and {imgs.resolution.units})."
+        )
+
+    # Ensure the smoothing lengths are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(smoothing_lengths, imgs.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Smoothing lengths must be compatible with the image resolution "
+            f"units (got {smoothing_lengths.units} and "
+            f"{imgs.resolution.units})."
+        )
+
     # Ensure coordinates have been centred
     if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
         np.isclose(cent_coords, 0)
@@ -543,6 +591,7 @@ def _generate_image_collection_generic(
     kernel_threshold,
     nthreads,
     emitter,
+    cosmo,
 ):
     """
     Generate an image collection for a generic emitter.
@@ -576,6 +625,10 @@ def _generate_image_collection_generic(
             only applies to particle imaging.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
+        cosmo (astropy.cosmology.Cosmology)
+            A cosmology object defining the cosmology to use for the images.
+            This is only relevant for angular images where a conversion to
+            projected angular coordinates is needed.
 
     Returns:
         ImageCollection
@@ -598,9 +651,21 @@ def _generate_image_collection_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
+        # Get the correct coordinates for the particles (i.e. angular
+        # or cartesian)
+        if imgs.has_angular_units and cosmo is not None:
+            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
+        elif imgs.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+
         return _generate_images_particle_hist(
             imgs,
-            coordinates=emitter.centered_coordinates,
+            coordinates=coords,
             signals=photometry,
         )
 
@@ -611,11 +676,26 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
+        # Get the correct coordinates and smoothing lengths for the
+        # particles (i.e. angular or cartesian)
+        if imgs.has_angular_units and cosmo is not None:
+            coords, smls = emitter.get_projected_angular_imaging_props(
+                cosmo=cosmo
+            )
+        elif imgs.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+            smls = emitter.smoothing_lengths
+
         return _generate_images_particle_smoothed(
             imgs=imgs,
             signals=photometry.photometry,
-            cent_coords=emitter.centered_coordinates,
-            smoothing_lengths=emitter.smoothing_lengths,
+            cent_coords=coords,
+            smoothing_lengths=smls,
             labels=photometry.filter_codes,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
@@ -623,6 +703,8 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed":
+        # FYI, the parametric imaging handles the angular vs cartesian
+        # image properties internally so we don't need to worry about it here
         return _generate_images_parametric_smoothed(
             imgs,
             density_grid=emitter.morphology.get_density_grid(
@@ -700,6 +782,15 @@ def _generate_ifu_particle_hist(
             "Spectra and coordinates must be the same size"
             f" for an IFU image (got {spectra.shape[0]} and "
             f"{cent_coords.shape[0]})."
+        )
+
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, ifu.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the IFU resolution units"
+            f" (got {cent_coords.units} and {ifu.resolution.units})."
         )
 
     # Get the spatial units we'll work with
@@ -822,6 +913,25 @@ def _generate_ifu_particle_smoothed(
             f"{cent_coords.shape[0]})."
         )
 
+    # Ensure the coordinates are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(cent_coords, ifu.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Coordinates must be compatible with the IFU resolution units"
+            f" (got {cent_coords.units} and {ifu.resolution.units})."
+        )
+
+    # Ensure the smoothing lengths are compatible with the fov/resolution
+    # Note that the resolution and fov are already guaranteed to be
+    # compatible with each other at this point
+    if not unit_is_compatible(smoothing_lengths, ifu.resolution.units):
+        raise exceptions.InconsistentArguments(
+            "Smoothing lengths must be compatible with the IFU resolution "
+            f"units (got {smoothing_lengths.units} and "
+            f"{ifu.resolution.units})."
+        )
+
     # Get the spatial units we'll work with
     spatial_units = ifu.resolution.units
 
@@ -934,6 +1044,7 @@ def _generate_ifu_generic(
     nthreads,
     label,
     emitter,
+    cosmo,
 ):
     """
     Generate a spectral cube.
@@ -974,6 +1085,10 @@ def _generate_ifu_generic(
             The label of the photometry to use.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
+        cosmo (astropy.cosmology.Cosmology)
+            A cosmology object defining the cosmology to use for the IFU.
+            This is only relevant for angular IFUs where a conversion to
+            projected angular coordinates is needed.
 
     Returns:
         SpectralCube: The generated spectral data cube.
@@ -1010,11 +1125,23 @@ def _generate_ifu_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
+        # Get the correct coordinates for the particles (i.e. angular
+        # or cartesian)
+        if ifu.has_angular_units and cosmo is not None:
+            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
+        elif ifu.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+
         return _generate_ifu_particle_hist(
             ifu,
             sed=sed,
             quantity=quantity,
-            cent_coords=emitter.centered_coordinates,
+            cent_coords=coords,
             nthreads=nthreads,
         )
 
@@ -1024,18 +1151,35 @@ def _generate_ifu_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
+        # Get the correct coordinates and smoothing lengths for the
+        # particles (i.e. angular or cartesian)
+        if ifu.has_angular_units and cosmo is not None:
+            coords, smls = emitter.get_projected_angular_imaging_props(
+                cosmo=cosmo
+            )
+        elif ifu.has_angular_units:
+            raise exceptions.InconsistentArguments(
+                "An Astropy cosmology object must be provided to use angular "
+                "coordinates for imaging."
+            )
+        else:
+            coords = emitter.centered_coordinates
+            smls = emitter.smoothing_lengths
+
         return _generate_ifu_particle_smoothed(
             ifu,
             sed=sed,
             quantity=quantity,
-            cent_coords=emitter.centered_coordinates,
-            smoothing_lengths=emitter.smoothing_lengths,
+            cent_coords=coords,
+            smoothing_lengths=smls,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
         )
 
     elif img_type == "smoothed":
+        # FYI, the parametric imaging handles the angular vs cartesian
+        # image properties internally so we don't need to worry about it here
         return _generate_ifu_parametric_smoothed(
             ifu,
             sed=sed,
