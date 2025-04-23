@@ -28,6 +28,7 @@ import os
 import shutil
 from functools import wraps
 
+import numpy as np
 import yaml
 from unyt import (
     Unit,
@@ -597,8 +598,35 @@ def unyt_to_ndview(arr, unit=None):
     if unit is None:
         return arr.ndview
 
-    # Ok, we have a unit, do the conversion in place and return it
-    arr.convert_to_units(unit)
+    # If the units are the same then just return the ndview
+    if arr.units == unit:
+        return arr.ndview
+
+    # Ok, we have a unit, do the conversion on the data and then copy the
+    # converted data into the ndview
+    raw = arr.ndview.astype(np.float64)
+
+    # Get the conversion factor
+    conversion_factor, offset = arr.units.get_conversion_factor(unit)
+
+    # Convert the data to the new unit
+    raw = np.multiply(raw, conversion_factor)
+
+    if offset is not None:
+        # If we have an offset then we need to add it
+        raw += offset
+
+    # Protect against any weird rounding that has occurred
+    # during the conversion
+    # TODO: this is very much a horrid hack that works for now.
+    raw = np.round(raw, decimals=10)
+
+    # Set the new unit
+    arr.units = unit
+
+    # Set the new data
+    np.copyto(arr.ndview, raw)
+
     return arr.ndview
 
 
