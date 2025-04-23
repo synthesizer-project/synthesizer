@@ -50,7 +50,7 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.extensions import tic, toc
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_generators import (
