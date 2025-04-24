@@ -2368,6 +2368,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
+        start = tic()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2419,7 +2421,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if label in spectra:
                 continue
             try:
-                extract_start = tic()
                 spectra, particle_spectra = self._extract_spectra(
                     emission_model[label],
                     emitters,
@@ -2429,7 +2430,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     nthreads=nthreads,
                     grid_assignment_method=grid_assignment_method,
                 )
-                toc("Extracting spectra", extract_start)
             except Exception as e:
                 if sys.version_info >= (3, 11):
                     e.add_note(f"EmissionModel.label: {label}")
@@ -2623,6 +2623,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_spectra:
                         del particle_spectra[model.label]
 
+        toc("Generating all spectra", start)
+
         return spectra, particle_spectra
 
     def _get_lines(
@@ -2729,6 +2731,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
+        start = tic()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2768,7 +2772,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 continue
 
             try:
-                extract_start = tic()
                 lines, particle_lines = self._extract_lines(
                     line_ids,
                     emission_model[label],
@@ -2779,7 +2782,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     nthreads=nthreads,
                     grid_assignment_method=grid_assignment_method,
                 )
-                toc("Extracting lines", extract_start)
             except Exception as e:
                 if sys.version_info >= (3, 11):
                     e.add_note(f"EmissionModel.label: {label}")
@@ -2931,6 +2933,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_lines:
                         del particle_lines[model.label]
 
+        toc("Generating all lines", start)
+
         return lines, particle_lines
 
     @accepts(fov=(kpc, arcsecond))
@@ -3008,6 +3012,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A dictionary of ImageCollections which can be attached to the
                 appropriate images attribute of the component.
         """
+        start = tic()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -3199,6 +3205,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if limit_to is not None and not _is_related:
             for key in set(images) - set(_orig_limit_to):
                 del images[key]
+
+        toc("Generating all images", start)
 
         return images
 

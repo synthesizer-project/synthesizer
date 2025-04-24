@@ -24,6 +24,7 @@ from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
     _generate_image_parametric_smoothed,
@@ -82,6 +83,8 @@ class Image(ImagingBase):
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
+        start = tic()
+
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
 
@@ -99,6 +102,8 @@ class Image(ImagingBase):
         # Set up the noise array and weight map
         self.noise_arr = None
         self.weight_map = None
+
+        toc("Creating Image", start)
 
     @property
     def img(self):
@@ -182,13 +187,15 @@ class Image(ImagingBase):
         # Ensure the images have the same resolution
         if self.resolution != other_img.resolution:
             raise exceptions.InconsistentAddition(
-                "The images must have the same resolution to be added."
+                "The images must have the same resolution to be added "
+                f"({self.resolution}, {other_img.resolution})."
             )
 
         # Ensure the images have the same fov
         if np.any(self.fov != other_img.fov):
             raise exceptions.InconsistentAddition(
-                "The images must have the same fov to be added."
+                "The images must have the same fov to be added "
+                f"({self.fov}, {other_img.fov})."
             )
 
         # Hanlde if units are involved or not

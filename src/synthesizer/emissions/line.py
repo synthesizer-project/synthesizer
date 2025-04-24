@@ -183,7 +183,7 @@ class LineCollection:
         self.available_diagrams = []
         self._which_diagrams()
 
-        toc("Initialised LineCollection", start)
+        toc("Creating LineCollection", start)
 
     @property
     def id(self):
