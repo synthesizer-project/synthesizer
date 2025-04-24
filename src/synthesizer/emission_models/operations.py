@@ -20,9 +20,6 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Template
-from synthesizer.imaging.image_generators import (
-    _generate_image_collection_generic,
-)
 from synthesizer.parametric import BlackHole
 
 
@@ -308,83 +305,6 @@ class Extraction:
 
         return lines, particle_lines
 
-    def _extract_images(
-        self,
-        this_model,
-        instrument,
-        fov,
-        img_type,
-        do_flux,
-        emitters,
-        images,
-        kernel,
-        kernel_threshold,
-        nthreads,
-    ):
-        """
-        Create an image for an extraction key.
-
-        Args:
-            this_model (EmissionModel):
-                The model defining the extraction.
-            instrument (Instrument):
-                The instrument to use when generating images.
-            fov (float):
-                The field of view of the images.
-            img_type (str):
-                The type of image to generate.
-            do_flux (bool):
-                Are we generating flux images?
-            emitters (dict):
-                The emitters to generate the images for.
-            images (dict):
-                The dictionary to store the images in.
-            kernel (str):
-                The kernel to use when generating images.
-            kernel_threshold (float):
-                The threshold to use when generating images.
-            nthreads (int):
-                The number of threads to use when generating images.
-            limit_to (str):
-                Limit the images to a specific model.
-
-        Returns:
-            dict:
-                The dictionary of image collections.
-        """
-        # Extract the label for this model
-        label = this_model.label
-
-        # Get the emitter
-        emitter = emitters[this_model.emitter]
-
-        # To make images for a particle based emitter we need to have generated
-        # per particle emissions first, make sure this is the case (note that
-        # parametric emitters don't since they smooth integrated emission
-        # over a density grid defined by their morphology)
-        if emitter.is_particle and not this_model.per_particle:
-            raise exceptions.MissingModelSetting(
-                "To generate images for a particle based emitter the model "
-                "must be set to per_particle. (pass per_particle=True when "
-                "initialising the model or call model.set_per_particle(True))"
-            )
-
-        # Store the resulting image collection
-        images[label] = _generate_image_collection_generic(
-            instrument,
-            fov,
-            img_type,
-            do_flux,
-            this_model.per_particle,
-            kernel,
-            kernel_threshold,
-            nthreads,
-            label,
-            emitter,
-        )
-
-        return images
-
     def _extract_summary(self):
         """Return a summary of an extraction model."""
         # Create a list to hold the summary
@@ -648,76 +568,6 @@ class Generation:
 
         return lines, particle_lines
 
-    def _generate_images(
-        self,
-        instrument,
-        fov,
-        this_model,
-        img_type,
-        do_flux,
-        emitter,
-        images,
-        kernel,
-        kernel_threshold,
-        nthreads,
-    ):
-        """
-        Create an image for a generation key.
-
-        Args:
-            instrument (Instrument):
-                The instrument to use when generating images.
-            fov (float):
-                The field of view of the images.
-            this_model (EmissionModel):
-                The model to generate the images for.
-            img_type (str):
-                The type of image to generate.
-            do_flux (bool):
-                Are we generating flux images?
-            emitter (dict):
-                The emitter to generate the images for.
-            images (dict):
-                The dictionary to store the images in.
-            kernel (str):
-                The kernel to use when generating images.
-            kernel_threshold (float):
-                The threshold to use when generating images.
-            nthreads (int):
-                The number of threads to use when generating images.
-
-        Returns:
-            dict:
-                The dictionary of image collections now containing the
-                generated images.
-        """
-        # To make images for a particle based emitter we need to have generated
-        # per particle emissions first, make sure this is the case (note that
-        # parametric emitters don't since they smooth integrated emission
-        # over a density grid defined by their morphology)
-        if emitter.is_particle and not this_model.per_particle:
-            raise exceptions.MissingModelSetting(
-                "To generate images for a particle based emitter the model "
-                "must be set to per_particle. (pass per_particle=True when "
-                "initialising the model or call model.set_per_particle(True))"
-            )
-
-        # Store the resulting image collection
-        images[this_model.label] = _generate_image_collection_generic(
-            instrument,
-            fov,
-            img_type,
-            do_flux,
-            this_model.per_particle,
-            kernel,
-            kernel_threshold,
-            nthreads,
-            this_model.label,
-            emitter,
-        )
-
-        return images
-
     def _generate_summary(self):
         """Return a summary of a generation model."""
         # Create a list to hold the summary
@@ -849,78 +699,6 @@ class Transformation:
             emissions[this_model.label] = emission
 
         return emissions, particle_emissions
-
-    def _transform_images(
-        self,
-        instrument,
-        fov,
-        this_model,
-        img_type,
-        do_flux,
-        emitter,
-        images,
-        kernel,
-        kernel_threshold,
-        nthreads,
-    ):
-        """
-        Create an image for a transformation model.
-
-        Args:
-            instrument (Instrument):
-                The instrument to use when generating images.
-            fov (float):
-                The field of view of the images.
-            this_model (EmissionModel):
-                The model to generate the images for.
-            img_type (str):
-                The type of image to generate.
-            do_flux (bool):
-                Are we generating flux images?
-            emitter (dict):
-                The emitter to generate the images for.
-            images (dict):
-                The dictionary to store the images in.
-            kernel (str):
-                The kernel to use when generating images.
-            kernel_threshold (float):
-                The threshold to use when generating images.
-            nthreads (int):
-                The number of threads to use when generating images.
-            instrument (Instrument):
-                The instrument to use when generating images.
-
-        Returns:
-            dict:
-                The dictionary of image collections now containing the
-                generated images.
-        """
-        # To make images for a particle based emitter we need to have generated
-        # per particle emissions first, make sure this is the case (note that
-        # parametric emitters don't since they smooth integrated emission
-        # over a density grid defined by their morphology)
-        if emitter.is_particle and not this_model.per_particle:
-            raise exceptions.MissingModelSetting(
-                "To generate images for a particle based emitter the model "
-                "must be set to per_particle. (pass per_particle=True when "
-                "initialising the model or call model.set_per_particle(True))"
-            )
-
-        # Store the resulting image collection
-        images[this_model.label] = _generate_image_collection_generic(
-            instrument,
-            fov,
-            img_type,
-            do_flux,
-            this_model.per_particle,
-            kernel,
-            kernel_threshold,
-            nthreads,
-            this_model.label,
-            emitter,
-        )
-
-        return images
 
     def _transform_summary(self):
         """Return a summary of a transformation model."""
@@ -1126,40 +904,9 @@ class Combination:
             if model.label not in images
         ]
 
-        # Ok, we don't have the models so we have no choice but to generate
-        # the image directly from the spectra
-        if len(missing) > 0 and this_model.emitter != "galaxy":
-            # To make images for a particle based emitter we need to
-            # have generated per particle emissions first, make sure this
-            # is the case (note that parametric emitters don't since they
-            # smooth integrated emission over a density grid defined by
-            # their morphology)
-            if (
-                emitters[this_model.emitter].is_particle
-                and not this_model.per_particle
-            ):
-                raise exceptions.MissingModelSetting(
-                    "To generate images for a particle based emitter"
-                    " the model must be set to per_particle. (pass "
-                    "per_particle=True when initialising the model or call "
-                    "model.set_per_particle(True))"
-                )
-
-            images[this_model.label] = _generate_image_collection_generic(
-                instrument,
-                fov,
-                img_type,
-                do_flux,
-                this_model.per_particle,
-                kernel,
-                kernel_threshold,
-                nthreads,
-                this_model.label,
-                emitters[this_model.emitter],
-            )
-            return images
-
-        elif len(missing) > 0 and this_model.emitter == "galaxy":
+        # Ok, we're missing some images. All other images that can be made
+        # have been made
+        if len(missing) > 0:
             raise exceptions.MissingImage(
                 "Can't generate galaxy level images without saving the "
                 f"spectra from the component models ({', '.join(missing)})."

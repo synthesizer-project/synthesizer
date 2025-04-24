@@ -4,14 +4,14 @@ The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
-from unyt import Mpc
+from unyt import Mpc, arcsecond
 
 from synthesizer import exceptions
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
-from synthesizer.units import accepts
+from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 
 
@@ -1140,6 +1140,7 @@ class BaseGalaxy:
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -1197,6 +1198,10 @@ class BaseGalaxy:
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
                 the images by instrument.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -1232,6 +1237,21 @@ class BaseGalaxy:
                 filters=filters,
             )
 
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
         # Convert `limit_to` to a list if it is a string
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
 
@@ -1251,6 +1271,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=False,
+            cosmo=cosmo,
         )
 
         # Get the instrument name if we have one
@@ -1319,6 +1340,7 @@ class BaseGalaxy:
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -1370,6 +1392,10 @@ class BaseGalaxy:
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
                 the images by instrument.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -1398,6 +1424,21 @@ class BaseGalaxy:
                 "place-holder", resolution=resolution, filters=filters
             )
 
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
         # Convert `limit_to` to a list if it is a string
         limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
 
@@ -1417,6 +1458,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=True,
+            cosmo=cosmo,
         )
 
         # Get the instrument name if we have one

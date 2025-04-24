@@ -8,7 +8,10 @@ particle.imaging.Images and parametric.imaging.Images classes.
 Example usage::
 
     # Create an image collection
-    img_coll = ImageCollection(resolution=0.1 * unyt.arcsec, npix=100)
+    img_coll = ImageCollection(
+        resolution=0.1 * unyt.arcsec,
+        fov=(10, 10) * unyt.arcsec,
+    )
 
     # Get histograms of the particle distribution
     img_coll.get_imgs_hist(photometry, coordinates)
@@ -47,16 +50,18 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.extensions.timers import tic, toc
+from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_generators import (
     _generate_images_parametric_smoothed,
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
-from synthesizer.units import Quantity
+from synthesizer.utils import TableFormatter
 
 
-class ImageCollection:
+class ImageCollection(ImagingBase):
     """
     A collection of Image objects.
 
@@ -66,39 +71,25 @@ class ImageCollection:
     Both parametric and particle based imaging uses this class.
 
     Attributes:
-        resolution (unyt_quantity)
-            The size of a pixel.
-        fov (unyt_quantity/tuple, unyt_quantity)
-            The width of the image.
-        npix (int/tuple, int)
-            The number of pixels in the image.
         imgs (dict)
-            A dictionary of images.
+            A dictionary of images to be turned into a collection.
         noise_maps (dict)
-            A dictionary of noise maps associated to imgs.
+            A dictionary of noise maps to be applied to the images.
         weight_maps (dict)
-            A dictionary of weight maps associated to imgs.
+            A dictionary of weight maps to be applied to the images.
         filter_codes (list)
-            A list of the filter codes of the images.
+            A list of filter codes for each image in the collection.
         rgb_img (np.ndarray)
             The RGB image array.
     """
 
-    # Define quantities
-    resolution = Quantity("spatial")
-    fov = Quantity("spatial")
-    orig_resolution = Quantity("spatial")
-
     def __init__(
         self,
         resolution,
-        fov=None,
-        npix=None,
+        fov,
         imgs=None,
     ):
         """Initialize the image collection.
-
-        Either fov or npix must be specified.
 
         An ImageCollection can either generate images or be initialised with
         an image dictionary, and optionally noise and weight maps. In practice
@@ -111,45 +102,12 @@ class ImageCollection:
             fov (unyt_quantity/tuple, unyt_quantity)
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
-            npix (int/tuple, int)
-                The number of pixels in the image. If a single value is given
-                then the image is assumed to be square.
             imgs (dict)
                 A dictionary of images to be turned into a collection.
-            noise_maps (dict)
-                A dictionary of noise maps associated to imgs.
-            weight_maps (dict)
-                A dictionary of weight maps associated to imgs.
         """
-        # Check the arguments
-        self._check_args(resolution, fov, npix)
-
-        # Attach resolution, fov, and npix
-        self.resolution = resolution
-        self.fov = fov
-        self.npix = npix
-
-        # If fov isn't a array, make it one
-        if self.fov is not None and self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # If npix isn't an array, make it one
-        if npix is not None and not isinstance(npix, np.ndarray):
-            if isinstance(npix, int):
-                self.npix = np.array((npix, npix))
-            else:
-                self.npix = np.array(npix)
-
-        # Keep track of the input resolution and and npix so we can handle
-        # super resolution correctly.
-        self.orig_resolution = resolution
-        self.orig_npix = npix
-
-        # Handle the different input cases
-        if npix is None:
-            self._compute_npix()
-        else:
-            self._compute_fov()
+        start = tic()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Container for images (populated when image creation methods are
         # called)
@@ -174,60 +132,7 @@ class ImageCollection:
                 self.imgs[f] = img
                 self.filter_codes.append(f)
 
-    def _check_args(self, resolution, fov, npix):
-        """
-        Ensure we have a valid combination of inputs.
-
-        Args:
-            resolution (unyt_quantity)
-                The size of a pixel.
-            fov (unyt_quantity)
-                The width of the image.
-            npix (int)
-                The number of pixels in the image.
-
-        Raises:
-            InconsistentArguments
-               Errors when an incorrect combination of arguments is passed.
-        """
-        # Missing units on resolution
-        if isinstance(resolution, float):
-            raise exceptions.InconsistentArguments(
-                "Resolution is missing units! Please include unyt unit "
-                "information (e.g. resolution * arcsec or resolution * kpc)"
-            )
-
-        # Missing image size
-        if fov is None and npix is None:
-            raise exceptions.InconsistentArguments(
-                "Either fov or npix must be specified!"
-            )
-
-    def _compute_npix(self):
-        """
-        Compute the number of pixels in the FOV.
-
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
-        """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self._fov / self._resolution))
-        if self.orig_npix is None:
-            self.orig_npix = np.int32(np.ceil(self._fov / self._resolution))
-
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
-
-    def _compute_fov(self):
-        """
-        Compute the FOV, based on the number of pixels.
-
-        When resolution and npix are given, the FOV is computed using this
-        function.
-        """
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
+        toc("Creating ImageCollection", start)
 
     @property
     def shape(self):
@@ -306,6 +211,19 @@ class ImageCollection:
         """Overload the len operator to return how many images there are."""
         return len(self.imgs)
 
+    def __str__(self):
+        """
+        Return a string representation of the ImageCollection.
+
+        Returns:
+            table (str)
+                A string representation of the ImageCollection.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("ImageCollection")
+
     def __getitem__(self, filter_code):
         """
         Enable dictionary key look up syntax.
@@ -328,7 +246,7 @@ class ImageCollection:
         # We may be being asked for all the images for an observatory, e.g.
         # "JWST", in which case we should return a new ImageCollection with
         # just those images.
-        out = ImageCollection(resolution=self.resolution, npix=self.npix)
+        out = ImageCollection(resolution=self.resolution, fov=self.fov)
         for f in self.imgs:
             if filter_code in f:
                 out.imgs[f.replace(filter_code + "/", "")] = self.imgs[f]
@@ -443,7 +361,6 @@ class ImageCollection:
         # Initialise the composite image with the right type
         composite_img = ImageCollection(
             resolution=self.resolution,
-            npix=None,
             fov=self.fov,
         )
 
@@ -629,7 +546,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=psfed_imgs,
         )
 
@@ -674,7 +591,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -720,7 +637,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -789,7 +706,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -802,6 +719,7 @@ class ImageCollection:
         cmap="Greys_r",
         filters=None,
         ncols=4,
+        individual_norm=False,
     ):
         """
         Plot all images.
@@ -837,6 +755,11 @@ class ImageCollection:
                 be plotted.
             ncols (int)
                 The number of columns to use when plotting multiple images.
+            individual_norm (bool)
+                If True, each image will be normalised individually. If
+                False, and vmin and vmax are not provided, the images will be
+                normalised to the global min and max of all images.
+                Defaults to False.
 
         Returns:
             matplotlib.pyplot.figure
@@ -856,8 +779,22 @@ class ImageCollection:
                 return x
 
         # Do we need to find the normalisation for each filter?
-        unique_norm_min = vmin is None
-        unique_norm_max = vmax is None
+        unique_norm_min = vmin is None and individual_norm
+        unique_norm_max = vmax is None and individual_norm
+
+        # Set up the minima and maxima
+        if vmin is None and not unique_norm_min:
+            vmin = np.inf
+            for f in self.imgs:
+                minimum = np.percentile(self.imgs[f].arr, 32)
+                if minimum < vmin:
+                    vmin = minimum
+        if vmax is None and not unique_norm_max:
+            vmax = -np.inf
+            for f in self.imgs:
+                maximum = np.percentile(self.imgs[f].arr, 99.9)
+                if maximum > vmax:
+                    vmax = maximum
 
         # Are we looping over a specified set of filters?
         if filters is not None:
@@ -895,14 +832,24 @@ class ImageCollection:
             if unique_norm_max:
                 vmax = np.max(img)
 
-            # Normalise the image.
-            img = (img - vmin) / (vmax - vmin)
-
             # Scale the image
             img = scaling_func(img)
 
+            # Define the normalisation
+            norm = plt.Normalize(
+                vmin=scaling_func(vmin),
+                vmax=scaling_func(vmax),
+                clip=True,
+            )
+
             # Plot the image and remove the surrounding axis
-            ax.imshow(img, origin="lower", interpolation="nearest", cmap=cmap)
+            ax.imshow(
+                img,
+                origin="lower",
+                interpolation="nearest",
+                cmap=cmap,
+                norm=norm,
+            )
             ax.axis("off")
 
             # Place a label for which filter this ised_ASCII

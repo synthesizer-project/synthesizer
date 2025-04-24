@@ -41,6 +41,7 @@ from matplotlib.colors import Normalize
 from unyt import angstrom
 
 from synthesizer import exceptions
+from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
     _generate_ifu_parametric_smoothed,
     _generate_ifu_particle_hist,
@@ -50,7 +51,7 @@ from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 
 
-class SpectralCube:
+class SpectralCube(ImagingBase):
     """
     The Spectral data cube object.
 
@@ -82,8 +83,6 @@ class SpectralCube:
 
     # Define quantities
     lam = Quantity("wavelength")
-    resolution = Quantity("spatial")
-    fov = Quantity("spatial")
 
     @accepts(lam=angstrom)
     def __init__(
@@ -107,19 +106,8 @@ class SpectralCube:
                 The wavelengths of the data cube.
 
         """
-        # If fov isn't a array, make it one
-        self.fov = fov
-        if self.fov is not None and self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # Keep track of the input resolution and and npix so we can handle
-        # super resolution correctly.
-        self.orig_resolution = resolution
-        self.orig_npix = None
-
-        # Attach resolution, fov, and npix
-        self.resolution = resolution
-        self._compute_npix()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Store the wavelengths
         self.lam = lam
@@ -179,34 +167,32 @@ class SpectralCube:
             )
         return self.arr * self.units
 
-    def _compute_npix(self):
+    @property
+    def shape(self):
         """
-        Compute the number of pixels in the FOV.
+        Return the shape of the data cube.
 
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
+        Returns:
+            tuple (int):
+                The shape of the data cube. (npix[0], npix[1], lam.size)
         """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self.fov / self.resolution))
-        if self.orig_npix is None:
-            self.orig_npix = np.int32(np.ceil(self.fov / self.resolution))
-
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
+        # Not applicable when the IFU hasn't been generated yet
+        if self.arr is None:
+            return ()
+        return self.arr.shape
 
     def __str__(self):
         """
-        Return a string representation of the SED object.
+        Return a string representation of the SpectralCube object.
 
         Returns:
             table (str)
-                A string representation of the SED object.
+                A string representation of the SpectralCube object.
         """
         # Intialise the table formatter
         formatter = TableFormatter(self)
 
-        return formatter.get_table("SED")
+        return formatter.get_table("SpectralCube")
 
     def __add__(self, other):
         """
