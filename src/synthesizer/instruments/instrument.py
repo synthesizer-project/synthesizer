@@ -25,7 +25,7 @@ Example usage:
 """
 
 import h5py
-from unyt import angstrom, kpc, unyt_array
+from unyt import angstrom, arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.instruments.filters import FilterCollection
@@ -70,10 +70,9 @@ class Instrument:
     """
 
     # Define quantities
-    resoluton = Quantity("spatial")
     lam = Quantity("wavelength")
 
-    @accepts(resolution=kpc, lam=angstrom)
+    @accepts(resolution=(kpc, arcsecond), lam=angstrom)
     def __init__(
         self,
         label,
@@ -131,7 +130,15 @@ class Instrument:
         self.filters = filters
 
         # Set the resolution of the Instrument (applicable for imaging)
-        self.resolution = resolution
+        if (
+            isinstance(resolution, (unyt_array, unyt_quantity))
+            or resolution is None
+        ):
+            self.resolution = resolution
+        else:
+            raise exceptions.InconsistentArguments(
+                "Resolution must have units."
+            )
 
         # Set the wavelength array for the Instrument (applicable for
         # spectroscopy)
@@ -155,6 +162,22 @@ class Instrument:
         # Set the noise maps of the Instrument (applicable for imaging and
         # resolved spectroscopy)
         self.noise_maps = noise_maps
+
+    @property
+    def _resolution(self):
+        """
+        Return the resolution of the Instrument without the units.
+
+        This emulates the behaviour of a Quantity object but here we can
+        have either angular or Cartesian resolutions. There's no need for
+        any complex unit handling here so we instead just introduced
+        this special case property.
+
+        Returns:
+            float:
+                The resolution of the Instrument.
+        """
+        return None if self.resolution is None else self.resolution.value
 
     @property
     def can_do_photometry(self):
@@ -367,9 +390,18 @@ class Instrument:
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
             psfs = {}
             for key in group["PSFs"]:
-                psfs[key] = unyt_array(
-                    group["PSFs"][key][...], group["PSFs"][key].attrs["units"]
-                )
+                # We can also have a group of datasets or a single dataset here
+                if isinstance(group["PSFs"][key], h5py.Group):
+                    for subkey in group["PSFs"][key]:
+                        psfs[f"{key}/{subkey}"] = unyt_array(
+                            group["PSFs"][key][subkey][...],
+                            group["PSFs"][key][subkey].attrs["units"],
+                        )
+                else:
+                    psfs[key] = unyt_array(
+                        group["PSFs"][key][...],
+                        group["PSFs"][key].attrs["units"],
+                    )
         elif "PSFs" in group:
             psfs = unyt_array(group["PSFs"][...], group["PSFs"].attrs["units"])
         else:

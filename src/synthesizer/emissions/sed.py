@@ -17,6 +17,7 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LogNorm
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
@@ -40,11 +41,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import (
-    TableFormatter,
-    rebin_1d,
-    wavelength_to_rgba,
-)
+from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis
 
 
@@ -331,7 +328,7 @@ class Sed:
         """
         # If we have units make sure they are ok and then strip them
         if isinstance(scaling, (unyt_array, unyt_quantity)):
-            if not self.lnu.units.is_compatible(scaling.units):
+            if self.lnu.units.dimensions != scaling.units.dimensions:
                 raise exceptions.InconsistentMultiplication(
                     f"Incompatible units {self.lnu.units} and {scaling.units}"
                 )
@@ -349,14 +346,6 @@ class Sed:
 
         # Handle a scalar scaling factor
         if np.isscalar(scaling):
-            if mask is not None:
-                lnu[mask] *= scaling
-            else:
-                lnu *= scaling
-
-        # Handle an single element array scaling factor
-        elif scaling.size == 1:
-            scaling = scaling.item()
             if mask is not None:
                 lnu[mask] *= scaling
             else:
@@ -383,15 +372,29 @@ class Sed:
         # just multiply them together
         elif isinstance(scaling, np.ndarray) and scaling.shape == self.shape:
             if mask is not None:
-                lnu[mask] *= scaling[..., mask]
+                lnu[mask] *= scaling[mask]
             else:
                 lnu *= scaling
+
+        # Ok, if we have an array but the shapes don't match then we need to
+        # create a new array where each element of the scaling array is
+        # multipled by the whole lnu array producing a new lnu array of
+        # shape (scaling.shape + lnu.shape)
+        elif isinstance(scaling, np.ndarray):
+            lnu = scaling[..., np.newaxis] * lnu
+
+            # Masks are not supported in this case
+            if mask is not None:
+                raise exceptions.InconsistentMultiplication(
+                    "Masking is not supported for scaling arrays"
+                    " with different shapes"
+                )
 
         # Otherwise, we've been handed a bad scaling factor
         else:
             out_str = f"Incompatible scaling factor with type {type(scaling)} "
             if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape}"
+                out_str += f"and shape {scaling.shape} (expected {self.shape})"
             else:
                 out_str += f"and value {scaling}"
             raise exceptions.InconsistentMultiplication(out_str)
@@ -403,7 +406,7 @@ class Sed:
         else:
             new_lnu = lnu * units
 
-        # If we scaled then we can return the scaled Sed
+        # Return a new Sed object if we aren't scaling inplace
         if not inplace:
             return Sed(self.lam, lnu=new_lnu)
 
@@ -573,6 +576,16 @@ class Sed:
                 The shape of self.lnu
         """
         return self.lnu.shape
+
+    @property
+    def nlam(self):
+        """
+        Get the number of wavelength elements.
+
+        Returns:
+            int: The number of wavelength elements.
+        """
+        return self.lam.size
 
     @property
     def bolometric_luminosity(self):
@@ -1028,6 +1041,15 @@ class Sed:
                 "A window of len 2 or 4 must be provided"
             )
 
+        # Ensure the beta we return is a real number
+        if np.any(np.isnan(beta)):
+            if isinstance(beta, np.ndarray):
+                beta[np.isnan(beta)] = 0.0
+            elif isinstance(beta, (list, tuple)):
+                beta = [0.0 if np.isnan(b) else b for b in beta]
+            elif isinstance(beta, float):
+                beta = 0.0
+
         return beta
 
     def get_fnu0(self):
@@ -1098,7 +1120,11 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            self._fnu *= igm().get_transmission(z, self._obslam)
+            # Support bot class references and instantiated objects
+            if callable(igm):
+                self._fnu *= igm().get_transmission(z, self.obslam)
+            else:
+                self._fnu *= igm.get_transmission(z, self.obslam)
 
         return self.fnu
 
@@ -1332,7 +1358,13 @@ class Sed:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
 
         # Evaluate the function at the desired wavelengths
-        new_spectra = spectres(new_lam, self._lam, self._lnu, fill=0)
+        new_spectra = spectres(
+            new_lam,
+            self._lam,
+            self._lnu,
+            fill=0,
+            verbose=False,
+        )
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra * self.lnu.units)
@@ -1364,6 +1396,34 @@ class Sed:
         toc("Resampling Sed", start)
 
         return sed
+
+    def apply_instrument_lams(self, instrument, nthreads=1):
+        """
+        Apply an instrument to the spectra.
+
+        This will resample a Sed object on to the instrument's wavelength
+        array. It is actually just an intuitive wrapper around
+        get_resampled_sed which will handle the actual resampling of
+        both lnu and fnu (if applicable) using the instrument's
+        wavelength array.
+
+        Args:
+            instrument (Instrument)
+                An instance of the Instrument class.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
+
+        Returns:
+            Sed
+                A new Sed with the instrument applied.
+        """
+        # Ensure the instrument can actually do spectroscopy
+        if not instrument.can_do_spectroscopy:
+            raise exceptions.InconsistentArguments(
+                f"{instrument.label} Instrument cannot do spectroscopy"
+            )
+        return self.get_resampled_sed(new_lam=instrument.lam)
 
     def apply_attenuation(
         self,
@@ -1497,7 +1557,7 @@ class Sed:
         """
         Plot the spectra.
 
-        A wrapper for synthesizer.sed.plot_spectra()
+        A wrapper for synthesizer.emissions.plot_spectra()
         """
         return plot_spectra(self, **kwargs)
 
@@ -1505,7 +1565,7 @@ class Sed:
         """
         Plot the observed spectra.
 
-        A wrapper for synthesizer.sed.plot_observed_spectra()
+        A wrapper for synthesizer.emissions.plot_observed_spectra()
         """
         return plot_observed_spectra(self, self.redshift, **kwargs)
 
@@ -1513,9 +1573,262 @@ class Sed:
         """
         Plot the spectra as a rainbow.
 
-        A wrapper for synthesizer.sed.plot_spectra_as_rainbow()
+        A wrapper for synthesizer.emissions.plot_spectra_as_rainbow()
         """
         return plot_spectra_as_rainbow(self, **kwargs)
+
+    def plot_spectra_stack(
+        self,
+        nbin=100,
+        fig=None,
+        ax=None,
+        show=False,
+        order=None,
+        quantity_to_plot="lnu",
+        cmap="magma",
+        vmin=None,
+        vmax=None,
+        xlimits=(),
+    ):
+        """
+        Plot a stack of the top nbin spectra in a multi-spectra sed.
+
+        This is only applicable for Sed object with ndim == 2. It will plot
+        bin the top nbin spectra into nbin wavelength bins, populate a grid
+        where x is the wavelength and each y row is one of the spectra, and
+        then plot this grid as an image.
+
+        This stack can optionally be ordered by their peak (from bluest
+        peak to reddest peak), by their bolometric_luminosity (from dimmest to
+        brightest), or by their luminosity at a specific wavelength (from
+        dimmest to brightest). This is defined by the order keyword, "peak",
+        "bolometric_luminosity", or a wavelength with units respectively.
+
+        Args:
+            nbin (int):
+                The number of bins to use for the stacking.
+            fig (matplotlib.pyplot.figure)
+                The figure containing the axis. By default one is created in
+                this function.
+            ax (matplotlib.axes):
+                The axis to plot the data on. By default one is created in
+                this function.
+            show (bool):
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            order (str/unyt_quantity):
+                The order to stack the spectra by. Can be "peak",
+                "bolometric_luminosity", a wavelength with units, or None. By
+                default the spectra will be plotted with the same order they
+                have in the Sed object.
+            quantity_to_plot (str):
+                The sed property to plot. Can be "lnu", "luminosity" or
+                "llam" for rest frame spectra or "fnu", "flam" or "flux"
+                for observed spectra. Defaults to "lnu".
+            cmap (str):
+                The matplotlib colormap to use for the plot. Defaults to
+                "magma".
+            vmin (float):
+                The minimum value for the color scale. If None, then we will
+                use 3 orders of magntitude below the maximum value.
+            vmax (float):
+                The maximum value for the color scale. If None, then we will
+                use the maximum value of the spectra.
+            xlimits (tuple of unyt_quantity):
+                The limits for the x axis. If None, then we will use the
+                minimum and maximum wavelength of the spectra.
+
+        Returns:
+            fig (matplotlib.pyplot.figure):
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes):
+                The matplotlib axes object containing the plotted data.
+        """
+        # First ensure we have a valid Sed object to work with
+        if self.ndim != 2:
+            raise exceptions.InconsistentArguments(
+                "This Sed object does not contain multiple spectra and thus "
+                "cannot be stacked. Please use a Sed object with ndim > 1."
+            )
+
+        # Are we plotting in the rest_frame?
+        rest_frame = quantity_to_plot in ("lnu", "llam", "luminosity")
+
+        # If we aren't doing rest frame... check we actually have the
+        # observed spectra
+        if not rest_frame and self.fnu is None:
+            raise exceptions.InconsistentArguments(
+                "This Sed object does not contain observed spectra and thus "
+                "cannot be stacked. Please use a Sed object with fnu."
+            )
+
+        # Define the wavelength bins based on nbin
+        if len(xlimits) == 0:
+            xlimits = (self.lam.min(), self.lam.max())
+        elif len(xlimits) != 2:
+            raise exceptions.InconsistentArguments(
+                "xlimits must be a tuple of length 2!"
+            )
+        if not isinstance(xlimits[0], unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "xlimits must be a tuple of unyt_quantity!"
+            )
+        if not isinstance(xlimits[1], unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "xlimits must be a tuple of unyt_quantity!"
+            )
+        new_lams = (
+            np.logspace(
+                np.log10(xlimits[0]),
+                np.log10(xlimits[1]),
+                nbin,
+            )
+            * xlimits[0].units
+        )
+
+        # Resample the spectra to the new wavelength grid
+        low_res_sed = self.get_resampled_sed(new_lam=new_lams)
+
+        # Get the order of the spectra to stack
+        if order == "peak":
+            # Get the peak and it's index for each spectra
+            peak_inds = np.argmax(low_res_sed._lnu, axis=-1)
+            peak_lams = low_res_sed.lam[peak_inds].value
+
+            # Sort the spectra by peak wavelength
+            order = np.argsort(peak_lams)
+
+            # Limit to the top nbin spectra
+            order = order[:nbin]
+
+        elif order == "bolometric_luminosity":
+            # Get the bolometric luminosity for each spectra
+            bolometric_luminosity = low_res_sed.bolometric_luminosity.value
+
+            # Sort the spectra by bolometric luminosity
+            order = np.argsort(bolometric_luminosity)[::-1]
+
+            # Limit to the top nbin spectra
+            order = order[:nbin]
+
+        elif isinstance(order, unyt_quantity):
+            # Ensure the wavelength is within the spectra range
+            if order < low_res_sed.lam.min() or order > low_res_sed.lam.max():
+                raise exceptions.InconsistentArguments(
+                    f"Requested wavelength ({order}) is outside the "
+                    f"range of the spectra ({low_res_sed.lam.min()}, "
+                    f"{low_res_sed.lam.max()})"
+                )
+
+            # Get the luminosity at the requested wavelength for each spectra
+            lum_at_lam = low_res_sed.get_lnu_at_lam(order).value
+
+            # Sort the spectra by luminosity at the requested wavelength
+            order = np.argsort(lum_at_lam)[::-1]
+
+            # Limit to the top nbin spectra
+            order = order[:nbin]
+
+        elif order is None:
+            # If no order is provided just use the first nbin spectra
+            order = np.arange(nbin)
+
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Unrecognised order ({order}). Options are 'peak', "
+                "'bolometric_luminosity', or a wavelength with units."
+            )
+
+        # Get the spectra to plot
+        spectra = getattr(low_res_sed, quantity_to_plot)
+
+        # Set up the array that will hold the stacked spectra
+        stacked_spectra = (
+            np.zeros((nbin, nbin), dtype=spectra.dtype) * spectra.units
+        )
+
+        # Loop over the resampled spectra and populate the grid from bottom
+        # to top
+        for row, i in enumerate(order):
+            # Ensure we aren't trying to extract a spectra that doesn't exist
+            if i >= spectra.shape[0]:
+                continue
+
+            # Populate the grid with the spectra
+            stacked_spectra[row, :] = spectra[i, :]
+
+        # Define a sensible normalisation for the color scale if not provided
+        if vmin is None:
+            vmin = stacked_spectra.max() / 1000.0
+        if vmax is None:
+            vmax = stacked_spectra.max()
+
+        # If we don't already have a figure, make one
+        if fig is None:
+            # Set up the figure
+            fig = plt.figure(figsize=(3.5, 3.5))
+
+        # If we don't already have an axis, make one
+        if ax is None:
+            # Create the axes
+            ax = fig.add_subplot(111)
+
+        # Plot the stacked spectra as a heatmap
+        im = ax.pcolormesh(
+            new_lams,
+            np.arange(nbin),
+            stacked_spectra,
+            shading="auto",
+            cmap=cmap,
+            norm=LogNorm(vmin=vmin, vmax=vmax, clip=True),
+        )
+
+        # Set the x scale to log
+        ax.set_xscale("log")
+
+        # Parse the units for the labels and make them pretty
+        x_units = self.lam.units.latex_repr
+        y_units = spectra.units.latex_repr
+
+        # Replace any \frac with a \ division
+        pattern = r"\{(.*?)\}\{(.*?)\}"
+        replacement = r"\1 \ / \ \2"
+        x_units = re.sub(pattern, replacement, x_units).replace(r"\frac", "")
+        y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
+
+        # Label the x axis
+        if rest_frame:
+            ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
+        else:
+            ax.set_xlabel(
+                r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$"
+            )
+
+        # Set the aspect ratio to be equal
+        ax.set_aspect("auto")
+
+        # Create a colorbar
+        cbar = fig.colorbar(im, ax=ax)
+
+        # Label the colorbar handling all possibilities
+        if quantity_to_plot == "lnu":
+            cbar.set_label(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "llam":
+            cbar.set_label(r"$L_{\lambda}/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "luminosity":
+            cbar.set_label(r"$L/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "fnu":
+            cbar.set_label(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
+        elif quantity_to_plot == "flam":
+            cbar.set_label(r"$F_{\lambda}/[\mathrm{" + y_units + r"}]$")
+        else:
+            cbar.set_label(r"$F/[\mathrm{" + y_units + r"}]$")
+
+        # Are we showing the plot?
+        if show:
+            plt.show()
+
+        return fig, ax
 
 
 def plot_spectra(
@@ -1533,6 +1846,8 @@ def plot_spectra(
     quantity_to_plot="lnu",
 ):
     """
+    Plot a spectra or dictionary of spectra.
+
     Plots either a specific spectra or all spectra provided in a dictionary.
     The plotted "type" of spectra is defined by the quantity_to_plot keyword
     arrgument which defaults to "lnu".
@@ -1588,7 +1903,6 @@ def plot_spectra(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
-
     # Check we have been given a valid quantity_to_plot
     if quantity_to_plot not in (
         "lnu",
@@ -1787,6 +2101,8 @@ def plot_observed_spectra(
     quantity_to_plot="fnu",
 ):
     """
+    Plot a spectra or dictionary of spectra.
+
     Plots either a specific observed spectra or all observed spectra
     provided in a dictionary.
 
@@ -1847,7 +2163,6 @@ def plot_observed_spectra(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
-
     # Check we have been given a valid quantity_to_plot
     if quantity_to_plot not in ("fnu", "flam"):
         raise exceptions.InconsistentArguments(
@@ -1921,8 +2236,8 @@ def plot_spectra_as_rainbow(
     Create a plot of the spectrum as a rainbow.
 
     Arguments:
-        sed (synthesizer.sed.Sed)
-            A synthesizer Sed object.
+        sed (synthesizer.emissions.Sed)
+            A synthesizer.emissions object.
         figsize (tuple)
             Fig-size tuple (width, height).
         lam_min (float)
@@ -1945,12 +2260,11 @@ def plot_spectra_as_rainbow(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
-
-    # take sum of Seds if two dimensional
+    # Take sum of Seds if two dimensional
     sed = sed.sum()
 
     if use_fnu:
-        # define filter for spectra
+        # Define filter for spectra
         wavelength_indices = np.logical_and(
             sed._obslam < lam_max, sed._obslam > lam_min
         )
@@ -1964,10 +2278,12 @@ def plot_spectra_as_rainbow(
         lam = sed.lam[wavelength_indices].to("nm").value
         spectra = sed._lnu[wavelength_indices]
 
-    # normalise spectrum
-    spectra /= np.max(spectra)
+    # Normalise spectrum
+    max_val = np.max(spectra)
+    if max_val > 0:
+        spectra /= max_val
 
-    # if logged rescale to between 0 and 1 using min_log_lnu
+    # If logged rescale to between 0 and 1 using min_log_lnu
     if logged:
         spectra = (np.log10(spectra) - min_log_lnu) / (-min_log_lnu)
         spectra[spectra < min_log_lnu] = 0
@@ -1975,7 +2291,7 @@ def plot_spectra_as_rainbow(
     # initialise figure
     fig = plt.figure(figsize=figsize)
 
-    # initialise axes
+    # Initialise axes
     if include_xaxis:
         ax = fig.add_axes((0, 0.3, 1, 1))
         ax.set_xlabel(r"$\lambda/\AA$")
@@ -1983,13 +2299,13 @@ def plot_spectra_as_rainbow(
         ax = fig.add_axes((0, 0.0, 1, 1))
         ax.set_xticks([])
 
-    # set background
+    # Set background
     ax.set_facecolor("black")
 
-    # always turn off y-ticks
+    # Always turn off y-ticks
     ax.set_yticks([])
 
-    # get an array of colours
+    # Get an array of colours
     colours = np.array(
         [
             wavelength_to_rgba(lam_, alpha=spectra_)
@@ -1997,146 +2313,10 @@ def plot_spectra_as_rainbow(
         ]
     )
 
-    # expand dimensions to get an image array
+    # Expand dimensions to get an image array
     im = np.expand_dims(colours, axis=0)
 
-    # show image
+    # Show image
     ax.imshow(im, aspect="auto", extent=(lam_min, lam_max, 0, 1))
 
     return fig, ax
-
-
-def get_transmission(intrinsic_sed, attenuated_sed):
-    """
-    Calculate transmission as a function of wavelength from an attenuated and
-    an intrinsic sed.
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-        array-like, float
-            The transmission array.
-    """
-
-    # Ensure wavelength arrays are equal
-    if not np.array_equal(attenuated_sed._lam, intrinsic_sed._lam):
-        raise exceptions.InconsistentArguments(
-            "Wavelength arrays of input spectra must be the same!"
-        )
-
-    return attenuated_sed.lnu / intrinsic_sed.lnu
-
-
-def get_attenuation(intrinsic_sed, attenuated_sed):
-    """
-    Calculate attenuation as a function of wavelength
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-        array-like, float
-            The attenuation array in magnitudes.
-    """
-
-    # Calculate the transmission array
-    transmission = get_transmission(intrinsic_sed, attenuated_sed)
-
-    return -2.5 * np.log10(transmission)
-
-
-@accepts(lam=angstrom)
-def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
-    """
-    Calculate attenuation at a given wavelength
-
-    Args:
-        lam (float/array-like, float)
-            The wavelength/s at which to evaluate the attenuation in
-            the same units as sed.lam (by default angstrom).
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-        float/array-like, float
-            The attenuation at the passed wavelength/s in magnitudes.
-    """
-    # Ensure lam is in the same units as the sed
-    if lam.units != intrinsic_sed.lam.units:
-        lam = lam.to(intrinsic_sed.lam.units)
-
-    # Calcilate the transmission array
-    attenuation = get_attenuation(intrinsic_sed, attenuated_sed)
-
-    return np.interp(lam.value, intrinsic_sed._lam, attenuation)
-
-
-def get_attenuation_at_5500(intrinsic_sed, attenuated_sed):
-    """
-    Calculate rest-frame FUV attenuation at 5500 angstrom.
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-         float
-            The attenuation at rest-frame 5500 angstrom in magnitudes.
-    """
-
-    return get_attenuation_at_lam(
-        5500.0 * angstrom,
-        intrinsic_sed,
-        attenuated_sed,
-    )
-
-
-def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
-    """
-    Calculate rest-frame FUV attenuation at 1500 angstrom.
-
-    Args:
-        intrinsic_sed (Sed)
-            The intrinsic spectra object.
-        attenuated_sed (Sed)
-            The attenuated spectra object.
-
-    Returns:
-         float
-            The attenuation at rest-frame 1500 angstrom in magnitudes.
-    """
-
-    return get_attenuation_at_lam(
-        1500.0 * angstrom,
-        intrinsic_sed,
-        attenuated_sed,
-    )
-
-
-def combine_list_of_seds(sed_list):
-    """
-    Combine a list of `Sed` objects (length `Ngal`) into a single
-    `Sed` object, with dimensions `Ngal x Nlam`. Each `Sed` object
-    in the list should have an identical wavelength range.
-
-    Args:
-        sed_list (list)
-            list of `Sed` objects
-    """
-
-    out_sed = sed_list[0]
-    for sed in sed_list[1:]:
-        out_sed = out_sed.concat(sed)
-
-    return out_sed

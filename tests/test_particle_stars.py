@@ -79,3 +79,201 @@ def test_calculate_radii(particle_stars_A):
 
     assert isinstance(particle_stars_A.get_radii(), np.ndarray)
     assert (particle_stars_A.radii <= 6 * kpc).all()
+
+
+class TestWeightedAttributes:
+    """Tests for checking the weighted attributes work correctly."""
+
+    def test_mass_weighted_age(self, unit_mass_stars):
+        """Test that mass weighted age is calculated correctly."""
+        result = unit_mass_stars.get_mass_weighted_age()
+        expected = 2.0 * Myr
+        assert np.isclose(result, expected), f"Age: {result} != {expected}"
+
+    def test_mass_weighted_metallicity(self, unit_mass_stars):
+        """Test that mass weighted metallicity is calculated correctly."""
+        result = unit_mass_stars.get_mass_weighted_metallicity()
+        expected = 0.02
+        assert np.isclose(result, expected), f"Z: {result} != {expected}"
+
+    def test_mass_weighted_optical_depth(self, unit_mass_stars):
+        """Test that mass weighted optical depth is calculated correctly."""
+        result = unit_mass_stars.get_mass_weighted_optical_depth()
+        expected = 0.2
+        assert np.isclose(result, expected), f"tau_V: {result} != {expected}"
+
+    def test_weighted_attr_coordinates_initial_masses(self, unit_mass_stars):
+        """Test weighted coordinates using 'initial_masses'."""
+        result = unit_mass_stars.get_weighted_attr(
+            "coordinates",
+            "initial_masses",
+            axis=0,
+        )
+        expected = np.array([1.0, 1.0, 1.0]) * kpc
+        assert np.allclose(result, expected)
+
+    def test_weighted_attr_coordinates_current_masses(self, unit_mass_stars):
+        """Test weighted coordinates using current_masses."""
+        result = unit_mass_stars.get_weighted_attr(
+            "coordinates",
+            unit_mass_stars.current_masses,
+            axis=0,
+        )
+        expected = np.array([1.0, 1.0, 1.0]) * kpc
+        assert np.allclose(result, expected)
+
+    def test_weighted_attr_coordinates_invalid_axis(self, unit_mass_stars):
+        """Test that using an invalid axis raises an exception."""
+        with pytest.raises(
+            TypeError,
+            match="Axis must be specified when "
+            "shapes of a and weights differ.",
+        ):
+            unit_mass_stars.get_weighted_attr(
+                "coordinates",
+                "initial_masses",
+            )
+        with pytest.raises(
+            np.exceptions.AxisError,
+            match="axis: axis 3 is out of bounds for array of dimension 2",
+        ):
+            unit_mass_stars.get_weighted_attr(
+                "coordinates",
+                "initial_masses",
+                axis=3,
+            )
+
+    def test_invalid_attr(self, unit_mass_stars):
+        """Test that using a non-existent attribute raises an exception."""
+        with pytest.raises(
+            AttributeError,
+            match="'Stars' object has no attribute 'not_an_attribute'",
+        ):
+            unit_mass_stars.get_weighted_attr(
+                "not_an_attribute", "initial_masses"
+            )
+
+    def test_invalid_mass_weight_attr(self, unit_mass_stars):
+        """Test that using a non-existent weight raises an exception."""
+        with pytest.raises(
+            AttributeError,
+            match="'Stars' object has no attribute 'not_an_attribute'",
+        ):
+            unit_mass_stars.get_weighted_attr(
+                "coordinates", "not_an_attribute"
+            )
+
+    def test_lum_weighted_age(self, unit_emission_stars):
+        """Test that luminosity weighted age is calculated correctly."""
+        result = unit_emission_stars.get_lum_weighted_age("FAKE", "fake")
+        expected = 2.0 * Myr
+        assert np.isclose(result, expected), f"Age: {result} != {expected}"
+
+    def test_flux_weighted_age(self, unit_emission_stars):
+        """Test that flux weighted age is calculated correctly."""
+        result = unit_emission_stars.get_flux_weighted_age("FAKE", "fake")
+        expected = 2.0 * Myr
+        assert np.isclose(result, expected), f"Age: {result} != {expected}"
+
+    def test_lum_weighted_metallicity(self, unit_emission_stars):
+        """Test that luminosity weighted metallicity is  correct."""
+        result = unit_emission_stars.get_lum_weighted_metallicity(
+            "FAKE", "fake"
+        )
+        expected = 0.02
+        assert np.isclose(result, expected), f"Z: {result} != {expected}"
+
+    def test_flux_weighted_metallicity(self, unit_emission_stars):
+        """Test that flux weighted metallicity is calculated correctly."""
+        result = unit_emission_stars.get_flux_weighted_metallicity(
+            "FAKE", "fake"
+        )
+        expected = 0.02
+        assert np.isclose(result, expected), f"Z: {result} != {expected}"
+
+    def test_lum_weighted_optical_depth(self, unit_emission_stars):
+        """Test that luminosity weighted optical depth is  correct."""
+        result = unit_emission_stars.get_lum_weighted_optical_depth(
+            "FAKE", "fake"
+        )
+        expected = 0.2
+        assert np.isclose(result, expected), f"tau_V: {result} != {expected}"
+
+    def test_flux_weighted_optical_depth(self, unit_emission_stars):
+        """Test that flux weighted optical depth is calculated correctly."""
+        result = unit_emission_stars.get_flux_weighted_optical_depth(
+            "FAKE", "fake"
+        )
+        expected = 0.2
+        assert np.isclose(result, expected), f"tau_V: {result} != {expected}"
+
+    def test_weighted_attr_coordinates_luminosity(self, unit_emission_stars):
+        """Test weighted coordinates using luminosity."""
+        result = unit_emission_stars.get_lum_weighted_attr(
+            "coordinates",
+            "FAKE",
+            "fake",
+            axis=0,
+        )
+        expected = np.array([1.0, 1.0, 1.0]) * kpc
+        assert np.allclose(result, expected)
+
+    def test_weighted_attr_coordinates_flux(self, unit_emission_stars):
+        """Test weighted coordinates using flux."""
+        result = unit_emission_stars.get_flux_weighted_attr(
+            "coordinates",
+            "FAKE",
+            "fake",
+            axis=0,
+        )
+        expected = np.array([1.0, 1.0, 1.0]) * kpc
+        assert np.allclose(result, expected)
+
+    def test_invalid_attr_lum_weighted(self, unit_emission_stars):
+        """Test that using a non-existent attribute raises an exception."""
+        with pytest.raises(
+            AttributeError,
+            match="'Stars' object has no attribute 'not_an_attribute'",
+        ):
+            unit_emission_stars.get_lum_weighted_attr(
+                "not_an_attribute",
+                "FAKE",
+                "fake",
+            )
+
+    def test_invalid_attr_flux_weighted(self, unit_emission_stars):
+        """Test that using a non-existent attribute raises an exception."""
+        with pytest.raises(
+            AttributeError,
+            match="'Stars' object has no attribute 'not_an_attribute'",
+        ):
+            unit_emission_stars.get_flux_weighted_attr(
+                "not_an_attribute",
+                "FAKE",
+                "fake",
+            )
+
+    def test_invalid_spec_key(self, unit_emission_stars):
+        """Test that using a non-existent key raises an exception."""
+        with pytest.raises(
+            KeyError,
+            match="'not_a_key'",
+        ):
+            unit_emission_stars.get_lum_weighted_attr(
+                "ages",
+                "not_a_key",
+                "fake",
+            )
+
+    def test_invalid_phot_key(self, unit_emission_stars):
+        """Test that using a non-existent key raises an exception."""
+        with pytest.raises(
+            KeyError,
+            match="'Filter code not_a_key not found"
+            " in photometry collection.'",
+        ):
+            unit_emission_stars.get_lum_weighted_attr(
+                "ages",
+                "FAKE",
+                "not_a_key",
+            )

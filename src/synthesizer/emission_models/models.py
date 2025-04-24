@@ -82,7 +82,7 @@ class AttenuatedEmission(EmissionModel):
     parameters see the EmissionModel class.
 
     Attributes:
-        dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
+        dust_curve (synthesizer.AttenuationLaw): The dust curve to use.
         apply_to (EmissionModel): The emission model to apply the dust to.
         label (str): The label for this emission model.
     """
@@ -100,7 +100,7 @@ class AttenuatedEmission(EmissionModel):
         Initialise the AttenuatedEmission object.
 
         Args:
-            dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
+            dust_curve (AttenuationLaw): The dust curve to use.
             apply_to (EmissionModel): The model to apply the dust to.
             emitter (string): The emitter this model is associated with.
             label (str): The label for this emission model.

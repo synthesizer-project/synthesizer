@@ -20,9 +20,6 @@
 #include "property_funcs.h"
 #include "timers.h"
 
-/* Define the maximum tree depth. */
-#define MAX_DEPTH 64
-
 /**
  * @brief Computes the line of sight surface densities with a loop.
  *
@@ -574,8 +571,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   }
 
   /* Allocate cells array. The first cell will be the root and then we will
-   * dynamically nibble off cells for the progeny. We start with 8*8^3 cells
-   * but when we need more cells we will dynamically allocate more memory. */
+   * dynamically nibble off cells for the progeny. */
   int ncells = 1;
   struct cell *root = synth_malloc(sizeof(struct cell), "root cell");
 

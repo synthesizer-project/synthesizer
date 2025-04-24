@@ -37,8 +37,7 @@ from spectres import spectres
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.line import Line, LineCollection, flatten_linelist
-from synthesizer.sed import Sed
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import depluralize, pluralize
@@ -102,6 +101,7 @@ class Grid:
 
     # Define Quantities
     lam = Quantity("wavelength")
+    line_lams = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
     def __init__(
@@ -157,7 +157,7 @@ class Grid:
         # Set up spectra and lines dictionaries (if we don't read them they'll
         # just stay as empty dicts)
         self.spectra = {}
-        self.line_lams = {}
+        self.line_lams = None
         self.line_lums = {}
         self.line_conts = {}
 
@@ -505,7 +505,7 @@ class Grid:
             )
             self.available_spectra.append("nebular_continuum")
 
-    def _get_lines_grid_old(self, read_lines):
+    def _get_lines_grid(self, read_lines):
         """
         Get the lines grid from the HDF5 file.
 
@@ -533,42 +533,23 @@ class Grid:
                 )
 
         with h5py.File(self.grid_filename, "r") as hf:
-            # Are we only reading a subset?
-            if isinstance(read_lines, list):
-                self.available_lines = flatten_linelist(read_lines)
-            else:
-                # If not, read all available lines
-                self.available_lines, _ = self._get_line_ids_from_file()
-
-            # Create an entry for each spectra type
-            for spectra in self.available_spectra:
-                self.line_lums[spectra] = {}
-                self.line_conts[spectra] = {}
-
-            # We read the lines themselves into "nebular" and "linecont"
-            # so make sure this exists
-            if (
-                "nebular" not in self.line_lums
-                or "linecont" not in self.line_lums
-            ):
-                raise exceptions.GridError(
-                    "No nebular or linecont spectra found. "
-                    "The nebular and linecont spectra is"
-                    " required for storing lines. Either you have explictly"
-                    " requested a subset of spectra without these, or "
-                    "something is wrong with the grid file."
-                )
+            self.available_lines = np.array(
+                [id.decode("utf-8") for id in hf["lines"]["id"][:]]
+            )
 
             # Read the line wavelengths
-            lines_outside_lam = []
-            for line in self.available_lines:
-                self.line_lams[line] = hf["lines"][line].attrs["wavelength"]
+            lams = hf["lines"]["wavelength"][...]
+            lam_units = hf["lines"]["wavelength"].attrs.get("Units")
+            self.line_lams = unyt_array(lams, lam_units).to(angstrom)
 
-                # Ensure this wavelength is within the wavelength array of the
-                # grid
+            # Check the lines are within the wavelength range of the grid. Its
+            # not a big issue if any are outside the range but we should warn
+            # the user since it could lead to confusion.
+            lines_outside_lam = []
+            for ind, line in enumerate(self.available_lines):
                 if (
-                    self.line_lams[line] < self.lam[0]
-                    or self.line_lams[line] > self.lam[-1]
+                    self.line_lams[ind] < self.lam[0]
+                    or self.line_lams[ind] > self.lam[-1]
                 ):
                     lines_outside_lam.append(line)
 
@@ -580,155 +561,53 @@ class Grid:
                     f"range of the grid: {lines_outside_lam}"
                 )
 
-            # Read the lines into the nebular and linecont entries. The
-            # continuum for "linecont" is by definition 0 (we'll do all
-            # other continua below)
-            for line in self.available_lines:
-                self.line_lums["nebular"][line] = hf["lines"][line][
-                    "luminosity"
-                ][:]
-                self.line_lums["linecont"][line] = hf["lines"][line][
-                    "luminosity"
-                ][:]
-                self.line_conts["linecont"][line] = np.zeros(
-                    self.spectra["linecont"].shape[:-1]
-                )
+            # Get the units, we only do this once since all the
+            # luminosities and continuums will have the same units
+            lum_units = hf["lines"]["luminosity"].attrs.get("Units")
+            cont_units = hf["lines"]["nebular_continuum"].attrs.get("Units")
 
-            # Now that we have read the line data itself we need to populate
-            # the other spectra entries. the line luminosities for all entries
-            # other than nebular are 0 but the continuums need to be sampled
-            # from the spectra.
-            for spectra in self.available_spectra:
-                # Define the extraction key
-                extract = spectra
+            # Read the nebular line luminosities and continuums
+            self.line_lums["nebular"] = unyt_array(
+                hf["lines"]["luminosity"][...],
+                lum_units,
+            )
+            self.line_conts["nebular"] = unyt_array(
+                hf["lines"]["nebular_continuum"][...],
+                cont_units,
+            )
 
-                # For nebular the extraction key is "nebular_continuum",
-                # otherwise we would extract the line luminosity along with
-                # the continuum
-                if spectra == "nebular":
-                    extract = "nebular_continuum"
+            # Read the line contribution luminosities and continuums (as
+            # called by cloudy, this is the same as nebular in our
+            # nomenclature - the line emissions from the birth cloud)
+            self.line_lums["linecont"] = unyt_array(
+                hf["lines"]["luminosity"][...],
+                lum_units,
+            )
+            self.line_conts["linecont"] = unyt_array(
+                np.zeros(self.line_lums["nebular"].shape),
+                cont_units,
+            )
 
-                # Create an interpolation function for this spectra
-                interp_func = interp1d(
-                    self._lam,
-                    self.spectra[extract],
-                    axis=-1,
-                    kind="linear",
-                    fill_value=0.0,
-                    bounds_error=False,
-                )
+            # Read the nebular continuum luminosities and continuums
+            self.line_lums["nebular_continuum"] = unyt_array(
+                np.zeros(self.line_lums["nebular"].shape),
+                lum_units,
+            )
+            self.line_conts["nebular_continuum"] = unyt_array(
+                hf["lines"]["nebular_continuum"][...],
+                cont_units,
+            )
 
-                # Get the continuum luminosities by interpolating the to get
-                # the continuum at the line wavelengths (we use scipy here
-                # because spectres can't handle single value interpolation).
-                # The linecont continuum is explicitly 0 and set above.
-                if spectra != "linecont":
-                    self.line_conts[spectra] = {
-                        line: interp_func(self.line_lams[line])
-                        for line in self.available_lines
-                    }
-
-                # Set the line luminosities to 0 as long as they haven't
-                # already been set
-                if spectra != "nebular" and spectra != "linecont":
-                    self.line_lums[spectra] = {
-                        line: np.zeros(self.spectra[spectra].shape[:-1])
-                        for line in self.available_lines
-                    }
-
-    def _get_lines_grid_new(self, read_lines):
-        """
-        Get the lines grid from the HDF5 file.
-
-        Args:
-            read_lines (bool/list)
-                Flag for whether to read all available lines or subset of
-                lines to read.
-        """
-        # Double check we actually have lines to read
-        if not self.lines_available:
-            if not self.reprocessed:
-                raise exceptions.GridError(
-                    "Grid hasn't been reprocessed with cloudy and has no "
-                    "lines. Either pass `read_lines=False` or load a grid "
-                    "which has been run through cloudy."
-                )
-
-            else:
-                raise exceptions.GridError(
-                    (
-                        "No lines available on this grid object. "
-                        "Either set `read_lines=False`, or load a grid "
-                        "containing line information"
-                    )
-                )
-
-        with h5py.File(self.grid_filename, "r") as hf:
-            self.available_lines = [
-                id.decode("utf-8") for id in hf["lines"]["id"][:]
-            ]
-
-            # Read the line wavelengths
-            lines_outside_lam = []
-            for ind, line in enumerate(self.available_lines):
-                self.line_lams[line] = hf["lines"]["wavelength"][ind]
-
-                # Ensure this wavelength is within the wavelength array of the
-                # grid
-                if (
-                    self.line_lams[line] < self.lam[0]
-                    or self.line_lams[line] > self.lam[-1]
-                ):
-                    lines_outside_lam.append(line)
-
-            # If we have lines outside the wavelength range of the grid
-            # warn the user
-            if len(lines_outside_lam) > 0:
-                warn(
-                    "The following lines are outside the wavelength "
-                    f"range of the grid: {lines_outside_lam}"
-                )
-
-            # Intialise keys we know we will have
-            self.line_lums.setdefault("nebular", {})
-            self.line_conts.setdefault("nebular", {})
-            self.line_lums.setdefault("linecont", {})
-            self.line_conts.setdefault("linecont", {})
-            self.line_lums.setdefault("nebular_continuum", {})
-            self.line_conts.setdefault("nebular_continuum", {})
-            self.line_lums.setdefault("transmitted", {})
-            self.line_conts.setdefault("transmitted", {})
-
-            # Read the lines and continua into the nebular and
-            # linecont entries.
-            for ind, line in enumerate(self.available_lines):
-                self.line_lums["nebular"][line] = hf["lines"]["luminosity"][
-                    ..., ind
-                ]
-                self.line_conts["nebular"][line] = hf["lines"][
-                    "nebular_continuum"
-                ][..., ind]
-
-                self.line_lums["linecont"][line] = hf["lines"]["luminosity"][
-                    ..., ind
-                ]
-                self.line_conts["linecont"][line] = np.zeros(
-                    self.line_lums["nebular"][line].shape
-                )
-
-                self.line_lums["nebular_continuum"][line] = np.zeros(
-                    self.line_lums["nebular"][line].shape
-                )
-                self.line_conts["nebular_continuum"][line] = hf["lines"][
-                    "nebular_continuum"
-                ][..., ind]
-
-                self.line_lums["transmitted"][line] = np.zeros(
-                    self.line_lums["nebular"][line].shape
-                )
-                self.line_conts["transmitted"][line] = hf["lines"][
-                    "transmitted"
-                ][..., ind]
+            # Read the transmitted line luminosities and continuums (the
+            # emission transmitted through the birth cloud)
+            self.line_lums["transmitted"] = unyt_array(
+                np.zeros(self.line_lums["nebular"].shape),
+                lum_units,
+            )
+            self.line_conts["transmitted"] = unyt_array(
+                hf["lines"]["transmitted"][...],
+                cont_units,
+            )
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries. the line luminosities for all entries
@@ -756,31 +635,17 @@ class Grid:
                 # the continuum at the line wavelengths (we use scipy here
                 # because spectres can't handle single value interpolation).
                 # The linecont continuum is explicitly 0 and set above.
-                self.line_conts[spectra] = {
-                    line: interp_func(self.line_lams[line])
-                    for line in self.available_lines
-                }
+                self.line_conts[spectra] = unyt_array(
+                    interp_func(self.line_lams),
+                    cont_units,
+                )
 
                 # Set the line luminosities to 0 as long as they haven't
                 # already been set
-                self.line_lums[spectra] = {
-                    line: np.zeros(self.spectra[spectra].shape[:-1])
-                    for line in self.available_lines
-                }
-
-    def _get_lines_grid(self, read_lines):
-        """
-        Get the lines grid from the HDF5 file.
-
-        Args:
-            read_lines (bool/list)
-                Flag for whether to read all available lines or subset of
-                lines to read.
-        """
-        if self.new_line_format:
-            self._get_lines_grid_new(read_lines)
-        else:
-            self._get_lines_grid_old(read_lines)
+                self.line_lums[spectra] = unyt_array(
+                    np.zeros((*self.spectra[spectra].shape[:-1], self.nlines)),
+                    lum_units,
+                )
 
     def _prepare_lam_axis(
         self,
@@ -887,6 +752,11 @@ class Grid:
         """Return whether the Grid has lines."""
         return len(self.line_lums) > 0
 
+    @property
+    def line_ids(self):
+        """Return the line IDs."""
+        return self.available_lines
+
     def _get_spectra_ids_from_file(self):
         """
         Get a list of the spectra available in a grid file.
@@ -917,12 +787,16 @@ class Grid:
                 List of associated wavelengths.
         """
         with h5py.File(self.grid_filename, "r") as hf:
-            lines = list(hf["lines"].keys())
-
-            wavelengths = np.array(
-                [hf["lines"][line].attrs["wavelength"] for line in lines]
+            lines = np.array(
+                [id.decode("utf-8") for id in hf["lines"]["id"][:]]
             )
-        return lines, wavelengths
+
+            # Read the line wavelengths
+            lams = hf["lines"]["wavelength"][...]
+            lam_units = hf["lines"]["wavelength"].attrs.get("Units")
+            lams = unyt_array(lams, lam_units).to(angstrom)
+
+        return lines, lams
 
     @accepts(new_lam=angstrom)
     def interp_spectra(self, new_lam, loop_grid=False):
@@ -1000,6 +874,11 @@ class Grid:
     def nlam(self):
         """Return the number of wavelengths in the grid."""
         return len(self.lam)
+
+    @property
+    def nlines(self):
+        """Return the number of lines in the grid."""
+        return len(self.available_lines)
 
     @staticmethod
     def get_nearest_index(value, array):
@@ -1129,13 +1008,12 @@ class Grid:
             )
 
             # Marginalize the line luminosities and continua
-            for line in self.available_lines:
-                self.line_lums[spectra_id][line] = marginalize_function(
-                    self.line_lums[spectra_id][line], axis=axis_index
-                )
-                self.line_conts[spectra_id][line] = marginalize_function(
-                    self.line_conts[spectra_id][line], axis=axis_index
-                )
+            self.line_lums[spectra_id] = marginalize_function(
+                self.line_lums[spectra_id], axis=axis_index
+            )
+            self.line_conts[spectra_id] = marginalize_function(
+                self.line_conts[spectra_id], axis=axis_index
+            )
 
     def _collapse_grid_interpolate(self, axis, value, pre_interp_function):
         """
@@ -1159,6 +1037,7 @@ class Grid:
                 "Must provide kwarg `value` if `method` is "
                 "`interpolate` or `nearest`"
             )
+
         # Check the value is within the bounds of the axis
         if value < np.min(axis_values) or value > np.max(axis_values):
             raise exceptions.InconsistentParameter(
@@ -1196,41 +1075,40 @@ class Grid:
             )
 
             # Interpolate the line luminosities and continua
-            for line in self.available_lines:
-                self.line_lums[spectra_id][line] = np.sum(
-                    [
-                        c0
-                        * np.take(
-                            self.line_lums[spectra_id][line],
-                            i0,
-                            axis=axis_index,
-                        ),
-                        c1
-                        * np.take(
-                            self.line_lums[spectra_id][line],
-                            i1,
-                            axis=axis_index,
-                        ),
-                    ],
-                    axis=0,
-                )
-                self.line_conts[spectra_id][line] = np.sum(
-                    [
-                        c0
-                        * np.take(
-                            self.line_conts[spectra_id][line],
-                            i0,
-                            axis=axis_index,
-                        ),
-                        c1
-                        * np.take(
-                            self.line_conts[spectra_id][line],
-                            i1,
-                            axis=axis_index,
-                        ),
-                    ],
-                    axis=0,
-                )
+            self.line_lums[spectra_id] = np.sum(
+                [
+                    c0
+                    * np.take(
+                        self.line_lums[spectra_id],
+                        i0,
+                        axis=axis_index,
+                    ),
+                    c1
+                    * np.take(
+                        self.line_lums[spectra_id],
+                        i1,
+                        axis=axis_index,
+                    ),
+                ],
+                axis=0,
+            )
+            self.line_conts[spectra_id] = np.sum(
+                [
+                    c0
+                    * np.take(
+                        self.line_conts[spectra_id],
+                        i0,
+                        axis=axis_index,
+                    ),
+                    c1
+                    * np.take(
+                        self.line_conts[spectra_id],
+                        i1,
+                        axis=axis_index,
+                    ),
+                ],
+                axis=0,
+            )
 
     def _collapse_grid_nearest(self, axis, value):
         """
@@ -1267,17 +1145,16 @@ class Grid:
             )
 
             # Extract the line luminosities and continua
-            for line in self.available_lines:
-                self.line_lums[spectra_id][line] = np.take(
-                    self.line_lums[spectra_id][line],
-                    np.argmin(np.abs(axis_values - value)),
-                    axis=axis_index,
-                )
-                self.line_conts[spectra_id][line] = np.take(
-                    self.line_conts[spectra_id][line],
-                    np.argmin(np.abs(axis_values - value)),
-                    axis=axis_index,
-                )
+            self.line_lums[spectra_id] = np.take(
+                self.line_lums[spectra_id],
+                np.argmin(np.abs(axis_values - value)),
+                axis=axis_index,
+            )
+            self.line_conts[spectra_id] = np.take(
+                self.line_conts[spectra_id],
+                np.argmin(np.abs(axis_values - value)),
+                axis=axis_index,
+            )
 
     def collapse(
         self,
@@ -1360,8 +1237,8 @@ class Grid:
                 The name of the spectra (in the grid) that is desired.
 
         Returns:
-            synthesizer.sed.Sed
-                A synthesizer Sed object
+            synthesizer.emissions.Sed
+                A synthesizer.emissions object
         """
         # Throw exception if the spectra_id not in list of available spectra
         if spectra_id not in self.available_spectra:
@@ -1389,23 +1266,26 @@ class Grid:
                 f"grid_point={grid_point})"
             )
 
-    def get_line(self, grid_point, line_id, spectra_type="nebular"):
+    def get_lines(self, grid_point, line_id=None, spectra_type="nebular"):
         """
         Create a Line object for a given line_id and grid_point.
 
         Args:
             grid_point (tuple)
                 A tuple of integers specifying the closest grid point.
-            line_id (str)
-                The id of the line.
+            line_id (str/list)
+                The id/s of the line. If a string contains a comma separated
+                list of line_ids a composite line will be returned containing
+                the sum of the luminosities and the mean of the wavelengths.
+                If a list of line_ids is provided a subset of lines will be
+                returned. If None then all available lines will be returned.
             spectra_type (str)
                 The spectra type to extract the line from. Default is
                 "nebular", all other spectra will have line luminosities of 0
                 by definition.
 
         Returns:
-            line (synthesizer.line.Line)
-                A synthesizer Line object.
+            lines (LineCollection)
         """
         # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
@@ -1414,70 +1294,26 @@ class Grid:
                 "as an argument should have the same shape as the grid."
             )
 
-        if isinstance(line_id, str):
-            line_id = [line_id]
+        # First create a LineCollection containing the grid point
+        all_lines = LineCollection(
+            line_ids=self.available_lines,
+            lam=self.line_lams,
+            lum=self.line_lums[spectra_type][grid_point],
+            cont=self.line_conts[spectra_type][grid_point],
+        )
 
-        # Set up a list to hold all lines
-        lines = []
+        # If we have no line_id we are done and can return the full collection
+        if line_id is None:
+            return all_lines
 
-        for line_id_ in line_id:
-            # Throw exception if tline_id not in list of available lines
-            if line_id_ not in self.available_lines:
-                raise exceptions.InconsistentParameter(
-                    f"Provided line_id ({line_id_}) is not in the list "
-                    "of available lines."
-                )
+        # Now we simply extract the line we want from the collection
+        line = all_lines[line_id]
 
-            # Create the line
-            # TODO: Need to use units from the grid file but they currently
-            # aren't stored correctly.
-            lam = self.line_lams[line_id_] * angstrom
-            lum = self.line_lums[spectra_type][line_id_][grid_point] * erg / s
-            cont = (
-                self.line_conts[spectra_type][line_id_][grid_point]
-                * erg
-                / s
-                / Hz
-            )
-            lines.append(
-                Line(
-                    line_id=line_id,
-                    wavelength=lam,
-                    luminosity=lum,
-                    continuum=cont,
-                )
-            )
+        # Formally delete the all_lines object, gargabe collection would
+        # probably do this anyway but we do it here to be sure.
+        del all_lines
 
-        return Line(combine_lines=lines)
-
-    def get_lines(self, grid_point, line_ids=None):
-        """
-        Create a LineCollection for multiple lines.
-
-        Args:
-            grid_point (tuple)
-                A tuple of the grid point indices.
-            line_ids (list)
-                A list of lines, if None use all available lines.
-
-        Returns:
-            lines (lines.LineCollection)
-        """
-        # If no line ids are provided calculate all lines
-        if line_ids is None:
-            line_ids = self.available_lines
-
-        # Line dictionary
-        lines = {}
-
-        for line_id in line_ids:
-            line = self.get_line(grid_point, line_id)
-
-            # Add to dictionary
-            lines[line.id] = line
-
-        # Create and return collection
-        return LineCollection(lines)
+        return line
 
     def plot_specific_ionising_lum(
         self,
@@ -1628,6 +1464,34 @@ class Grid:
         # Return tuple of wavelengths and delta lambda
         return self.lam, delta_lambda
 
+    def get_flattened_axes_values(self):
+        """
+        Get the flattened axis values for the grid.
+
+        This will return a dictionary of the axes values that correspond to
+        the grid once flattened.
+
+        Returns:
+            dict
+                A dictionary containing the flattened versions of the axes.
+        """
+        # Create a tuple of the axes values
+        axes_values_tuple = (self._axes_values[axis] for axis in self.axes)
+
+        # Create a meshgrid of the axes_values
+        axes_values_mesh_tuple = np.meshgrid(*axes_values_tuple, indexing="ij")
+
+        # Create a dictionary with flattened versions of the axes values
+        flattened_axes_values = {
+            axis: unyt_array(
+                axes_values_mesh_tuple[axis_index].flatten(),
+                self._axes_units[axis],
+            )
+            for axis_index, axis in enumerate(self.axes)
+        }
+
+        return flattened_axes_values
+
     def get_sed(self, spectra_type):
         """
         Get the spectra grid as an Sed object.
@@ -1668,9 +1532,9 @@ class Grid:
 
         # Apply the mask to the spectra
         for spectra_type in self.available_spectra:
-            self.spectra[spectra_type] = self.spectra[spectra_type][
-                ..., okinds
-            ]
+            self.spectra[spectra_type] = np.ascontiguousarray(
+                self.spectra[spectra_type][..., okinds]
+            )
 
     def animate_grid(
         self,
@@ -1814,13 +1678,11 @@ class Template:
 
         # Attach the template now we've done the interpolation (if needed)
         self._sed = sed
-        self.lnu = sed.lnu
         self.lam = sed.lam
 
         # Normalise, just in case
-        self.normalisation = sed._bolometric_luminosity
-        self._sed._lnu /= self.normalisation
-        self._lnu /= self.normalisation
+        self.normalisation = sed.bolometric_luminosity
+        self._sed._lnu /= self.normalisation.to(self._sed.lnu.units * Hz).value
 
     @accepts(bolometric_luminosity=erg / s)
     def get_spectra(self, bolometric_luminosity):
@@ -1841,4 +1703,4 @@ class Template:
             )
 
         # Scale the spectra and return
-        return self._sed * bolometric_luminosity
+        return self._sed * (bolometric_luminosity / Hz)

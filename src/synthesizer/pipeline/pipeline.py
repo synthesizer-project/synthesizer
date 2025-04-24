@@ -31,15 +31,17 @@ Example usage:
 import time
 
 import numpy as np
-from pathos.multiprocessing import ProcessingPool as Pool
 from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
+from synthesizer.emission_models.transformers import Inoue14
 from synthesizer.instruments import Instrument, InstrumentCollection
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
+    count_and_check_dict_recursive,
+    get_full_memory,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
@@ -128,6 +130,7 @@ class Pipeline:
         nthreads=1,
         comm=None,
         verbose=1,
+        report_memory=False,
     ):
         """
         Initialise the Pipeline object.
@@ -158,6 +161,13 @@ class Pipeline:
             verbose (int): How talkative are we? 0: No output beyond hello and
                 goodbye. 1: Outputs with timings but only on rank 0 (when using
                 MPI). 2: Outputs with timings on all ranks (when using MPI).
+            report_memory (bool): Should we report memory usage as we run?
+                This should only be turned on for debugging purposes. This
+                will report the memory usage of the galaxies, the results,
+                and the pipeline object itself in the progress table. This
+                can be very EXPENSIVE in terms of time since we recurse through
+                all objects to get the memory usage after processing each
+                galaxy. Default is False.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -167,9 +177,9 @@ class Pipeline:
 
         # Check if it's a single instrument
         if isinstance(instruments, Instrument):
-            # mock up an InstrumentCollection
+            # Mock up an InstrumentCollection
             collection = InstrumentCollection()
-            collection.add_instruments(self, instruments)
+            collection.add_instruments(instruments)
             self.instruments = collection
         else:
             self.instruments = instruments
@@ -177,9 +187,14 @@ class Pipeline:
         # Set verbosity
         self.verbose = verbose
 
+        # Are we reporting memory usage?
+        self._report_memory = report_memory
+
         # How many galaxies are we going to be looking at?
         self.n_galaxies = 0
         self.n_galaxies_local = 0  # Only applicable when using MPI
+        self.n_galaxies_per_rank = 0  # Only applicable when using MPI
+        self.n_galaxies_offset = 0  # Only applicable when using MPI
 
         # Define the container to hold the galaxies
         self.galaxies = []
@@ -201,26 +216,52 @@ class Pipeline:
         # on an instrument-by-instrument basis (e.g. check resolution are
         # the same for imaging, wavelength arrays for spectroscopy etc.).
         self.filters = FilterCollection()
-        for inst in instruments:
+        for inst in self.instruments:
             if inst.can_do_photometry:
                 self.filters += inst.filters
 
-        # Define flags to indicate when we completed the various stages
+        # Define flags for what we will do
+        self._do_los_optical_depths = False
+        self._do_lnu_spectra = False
+        self._do_fnu_spectra = False
+        self._do_luminosities = False
+        self._do_fluxes = False
+        self._do_lum_lines = False
+        self._do_flux_lines = False
+        self._do_images_lum = False
+        self._do_images_lum_psf = False
+        self._do_images_flux = False
+        self._do_images_flux_psf = False
+        self._do_lnu_data_cubes = False
+        self._do_fnu_data_cubes = False
+        self._do_spectroscopy = False
+        self._do_sfzh = False
+        self._do_sfh = False
+
+        # Define the container for all the kwargs needed by each operation
+        # This will be a dict of dicts
+        self._operation_kwargs = {}
+
+        # Define flags for what we will write out
+        self._write_lnu_spectra = False
+        self._write_fnu_spectra = False
+        self._write_luminosities = False
+        self._write_fluxes = False
+        self._write_lines = False
+        self._write_flux_lines = False
+        self._write_images_lum = False
+        self._write_images_lum_psf = False
+        self._write_images_flux = False
+        self._write_images_flux_psf = False
+        self._write_lnu_data_cubes = False
+        self._write_fnu_data_cubes = False
+        self._write_spectroscopy = False
+        self._write_sfzh = False
+        self._write_sfh = False
+
+        # Define flags to indicate we read the galaxies
         self._loaded_galaxies = False
-        self._got_lnu_spectra = False
-        self._got_fnu_spectra = False
-        self._got_luminosities = False
-        self._got_fluxes = False
-        self._got_lum_lines = False
-        self._got_flux_lines = False
-        self._got_images_lum = False
-        self._got_images_lum_psf = False
-        self._got_images_flux = False
-        self._got_images_flux_psf = False
-        self._got_lnu_data_cubes = False
-        self._got_fnu_data_cubes = False
-        self._got_spectroscopy = False
-        self._got_sfzh = False
+        self._analysis_complete = False
 
         # Define containers for any additional analysis functions
         self._analysis_funcs = []
@@ -229,26 +270,75 @@ class Pipeline:
         self._analysis_results_keys = []
         self._analysis_results = {}
 
-        # It'll be helpful later if we know what line IDs have been requested
-        # so we'll store these should get_lines be called.
-        self._line_ids = []
-
         # Initialise containers for all the data we can generate
-        self.sfzh = None
-        self.lnu_spectra = {}
-        self.fnu_spectra = {}
-        self.luminosities = {}
-        self.fluxes = {}
-        self.lines_lum = {}
-        self.line_cont_lum = {}
-        self.flux_lines = {}
-        self.images_lum = {}
-        self.images_lum_psf = {}
-        self.images_flux = {}
-        self.images_flux_psf = {}
-        self.lnu_data_cubes = {}
-        self.fnu_data_cubes = {}
-        self.spectroscopy = {}
+        self.sfzhs = []
+        self.sfhs = []
+        self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_cont_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_lams = None
+        self.line_ids = None
+        self.line_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_cont_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_obs_lams = None
+        self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.lnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.spectroscopy = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+
+        # We'll need to store the timing information to be reported at the
+        # end of the pipeline (this will be stored with the operation
+        # as the key and the value being the collected time taken).
+        self._op_timing = {
+            "LOS optical depths": 0.0,
+            "SFZH": 0.0,
+            "SFH": 0.0,
+            "Lnu Spectra": 0.0,
+            "Fnu Spectra": 0.0,
+            "Luminosities": 0.0,
+            "Fluxes": 0.0,
+            "Emission Line Luminosities": 0.0,
+            "Emission Line Fluxes": 0.0,
+            "Luminosity Images": 0.0,
+            "Luminosity Images (with PSF)": 0.0,
+            "Flux Images": 0.0,
+            "Flux Images (With PSF)": 0.0,
+            "Lnu Data Cubes": 0.0,
+            "Fnu Data Cubes": 0.0,
+            "Spectroscopy": 0.0,
+            "Extra Analyses": 0.0,
+            "Unpacking results": 0.0,
+        }
+
+        # We'll also report total counts so define a container for those.
+        self._op_counts = {
+            "LOS optical depths": 0,
+            "SFZH": 0,
+            "SFH": 0,
+            "Lnu Spectra": 0,
+            "Fnu Spectra": 0,
+            "Luminosities": 0,
+            "Fluxes": 0,
+            "Emission Line Luminosities": 0,
+            "Emission Line Fluxes": 0,
+            "Luminosity Images": 0,
+            "Luminosity Images (with PSF)": 0,
+            "Flux Images": 0,
+            "Flux Images (With PSF)": 0,
+            "Lnu Data Cubes": 0,
+            "Fnu Data Cubes": 0,
+            "Spectroscopy": 0,
+            "Extra Analyses": 0,
+        }
+
+        # Some constants we'll use to format the progress report
+        self._table_col_width = 12
 
         # Everything that follows is only needed for hybrid parallelism
         # (running with MPI in addition to shared memory parallelism)
@@ -273,12 +363,19 @@ class Pipeline:
         # Attach the writer, we'll assign this later in the write method
         self.io_helper = None
 
+        # If we are using MPI we need to make sure everyone agrees on the
+        # start time, take the minimum
+        if self.using_mpi:
+            self._start_time = min(self.comm.allgather(self._start_time))
+
         # Hold back everyone in MPI land until we're all ready to go
         if self.using_mpi:
             comm.Barrier()
 
     def _say_hello(self):
         """Print a nice welcome."""
+        if self.verbose == 0:
+            return
         print()
         print("\n".join([" " * 25 + s for s in Art.galaxy.split("\n")]))
         print()
@@ -515,6 +612,387 @@ class Pipeline:
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
+    @property
+    def results_memory_usage(self):
+        """
+        Return the memory usage of the various results stored on the Pipeline.
+
+        Returns:
+            float: The memory usage in Megabytes.
+        """
+        results = [
+            self.sfzhs,
+            self.sfhs,
+            self.lnu_spectra,
+            self.fnu_spectra,
+            self.luminosities,
+            self.fluxes,
+            self.line_lums,
+            self.line_cont_lums,
+            self.line_lams,
+            self.line_ids,
+            self.line_fluxes,
+            self.line_cont_fluxes,
+            self.line_obs_lams,
+            self.images_lum,
+            self.images_lum_psf,
+            self.images_flux,
+            self.images_flux_psf,
+            self.lnu_data_cubes,
+            self.fnu_data_cubes,
+            self.spectroscopy,
+        ]
+
+        return get_full_memory(results) / (1024**2)
+
+    @property
+    def galaxies_memory_usage(self):
+        """
+        Return the memory usage of the galaxies loaded into the Pipeline.
+
+        Returns:
+            float: The memory usage in Megabytes.
+        """
+        return get_full_memory(self.galaxies) / (1024**2)
+
+    @property
+    def all_galaxies_memory_usage(self):
+        """
+        Return the memory usage of all galaxies across all ranks.
+
+        Returns:
+            float: The memory usage in Megabytes.
+        """
+        if self.using_mpi:
+            return self.comm.allreduce(self.galaxies_memory_usage)
+        return self.galaxies_memory_usage
+
+    @property
+    def memory_usage(self):
+        """
+        Return the memory usage of the Pipeline object.
+
+        Returns:
+            float: The memory usage in Megabytes.
+        """
+        return get_full_memory(self) / (1024**2)
+
+    def _print_progress_header(self):
+        """Print the header for the progress report."""
+        # Nothing to do if we are not rank 0
+        if self.rank != 0:
+            return
+
+        # Obey 0 verbosity
+        if self.verbose == 0:
+            return
+
+        # Print the pipeline footprint regardless of report memory setting
+        self._print("Pipeline memory footprint (MB):", self.memory_usage)
+        self._print("Running the pipeline...")
+        self._print_progress_footer()
+
+        # Define the header for the progress report
+        header = (
+            "|"
+            + f"{'Galaxy #':>{self._table_col_width}}"
+            + "|"
+            + f"{'Nstars':>{self._table_col_width}}"
+            + "|"
+            + f"{'Ngas':>{self._table_col_width}}"
+            + "|"
+            + f"{'Nbh':>{self._table_col_width}}"
+            + "|"
+            + f"{'dt (s)':>{self._table_col_width}}"
+            + "|"
+        )
+
+        # If we are reporting memory usage we need to add the extra columns
+        if self._report_memory:
+            header += (
+                f"{'Memory footprint (MB)':>{self._table_col_width * 2}}"
+                + "|"
+                + f"{'Galaxy memory (MB)':>{self._table_col_width * 2}}"
+                + "|"
+                + f"{'Results memory (MB)':>{self._table_col_width * 2}}"
+                + "|"
+            )
+
+        self._print(header)
+
+        self._print_progress_footer()
+
+    def _add_progress_row(self, gal, igal, start):
+        """
+        Print a row for the progress report.
+
+        Args:
+            gal (Galaxy): The galaxy object to report on.
+            igal (int): The index of the galaxy.
+            start (float): The start time of the process.
+        """
+        # Obey 0 verbosity
+        if self.verbose == 0:
+            return
+
+        # Get the number of stars, for parametric galaxies we don't have this
+        # information but we do have the sfzh shape
+        if gal.stars is not None and hasattr(gal.stars, "nstars"):
+            nstars = gal.stars.nstars
+        elif gal.stars is not None:
+            nstars = str(gal.stars.sfzh.shape)
+        else:
+            nstars = "None"
+
+        # Get the number of blackholes (this is automatically 1 for parametric
+        # galaxies)
+        nbh = gal.black_holes.nbh if gal.black_holes is not None else "None"
+
+        # Get the number of gas particles (this should be None for parametric)
+        ngas = gal.gas.nparticles if gal.gas is not None else "None"
+
+        # Get the elapsed time for this galaxy
+        elapsed = time.perf_counter() - start
+
+        # Get the memory footprint if we are reporting memory usage
+        if self._report_memory:
+            res_mem_mb = self.results_memory_usage
+            self_mem_mb = self.memory_usage
+            gal_mem_mb = self.galaxies_memory_usage
+
+        # In MPI land we need to add the offset to this ranks galaxy index
+        if self.using_mpi:
+            igal += self.n_galaxies_offset
+
+        # We don't want to obey the verbosity level here, we always want to
+        # print this information so we'll use the print method directly
+
+        # Get the current time code in seconds with 0 padding and 2
+        # decimal places
+        now = time.perf_counter() - self._start_time
+        int_now = str(int(now)).zfill(
+            len(str(int(now))) + 1 if now > 9999 else 5
+        )
+        decimal = str(now).split(".")[-1][:2]
+        now_str = f"{int_now}.{decimal}"
+
+        # Create the prefix for the print, theres extra info to output if
+        # we are using MPI
+        if self.using_mpi:
+            # Only print on rank 0 if we are using MPI and have verbosity 1
+            if self.verbose == 1 and self.rank != 0:
+                return
+
+            prefix = (
+                f"[{str(self.rank).zfill(len(str(self.size)) + 1)}]"
+                f"[{now_str}]:"
+            )
+
+        else:
+            prefix = f"[{now_str}]:"
+
+        # Define the row for the progress report
+        row = (
+            "|"
+            + f"{igal:>{self._table_col_width}}"
+            + "|"
+            + f"{nstars:>{self._table_col_width}}"
+            + "|"
+            + f"{ngas:>{self._table_col_width}}"
+            + "|"
+            + f"{nbh:>{self._table_col_width}}"
+            + "|"
+            + f"{elapsed:>{self._table_col_width}.2f}"
+            + "|"
+        )
+
+        # If we are reporting memory usage we need to add the extra columns
+        if self._report_memory:
+            row += (
+                f"{self_mem_mb:>{self._table_col_width * 2}.2f}"
+                + "|"
+                + f"{gal_mem_mb:>{self._table_col_width * 2}.2f}"
+                + "|"
+                + f"{res_mem_mb:>{self._table_col_width * 2}.2f}"
+                + "|"
+            )
+
+        print(prefix, row)
+
+    def _print_progress_footer(self):
+        """Print the footer for the progress report."""
+        footer = (
+            "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width
+            + "+"
+            + "-" * self._table_col_width
+            + "+"
+        )
+
+        # If we are reporting memory usage we need to add the extra columns
+        if self._report_memory:
+            footer += (
+                "-" * self._table_col_width * 2
+                + "+"
+                + "-" * self._table_col_width * 2
+                + "+"
+                + "-" * self._table_col_width * 2
+                + "+"
+            )
+        self._print(footer)
+
+    def _report_total_timings(self):
+        """Print the total timings for each operation."""
+        # If we are using MPI we need to sum the timings and counts across all
+        # ranks to get the total time taken and total counts
+        if self.using_mpi:
+            for key in self._op_timing:
+                self._op_timing[key] = self.comm.allreduce(
+                    self._op_timing[key]
+                )
+            for key in self._op_counts:
+                self._op_counts[key] = self.comm.allreduce(
+                    self._op_counts[key]
+                )
+
+            # We only want to report this on rank 0 so we'll return if we're
+            # not rank 0
+            if self.rank != 0:
+                return
+
+        # Loop over the timings and print them out
+        for key, elapsed in self._op_timing.items():
+            if elapsed == 0.0:
+                continue
+
+            # Report in sensible units
+            if elapsed < 1:
+                elapsed *= 1000
+                units = "ms"
+            elif elapsed < 60:
+                units = "s"
+            else:
+                elapsed /= 60
+                units = "mins"
+
+            # Handle reporting (extra analysis and unpackign need some special
+            # handling because they are not operations)
+            if key == "Unpacking results":
+                self._print(f"{key} took {elapsed:.2f} {units}")
+            elif key == "Extra Analyses":
+                self._print(
+                    f"Running {self._op_counts[key]} extra analyses"
+                    f" took {elapsed:.2f} {units}"
+                )
+            elif key in self._op_counts:
+                self._print(
+                    f"Computing {self._op_counts[key]} {key}"
+                    f" took {elapsed:.2f} {units}"
+                )
+            else:
+                self._print(f"Computing {key} took {elapsed:.2f} {units}")
+
+    def report_operations(self):
+        """
+        Print the operations that will be performed by the Pipeline.
+
+        This will print out the operations that will be performed by the
+        pipeline, including which will be written out and which will just be
+        computed.
+        """
+        self._print("-" * 60)
+        self._print("".ljust(30) + "Compute?".rjust(15) + "Write?".rjust(15))
+
+        # Print each operation and whether it will be written out
+        self._print(
+            "Line of Sight Optical Depths".ljust(30)
+            + str(self._do_los_optical_depths).rjust(15)
+            + "N/A".rjust(15)
+        )
+        self._print(
+            "SFZH".ljust(30)
+            + str(self._do_sfzh).rjust(15)
+            + str(self._write_sfzh).rjust(15)
+        )
+        self._print(
+            "SFH".ljust(30)
+            + str(self._do_sfh).rjust(15)
+            + str(self._write_sfh).rjust(15)
+        )
+        self._print(
+            "Lnu Spectra".ljust(30)
+            + str(self._do_lnu_spectra).rjust(15)
+            + str(self._write_lnu_spectra).rjust(15)
+        )
+        self._print(
+            "Fnu Spectra".ljust(30)
+            + str(self._do_fnu_spectra).rjust(15)
+            + str(self._write_fnu_spectra).rjust(15)
+        )
+        self._print(
+            "Photometric Luminosities".ljust(30)
+            + str(self._do_luminosities).rjust(15)
+            + str(self._write_luminosities).rjust(15)
+        )
+        self._print(
+            "Photometric Fluxes".ljust(30)
+            + str(self._do_fluxes).rjust(15)
+            + str(self._write_fluxes).rjust(15)
+        )
+        self._print(
+            "Emission Line Luminosities".ljust(30)
+            + str(self._do_lum_lines).rjust(15)
+            + str(self._write_lines).rjust(15)
+        )
+        self._print(
+            "Emission Line Fluxes".ljust(30)
+            + str(self._do_flux_lines).rjust(15)
+            + str(self._write_flux_lines).rjust(15)
+        )
+        self._print(
+            "Luminosity Images".ljust(30)
+            + str(self._do_images_lum).rjust(15)
+            + str(self._write_images_lum).rjust(15)
+        )
+        self._print(
+            "Luminosity Images (with PSF)".ljust(30)
+            + str(self._do_images_lum_psf).rjust(15)
+            + str(self._write_images_lum_psf).rjust(15)
+        )
+        self._print(
+            "Flux Images".ljust(30)
+            + str(self._do_images_flux).rjust(15)
+            + str(self._write_images_flux).rjust(15)
+        )
+        self._print(
+            "Flux Images (with PSF)".ljust(30)
+            + str(self._do_images_flux_psf).rjust(15)
+            + str(self._write_images_flux_psf).rjust(15)
+        )
+        # Coming soon...
+        # self._print(
+        #     "Lnu Data Cubes".ljust(30)
+        #     + str(self._do_lnu_data_cubes).rjust(15)
+        #     + str(self._write_lnu_data_cubes).rjust(15)
+        # )
+        # self._print(
+        #     "Fnu Data Cubes".ljust(30)
+        #     + str(self._do_fnu_data_cubes).rjust(15)
+        #     + str(self._write_fnu_data_cubes).rjust(15)
+        # )
+        # self._print(
+        #     "Spectroscopy".ljust(30)
+        #     + str(self._do_spectroscopy).rjust(15)
+        #     + str(self._write_spectroscopy).rjust(15)
+        # )
+        self._print("-" * 60)
+
     def add_analysis_func(self, func, result_key, *args, **kwargs):
         """
         Add an analysis function to the Pipeline.
@@ -584,7 +1062,7 @@ class Pipeline:
                 "Choose a different result_key"
             )
         else:
-            self._analysis_results[result_key] = None
+            self._analysis_results[result_key] = []
 
         self._print(f"Added analysis function: {result_key}")
 
@@ -602,6 +1080,10 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Check there are actually galaxies...
+        if len(galaxies) == 0:
+            self._print("No galaxies provided to add to the Pipeline.")
+
         # Attach the galaxies
         self.galaxies = galaxies
         self.n_galaxies_local = len(galaxies)
@@ -610,27 +1092,56 @@ class Pipeline:
         # to get the total number of galaxies
         if self.using_mpi:
             self.n_galaxies = self.comm.allreduce(self.n_galaxies_local)
+            self.n_galaxies_per_rank = self.comm.allgather(
+                self.n_galaxies_local
+            )
+            self.n_galaxies_offset = sum(self.n_galaxies_per_rank[: self.rank])
         else:
             self.n_galaxies = self.n_galaxies_local
+            self.n_galaxies_per_rank = [self.n_galaxies_local]
+            self.n_galaxies_offset = 0
 
         # If we have MPI lets report the balance
         if self.using_mpi:
             self._report_balance()
+
+        # Report the galaxy memory footprint (in MPI land we'll report
+        # the total and local memory usage)
+        if self.using_mpi:
+            self._print(
+                "Local galaxies memory footprint:"
+                f" {self.galaxies_memory_usage:.2f} MB"
+            )
+            self._print(
+                "Distributed galaxies total memory footprint:"
+                f" {self.all_galaxies_memory_usage:.2f} MB"
+            )
+        else:
+            self._print(
+                "Galaxies memory footprint: "
+                f"{self.galaxies_memory_usage:.2f} MB"
+            )
 
         # Done!
         self._loaded_galaxies = True
         self._took(start, f"Adding {self.n_galaxies} galaxies")
 
     def get_los_optical_depths(
-        self, kernel, kernel_threshold=1.0, kappa=0.0795
+        self,
+        kernel,
+        kernel_threshold=1.0,
+        kappa=0.0795,
     ):
         """
-        Compute the Line of Sight optical depths for all particles.
+        Flag that the Pipeline should compute the LOS optical depths.
 
-        This will compute the optical depths based on the line of sight dust
-        column density for all non-gas components. We project a ray along the
-        z axis (LOS) and any gas kernels it intersects are evaluated at the
-        intersection and their contributions to the optical depth is included.
+        This will signal the Pipeline to compute the LOS optical depths when
+        the run method is called.
+
+        LOS optical depths are computed first.
+
+        Note that the LOS calculation requries a galaxy has a gas component and
+        either a stellar or black hole components emitting.
 
         Args:
             kernel (array-like):
@@ -641,29 +1152,106 @@ class Pipeline:
                 The dust opacity coefficient in units of Msun / pc**2. Default
                 is 0.0795.
         """
+        # Store the arguments for the operation
+        self._operation_kwargs["get_los_optical_depths"] = {
+            "kernel": kernel,
+            "kernel_threshold": kernel_threshold,
+            "kappa": kappa,
+        }
+
+        # Flag that we will compute the LOS optical depths
+        self._do_los_optical_depths = True
+
+    def _get_los_optical_depths(self, galaxy):
+        """
+        Compute the Line of Sight optical depths for all particles.
+
+        This will compute the optical depths based on the line of sight dust
+        column density for all non-gas components. We project a ray along the
+        z axis (LOS) and any gas kernels it intersects are evaluated at the
+        intersection and their contributions to the optical depth is included.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the optical depths for.
+        """
         start = time.perf_counter()
 
-        # Loop over galaxies and compute the optical depths for the present
-        # components. This can use internal shared memory parallelism so we
-        # just loop over the galaxies.
-        for g in self.galaxies:
-            g.get_stellar_los_tau_v(
-                kappa=kappa,
-                kernel=kernel,
-                threshold=kernel_threshold,
+        # Compute the optical depths for the present components.
+        if (
+            galaxy.stars is not None
+            and galaxy.gas is not None
+            and galaxy.stars.nstars > 0
+        ):
+            galaxy.get_stellar_los_tau_v(
+                kappa=self._operation_kwargs["get_los_optical_depths"][
+                    "kappa"
+                ],
+                kernel=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel"
+                ],
+                threshold=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel_threshold"
+                ],
                 nthreads=self.nthreads,
             )
-            g.get_black_hole_los_tau_v(
-                kappa=kappa,
-                kernel=kernel,
-                threshold=kernel_threshold,
+        if (
+            galaxy.black_holes is not None
+            and galaxy.gas is not None
+            and galaxy.black_holes.nbh > 0
+        ):
+            galaxy.get_black_hole_los_tau_v(
+                kappa=self._operation_kwargs["get_los_optical_depths"][
+                    "kappa"
+                ],
+                kernel=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel"
+                ],
+                threshold=self._operation_kwargs["get_los_optical_depths"][
+                    "kernel_threshold"
+                ],
                 nthreads=self.nthreads,
             )
 
-        # Done!
-        self._took(start, "Getting LOS optical depths")
+        # Count how many optical depths we have generated (1 per particle) and
+        # increment the total counts
+        if galaxy.stars is not None and galaxy.gas is not None:
+            self._op_counts["LOS optical depths"] += galaxy.stars.nstars
+        if galaxy.black_holes is not None and galaxy.gas is not None:
+            self._op_counts["LOS optical depths"] += galaxy.black_holes.nbh
 
-    def get_sfzh(self, grid):
+        # Record the time taken
+        self._op_timing["LOS optical depths"] += time.perf_counter() - start
+
+    def get_sfzh(self, log10ages, log10metallicities):
+        """
+        Flag that the Pipeline should compute the SFZH grid.
+
+        This will signal the Pipeline to compute the SFZH grid when the run
+        method is called.
+
+        The SFZH grid is the star formation history grid for each galaxy.
+
+        Args:
+            log10ages (array-like):
+                The log10 age axis of the SFZH grid.
+            log10metallicities (array-like):
+                The log10 metallicity axis of the SFZH grid.
+        """
+        # Store the arguments for the operation
+        self._operation_kwargs["get_sfzh"] = {
+            "log10ages": log10ages,
+            "log10metallicities": log10metallicities,
+        }
+
+        # Flag that we will compute the SFZH grid
+        self._do_sfzh = True
+
+        # Flag that we will want to write out the SFZH grid (calling the
+        # get_sfzh method is considered the the intent to write it out)
+        self._write_sfzh = True
+
+    def _get_sfzh(self, galaxy):
         """
         Compute the SFZH grid for each galaxy.
 
@@ -671,233 +1259,398 @@ class Pipeline:
         grid.
 
         Args:
-            grid (Grid):
-                The SPS grid to use for the SFZH calculation.
+            galaxy (Galaxy):
+                The galaxy to compute the SFZH grid for.
         """
         start = time.perf_counter()
 
-        # Loop over galaxies and get thier SFZH, skip any without stars. This
-        # Can use internal shared memory parallelism so we just loop over the
-        # galaxies.
-        for g in self.galaxies:
-            # Parametric galaxies have this ready to go so we can skip them
-            if getattr(g, "sfzh", None) is not None:
-                continue
-            elif g.stars is not None and g.stars.nstars > 0:
-                g.get_sfzh(grid, nthreads=self.nthreads)
+        # Get the SFZH, skip any without stars.
+        # Parametric galaxies have this ready to go so we can skip them
+        if getattr(galaxy, "sfzh", None) is not None:
+            self.sfzhs.append(galaxy.sfzh)
+            return
+        elif galaxy.stars is not None and galaxy.stars.nstars > 0:
+            galaxy.stars.get_sfzh(
+                log10ages=self._operation_kwargs["get_sfzh"]["log10ages"],
+                log10metallicities=self._operation_kwargs["get_sfzh"][
+                    "log10metallicities"
+                ],
+                nthreads=self.nthreads,
+            )
+        else:
+            # No stars, no SFZH, store a zeroed grid
+            self.sfzhs.append(
+                np.zeros(
+                    (
+                        len(self._operation_kwargs["get_sfzh"]["log10ages"]),
+                        len(
+                            self._operation_kwargs["get_sfzh"][
+                                "log10metallicities"
+                            ]
+                        ),
+                    )
+                )
+            )
 
-        # Unpack the SFZH attributes into a single array on the Pipeline object
-        self.sfzh = unyt_array(
-            [g.sfzh.value for g in self.galaxies],
-            self.galaxies[0].sfzh.units,
+            return
+
+        # Count the number of SFZH grids we have generated
+        self._op_counts["SFZH"] += 1
+
+        # Record the time taken
+        self._op_timing["SFZH"] += time.perf_counter() - start
+
+    def get_sfh(self, log10ages):
+        """
+        Flag that the Pipeline should compute the binned SFH.
+
+        This will signal the Pipeline to compute the binned SFH when the run
+        method is called.
+
+        The SFH is the binned star formation history based on an arbitrary
+        set of age bins define din log10 space.
+
+        Args:
+            log10ages (array-like):
+                The log10 age axis of the SFH grid.
+        """
+        # Store the arguments for the operation
+        self._operation_kwargs["get_sfh"] = {"log10ages": log10ages}
+
+        # Flag that we will compute the SFH grid
+        self._do_sfh = True
+
+        # Flag that we will want to write out the SFH grid (calling the
+        # get_sfh method is considered the the intent to write it out)
+        self._write_sfh = True
+
+    def _get_sfh(self, galaxy):
+        """
+        Compute the binned SFH for each galaxy.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the SFH for.
+        """
+        start = time.perf_counter()
+
+        # Get the SFH, skip any without stars.
+        # Parametric galaxies have this ready to go so we can skip them
+        if getattr(galaxy, "sfh", None) is not None:
+            self.sfhs.append(galaxy.sfh)
+            return
+        elif galaxy.stars is not None and galaxy.stars.nstars > 0:
+            galaxy.stars.get_sfh(
+                log10ages=self._operation_kwargs["get_sfh"]["log10ages"],
+                nthreads=self.nthreads,
+            )
+        else:
+            # No stars, no SFH, store a zeroed grid
+            self.sfhs.append(
+                np.zeros(len(self._operation_kwargs["get_sfh"]["log10ages"]))
+            )
+
+            return
+
+        # Count the number of SFH grids we have generated
+        self._op_counts["SFH"] += 1
+
+        # Record the time taken
+        self._op_timing["SFH"] += time.perf_counter() - start
+
+    def get_spectra(self):
+        """
+        Flag that the Pipeline should compute the rest frame spectra.
+
+        This will signal the Pipeline to compute the rest frame spectral
+        luminosity density for each galaxy when the run method is called.
+
+        The spectra are generated based on the EmissionModel and the galaxy
+        components.
+
+        Spectral flux densities can be computed with get_observed_spectra.
+        """
+        # Flag that we will compute the spectra
+        self._do_lnu_spectra = True
+
+        # Flag that we will want to write out the spectra (calling the
+        # get_spectra method is considered the intent to write it out)
+        self._write_lnu_spectra = True
+
+    def _get_spectra(self, galaxy):
+        """
+        Generate the spectra for the galaxies based on the EmissionModel.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate the spectra for.
+        """
+        start = time.perf_counter()
+
+        # Get the spectra
+        galaxy.get_spectra(self.emission_model, nthreads=self.nthreads)
+
+        # Count the number of spectra we have generated
+        self._op_counts["Lnu Spectra"] += count_and_check_dict_recursive(
+            galaxy.spectra
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Lnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.stars.spectra
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Lnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.black_holes.spectra
+            )
+
+        # Record the time taken
+        self._op_timing["Lnu Spectra"] += time.perf_counter() - start
+
+    def get_observed_spectra(self, cosmo, igm=Inoue14):
+        """
+        Flag that the Pipeline should compute the observed spectra.
+
+        This will signal the Pipeline to compute the observed spectral flux
+        density for each galaxy when the run method is called.
+
+        The observed spectra are generated based on the rest frame spectra and
+        the cosmology.
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for the observed spectra.
+            igm (IGMBase):
+                The IGM model to use for the attenuation of the spectra.
+        """
+        # Store the cosmology for the operation
+        self._operation_kwargs["get_observed_spectra"] = {
+            "cosmo": cosmo,
+            "igm": igm,
+        }
+
+        # Flag that we will compute the observed spectra
+        self._do_fnu_spectra = True
+
+        # To compute the observed spectra we need to have already computed the
+        # rest frame spectra
+        self._do_lnu_spectra = True
+
+        # Flag that we will want to write out the observed spectra (calling the
+        # get_observed_spectra method is considered the intent to write it out)
+        self._write_fnu_spectra = True
+
+    def _get_observed_spectra(self, galaxy):
+        """
+        Compute the observed spectra for each galaxy.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the observed spectra for.
+        """
+        start = time.perf_counter()
+
+        # Get the observed spectra
+        galaxy.get_observed_spectra(
+            cosmo=self._operation_kwargs["get_observed_spectra"]["cosmo"],
+            igm=self._operation_kwargs["get_observed_spectra"]["igm"],
         )
 
-        # Done!
-        self._got_sfzh = True
-        self._took(start, "Getting SFZH")
-
-    def get_spectra(self, cosmo=None):
-        """Generate the spectra for the galaxies based on the EmissionModel."""
-        start = time.perf_counter()
-
-        # Ensure we are ready
-        if not self._loaded_galaxies:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate spectra before galaxies are loaded! "
-                "Call load_galaxies first."
+        # Count the number of observed spectra we have generated
+        self._op_counts["Fnu Spectra"] += count_and_check_dict_recursive(
+            galaxy.spectra
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Fnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.stars.spectra
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Fnu Spectra"] += count_and_check_dict_recursive(
+                galaxy.black_holes.spectra
             )
 
-        # Loop over the galaxies and get the spectra
-        for g in self.galaxies:
-            g.get_spectra(self.emission_model, nthreads=self.nthreads)
-
-        # If we have a cosmology, get the observed spectra. We can do this
-        # with a threadpool if we have multiple threads, but there's no
-        # internal shared memory parallelism in this process.
-        if cosmo is not None and self.nthreads > 1:
-
-            def _get_observed_spectra(g):
-                g.get_observed_spectra(cosmo=cosmo)
-                return g
-
-            with Pool(self.nthreads) as pool:
-                self.galaxies = pool.map(
-                    _get_observed_spectra,
-                    self.galaxies,
-                )
-        elif cosmo is not None:
-            for g in self.galaxies:
-                g.get_observed_spectra(cosmo=cosmo)
-
-        # Ubpack the spectra into a dictionary on the Pipeline object
-        self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        for g in self.galaxies:
-            for spec_type, spec in g.spectra.items():
-                self.lnu_spectra["Galaxy"].setdefault(spec_type, []).append(
-                    spec.lnu
-                )
-                if cosmo is not None:
-                    self.fnu_spectra["Galaxy"].setdefault(
-                        spec_type, []
-                    ).append(spec.fnu)
-            if g.stars is not None:
-                for spec_type, spec in g.stars.spectra.items():
-                    self.lnu_spectra["Stars"].setdefault(spec_type, []).append(
-                        spec.lnu
-                    )
-                    if cosmo is not None:
-                        self.fnu_spectra["Stars"].setdefault(
-                            spec_type, []
-                        ).append(spec.fnu)
-            if g.black_holes is not None:
-                for spec_type, spec in g.black_holes.spectra.items():
-                    self.lnu_spectra["BlackHole"].setdefault(
-                        spec_type, []
-                    ).append(spec.lnu)
-                    if cosmo is not None:
-                        self.fnu_spectra["BlackHole"].setdefault(
-                            spec_type, []
-                        ).append(spec.fnu)
-
-        # Convert the lists of spectra to unyt arrays
-        for spec_type, spec in self.lnu_spectra["Galaxy"].items():
-            self.lnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.lnu_spectra["Stars"].items():
-            self.lnu_spectra["Stars"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.lnu_spectra["BlackHole"].items():
-            self.lnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.fnu_spectra["Galaxy"].items():
-            self.fnu_spectra[spec_type] = unyt_array(spec)
-        for spec_type, spec in self.fnu_spectra["Stars"].items():
-            self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.fnu_spectra["BlackHole"].items():
-            self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
-
-        # Done!
-        self._got_lnu_spectra = True
-        self._got_fnu_spectra = True if cosmo is not None else False
-        self._took(start, "Generating spectra")
+        # Record the time taken
+        self._op_timing["Fnu Spectra"] += time.perf_counter() - start
 
     def get_photometry_luminosities(self):
-        """Compute the photometric luminosities from the generated spectra."""
-        start = time.perf_counter()
+        """
+        Flag that the Pipeline should compute the photometric luminosities.
 
-        # Ensure we are ready
-        if not self._got_lnu_spectra:
+        This will signal the Pipeline to compute the photometric luminosities
+        for each galaxy when the run method is called.
+
+        The photometric luminosities are generated based on the lnu
+        spectra and the instrument filters.
+        """
+        # Ensure we have filters to compute the photometry
+        if len(self.filters) == 0:
             raise exceptions.PipelineNotReady(
-                "Cannot generate photometry before lnu spectra are generated! "
-                "Call get_spectra first."
-            )
-        elif len(self.filters) == 0:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate photometry without instruments! "
+                "Cannot generate photometry without instruments with filters! "
                 "Add instruments with filters and try again."
             )
 
-        # Loop over the galaxies and get the photometry, there is internal
-        # shared memory parallelism in this process so we can just loop over
-        # the galaxies at this level
-        for g in self.galaxies:
-            g.get_photo_lnu(filters=self.filters, nthreads=self.nthreads)
+        # Flag that we will compute the photometric luminosities
+        self._do_luminosities = True
 
-        # Unpack the luminosities into a dictionary on the Pipeline object
-        self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        for g in self.galaxies:
-            for spec_type, phot in g.photo_lnu.items():
-                for filt, lnu in phot.items():
-                    self.luminosities["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(filt, []).append(lnu)
-            if g.stars is not None:
-                for spec_type, phot in g.stars.photo_lnu.items():
-                    for filt, lnu in phot.items():
-                        self.luminosities["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(filt, []).append(lnu)
-            if g.black_holes is not None:
-                for spec_type, phot in g.black_holes.photo_lnu.items():
-                    for filt, lnu in phot.items():
-                        self.luminosities["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(filt, []).append(lnu)
+        # To compute the photometric luminosities we need to have already
+        # computed the lnu spectra
+        self._do_lnu_spectra = True
 
-        # Convert the lists of luminosities to unyt arrays
-        for spec_type, phot in self.luminosities["Galaxy"].items():
-            for filt, lnu in phot.items():
-                self.luminosities["Galaxy"][spec_type][filt] = unyt_array(lnu)
-        for spec_type, phot in self.luminosities["Stars"].items():
-            for filt, lnu in phot.items():
-                self.luminosities["Stars"][spec_type][filt] = unyt_array(lnu)
-        for spec_type, phot in self.luminosities["BlackHole"].items():
-            for filt, lnu in phot.items():
-                self.luminosities["BlackHole"][spec_type][filt] = unyt_array(
-                    lnu
-                )
+        # Flag that we will want to write out the photometric luminosities
+        # (calling the get_photometry_luminosities method is considered the
+        # intent to write it out)
+        self._write_luminosities = True
 
-        # Done!
-        self._got_luminosities = True
-        self._took(start, "Getting photometric luminosities")
+    def _get_photometry_luminosities(self, galaxy):
+        """
+        Compute the photometric luminosities from the generated spectra.
 
-    def get_photometry_fluxes(self):
-        """Compute the photometric fluxes from the generated spectra."""
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the photometric luminosities for.
+        """
         start = time.perf_counter()
 
-        # Ensure we are ready
-        if not self._got_fnu_spectra:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate photometry before fnu spectra are generated! "
-                "Call get_spectra with a cosmology object first."
+        # Get the photometry.
+        galaxy.get_photo_lnu(filters=self.filters, nthreads=self.nthreads)
+
+        # Count the number of photometric luminosities we have generated
+        self._op_counts["Luminosities"] += count_and_check_dict_recursive(
+            galaxy.photo_lnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Luminosities"] += count_and_check_dict_recursive(
+                galaxy.stars.photo_lnu
             )
-        elif len(self.filters) == 0:
+        if galaxy.black_holes is not None:
+            self._op_counts["Luminosities"] += count_and_check_dict_recursive(
+                galaxy.black_holes.photo_lnu
+            )
+
+        # Record the time taken
+        self._op_timing["Luminosities"] += time.perf_counter() - start
+
+    def get_photometry_fluxes(self, cosmo=None, igm=None):
+        """
+        Flag that the Pipeline should compute the photometric fluxes.
+
+        This will signal the Pipeline to compute the photometric fluxes for
+        each galaxy when the run method is called.
+
+        The photometric fluxes are generated based on the fnu spectra and the
+        instrument filters.
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the cosmology to compute the observed spectra
+                first. Default is None.
+            igm (IGMBase):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the IGM model to compute the observed spectra
+                first. Unlike the cosmology, this is not required if IGM
+                attenuation is not needed. Default is None.
+        """
+        # Ensure we have filters to compute the photometry
+        if len(self.filters) == 0:
             raise exceptions.PipelineNotReady(
-                "Cannot generate photometry without instruments! "
+                "Cannot generate photometry without instruments with filters! "
                 "Add instruments with filters and try again."
             )
 
-        # Loop over the galaxies and get the photometry, there is internal
-        # shared memory parallelism in this process so we can just loop over
-        # the galaxies at this level
-        for g in self.galaxies:
-            g.get_photo_fnu(filters=self.filters, nthreads=self.nthreads)
+        # Flag that we will compute the photometric fluxes
+        self._do_fluxes = True
 
-        # Unpack the fluxes into a dictionary on the Pipeline object
-        self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        for g in self.galaxies:
-            for spec_type, phot in g.photo_fnu.items():
-                for filt, fnu in phot.items():
-                    self.fluxes["Galaxy"].setdefault(spec_type, {}).setdefault(
-                        filt, []
-                    ).append(fnu)
-            if g.stars is not None:
-                for spec_type, phot in g.stars.photo_fnu.items():
-                    for filt, fnu in phot.items():
-                        self.fluxes["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(filt, []).append(fnu)
-            if g.black_holes is not None:
-                for spec_type, phot in g.black_holes.photo_fnu.items():
-                    for filt, fnu in phot.items():
-                        self.fluxes["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(filt, []).append(fnu)
+        # To compute the photometric fluxes we need to have already computed
+        # the fnu spectra which themselves require the lnu spectra to be
+        # computed
+        self._do_fnu_spectra = True
+        self._do_lnu_spectra = True
 
-        # Convert the lists of fluxes to unyt arrays
-        for spec_type, phot in self.fluxes["Galaxy"].items():
-            for filt, fnu in phot.items():
-                self.fluxes["Galaxy"][spec_type][filt] = unyt_array(fnu)
-        for spec_type, phot in self.fluxes["Stars"].items():
-            for filt, fnu in phot.items():
-                self.fluxes["Stars"][spec_type][filt] = unyt_array(fnu)
-        for spec_type, phot in self.fluxes["BlackHole"].items():
-            for filt, fnu in phot.items():
-                self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
+        # Ensure we have a cosmology if we need to compute the observed spectra
+        # and get_spectra_observed has not been called
+        if (
+            "get_observed_spectra" not in self._operation_kwargs
+            and cosmo is None
+        ):
+            raise exceptions.PipelineNotReady(
+                "Cannot generate fluxes without an astropy.cosmology object, "
+                "please pass one to the cosmo argument of "
+                "get_photometry_fluxes."
+            )
+        elif "get_observed_spectra" not in self._operation_kwargs:
+            self._operation_kwargs["get_observed_spectra"] = {
+                "cosmo": cosmo,
+                "igm": igm,
+            }
 
-        # Done!
-        self._got_fluxes = True
-        self._took(start, "Getting photometric fluxes")
+        # Flag that we will want to write out the photometric fluxes (calling
+        # the get_photometry_fluxes method is considered the intent to write it
+        # out)
+        self._write_fluxes = True
+
+    def _get_photometry_fluxes(self, galaxy):
+        """
+        Compute the photometric fluxes from the generated spectra.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the photometric fluxes for.
+        """
+        start = time.perf_counter()
+
+        # Get the photometry.
+        galaxy.get_photo_fnu(filters=self.filters, nthreads=self.nthreads)
+
+        # Count the number of photometric fluxes we have generated
+        self._op_counts["Fluxes"] += count_and_check_dict_recursive(
+            galaxy.photo_fnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Fluxes"] += count_and_check_dict_recursive(
+                galaxy.stars.photo_fnu
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Fluxes"] += count_and_check_dict_recursive(
+                galaxy.black_holes.photo_fnu
+            )
+
+        # Record the time taken
+        self._op_timing["Fluxes"] += time.perf_counter() - start
 
     def get_lines(self, line_ids):
+        """
+        Flag that the Pipeline should compute the emission lines.
+
+        This will signal the Pipeline to compute the emission lines for each
+        galaxy when the run method is called.
+
+        The emission lines are generated based on the lnu spectra and the
+        EmissionModel.
+
+        Args:
+            line_ids (list):
+                The emission line IDs to generate.
+        """
+        # Store the line IDs for the operation
+        self._operation_kwargs["get_lines"] = {"line_ids": line_ids}
+
+        # Flag that we will compute the emission lines
+        self._do_lum_lines = True
+
+        # To compute the emission lines we need to have already computed the
+        # lnu spectra
+        # TODO: Not sure this is actually necessary now... it shouldn't be
+        # anyway, find out what is causing this to be needed and squash it
+        self._do_lnu_spectra = True
+
+        # Flag that we will want to write out the emission lines (calling the
+        # get_lines method is considered the intent to write it out)
+        self._write_lines = True
+
+        # Store the line IDs, we'll write these once later
+        self.line_ids = line_ids
+
+    def _get_lines(self, galaxy):
         """
         Generate the emission lines for the galaxies.
 
@@ -905,83 +1658,152 @@ class Pipeline:
         that were saved when spectra were generated.
 
         Args:
-            line_ids (list):
-                The emission line IDs to generate.
+            galaxy (Galaxy):
+                The galaxy to generate the emission lines for.
         """
         start = time.perf_counter()
 
-        self._print(f"Generating {len(line_ids)} emission lines...")
+        # Loop over the galaxies and get the spectra
+        galaxy.get_lines(
+            self._operation_kwargs["get_lines"]["line_ids"],
+            self.emission_model,
+            nthreads=self.nthreads,
+        )
 
-        # Ensure we are ready
-        if not self._loaded_galaxies:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate emission lines before galaxies are loaded! "
-                "Call load_galaxies first."
+        # Store the line wavelengths for writing, we only do this once since
+        # they are the same for all galaxies but we need to find them first
+        # (either on the galaxy, stars, or black holes)
+        if self.line_lams is None:
+            # Get the line lams from the first line collection we can find
+            for lines in galaxy.lines.values():
+                self.line_lams = lines.lam
+                break
+            if self.line_lams is None and galaxy.stars is not None:
+                for lines in galaxy.stars.lines.values():
+                    self.line_lams = lines.lam
+                    break
+            if self.line_lams is None and galaxy.black_holes is not None:
+                for lines in galaxy.black_holes.lines.values():
+                    self.line_lams = lines.lam
+                    break
+
+        # Count the number of emission lines we have generated
+        self._op_counts["Emission Line Luminosities"] += (
+            count_and_check_dict_recursive(galaxy.lines)
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Emission Line Luminosities"] += (
+                count_and_check_dict_recursive(galaxy.stars.lines)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Emission Line Luminosities"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.lines)
             )
 
-        # Loop over the galaxies and get the spectra
-        for g in self.galaxies:
-            g.get_lines(line_ids, self.emission_model, nthreads=self.nthreads)
+        # Record the time taken
+        self._op_timing["Emission Line Luminosities"] += (
+            time.perf_counter() - start
+        )
 
-        # Store the line IDs for later
-        self._line_ids = line_ids
+    def get_observed_lines(self, cosmo, igm=Inoue14, line_ids=None):
+        """
+        Flag that the Pipeline should compute the observed emission lines.
 
-        # Unpack the luminosity lines into a dictionary on the Pipeline object
-        self.lines_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_cont_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        for g in self.galaxies:
-            for spec_type, lines in g.lines.items():
-                for line in lines:
-                    self.lines_lum["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(line.id, []).append(line.luminosity)
-                    self.line_cont_lum["Galaxy"].setdefault(
-                        spec_type, {}
-                    ).setdefault(line.id, []).append(line.continuum)
-            if g.stars is not None:
-                for spec_type, lines in g.stars.lines.items():
-                    for line in lines:
-                        self.lines_lum["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.luminosity)
-                        self.line_cont_lum["Stars"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.continuum)
-            if g.black_holes is not None:
-                for spec_type, lines in g.black_holes.lines.items():
-                    for line in lines:
-                        self.lines_lum["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.luminosity)
-                        self.line_cont_lum["BlackHole"].setdefault(
-                            spec_type, {}
-                        ).setdefault(line.id, []).append(line.continuum)
+        This will signal the Pipeline to compute the observed emission lines
+        for each galaxy when the run method is called.
 
-        # Convert the lists of luminosities to unyt arrays
-        for spec_type, lines in self.lines_lum["Galaxy"].items():
-            for line_id, lum in lines.items():
-                self.lines_lum["Galaxy"][spec_type][line_id] = unyt_array(lum)
-                self.line_cont_lum["Galaxy"][spec_type][line_id] = unyt_array(
-                    lum
-                )
-        for spec_type, lines in self.lines_lum["Stars"].items():
-            for line_id, lum in lines.items():
-                self.lines_lum["Stars"][spec_type][line_id] = unyt_array(lum)
-                self.line_cont_lum["Stars"][spec_type][line_id] = unyt_array(
-                    lum
-                )
-        for spec_type, lines in self.lines_lum["BlackHole"].items():
-            for line_id, lum in lines.items():
-                self.lines_lum["BlackHole"][spec_type][line_id] = unyt_array(
-                    lum
-                )
-                self.line_cont_lum["BlackHole"][spec_type][line_id] = (
-                    unyt_array(lum)
-                )
+        The observed emission lines are generated based on the emission lines
+        and the cosmology.
 
-        # Done!
-        self._got_lum_lines = True
-        self._took(start, "Getting emission lines")
+        Args:
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for the observed emission lines.
+            igm (IGMBase):
+                The IGM model to use for the observed emission lines. Default
+                is Inoue14.
+            line_ids (list):
+                If get_lines has not been called explicitly, then we will need
+                the line IDs to generate the emission lines. Default is None.
+        """
+        # Store the cosmology for the operation
+        self._operation_kwargs["get_observed_lines"] = {
+            "cosmo": cosmo,
+            "igm": igm,
+        }
+
+        # Flag that we will compute the observed emission lines
+        self._do_flux_lines = True
+
+        # To compute the observed emission lines we need to have already
+        # computed the emission lines which themselves require the lnu spectra
+        # to be computed
+        self._do_lum_lines = True
+        self._do_lnu_spectra = True
+
+        # Ensure we have line IDs if we need to compute the emission lines and
+        # get_lines has not been called
+        if "get_lines" not in self._operation_kwargs and line_ids is None:
+            raise exceptions.PipelineNotReady(
+                "Cannot generate observed lines without line IDs, "
+                "please pass a list of line IDs to the line_ids argument of "
+                "get_observed_lines."
+            )
+        elif "get_lines" not in self._operation_kwargs:
+            self._operation_kwargs["get_lines"] = {"line_ids": line_ids}
+
+        # Flag that we will want to write out the observed emission lines
+        # (calling the get_observed_lines method is considered the intent to
+        # write it out)
+        self._write_flux_lines = True
+
+    def _get_observed_lines(self, galaxy):
+        """
+        Compute the observed emission lines for each galaxy.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the observed emission lines for.
+        """
+        start = time.perf_counter()
+
+        # Get the observed emission lines
+        galaxy.get_observed_lines(
+            cosmo=self._operation_kwargs["get_observed_lines"]["cosmo"],
+            igm=self._operation_kwargs["get_observed_lines"]["igm"],
+        )
+
+        # Store the observed line wavelengths for writing, we only do this once
+        # since they are the same for all galaxies but we need to find them
+        # first (either on the galaxy, stars, or black holes)
+        if self.line_obs_lams is None:
+            # Get the line lams from the first line collection we can find
+            for lines in galaxy.lines.values():
+                self.line_obs_lams = lines.obslam
+                break
+            if self.line_obs_lams is None and galaxy.stars is not None:
+                for lines in galaxy.stars.lines.values():
+                    self.line_obs_lams = lines.obslam
+                    break
+            if self.line_obs_lams is None and galaxy.black_holes is not None:
+                for lines in galaxy.black_holes.lines.values():
+                    self.line_obs_lams = lines.obslam
+                    break
+
+        # Count the number of observed emission lines we have generated
+        self._op_counts["Emission Line Fluxes"] += (
+            count_and_check_dict_recursive(galaxy.lines)
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Emission Line Fluxes"] += (
+                count_and_check_dict_recursive(galaxy.stars.lines)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Emission Line Fluxes"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.lines)
+            )
+
+        # Record the time taken
+        self._op_timing["Emission Line Fluxes"] += time.perf_counter() - start
 
     def get_images_luminosity(
         self,
@@ -989,7 +1811,69 @@ class Pipeline:
         img_type="smoothed",
         kernel=None,
         kernel_threshold=1.0,
+        spectra_type=None,
+        write=True,
+        instrument_subset=(),
     ):
+        """
+        Flag that the Pipeline should compute the luminosity images.
+
+        This will signal the Pipeline to compute the luminosity images for each
+        galaxy when the run method is called.
+
+        The luminosity images are generated based on the luminosities, and
+        in turn the lnu spectra, and the instrument filters.
+
+        Args:
+            fov (unyt_quantity):
+                The field of view of the image with units.
+            img_type (str):
+                The type of image to generate. Options are 'smoothed' or
+                'hist'. Default is 'smoothed'.
+            kernel (array-like):
+                The kernel to use for smoothing the image. Default is None.
+                Required for 'smoothed' images from a particle distribution.
+            kernel_threshold (float):
+                The threshold of the kernel. Default is 1.0.
+            spectra_type (list/str):
+                The type of spectra to generate images for. By default this
+                is None and all spectra types will be used. This can either
+                be a list of strings or a single string.
+            write (bool):
+                Whether to write the images to disk. Default is True.
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
+        """
+        # Store the arguments for the operation
+        self._operation_kwargs["get_images_luminosity"] = {
+            "fov": fov,
+            "img_type": img_type,
+            "kernel": kernel,
+            "kernel_threshold": kernel_threshold,
+            "spectra_type": spectra_type
+            if isinstance(spectra_type, (list, tuple))
+            else [spectra_type],
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset],
+        }
+
+        # Flag that we will compute the luminosity images
+        self._do_images_lum = True
+
+        # To compute the luminosity images we need to have already computed the
+        # luminosities, and therefore also the lnu spectra
+        self._do_luminosities = True
+        self._do_lnu_spectra = True
+
+        # Flag that we will want to write out the luminosity images (calling
+        # the get_images_luminosity method is considered the intent to write
+        # it out)
+        if write:
+            self._write_images_lum = True
+
+    def _get_images_luminosity(self, galaxy):
         """
         Compute the luminosity images for the galaxies.
 
@@ -997,29 +1881,21 @@ class Pipeline:
         that were saved when spectra were generated, in all filters included in
         the Pipeline instruments.
 
-        A PSF and/or noise will be applied if they are available on the
-        instrument.
-
         Args:
-            fov (unyt_quantity):
-                The field of view of the image with units.
-            img_type (str):
-                The type of image to generate. Options are 'smoothed' or
-                'hist'. Default is 'smoothed'.
-            kernel (array-like):
-                The kernel to use for smoothing the image. Default is None.
-                Required for 'smoothed' images from a particle distribution.
-            kernel_threshold (float):
-                The threshold of the kernel. Default is 1.0.
+            galaxy (Galaxy):
+                The galaxy to generate the luminosity images for.
         """
         start = time.perf_counter()
 
-        # Ensure we are ready
-        if not self._got_luminosities:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate images before luminosities are generated! "
-                "Call get_photometry_luminosities first."
-            )
+        # Unpack the spectra types
+        spectra_types = self._operation_kwargs["get_images_luminosity"][
+            "spectra_type"
+        ]
+
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs["get_images_luminosity"][
+            "instrument_subset"
+        ]
 
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
@@ -1027,159 +1903,290 @@ class Pipeline:
             if not inst.can_do_imaging:
                 continue
 
-            # Loop over galaxies getting the initial images. We do this on
-            # an individual galaxy basis since we can use internal shared
-            # memory parallelism to do this
-            for g in self.galaxies:
-                g.get_images_luminosity(
+            # Skip if the instrument is not in the subset
+            if (
+                len(instrument_subset) > 0
+                and inst.label not in instrument_subset
+            ):
+                continue
+
+            # Get the basic images for the requested spectra types
+            if spectra_types is None:
+                galaxy.get_images_luminosity(
                     resolution=inst.resolution,
-                    fov=fov,
+                    fov=self._operation_kwargs["get_images_luminosity"]["fov"],
                     emission_model=self.emission_model,
-                    img_type=img_type,
-                    kernel=kernel,
-                    kernel_threshold=kernel_threshold,
+                    img_type=self._operation_kwargs["get_images_luminosity"][
+                        "img_type"
+                    ],
+                    kernel=self._operation_kwargs["get_images_luminosity"][
+                        "kernel"
+                    ],
+                    kernel_threshold=self._operation_kwargs[
+                        "get_images_luminosity"
+                    ]["kernel_threshold"],
                     nthreads=self.nthreads,
                     instrument=inst,
                 )
+            else:
+                for spec_type in spectra_types:
+                    galaxy.get_images_luminosity(
+                        resolution=inst.resolution,
+                        fov=self._operation_kwargs["get_images_luminosity"][
+                            "fov"
+                        ],
+                        emission_model=self.emission_model,
+                        img_type=self._operation_kwargs[
+                            "get_images_luminosity"
+                        ]["img_type"],
+                        kernel=self._operation_kwargs["get_images_luminosity"][
+                            "kernel"
+                        ],
+                        kernel_threshold=self._operation_kwargs[
+                            "get_images_luminosity"
+                        ]["kernel_threshold"],
+                        nthreads=self.nthreads,
+                        instrument=inst,
+                        limit_to=spec_type,
+                    )
 
-        # Unpack the luminosity images into a dictionary on the Pipeline object
-        self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        for g in self.galaxies:
-            for d in g.images_lnu.values():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.images_lum["Galaxy"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
-            if g.stars is not None:
-                for d in g.stars.images_lnu.values():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.images_lum["Stars"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-            if g.black_holes is not None:
-                for d in g.black_holes.images_lnu.values():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.images_lum["BlackHole"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-
-        # Convert the lists of images to unyt arrays
-        for spec_type, imgs in self.images_lum["Galaxy"].items():
-            for f, img in imgs.items():
-                self.images_lum["Galaxy"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_lum["Stars"].items():
-            for f, img in imgs.items():
-                self.images_lum["Stars"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_lum["BlackHole"].items():
-            for f, img in imgs.items():
-                self.images_lum["BlackHole"][spec_type][f] = unyt_array(img)
-
-        # Done!
-        self._got_images_lum = True
-        self._took(start, "Getting luminosity images")
-
-    def apply_psfs_luminosity(self):
-        """Apply any instrument PSFs to the luminosity images."""
-        start = time.perf_counter()
-
-        # Ensure we are ready
-        if not self._got_images_lum:
-            raise exceptions.PipelineNotReady(
-                "Cannot apply PSF to images before images are generated! "
-                "Call get_images_luminosity first."
+        # Count the number of images we have generated
+        self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
+            galaxy.images_lnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Luminosity Images"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_lnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Luminosity Images"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.images_lnu)
             )
 
+        # Record the time taken
+        self._op_timing["Luminosity Images"] += time.perf_counter() - start
+
+    def get_images_luminosity_psfs(
+        self,
+        fov=None,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+        spectra_type=None,
+        write=True,
+        instrument_subset=(),
+    ):
+        """
+        Flag that the Pipeline should apply the instrument PSFs to images.
+
+        This will signal the Pipeline to apply the instrument PSFs to the
+        luminosity images for each galaxy when the run method is called.
+
+        The PSFs are applied to the luminosity images generated in the
+        get_images_luminosity method.
+
+        Instruments must have PSFs defined on them for this method to do
+        anything.
+
+        Args:
+            fov (unyt_quantity):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the field of view of the image with units. Default
+                is None.
+            img_type (str):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the type of image to generate. Options are
+                'smoothed' or 'hist'. Default is 'smoothed'.
+            kernel (array-like):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the kernel to use for smoothing the image. Default
+                is None. Required for 'smoothed' images from a particle
+                distribution.
+            kernel_threshold (float):
+                If get_images_luminosity has not been called explicitly, then
+                we will need the threshold of the kernel. Default is 1.0.
+            spectra_type (list/str):
+                The type of spectra to generate images for. By default this
+                is None and all spectra types will be used. This can either
+                be a list of strings or a single string.
+            write (bool):
+                Whether to write the images to disk. Default is True.
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
+        """
+        # Store the instrument subset for the operation
+        self._operation_kwargs["get_images_luminosity_psfs"] = {
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset]
+        }
+
+        # Flag that we will apply the PSFs to the luminosity images
+        self._do_images_lum_psf = True
+
+        # To apply the PSFs to the luminosity images we need to have already
+        # computed the luminosity images which themselves require the
+        # luminosities, and therefore also the lnu spectra
+        self._do_images_lum = True
+        self._do_luminosities = True
+        self._do_lnu_spectra = True
+
+        # Ensure we have the arguments for the operation if
+        # get_images_luminosity has not been called
+        if "get_images_luminosity" not in self._operation_kwargs:
+            self._operation_kwargs["get_images_luminosity"] = {}
+            if fov is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a field of view, please pass "
+                    "one to the fov argument of get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"]["fov"] = fov
+            if img_type is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without an image type, please pass one "
+                    "to the img_type argument of get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"]["img_type"] = (
+                    img_type
+                )
+            if kernel is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel, please pass one to "
+                    "the kernel argument of get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"]["kernel"] = (
+                    kernel
+                )
+            if kernel_threshold is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel threshold, please"
+                    " pass one to the kernel_threshold argument of "
+                    "get_images_luminosity_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_luminosity"][
+                    "kernel_threshold"
+                ] = kernel_threshold
+            self._operation_kwargs["get_images_luminosity"]["spectra_type"] = (
+                spectra_type
+                if isinstance(spectra_type, (list, tuple))
+                else [spectra_type]
+            )
+            self._operation_kwargs["get_images_luminosity"][
+                "instrument_subset"
+            ] = (
+                instrument_subset
+                if isinstance(instrument_subset, (list, tuple))
+                else [instrument_subset]
+            )
+
+        # Flag that we will want to write out the luminosity images with PSFs
+        # (calling the get_images_luminosity_psfs method is considered the
+        # intent to write it out)
+        if write:
+            self._write_images_lum_psf = True
+
+    def _get_images_luminosity_psfs(self, galaxy):
+        """
+        Apply any instrument PSFs to the luminosity images.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to apply the PSFs to the luminosity images for.
+        """
+        start = time.perf_counter()
+
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs[
+            "get_images_luminosity_psfs"
+        ]["instrument_subset"]
+
         # Loop over instruments and perform any imaging they define
-        self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for inst in self.instruments:
-            # Skip if the instrument can't do imaging
+            # Skip if the instrument can't do PSF imaging
             if not inst.can_do_psf_imaging:
                 continue
 
-            # Loop over galaxies
-            for g in self.galaxies:
-                # Ensure we have the PSF dictionary on the galaxy
-                if not hasattr(g, "images_psf_lnu"):
-                    g.images_psf_lnu = {}
+            # Skip if the instrument is not in the subset
+            if (
+                len(instrument_subset) > 0
+                and inst.label not in instrument_subset
+            ):
+                continue
 
-                # Apply PSFs to the galaxy level images
-                g.images_psf_lnu.setdefault(inst.label, {})
-                for spec_type, imgs in g.images_lnu[inst.label].items():
-                    g.images_psf_lnu[inst.label][spec_type] = imgs.apply_psfs(
+            # Unlike the other operations we need a container to hold the
+            # PSF applied images, if it doesn't exist we'll create it here
+            # and add the appropriate keys
+            if not hasattr(galaxy, "images_psf_lnu"):
+                galaxy.images_psf_lnu = {}
+            galaxy.images_psf_lnu.setdefault(inst.label, {})
+            if galaxy.stars is not None:
+                if not hasattr(galaxy.stars, "images_psf_lnu"):
+                    galaxy.stars.images_psf_lnu = {}
+                galaxy.stars.images_psf_lnu.setdefault(inst.label, {})
+            if galaxy.black_holes is not None:
+                if not hasattr(galaxy.black_holes, "images_psf_lnu"):
+                    galaxy.black_holes.images_psf_lnu = {}
+                galaxy.black_holes.images_psf_lnu.setdefault(inst.label, {})
+
+            # Apply PSFs to the galaxy level images
+            if inst.label in galaxy.images_lnu:
+                for spec_type, imgs in galaxy.images_lnu[inst.label].items():
+                    galaxy.images_psf_lnu[inst.label][spec_type] = (
+                        imgs.apply_psfs(
+                            inst.psfs,
+                        )
+                    )
+
+            # Apply PSFs to the stars level images
+            if (
+                galaxy.stars is not None
+                and inst.label in galaxy.stars.images_lnu
+            ):
+                for spec_type, imgs in galaxy.stars.images_lnu[
+                    inst.label
+                ].items():
+                    galaxy.stars.images_psf_lnu[inst.label][spec_type] = (
+                        imgs.apply_psfs(
+                            inst.psfs,
+                        )
+                    )
+
+            # Apply PSFs to the black hole level images
+            if (
+                galaxy.black_holes is not None
+                and inst.label in galaxy.black_holes.images_lnu
+            ):
+                for spec_type, imgs in galaxy.black_holes.images_lnu[
+                    inst.label
+                ].items():
+                    galaxy.black_holes.images_psf_lnu[inst.label][
+                        spec_type
+                    ] = imgs.apply_psfs(
                         inst.psfs,
                     )
 
-                    # Unpack the image arrays onto the Pipeline object
-                    for f, img in g.images_psf_lnu[inst.label][
-                        spec_type
-                    ].items():
-                        self.images_lum_psf["Galaxy"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
+        # Count the number of images we have generated
+        self._op_counts["Luminosity Images (with PSF)"] += (
+            count_and_check_dict_recursive(galaxy.images_lnu)
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Luminosity Images (with PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_lnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Luminosity Images (with PSF)"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.images_lnu)
+            )
 
-                # Apply PSFs to the stars level images
-                if g.stars is not None:
-                    if not hasattr(g.stars, "images_psf_lnu"):
-                        g.stars.images_psf_lnu = {}
-                    g.stars.images_psf_lnu.setdefault(inst.label, {})
-                    for spec_type, imgs in g.stars.images_lnu[
-                        inst.label
-                    ].items():
-                        g.stars.images_psf_lnu[inst.label][spec_type] = (
-                            imgs.apply_psfs(
-                                inst.psfs,
-                            )
-                        )
-
-                        # Unpack the image arrays onto the Pipeline object
-                        for f, img in g.stars.images_psf_lnu[inst.label][
-                            spec_type
-                        ].items():
-                            self.images_lum_psf["Stars"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-
-                # Apply PSFs to the black hole level images
-                if g.black_holes is not None:
-                    if not hasattr(g.black_holes, "images_psf_lnu"):
-                        g.black_holes.images_psf_lnu = {}
-                    g.black_holes.images_psf_lnu.setdefault(inst.label, {})
-                    for spec_type, imgs in g.black_holes.images_lnu[
-                        inst.label
-                    ].items():
-                        g.black_holes.images_psf_lnu[inst.label][spec_type] = (
-                            imgs.apply_psfs(
-                                inst.psfs,
-                            )
-                        )
-
-                        # Unpack the image arrays onto the Pipeline object
-                        for f, img in g.black_holes.images_psf_lnu[inst.label][
-                            spec_type
-                        ].items():
-                            self.images_lum_psf["BlackHole"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-
-        # Convert the lists of images to unyt arrays
-        for spec_type, imgs in self.images_lum_psf["Galaxy"].items():
-            for f, img in imgs.items():
-                self.images_lum_psf["Galaxy"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_lum_psf["Stars"].items():
-            for f, img in imgs.items():
-                self.images_lum_psf["Stars"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_lum_psf["BlackHole"].items():
-            for f, img in imgs.items():
-                self.images_lum_psf["BlackHole"][spec_type][f] = unyt_array(
-                    img
-                )
-
-        # Done!
-        self._got_images_lum_psf = True
-        self._took(start, "Applying PSFs to luminosity images")
+        # Record the time taken
+        self._op_timing["Luminosity Images (with PSF)"] += (
+            time.perf_counter() - start
+        )
 
     def get_images_flux(
         self,
@@ -1187,16 +2194,20 @@ class Pipeline:
         img_type="smoothed",
         kernel=None,
         kernel_threshold=1.0,
+        cosmo=None,
+        igm=None,
+        spectra_type=None,
+        write=True,
+        instrument_subset=(),
     ):
         """
-        Compute the flux images for the galaxies.
+        Flag that the Pipeline should compute the flux images.
 
-        This function will compute the flux images for all spectra types that
-        were saved when spectra were generated, in all filters included in the
-        Pipeline instruments.
+        This will signal the Pipeline to compute the flux images for each
+        galaxy when the run method is called.
 
-        A PSF and/or noise will be applied if they are available on the
-        instrument.
+        The flux images are generated based on the fluxes, and in turn the fnu
+        spectra, and the instrument filters.
 
         Args:
             fov (unyt_quantity):
@@ -1209,15 +2220,93 @@ class Pipeline:
                 Required for 'smoothed' images from a particle distribution.
             kernel_threshold (float):
                 The threshold of the kernel. Default is 1.0.
+            cosmo (astropy.cosmology.Cosmology):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the cosmology to compute the observed spectra
+                first. Default is None.
+            igm (IGMBase):
+                If get_spectra_observed has not been called explicitly, then
+                we will need the IGM model to compute the observed spectra
+                first. Unlike the cosmology, this is not required if IGM
+                attenuation is not needed. Default is None.
+            spectra_type (list/str):
+                The type of spectra to generate images for. By default this
+                is None and all spectra types will be used. This can either
+                be a list of strings or a single string.
+            write (bool):
+                Whether to write the images to disk. Default is True.
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
+        """
+        # Store the arguments for the operation
+        self._operation_kwargs["get_images_flux"] = {
+            "fov": fov,
+            "img_type": img_type,
+            "kernel": kernel,
+            "kernel_threshold": kernel_threshold,
+            "spectra_type": spectra_type
+            if isinstance(spectra_type, (list, tuple))
+            else [spectra_type],
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset],
+        }
+
+        # Flag that we will compute the flux images
+        self._do_images_flux = True
+
+        # To compute the flux images we need to have already computed the
+        # fluxes which themselves require the fnu spectra to be computed
+        self._do_fluxes = True
+        self._do_lnu_spectra = True
+        self._do_fnu_spectra = True
+
+        # Ensure we have a cosmology if we need to compute the observed spectra
+        # and get_spectra_observed has not been called
+        if (
+            "get_observed_spectra" not in self._operation_kwargs
+            and cosmo is None
+        ):
+            raise exceptions.PipelineNotReady(
+                "Cannot generate flux images without an astropy.cosmology"
+                " object, please pass one to the cosmo argument of "
+                "get_images_flux."
+            )
+        elif "get_observed_spectra" not in self._operation_kwargs:
+            self._operation_kwargs["get_observed_spectra"] = {
+                "cosmo": cosmo,
+                "igm": igm,
+            }
+
+        # Flag that we will want to write out the flux images (calling the
+        # get_images_flux method is considered the intent to write it out)
+        if write:
+            self._write_images_flux = True
+
+    def _get_images_flux(self, galaxy):
+        """
+        Compute the flux images for the galaxies.
+
+        This function will compute the flux images for all spectra types that
+        were saved when spectra were generated, in all filters included in the
+        Pipeline instruments.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate the flux images for (all components).
         """
         start = time.perf_counter()
 
-        # Ensure we are ready
-        if not self._got_fluxes:
-            raise exceptions.PipelineNotReady(
-                "Cannot generate images before fluxes are generated! "
-                "Call get_photometry_fluxes first."
-            )
+        # Unpack the spectra types
+        spectra_types = self._operation_kwargs["get_images_flux"][
+            "spectra_type"
+        ]
+
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs["get_images_flux"][
+            "instrument_subset"
+        ]
 
         # Loop over instruments and perform any imaging they define
         for inst in self.instruments:
@@ -1225,159 +2314,310 @@ class Pipeline:
             if not inst.can_do_imaging:
                 continue
 
-            # Loop over galaxies getting the initial images. We do this on
-            # an individual galaxy basis since we can use internal shared
-            # memory parallelism to do this
-            for g in self.galaxies:
-                g.get_images_flux(
+            # Skip if the instrument is not in the subset
+            if (
+                len(instrument_subset) > 0
+                and inst.label not in instrument_subset
+            ):
+                continue
+
+            # Get the basic images for the requested spectra types
+            if spectra_types is None:
+                galaxy.get_images_flux(
                     resolution=inst.resolution,
-                    fov=fov,
+                    fov=self._operation_kwargs["get_images_flux"]["fov"],
                     emission_model=self.emission_model,
-                    img_type=img_type,
-                    kernel=kernel,
-                    kernel_threshold=kernel_threshold,
+                    img_type=self._operation_kwargs["get_images_flux"][
+                        "img_type"
+                    ],
+                    kernel=self._operation_kwargs["get_images_flux"]["kernel"],
+                    kernel_threshold=self._operation_kwargs["get_images_flux"][
+                        "kernel_threshold"
+                    ],
                     nthreads=self.nthreads,
                     instrument=inst,
                 )
+            else:
+                for spec_type in spectra_types:
+                    galaxy.get_images_flux(
+                        resolution=inst.resolution,
+                        fov=self._operation_kwargs["get_images_flux"]["fov"],
+                        emission_model=self.emission_model,
+                        img_type=self._operation_kwargs["get_images_flux"][
+                            "img_type"
+                        ],
+                        kernel=self._operation_kwargs["get_images_flux"][
+                            "kernel"
+                        ],
+                        kernel_threshold=self._operation_kwargs[
+                            "get_images_flux"
+                        ]["kernel_threshold"],
+                        nthreads=self.nthreads,
+                        instrument=inst,
+                        limit_to=spec_type,
+                    )
 
-        # Unpack the flux images into a dictionary on the Pipeline object
-        self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        for g in self.galaxies:
-            for d in g.images_fnu.values():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.images_flux["Galaxy"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
-            if g.stars is not None:
-                for d in g.stars.images_fnu.values():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.images_flux["Stars"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-            if g.black_holes is not None:
-                for d in g.black_holes.images_fnu.values():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.images_flux["BlackHole"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-
-        # Convert the lists of images to unyt arrays
-        for spec_type, imgs in self.images_flux["Galaxy"].items():
-            for f, img in imgs.items():
-                self.images_flux["Galaxy"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_flux["Stars"].items():
-            for f, img in imgs.items():
-                self.images_flux["Stars"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_flux["BlackHole"].items():
-            for f, img in imgs.items():
-                self.images_flux["BlackHole"][spec_type][f] = unyt_array(img)
-
-        # Done!
-        self._got_images_flux = True
-        self._took(start, "Getting flux images")
-
-    def apply_psfs_flux(self):
-        """Apply any instrument PSFs to the flux images."""
-        start = time.perf_counter()
-
-        # Ensure we are ready
-        if not self._got_images_flux:
-            raise exceptions.PipelineNotReady(
-                "Cannot apply PSF to images before images are generated! "
-                "Call get_images_flux first."
+        # Count the number of images we have generated
+        self._op_counts["Flux Images"] += count_and_check_dict_recursive(
+            galaxy.images_fnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Flux Images"] += count_and_check_dict_recursive(
+                galaxy.stars.images_fnu
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Flux Images"] += count_and_check_dict_recursive(
+                galaxy.black_holes.images_fnu
             )
 
+        # Record the time taken
+        self._op_timing["Flux Images"] += time.perf_counter() - start
+
+    def get_images_flux_psfs(
+        self,
+        fov=None,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+        cosmo=None,
+        igm=None,
+        spectra_type=None,
+        write=True,
+        instrument_subset=(),
+    ):
+        """
+        Flag that the Pipeline should apply the instrument PSFs to images.
+
+        This will signal the Pipeline to apply the instrument PSFs to the flux
+        images for each galaxy when the run method is called.
+
+        The PSFs are applied to the flux images generated in the
+        get_images_flux method.
+
+        Instruments must have PSFs defined on them for this method to do
+        anything.
+
+        Args:
+            fov (unyt_quantity):
+                If get_images_flux has not been called explicitly, then we will
+                need the field of view of the image with units. Default is
+                None.
+            img_type (str):
+                If get_images_flux has not been called explicitly, then we will
+                need the type of image to generate. Options are 'smoothed' or
+                'hist'. Default is 'smoothed'.
+            kernel (array-like):
+                If get_images_flux has not been called explicitly, then we will
+                need the kernel to use for smoothing the image. Default is
+                None.
+                Required for 'smoothed' images from a particle distribution.
+            kernel_threshold (float):
+                If get_images_flux has not been called explicitly, then we will
+                need the threshold of the kernel. Default is 1.0.
+            cosmo (astropy.cosmology.Cosmology):
+                If get_spectra_observed has not been called explicitly, then we
+                will need the cosmology to compute the observed spectra first.
+                Default is None.
+            igm (IGMBase):
+                If get_spectra_observed has not been called explicitly, then we
+                will need the IGM model to compute the observed spectra first.
+                Unlike the cosmology, this is not required if IGM attenuation
+                is not needed. Default is None.
+            spectra_type (str):
+                The type of spectra to generate images for. By default this is
+                None and all spectra types will be used. This can either be a
+                single string or a list of strings.
+            write (bool):
+                Whether to write out the images with PSFs. Default is True.
+            instrument_subset (list):
+                A list of instrument names to use for the images. If None,
+                all applicable instruments will be used. Default is None.
+        """
+        # Store the instrument subset for the operation
+        self._operation_kwargs["get_images_flux_psfs"] = {
+            "instrument_subset": instrument_subset
+            if isinstance(instrument_subset, (list, tuple))
+            else [instrument_subset]
+        }
+
+        # Flag that we will apply the PSFs to the flux images
+        self._do_images_flux_psf = True
+
+        # To apply the PSFs to the flux images we need to have already computed
+        # the flux images which themselves require the fluxes, and therefore
+        # also the fnu spectra
+        self._do_images_flux = True
+        self._do_fluxes = True
+        self._do_lnu_spectra = True
+        self._do_fnu_spectra = True
+
+        # Ensure we have the arguments for the operation if get_images_flux has
+        # not been called
+        if "get_images_flux" not in self._operation_kwargs:
+            self._operation_kwargs["get_images_flux"] = {}
+            if fov is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a field of view, please pass "
+                    "one to the fov argument of get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"]["fov"] = fov
+            if img_type is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without an image type, please pass one "
+                    "to the img_type argument of get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"]["img_type"] = (
+                    img_type
+                )
+            if kernel is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel, please pass one to "
+                    "the kernel argument of get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"]["kernel"] = kernel
+            if kernel_threshold is None:
+                raise exceptions.PipelineNotReady(
+                    "Cannot apply PSFs without a kernel threshold, please"
+                    " pass one to the kernel_threshold argument of "
+                    "get_images_flux_psfs."
+                )
+            else:
+                self._operation_kwargs["get_images_flux"][
+                    "kernel_threshold"
+                ] = kernel_threshold
+            self._operation_kwargs["get_images_flux"]["spectra_type"] = (
+                spectra_type
+                if isinstance(spectra_type, (list, tuple))
+                else [spectra_type]
+            )
+            self._operation_kwargs["get_images_flux"]["instrument_subset"] = (
+                instrument_subset
+                if isinstance(instrument_subset, (list, tuple))
+                else [instrument_subset]
+            )
+
+        # Ensure we have a cosmology if we need to compute the observed spectra
+        # and get_spectra_observed has not been called
+        if (
+            "get_observed_spectra" not in self._operation_kwargs
+            and cosmo is None
+        ):
+            raise exceptions.PipelineNotReady(
+                "Cannot generate flux images without an astropy.cosmology"
+                " object, please pass one to the cosmo argument of "
+                "get_images_flux_psfs."
+            )
+        elif "get_observed_spectra" not in self._operation_kwargs:
+            self._operation_kwargs["get_observed_spectra"] = {
+                "cosmo": cosmo,
+                "igm": igm,
+            }
+
+        # Flag that we will want to write out the flux images (calling the
+        # get_images_flux_psfs method is considered the intent to write it out)
+        if write:
+            self._write_images_flux_psf = True
+
+    def _get_images_flux_psfs(self, galaxy):
+        """
+        Apply any instrument PSFs to the flux images.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to apply the PSFs to the flux images for.
+        """
+        start = time.perf_counter()
+
+        # Unpack the instrument subset
+        instrument_subset = self._operation_kwargs["get_images_flux_psfs"][
+            "instrument_subset"
+        ]
+
         # Loop over instruments and perform any imaging they define
-        self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         for inst in self.instruments:
-            # Skip if the instrument can't do imaging
+            # Skip if the instrument can't do PSF imaging
             if not inst.can_do_psf_imaging:
                 continue
 
-            # Loop over galaxies
-            for g in self.galaxies:
-                # Ensure we have the PSF dictionary on the galaxy
-                if not hasattr(g, "images_psf_fnu"):
-                    g.images_psf_fnu = {}
+            # Skip if the instrument is not in the subset
+            if (
+                len(instrument_subset) > 0
+                and inst.label not in instrument_subset
+            ):
+                continue
 
-                # Apply PSFs to the galaxy level images
-                g.images_psf_fnu.setdefault(inst.label, {})
-                for spec_type, imgs in g.images_fnu[inst.label].items():
-                    g.images_psf_fnu[inst.label][spec_type] = imgs.apply_psfs(
+            # Unlike the other operations we need a container to hold the
+            # PSF applied images, if it doesn't exist we'll create it here
+            # and add the appropriate keys
+            if not hasattr(galaxy, "images_psf_fnu"):
+                galaxy.images_psf_fnu = {}
+            galaxy.images_psf_fnu.setdefault(inst.label, {})
+            if galaxy.stars is not None:
+                if not hasattr(galaxy.stars, "images_psf_fnu"):
+                    galaxy.stars.images_psf_fnu = {}
+                galaxy.stars.images_psf_fnu.setdefault(inst.label, {})
+            if galaxy.black_holes is not None:
+                if not hasattr(galaxy.black_holes, "images_psf_fnu"):
+                    galaxy.black_holes.images_psf_fnu = {}
+                galaxy.black_holes.images_psf_fnu.setdefault(inst.label, {})
+
+            # Apply PSFs to the galaxy level images
+            if inst.label in galaxy.images_fnu:
+                for spec_type, imgs in galaxy.images_fnu[inst.label].items():
+                    galaxy.images_psf_fnu[inst.label][spec_type] = (
+                        imgs.apply_psfs(
+                            inst.psfs,
+                        )
+                    )
+
+            # Apply PSFs to the stars level images
+            if (
+                galaxy.stars is not None
+                and inst.label in galaxy.stars.images_fnu
+            ):
+                for spec_type, imgs in galaxy.stars.images_fnu[
+                    inst.label
+                ].items():
+                    galaxy.stars.images_psf_fnu[inst.label][spec_type] = (
+                        imgs.apply_psfs(
+                            inst.psfs,
+                        )
+                    )
+
+            # Apply PSFs to the black hole level images
+            if (
+                galaxy.black_holes is not None
+                and inst.label in galaxy.black_holes.images_fnu
+            ):
+                for spec_type, imgs in galaxy.black_holes.images_fnu[
+                    inst.label
+                ].items():
+                    galaxy.black_holes.images_psf_fnu[inst.label][
+                        spec_type
+                    ] = imgs.apply_psfs(
                         inst.psfs,
                     )
 
-                    # Unpack the image arrays onto the Pipeline object
-                    for f, img in g.images_psf_fnu[inst.label][
-                        spec_type
-                    ].items():
-                        self.images_flux_psf["Galaxy"].setdefault(
-                            spec_type, {}
-                        ).setdefault(f, []).append(img.arr * img.units)
+        # Count the number of images we have generated
+        self._op_counts["Flux Images (With PSF)"] += (
+            count_and_check_dict_recursive(galaxy.images_fnu)
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Flux Images (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.images_fnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Flux Images (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.images_fnu)
+            )
 
-                # Apply PSFs to the stars level images
-                if g.stars is not None:
-                    if not hasattr(g.stars, "images_psf_fnu"):
-                        g.stars.images_psf_fnu = {}
-                    g.stars.images_psf_fnu.setdefault(inst.label, {})
-                    for spec_type, imgs in g.stars.images_fnu[
-                        inst.label
-                    ].items():
-                        g.stars.images_psf_fnu[inst.label][spec_type] = (
-                            imgs.apply_psfs(
-                                inst.psfs,
-                            )
-                        )
-
-                        # Unpack the image arrays onto the Pipeline object
-                        for f, img in g.stars.images_psf_fnu[inst.label][
-                            spec_type
-                        ].items():
-                            self.images_flux_psf["Stars"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-
-                # Apply PSFs to the black hole level images
-                if g.black_holes is not None:
-                    if not hasattr(g.black_holes, "images_psf_fnu"):
-                        g.black_holes.images_psf_fnu = {}
-                    g.black_holes.images_psf_fnu.setdefault(inst.label, {})
-                    for spec_type, imgs in g.black_holes.images_fnu[
-                        inst.label
-                    ].items():
-                        g.black_holes.images_psf_fnu[inst.label][spec_type] = (
-                            imgs.apply_psfs(
-                                inst.psfs,
-                            )
-                        )
-
-                        # Unpack the image arrays onto the Pipeline object
-                        for f, img in g.black_holes.images_psf_fnu[inst.label][
-                            spec_type
-                        ].items():
-                            self.images_flux_psf["BlackHole"].setdefault(
-                                spec_type, {}
-                            ).setdefault(f, []).append(img.arr * img.units)
-
-        # Convert the lists of images to unyt arrays
-        for spec_type, imgs in self.images_flux_psf["Galaxy"].items():
-            for f, img in imgs.items():
-                self.images_flux_psf["Galaxy"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_flux_psf["Stars"].items():
-            for f, img in imgs.items():
-                self.images_flux_psf["Stars"][spec_type][f] = unyt_array(img)
-        for spec_type, imgs in self.images_flux_psf["BlackHole"].items():
-            for f, img in imgs.items():
-                self.images_flux_psf["BlackHole"][spec_type][f] = unyt_array(
-                    img
-                )
-
-        # Done!
-        self._got_images_flux_psf = True
-        self._took(start, "Applying PSFs to flux images")
+        # Record the time taken
+        self._op_timing["Flux Images (With PSF)"] += (
+            time.perf_counter() - start
+        )
 
     def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
@@ -1401,14 +2641,18 @@ class Pipeline:
         self._got_fnu_data_cubes = True
         self._took(start, "Getting fnu data cubes")
 
-    def _run_extra_analysis(self):
+    def _run_extra_analysis(self, galaxy):
         """
         Call any user provided analysis functions.
 
-        We will call this just before writing out all data. This ensures that
+        We will call this last when running the pipeline. This ensures that
         all data generated by the pipeline exists before performing the user
         calculations. This is important since the user may want to use the
         data generated by the pipeline in their analysis functions.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to run the extra analysis functions on.
         """
         start = time.perf_counter()
 
@@ -1416,31 +2660,595 @@ class Pipeline:
         if len(self._analysis_funcs) == 0:
             return
 
-        # Loop over the analysis functions and run them on each individual
-        # galaxy. We can do this with a threadpool if we have multiple threads.
+        # Create a temporary attribute on the galaxy to store the results
+        # of the analysis functions
+        galaxy._extra_analysis_results = {}
+
+        # Loop over the analysis functions and call them for this galaxy
         for func, args, kwargs, key in zip(
             self._analysis_funcs,
             self._analysis_args,
             self._analysis_kwargs,
             self._analysis_results_keys,
         ):
-            func_start = time.perf_counter()
-            res = []
-            for g in self.galaxies:
-                res.append(func(g, *args, **kwargs))
-            self._analysis_results[key] = (
-                combine_list_of_dicts(res)
-                if isinstance(res[0], dict)
-                else unyt_array(res)
-            )
-            self._took(func_start, f"{key} extra analysis")
+            # Run the analysis function on this galaxy
+            try:
+                func_start = time.perf_counter()
+                res = func(galaxy, *args, **kwargs)
+
+                # Count the number of times we have run this function
+                self._op_counts["Extra Analyses"] += 1
+
+                # Record the time taken
+                self._op_timing[key] = (
+                    self._op_timing.get(key, 0.0)
+                    + time.perf_counter()
+                    - func_start
+                )
+
+            except Exception as e:
+                raise type(e)(
+                    f"Error running extra analysis function {key}: {e}"
+                ).with_traceback(e.__traceback__)
+
+            # Store the result on the galaxy
+            galaxy._extra_analysis_results[key] = res
+
+        # Record the time taken
+        self._op_timing["Extra Analyses"] += time.perf_counter() - start
+
+    def _unpack_results(self, galaxy):
+        """
+        Unpack the results from the galaxy into the pipeline.
+
+        This will extract all the calculated data from the galaxy and store it
+        on the pipeline for writing out. All data not flagged to be saved will
+        be cleared when the galaxy is garbage collected.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to unpack the results from.
+        """
+        start = time.perf_counter()
+
+        # Do we need to unpack the SFZH?
+        if self._write_sfzh:
+            self.sfzhs.append(galaxy.stars.sfzh)
+
+        # Do we need to unpack the SFH?
+        if self._write_sfh:
+            self.sfhs.append(galaxy.stars.sfh)
+
+        # Do we need to unpack the lnu spectra?
+        if self._write_lnu_spectra:
+            for spec_type, spec in galaxy.spectra.items():
+                self.lnu_spectra["Galaxy"].setdefault(spec_type, []).append(
+                    spec.lnu
+                )
+            if galaxy.stars is not None:
+                for spec_type, spec in galaxy.stars.spectra.items():
+                    self.lnu_spectra["Stars"].setdefault(spec_type, []).append(
+                        spec.lnu
+                    )
+            if galaxy.black_holes is not None:
+                for spec_type, spec in galaxy.black_holes.spectra.items():
+                    self.lnu_spectra["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(spec.lnu)
+
+        # Do we need to unpack the fnu spectra?
+        if self._write_fnu_spectra:
+            for spec_type, spec in galaxy.spectra.items():
+                self.fnu_spectra["Galaxy"].setdefault(spec_type, []).append(
+                    spec.fnu
+                )
+            if galaxy.stars is not None:
+                for spec_type, spec in galaxy.stars.spectra.items():
+                    self.fnu_spectra["Stars"].setdefault(spec_type, []).append(
+                        spec.fnu
+                    )
+            if galaxy.black_holes is not None:
+                for spec_type, spec in galaxy.black_holes.spectra.items():
+                    self.fnu_spectra["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(spec.fnu)
+
+        # Do we need to unpack the photometric luminosities?
+        if self._write_luminosities:
+            for spec_type, phot in galaxy.photo_lnu.items():
+                for filt, lnu in phot.items():
+                    self.luminosities["Galaxy"].setdefault(
+                        spec_type, {}
+                    ).setdefault(filt, []).append(lnu)
+            if galaxy.stars is not None:
+                for spec_type, phot in galaxy.stars.photo_lnu.items():
+                    for filt, lnu in phot.items():
+                        self.luminosities["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(lnu)
+            if galaxy.black_holes is not None:
+                for spec_type, phot in galaxy.black_holes.photo_lnu.items():
+                    for filt, lnu in phot.items():
+                        self.luminosities["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(lnu)
+
+        # Do we need to unpack the photometric fluxes?
+        if self._write_fluxes:
+            for spec_type, phot in galaxy.photo_fnu.items():
+                for filt, fnu in phot.items():
+                    self.fluxes["Galaxy"].setdefault(spec_type, {}).setdefault(
+                        filt, []
+                    ).append(fnu)
+            if galaxy.stars is not None:
+                for spec_type, phot in galaxy.stars.photo_fnu.items():
+                    for filt, fnu in phot.items():
+                        self.fluxes["Stars"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(fnu)
+            if galaxy.black_holes is not None:
+                for spec_type, phot in galaxy.black_holes.photo_fnu.items():
+                    for filt, fnu in phot.items():
+                        self.fluxes["BlackHole"].setdefault(
+                            spec_type, {}
+                        ).setdefault(filt, []).append(fnu)
+
+        # Do we need to unpack the emission lines?
+        if self._write_lines:
+            for spec_type, lines in galaxy.lines.items():
+                self.line_lums["Galaxy"].setdefault(spec_type, []).append(
+                    lines.luminosity
+                )
+                self.line_cont_lums["Galaxy"].setdefault(spec_type, []).append(
+                    lines.continuum
+                )
+            if galaxy.stars is not None:
+                for spec_type, lines in galaxy.stars.lines.items():
+                    self.line_lums["Stars"].setdefault(spec_type, []).append(
+                        lines.luminosity
+                    )
+                    self.line_cont_lums["Stars"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
+            if galaxy.black_holes is not None:
+                for spec_type, lines in galaxy.black_holes.lines.items():
+                    self.line_lums["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.luminosity)
+                    self.line_cont_lums["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
+
+        # Do we need to unpack the observed emission lines?
+        if self._write_flux_lines:
+            for spec_type, lines in galaxy.lines.items():
+                self.line_fluxes["Galaxy"].setdefault(spec_type, []).append(
+                    lines.flux
+                )
+                self.line_cont_fluxes["Galaxy"].setdefault(
+                    spec_type, []
+                ).append(lines.continuum)
+            if galaxy.stars is not None:
+                for spec_type, lines in galaxy.stars.lines.items():
+                    self.line_fluxes["Stars"].setdefault(spec_type, []).append(
+                        lines.flux
+                    )
+                    self.line_cont_fluxes["Stars"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
+            if galaxy.black_holes is not None:
+                for spec_type, lines in galaxy.black_holes.lines.items():
+                    self.line_fluxes["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.flux)
+                    self.line_cont_fluxes["BlackHole"].setdefault(
+                        spec_type, []
+                    ).append(lines.continuum)
+
+        # Do we need to unpack the luminosity images?
+        if self._write_images_lum:
+            for d in galaxy.images_lnu.values():
+                for spec_type, imgs in d.items():
+                    for f, img in imgs.items():
+                        self.images_lum["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.stars is not None:
+                for d in galaxy.stars.images_lnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_lum["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.black_holes is not None:
+                for d in galaxy.black_holes.images_lnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_lum["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Do we need to unpack the flux images?
+        if self._write_images_flux:
+            for d in galaxy.images_fnu.values():
+                for spec_type, imgs in d.items():
+                    for f, img in imgs.items():
+                        self.images_flux["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.stars is not None:
+                for d in galaxy.stars.images_fnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_flux["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.black_holes is not None:
+                for d in galaxy.black_holes.images_fnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_flux["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Do we need to unpack the luminosity images with PSFs?
+        if self._write_images_lum_psf:
+            for d in galaxy.images_psf_lnu.values():
+                for spec_type, imgs in d.items():
+                    for f, img in imgs.items():
+                        self.images_lum_psf["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.stars is not None:
+                for d in galaxy.stars.images_psf_lnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_lum_psf["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.black_holes is not None:
+                for d in galaxy.black_holes.images_psf_lnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_lum_psf["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Do we need to unpack the flux images with PSFs?
+        if self._write_images_flux_psf:
+            for d in galaxy.images_psf_fnu.values():
+                for spec_type, imgs in d.items():
+                    for f, img in imgs.items():
+                        self.images_flux_psf["Galaxy"].setdefault(
+                            spec_type, {}
+                        ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.stars is not None:
+                for d in galaxy.stars.images_psf_fnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_flux_psf["Stars"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+            if galaxy.black_holes is not None:
+                for d in galaxy.black_holes.images_psf_fnu.values():
+                    for spec_type, imgs in d.items():
+                        for f, img in imgs.items():
+                            self.images_flux_psf["BlackHole"].setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
+
+        # Do we need to unpack the extra analysis results?
+        if hasattr(galaxy, "_extra_analysis_results"):
+            for key, res in galaxy._extra_analysis_results.items():
+                self._analysis_results[key].append(res)
 
         # Done!
-        self._took(start, "Extra analysis")
+        self._op_timing["Unpacking results"] += time.perf_counter() - start
+
+    def run(self):
+        """
+        Run the pipeline.
+
+        This will churn throuh the attached galaxies generating all the data
+        requested using the get_* methods.
+
+        Only data flagged for saving will be held in memory with all other data
+        cleared out.
+
+        Once the pipeline has run, the data can be written out to a file using
+        the write method.
+
+        Note that as we loop over galaxies they will be removed from the
+        pipeline to free up memory. This means that once the pipeline has run
+        the galaxies will no longer be accessible from the pipeline object.
+
+        Raises:
+            PipelineNotReady:
+                If the pipeline is not ready to a specific operation.
+        """
+        # Ensure we are ready
+        if not self._loaded_galaxies:
+            raise exceptions.PipelineNotReady(
+                "Cannot generate spectra before galaxies are loaded! "
+                "Call load_galaxies first."
+            )
+
+        # Ensure we have at least one operation signalled
+        signals = [
+            self._do_los_optical_depths,
+            self._do_lnu_spectra,
+            self._do_fnu_spectra,
+            self._do_luminosities,
+            self._do_fluxes,
+            self._do_lum_lines,
+            self._do_flux_lines,
+            self._do_images_lum,
+            self._do_images_lum_psf,
+            self._do_images_flux,
+            self._do_images_flux_psf,
+            self._do_lnu_data_cubes,
+            self._do_fnu_data_cubes,
+            self._do_spectroscopy,
+            self._do_sfzh,
+            self._do_sfh,
+        ]
+        if not any(signals):
+            raise exceptions.PipelineNotReady(
+                "Cannot run pipeline without any operations signalled! "
+                "Use the get_* methods to signal operations."
+            )
+
+        # Print the header for the pipeline run to the console
+        self._print_progress_header()
+
+        # Loop over galaxie and compute what has been requested using get_*
+        # signalling methods
+        igal = 0
+        while len(self.galaxies) > 0:
+            start_gal = time.perf_counter()
+
+            # Pop the first galaxy from the list
+            gal = self.galaxies.pop(0)
+
+            # Are we generating LOS optical depths?
+            if self._do_los_optical_depths:
+                self._get_los_optical_depths(gal)
+
+            # Are we generating SFZHs?
+            if self._do_sfzh:
+                self._get_sfzh(gal)
+
+            # Are we generating SFHs?
+            if self._do_sfh:
+                self._get_sfh(gal)
+
+            # Are we generating lnu spectra?
+            if self._do_lnu_spectra:
+                self._get_spectra(gal)
+
+            # Are we generating fnu spectra?
+            if self._do_fnu_spectra:
+                self._get_observed_spectra(gal)
+
+            # Are we generating photometric luminosities?
+            if self._do_luminosities:
+                self._get_photometry_luminosities(gal)
+
+            # Are we generating photometric fluxes?
+            if self._do_fluxes:
+                self._get_photometry_fluxes(gal)
+
+            # Are we generating emission lines?
+            if self._do_lum_lines:
+                self._get_lines(gal)
+
+            # Are we generating observed emission lines?
+            if self._do_flux_lines:
+                self._get_observed_lines(gal)
+
+            # Are we generating luminosity images?
+            if self._do_images_lum:
+                self._get_images_luminosity(gal)
+
+            # Are we generating flux images?
+            if self._do_images_flux:
+                self._get_images_flux(gal)
+
+            # Are we applying PSFs to the luminosity images?
+            if self._do_images_lum_psf:
+                self._get_images_luminosity_psfs(gal)
+
+            # Are we applying PSFs to the flux images?
+            if self._do_images_flux_psf:
+                self._get_images_flux_psfs(gal)
+
+            # Run any extra analysis functions
+            self._run_extra_analysis(gal)
+
+            # Ok, we're done with this galaxy so we can unpack the results
+            self._unpack_results(gal)
+
+            # Output into the progress table
+            self._add_progress_row(gal, igal, start_gal)
+            igal += 1
+
+            # Now we can remove the galaxy to free up memory
+            del gal
+
+        # print the footer for the pipeline run to the console
+        self._print_progress_footer()
+
+        # We're done! Report the time taken
+        self._report_total_timings()
+
+        # Clean up the outputs
+        self._clean_outputs()
+
+        # Flag that we have run the pipeline
+        self._analysis_complete = True
+
+    def _clean_outputs(self):
+        """
+        Clean up the lists attached to the pipeline.
+
+        This prepares the results for writing out to a file.
+        """
+        start = time.perf_counter()
+
+        # Convert the lists of SFZHs to unyt arrays
+        self.sfzhs = unyt_array(self.sfzhs)
+
+        # Convert the lists of SFHs to unyt arrays
+        self.sfhs = unyt_array(self.sfhs)
+
+        # Convert the lists of spectra to unyt arrays
+        for spec_type, spec in self.lnu_spectra["Galaxy"].items():
+            self.lnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.lnu_spectra["Stars"].items():
+            self.lnu_spectra["Stars"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.lnu_spectra["BlackHole"].items():
+            self.lnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.fnu_spectra["Galaxy"].items():
+            self.fnu_spectra[spec_type] = unyt_array(spec)
+        for spec_type, spec in self.fnu_spectra["Stars"].items():
+            self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.fnu_spectra["BlackHole"].items():
+            self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+
+        # Convert the lists of luminosities to unyt arrays
+        for spec_type, phot in self.luminosities["Galaxy"].items():
+            for filt, lnu in phot.items():
+                self.luminosities["Galaxy"][spec_type][filt] = unyt_array(lnu)
+        for spec_type, phot in self.luminosities["Stars"].items():
+            for filt, lnu in phot.items():
+                self.luminosities["Stars"][spec_type][filt] = unyt_array(lnu)
+        for spec_type, phot in self.luminosities["BlackHole"].items():
+            for filt, lnu in phot.items():
+                self.luminosities["BlackHole"][spec_type][filt] = unyt_array(
+                    lnu
+                )
+
+        # Convert the lists of fluxes to unyt arrays
+        for spec_type, phot in self.fluxes["Galaxy"].items():
+            for filt, fnu in phot.items():
+                self.fluxes["Galaxy"][spec_type][filt] = unyt_array(fnu)
+        for spec_type, phot in self.fluxes["Stars"].items():
+            for filt, fnu in phot.items():
+                self.fluxes["Stars"][spec_type][filt] = unyt_array(fnu)
+        for spec_type, phot in self.fluxes["BlackHole"].items():
+            for filt, fnu in phot.items():
+                self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
+
+        # Convert the lists of line luminosities and continua to unyt arrays
+        for spec_type, lines in self.line_lums["Galaxy"].items():
+            self.line_lums["Galaxy"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.line_cont_lums["Galaxy"].items():
+            self.line_cont_lums["Galaxy"][spec_type] = unyt_array(conts)
+        for spec_type, lines in self.line_lums["Stars"].items():
+            self.line_lums["Stars"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.line_cont_lums["Stars"].items():
+            self.line_cont_lums["Stars"][spec_type] = unyt_array(conts)
+        for spec_type, lines in self.line_lums["BlackHole"].items():
+            self.line_lums["BlackHole"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.line_cont_lums["BlackHole"].items():
+            self.line_cont_lums["BlackHole"][spec_type] = unyt_array(conts)
+
+        # Convert the lists of line fluxes and continua to unyt arrays
+        for spec_type, fluxes in self.line_fluxes["Galaxy"].items():
+            self.line_fluxes["Galaxy"][spec_type] = unyt_array(fluxes)
+        for spec_type, conts in self.line_cont_fluxes["Galaxy"].items():
+            self.line_cont_fluxes["Galaxy"][spec_type] = unyt_array(conts)
+        for spec_type, fluxes in self.line_fluxes["Stars"].items():
+            self.line_fluxes["Stars"][spec_type] = unyt_array(fluxes)
+        for spec_type, conts in self.line_cont_fluxes["Stars"].items():
+            self.line_cont_fluxes["Stars"][spec_type] = unyt_array(conts)
+        for spec_type, fluxes in self.line_fluxes["BlackHole"].items():
+            self.line_fluxes["BlackHole"][spec_type] = unyt_array(fluxes)
+        for spec_type, conts in self.line_cont_fluxes["BlackHole"].items():
+            self.line_cont_fluxes["BlackHole"][spec_type] = unyt_array(conts)
+
+        # Convert the lists of luminosity images to unyt arrays
+        for spec_type, imgs in self.images_lum["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_lum["Galaxy"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum["Stars"].items():
+            for f, img in imgs.items():
+                self.images_lum["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_lum["BlackHole"][spec_type][f] = unyt_array(img)
+
+        # Convert the lists of flux images to unyt arrays
+        for spec_type, imgs in self.images_flux["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_flux["Galaxy"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux["Stars"].items():
+            for f, img in imgs.items():
+                self.images_flux["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_flux["BlackHole"][spec_type][f] = unyt_array(img)
+
+        # Convert the lists of psf luminosity images to unyt arrays
+        for spec_type, imgs in self.images_lum_psf["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_lum_psf["Galaxy"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum_psf["Stars"].items():
+            for f, img in imgs.items():
+                self.images_lum_psf["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_lum_psf["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_lum_psf["BlackHole"][spec_type][f] = unyt_array(
+                    img
+                )
+
+        # Convert the lists of psf flux images to unyt arrays
+        for spec_type, imgs in self.images_flux_psf["Galaxy"].items():
+            for f, img in imgs.items():
+                self.images_flux_psf["Galaxy"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux_psf["Stars"].items():
+            for f, img in imgs.items():
+                self.images_flux_psf["Stars"][spec_type][f] = unyt_array(img)
+        for spec_type, imgs in self.images_flux_psf["BlackHole"].items():
+            for f, img in imgs.items():
+                self.images_flux_psf["BlackHole"][spec_type][f] = unyt_array(
+                    img
+                )
+
+        # Convert the lists of extra analysis results to unyt arrays
+        # Unlike the previous data we need to do some checks here to ensure
+        # that the data is in a consistent format. This is because the user
+        # can return any type of data from their analysis functions.
+        for key, res in self._analysis_results.items():
+            # Ensure the data of all results is in the same format.
+            types = set([type(r) for r in res])
+            if len(types) > 1:
+                raise exceptions.BadResult(
+                    "All results from extra analysis functions must be "
+                    f"of the same type. Got: {set(types)}"
+                )
+
+            # Combine the list of results into a dict of unyt arrays or a
+            # single unyt array. This will simply return a unyt array if we
+            # hand a list of values
+            combined_data = combine_list_of_dicts(res)
+
+            # Store the data
+            self._analysis_results[key] = combined_data
+
+        self._took(start, "Cleaning outputs")
 
     def write(self, outpath, verbose=None):
         """
         Write what we have produced to a HDF5 file.
+
+        Any get_* methods that have been called will have their results written
+        to the HDF5 file. We consider the call to get_* to be the signal to
+        write the data out. If a get_* method has not been called, but the data
+        was needed by a subsequent get_* method, it will have been run but
+        then discarded, e.g. calling get_photometry_fluxes will have run
+        get_observed_spectra, which will have run get_spectra, but the results
+        from get_spectra and get_observed_spectra will have been discarded.
 
         Args:
             outpath (str):
@@ -1448,9 +3256,14 @@ class Pipeline:
             verbose (bool, optional):
                 If set, override the Pipeline verbose setting.
         """
-        # We're done with everything so we know we'll have what is needed for
-        # any extra analysis asked for by the user. We'll run these now.
-        self._run_extra_analysis()
+        # Ensure we have run the pipeline (this is mostly useful to help with
+        # running old pipelines that don't call run before write)
+        if not self._analysis_complete:
+            self._print(
+                "Pipeline has not been run. "
+                "Running pipeline before writing."
+            )
+            self.run()
 
         write_start = time.perf_counter()
 
@@ -1482,7 +3295,7 @@ class Pipeline:
             galaxy_indices = None
 
         # Write spectral luminosity densities
-        if self._got_lnu_spectra:
+        if self._write_lnu_spectra:
             self.io_helper.write_data(
                 self.lnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralLuminosityDensities",
@@ -1500,7 +3313,7 @@ class Pipeline:
             )
 
         # Write spectral flux densities
-        if self._got_fnu_spectra:
+        if self._write_fnu_spectra:
             self.io_helper.write_data(
                 self.fnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralFluxDensities",
@@ -1518,7 +3331,7 @@ class Pipeline:
             )
 
         # Write photometric luminosities
-        if self._got_luminosities:
+        if self._write_luminosities:
             self.io_helper.write_data(
                 self.luminosities["Galaxy"],
                 "Galaxies/Photometry/Luminosities",
@@ -1536,7 +3349,7 @@ class Pipeline:
             )
 
         # Write photometric fluxes
-        if self._got_fluxes:
+        if self._write_fluxes:
             self.io_helper.write_data(
                 self.fluxes["Galaxy"],
                 "Galaxies/Photometry/Fluxes",
@@ -1554,40 +3367,88 @@ class Pipeline:
             )
 
         # Write emission line luminosities
-        if self._got_lum_lines:
+        if self._write_lines:
             self.io_helper.write_data(
-                self.lines_lum["Galaxy"],
+                self.line_lums["Galaxy"],
                 "Galaxies/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.lines_lum["Stars"],
+                self.line_lums["Stars"],
                 "Galaxies/Stars/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.lines_lum["BlackHole"],
+                self.line_lums["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lum["Galaxy"],
+                self.line_cont_lums["Galaxy"],
                 "Galaxies/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lum["Stars"],
+                self.line_cont_lums["Stars"],
                 "Galaxies/Stars/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lum["BlackHole"],
+                self.line_cont_lums["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Continuum",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_ids,
+                "Galaxies/Lines/IDs",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_lams,
+                "Galaxies/Lines/Wavelengths",
+                galaxy_indices,
+            )
+
+        # Write observed emission line fluxes
+        if self._write_flux_lines:
+            self.io_helper.write_data(
+                self.line_fluxes["Galaxy"],
+                "Galaxies/Lines/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_fluxes["Stars"],
+                "Galaxies/Stars/Lines/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_fluxes["BlackHole"],
+                "Galaxies/BlackHoles/Lines/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_cont_fluxes["Galaxy"],
+                "Galaxies/Lines/Continuum",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_cont_fluxes["Stars"],
+                "Galaxies/Stars/Lines/Continuum",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_cont_fluxes["BlackHole"],
+                "Galaxies/BlackHoles/Lines/Continuum",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_obs_lams,
+                "Galaxies/Lines/ObservedWavelengths",
                 galaxy_indices,
             )
 
         # Write luminosity images
-        if self._got_images_lum:
+        if self._write_images_lum:
             self.io_helper.write_data(
                 self.images_lum["Galaxy"],
                 "Galaxies/Images/Luminosity",
@@ -1605,7 +3466,7 @@ class Pipeline:
             )
 
         # Write PSF luminosity images
-        if self._got_images_lum_psf:
+        if self._write_images_lum_psf:
             self.io_helper.write_data(
                 self.images_lum_psf["Galaxy"],
                 "Galaxies/PSFImages/Luminosity",
@@ -1622,9 +3483,8 @@ class Pipeline:
                 galaxy_indices,
             )
 
-        # Write flux images (again these are heavy so we'll collect them
-        # separately)
-        if self._got_images_flux:
+        # Write flux images
+        if self._write_images_flux:
             self.io_helper.write_data(
                 self.images_flux["Galaxy"],
                 "Galaxies/Images/Flux",
@@ -1642,7 +3502,7 @@ class Pipeline:
             )
 
         # Write PSF flux images
-        if self._got_images_flux_psf:
+        if self._write_images_flux_psf:
             self.io_helper.write_data(
                 self.images_flux_psf["Galaxy"],
                 "Galaxies/PSFImages/Flux",
