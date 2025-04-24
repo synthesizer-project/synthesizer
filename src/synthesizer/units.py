@@ -565,19 +565,20 @@ def has_units(x):
 
 def unyt_to_ndview(arr, unit=None):
     """
-    Extract a the underlying data from a unyt_array or unyt_quantity.
+    Extract the underlying data from a `unyt_array` or `unyt_quantity`.
 
-    An ndview is a pointer to the underlying data of a unyt_array or
-    unyt_quantity.
+    An ndview is a pointer to the underlying data of a `unyt_array` or
+    `unyt_quantity`.
 
     This is a helper function to enable the extraction of the underlying data
-    from a unyt_array or unyt_quantity WITHOUT making a copy of the data.
-    This is possible with the nview property on a unyt_array or unyt_quantity,
-    however, this is not implemented with an inplace unit conversion.
+    from a `unyt_array` or `unyt_quantity` WITHOUT making a copy of the data.
+    This is possible with the `ndview` property on a `unyt_array` or
+    `unyt_quantity`, however, this is not implemented with an inplace unit
+    conversion.
 
     This function can either be used to extract the underlying data in the
-    existing units or to convert inplace to a new unit and then return the
-    view (an operation not implemented in unyt as far as I can tell).
+    existing units, or to convert inplace to a new unit and then return the
+    view (an operation not implemented in unyt to date, as far as I can tell).
 
     Args:
         arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to
