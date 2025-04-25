@@ -187,13 +187,15 @@ class Image(ImagingBase):
         # Ensure the images have the same resolution
         if self.resolution != other_img.resolution:
             raise exceptions.InconsistentAddition(
-                "The images must have the same resolution to be added."
+                "The images must have the same resolution to be added "
+                f"({self.resolution}, {other_img.resolution})."
             )
 
         # Ensure the images have the same fov
         if np.any(self.fov != other_img.fov):
             raise exceptions.InconsistentAddition(
-                "The images must have the same fov to be added."
+                "The images must have the same fov to be added "
+                f"({self.fov}, {other_img.fov})."
             )
 
         # Hanlde if units are involved or not

@@ -87,6 +87,8 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
      * do this for each element because there is no guarantee the input
      * wavelengths will be evenly spaced but we also don't want to repeat
      * the nearest bin search too many times. */
+    double shifted_wavelengths[nlam];
+    int mapped_indices[nlam];
     for (int ilam = 0; ilam < nlam; ilam++) {
       shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
       mapped_indices[ilam] =
@@ -187,10 +189,6 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
       }
     }
   }
-
-  /* Free the allocated arrays. */
-  free(shifted_wavelengths);
-  free(mapped_indices);
 }
 
 /**
@@ -224,33 +222,28 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
-    /* Skip masked particles. */
-    if (mask != NULL && !mask[p]) {
-      continue;
+    /* Get the thread id. */
+    int tid = omp_get_thread_num();
+
+    /* Calculate start and end indices for each thread */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
     }
-
-    /* Get this particle's mass. */
-    const double mass = part_masses[p];
-
-    /* Setup the index and mass fraction arrays. */
-    int part_indices[ndim];
-    double axis_fracs[ndim];
-
-    /* Get the grid indices and cell fractions for the particle. */
-    get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                          part_props, p);
-
-    /* To combine fractions we will need an array of dimensions for the
-     * subset. These are always two in size, one for the low and one for high
-     * grid point. */
-    int sub_dims[ndim];
-    for (int idim = 0; idim < ndim; idim++) {
-      sub_dims[idim] = 2;
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
     }
+#endif
 
-    /* Now loop over this collection of cells collecting and setting their
-     * weights. */
-    for (int icell = 0; icell < ncells; icell++) {
+    /* Loop over particles. */
+    for (int p = start; p < end; p++) {
 
       /* Set up some index arrays we'll need. */
       int subset_ind[ndim];
@@ -277,17 +270,16 @@ static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
         continue;
       }
 
-      /* Define the weight. */
-      double weight = frac * mass;
+      /* Get this particle's mass. */
+      const double mass = part_masses[p];
 
-      /* Get the weight's index. */
-      const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+      /* Setup the index and mass fraction arrays. */
+      int part_indices[ndim];
+      double axis_fracs[ndim];
 
-      /* Get the spectra ind. */
-      int unraveled_ind[ndim + 1];
-      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-      unraveled_ind[ndim] = 0;
-      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+      /* Get the grid indices and cell fractions for the particle. */
+      get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                            part_props, p);
 
       /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -528,104 +520,424 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
                                          double *spectra, int nthreads,
                                          const double c) {
 
-  /* Unpack the grid properties. */
-  int *dims = grid->dims;
-  int ndim = grid->ndim;
-  int nlam = grid->nlam;
-  double *wavelength = grid->lam;
-  double **grid_props = grid->props;
-  double *grid_spectra = grid->spectra;
+  /* How many particles should each thread get? */
+  int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
 
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  double *velocity = parts->velocities;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
+#pragma omp parallel num_threads(nthreads)
+  {
 
-  /* Calculate the number of cell in a patch of the grid. */
-  int ncells = 1 << ndim;
+    /* Calculate the number of cell in a patch of the grid. */
+    int ncells = 1 << ndim;
 
-  /* Allocate the shifted wavelengths array and the mapped indices array. */
-  double *shifted_wavelengths =
-      synth_malloc(nlam * sizeof(double), "shifted wavelengths");
-  int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
+    /* Allocate the shifted wavelengths array and the mapped indices array. */
+    double *shifted_wavelengths =
+        synth_malloc(nlam * sizeof(double), "shifted wavelengths");
+    int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
 
-  /* Loop over particles. */
-#pragma omp parallel for schedule(static) num_threads(nthreads)
-  for (int p = 0; p < npart; p++) {
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *velocity = parts->velocities;
+    int npart = parts->npart;
+    npy_bool *mask = parts->mask;
 
-    /* Skip masked particles. */
-    if (mask != NULL && !mask[p]) {
-      continue;
+    /* Get the thread id. */
+    int tid = omp_get_thread_num();
+
+    /* Calculate start and end indices for each thread */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
     }
-
-    /* Get this particle's mass. velocity and doppler shift. */
-    const double mass = part_masses[p];
-
-    /* Get the particle velocity and red/blue shift factor. */
-    double vel = velocity[p];
-    double shift_factor = 1.0 + vel / c;
-
-    /* Shift the wavelengths and get the mapping for each wavelength bin. We
-     * do this for each element because there is no guarantee the input
-     * wavelengths will be evenly spaced but we also don't want to repeat
-     * the nearest bin search too many times. */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
-      mapped_indices[ilam] =
-          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
     }
+#endif
 
-    /* Setup the index and mass fraction arrays. */
-    int part_indices[ndim];
-    double axis_fracs[ndim];
+    /* Loop over particles. */
+    for (int p = start; p < end; p++) {
 
-    /* Get the grid indices and cell fractions for the particle. */
-    get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                          part_props, p);
+      /* Get the grid indices and cell fractions for the particle. */
+      get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                            part_props, p);
 
-    /* To combine fractions we will need an array of dimensions for the
-     * subset. These are always two in size, one for the low and one for
-     * high grid point. */
-    int sub_dims[ndim];
-    for (int idim = 0; idim < ndim; idim++) {
-      sub_dims[idim] = 2;
-    }
-
-    /* Now loop over this collection of cells collecting and setting their
-     * weights. */
-    for (int icell = 0; icell < ncells; icell++) {
-
-      /* Set up some index arrays we'll need. */
-      int subset_ind[ndim];
-      int frac_ind[ndim];
-
-      /* Get the multi-dimensional version of icell. */
-      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-      /* Multiply all contributing fractions and get the fractions index
-       * in the grid. */
-      double frac = 1;
+      /* To combine fractions we will need an array of dimensions for the
+       * subset. These are always two in size, one for the low and one for
+       * high grid point. */
+      int sub_dims[ndim];
       for (int idim = 0; idim < ndim; idim++) {
-        if (subset_ind[idim] == 0) {
-          frac *= (1 - axis_fracs[idim]);
-          frac_ind[idim] = part_indices[idim] - 1;
-        } else {
-          frac *= axis_fracs[idim];
-          frac_ind[idim] = part_indices[idim];
-        }
+        sub_dims[idim] = 2;
       }
 
-      if (frac == 0) {
+      /* Now loop over this collection of cells collecting and setting their
+       * weights. */
+      for (int icell = 0; icell < ncells; icell++) {
+
+        /* Set up some index arrays we'll need. */
+        int subset_ind[ndim];
+        int frac_ind[ndim];
+
+        /* Get the multi-dimensional version of icell. */
+        get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+        /* Multiply all contributing fractions and get the fractions index
+         * in the grid. */
+        double frac = 1;
+        for (int idim = 0; idim < ndim; idim++) {
+          if (subset_ind[idim] == 0) {
+            frac *= (1 - axis_fracs[idim]);
+            frac_ind[idim] = part_indices[idim] - 1;
+          } else {
+            frac *= axis_fracs[idim];
+            frac_ind[idim] = part_indices[idim];
+          }
+        }
+
+        if (frac == 0) {
+          continue;
+        }
+
+        /* Get this particle's mass. velocity and doppler shift. */
+        const double mass = part_masses[p];
+
+        /* Get the particle velocity and red/blue shift factor. */
+        double vel = velocity[p];
+        double shift_factor = 1.0 + vel / c;
+
+        /* Shift the wavelengths and get the mapping for each wavelength bin. We
+         * do this for each element because there is no guarantee the input
+         * wavelengths will be evenly spaced but we also don't want to repeat
+         * the nearest bin search too many times. */
+        double shifted_wavelengths[nlam];
+        int mapped_indices[nlam];
+        for (int ilam = 0; ilam < nlam; ilam++) {
+          shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+          mapped_indices[ilam] =
+              get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+        }
+
+        /* Setup the index and mass fraction arrays. */
+        int part_indices[ndim];
+        double axis_fracs[ndim];
+
+        /* Get the grid indices and cell fractions for the particle. */
+        get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                              part_props, p);
+
+        /* To combine fractions we will need an array of dimensions for the
+         * subset. These are always two in size, one for the low and one for
+         * high grid point. */
+        int sub_dims[ndim];
+        for (int idim = 0; idim < ndim; idim++) {
+          sub_dims[idim] = 2;
+        }
+
+        /* Now loop over this collection of cells collecting and setting their
+         * weights. */
+        for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+
+          /* Set up some index arrays we'll need. */
+          int subset_ind[ndim];
+          int frac_ind[ndim];
+
+          /* Get the multi-dimensional version of icell. */
+          get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+          /* Multiply all contributing fractions and get the fractions index
+           * in the grid. */
+          double frac = 1;
+          for (int idim = 0; idim < ndim; idim++) {
+            if (subset_ind[idim] == 0) {
+              frac *= (1 - axis_fracs[idim]);
+              frac_ind[idim] = part_indices[idim] - 1;
+            } else {
+              frac *= axis_fracs[idim];
+              frac_ind[idim] = part_indices[idim];
+            }
+          }
+
+          if (frac == 0) {
+            continue;
+          }
+
+          /* Define the weight. */
+          double weight = frac * mass;
+
+          /* Get the weight's index. */
+          const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+
+          /* Get the spectra ind. */
+          int unraveled_ind[ndim + 1];
+          get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+          unraveled_ind[ndim] = 0;
+          int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+          /* Add this grid cell's contribution to the spectra */
+          for (int ilam = 0; ilam < nlam; ilam++) {
+
+            /* Get the shifted wavelength and index. */
+            int ilam_shifted = mapped_indices[ilam];
+            double shifted_lambda = shifted_wavelengths[ilam];
+
+            /* Skip if this wavelength is masked. */
+            /* Note: we skip the shifted wavelength here because the mask is
+             * effectively saying "I want to ignore this wavelength in the
+             * output spectra". */
+            if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
+              continue;
+            }
+
+            /* Compute the fraction of the shifted wavelength between the two
+             * closest wavelength elements. */
+            double frac_shifted = 0.0;
+            if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+              frac_shifted =
+                  (shifted_lambda - wavelength[ilam_shifted - 1]) /
+                  (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
+            } else {
+              /* Out of bounds, skip this wavelength */
+              continue;
+            }
+
+            /* Get the grid spectra value for this wavelength. */
+            double grid_spectra_value =
+                grid_spectra[spectra_ind + ilam] * weight;
+
+            /* Add the contribution to the corresponding wavelength element. */
+            spectra[p * nlam + ilam_shifted - 1] +=
+                (1.0 - frac_shifted) * grid_spectra_value;
+            spectra[p * nlam + ilam_shifted] +=
+                frac_shifted * grid_spectra_value;
+          }
+        }
+      }
+    }
+  }
+#endif
+
+  /**
+   * @brief This calculates particle spectra using a cloud in cell approach.
+   *
+   * This is a wrapper which calls the correct function based on the number of
+   * threads requested and whether OpenMP is available.
+   *
+   * @param grid: A struct containing the properties along each grid axis.
+   * @param parts: A struct containing the particle properties.
+   * @param spectra: The output array.
+   * @param nthreads: The number of threads to use.
+   */
+  void spectra_loop_cic(struct grid * grid, struct particles * parts,
+                        double *spectra, double *part_spectra,
+                        const int nthreads) {
+
+    double start_time = tic();
+
+    /* Call the correct function for the configuration/number of threads. */
+
+#ifdef WITH_OPENMP
+
+    /* If we have multiple threads and OpenMP we can parallelise. */
+    if (nthreads > 1) {
+      spectra_loop_cic_omp(grid, parts, spectra, part_spectra, nthreads);
+    }
+    /* Otherwise there's no point paying the OpenMP overhead. */
+    else {
+      spectra_loop_cic_serial(grid, parts, spectra, part_spectra);
+    }
+
+#else
+
+  (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  spectra_loop_cic_serial(grid, parts, spectra, part_spectra);
+
+#endif
+    toc("Cloud in Cell particle spectra loop", start_time);
+  }
+
+  /**
+   * @brief This calculates doppler-shifted particle spectra using a cloud in
+   * cell approach.
+   *
+   * This is a wrapper which calls the correct function based on the number of
+   * threads requested and whether OpenMP is available.
+   *
+   * @param grid: A struct containing the properties along each grid axis.
+   * @param parts: A struct containing the particle properties.
+   * @param spectra: The output array.
+   * @param nthreads: The number of threads to use.
+   */
+  void shifted_spectra_loop_cic(struct grid * grid, struct particles * parts,
+                                double *spectra, const int nthreads,
+                                const double c) {
+
+    double start_time = tic();
+
+    /* Call the correct function for the configuration/number of threads. */
+
+#ifdef WITH_OPENMP
+
+    /* If we have multiple threads and OpenMP we can parallelise. */
+    if (nthreads > 1) {
+      shifted_spectra_loop_cic_omp(grid, parts, spectra, nthreads, c);
+    }
+    /* Otherwise there's no point paying the OpenMP overhead. */
+    else {
+      shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
+    }
+
+#else
+
+  (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
+
+#endif
+    toc("Cloud in Cell particle loop", start_time);
+  }
+
+  /**
+   * @brief This calculates particle spectra using a nearest grid point
+   * approach.
+   *
+   * This is the serial version of the function.
+   *
+   * @param grid: A struct containing the properties along each grid axis.
+   * @param parts: A struct containing the particle properties.
+   * @param spectra: The output array.
+   */
+  static void spectra_loop_ngp_serial(struct grid * grid,
+                                      struct particles * parts, double *spectra,
+                                      double *part_spectra) {
+
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    int nlam = grid->nlam;
+    double **grid_props = grid->props;
+    double *grid_spectra = grid->spectra;
+
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    int npart = parts->npart;
+    npy_bool *mask = parts->mask;
+
+    /* Loop over particles. */
+    for (int p = 0; p < npart; p++) {
+
+      /* Skip masked particles. */
+      if (mask != NULL && !mask[p]) {
         continue;
       }
 
-      /* Define the weight. */
-      double weight = frac * mass;
+      /* Get this particle's mass. */
+      const double weight = part_masses[p];
+
+      /* Setup the index array. */
+      int part_indices[ndim];
+
+      /* Get the grid indices for the particle */
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
 
       /* Get the weight's index. */
-      const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+      const int grid_ind = get_flat_index(part_indices, dims, ndim);
+
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < nlam; ilam++) {
+
+        /* Skip if this wavelength is masked. */
+        if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
+          continue;
+        }
+
+        /* Add the contribution to this wavelength. */
+        part_spectra[p * nlam + ilam] +=
+            grid_spectra[spectra_ind + ilam] * weight;
+        spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
+      }
+    }
+  }
+
+  /**
+   * @brief This calculates particle spectra using a nearest grid point
+   * approach. This is the version of the function that accounts doppler shift
+   * This is the serial version of the function.
+   *
+   * @param grid: A struct containing the properties along each grid axis.
+   * @param parts: A struct containing the particle properties.
+   * @param spectra: The output array.
+   * @param c: speed of light.
+   */
+  static void shifted_spectra_loop_ngp_serial(struct grid * grid,
+                                              struct particles * parts,
+                                              double *spectra, const double c) {
+
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    int nlam = grid->nlam;
+    double *wavelength = grid->lam;
+    double **grid_props = grid->props;
+    double *grid_spectra = grid->spectra;
+
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *velocity = parts->velocities;
+    int npart = parts->npart;
+    npy_bool *mask = parts->mask;
+
+    /* Loop over particles. */
+    for (int p = 0; p < npart; p++) {
+
+      /* Skip masked particles. */
+      if (mask != NULL && !mask[p]) {
+        continue;
+      }
+
+      /* Get this particle's mass, velocity and doppler shift. */
+      const double weight = part_masses[p];
+
+      /* Get the particle velocity and red/blue shift factor. */
+      double vel = velocity[p];
+      double shift_factor = 1.0 + vel / c;
+
+      /* Shift the wavelengths and get the mapping for each wavelength bin. We
+       * do this for each element because there is no guarantee the input
+       * wavelengths will be evenly spaced but we also don't want to repeat
+       * the nearest bin search too many times. */
+      double shifted_wavelengths[nlam];
+      int mapped_indices[nlam];
+      for (int ilam = 0; ilam < nlam; ilam++) {
+        shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+        mapped_indices[ilam] =
+            get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+      }
+
+      /* Setup the index array. */
+      int part_indices[ndim];
+
+      /* Get the grid indices for the particle */
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+
+      /* Get the weight's index. */
+      const int grid_ind = get_flat_index(part_indices, dims, ndim);
 
       /* Get the spectra ind. */
       int unraveled_ind[ndim + 1];
@@ -671,279 +983,6 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
     }
   }
 
-  /* Free the allocated arrays. */
-  free(shifted_wavelengths);
-  free(mapped_indices);
-}
-#endif
-
-/**
- * @brief This calculates particle spectra using a cloud in cell approach.
- *
- * This is a wrapper which calls the correct function based on the number of
- * threads requested and whether OpenMP is available.
- *
- * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param spectra: The output array.
- * @param nthreads: The number of threads to use.
- */
-void spectra_loop_cic(struct grid *grid, struct particles *parts,
-                      double *spectra, double *part_spectra,
-                      const int nthreads) {
-
-  double start_time = tic();
-
-  /* Call the correct function for the configuration/number of threads. */
-
-#ifdef WITH_OPENMP
-
-  /* If we have multiple threads and OpenMP we can parallelise. */
-  if (nthreads > 1) {
-    spectra_loop_cic_omp(grid, parts, spectra, part_spectra, nthreads);
-  }
-  /* Otherwise there's no point paying the OpenMP overhead. */
-  else {
-    spectra_loop_cic_serial(grid, parts, spectra, part_spectra);
-  }
-
-#else
-
-  (void)nthreads;
-
-  /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_cic_serial(grid, parts, spectra, part_spectra);
-
-#endif
-  toc("Cloud in Cell particle spectra loop", start_time);
-}
-
-/**
- * @brief This calculates doppler-shifted particle spectra using a cloud in
- * cell approach.
- *
- * This is a wrapper which calls the correct function based on the number of
- * threads requested and whether OpenMP is available.
- *
- * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param spectra: The output array.
- * @param nthreads: The number of threads to use.
- */
-void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
-                              double *spectra, const int nthreads,
-                              const double c) {
-
-  double start_time = tic();
-
-  /* Call the correct function for the configuration/number of threads. */
-
-#ifdef WITH_OPENMP
-
-  /* If we have multiple threads and OpenMP we can parallelise. */
-  if (nthreads > 1) {
-    shifted_spectra_loop_cic_omp(grid, parts, spectra, nthreads, c);
-  }
-  /* Otherwise there's no point paying the OpenMP overhead. */
-  else {
-    shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
-  }
-
-#else
-
-  (void)nthreads;
-
-  /* We don't have OpenMP, just call the serial version. */
-  shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
-
-#endif
-  toc("Cloud in Cell particle loop", start_time);
-}
-
-/**
- * @brief This calculates particle spectra using a nearest grid point
- * approach.
- *
- * This is the serial version of the function.
- *
- * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param spectra: The output array.
- */
-static void spectra_loop_ngp_serial(struct grid *grid, struct particles *parts,
-                                    double *spectra, double *part_spectra) {
-
-  /* Unpack the grid properties. */
-  int *dims = grid->dims;
-  int ndim = grid->ndim;
-  int nlam = grid->nlam;
-  double **grid_props = grid->props;
-  double *grid_spectra = grid->spectra;
-
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
-
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
-
-    /* Skip masked particles. */
-    if (mask != NULL && !mask[p]) {
-      continue;
-    }
-
-    /* Get this particle's mass. */
-    const double weight = part_masses[p];
-
-    /* Setup the index array. */
-    int part_indices[ndim];
-
-    /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-    /* Get the weight's index. */
-    const int grid_ind = get_flat_index(part_indices, dims, ndim);
-
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-
-      /* Skip if this wavelength is masked. */
-      if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
-        continue;
-      }
-
-      /* Add the contribution to this wavelength. */
-      part_spectra[p * nlam + ilam] +=
-          grid_spectra[spectra_ind + ilam] * weight;
-      spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
-    }
-  }
-}
-
-/**
- * @brief This calculates particle spectra using a nearest grid point
- * approach. This is the version of the function that accounts doppler shift
- * This is the serial version of the function.
- *
- * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param spectra: The output array.
- * @param c: speed of light.
- */
-static void shifted_spectra_loop_ngp_serial(struct grid *grid,
-                                            struct particles *parts,
-                                            double *spectra, const double c) {
-
-  /* Unpack the grid properties. */
-  int *dims = grid->dims;
-  int ndim = grid->ndim;
-  int nlam = grid->nlam;
-  double *wavelength = grid->lam;
-  double **grid_props = grid->props;
-  double *grid_spectra = grid->spectra;
-
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  double *velocity = parts->velocities;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
-
-  /* Allocate the shifted wavelengths array and the mapped indices array. */
-  double *shifted_wavelengths =
-      synth_malloc(nlam * sizeof(double), "shifted wavelengths");
-  int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
-
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
-
-    /* Skip masked particles. */
-    if (mask != NULL && !mask[p]) {
-      continue;
-    }
-
-    /* Get this particle's mass, velocity and doppler shift. */
-    const double weight = part_masses[p];
-
-    /* Get the particle velocity and red/blue shift factor. */
-    double vel = velocity[p];
-    double shift_factor = 1.0 + vel / c;
-
-    /* Shift the wavelengths and get the mapping for each wavelength bin. We
-     * do this for each element because there is no guarantee the input
-     * wavelengths will be evenly spaced but we also don't want to repeat
-     * the nearest bin search too many times. */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
-      mapped_indices[ilam] =
-          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
-    }
-
-    /* Setup the index array. */
-    int part_indices[ndim];
-
-    /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-    /* Get the weight's index. */
-    const int grid_ind = get_flat_index(part_indices, dims, ndim);
-
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-
-      /* Get the shifted wavelength and index. */
-      int ilam_shifted = mapped_indices[ilam];
-      double shifted_lambda = shifted_wavelengths[ilam];
-
-      /* Skip if this wavelength is masked. */
-      /* Note: we skip the shifted wavelength here because the mask is
-       * effectively saying "I want to ignore this wavelength in the
-       * output spectra". */
-      if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
-        continue;
-      }
-
-      /* Compute the fraction of the shifted wavelength between the two
-       * closest wavelength elements. */
-      double frac_shifted = 0.0;
-      if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
-        frac_shifted =
-            (shifted_lambda - wavelength[ilam_shifted - 1]) /
-            (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
-      } else {
-        /* Out of bounds, skip this wavelength */
-        continue;
-      }
-
-      /* Get the grid spectra value for this wavelength. */
-      double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
-
-      /* Add the contribution to the corresponding wavelength element. */
-      spectra[p * nlam + ilam_shifted - 1] +=
-          (1.0 - frac_shifted) * grid_spectra_value;
-      spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
-    }
-  }
-
-  /* Free the allocated arrays. */
-  free(shifted_wavelengths);
-  free(mapped_indices);
-}
-
 /**
  * @brief This calculates particle spectra using a nearest grid point approach.
  *
@@ -955,88 +994,89 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
-                                 double *spectra, double *part_spectra,
-                                 int nthreads) {
+  static void spectra_loop_ngp_omp(struct grid * grid, struct particles * parts,
+                                   double *spectra, double *part_spectra,
+                                   int nthreads) {
 
-  /* Unpack the grid properties. */
-  int *dims = grid->dims;
-  int ndim = grid->ndim;
-  int nlam = grid->nlam;
-  double **grid_props = grid->props;
-  double *grid_spectra = grid->spectra;
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    int nlam = grid->nlam;
+    double **grid_props = grid->props;
+    double *grid_spectra = grid->spectra;
 
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    int npart = parts->npart;
+    npy_bool *mask = parts->mask;
 
 #pragma omp parallel num_threads(nthreads)
-  {
-    /* Get the thread id. */
-    int tid = omp_get_thread_num();
+    {
+      /* Get the thread id. */
+      int tid = omp_get_thread_num();
 
-    /* We will give each thread a chunk of the spectra to work on. */
+      /* We will give each thread a chunk of the spectra to work on. */
 
-    /* How many wavelength elements should each thread get? */
-    int nlam_per_thread = (grid->nlam + nthreads - 1) / nthreads;
+      /* How many wavelength elements should each thread get? */
+      int nlam_per_thread = (grid->nlam + nthreads - 1) / nthreads;
 
-    /* Calculate the start and end indices for this thread. */
-    int start = tid * nlam_per_thread;
-    int end = start + nlam_per_thread;
-    if (end >= grid->nlam) {
-      end = grid->nlam;
-    }
-
-    /* Loop over wavelengths. */
-    for (int ilam = 0; ilam < end - start; ilam++) {
-
-      /* Skip if this wavelength is masked. */
-      if (grid->lam_mask != NULL && !grid->lam_mask[start + ilam]) {
-        continue;
+      /* Calculate the start and end indices for this thread. */
+      int start = tid * nlam_per_thread;
+      int end = start + nlam_per_thread;
+      if (end >= grid->nlam) {
+        end = grid->nlam;
       }
 
-      /* Temporary value to hold the the spectra for this wavelength. */
-      double this_element = 0.0;
+      /* Loop over wavelengths. */
+      for (int ilam = 0; ilam < end - start; ilam++) {
 
-      /* Loop over particles. */
-      for (int p = 0; p < npart; p++) {
-
-        /* Skip masked particles. */
-        if (mask != NULL && !mask[p]) {
+        /* Skip if this wavelength is masked. */
+        if (grid->lam_mask != NULL && !grid->lam_mask[start + ilam]) {
           continue;
         }
 
-        /* Get this particle's mass. */
-        const double weight = part_masses[p];
+        /* Temporary value to hold the the spectra for this wavelength. */
+        double this_element = 0.0;
 
-        /* Setup the index array. */
-        int part_indices[ndim];
+        /* Loop over particles. */
+        for (int p = 0; p < npart; p++) {
 
-        /* Get the grid indices for the particle */
-        get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+          /* Skip masked particles. */
+          if (mask != NULL && !mask[p]) {
+            continue;
+          }
 
-        /* Get the weight's index. */
-        const int grid_ind = get_flat_index(part_indices, dims, ndim);
+          /* Get this particle's mass. */
+          const double weight = part_masses[p];
 
-        /* Get the spectra ind. */
-        int unraveled_ind[ndim + 1];
-        get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-        unraveled_ind[ndim] = 0;
-        int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+          /* Setup the index array. */
+          int part_indices[ndim];
 
-        /* Add the contribution to this wavelength. */
-        this_element += grid->spectra[spectra_ind + start + ilam] * weight;
-        // /* Add the contribution to this wavelength. */
-        // part_spectra[p * nlam + ilam] +=
-        //     grid_spectra[spectra_ind + ilam] * weight;
+          /* Get the grid indices for the particle */
+          get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props,
+                            p);
+
+          /* Get the weight's index. */
+          const int grid_ind = get_flat_index(part_indices, dims, ndim);
+
+          /* Get the spectra ind. */
+          int unraveled_ind[ndim + 1];
+          get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+          unraveled_ind[ndim] = 0;
+          int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+          /* Add the contribution to this wavelength. */
+          this_element += grid->spectra[spectra_ind + start + ilam] * weight;
+          // /* Add the contribution to this wavelength. */
+          // part_spectra[p * nlam + ilam] +=
+          //     grid_spectra[spectra_ind + ilam] * weight;
+        }
+
+        spectra[start + ilam] = this_element;
       }
-
-      spectra[start + ilam] = this_element;
     }
   }
-}
 #endif
 
 /**
@@ -1050,144 +1090,143 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void shifted_spectra_loop_ngp_omp(struct grid *grid,
-                                         struct particles *parts,
-                                         double *spectra, int nthreads,
-                                         const double c) {
+  static void shifted_spectra_loop_ngp_omp(
+      struct grid * grid, struct particles * parts, double *spectra,
+      int nthreads, const double c) {
 
-  /* Unpack the grid properties. */
-  int *dims = grid->dims;
-  int ndim = grid->ndim;
-  int nlam = grid->nlam;
-  double *wavelength = grid->lam;
-  double **grid_props = grid->props;
-  double *grid_spectra = grid->spectra;
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    int nlam = grid->nlam;
+    double *wavelength = grid->lam;
+    double **grid_props = grid->props;
+    double *grid_spectra = grid->spectra;
 
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  double *velocity = parts->velocities;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *velocity = parts->velocities;
+    int npart = parts->npart;
+    npy_bool *mask = parts->mask;
 
-  /* Allocate the shifted wavelengths array and the mapped indices array. */
-  double *shifted_wavelengths =
-      synth_malloc(nlam * sizeof(double), "shifted wavelengths");
-  int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
+    /* Allocate the shifted wavelengths array and the mapped indices array. */
+    double *shifted_wavelengths =
+        synth_malloc(nlam * sizeof(double), "shifted wavelengths");
+    int *mapped_indices = synth_malloc(nlam * sizeof(int), "mapped indices");
 
 #pragma omp parallel for schedule(static) num_threads(nthreads)
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+    /* Loop over particles. */
+    for (int p = 0; p < npart; p++) {
 
-    /* Skip masked particles. */
-    if (mask != NULL && !mask[p]) {
-      continue;
-    }
-
-    /* Get this particle's mass, velocity and doppler shift contribution. */
-    const double weight = part_masses[p];
-
-    /* Get the particle velocity and red/blue shift factor. */
-    double vel = velocity[p];
-    double shift_factor = 1.0 + vel / c;
-
-    /* Shift the wavelengths and get the mapping for each wavelength bin. We
-     * do this for each element because there is no guarantee the input
-     * wavelengths will be evenly spaced but we also don't want to repeat
-     * the nearest bin search too many times. */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
-      mapped_indices[ilam] =
-          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
-    }
-
-    /* Setup the index array. */
-    int part_indices[ndim];
-
-    /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-    /* Get the weight's index. */
-    const int grid_ind = get_flat_index(part_indices, dims, ndim);
-
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-
-      /* Get the shifted wavelength and index. */
-      int ilam_shifted = mapped_indices[ilam];
-      double shifted_lambda = shifted_wavelengths[ilam];
-
-      /* Skip if this wavelength is masked. */
-      /* Note: we skip the shifted wavelength here because the mask is
-       * effectively saying "I want to ignore this wavelength in the
-       * output spectra". */
-      if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
+      /* Skip masked particles. */
+      if (mask != NULL && !mask[p]) {
         continue;
       }
 
-      /* Compute the fraction of the shifted wavelength between the two
-       * closest wavelength elements. */
-      double frac_shifted = 0.0;
-      if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
-        frac_shifted =
-            (shifted_lambda - wavelength[ilam_shifted - 1]) /
-            (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
-      } else {
-        /* Out of bounds, skip this wavelength */
-        continue;
+      /* Get this particle's mass, velocity and doppler shift contribution. */
+      const double weight = part_masses[p];
+
+      /* Get the particle velocity and red/blue shift factor. */
+      double vel = velocity[p];
+      double shift_factor = 1.0 + vel / c;
+
+      /* Shift the wavelengths and get the mapping for each wavelength bin. We
+       * do this for each element because there is no guarantee the input
+       * wavelengths will be evenly spaced but we also don't want to repeat
+       * the nearest bin search too many times. */
+      for (int ilam = 0; ilam < nlam; ilam++) {
+        shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+        mapped_indices[ilam] =
+            get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
       }
 
-      /* Get the grid spectra value for this wavelength. */
-      double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
+      /* Setup the index array. */
+      int part_indices[ndim];
 
-      /* Add the contribution to the corresponding wavelength element. */
-      spectra[p * nlam + ilam_shifted - 1] +=
-          (1.0 - frac_shifted) * grid_spectra_value;
-      spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
+      /* Get the grid indices for the particle */
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+
+      /* Get the weight's index. */
+      const int grid_ind = get_flat_index(part_indices, dims, ndim);
+
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < nlam; ilam++) {
+
+        /* Get the shifted wavelength and index. */
+        int ilam_shifted = mapped_indices[ilam];
+        double shifted_lambda = shifted_wavelengths[ilam];
+
+        /* Skip if this wavelength is masked. */
+        /* Note: we skip the shifted wavelength here because the mask is
+         * effectively saying "I want to ignore this wavelength in the
+         * output spectra". */
+        if (grid->lam_mask != NULL && !grid->lam_mask[ilam_shifted]) {
+          continue;
+        }
+
+        /* Compute the fraction of the shifted wavelength between the two
+         * closest wavelength elements. */
+        double frac_shifted = 0.0;
+        if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+          frac_shifted =
+              (shifted_lambda - wavelength[ilam_shifted - 1]) /
+              (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
+        } else {
+          /* Out of bounds, skip this wavelength */
+          continue;
+        }
+
+        /* Get the grid spectra value for this wavelength. */
+        double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
+
+        /* Add the contribution to the corresponding wavelength element. */
+        spectra[p * nlam + ilam_shifted - 1] +=
+            (1.0 - frac_shifted) * grid_spectra_value;
+        spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
+      }
     }
+    /* Free the allocated arrays. */
+    free(shifted_wavelengths);
+    free(mapped_indices);
   }
-  /* Free the allocated arrays. */
-  free(shifted_wavelengths);
-  free(mapped_indices);
-}
 #endif
 
-/**
- * @brief This calculates particle spectra using a nearest grid point
- * approach.
- *
- * This is a wrapper which calls the correct function based on the number of
- * threads requested and whether OpenMP is available.
- *
- * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param spectra: The output array.
- * @param nthreads: The number of threads to use.
- */
-void spectra_loop_ngp(struct grid *grid, struct particles *parts,
-                      double *spectra, double *part_spectra,
-                      const int nthreads) {
+  /**
+   * @brief This calculates particle spectra using a nearest grid point
+   * approach.
+   *
+   * This is a wrapper which calls the correct function based on the number of
+   * threads requested and whether OpenMP is available.
+   *
+   * @param grid: A struct containing the properties along each grid axis.
+   * @param parts: A struct containing the particle properties.
+   * @param spectra: The output array.
+   * @param nthreads: The number of threads to use.
+   */
+  void spectra_loop_ngp(struct grid * grid, struct particles * parts,
+                        double *spectra, double *part_spectra,
+                        const int nthreads) {
 
-  double start_time = tic();
+    double start_time = tic();
 
-  /* Call the correct function for the configuration/number of threads. */
+    /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
 
-  /* If we have multiple threads and OpenMP we can parallelise. */
-  if (nthreads > 1) {
-    spectra_loop_ngp_omp(grid, parts, spectra, part_spectra, nthreads);
-  }
-  /* Otherwise there's no point paying the OpenMP overhead. */
-  else {
-    spectra_loop_ngp_serial(grid, parts, spectra, part_spectra);
-  }
+    /* If we have multiple threads and OpenMP we can parallelise. */
+    if (nthreads > 1) {
+      spectra_loop_ngp_omp(grid, parts, spectra, part_spectra, nthreads);
+    }
+    /* Otherwise there's no point paying the OpenMP overhead. */
+    else {
+      spectra_loop_ngp_serial(grid, parts, spectra, part_spectra);
+    }
 
 #else
 
@@ -1197,39 +1236,39 @@ void spectra_loop_ngp(struct grid *grid, struct particles *parts,
   spectra_loop_ngp_serial(grid, parts, spectra, part_spectra);
 
 #endif
-  toc("Nearest Grid Point particle spectra loop", start_time);
-}
+    toc("Nearest Grid Point particle spectra loop", start_time);
+  }
 
-/**
- * @brief This calculates doppler-shifted particle spectra using a nearest
- * grid point approach.
- *
- * This is a wrapper which calls the correct function based on the number of
- * threads requested and whether OpenMP is available.
- * This is the version of the wrapper that accounts for doppler shift.
- * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param spectra: The output array.
- * @param nthreads: The number of threads to use.
- */
-void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
-                              double *spectra, const int nthreads,
-                              const double c) {
+  /**
+   * @brief This calculates doppler-shifted particle spectra using a nearest
+   * grid point approach.
+   *
+   * This is a wrapper which calls the correct function based on the number of
+   * threads requested and whether OpenMP is available.
+   * This is the version of the wrapper that accounts for doppler shift.
+   * @param grid: A struct containing the properties along each grid axis.
+   * @param parts: A struct containing the particle properties.
+   * @param spectra: The output array.
+   * @param nthreads: The number of threads to use.
+   */
+  void shifted_spectra_loop_ngp(struct grid * grid, struct particles * parts,
+                                double *spectra, const int nthreads,
+                                const double c) {
 
-  double start_time = tic();
+    double start_time = tic();
 
-  /* Call the correct function for the configuration/number of threads. */
+    /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
 
-  /* If we have multiple threads and OpenMP we can parallelise. */
-  if (nthreads > 1) {
-    shifted_spectra_loop_ngp_omp(grid, parts, spectra, nthreads, c);
-  }
-  /* Otherwise there's no point paying the OpenMP overhead. */
-  else {
-    shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
-  }
+    /* If we have multiple threads and OpenMP we can parallelise. */
+    if (nthreads > 1) {
+      shifted_spectra_loop_ngp_omp(grid, parts, spectra, nthreads, c);
+    }
+    /* Otherwise there's no point paying the OpenMP overhead. */
+    else {
+      shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
+    }
 
 #else
 
@@ -1239,107 +1278,107 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
   shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
 
 #endif
-  toc("Nearest Grid Point particle spectra loop", start_time);
-}
+    toc("Nearest Grid Point particle spectra loop", start_time);
+  }
 
-/**
- * @brief Calculate the integrated spectra from the per-particle spectra.
- *
- * This is the serial version of the function.
- *
- * @param spectra: The output array.
- * @param part_spectra: The input particle spectra array.
- * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements.
- */
-void get_integrated_spectra_serial(double *spectra, const double *part_spectra,
-                                   int npart, int nlam) {
-
-  /* Loop over the particle spectra and sum them along the wavelength axis.
+  /**
+   * @brief Calculate the integrated spectra from the per-particle spectra.
+   *
+   * This is the serial version of the function.
+   *
+   * @param spectra: The output array.
+   * @param part_spectra: The input particle spectra array.
+   * @param npart: The number of particles.
+   * @param nlam: The number of wavelength elements.
    */
-  for (int p = 0; p < npart; p++) {
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      spectra[ilam] += part_spectra[p * nlam + ilam];
+  void get_integrated_spectra_serial(
+      double *spectra, const double *part_spectra, int npart, int nlam) {
+
+    /* Loop over the particle spectra and sum them along the wavelength axis.
+     */
+    for (int p = 0; p < npart; p++) {
+      for (int ilam = 0; ilam < nlam; ilam++) {
+        spectra[ilam] += part_spectra[p * nlam + ilam];
+      }
     }
   }
-}
 
-/**
- * @brief Calculate the integrated spectra from the per-particle spectra.
- *
- * This is the parallel version of the function.
- *
- * @param spectra: The output array.
- * @param part_spectra: The input particle spectra array.
- * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements.
- * @param nthreads: The number of threads to use.
- */
-void get_integrated_spectra_omp(double *spectra, const double *part_spectra,
-                                int npart, int nlam, int nthreads) {
+  /**
+   * @brief Calculate the integrated spectra from the per-particle spectra.
+   *
+   * This is the parallel version of the function.
+   *
+   * @param spectra: The output array.
+   * @param part_spectra: The input particle spectra array.
+   * @param npart: The number of particles.
+   * @param nlam: The number of wavelength elements.
+   * @param nthreads: The number of threads to use.
+   */
+  void get_integrated_spectra_omp(double *spectra, const double *part_spectra,
+                                  int npart, int nlam, int nthreads) {
 
 #pragma omp parallel num_threads(nthreads)
-  {
+    {
 
-    /* Allocate and zero the thread private spectra array. */
-    double *thread_spectra =
-        synth_malloc((size_t)nlam * sizeof *thread_spectra, "thread_spectra");
-    memset(thread_spectra, 0, nlam * sizeof *thread_spectra);
+      /* Allocate and zero the thread private spectra array. */
+      double *thread_spectra =
+          synth_malloc((size_t)nlam * sizeof *thread_spectra, "thread_spectra");
+      memset(thread_spectra, 0, nlam * sizeof *thread_spectra);
 
-    /* Parallel loop over the particles. */
+      /* Parallel loop over the particles. */
 #pragma omp for
-    for (int p = 0; p < npart; ++p) {
+      for (int p = 0; p < npart; ++p) {
 
-      /* Get a pointer to this particle's spectra. */
-      const double *ps = part_spectra + (size_t)p * nlam;
+        /* Get a pointer to this particle's spectra. */
+        const double *ps = part_spectra + (size_t)p * nlam;
 
-      /* Sum all the wavelengths for this particle with a vectorised loop.
-       */
+        /* Sum all the wavelengths for this particle with a vectorised loop.
+         */
 #pragma omp simd
-      for (int il = 0; il < nlam; ++il) {
-        thread_spectra[il] += ps[il];
+        for (int il = 0; il < nlam; ++il) {
+          thread_spectra[il] += ps[il];
+        }
       }
-    }
 
 #pragma omp critical
-    {
-      /* Reduce down onto the main spectra array. */
-      for (int il = 0; il < nlam; ++il) {
-        spectra[il] += thread_spectra[il];
+      {
+        /* Reduce down onto the main spectra array. */
+        for (int il = 0; il < nlam; ++il) {
+          spectra[il] += thread_spectra[il];
+        }
       }
+
+      free(thread_spectra);
     }
-
-    free(thread_spectra);
   }
-}
 
-/**
- * @brief Calculate the integrated spectra from the per-particle spectra.
- *
- * This is a wrapper which calls the correct function based on the number of
- * threads requested and whether OpenMP is available.
- *
- * @param spectra: The output array.
- * @param part_spectra: The input particle spectra array.
- * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements.
- * @param nthreads: The number of threads to use.
- */
-void get_integrated_spectra(double *spectra, const double *part_spectra,
-                            int npart, int nlam, int nthreads) {
+  /**
+   * @brief Calculate the integrated spectra from the per-particle spectra.
+   *
+   * This is a wrapper which calls the correct function based on the number of
+   * threads requested and whether OpenMP is available.
+   *
+   * @param spectra: The output array.
+   * @param part_spectra: The input particle spectra array.
+   * @param npart: The number of particles.
+   * @param nlam: The number of wavelength elements.
+   * @param nthreads: The number of threads to use.
+   */
+  void get_integrated_spectra(double *spectra, const double *part_spectra,
+                              int npart, int nlam, int nthreads) {
 
-  double start_time = tic();
+    double start_time = tic();
 
-  /* Call the correct function for the configuration/number of threads. */
+    /* Call the correct function for the configuration/number of threads. */
 #ifdef WITH_OPENMP
-  /* If we have multiple threads and OpenMP we can parallelise. */
-  if (nthreads > 1 && npart > nthreads * 2) {
-    get_integrated_spectra_omp(spectra, part_spectra, npart, nlam, nthreads);
-  }
-  /* Otherwise there's no point paying the OpenMP overhead. */
-  else {
-    get_integrated_spectra_serial(spectra, part_spectra, npart, nlam);
-  }
+    /* If we have multiple threads and OpenMP we can parallelise. */
+    if (nthreads > 1 && npart > nthreads * 2) {
+      get_integrated_spectra_omp(spectra, part_spectra, npart, nlam, nthreads);
+    }
+    /* Otherwise there's no point paying the OpenMP overhead. */
+    else {
+      get_integrated_spectra_serial(spectra, part_spectra, npart, nlam);
+    }
 #else
 
   (void)nthreads;
@@ -1349,276 +1388,276 @@ void get_integrated_spectra(double *spectra, const double *part_spectra,
 
 #endif
 
-  toc("Summing particle spectra", start_time);
-}
-
-/**
- * @brief Computes an integrated SED for a collection of particles.
- *
- * @param np_grid_spectra: The SPS spectra array.
- * @param grid_tuple: The tuple containing arrays of grid axis properties.
- * @param part_tuple: The tuple of particle property arrays (in the same
- * order as grid_tuple).
- * @param np_part_mass: The particle mass array.
- * @param np_velocities: The velocities array.
- * @param np_ndims: The size of each grid axis.
- * @param ndim: The number of grid axes.
- * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements.
- * @param vel_shift: bool flag whether to consider doppler shift in spectra
- * computation. Defaults to False
- * @param c: speed of light
- */
-PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
-
-  double start_time = tic();
-  double setup_start = tic();
-
-  /* We don't need the self argument but it has to be there. Tell the
-   * compiler we don't care. */
-  (void)self;
-
-  int ndim, npart, nlam, nthreads;
-  PyObject *grid_tuple, *part_tuple;
-  PyArrayObject *np_grid_spectra;
-  PyArrayObject *np_part_mass, *np_ndims;
-  PyArrayObject *np_mask, *np_lam_mask;
-  char *method;
-
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOO", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads, &np_mask, &np_lam_mask)) {
-    return NULL;
+    toc("Summing particle spectra", start_time);
   }
 
-  /* Extract the grid struct. */
-  struct grid *grid_props =
-      get_spectra_grid_struct(grid_tuple, np_ndims, np_grid_spectra,
-                              /*np_lam*/ NULL, np_lam_mask, ndim, nlam);
-  if (grid_props == NULL) {
-    return NULL;
+  /**
+   * @brief Computes an integrated SED for a collection of particles.
+   *
+   * @param np_grid_spectra: The SPS spectra array.
+   * @param grid_tuple: The tuple containing arrays of grid axis properties.
+   * @param part_tuple: The tuple of particle property arrays (in the same
+   * order as grid_tuple).
+   * @param np_part_mass: The particle mass array.
+   * @param np_velocities: The velocities array.
+   * @param np_ndims: The size of each grid axis.
+   * @param ndim: The number of grid axes.
+   * @param npart: The number of particles.
+   * @param nlam: The number of wavelength elements.
+   * @param vel_shift: bool flag whether to consider doppler shift in spectra
+   * computation. Defaults to False
+   * @param c: speed of light
+   */
+  PyObject *compute_particle_seds(PyObject * self, PyObject * args) {
+
+    double start_time = tic();
+    double setup_start = tic();
+
+    /* We don't need the self argument but it has to be there. Tell the
+     * compiler we don't care. */
+    (void)self;
+
+    int ndim, npart, nlam, nthreads;
+    PyObject *grid_tuple, *part_tuple;
+    PyArrayObject *np_grid_spectra;
+    PyArrayObject *np_part_mass, *np_ndims;
+    PyArrayObject *np_mask, *np_lam_mask;
+    char *method;
+
+    if (!PyArg_ParseTuple(args, "OOOOOiiisiOO", &np_grid_spectra, &grid_tuple,
+                          &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
+                          &nlam, &method, &nthreads, &np_mask, &np_lam_mask)) {
+      return NULL;
+    }
+
+    /* Extract the grid struct. */
+    struct grid *grid_props =
+        get_spectra_grid_struct(grid_tuple, np_ndims, np_grid_spectra,
+                                /*np_lam*/ NULL, np_lam_mask, ndim, nlam);
+    if (grid_props == NULL) {
+      return NULL;
+    }
+
+    /* Extract the particle struct. */
+    struct particles *part_props = get_part_struct(
+        part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
+    if (part_props == NULL) {
+      return NULL;
+    }
+
+    /* Allocate the spectra. */
+    double *spectra = NULL;
+    int err = posix_memalign((void **)&spectra, 64,
+                             grid_props->nlam * sizeof(double));
+    if (err != 0 || spectra == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "Failed to allocate aligned memory for spectra.");
+      return NULL;
+    }
+    bzero(spectra, grid_props->nlam * sizeof(double));
+    double *part_spectra = calloc(npart * nlam, sizeof(double));
+    if (part_spectra == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Could not allocate memory for spectra.");
+      return NULL;
+    }
+
+    toc("Extracting Python data", setup_start);
+
+    /* With everything set up we can compute the spectra for each particle
+     * using the requested method. */
+    if (strcmp(method, "cic") == 0) {
+      spectra_loop_cic(grid_props, part_props, spectra, part_spectra, nthreads);
+    } else if (strcmp(method, "ngp") == 0) {
+      spectra_loop_ngp(grid_props, part_props, spectra, part_spectra, nthreads);
+    } else {
+      PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+      return NULL;
+    }
+
+    /* Check we got the spectra sucessfully. (Any error messages will already
+     * be set) */
+    if (spectra == NULL) {
+      return NULL;
+    }
+    if (part_spectra == NULL) {
+      return NULL;
+    }
+
+    /* Clean up memory! */
+    free(part_props);
+    free(grid_props);
+
+    /* Construct the particle spectra output numpy array. */
+    npy_intp np_dims[2] = {
+        npart,
+        nlam,
+    };
+    PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
+        2, np_dims, NPY_FLOAT64, part_spectra);
+
+    /* Construct the integrated spectra output numpy array. */
+    npy_intp np_dims_int[1] = {nlam};
+    PyArrayObject *out_integrated_spectra =
+        (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
+                                                   spectra);
+
+    /* Construct the output tuple. */
+    PyObject *out_tuple =
+        Py_BuildValue("NN", out_spectra, out_integrated_spectra);
+
+    toc("Computing particle and integrated lnus", start_time);
+
+    return out_tuple;
   }
 
-  /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
-  if (part_props == NULL) {
-    return NULL;
+  /**
+   * @brief Computes an integrated SED for a collection of particles.
+   *
+   * @param np_grid_spectra: The SPS spectra array.
+   * @param grid_tuple: The tuple containing arrays of grid axis properties.
+   * @param part_tuple: The tuple of particle property arrays (in the same
+   * order as grid_tuple).
+   * @param np_part_mass: The particle mass array.
+   * @param np_velocities: The velocities array.
+   * @param np_ndims: The size of each grid axis.
+   * @param ndim: The number of grid axes.
+   * @param npart: The number of particles.
+   * @param nlam: The number of wavelength elements.
+   * @param vel_shift: bool flag whether to consider doppler shift in spectra
+   * computation. Defaults to False
+   * @param c: speed of light
+   */
+  PyObject *compute_part_seds_with_vel_shift(PyObject * self, PyObject * args) {
+
+    double start_time = tic();
+    double setup_start = tic();
+
+    /* We don't need the self argument but it has to be there. Tell the
+     * compiler we don't care. */
+    (void)self;
+
+    int ndim, npart, nlam, nthreads;
+    PyObject *grid_tuple, *part_tuple;
+    PyObject *py_vel_shift;
+    PyObject *py_c;
+    PyArrayObject *np_grid_spectra, *np_lam;
+    PyArrayObject *np_velocities;
+    PyArrayObject *np_part_mass, *np_ndims;
+    PyArrayObject *np_mask, *np_lam_mask;
+    char *method;
+
+    if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOO", &np_grid_spectra, &np_lam,
+                          &grid_tuple, &part_tuple, &np_part_mass,
+                          &np_velocities, &np_ndims, &ndim, &npart, &nlam,
+                          &method, &nthreads, &py_c, &np_mask, &np_lam_mask)) {
+      return NULL;
+    }
+
+    /* Extract the grid struct. */
+    struct grid *grid_props = get_spectra_grid_struct(
+        grid_tuple, np_ndims, np_grid_spectra, np_lam, np_lam_mask, ndim, nlam);
+    if (grid_props == NULL) {
+      return NULL;
+    }
+
+    /* Extract the particle struct. */
+    struct particles *part_props = get_part_struct(
+        part_tuple, np_part_mass, np_velocities, np_mask, npart, ndim);
+    if (part_props == NULL) {
+      return NULL;
+    }
+
+    /* Allocate the spectra. */
+    double *spectra = calloc(npart * nlam, sizeof(double));
+    if (spectra == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Could not allocate memory for spectra.");
+      return NULL;
+    }
+
+    /* Convert c to double */
+    double c = PyFloat_AsDouble(py_c);
+
+    toc("Extracting Python data", setup_start);
+
+    /* With everything set up we can compute the spectra for each particle
+     * using the requested method. */
+    if (strcmp(method, "cic") == 0) {
+      shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads, c);
+    } else if (strcmp(method, "ngp") == 0) {
+      shifted_spectra_loop_ngp(grid_props, part_props, spectra, nthreads, c);
+    } else {
+      PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+      return NULL;
+    }
+
+    /* Check we got the spectra sucessfully. (Any error messages will already
+     * be set) */
+    if (spectra == NULL) {
+      return NULL;
+    }
+
+    /* Compute the integrated spectra. */
+    double *integrated_spectra =
+        synth_malloc(nlam * sizeof(double), "integrated spectra");
+    memset(integrated_spectra, 0, nlam * sizeof(double));
+    get_integrated_spectra(integrated_spectra, spectra, npart, nlam, nthreads);
+
+    /* Clean up memory! */
+    free(part_props);
+    free(grid_props);
+
+    /* Construct the particle spectra output numpy array. */
+    npy_intp np_dims[2] = {
+        npart,
+        nlam,
+    };
+    PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
+        2, np_dims, NPY_FLOAT64, spectra);
+
+    /* Construct the integrated spectra output numpy array. */
+    npy_intp np_dims_int[1] = {nlam};
+    PyArrayObject *out_integrated_spectra =
+        (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
+                                                   integrated_spectra);
+
+    /* Construct the output tuple. */
+    PyObject *out_tuple =
+        Py_BuildValue("NN", out_spectra, out_integrated_spectra);
+
+    toc("Computing particle and integrated lnus (with velocity shift)",
+        start_time);
+
+    return out_tuple;
   }
 
-  /* Allocate the spectra. */
-  double *spectra = NULL;
-  int err =
-      posix_memalign((void **)&spectra, 64, grid_props->nlam * sizeof(double));
-  if (err != 0 || spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Failed to allocate aligned memory for spectra.");
-    return NULL;
-  }
-  bzero(spectra, grid_props->nlam * sizeof(double));
-  double *part_spectra = calloc(npart * nlam, sizeof(double));
-  if (part_spectra == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Could not allocate memory for spectra.");
-    return NULL;
-  }
+  /* Below is all the gubbins needed to make the module importable in Python.
+   */
+  static PyMethodDef SedMethods[] = {
+      {"compute_particle_seds", (PyCFunction)compute_particle_seds,
+       METH_VARARGS, "Method for calculating particle intrinsic spectra."},
+      {"compute_part_seds_with_vel_shift",
+       (PyCFunction)compute_part_seds_with_vel_shift, METH_VARARGS,
+       "Method for calculating particle intrinsic spectra accounting for "
+       "velocity shift."},
+      {NULL, NULL, 0, NULL}};
 
-  toc("Extracting Python data", setup_start);
-
-  /* With everything set up we can compute the spectra for each particle
-   * using the requested method. */
-  if (strcmp(method, "cic") == 0) {
-    spectra_loop_cic(grid_props, part_props, spectra, part_spectra, nthreads);
-  } else if (strcmp(method, "ngp") == 0) {
-    spectra_loop_ngp(grid_props, part_props, spectra, part_spectra, nthreads);
-  } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
-    return NULL;
-  }
-
-  /* Check we got the spectra sucessfully. (Any error messages will already
-   * be set) */
-  if (spectra == NULL) {
-    return NULL;
-  }
-  if (part_spectra == NULL) {
-    return NULL;
-  }
-
-  /* Clean up memory! */
-  free(part_props);
-  free(grid_props);
-
-  /* Construct the particle spectra output numpy array. */
-  npy_intp np_dims[2] = {
-      npart,
-      nlam,
+  /* Make this importable. */
+  static struct PyModuleDef moduledef = {
+      PyModuleDef_HEAD_INIT,
+      "make_particle_sed",                   /* m_name */
+      "A module to calculate particle seds", /* m_doc */
+      -1,                                    /* m_size */
+      SedMethods,                            /* m_methods */
+      NULL,                                  /* m_reload */
+      NULL,                                  /* m_traverse */
+      NULL,                                  /* m_clear */
+      NULL,                                  /* m_free */
   };
-  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
-      2, np_dims, NPY_FLOAT64, part_spectra);
 
-  /* Construct the integrated spectra output numpy array. */
-  npy_intp np_dims_int[1] = {nlam};
-  PyArrayObject *out_integrated_spectra =
-      (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
-                                                 spectra);
-
-  /* Construct the output tuple. */
-  PyObject *out_tuple =
-      Py_BuildValue("NN", out_spectra, out_integrated_spectra);
-
-  toc("Computing particle and integrated lnus", start_time);
-
-  return out_tuple;
-}
-
-/**
- * @brief Computes an integrated SED for a collection of particles.
- *
- * @param np_grid_spectra: The SPS spectra array.
- * @param grid_tuple: The tuple containing arrays of grid axis properties.
- * @param part_tuple: The tuple of particle property arrays (in the same
- * order as grid_tuple).
- * @param np_part_mass: The particle mass array.
- * @param np_velocities: The velocities array.
- * @param np_ndims: The size of each grid axis.
- * @param ndim: The number of grid axes.
- * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements.
- * @param vel_shift: bool flag whether to consider doppler shift in spectra
- * computation. Defaults to False
- * @param c: speed of light
- */
-PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
-
-  double start_time = tic();
-  double setup_start = tic();
-
-  /* We don't need the self argument but it has to be there. Tell the
-   * compiler we don't care. */
-  (void)self;
-
-  int ndim, npart, nlam, nthreads;
-  PyObject *grid_tuple, *part_tuple;
-  PyObject *py_vel_shift;
-  PyObject *py_c;
-  PyArrayObject *np_grid_spectra, *np_lam;
-  PyArrayObject *np_velocities;
-  PyArrayObject *np_part_mass, *np_ndims;
-  PyArrayObject *np_mask, *np_lam_mask;
-  char *method;
-
-  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOO", &np_grid_spectra, &np_lam,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_velocities,
-                        &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
-                        &py_c, &np_mask, &np_lam_mask)) {
-    return NULL;
-  }
-
-  /* Extract the grid struct. */
-  struct grid *grid_props = get_spectra_grid_struct(
-      grid_tuple, np_ndims, np_grid_spectra, np_lam, np_lam_mask, ndim, nlam);
-  if (grid_props == NULL) {
-    return NULL;
-  }
-
-  /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, np_velocities, np_mask, npart, ndim);
-  if (part_props == NULL) {
-    return NULL;
-  }
-
-  /* Allocate the spectra. */
-  double *spectra = calloc(npart * nlam, sizeof(double));
-  if (spectra == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Could not allocate memory for spectra.");
-    return NULL;
-  }
-
-  /* Convert c to double */
-  double c = PyFloat_AsDouble(py_c);
-
-  toc("Extracting Python data", setup_start);
-
-  /* With everything set up we can compute the spectra for each particle
-   * using the requested method. */
-  if (strcmp(method, "cic") == 0) {
-    shifted_spectra_loop_cic(grid_props, part_props, spectra, nthreads, c);
-  } else if (strcmp(method, "ngp") == 0) {
-    shifted_spectra_loop_ngp(grid_props, part_props, spectra, nthreads, c);
-  } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
-    return NULL;
-  }
-
-  /* Check we got the spectra sucessfully. (Any error messages will already
-   * be set) */
-  if (spectra == NULL) {
-    return NULL;
-  }
-
-  /* Compute the integrated spectra. */
-  double *integrated_spectra =
-      synth_malloc(nlam * sizeof(double), "integrated spectra");
-  memset(integrated_spectra, 0, nlam * sizeof(double));
-  get_integrated_spectra(integrated_spectra, spectra, npart, nlam, nthreads);
-
-  /* Clean up memory! */
-  free(part_props);
-  free(grid_props);
-
-  /* Construct the particle spectra output numpy array. */
-  npy_intp np_dims[2] = {
-      npart,
-      nlam,
+  PyMODINIT_FUNC PyInit_particle_spectra(void) {
+    PyObject *m = PyModule_Create(&moduledef);
+    import_array();
+    return m;
   };
-  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
-      2, np_dims, NPY_FLOAT64, spectra);
-
-  /* Construct the integrated spectra output numpy array. */
-  npy_intp np_dims_int[1] = {nlam};
-  PyArrayObject *out_integrated_spectra =
-      (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
-                                                 integrated_spectra);
-
-  /* Construct the output tuple. */
-  PyObject *out_tuple =
-      Py_BuildValue("NN", out_spectra, out_integrated_spectra);
-
-  toc("Computing particle and integrated lnus (with velocity shift)",
-      start_time);
-
-  return out_tuple;
-}
-
-/* Below is all the gubbins needed to make the module importable in Python.
- */
-static PyMethodDef SedMethods[] = {
-    {"compute_particle_seds", (PyCFunction)compute_particle_seds, METH_VARARGS,
-     "Method for calculating particle intrinsic spectra."},
-    {"compute_part_seds_with_vel_shift",
-     (PyCFunction)compute_part_seds_with_vel_shift, METH_VARARGS,
-     "Method for calculating particle intrinsic spectra accounting for "
-     "velocity shift."},
-    {NULL, NULL, 0, NULL}};
-
-/* Make this importable. */
-static struct PyModuleDef moduledef = {
-    PyModuleDef_HEAD_INIT,
-    "make_particle_sed",                   /* m_name */
-    "A module to calculate particle seds", /* m_doc */
-    -1,                                    /* m_size */
-    SedMethods,                            /* m_methods */
-    NULL,                                  /* m_reload */
-    NULL,                                  /* m_traverse */
-    NULL,                                  /* m_clear */
-    NULL,                                  /* m_free */
-};
-
-PyMODINIT_FUNC PyInit_particle_spectra(void) {
-  PyObject *m = PyModule_Create(&moduledef);
-  import_array();
-  return m;
-};
