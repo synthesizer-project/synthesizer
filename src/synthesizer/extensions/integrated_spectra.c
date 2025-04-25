@@ -294,7 +294,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       grid_props->ndim, np_dims_weights, NPY_FLOAT64, grid_weights);
 
   /* Clean up memory! */
-  free(part_props);
+  // free(part_props);
   free(grid_props);
 
   toc("Compute integrated SED", start_time);
