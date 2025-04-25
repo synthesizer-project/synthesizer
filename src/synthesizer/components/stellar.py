@@ -114,7 +114,7 @@ class StarsComponent(Component):
 
         # Ok, we need to calculate them
         self._log10metallicities = np.log10(
-            self._metallicities,
+            self.metallicities,
             dtype=np.float64,
         )
         return self._log10metallicities
