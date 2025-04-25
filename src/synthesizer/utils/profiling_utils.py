@@ -256,7 +256,11 @@ def plot_speed_up_plot(
     # Create the figure and gridspec layout
     fig = plt.figure(figsize=figsize)
     gs = gridspec.GridSpec(
-        3, 2, width_ratios=[3, 1], height_ratios=[1, 1, 0.05], hspace=0.0
+        3,
+        1,
+        width_ratios=[3],
+        height_ratios=[2, 1, 0.2],
+        hspace=0.0,
     )
 
     # Main plot
@@ -305,15 +309,8 @@ def plot_speed_up_plot(
     # Hide x-tick labels for the main plot
     plt.setp(ax_main.get_xticklabels(), visible=False)
 
-    # Sacrificial axis for the legend
-    ax_legend = fig.add_subplot(gs[0:2, 1])
-    ax_legend.axis("off")  # Hide the sacrificial axis
-
-    # Create the legend
+    # Get the legend handles and labels from the main plot
     handles, labels = ax_main.get_legend_handles_labels()
-    ax_legend.legend(
-        handles, labels, loc="center left", bbox_to_anchor=(-0.3, 0.5)
-    )
 
     # Add a second key for linestyle
     handles = [
@@ -326,6 +323,16 @@ def plot_speed_up_plot(
         ),
     ]
     ax_speedup.legend(handles=handles, loc="upper left")
+
+    # Add a second legend below the x-axis of the lower plot
+    ax_legend = fig.add_subplot(gs[2, 0])
+    ax_legend.axis("off")
+    ax_legend.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.5),
+    )
 
     fig.savefig(
         outpath,
