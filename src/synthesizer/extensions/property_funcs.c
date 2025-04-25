@@ -9,7 +9,6 @@
 
 /* Header */
 #include "property_funcs.h"
-#include "timers.h"
 
 /**
  * @brief Allocate an array.
@@ -131,6 +130,50 @@ double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims) {
 
   /* Success. */
   return grid_props;
+}
+
+/**
+ * @brief Extract the particle properties from a tuple of numpy arrays.
+ *
+ * @param part_tuple: A tuple of numpy arrays containing the particle
+ * properties.
+ * @param ndim: The number of dimensions in the grid.
+ * @param npart: The number of particles.
+ */
+double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
+
+  /* Allocate a single array for particle properties. */
+  double **part_props = malloc(npart * ndim * sizeof(double *));
+  if (part_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for part_props.");
+    return NULL;
+  }
+
+  /* Unpack the particle property arrays into a single contiguous array. */
+  for (int idim = 0; idim < ndim; idim++) {
+
+    /* Extract the data from the numpy array. */
+    PyArrayObject *np_part_arr =
+        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
+    if (np_part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+      return NULL;
+    }
+    double *part_arr = PyArray_DATA(np_part_arr);
+    if (part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+      return NULL;
+    }
+
+    /* Assign this data to the property array. */
+    for (int ipart = 0; ipart < npart; ipart++) {
+      part_props[ipart * ndim + idim] = part_arr + ipart;
+    }
+  }
+
+  /* Success. */
+  return part_props;
 }
 
 /**
@@ -304,41 +347,6 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
 
   return grid;
 }
-
-/**
- * @brief Fill the particle properties pointers into the particles struct.
- *
- * @param part_tuple: A tuple of numpy arrays containing the particle
- * properties.
- * @param ndim: The number of dimensions in the grid.
- * @param particles: The particles struct with flexible props array.
- */
-static void extract_part_props(PyObject *part_tuple, int ndim,
-                               struct particles *particles) {
-  double start = tic();
-
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_part_arr =
-        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
-    if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return;
-    }
-    double *part_arr = PyArray_DATA(np_part_arr);
-    if (part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return;
-    }
-
-    /* Assign this data to the particles struct. */
-    particles->props[idim] = part_arr;
-  }
-
-  toc("Extracting particle properties", start);
-}
-
 /**
  * @brief Create the particles struct from the input numpy arrays.
  *
@@ -348,7 +356,6 @@ static void extract_part_props(PyObject *part_tuple, int ndim,
  * @param np_velocities: The particle velocities.
  * @param np_mask: The particle mask.
  * @param npart: The number of particles.
- * @param ndim: The number of dimensions in the grid.
  *
  * @return struct particles*: A pointer to the particles struct.
  */
@@ -357,21 +364,16 @@ struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_velocities,
                                   PyArrayObject *np_mask, const int npart,
                                   const int ndim) {
+
+  /* Initialise the particles struct. */
+  struct particles *particles = malloc(sizeof(struct particles));
+  bzero(particles, sizeof(struct particles));
+
   /* Quick check to make sure our inputs are valid. */
-  if (npart <= 0) {
+  if (npart == 0) {
     PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
     return NULL;
   }
-
-  /* Allocate one block for struct + props pointers. */
-  size_t sz = sizeof(struct particles *) + ndim * sizeof(double *);
-  struct particles *particles = malloc(sz);
-  if (particles == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for particles struct.");
-    return NULL;
-  }
-  memset(particles, 0, sz);
 
   /* Attach the simple integers. */
   particles->npart = npart;
@@ -380,7 +382,6 @@ struct particles *get_part_struct(PyObject *part_tuple,
   if (np_part_mass != NULL) {
     particles->mass = extract_data_double(np_part_mass, "part_mass");
     if (particles->mass == NULL) {
-      free(particles);
       return NULL;
     }
   }
@@ -389,16 +390,14 @@ struct particles *get_part_struct(PyObject *part_tuple,
   if (np_velocities != NULL) {
     particles->velocities = extract_data_double(np_velocities, "part_vel");
     if (particles->velocities == NULL) {
-      free(particles);
       return NULL;
     }
   }
 
-  /* Fill the particle properties pointers. */
+  /* Extract the particle properties from the tuple of numpy arrays. */
   if (part_tuple != NULL) {
-    extract_part_props(part_tuple, ndim, particles);
-    if (PyErr_Occurred()) {
-      free(particles);
+    particles->props = extract_part_props(part_tuple, ndim, npart);
+    if (particles->props == NULL) {
       return NULL;
     }
   }
@@ -408,7 +407,6 @@ struct particles *get_part_struct(PyObject *part_tuple,
   if (np_mask != NULL && np_mask != Py_None) {
     particles->mask = extract_data_bool(np_mask, "mask");
     if (particles->mask == NULL) {
-      free(particles);
       return NULL;
     }
   } else {

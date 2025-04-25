@@ -56,6 +56,9 @@ struct grid {
 /* A struct to hold particle properties. */
 struct particles {
 
+  /* An array of pointers holding the properties along each axis. */
+  double **props;
+
   /* The number of particles. */
   int npart;
 
@@ -67,9 +70,6 @@ struct particles {
 
   /* The mask array denoting which particles should be included. */
   npy_bool *mask;
-
-  /* An array of pointers holding the properties along each axis. */
-  double *props[]; /* flexible array member */
 };
 
 /* Prototypes */
@@ -78,6 +78,7 @@ double *extract_data_double(PyArrayObject *np_arr, char *name);
 int *extract_data_int(PyArrayObject *np_arr, char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
+double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,
