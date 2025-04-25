@@ -601,10 +601,15 @@ def unyt_to_ndview(arr, unit=None):
     if arr.units == unit:
         return arr.ndview
 
-    # Ok, we do need to do a conversion, this sucks but the best thing we
-    # can do to avoid precision issues and many other problems is to
-    # just do the conversion normally and cry about it later
-    return arr.to(unit).ndview
+    # Ok, we need to do a conversion. We'll do this inplace and then
+    # return the ndview
+    # NOTE: for some reason this method of conversion can lead to very small
+    # precision differences vs the to, to_value (etc.) methods. In reality
+    # these diffences are negligable but they can lead to exact comparisons
+    # failing. This is fine as long as np.isclose/np.allclose is used to check
+    # for equality.
+    arr.convert_to_units(unit)
+    return arr.ndview
 
 
 def _raise_or_convert(expected_unit, name, value):
