@@ -9,6 +9,7 @@
 
 /* Header */
 #include "property_funcs.h"
+#include "timers.h"
 
 /**
  * @brief Allocate an array.
