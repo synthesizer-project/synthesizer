@@ -2368,8 +2368,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        start = tic()
-
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2547,6 +2545,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
+                scale_start = tic()
                 if scaler is None:
                     continue
                 if hasattr(emitter, scaler):
@@ -2604,26 +2603,31 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     raise exceptions.InconsistentArguments(
                         f"Can't scale spectra by {scaler}."
                     )
+                toc("Scaling spectra", scale_start)
 
         # Only apply post processing and deletion if we aren't in a recursive
         # related model call
         if not _is_related:
+            post_processing_start = tic()
+
             # Apply any post processing functions
             for func in self._post_processing:
                 spectra = func(spectra, emitters, self)
                 if len(particle_spectra) > 0:
                     particle_spectra = func(particle_spectra, emitters, self)
 
+            toc("Post processing spectra", post_processing_start)
+
             # Loop over all models and delete those spectra if we aren't saving
             # them (we have to this after post processing incase the deleted
             # spectra are needed during post processing)
+            delete_start = tic()
             for model in emission_model._models.values():
                 if not model.save and model.label in spectra:
                     del spectra[model.label]
                     if model.per_particle and model.label in particle_spectra:
                         del particle_spectra[model.label]
-
-        toc("Generating all spectra", start)
+            toc("Deleting non-saved spectra", delete_start)
 
         return spectra, particle_spectra
 
@@ -2731,8 +2735,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
-        start = tic()
-
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2933,8 +2935,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_lines:
                         del particle_lines[model.label]
 
-        toc("Generating all lines", start)
-
         return lines, particle_lines
 
     @accepts(fov=(kpc, arcsecond))
@@ -3012,8 +3012,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A dictionary of ImageCollections which can be attached to the
                 appropriate images attribute of the component.
         """
-        start = tic()
-
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -3205,8 +3203,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if limit_to is not None and not _is_related:
             for key in set(images) - set(_orig_limit_to):
                 del images[key]
-
-        toc("Generating all images", start)
 
         return images
 
