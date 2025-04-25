@@ -208,10 +208,21 @@ class Particles:
             log10metallicities (array)
                 log10 particle metallicities.
         """
+        # Have we already got the log10metallicities?
+        if (
+            hasattr(self, "_log10metallicities")
+            and self._log10metallicities is not None
+        ):
+            return self._log10metallicities
+
+        # Ok, we have to calculate it (fixing the metallicity floor)
         mets = self.metallicities
         mets[mets == 0.0] = self.metallicity_floor
 
-        return np.log10(mets, dtype=np.float64)
+        # Store it for future calls
+        self._log10metallicities = np.log10(mets, dtype=np.float64)
+
+        return self._log10metallicities
 
     def get_projected_angular_coordinates(
         self,

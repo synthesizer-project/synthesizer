@@ -88,7 +88,16 @@ class StarsComponent(Component):
             log10ages (array)
                 log10 stellar ages
         """
-        return np.log10(self._ages, dtype=np.float64)
+        # Have we already calculated the log10 ages?
+        if hasattr(self, "_log10ages"):
+            return self._log10ages
+
+        # Ok, we need to calculate them
+        self._log10ages = np.log10(
+            self._ages,
+            dtype=np.float64,
+        )
+        return self._log10ages
 
     @property
     def log10metallicities(self):
@@ -99,7 +108,16 @@ class StarsComponent(Component):
             log10metallicities (array)
                 log10 stellar metallicities
         """
-        return np.log10(self.metallicities, dtype=np.float64)
+        # Have we already calculated the log10 metallicities?
+        if hasattr(self, "_log10metallicities"):
+            return self._log10metallicities
+
+        # Ok, we need to calculate them
+        self._log10metallicities = np.log10(
+            self._metallicities,
+            dtype=np.float64,
+        )
+        return self._log10metallicities
 
     def __str__(self):
         """
