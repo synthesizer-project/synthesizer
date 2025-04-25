@@ -91,7 +91,7 @@ def int_spectra_strong_scaling(
         },
         total_msg="Generating spectra",
         low_thresh=low_thresh,
-        figsize=(3.5, 2 * 3.5),
+        figsize=(7, 7),
     )
 
 

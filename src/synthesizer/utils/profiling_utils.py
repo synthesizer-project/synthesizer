@@ -344,7 +344,7 @@ def run_scaling_test(
     kwargs,
     total_msg,
     low_thresh,
-    figsize=(3.5, 2 * 3.5),
+    figsize=(6, 6),
 ):
     """
     Run a scaling test for the Synthesizer package.
