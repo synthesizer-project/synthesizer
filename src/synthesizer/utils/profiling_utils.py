@@ -236,6 +236,7 @@ def plot_speed_up_plot(
     threads,
     linestyles,
     outpath,
+    figsize=(2 * 3.5, 3.5),
 ):
     """
     Plot a strong scaling test.
@@ -249,10 +250,11 @@ def plot_speed_up_plot(
             A dictionary mapping keys to their respective linestyles.
         outpath (str):
             The path to save the plot.
-
+        figsize (tuple):
+            The size of the figure in inches (width, height).
     """
     # Create the figure and gridspec layout
-    fig = plt.figure(figsize=(12, 10))
+    fig = plt.figure(figsize=figsize)
     gs = gridspec.GridSpec(
         3, 2, width_ratios=[3, 1], height_ratios=[1, 1, 0.05], hspace=0.0
     )
