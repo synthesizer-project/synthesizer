@@ -6,26 +6,34 @@
 #define WEIGHTS_H_
 /* C includes */
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* Local includes */
 #include "macros.h"
 #include "property_funcs.h"
 
-/* Define a struct to hold the useful data a generic callback function will
- * need. */
-struct callback_data {
-  int *indices;
-  int *dims;
-  int ndim;
-  int particle_index;
-  int nlam;
-  int npart;
-  double fesc;
-  double *grid_spectra;
-  double *grid_lines;
-  double *grid_continuum;
+struct part_grid_cell {
+  int part_ind;
+  int sort_grid_ind;
+  double mass;
+  double *fracs;
+  int *grid_inds;
 };
+
+void _get_part_ind_frac_cic(struct part_grid_cell *cell_struct, int *dims,
+                            int ndim, double **grid_props, double *part_props);
+
+static int compare_part_grid_cells(const void *a, const void *b) {
+  const struct part_grid_cell *A = (const struct part_grid_cell *)a;
+  const struct part_grid_cell *B = (const struct part_grid_cell *)b;
+
+  if (A->sort_grid_ind < B->sort_grid_ind)
+    return -1;
+  if (A->sort_grid_ind > B->sort_grid_ind)
+    return +1;
+  return 0;
+}
 
 /**
  * @brief Compute an ndimensional index from a flat index.
