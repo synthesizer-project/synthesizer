@@ -142,6 +142,7 @@ double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims) {
  */
 double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
 
+  start = tic();
   /* Allocate a single array for particle properties. */
   double **part_props = malloc(npart * ndim * sizeof(double *));
   if (part_props == NULL) {
@@ -171,6 +172,7 @@ double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
       part_props[ipart * ndim + idim] = part_arr + ipart;
     }
   }
+  toc("Extracting particle properties", start);
 
   /* Success. */
   return part_props;
