@@ -140,7 +140,7 @@ def los_surface_density_strong_scaling(
         },
         total_msg="Calculating LOS surface density",
         low_thresh=low_thresh,
-        figsize=(3.5, 2 * 3.5),
+        figsize=(6, 7),
     )
 
 

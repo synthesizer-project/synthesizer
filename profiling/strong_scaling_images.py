@@ -150,7 +150,7 @@ def images_strong_scaling(
         },
         total_msg="Generating images",
         low_thresh=low_thresh,
-        figsize=(3.5, 2 * 3.5),
+        figsize=(6, 7),
     )
 
 
