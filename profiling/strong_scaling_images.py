@@ -16,7 +16,7 @@ from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.kernel_functions import Kernel
-from synthesizer.parametric import SFH, ZDist
+from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfzh
@@ -67,7 +67,7 @@ def images_strong_scaling(
         grid.log10ages,
         grid.metallicities,
         sf_hist=SFH.Constant(100 * Myr),
-        metal_dist=ZDist.Normal(0.005, 0.01),
+        metal_dist=0.01,
         initial_mass=mass,
     )
 
@@ -76,9 +76,11 @@ def images_strong_scaling(
         CoordinateGenerator.generate_3D_gaussian(
             nstars,
             mean=np.array([50, 50, 50]),
+            cov=np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]) * 5,
         )
         * kpc
     )
+    coords = np.random.uniform(0, 30, size=(nstars, 3)) * kpc
 
     # Calculate the smoothing lengths
     smls = calculate_smoothing_lengths(coords, num_neighbours=56)
@@ -94,13 +96,12 @@ def images_strong_scaling(
         coordinates=coords,
         smoothing_lengths=smls,
         redshift=1,
-        centre=np.array([50, 50, 50]) * kpc,
+        centre=np.array([15, 15, 15]) * kpc,
     )
 
     # Get the spectra
     stars.get_spectra(
         model,
-        nthreads=max_threads,
     )
 
     # Get photometry
