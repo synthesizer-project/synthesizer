@@ -236,7 +236,7 @@ def plot_speed_up_plot(
     threads,
     linestyles,
     outpath,
-    figsize=(2 * 3.5, 3.5),
+    figsize=(3.5, 2 * 3.5),
 ):
     """
     Plot a strong scaling test.
@@ -344,6 +344,7 @@ def run_scaling_test(
     kwargs,
     total_msg,
     low_thresh,
+    figsize=(3.5, 2 * 3.5),
 ):
     """
     Run a scaling test for the Synthesizer package.
@@ -360,6 +361,7 @@ def run_scaling_test(
         kwargs (dict): The keyword arguments to pass to the function.
         total_msg (str): The message to print for the total time.
         low_thresh (float): The threshold for low runtimes.
+        figsize (tuple): The size of the figure in inches (width, height).
     """
     # Run the scaling test itself
     output, threads = _run_averaged_scaling_test(
@@ -386,4 +388,5 @@ def run_scaling_test(
         threads,
         linestyles,
         plot_outpath,
+        figsize=figsize,
     )
