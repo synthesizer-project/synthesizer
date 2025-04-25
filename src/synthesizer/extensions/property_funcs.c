@@ -142,7 +142,7 @@ double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims) {
  */
 double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
 
-  start = tic();
+  double start = tic();
   /* Allocate a single array for particle properties. */
   double **part_props = malloc(npart * ndim * sizeof(double *));
   if (part_props == NULL) {
