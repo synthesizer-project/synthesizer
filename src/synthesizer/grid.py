@@ -1226,7 +1226,7 @@ class Grid:
         self._axes_units.pop(axis)
         self.naxes -= 1
 
-    def get_spectra(self, grid_point, spectra_id="incident"):
+    def get_sed_at_grid_point(self, grid_point, spectra_id="incident"):
         """
         Create an Sed object for a specific grid point.
 
@@ -1265,6 +1265,42 @@ class Grid:
                 f"grid_point is outside of the grid (grid.shape={self.shape}, "
                 f"grid_point={grid_point})"
             )
+
+    def get_sed(self, grid_point=None, spectra_id="incident"):
+        """
+        Create an Sed object, either of the entire grid (if grid_point=False)
+        or for a specific grid point.
+
+        This enables grid wide use of Sed methods for flux, photometry,
+        indices, ionising photons, etc.
+
+        Args:
+            grid_point (tuple or bool)
+                A tuple of integers specifying the closest grid point or a
+                bool.
+            spectra_type (str)
+                The key of the spectra grid to extract as an Sed object.
+
+        Returns:
+            Sed
+                An Sed object.
+        """
+
+        # Throw exception if the spectra_id not in list of available spectra
+        if spectra_id not in self.available_spectra:
+            raise exceptions.InconsistentParameter(
+                "Provided spectra_id is not in the list of available spectra."
+            )
+
+        # If a grid point is provided call the function above ...
+        if grid_point is not None:
+            return self.get_sed_at_grid_point(
+                grid_point=grid_point, spectra_id=spectra_id
+            )
+
+        # ... otherwise, return the entire Sed grid.
+        else:
+            return Sed(self.lam, self.spectra[spectra_id] * erg / s / Hz)
 
     def get_lines(self, grid_point, line_id=None, spectra_type="nebular"):
         """
@@ -1491,23 +1527,6 @@ class Grid:
         }
 
         return flattened_axes_values
-
-    def get_sed(self, spectra_type):
-        """
-        Get the spectra grid as an Sed object.
-
-        This enables grid wide use of Sed methods for flux, photometry,
-        indices, ionising photons, etc.
-
-        Args:
-            spectra_type (string)
-                The key of the spectra grid to extract as an Sed object.
-
-        Returns:
-            Sed
-                The spectra grid as an Sed object.
-        """
-        return Sed(self.lam, self.spectra[spectra_type] * erg / s / Hz)
 
     @accepts(min_lam=angstrom, max_lam=angstrom)
     def truncate_grid_lam(self, min_lam, max_lam):
