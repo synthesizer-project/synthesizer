@@ -1226,7 +1226,7 @@ class Grid:
         self._axes_units.pop(axis)
         self.naxes -= 1
 
-    def get_sed_at_grid_point(self, grid_point, spectra_id="incident"):
+    def get_sed_at_grid_point(self, grid_point, spectra_type="incident"):
         """
         Create an Sed object for a specific grid point.
 
@@ -1241,7 +1241,7 @@ class Grid:
                 A synthesizer.emissions object
         """
         # Throw exception if the spectra_id not in list of available spectra
-        if spectra_id not in self.available_spectra:
+        if spectra_type not in self.available_spectra:
             raise exceptions.InconsistentParameter(
                 "Provided spectra_id is not in the list of available spectra."
             )
@@ -1257,7 +1257,7 @@ class Grid:
         try:
             return Sed(
                 self.lam,
-                lnu=self.spectra[spectra_id][grid_point] * erg / s / Hz,
+                lnu=self.spectra[spectra_type][grid_point] * erg / s / Hz,
             )
         except IndexError:
             # Modify the error message for clarity
@@ -1266,7 +1266,7 @@ class Grid:
                 f"grid_point={grid_point})"
             )
 
-    def get_sed(self, grid_point=None, spectra_id="incident"):
+    def get_sed(self, grid_point=None, spectra_type="incident"):
         """
         Create an Sed object, either of the entire grid (if grid_point=False)
         or for a specific grid point.
@@ -1275,7 +1275,7 @@ class Grid:
         indices, ionising photons, etc.
 
         Args:
-            grid_point (tuple or bool)
+            grid_point (tuple/bool)
                 A tuple of integers specifying the closest grid point or a
                 bool.
             spectra_type (str)
@@ -1287,7 +1287,7 @@ class Grid:
         """
 
         # Throw exception if the spectra_id not in list of available spectra
-        if spectra_id not in self.available_spectra:
+        if spectra_type not in self.available_spectra:
             raise exceptions.InconsistentParameter(
                 "Provided spectra_id is not in the list of available spectra."
             )
@@ -1295,19 +1295,19 @@ class Grid:
         # If a grid point is provided call the function above ...
         if grid_point is not None:
             return self.get_sed_at_grid_point(
-                grid_point=grid_point, spectra_id=spectra_id
+                grid_point=grid_point, spectra_id=spectra_type
             )
 
         # ... otherwise, return the entire Sed grid.
         else:
-            return Sed(self.lam, self.spectra[spectra_id] * erg / s / Hz)
+            return Sed(self.lam, self.spectra[spectra_type] * erg / s / Hz)
 
-    def get_lines(self, grid_point, line_id=None, spectra_type="nebular"):
+    def get_lines(self, grid_point=None, line_id=None, spectra_type="nebular"):
         """
         Create a Line object for a given line_id and grid_point.
 
         Args:
-            grid_point (tuple)
+            grid_point (tuple/bool)
                 A tuple of integers specifying the closest grid point.
             line_id (str/list)
                 The id/s of the line. If a string contains a comma separated
@@ -1330,13 +1330,25 @@ class Grid:
                 "as an argument should have the same shape as the grid."
             )
 
-        # First create a LineCollection containing the grid point
-        all_lines = LineCollection(
-            line_ids=self.available_lines,
-            lam=self.line_lams,
-            lum=self.line_lums[spectra_type][grid_point],
-            cont=self.line_conts[spectra_type][grid_point],
-        )
+        # If a grid point is provided call the function above ...
+        if grid_point is not None:
+            # First create a LineCollection containing the grid point
+            all_lines = LineCollection(
+                line_ids=self.available_lines,
+                lam=self.line_lams,
+                lum=self.line_lums[spectra_type][grid_point],
+                cont=self.line_conts[spectra_type][grid_point],
+            )
+
+        # ... otherwise, return the entire line grid as a LineCollection.
+        else:
+            # First create a LineCollection containing the grid point
+            all_lines = LineCollection(
+                line_ids=self.available_lines,
+                lam=self.line_lams,
+                lum=self.line_lums[spectra_type],
+                cont=self.line_conts[spectra_type],
+            )
 
         # If we have no line_id we are done and can return the full collection
         if line_id is None:
