@@ -9,8 +9,7 @@ from synthesizer.synth_warnings import warn
 
 
 def discover_outputs_recursive(obj, prefix="", output_set=None):
-    """
-    Recursively discover all outputs attached to a galaxy.
+    """Recursively discover all outputs attached to a galaxy.
 
     This function will collate all paths to attributes at any level within
     the input object.
@@ -85,8 +84,7 @@ def discover_outputs_recursive(obj, prefix="", output_set=None):
 
 
 def discover_outputs(galaxies):
-    """
-    Recursively discover all outputs attached to a galaxy.
+    """Recursively discover all outputs attached to a galaxy.
 
     This function will collate all paths to attributes at any level within
     the input object.
@@ -102,12 +100,7 @@ def discover_outputs(galaxies):
     the full path to the output list.
 
     Args:
-        galaxy (dict):
-            The dictionary to search.
-        prefix (str):
-            A prefix to add to the keys of the arrays.
-        output (dict):
-            A dictionary to store the output paths in.
+        galaxies (list): A list of galaxies to search.
     """
     # Set up the set to hold the global output paths
     output_set = set()
@@ -120,16 +113,12 @@ def discover_outputs(galaxies):
 
 
 def discover_dict_recursive(data, prefix="", output_set=None):
-    """
-    Recursively discover all leaves in a dictionary.
+    """Recursively discover all leaves in a dictionary.
 
     Args:
-        obj (dict):
-            The dictionary to search.
-        prefix (str):
-            A prefix to add to the keys of the arrays.
-        output_set (set):
-            A set to store the output paths in.
+        data (dict): The dictionary to search.
+        prefix (str): A prefix to add to the keys of the arrays.
+        output_set (set): A set to store the output paths in.
 
     Returns:
         dict:
@@ -153,8 +142,7 @@ def discover_dict_recursive(data, prefix="", output_set=None):
 
 
 def discover_dict_structure(data):
-    """
-    Recursively discover the structure of a dictionary.
+    """Recursively discover the structure of a dictionary.
 
     Args:
         data (dict):
@@ -174,16 +162,11 @@ def discover_dict_structure(data):
 
 
 def count_and_check_dict_recursive(data, prefix=""):
-    """
-    Recursively count the number of leaves in a dictionary.
+    """Recursively count the number of leaves in a dictionary.
 
     Args:
-        obj (dict):
-            The dictionary to search.
-        prefix (str):
-            A prefix to add to the keys of the arrays.
-        output_dict (dict):
-            A dictionary to store the output paths in.
+        data (dict): The dictionary to search.
+        prefix (str): A prefix to add to the keys of the arrays.
 
     Returns:
         dict:
@@ -226,8 +209,7 @@ def count_and_check_dict_recursive(data, prefix=""):
 
 @lru_cache(maxsize=500)
 def cached_split(split_key):
-    """
-    Split a key into a list of keys.
+    """Split a key into a list of keys.
 
     This is a cached version of the split function to avoid repeated
     splitting of the same key.
@@ -244,8 +226,7 @@ def cached_split(split_key):
 
 
 def combine_list_of_dicts(dicts):
-    """
-    Combine a list of dictionaries into a single dictionary.
+    """Combine a list of dictionaries into a single dictionary.
 
     Args:
         dicts (list):
@@ -287,8 +268,7 @@ def combine_list_of_dicts(dicts):
 
 
 def unify_dict_structure_across_ranks(data, comm, root=0):
-    """
-    Recursively unify the structure of a dictionary across all ranks.
+    """Recursively unify the structure of a dictionary across all ranks.
 
     This function will ensure that all ranks have the same structure in their
     dictionaries. This is necessary for writing out the data in parallel.
@@ -331,8 +311,7 @@ def unify_dict_structure_across_ranks(data, comm, root=0):
 
 
 def get_dataset_properties(data, comm, root=0):
-    """
-    Return the shapes, dtypes and units of all data arrays in a dictionary.
+    """Return the shapes, dtypes and units of all data arrays in a dictionary.
 
     Args:
         data (dict): The data to get the shapes of.
