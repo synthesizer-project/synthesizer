@@ -1028,9 +1028,9 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
 
         /* Add the contribution to this wavelength. */
         this_element += grid->spectra[spectra_ind + start + ilam] * weight;
-        // /* Add the contribution to this wavelength. */
-        // part_spectra[p * nlam + ilam] +=
-        //     grid_spectra[spectra_ind + ilam] * weight;
+        /* Add the contribution to this wavelength. */
+        part_spectra[p * nlam + ilam] +=
+            grid_spectra[spectra_ind + ilam] * weight;
       }
 
       spectra[start + ilam] = this_element;
