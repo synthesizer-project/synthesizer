@@ -905,7 +905,6 @@ class TestLineCollectionWeights:
         random_part_stars,
     ):
         """Test reusing weights to calculate lines for the same grid."""
-
         # Compute the lines the first time
         first_lines = random_part_stars.get_lines(
             test_grid.available_lines,
@@ -946,7 +945,6 @@ class TestLineCollectionWeights:
         random_part_stars,
     ):
         """Test reusing weights to calculate lines for the same grid."""
-
         # Compute the lines the first time
         first_lines = random_part_stars.get_lines(
             test_grid.available_lines,

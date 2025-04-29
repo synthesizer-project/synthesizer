@@ -97,6 +97,8 @@ class TestTemplateInit:
 
 
 class TestTemplateGeneration:
+    """Test suite for generating SEDs from templates."""
+
     def test_template_get_spectra(self):
         """Test the get_spectra method."""
         # Create sample data

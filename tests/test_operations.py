@@ -15,8 +15,7 @@ def test_single_star_extraction(
     nebular_emission_model,
     reprocessed_emission_model,
 ):
-    """
-    Test extraciton of a single star's emission.
+    """Test extraciton of a single star's emission.
 
     This will use and compare a single star for a particle Stars object and a
     single SFZH bin for a parametric Stars object. These two descriptions

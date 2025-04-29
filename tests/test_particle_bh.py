@@ -7,6 +7,8 @@ from synthesizer.utils import scalar_to_array
 
 
 class TestBlackHolesInit:
+    """Test suite for initialising BlackHoles instances."""
+
     def test_scalar_to_array(self):
         """Test that scalar_to_array works in various situations."""
         # Scalar with no units

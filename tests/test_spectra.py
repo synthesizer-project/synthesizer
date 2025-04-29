@@ -85,6 +85,7 @@ def test_masked_integrated_generation_cic(
     nebular_emission_model,
     random_part_stars,
 ):
+    """Test the generation of integrated with a mask spectra."""
     # Add a mask to the emission model
     nebular_emission_model.add_mask(
         attr="ages",
@@ -219,7 +220,6 @@ def test_threaded_generation_cic_integrated(
 
 def test_reusing_weights_ngp(nebular_emission_model, random_part_stars):
     """Test reusing weights to calculate another spectra for the same grid."""
-
     # Compute the spectra the first time
     first_spec = random_part_stars.get_spectra(
         nebular_emission_model,
@@ -250,7 +250,6 @@ def test_reusing_weights_ngp(nebular_emission_model, random_part_stars):
 
 def test_reusing_weights_cic(nebular_emission_model, random_part_stars):
     """Test reusing weights to calculate another spectra for the same grid."""
-
     # Compute the spectra the first time
     first_spec = random_part_stars.get_spectra(
         nebular_emission_model,
