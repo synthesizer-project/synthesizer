@@ -1,5 +1,4 @@
-"""
-This is a helper script to quickly make plots from profiling outputs.
+"""This is a helper script to quickly make plots from profiling outputs.
 
 To use this diagnostic script first profile a script redirecting the output to
 a file:
@@ -22,6 +21,16 @@ import numpy as np
 
 
 def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
+    """Translate the profiling data into a table.
+
+    Args:
+        funcs (list): List of function names.
+        ncalls (list): List of number of calls to each function.
+        tottime (list): List of total time taken by each function.
+        pcent (list): List of percentage time taken by each function.
+        col_width (int): Width of the first column.
+        numeric_width (int): Width of the numeric columns.
+    """
     # Define string holding the table
     report_string = ""
 
