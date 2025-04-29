@@ -45,8 +45,7 @@ FILE_PATH = os.path.join(os.path.dirname(__file__), "default_units.yml")
 
 
 def _load_and_convert_unit_categories() -> dict:
-    """
-    Load the default unit system from a YAML file.
+    """Load the default unit system from a YAML file.
 
     This loads all the strings stored in the YAML file and converts them into
     unyt Unit objects.
@@ -82,8 +81,7 @@ UNIT_CATEGORIES = _load_and_convert_unit_categories()
 
 
 class DefaultUnits:
-    """
-    The DefaultUnits class is a container for the default unit system.
+    """The DefaultUnits class is a container for the default unit system.
 
     This class is used to store the default unit system for Synthesizer. It
     contains all the unit categories defined in the default unit system.
@@ -94,8 +92,7 @@ class DefaultUnits:
     """
 
     def __init__(self):
-        """
-        Initialise the default unit system.
+        """Initialise the default unit system.
 
         This will extract all the unit categories from the previously loaded
         YAML file and attach them as attributes to the DefaultUnits object.
@@ -138,8 +135,7 @@ class DefaultUnits:
         return type(UNIT_CATEGORIES)
 
     def __str__(self):
-        """
-        Return a string representation of the default unit system.
+        """Return a string representation of the default unit system.
 
         Returns:
             table (str)
@@ -163,8 +159,7 @@ default_units = DefaultUnits()
 
 
 class UnitSingleton(type):
-    """
-    A metaclass used to ensure singleton behaviour for the Units class.
+    """A metaclass used to ensure singleton behaviour for the Units class.
 
     A singleton design pattern is used to ensure that only one instance of the
     class can exist at any one time.
@@ -174,8 +169,7 @@ class UnitSingleton(type):
     _instances = {}
 
     def __call__(cls, new_units=None, force=False):
-        """
-        Make an instance of the child class or return the original.
+        """Make an instance of the child class or return the original.
 
         When a new instance is made, this method is called.
 
@@ -216,8 +210,7 @@ class UnitSingleton(type):
 
 
 class Units(metaclass=UnitSingleton):
-    """
-    Holds the definition of the internal unit system using unyt.
+    """Holds the definition of the internal unit system using unyt.
 
     Units is a Singleton, meaning there can only ever be one. Each time a new
     instance is instantiated the original will be returned. This enforces a
@@ -241,11 +234,10 @@ class Units(metaclass=UnitSingleton):
     """
 
     def __init__(self, units=None, force=False):
-        """
-        Intialise the Units object.
+        """Intialise the Units object.
 
         Args:
-            units (dict)
+            units (dict):
                 A dictionary containing any modifications to the default unit
                 system. This can either modify the unit categories
                 defined in the default unit system, e.g.:
@@ -260,7 +252,7 @@ class Units(metaclass=UnitSingleton):
                     units = {"coordinates": kpc,
                              "smoothing_lengths": kpc,
                              "lam": m}
-            force (bool)
+            force (bool):
                 A flag for whether to force an update of the Units object.
         """
         # Define a dictionary to hold the unit system. We'll use this if we
@@ -298,8 +290,7 @@ class Units(metaclass=UnitSingleton):
                 self._units[key] = units[key]
 
     def __str__(self):
-        """
-        Return a string representation of the default unit system.
+        """Return a string representation of the default unit system.
 
         Returns:
             table (str)
@@ -318,8 +309,7 @@ class Units(metaclass=UnitSingleton):
         )
 
     def _preserve_orig_units(self):
-        """
-        Write out the original unit system to a yaml file.
+        """Write out the original unit system to a yaml file.
 
         This makes sure we can always reverse the unit system back to the
         original state.
@@ -339,8 +329,7 @@ class Units(metaclass=UnitSingleton):
         print(f"Original unit system has been preserved at {original_path}.")
 
     def overwrite_defaults_yaml(self):
-        """
-        Permenantly overwrite the default unit system with the current one.
+        """Permenantly overwrite the default unit system with the current one.
 
         This method is used to overwrite the default unit system with the
         current one. This is to be used when the user wants to permenantly
@@ -363,8 +352,7 @@ class Units(metaclass=UnitSingleton):
         print(f"Default unit system has been updated at {FILE_PATH}.")
 
     def reset_defaults_yaml(self):
-        """
-        Reset the default unit system to the original one.
+        """Reset the default unit system to the original one.
 
         This will overwrite the default_units.yml file with the
         original_units.yml file.
@@ -397,8 +385,7 @@ class Units(metaclass=UnitSingleton):
 
 
 class Quantity:
-    """
-    A decriptor class controlling dynamicly associated attribute units.
+    """A decriptor class controlling dynamicly associated attribute units.
 
     Provides the ability to associate attribute values on an object with unyt
     units defined in the global unit system (Units).
@@ -416,8 +403,7 @@ class Quantity:
     """
 
     def __init__(self, category):
-        """
-        Initialise the Quantity.
+        """Initialise the Quantity.
 
         This will extract the unit from the global unit system based on the
         passed category. Note that this unit can be overriden if the user
@@ -425,7 +411,7 @@ class Quantity:
         Quantity.
 
         Args:
-            category (str)
+            category (str):
                 The category of the attribute. This is used to get the unit
                 from the global unit system.
         """
@@ -435,8 +421,7 @@ class Quantity:
         self.unit = getattr(Units(), category)
 
     def __set_name__(self, owner, name):
-        """
-        Store the name of the class variable when it is assigned a Quantity.
+        """Store the name of the class variable when it is assigned a Quantity.
 
         When a class variable is assigned a Quantity() this method is called
         extracting the name of the class variable, assigning it to attributes
@@ -450,8 +435,7 @@ class Quantity:
             self.unit = getattr(Units(), name)
 
     def __get__(self, obj, type=None):
-        """
-        Return the value of the attribute with units.
+        """Return the value of the attribute with units.
 
         When referencing an attribute with its public_name this method is
         called. It handles the returning of the values stored in the
@@ -477,18 +461,17 @@ class Quantity:
         return value * self.unit
 
     def __set__(self, obj, value):
-        """
-        Set the value of the attribute with units.
+        """Set the value of the attribute with units.
 
         When setting a Quantity variable this method is called, firstly the
         value is converted to the expected units. Once converted the value is
         stored on the instance of the class under the private_name variable.
 
         Args:
-            obj (arbitrary)
+            obj (Any):
                 The object contain the Quantity attribute that we are storing
                 value in.
-            value (array-like/float/int)
+            value (array-like/float/int):
                 The value to store in the attribute.
         """
         # Do we need to perform a unit conversion? If not we assume value
@@ -504,13 +487,12 @@ class Quantity:
 
 
 def has_units(x):
-    """
-    Check whether the passed variable has units.
+    """Check whether the passed variable has units.
 
     This will check the argument is a unyt_quanity or unyt_array.
 
     Args:
-        x (generic variable)
+        x (generic variable):
             The variables to check.
 
     Returns:
@@ -525,8 +507,7 @@ def has_units(x):
 
 
 def _check_arg(units, name, value):
-    """
-    Check the units of an argument.
+    """Check the units of an argument.
 
     This function is used to check the units of an argument passed to
     a function. If the units are missing or incompatible an error will be
@@ -534,11 +515,11 @@ def _check_arg(units, name, value):
     will be converted to the correct units.
 
     Args:
-        units (dict)
+        units (dict):
             The dictionary of units defined in the accepts decorator.
-        name (str)
+        name (str):
             The name of the argument.
-        value (generic variable)
+        value (generic variable):
             The value of the argument.
 
     Returns:
@@ -619,8 +600,7 @@ def _check_arg(units, name, value):
 
 
 def accepts(**units):
-    """
-    Check arguments passed to the wrapped function have compatible units.
+    """Check arguments passed to the wrapped function have compatible units.
 
     This decorator will cross check any of the arguments passed to the wrapped
     function with the units defined in this decorators kwargs. If units are
@@ -632,7 +612,7 @@ def accepts(**units):
     Synthesizer specific errors and conversion functionality.
 
     Args:
-        **units
+        **units (dict):
             The keyword arguments defined with this decorator. Each takes the
             form of argument=unit_for_argument. In reality this is a
             dictionary of the form {"variable": unyt.unit}.
@@ -643,28 +623,30 @@ def accepts(**units):
     """
 
     def check_accepts(func):
-        """
-        Check arguments passed to the wrapped function have compatible units.
+        """Check arguments have compatible units.
+
+        This will check the arguments passed to the wrapped function have
+        compatible units. If the units are missing or incompatible an error
+        will be raised. If the units don't match the units passed to the
+        accepts decorator in units then the values will be converted
+        to the correct units.
 
         Args:
-            func (function)
-                The function to be wrapped.
+            func (function): The function to be wrapped.
 
         Returns:
-            function
-                The wrapped function.
+            function: The wrapped function.
         """
         arg_names = func.__code__.co_varnames
 
         @wraps(func)
         def wrapped(*args, **kwargs):
-            """
-            Handle all the arguments passed to the wrapped function.
+            """Handle all the arguments passed to the wrapped function.
 
             Args:
-                *args
+                *args:
                     The arguments passed to the wrapped function.
-                **kwargs
+                **kwargs:
                     The keyword arguments passed to the wrapped function.
 
             Returns:
