@@ -47,8 +47,7 @@ from synthesizer.utils.art import Art
 
 
 class Pipeline:
-    """
-    A class for running observable generation pipelines on a set of galaxies.
+    """A class for running observable generation pipelines on galaxies.
 
     To use this class the user must instantiate it with a galaxy loading
     function, an emission model defining the different emissions that will be
@@ -130,8 +129,7 @@ class Pipeline:
         comm=None,
         verbose=1,
     ):
-        """
-        Initialise the Pipeline object.
+        """Initialise the Pipeline object.
 
         This will not perform any part of the calculation, it only sets it up.
 
@@ -448,8 +446,7 @@ class Pipeline:
         self._print("Goodbye!")
 
     def _print(self, *args, **kwargs):
-        """
-        Print a message to the screen with extra information.
+        """Print a message to the screen with extra information.
 
         The prints behave differently depending on whether we are using MPI or
         not. We can also set the verbosity level at the Pipeline level which
@@ -461,7 +458,8 @@ class Pipeline:
             2: Outputs with timings on all ranks (when using MPI).
 
         Args:
-            message (str): The message to print.
+            *args: The message to print.
+            **kwargs: Any additional arguments to pass to the print function.
         """
         # At verbosity 0 we are silent
         if self.verbose == 0:
@@ -494,8 +492,7 @@ class Pipeline:
         print(prefix, *args, **kwargs)
 
     def _took(self, start, message):
-        """
-        Print a message with the time taken since the start time.
+        """Print a message with the time taken since the start time.
 
         Args:
             start (float): The start time of the process.
@@ -517,8 +514,7 @@ class Pipeline:
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
     def add_analysis_func(self, func, result_key, *args, **kwargs):
-        """
-        Add an analysis function to the Pipeline.
+        """Add an analysis function to the Pipeline.
 
         The provided function will be called on each galaxy in the Pipeline
         once all data has been generated. The function should take a galaxy
@@ -557,6 +553,9 @@ class Pipeline:
                 The key to use when storing the results of the analysis
                 function in the output. This can include slashes to denote
                 nesting, e.g. "Gas/Nested/Result".
+            *args: Any additional arguments to pass to the analysis function.
+            **kwargs: Any additional keyword arguments to pass to the
+                analysis function.
         """
         # Ensure we have a callable function
         if not callable(func):
@@ -590,8 +589,7 @@ class Pipeline:
         self._print(f"Added analysis function: {result_key}")
 
     def add_galaxies(self, galaxies):
-        """
-        Add galaxies to the Pipeline.
+        """Add galaxies to the Pipeline.
 
         This function will add the provided galaxies to the Pipeline. This is
         useful if you have already loaded the galaxies and want to add them to
@@ -625,8 +623,7 @@ class Pipeline:
     def get_los_optical_depths(
         self, kernel, kernel_threshold=1.0, kappa=0.0795
     ):
-        """
-        Compute the Line of Sight optical depths for all particles.
+        """Compute the Line of Sight optical depths for all particles.
 
         This will compute the optical depths based on the line of sight dust
         column density for all non-gas components. We project a ray along the
@@ -680,8 +677,7 @@ class Pipeline:
             )
 
     def get_sfzh(self, grid):
-        """
-        Compute the SFZH grid for each galaxy.
+        """Compute the SFZH grid for each galaxy.
 
         This is also the integrated weights of each star particle onto the SPS
         grid.
@@ -962,8 +958,7 @@ class Pipeline:
             self._took(start, f"Getting {n_fluxes} photometric fluxes")
 
     def get_lines(self, line_ids):
-        """
-        Generate the emission lines for the galaxies.
+        """Generate the emission lines for the galaxies.
 
         This function will generate the emission lines for all spectra types
         that were saved when spectra were generated.
@@ -1065,8 +1060,7 @@ class Pipeline:
         kernel=None,
         kernel_threshold=1.0,
     ):
-        """
-        Compute the luminosity images for the galaxies.
+        """Compute the luminosity images for the galaxies.
 
         This function will compute the luminosity images for all spectra types
         that were saved when spectra were generated, in all filters included in
@@ -1287,8 +1281,7 @@ class Pipeline:
         kernel=None,
         kernel_threshold=1.0,
     ):
-        """
-        Compute the flux images for the galaxies.
+        """Compute the flux images for the galaxies.
 
         This function will compute the flux images for all spectra types that
         were saved when spectra were generated, in all filters included in the
@@ -1524,8 +1517,7 @@ class Pipeline:
         self._took(start, "Getting fnu data cubes")
 
     def _run_extra_analysis(self):
-        """
-        Call any user provided analysis functions.
+        """Call any user provided analysis functions.
 
         We will call this just before writing out all data. This ensures that
         all data generated by the pipeline exists before performing the user
@@ -1554,7 +1546,7 @@ class Pipeline:
                     res.append(func(g, *args, **kwargs))
             except Exception as e:
                 self._print(
-                    "Error running extra analysis function" f" {key}: {e}"
+                    f"Error running extra analysis function {key}: {e}"
                 )
 
             # Store the results and combine them if necessary
@@ -1595,9 +1587,7 @@ class Pipeline:
                 self._took(func_start, f"{key} extra analysis")
 
             except Exception as e:
-                self._print(
-                    "Error storing extra analysis results" f" {key}: {e}"
-                )
+                self._print(f"Error storing extra analysis results {key}: {e}")
 
         # Count the number of extra analysis results we have generated
         n_extra_analysis = count_and_check_dict_recursive(
@@ -1631,8 +1621,7 @@ class Pipeline:
         output_images_lnu_psf=True,
         output_images_fnu_psf=True,
     ):
-        """
-        Write what we have produced to a HDF5 file.
+        """Write what we have produced to a HDF5 file.
 
         By default everything that has been calculated will be written out. If
         you only want a subset of the data then set the appropriate flags to
@@ -1896,8 +1885,7 @@ class Pipeline:
         self._say_goodbye()
 
     def combine_files(self):
-        """
-        Combine inidividual rank files into a single file.
+        """Combine inidividual rank files into a single file.
 
         Only applicable to MPI runs.
 
@@ -1931,8 +1919,7 @@ class Pipeline:
         self._took(start, "Combining files")
 
     def combine_files_virtual(self):
-        """
-        Combine inidividual rank files into a single virtual file.
+        """Combine inidividual rank files into a single virtual file.
 
         Only applicable to MPI runs.
 
@@ -1968,8 +1955,7 @@ class Pipeline:
         raise NotImplementedError("Repartitioning is not yet implemented.")
 
     def _report_balance(self):
-        """
-        Report the balance of galaxies across the ranks.
+        """Report the balance of galaxies across the ranks.
 
         This function will print out a nice horizontal bar graph showing the
         distribution of galaxies across the ranks.
