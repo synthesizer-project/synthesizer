@@ -189,6 +189,7 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+    ".pre-commit-config.yaml",
     "*__init__.py"  # ignore all init files
 ]
 
@@ -199,6 +200,7 @@ indent-width = 4
 
 # Assume Python 3.8 by default regardless
 target-version = "py38"
+
 
 [tool.ruff.lint]
 select = ["F", "E", "W", "D"]
@@ -218,8 +220,12 @@ unfixable = []
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# For every .py under examples/, ignore all D-rules
+"examples/**/*.py" = ["D"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
