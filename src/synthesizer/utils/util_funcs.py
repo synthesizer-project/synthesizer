@@ -17,8 +17,7 @@ from synthesizer.units import accepts
 
 @accepts(frequency=Hz, temperature=K)
 def planck(frequency, temperature):
-    """
-    Compute the planck distribution for a given frequency and temperature.
+    """Compute the planck distribution for a given frequency and temperature.
 
     This function computes the spectral radiance of a black body at a given
     frequency and temperature using Planck's law. The spectral radiance is
@@ -47,23 +46,22 @@ def planck(frequency, temperature):
 
 
 def rebin_1d(arr, resample_factor, func=np.sum):
-    """
-    A simple function for rebinning a 1D array using a specificed
-    function (e.g. sum or mean).
+    """Rebin a 1D array.
+
+    This function takes a 1D array and rebins it by a specified factor using
+    a specified function (e.g. mean or sum).
 
     Args:
-        arr (array-like)
+        arr (np.ndarray, list or unyt_array):
             The input 1D array.
-        resample_factor (int)
+        resample_factor (int):
             The integer rebinning factor, i.e. how many bins to rebin by.
-        func (func)
+        func (function):
             The function to use (e.g. mean or sum).
 
     Returns:
-        array-like
-            The input array resampled by i.
+        array-like: The input array resampled by i.
     """
-
     # Ensure the array is 1D
     if arr.ndim != 1:
         raise exceptions.InconsistentArguments(
@@ -93,16 +91,15 @@ def rebin_1d(arr, resample_factor, func=np.sum):
 
 
 def scalar_to_array(value):
-    """
-    Convert a passed scalar to an array.
+    """Convert a passed scalar to an array.
 
     Args:
-        value (Any)
+        value (Any):
             The value to wrapped into an array. If already an array-like
             object then it is returned as is.
 
     Returns:
-        array-like/unyt_array
+        array-like/unyt_array:
             The scalar value wrapped in an array or the array-like object
             passed in.
 
@@ -147,14 +144,13 @@ def scalar_to_array(value):
 
 
 def parse_grid_id(grid_id):
-    """
-    Parse a grid name for the properties of the grid.
+    """Parse a grid name for the properties of the grid.
 
     This is used for parsing a grid ID to return the SPS model,
     version, and IMF
 
     Args:
-        grid_id (str)
+        grid_id (str):
             string grid identifier
     """
     if len(grid_id.split("_")) == 2:
@@ -208,8 +204,7 @@ def wavelength_to_rgba(
     fill_blue=(0, 0, 0, 0.5),
     alpha=1.0,
 ):
-    """
-    Convert wavelength float to RGBA tuple.
+    """Convert wavelength float to RGBA tuple.
 
     Taken from https://stackoverflow.com/questions/44959955/\
         matplotlib-color-under-curve-based-on-spectral-color
@@ -217,18 +212,18 @@ def wavelength_to_rgba(
     Who originally took it from http://www.noah.org/wiki/\
         Wavelength_to_RGB_in_Python
 
-    Arguments:
-        wavelength (float)
+    Args:
+        wavelength (float):
             Wavelength in nm.
-        gamma (float)
+        gamma (float):
             Gamma value.
-        fill_red (bool or tuple)
+        fill_red (bool or tuple):
             The colour (RGBA) to use for wavelengths red of the visible. If
             None use final nearest visible colour.
-        fill_blue (bool or tuple)
+        fill_blue (bool or tuple):
             The colour (RGBA) to use for wavelengths red of the visible. If
             None use final nearest visible colour.
-        alpha (float)
+        alpha (float):
             The value of the alpha channel (between 0 and 1).
 
 
@@ -236,7 +231,6 @@ def wavelength_to_rgba(
         rgba (tuple)
             RGBA tuple.
     """
-
     if wavelength < 380:
         return fill_blue
     if wavelength > 750:
@@ -272,18 +266,17 @@ def wavelength_to_rgba(
 
 
 def wavelengths_to_rgba(wavelengths, gamma=0.8):
-    """
-    Convert wavelength array to RGBA list.
+    """Convert wavelength array to RGBA list.
 
     Arguments:
-        wavelength (unyt_array)
-            Wavelength in nm.
+        wavelengths (unyt_array):
+            The wavelengths to convert to RGBA tuples.
+        gamma (float):
+            The gamma value to use for the conversion.
 
     Returns:
-        rgba (list)
-            list of RGBA tuples.
+        list : list of RGBA tuples.
     """
-
     # If wavelengths provided as a unyt_array convert to nm otherwise assume
     # in Angstrom and convert.
     if isinstance(wavelengths, unyt_array):
@@ -299,8 +292,7 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
 
 
 def combine_arrays(arr1, arr2):
-    """
-    Combine two arrays into a single array.
+    """Combine two arrays into a single array.
 
     This function is a helper used to combine two arrays of the same length
     into a single array while abstracting some checks and handling improper
@@ -310,14 +302,13 @@ def combine_arrays(arr1, arr2):
     the other is not then None is returned along with a warning.
 
     Args:
-        arr1 (array-like)
+        arr1 (np.ndarray):
             The first array to combine.
-        arr2 (array-like)
+        arr2 (np.ndarray):
             The second array to combine.
 
     Returns:
-        array-like
-            The combined array.
+        np.ndarray or None: The combined array.
     """
     # Are both arrays None?
     if arr1 is None and arr2 is None:
@@ -341,7 +332,8 @@ def pluralize(word: str) -> str:
     """Pluralize a singular word.
 
     Args:
-        word (str): The word to pluralize.
+        word (str):
+            The word to pluralize.
 
     Returns:
         str: The pluralized word.
@@ -367,8 +359,7 @@ def pluralize(word: str) -> str:
 
 
 def depluralize(word: str) -> str:
-    """
-    Convert a plural word to its singular form based on simple rules.
+    """Convert a plural word to its singular form based on simple rules.
 
     Args:
         word (str): The word to depluralize.
@@ -376,7 +367,6 @@ def depluralize(word: str) -> str:
     Returns:
         str: The depluralized word.
     """
-
     if word.endswith("ies") and len(word) > 3:  # babies -> baby
         return word[:-3] + "y"
     elif word.endswith("ves"):  # leaves -> leaf, knives -> knife
