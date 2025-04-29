@@ -18,9 +18,11 @@ Example usage:
 import numpy as np
 
 
-def get_rotation_matrix(vector, unit=None):
-    """
-    Get the rotation matrix to rotate a vector to another vector.
+def get_rotation_matrix(
+    vector: np.ndarray | list | tuple,
+    unit: np.ndarray | list | tuple = None,
+):
+    """Get the rotation matrix to rotate a vector to another vector.
 
     This uses the Rodrigues' rotation formula for the re-projection.
 
@@ -29,13 +31,13 @@ def get_rotation_matrix(vector, unit=None):
     matrix-to-align-a-vector-to-an-axis
 
     Args:
-        vector (array-like, float)
+        vector (np.ndarray of float):
             The vector to rotate.
-        unit (array-like, float)
+        unit (np.ndarray of float, optional):
             The vector to rotate to.
 
     Returns:
-        matrix (array-like, float)
+        matrix (np.ndarray of float):
             The rotation matrix.
     """
     # Define the unit vector is needed
