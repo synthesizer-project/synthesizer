@@ -150,9 +150,7 @@ print(
     f"LOS calculation with loop took {loop_time:.4f} "
     f"seconds for nstar={n} and ngas={ngas}"
 )
-print(
-    "Ratio in wallclock: " f"Time_loop/Time_tree={loop_time / tree_time:.4f}"
-)
+print(f"Ratio in wallclock: Time_loop/Time_tree={loop_time / tree_time:.4f}")
 print(
     f"Tree gave={tree_sum:.2e} Loop gave={loop_sum:.2e} "
     "Normalised residual="

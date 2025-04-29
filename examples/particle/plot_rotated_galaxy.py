@@ -104,12 +104,12 @@ edge_on_galaxy = Galaxy(stars=edge_on_stars)
 
 # Print the angular momentum of the face-on and edge-on stars
 print(
-    "Angular momentum of face-on stars: "
-    f"{face_on_galaxy.stars.angular_momentum}"
+    "Angular momentum of face-on stars:"
+    f" {face_on_galaxy.stars.angular_momentum}"
 )
 print(
-    "Angular momentum of edge-on stars: "
-    f"{edge_on_galaxy.stars.angular_momentum}"
+    "Angular momentum of edge-on stars:"
+    f" {edge_on_galaxy.stars.angular_momentum}"
 )
 
 # As well as rotating at the component level you can rotate an entire
