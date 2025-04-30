@@ -138,7 +138,7 @@ class DefaultUnits:
         """Return a string representation of the default unit system.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the LineCollection object.
         """
         # Local import to avoid cyclic imports
@@ -293,7 +293,7 @@ class Units(metaclass=UnitSingleton):
         """Return a string representation of the default unit system.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the LineCollection object.
         """
         # Local import to avoid cyclic imports
@@ -393,10 +393,10 @@ class Quantity:
     Attributes:
         unit (unyt.unit_object.Unit)
             The unit for this Quantity from the global unit system.
-        public_name (str)
+        public_name (str):
             The name of the class variable containing Quantity. Used the user
             wants values with a unit returned.
-        private_name (str)
+        private_name (str):
             The name of the class variable with a leading underscore. Used the
             mostly internally for (or when the user wants) values without a
             unit returned.
