@@ -35,7 +35,7 @@ from synthesizer.utils.geometry import get_rotation_matrix
 
 
 class Galaxy(BaseGalaxy):
-    """The Particle based Galaxy object.
+    """The Particle Galaxy class.
 
     When working with particles this object provides interfaces for calculating
     spectra, galaxy properties and images. A galaxy can be composed of any
@@ -43,16 +43,22 @@ class Galaxy(BaseGalaxy):
     particle.BlackHoles objects.
 
     Attributes:
-
+        stars (object, Stars):
+            An instance of Stars containing the stellar particle data.
+        gas (object, Gas):
+            An instance of Gas containing the gas particle data.
+        black_holes (object, BlackHoles):
+            An instance of BlackHoles containing the black hole particle
+            data.
+        redshift (float):
+            The redshift of the galaxy.
+        centre (unyt_array of float):
+            The centre of the galaxy particles. Can be defined in a number
+            of ways (e.g. centre of mass, centre of potential, etc.)
+        galaxy_type (str):
+            A string describing the type of galaxy. This is set to "Particle"
+            for this class.
     """
-
-    attrs = [
-        "stars",
-        "gas",
-        "sf_gas_metallicity",
-        "sf_gas_mass",
-        "gas_mass",
-    ]
 
     @accepts(centre=Mpc)
     def __init__(
@@ -65,32 +71,30 @@ class Galaxy(BaseGalaxy):
         centre=None,
         **kwargs,
     ):
-        """Initialise a particle based Galaxy with objects derived from
-           Particles.
+        """Initialise a particle based Galaxy.
 
         Args:
-            name (str)
+            name (str):
                 A name to identify the galaxy. Only used for external
                 labelling, has no internal use.
-            stars (object, Stars/Stars)
+            stars (object, Stars/Stars):
                 An instance of Stars containing the stellar particle data
-            gas (object, Gas)
+            gas (object, Gas):
                 An instance of Gas containing the gas particle data.
-            black_holes (object, BlackHoles)
+            black_holes (object, BlackHoles):
                 An instance of BlackHoles containing the black hole particle
                 data.
-            redshift (float)
+            redshift (float):
                 The redshift of the galaxy.
-            centre (float)
+            centre (float):
                 Centre of the galaxy particles. Can be defined in a number
                 of ways (e.g. centre of mass)
-            **kwargs
+            **kwargs (dict):
                 Arbitrary keyword arguments.
 
         Raises:
             InconsistentArguments
         """
-
         # Check we haven't been given a SFZH
         if isinstance(stars, ParametricStars):
             raise exceptions.InconsistentArguments(
@@ -134,10 +138,7 @@ class Galaxy(BaseGalaxy):
             setattr(self, key, value)
 
     def calculate_integrated_stellar_properties(self):
-        """
-        Calculate integrated stellar properties
-        """
-
+        """Calculate integrated stellar properties."""
         # Define integrated properties of this galaxy
         if self.stars.current_masses is not None:
             self.stellar_mass = np.sum(self.stars.current_masses)
@@ -161,10 +162,7 @@ class Galaxy(BaseGalaxy):
             )
 
     def calculate_integrated_gas_properties(self):
-        """
-        Calculate integrated gas properties
-        """
-
+        """Calculate integrated gas properties."""
         # Define integrated properties of this galaxy
         if self.gas.masses is not None:
             self.gas_mass = np.sum(self.gas.masses)
@@ -213,22 +211,21 @@ class Galaxy(BaseGalaxy):
         stars=None,
         **kwargs,
     ):
-        """
-        Load arrays for star properties into a `Stars`  object.
+        """Load arrays for star properties into a `Stars`  object.
 
         This will populate the stars attribute with the instantiated Stars
         object.
 
         Args:
-            initial_masses (array_like, float)
+            initial_masses (unyt_array of float):
                 Initial stellar particle masses (mass at birth), Msol
-            ages (array_like, float)
+            ages (unyt_array of float):
                 Star particle age, Myr
-            metallicities (array_like, float)
+            metallicities (unyt_array of float):
                 Star particle metallicity (total metal fraction)
-            stars (stars particle object)
+            stars (Stars):
                 A pre-existing stars particle object to use. Defaults to None.
-            **kwargs
+            **kwargs (dict):
                 Arbitrary keyword arguments.
 
         Returns:
@@ -272,19 +269,18 @@ class Galaxy(BaseGalaxy):
         gas=None,
         **kwargs,
     ):
-        """
-        Load arrays for gas particle properties into a `Gas` object.
+        """Load arrays for gas particle properties into a `Gas` object.
 
         This will populate the gas attribute with the instantiated Gas object.
 
         Args:
-            masses : array_like (float)
-                gas particle masses, Msol
-            metallicities : array_like (float)
-                gas particle metallicity (total metal fraction)
-            gas (gas particle object)
+            masses (unyt_array of float):
+                Gas particle masses.
+            metallicities (unyt_array of float):
+                Gas particle metallicities (total metal fraction).
+            gas (Gas):
                 A pre-existing gas particle object to use. Defaults to None.
-            **kwargs
+            **kwargs (dict):
                 Arbitrary keyword arguments.
         """
         if gas is not None:
@@ -312,17 +308,16 @@ class Galaxy(BaseGalaxy):
             self.gas.centre = self.centre
 
     def calculate_black_hole_metallicity(self, default_metallicity=0.012):
-        """
-        Calculates the metallicity of the region surrounding a black hole. This
-        is defined as the mass weighted average metallicity of all gas
+        """Calculate the metallicity of the region surrounding a black hole.
+
+        This is defined as the mass weighted average metallicity of all gas
         particles whose SPH kernels intersect the black holes position.
 
         Args:
-            default_metallicity (float)
+            default_metallicity (float):
                 The metallicity value used when no gas particles are in range
                 of the black hole. The default is solar metallcity.
         """
-
         # Ensure we actually have Gas and black holes
         if self.gas is None:
             raise exceptions.InconsistentArguments(
@@ -405,8 +400,7 @@ class Galaxy(BaseGalaxy):
         min_count=100,
         nthreads=1,
     ):
-        """
-        Calculate the LOS optical depth for each star particle.
+        """Calculate the LOS optical depth for each star particle.
 
         This will calculate the optical depth for each star particle based on
         the gas particle distribution. The stars are considered to interact
@@ -417,33 +411,33 @@ class Galaxy(BaseGalaxy):
         self.stars.tau_v.
 
         Args:
-            kappa (float)
+            kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (array_like/float)
+            kernel (np.ndarray of float):
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
-            tau_v_attr (str)
+            tau_v_attr (str):
                 The attribute to store the tau_v values in the stars object.
                 Defaults to "tau_v".
-            mask (bool)
+            mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
-            threshold (float)
+            threshold (float):
                 The threshold above which the SPH kernel is 0. This is normally
                 at a value of the impact parameter of q = r / h = 1.
-            force_loop (bool)
+            force_loop (bool):
                 By default (False) the C function will only loop over nearby
                 gas particles to search for contributions to the LOS surface
                 density. This forces the loop over *all* gas particles.
-            min_count (int)
+            min_count (int):
                 The minimum number of particles in a leaf cell of the tree
                 used to search for gas particles. Can be used to tune the
                 performance of the tree search in extreme cases. If there are
                 fewer particles in a leaf cell than this value, the search
                 will be performed with a brute force loop.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
         start = tic()
@@ -504,8 +498,7 @@ class Galaxy(BaseGalaxy):
         min_count=100,
         nthreads=1,
     ):
-        """
-        Calculate the LOS optical depth for each black hole particle.
+        """Calculate the LOS optical depth for each black hole particle.
 
         This will calculate the optical depth for each black hole particle
         based on the gas particle distribution. The black holes are considered
@@ -516,34 +509,34 @@ class Galaxy(BaseGalaxy):
         at self.black_holes.tau_v.
 
         Args:
-            kappa (float)
+            kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (array_like/float)
+            kernel (np.ndarray of float):
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
-            tau_v_attr (str)
+            tau_v_attr (str):
                 The attribute to store the tau_v values in the black_holes
                 object. Defaults to "tau_v".
-            mask (bool)
+            mask (np.ndarray of bool):
                 A mask to be applied to the black holes. Surface densities will
                 only be computed and returned for black holes with True in the
                 mask.
-            threshold (float)
+            threshold (float):
                 The threshold above which the SPH kernel is 0. This is normally
                 at a value of the impact parameter of q = r / h = 1.
-            force_loop (bool)
+            force_loop (bool):
                 By default (False) the C function will only loop over nearby
                 gas particles to search for contributions to the LOS surface
                 density. This forces the loop over *all* gas particles.
-            min_count (int)
+            min_count (int):
                 The minimum number of particles in a leaf cell of the tree
                 used to search for gas particles. Can be used to tune the
                 performance of the tree search in extreme cases. If there are
                 fewer particles in a leaf cell than this value, the search
                 will be performed with a brute force loop.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
         start = tic()
@@ -605,8 +598,7 @@ class Galaxy(BaseGalaxy):
         min_count=100,
         nthreads=1,
     ):
-        """
-        Calculate the LOS optical depth for each star particle.
+        """Calculate the LOS optical depth for each star particle.
 
         This will calculate the optical depth for each star particle based on
         the gas particle distribution. The stars are considered to interact
@@ -617,33 +609,33 @@ class Galaxy(BaseGalaxy):
         self.stars.tau_v.
 
         Args:
-            kappa (float)
+            kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (array_like/float)
+            kernel (np.ndarray of float):
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
-            tau_v_attr (str)
+            tau_v_attr (str):
                 The attribute to store the tau_v values in the stars object.
                 Defaults to "tau_v".
-            mask (bool)
+            mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
-            threshold (float)
+            threshold (float):
                 The threshold above which the SPH kernel is 0. This is normally
                 at a value of the impact parameter of q = r / h = 1.
-            force_loop (bool)
+            force_loop (bool):
                 By default (False) the C function will only loop over nearby
                 gas particles to search for contributions to the LOS surface
                 density. This forces the loop over *all* gas particles.
-            min_count (int)
+            min_count (int):
                 The minimum number of particles in a leaf cell of the tree
                 used to search for gas particles. Can be used to tune the
                 performance of the tree search in extreme cases. If there are
                 fewer particles in a leaf cell than this value, the search
                 will be performed with a brute force loop.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
         start = tic()
@@ -693,7 +685,7 @@ class Galaxy(BaseGalaxy):
 
         return tau_v
 
-    def screen_dust_gamma_parameter(
+    def calculate_dust_screen_gamma(
         self,
         gamma_min=0.01,
         gamma_max=1.8,
@@ -703,8 +695,9 @@ class Galaxy(BaseGalaxy):
         sf_gas_mass=None,
         stellar_mass=None,
     ):
-        """
-        Calculate the gamma parameter, controlling the optical depth
+        """Calculate the optical depth gamma parameter.
+
+        Gamma is a parametrisation for controlling the optical depth
         due to dust dependent on the mass and metallicity of star forming
         gas.
 
@@ -750,7 +743,6 @@ class Galaxy(BaseGalaxy):
             gamma (array):
                 Dust attentuation scaling parameter for this galaxy
         """
-
         if sf_gas_metallicity is None:
             if self.sf_gas_metallicity is None:
                 raise ValueError("No sf_gas_metallicity provided")
@@ -782,11 +774,12 @@ class Galaxy(BaseGalaxy):
         return gamma
 
     @accepts(stellar_mass_weighted_age=Myr)
-    def dust_to_metal_vijayan19(
-        self, stellar_mass_weighted_age=None, ism_metallicity=None
+    def calculate_dust_to_metal_vijayan19(
+        self,
+        stellar_mass_weighted_age=None,
+        ism_metallicity=None,
     ):
-        """
-        Calculate the dust to metal ratio based on stellar age and metallicity.
+        """Calculate the dust to metal ratio from stellar age and metallicity.
 
         This uses a fitting function for the dust-to-metals ratio based on
         galaxy properties, from L-GALAXIES dust modeling.
@@ -797,10 +790,10 @@ class Galaxy(BaseGalaxy):
         metal ratio.
 
         Args:
-            stellar_mass_weighted_age (float)
+            stellar_mass_weighted_age (float):
                 Mass weighted age of stars in Myr. Defaults to None,
                 and uses value provided on this galaxy object (in Gyr)
-            ism_metallicity (float)
+            ism_metallicity (float):
                 Mass weighted gas-phase metallicity. Defaults to None,
                 and uses value provided on this galaxy object
                 (dimensionless)
@@ -860,27 +853,26 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         nthreads=1,
     ):
-        """
-        Make a mass map, either with or without smoothing.
+        """Make a mass map, either with or without smoothing.
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The stellar mass image.
         """
         # Instantiate the Image object.
         img = Image(
@@ -924,27 +916,26 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         nthreads=1,
     ):
-        """
-        Make a mass map, either with or without smoothing.
+        """Make a mass map, either with or without smoothing.
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The gas mass image.
         """
         # Instantiate the Image object.
         img = Image(
@@ -988,30 +979,29 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         nthreads=1,
     ):
-        """
-        Make an age map, either with or without smoothing.
+        """Make an age map, either with or without smoothing.
 
         The age in a pixel is the initial mass weighted average age in that
         pixel.
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The stellar age image.
         """
         # Instantiate the Image object.
         weighted_img = Image(
@@ -1089,27 +1079,26 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         nthreads=1,
     ):
-        """
-        Make a stellar metal mass map, either with or without smoothing.
+        """Make a stellar metal mass map, either with or without smoothing.
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The stellar metal mass image.
         """
         # Instantiate the Image object.
         img = Image(
@@ -1153,29 +1142,28 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         nthreads=1,
     ):
-        """
-        Make a gas metal mass map, either with or without smoothing.
+        """Make a gas metal mass map, either with or without smoothing.
 
         TODO: make dust map!
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The gas metal mass image.
         """
         # Instantiate the Image object.
         img = Image(
@@ -1219,30 +1207,29 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         nthreads=1,
     ):
-        """
-        Make a stellar metallicity map, either with or without smoothing.
+        """Make a stellar metallicity map, either with or without smoothing.
 
         The metallicity in a pixel is the mass weighted average metallicity in
         that pixel.
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The stellar metallicity image.
         """
         # Make the weighted image
         weighted_img = self.get_map_stellar_metal_mass(
@@ -1279,8 +1266,7 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         nthreads=1,
     ):
-        """
-        Make a gas metallicity map, either with or without smoothing.
+        """Make a gas metallicity map, either with or without smoothing.
 
         The metallicity in a pixel is the mass weighted average metallicity in
         that pixel.
@@ -1288,23 +1274,23 @@ class Galaxy(BaseGalaxy):
         TODO: make dust map!
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The gas metallicity image.
         """
         # Make the weighted image
         weighted_img = self.get_map_gas_metal_mass(
@@ -1342,34 +1328,33 @@ class Galaxy(BaseGalaxy):
         age_bin=100 * Myr,
         nthreads=1,
     ):
-        """
-        Make a SFR map, either with or without smoothing.
+        """Make a SFR map, either with or without smoothing.
 
         Only stars younger than age_bin are included in the map. This is
         calculated by computing the initial mass map for stars in the age bin
         and then dividing by the size of the age bin.
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            age_bin (unyt_quantity/float)
+            age_bin (unyt_quantity/float):
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The SFR image.
         """
         # Convert the age bin if necessary
         if isinstance(age_bin, unyt_quantity):
@@ -1429,8 +1414,7 @@ class Galaxy(BaseGalaxy):
         age_bin=100 * Myr,
         nthreads=1,
     ):
-        """
-        Make a SFR map, either with or without smoothing.
+        """Make a SFR map, either with or without smoothing.
 
         Only stars younger than age_bin are included in the map. This is
         calculated by computing the initial mass map for stars in the age bin
@@ -1438,26 +1422,26 @@ class Galaxy(BaseGalaxy):
         the galaxy.
 
         Args:
-            resolution (float)
+            resolution (float):
                 The size of a pixel.
-            fov (float)
+            fov (float):
                 The width of the image in image coordinates.
-            img_type (str)
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            age_bin (unyt_quantity/float)
+            age_bin (unyt_quantity/float):
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            Image
+            Image: The sSFR image.
         """
         # Get the SFR map
         img = self.get_map_sfr(
@@ -1489,8 +1473,7 @@ class Galaxy(BaseGalaxy):
         quantity="lnu",
         nthreads=1,
     ):
-        """
-        Make a SpectralCube from an Sed held by this galaxy.
+        """Make a SpectralCube from an Sed held by this galaxy.
 
         Data cubes are calculated by smoothing spectra over the component
         morphology. The Sed used is defined by <component>_spectra.
@@ -1501,34 +1484,34 @@ class Galaxy(BaseGalaxy):
         NOTE: Either npix or fov must be defined.
 
         Args:
-            resolution (Quantity, float)
+            resolution (unyt_quantity, float):
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
+            fov (unyt_quantity, float):
                 The width of the image in image coordinates.
-            lam (unyt_array, float)
+            lam (unyt_array, float):
                 The wavelength array to use for the data cube.
-            cube_type (str)
+            cube_type (str):
                 The type of data cube to make. Either "smoothed" to smooth
                 particle spectra over a kernel or "hist" to sort particle
                 spectra into individual spaxels.
-            stellar_spectra (string)
+            stellar_spectra (str):
                 The stellar spectra key to make into a data cube.
-            blackhole_spectra (string)
+            blackhole_spectra (str):
                 The black hole spectra key to make into a data cube.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
 
         Returns:
-            SpectralCube
+            SpectralCube:
                 The spectral data cube object containing the derived
                 data cube.
         """
@@ -1610,8 +1593,7 @@ class Galaxy(BaseGalaxy):
         rot_matrix=None,
         inplace=True,
     ):
-        """
-        Rotate coordinates.
+        """Rotate coordinates.
 
         This method can either use angles or a provided rotation matrix.
 
@@ -1628,7 +1610,7 @@ class Galaxy(BaseGalaxy):
             theta (unyt_quantity):
                 The angle in radians to rotate around the y-axis. If rot_matrix
                 is defined this will be ignored.
-            rot_matrix (array-like, float):
+            rot_matrix (np.ndarray of float):
                 A 3x3 rotation matrix to apply to the coordinates
                 instead of phi and theta.
             inplace (bool):
@@ -1679,8 +1661,7 @@ class Galaxy(BaseGalaxy):
         return
 
     def rotate_edge_on(self, component="stars", inplace=True):
-        """
-        Rotate the particle distribution to edge-on.
+        """Rotate the particle distribution to edge-on.
 
         This will rotate the particle distribution such that the angular
         momentum vector is aligned with the y-axis in an image
@@ -1711,8 +1692,7 @@ class Galaxy(BaseGalaxy):
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
     def rotate_face_on(self, component="stars", inplace=True):
-        """
-        Rotate the particle distribution to face-on.
+        """Rotate the particle distribution to face-on.
 
         This will rotate the particle distribution such that the angular
         momentum vector is aligned with the z-axis in an image.

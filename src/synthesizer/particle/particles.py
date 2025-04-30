@@ -19,36 +19,35 @@ from synthesizer.utils.geometry import get_rotation_matrix
 
 
 class Particles:
-    """
-    The base particle class.
+    """The base particle class.
 
     All attributes of this class are optional keyword arguments in the child
     classes. Here we demand they are passed as positional arguments to protect
     against future changes.
 
     Attributes:
-        coordinates (array-like, float)
+        coordinates (np.ndarray of float):
             The 3D coordinates of each particle.
-        velocities (array-like, float)
+        velocities (np.ndarray of float):
             The 3D velocity of each stellar particle.
-        masses (array-like, float)
+        masses (np.ndarray of float):
             The mass of each particle in Msun.
-        redshift (array-like/float)
+        redshift (np.ndarray of float):
             The redshift/s of the stellar particles.
-        softening_length (float)
+        softening_length (float):
             The physical gravitational softening length.
         nparticle : int
             How many particles are there?
-        centre (array, float)
+        centre (array, float):
             Centre of the particle distribution.
-        metallicity_floor (float)
+        metallicity_floor (float):
             The metallicity floor when using log properties (only matters for
             baryons). This is used to avoid log(0) errors.
-        tau_v (float)
+        tau_v (float):
             The V band optical depth.
-        radii (array-like, float)
+        radii (np.ndarray of float):
             The radii of the particles.
-        _grid_weights (dict, array-like, float)
+        _grid_weights (dict, np.ndarray of float):
             Weights for each particle sorted onto a grid. This dictionary takes
             the form of {<method>: {grid_name: weights}} where weights is an
             array of the same shape as the grid containg the particles sorted
@@ -83,30 +82,29 @@ class Particles:
         tau_v=None,
         name="Particles",
     ):
-        """
-        Intialise the Particles.
+        """Intialise the Particles.
 
         Args:
-            coordinates (array-like, float)
+            coordinates (np.ndarray of float):
                 The 3D positions of the particles.
-            velocities (array-like, float)
+            velocities (np.ndarray of float):
                 The 3D velocities of the particles.
-            masses (array-like, float)
+            masses (np.ndarray of float):
                 The mass of each particle.
-            redshift (float)
+            redshift (float):
                 The redshift/s of the particles.
-            softening_length (float)
+            softening_lengths (float):
                 The physical gravitational softening length.
-            nparticles (int)
+            nparticles (int):
                 How many particles are there?
-            centre (array, float)
+            centre (array, float):
                 Centre of the particle distribution.
-            metallicity_floor (float)
+            metallicity_floor (float):
                 The metallicity floor when using log properties (only matters
                 for baryons). This is used to avoid log(0) errors.
-            tau_v (float)
+            tau_v (float):
                 The V band optical depth.
-            name (str)
+            name (str):
                 The name of the particle type.
         """
         # Set phase space coordinates
@@ -156,8 +154,7 @@ class Particles:
 
     @property
     def particle_photo_fluxes(self):
-        """
-        Get the particle photometry fluxes.
+        """Get the particle photometry fluxes.
 
         Returns:
             dict
@@ -171,8 +168,7 @@ class Particles:
 
     @property
     def photo_luminosities(self):
-        """
-        Get the photometry luminosities.
+        """Get the photometry luminosities.
 
         Returns:
             dict
@@ -195,8 +191,7 @@ class Particles:
 
     @property
     def log10metallicities(self):
-        """
-        Return particle metallicities in log (base 10).
+        """Return particle metallicities in log (base 10).
 
         Zero valued metallicities are set to `metallicity_floor`,
         which is set on initialisation of this particle object.
@@ -211,21 +206,20 @@ class Particles:
         return np.log10(mets)
 
     def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate luminosity photometry using a FilterCollection object.
+        """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
-            filters (filters.FilterCollection)
+            filters (filters.FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
 
         Returns:
-            photo_lnu (dict)
-                A dictionary of rest frame broadband luminosities.
+            photo_lnu (dict): A dictionary of rest frame broadband
+                luminosities.
         """
         # Loop over spectra in the component
         for spectra in self.particle_spectra:
@@ -237,21 +231,19 @@ class Particles:
         return self.particle_photo_lnu
 
     def get_particle_photo_fnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate flux photometry using a FilterCollection object.
+        """Calculate flux photometry using a FilterCollection object.
 
         Args:
-            filters (object)
+            filters (object):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
 
         Returns:
-            (dict)
-                A dictionary of fluxes in each filter in filters.
+            dict: A dictionary of fluxes in each filter in filters.
         """
         # Loop over spectra in the component
         for spectra in self.particle_spectra:
@@ -263,18 +255,17 @@ class Particles:
         return self.particle_photo_fnu
 
     def get_mask(self, attr, thresh, op, mask=None):
-        """
-        Create a mask using a threshold and attribute on which to mask.
+        """Create a mask using a threshold and attribute on which to mask.
 
         Args:
-            attr (str)
+            attr (str):
                 The attribute to derive the mask from.
-            thresh (float)
+            thresh (float):
                 The threshold value.
-            op (str)
+            op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
                 or "!=".
-            mask (array)
+            mask (array):
                 Optionally, a mask to combine with the new mask.
 
         Returns:
@@ -329,8 +320,7 @@ class Particles:
         return new_mask
 
     def integrate_particle_spectra(self):
-        """
-        Integrate any particle spectra to get integrated spectra.
+        """Integrate any particle spectra to get integrated spectra.
 
         This will take all spectra in self.particle_spectra and call the sum
         method on them, populating self.spectra with the results.
@@ -341,11 +331,10 @@ class Particles:
             self.spectra[key] = sed.sum()
 
     def __str__(self):
-        """
-        Return a string representation of the particle object.
+        """Return a string representation of the particle object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the particle object.
         """
         # Intialise the table formatter
@@ -354,8 +343,7 @@ class Particles:
         return formatter.get_table("Particles")
 
     def calculate_centre_of_mass(self):
-        """
-        Calculate the centre of mass of the collection of particles.
+        """Calculate the centre of mass of the collection of particles.
 
         Uses the `masses` and `coordinates` attributes,
         and assigns the centre of mass to the `centre` attribute
@@ -371,11 +359,10 @@ class Particles:
         self.center = com
 
     def get_radii(self):
-        """
-        Calculate the radii of the particles.
+        """Calculate the radii of the particles.
 
         Returns:
-            radii (array-like, float)
+            radii (np.ndarray of float):
                 The radii of the particles.
         """
         # Raise an error if the centre is not set
@@ -391,14 +378,12 @@ class Particles:
 
     @accepts(aperture_radius=Mpc)
     def _aperture_mask(self, aperture_radius):
-        """
-        Mask for particles within spherical aperture.
+        """Mask for particles within spherical aperture.
 
         Args:
-            aperture_radius (float)
+            aperture_radius (float):
                 Radius of spherical aperture in kpc
         """
-
         if self.centre is None:
             raise ValueError(
                 "Centre of particles must be set to use aperture mask."
@@ -411,17 +396,16 @@ class Particles:
         return self.radii < aperture_radius
 
     def _get_radius(self, weights, frac):
-        """
-        Calculate the radius of a particle distribution.
+        """Calculate the radius of a particle distribution.
 
         Args:
-            weights (array-like, float)
+            weights (np.ndarray of float):
                 The weights to use to weight the particles.
-            frac (float)
+            frac (float):
                 The fraction of the total weight for the radius.
 
         Returns:
-            radius (float)
+            radius (float):
                 The radius of the particle distribution.
         """
         # Get the radii if not already set
@@ -449,19 +433,18 @@ class Particles:
         return radius * self.radii.units
 
     def get_attr_radius(self, weight_attr, frac=0.5):
-        """
-        Calculate the radius of a particle distribution.
+        """Calculate the radius of a particle distribution.
 
         By default this will return the "half attr radius."
 
         Args:
-            weight_attr (str)
+            weight_attr (str):
                 The attribute to use to weight the particles.
-            frac (float)
+            frac (float):
                 The fraction of the total attribute for the radius.
 
         Returns:
-            radius (float)
+            radius (float):
                 The radius of the particle distribution.
         """
         # Get the weight attribute
@@ -476,19 +459,18 @@ class Particles:
         return self._get_radius(weights, frac)
 
     def get_luminosity_radius(self, spectra_type, filter_code, frac=0.5):
-        """
-        Calculate the radius of a particle distribution based on luminoisty.
+        """Calculate the radius of a particle distribution based on luminoisty.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use to compute radius.
-            filter_code (str)
+            filter_code (str):
                 The filter code to compute the radius for.
-            frac (float)
+            frac (float):
                 The fraction of the total light for the radius.
 
         Returns:
-            radius (float)
+            radius (float):
                 The radius of the particle distribution.
         """
         # Check we have that spectra type, if so unpack it
@@ -512,19 +494,18 @@ class Particles:
         return self._get_radius(light, frac)
 
     def get_flux_radius(self, spectra_type, filter_code, frac=0.5):
-        """
-        Calculate the radius of a particle distribution based on flux.
+        """Calculate the radius of a particle distribution based on flux.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use to compute radius.
-            filter_code (str)
+            filter_code (str):
                 The filter code to compute the radius for.
-            frac (float)
+            frac (float):
                 The fraction of the total light for the radius.
 
         Returns:
-            radius (float)
+            radius (float):
                 The radius of the particle distribution.
         """
         # Check we have that spectra type, if so unpack it
@@ -548,44 +529,41 @@ class Particles:
         return self._get_radius(light, frac)
 
     def get_half_mass_radius(self):
-        """
-        Calculate the half mass radius of the particle distribution.
+        """Calculate the half mass radius of the particle distribution.
 
         Returns:
-            radius (float)
+            radius (float):
                 The half mass radius of the particle distribution.
         """
         # Hanlde
         return self.get_attr_radius("masses", 0.5)
 
     def get_half_luminosity_radius(self, spectra_type, filter_code):
-        """
-        Calculate the half luminosity radius of the particle distribution.
+        """Calculate the half luminosity radius of the particle distribution.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use to compute radius.
-            filter_code (str)
+            filter_code (str):
                 The filter code to compute the radius for.
 
         Returns:
-            radius (float)
+            radius (float):
                 The half luminosity radius of the particle distribution.
         """
         return self.get_luminosity_radius(spectra_type, filter_code, 0.5)
 
     def get_half_flux_radius(self, spectra_type, filter_code):
-        """
-        Calculate the half flux radius of the particle distribution.
+        """Calculate the half flux radius of the particle distribution.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use to compute radius.
-            filter_code (str)
+            filter_code (str):
                 The filter code to compute the radius for.
 
         Returns:
-            radius (float)
+            radius (float):
                 The half flux radius of the particle distribution.
         """
         return self.get_flux_radius(spectra_type, filter_code, 0.5)
@@ -601,32 +579,31 @@ class Particles:
         min_count,
         nthreads,
     ):
-        """
-        Prepare the arguments for line of sight column density computation.
+        """Prepare the arguments for line of sight column density computation.
 
         Args:
-            other_parts (Particles)
+            other_parts (Particles):
                 The other particles to compute the column density with.
-            attr (str)
+            attr (str):
                 The attribute to compute the column density of.
-            kernel (array_like, float)
+            kernel (array_like, float):
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
-            mask (bool)
+            mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
-            threshold (float)
+            threshold (float):
                 The threshold above which the SPH kernel is 0. This is normally
                 at a value of the impact parameter of q = r / h = 1.
-            force_loop (bool)
+            force_loop (bool):
                 Whether to force the use of a simple loop rather than the tree.
-            min_count (int)
+            min_count (int):
                 The minimum number of particles allowed in a leaf cell when
                 using the tree. This can be used for tuning the tree
                 performance.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the calculation.
         """
         # Ensure we actually have the properties needed
@@ -698,44 +675,43 @@ class Particles:
         min_count=100,
         nthreads=1,
     ):
-        """
-        Calculate the column density of an attribute.
+        """Calculate the column density of an attribute.
 
         This will calculate the column density of an attribute on another
         Particles child instance at the positions of the particles in this
         Particles instance.
 
         Args:
-            other_parts (Particles)
+            other_parts (Particles):
                 The other particles to calculate the column density with.
-            density_attr (str)
+            density_attr (str):
                 The attribute to use to calculate the column density.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
-            column_density_attr (str)
+            column_density_attr (str):
                 The attribute to store the column density in on the Particles
                 instance. If None, the column density will not be stored. By
                 default this is None.
-            mask (array-like, bool)
+            mask (array-like, bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
-            threshold (float)
+            threshold (float):
                 The threshold above which the SPH kernel is 0. This is normally
                 at a value of the impact parameter of q = r / h = 1.
-            force_loop (bool)
+            force_loop (bool):
                 Whether to force the use of a simple loop rather than the tree.
-            min_count (int)
+            min_count (int):
                 The minimum number of particles allowed in a leaf cell when
                 using the tree. This can be used for tuning the tree
                 performance.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the calculation.
 
         Returns:
-            column_density (float)
+            column_density (float):
                 The column density of the particles.
         """
         from synthesizer.extensions.column_density import (
@@ -782,8 +758,7 @@ class Particles:
         rot_matrix=None,
         inplace=True,
     ):
-        """
-        Rotate coordinates.
+        """Rotate coordinates.
 
         This method can either use angles or a provided rotation matrix.
 
@@ -800,7 +775,7 @@ class Particles:
             theta (unyt_quantity):
                 The angle in radians to rotate around the y-axis. If rot_matrix
                 is defined this will be ignored.
-            rot_matrix (array-like, float):
+            rot_matrix (np.ndarray of float):
                 A 3x3 rotation matrix to apply to the coordinates
                 instead of phi and theta.
             inplace (bool):
@@ -808,9 +783,8 @@ class Particles:
                 instance.
 
         Returns:
-            Particles
-                A new instance of the particles with the rotated coordinates,
-                if inplace is False.
+            Particles: A new instance of the particles with the rotated
+                coordinates, if inplace is False.
         """
         # Are we using angles?
         if rot_matrix is None:
@@ -855,12 +829,10 @@ class Particles:
 
     @property
     def angular_momentum(self):
-        """
-        Calculate the total angular momentum vector of the particles.
+        """Calculate the total angular momentum vector of the particles.
 
         Returns:
-            unyt_array
-                The angular momentum vector of the particle system.
+            unyt_array: The angular momentum vector of the particle system.
         """
         # Ensure we have all the attributes we need
         if self.coordinates is None:
@@ -892,8 +864,7 @@ class Particles:
         ).to(ang_mom_unit)
 
     def rotate_edge_on(self, inplace=True):
-        """
-        Rotate the particle distribution to edge-on.
+        """Rotate the particle distribution to edge-on.
 
         This will rotate the particle distribution such that the angular
         momentum vector is aligned with the y-axis in an image.
@@ -917,8 +888,7 @@ class Particles:
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
     def rotate_face_on(self, inplace=True):
-        """
-        Rotate the particle distribution to face-on.
+        """Rotate the particle distribution to face-on.
 
         This will rotate the particle distribution such that the angular
         momentum vector is aligned with the z-axis in an image.
@@ -942,25 +912,23 @@ class Particles:
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
     def get_weighted_attr(self, attr, weights, axis=None):
-        """
-        Get a weighted attribute.
+        """Get a weighted attribute.
 
         This will compute the weighted average of an attribute using the
         provided weights.
 
         Args:
-            attr (str)
+            attr (str):
                 The attribute to weight.
-            weights (str/(array-like, float))
+            weights (str/np.ndarray of float):
                 The weights to apply to the attribute. This can either be a
                 string to get the attribute from the particle object or an
                 array-like of the weights.
-            axis (int)
+            axis (int):
                 The axis to compute the weighted attribute along.
 
         Returns:
-            weighted_attr (float)
-                The weighted attribute.
+            weighted_attr (float): The weighted attribute.
         """
         # Get the attribute
         attr_vals = getattr(self, attr)
@@ -981,24 +949,23 @@ class Particles:
     def get_lum_weighted_attr(
         self, attr, spectra_type, filter_code, axis=None
     ):
-        """
-        Get a luminosity weighted attribute.
+        """Get a luminosity weighted attribute.
 
         This will compute the luminosity weighted average of an attribute
         using the provided weights.
 
         Args:
-            attr (str)
+            attr (str):
                 The attribute to weight.
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use to compute the luminosity.
-            filter_code (str)
+            filter_code (str):
                 The filter code to compute the luminosity for.
-            axis (int)
+            axis (int):
                 The axis to compute the weighted attribute along.
 
         Returns:
-            weighted_attr (float)
+            weighted_attr (float):
                 The luminosity weighted attribute.
         """
         # Get the luminosity
@@ -1009,25 +976,23 @@ class Particles:
     def get_flux_weighted_attr(
         self, attr, spectra_type, filter_code, axis=None
     ):
-        """
-        Get a flux weighted attribute.
+        """Get a flux weighted attribute.
 
         This will compute the flux weighted average of an attribute using the
         provided weights.
 
         Args:
-            attr (str)
+            attr (str):
                 The attribute to weight.
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use to compute the flux.
-            filter_code (str)
+            filter_code (str):
                 The filter code to compute the flux for.
-            axis (int)
+            axis (int):
                 The axis to compute the weighted attribute along.
 
         Returns:
-            weighted_attr (float)
-                The flux weighted attribute.
+            weighted_attr (float): The flux weighted attribute.
         """
         # Get the flux
         flux = self.particle_photo_fnu[spectra_type][filter_code]
@@ -1036,29 +1001,24 @@ class Particles:
 
 
 class CoordinateGenerator:
-    """
-    A collection of helper methods for generating random coordinate arrays from
-    various distribution functions.
-    """
+    """A collection of functions for generating random coordinate arrays."""
 
     def generate_3D_gaussian(n, mean=np.zeros(3), cov=None):
-        """
-        A generator for coordinates from a 3D gaussian distribution.
+        """Generate for coordinates from a 3D gaussian distribution.
 
         Args:
-            n (int)
+            n (int):
                 The number of coordinates to sample.
-            mean (array-like, float)
+            mean (np.ndarray of float):
                 The centre of the gaussian distribution. Must be a 3D array
                 containing the centre along each axis.
-            cov (array-like, float)
+            cov (np.ndarray of float):
                 The covariance of the gaussian distribution.
 
         Returns:
-            coords (array-like, float)
+            coords (np.ndarray of float):
                 The sampled coordinates in an (n, 3) array.
         """
-
         # If we haven't been passed a covariance make one
         if cov is None:
             cov = np.zeros((3, 3))
@@ -1070,6 +1030,7 @@ class CoordinateGenerator:
         return coords
 
     def generate_2D_Sersic(N):
+        """Generate a 2D Sersic profile."""
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -1078,6 +1039,7 @@ class CoordinateGenerator:
         )
 
     def generate_3D_spline(N, kernel_func):
+        """Generate a 3D spline profile."""
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "

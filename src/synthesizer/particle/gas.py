@@ -25,8 +25,9 @@ from synthesizer.utils.util_funcs import combine_arrays
 
 
 class Gas(Particles):
-    """
-    The base Gas class. This contains all data a collection of gas particles
+    """The particle Gas class.
+
+    This contains all data a collection of gas particles
     could contain. It inherits from the base Particles class holding
     attributes and methods common to all particle types.
 
@@ -40,15 +41,24 @@ class Gas(Particles):
     None if not provided.
 
     Attributes:
-        metallicities (array-like, float)
+        metallicities (np.ndarray of float):
             The gas phase metallicity of each particle (integrated)
-        star_forming (array-like, bool)
+        star_forming (array-like, bool):
             Flag for whether each gas particle is star forming or not.
-        log10metallicities (float)
+        log10metallicities (float):
             Convnience attribute containing log10(metallicity).
-        smoothing_lengths (array-like, float)
+        smoothing_lengths (np.ndarray of float)
             The smoothing lengths (describing the sph kernel) of each gas
             particle in simulation length units.
+        dust_to_metal_ratio (np.ndarray of float)
+            The ratio between dust and total metal content in a gas
+            particle. This can either be a single float or an array of
+            values for each gas particle.
+        dust_masses (unyt_quantity):
+            The mass of dust in each particle in Msun.
+        star_forming (np.ndarray of bool):
+            A boolean array indicating whether each gas particle is
+            star forming or not.
     """
 
     # Define the allowed attributes
@@ -96,44 +106,45 @@ class Gas(Particles):
         tau_v=None,
         **kwargs,
     ):
-        """
-        Initialise the gas object.
+        """Initialise the gas object.
 
         Args:
-            masses (array-like, float)
+            masses (np.ndarray of float):
                 The mass of each particle in Msun.
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The metallicity of each gas particle.
-            star_forming (array-like, bool)
+            star_forming (array-like, bool):
                 Flag for whether each gas particle is star forming or not.
-            redshift (float)
+            redshift (float):
                 The redshift/s of the stellar particles.
-            coordinates (array-like, float)
+            coordinates (np.ndarray of float):
                 The 3D positions of the particles.
-            velocities (array-like, float)
+            velocities (np.ndarray of float):
                 The 3D velocities of the particles.
-            smoothing_lengths (array-like, float)
+            smoothing_lengths (np.ndarray of float):
                 The smoothing lengths (describing the sph kernel) of each
                 gas particle in simulation length units.
-            dust_to_metal_ratio (array_like, float or float)
+            softening_lengths (np.ndarray of float):
+                The softening lengths of each gas particle in simulation
+                length units.
+            dust_to_metal_ratio (array_like, float or float):
                 The ratio between dust and total metal content in a gas
                 particle. This can either be a single float or an array of
                 values for each gas particle.
-            dust_masses (array_like, float)
+            dust_masses (array_like, float):
                 Mass of dust in each particle in Msun.
-            verbose (bool)
+            verbose (bool):
                 Whether to print extra information to the console.
-            centre (array-like, float)
+            centre (np.ndarray of float):
                 The centre of the galaxy in simulation length units.
-            metallicity_floor (float)
+            metallicity_floor (float):
                 The metallicity floor when using log properties (only matters
                 for baryons). This is used to avoid log(0) errors.
-            tau_v (float)
+            tau_v (float):
                 The dust optical depth in the V band.
-            **kwargs
+            **kwargs (dict):
                 Extra optional properties to set on the gas object.
         """
-
         # Instantiate parent
         Particles.__init__(
             self,
@@ -195,15 +206,13 @@ class Gas(Particles):
             setattr(self, key, value)
 
     def _check_gas_args(self):
-        """
-        Sanitizes the inputs ensuring all arguments agree and are compatible.
+        """Sanitize the inputs ensuring all arguments agree and are compatible.
 
         Raises:
             InconsistentArguments
                 If any arguments are incompatible or not as expected an error
                 is thrown.
         """
-
         # Ensure all arrays are the expected length
         for key in self.attrs:
             attr = getattr(self, key)
@@ -215,17 +224,13 @@ class Gas(Particles):
                     )
 
     def calculate_dust_mass(self):
-        """
-        Calculate dust mass from a given dust-to-metals ratio
-        and gas particle properties (mass and metallicity)
-        """
+        """Calculate dust mass from a given dust-to-metals ratio."""
         self.dust_masses = (
             self.masses * self.metallicities * self.dust_to_metal_ratio
         )
 
     def __str__(self):
-        """
-        Return a string representation of the stars object.
+        """Return a string representation of the stars object.
 
         Returns:
             table (str)
@@ -237,15 +242,14 @@ class Gas(Particles):
         return formatter.get_table("Gas")
 
     def __add__(self, other):
-        """
-        Add two gas objects together.
+        """Add two gas objects together.
 
         Args:
-            other (Gas)
+            other (Gas):
                 The gas object to add to this one.
 
         Returns:
-            new_gas (Gas)
+            new_gas (Gas):
                 A new gas object containing the combined gas particles.
         """
         # Ensure we have a gas object
