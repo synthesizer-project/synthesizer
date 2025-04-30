@@ -233,7 +233,7 @@ class Gas(Particles):
         """Return a string representation of the stars object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the particle object.
         """
         # Intialise the table formatter
