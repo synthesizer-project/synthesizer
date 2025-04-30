@@ -126,7 +126,7 @@ class BaseGalaxy:
         """Return a string representation of the galaxy object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the galaxy object.
         """
         # Intialise the table formatter
