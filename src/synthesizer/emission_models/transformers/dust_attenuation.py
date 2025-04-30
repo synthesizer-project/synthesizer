@@ -33,24 +33,22 @@ __all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLi08"]
 
 
 class AttenuationLaw(Transformer):
-    """
-    The base class for all attenuation laws.
+    """The base class for all attenuation laws.
 
     A child of this class should define it's own get_tau method with any
     model specific behaviours. This will be used by get_transmission (which
     itself can be overloaded by the child if needed).
 
     Attributes:
-        description (str)
+        description (str):
             A description of the type of model. Defined on children classes.
     """
 
     def __init__(self, description):
-        """
-        Initialise the parent and set common attributes.
+        """Initialise the parent and set common attributes.
 
         Args:
-            description (str)
+            description (str):
                 A description of the type of model.
         """
         # Store the description of the model.
@@ -68,23 +66,21 @@ class AttenuationLaw(Transformer):
 
     @accepts(lam=angstrom)
     def get_transmission(self, tau_v, lam):
-        """
-        Compute the transmission curve.
+        """Compute the transmission curve.
 
         Returns the transmitted flux/luminosity fraction based on an optical
         depth at a range of wavelengths.
 
         Args:
-            tau_v (float/array-like, float)
+            tau_v (float/np.ndarray of float):
                 Optical depth in the V-band. Can either be a single float or
                 array.
-
-            lam (array-like, float)
+            lam (np.ndarray of float):
                 The wavelengths (with units) at which to calculate
                 transmission.
 
         Returns:
-            array-like
+            np.ndarray of float:
                 The transmission at each wavelength. Either (lam.size,) in
                 shape for singular tau_v values or (tau_v.size, lam.size)
                 tau_v is an array.
@@ -106,8 +102,7 @@ class AttenuationLaw(Transformer):
         return np.exp(-exponent)
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
-        """
-        Apply the dust attenuation to the emission.
+        """Apply the dust attenuation to the emission.
 
         Args:
             emission (Line/Sed): The emission to transform.
@@ -149,28 +144,27 @@ class AttenuationLaw(Transformer):
         show=True,
         **kwargs,
     ):
-        """
-        Plot the attenuation curve.
+        """Plot the attenuation curve.
 
         Args:
-            lam (array-like, float)
+            lam (np.ndarray of float):
                 The wavelengths (with units) at which to calculate
                 transmission.
-            fig (matplotlib.figure.Figure)
+            fig (matplotlib.figure.Figure):
                 The figure to plot on. If None, a new figure will be created.
-            ax (matplotlib.axes.Axes)
+            ax (matplotlib.axes.Axes):
                 The axis to plot on. If None, a new axis will be created.
-            label (str)
+            label (str):
                 The label to use for the plot.
-            figsize (tuple)
+            figsize (tuple):
                 The size of the figure to create if fig is None.
-            show (bool)
+            show (bool):
                 Whether to show the plot.
-            **kwargs (dict)
+            **kwargs (dict):
                 Keyword arguments to be provided to the `plot` call.
 
         Returns:
-            fig, ax
+            fig, ax:
                 The figure and axis objects.
         """
         if fig is None:
@@ -213,29 +207,28 @@ class AttenuationLaw(Transformer):
         figsize=(8, 6),
         show=True,
     ):
-        """
-        Plot the transmission curve.
+        """Plot the transmission curve.
 
         Args:
-            tau_v (float/array-like, float)
+            tau_v (float/np.ndarray of float):
                 Optical depth in the V-band. Can either be a single float or
                 array.
-            lam (array-like, float)
+            lam (np.ndarray of float):
                 The wavelengths (with units) at which to calculate
                 transmission.
-            fig (matplotlib.figure.Figure)
+            fig (matplotlib.figure.Figure):
                 The figure to plot on. If None, a new figure will be created.
-            ax (matplotlib.axes.Axes)
+            ax (matplotlib.axes.Axes):
                 The axis to plot on. If None, a new axis will be created.
-            label (str)
+            label (str):
                 The label to use for the plot.
-            figsize (tuple)
+            figsize (tuple):
                 The size of the figure to create if fig is None.
-            show (bool)
+            show (bool):
                 Whether to show the plot.
 
         Returns:
-            fig, ax
+            fig, ax:
                 The figure and axis objects.
         """
         if fig is None:
@@ -265,21 +258,19 @@ class AttenuationLaw(Transformer):
 
 
 class PowerLaw(AttenuationLaw):
-    """
-    Custom power law dust curve.
+    """Custom power law dust curve.
 
     Attributes:
-        slope (float)
+        slope (float):
             The slope of the power law.
     """
 
     def __init__(self, slope=-1.0):
-        """
-        Initialise the power law slope of the dust curve.
+        """Initialise the power law slope of the dust curve.
 
         Args:
-            params (dict)
-                A dictionary containing the parameters for the model.
+            slope (float):
+                The slope of the power law dust curve.
         """
         description = "simple power law dust curve"
         AttenuationLaw.__init__(self, description)
@@ -287,33 +278,29 @@ class PowerLaw(AttenuationLaw):
 
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam):
-        """
-        Calculate optical depth at a wavelength.
+        """Calculate optical depth at a wavelength.
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths.
 
         Returns:
-            float/array-like, float
-                The optical depth.
+            float/np.ndarray of float: The optical depth.
         """
         return (lam / (5500.0 * angstrom)) ** self.slope
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
-        """
-        Calculate V-band normalised optical depth.
+        """Calculate V-band normalised optical depth.
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths.
 
         Returns:
-            float/array-like, float
-                The optical depth.
+            float/np.ndarray of float: The optical depth.
         """
         return self.get_tau_at_lam(lam) / self.get_tau_at_lam(
             5500.0 * angstrom
@@ -322,33 +309,28 @@ class PowerLaw(AttenuationLaw):
 
 @accepts(lam=um, cent_lam=um, gamma=um)
 def N09Tau(lam, slope, cent_lam, ampl, gamma):
-    """
-    Generate the transmission curve for the Noll+2009 attenuation curve.
+    """Generate the transmission curve for the Noll+2009 attenuation curve.
 
     Attenuation curve using a modified version of the Calzetti
     attenuation (Calzetti+2000) law allowing for a varying UV slope
     and the presence of a UV bump; from Noll+2009
 
     Args:
-        lam (array-like, float)
+        lam (np.ndarray of float):
             The input wavelength array (expected in AA units,
             global unit).
-
-        slope (float)
+        slope (float):
             The slope of the attenuation curve.
-
-        cent_lam (float)
+        cent_lam (float):
             The central wavelength of the UV bump, expected in microns.
-
-        ampl (float)
+        ampl (float):
             The amplitude of the UV-bump.
-
-        gamma (float)
+        gamma (float):
             The width (FWHM) of the UV bump, in microns.
 
     Returns:
-        (array-like, float)
-            V-band normalised optical depth for given wavelength
+        np.ndarray of float: V-band normalised optical depth for
+            given wavelength
     """
     lam_v = 0.55
     k_lam = np.zeros_like(lam.value)
@@ -395,23 +377,22 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
 
 
 class Calzetti2000(AttenuationLaw):
-    """
-    Calzetti attenuation curve.
+    """Calzetti attenuation curve.
 
     This includes options for the slope and UV-bump implemented in
     Noll et al. 2009.
 
     Attributes:
-        slope (float)
+        slope (float):
             The slope of the attenuation curve.
 
-        cent_lam (float)
+        cent_lam (float):
             The central wavelength of the UV bump, expected in microns.
 
-        ampl (float)
+        ampl (float):
             The amplitude of the UV-bump.
 
-        gamma (float)
+        gamma (float):
             The width (FWHM) of the UV bump, in microns.
 
     """
@@ -424,20 +405,19 @@ class Calzetti2000(AttenuationLaw):
         ampl=0,
         gamma=0.035 * um,
     ):
-        """
-        Initialise the dust curve.
+        """Initialise the dust curve.
 
         Args:
-            slope (float)
+            slope (float):
                 The slope of the attenuation curve.
 
-            cent_lam (float)
+            cent_lam (float):
                 The central wavelength of the UV bump, expected in microns.
 
-            ampl (float)
+            ampl (float):
                 The amplitude of the UV-bump.
 
-            gamma (float)
+            gamma (float):
                 The width (FWHM) of the UV bump, in microns.
         """
         description = (
@@ -455,19 +435,17 @@ class Calzetti2000(AttenuationLaw):
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
-        """
-        Calculate V-band normalised optical depth.
+        """Calculate V-band normalised optical depth.
 
         (Uses the N09Tau function defined above.)
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
 
         Returns:
-            float/array-like, float
-                The optical depth.
+            float/np.ndarray of float: The optical depth.
         """
         return N09Tau(
             lam=lam,
@@ -479,19 +457,17 @@ class Calzetti2000(AttenuationLaw):
 
 
 class MWN18(AttenuationLaw):
-    """
-    Milky Way attenuation curve used in Narayanan+2018.
+    """Milky Way attenuation curve used in Narayanan+2018.
 
     Attributes:
-        data (array-like, float)
+        data (np.ndarray of float)
             The data describing the dust curve, loaded from MW_N18.npz.
-        tau_lam_v (float)
+        tau_lam_v (float):
             The V band optical depth.
     """
 
     def __init__(self):
-        """
-        Initialise the dust curve.
+        """Initialise the dust curve.
 
         This will load the data and get the V band optical depth by
         interpolation.
@@ -505,14 +481,13 @@ class MWN18(AttenuationLaw):
 
     @accepts(lam=angstrom)
     def get_tau(self, lam, interp="cubic"):
-        """
-        Calculate V-band normalised optical depth.
+        """Calculate V-band normalised optical depth.
 
         Args:
-            lam (float/array, float)
+            lam (float/array, float):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
-            interp (str)
+            interp (str):
                 The type of interpolation to use. Can be 'linear', 'nearest',
                 'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
                 'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
@@ -520,8 +495,7 @@ class MWN18(AttenuationLaw):
                 second or third order. Uses scipy.interpolate.interp1d.
 
         Returns:
-            float/array, float
-                The optical depth.
+            float/array, float: The optical depth.
         """
         func = interpolate.interp1d(
             self.data.f.mw_df_lam[::-1],
@@ -533,30 +507,27 @@ class MWN18(AttenuationLaw):
 
 
 class GrainsWD01(AttenuationLaw):
-    """
-    Weingarter and Draine 2001 dust grain extinction model.
+    """Weingarter and Draine 2001 dust grain extinction model.
 
     Includes curves for MW, SMC and LMC or any available in WD01.
 
     Attributes:
-        model (str)
+        model (str):
             The dust grain model used.
         emodel (function)
             The function that describes the model from WD01 imported above.
     """
 
     def __init__(self, model="SMCBar"):
-        """
-        Initialise the dust curve.
+        """Initialise the dust curve.
 
         Args:
-            model (str)
+            model (str):
                 The dust grain model to use.
         """
         AttenuationLaw.__init__(
             self,
-            "Weingarter and Draine 2001 dust grain model"
-            " for MW, SMC, and LMC",
+            "Weingarter and Draine 2001 dust grain model for MW, SMC, and LMC",
         )
 
         # Get the correct model string
@@ -572,15 +543,14 @@ class GrainsWD01(AttenuationLaw):
 
     @accepts(lam=angstrom)
     def get_tau(self, lam, interp="slinear"):
-        """
-        Calculate V-band normalised optical depth.
+        """Calculate V-band normalised optical depth.
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
 
-            interp (str)
+            interp (str):
                 The type of interpolation to use. Can be 'linear', 'nearest',
                 'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
                 'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
@@ -588,8 +558,7 @@ class GrainsWD01(AttenuationLaw):
                 second or third order. Uses scipy.interpolate.interp1d.
 
         Returns:
-            float/array-like, float
-                The optical depth.
+            float/np.ndarray of float: The optical depth.
         """
         lam_lims = np.logspace(2, 8, 10000) * angstrom
         lam_v = 5500 * angstrom  # V-band wavelength
@@ -612,29 +581,27 @@ class GrainsWD01(AttenuationLaw):
 
 @accepts(lam=um)
 def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
-    """
-    Drude-like parametric expression for the attenuation curve from Li+08.
+    """Drude-like parametric expression for the attenuation curve from Li+08.
 
     Args:
-
-        lam (array-like, float)
+        lam (np.ndarray of float):
             The wavelengths (microns units) at which to calculate transmission.
-        UV_slope (float)
+        UV_slope (float):
             Dimensionless parameter describing the UV-FUV slope
-        OPT_NIR_slope (float)
+        OPT_NIR_slope (float):
             Dimensionless parameter describing the optical/NIR slope
-        FUV_slope (float)
+        FUV_slope (float):
             Dimensionless parameter describing the FUV slope
-        bump (float)
+        bump (float):
             Dimensionless parameter describing the UV bump
             strength (0< bump <1)
-        model (string)
+        model (str):
             Via this parameter one can choose one of the templates for
             extinction/attenuation curves from: Calzetti, SMC, MW (R_V=3.1),
             and LMC
 
     Returns:
-            tau/tau_v at each input wavelength (lam)
+            np.ndarray of float/float: tau/tau_v at each input wavelength (lam)
     """
     # Empirical templates (Calzetti, SMC, MW RV=3.1, LMC)
     if model == "Calzetti":
@@ -671,20 +638,19 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
 
 
 class ParametricLi08(AttenuationLaw):
-    """
-    Parametric, empirical attenuation curve.
+    """Parametric, empirical attenuation curve.
 
     Implemented in Li+08, Evolution of the parameters up to high-z
     (z=12) studied in: Markov+23a,b
 
     Attributes:
-        UV_slope (float)
+        UV_slope (float):
             Dimensionless parameter describing the UV-FUV slope
-        OPT_NIR_slope (float)
+        OPT_NIR_slope (float):
             Dimensionless parameter describing the optical/NIR slope
-        FUV_slope (float)
+        FUV_slope (float):
             Dimensionless parameter describing the FUV slope
-        bump (float)
+        bump (float):
             Dimensionless parameter describing the UV bump
             strength (0< bump <1)
         model (string)
@@ -701,20 +667,19 @@ class ParametricLi08(AttenuationLaw):
         bump=0.0,
         model=None,
     ):
-        """
-        Initialise the dust curve.
+        """Initialise the dust curve.
 
         Args:
-            UV_slope (float)
+            UV_slope (float):
                 Dimensionless parameter describing the UV-FUV slope
-            OPT_NIR_slope (float)
+            OPT_NIR_slope (float):
                 Dimensionless parameter describing the optical/NIR slope
-            FUV_slope (float)
+            FUV_slope (float):
                 Dimensionless parameter describing the FUV slope
-            bump (float)
+            bump (float):
                 Dimensionless parameter describing the UV bump
                 strength (0< bump <1)
-            model (string)
+            model (str):
                 Fixing attenuation/extinction curve to one of the known
                 templates: MW, SMC, LMC, Calzetti
         """
@@ -749,19 +714,17 @@ class ParametricLi08(AttenuationLaw):
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
-        """
-        Calculate V-band normalised optical depth.
+        """Calculate V-band normalised optical depth.
 
         (Uses the Li_08 function defined above.)
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
 
         Returns:
-            float/array-like, float
-                The optical depth.
+            float/np.ndarray of float: The optical depth.
         """
         return Li08(
             lam=lam,

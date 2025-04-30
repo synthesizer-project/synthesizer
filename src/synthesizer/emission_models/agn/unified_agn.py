@@ -30,8 +30,7 @@ from synthesizer.emission_models.transformers import (
 
 
 class UnifiedAGN(BlackHoleEmissionModel):
-    """
-    An emission model that defines the Unified AGN model.
+    """An emission model that defines the Unified AGN model.
 
     The UnifiedAGN model includes a disc, nlr, blr and torus component and
     combines these components taking into accountgeometry of the disc
@@ -71,8 +70,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         label="intrinsic",
         **kwargs,
     ):
-        """
-        Initialize the UnifiedAGN model.
+        """Initialize the UnifiedAGN model.
 
         Args:
             nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
@@ -81,6 +79,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 emission model to use for the torus.
             covering_fraction_nlr (float): The covering fraction of the NLR.
             covering_fraction_blr (float): The covering fraction of the BLR.
+            covered_fraction (float): The covering fraction of the disc.
             label (str): The label for the model.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.

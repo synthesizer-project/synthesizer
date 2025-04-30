@@ -61,8 +61,7 @@ from synthesizer.units import Quantity, accepts
 
 
 class EmissionModel(Extraction, Generation, Transformation, Combination):
-    """
-    A class to define the construction of an emission from a grid.
+    """A class to define the construction of an emission from a grid.
 
     An emission can either be a spectra (Sed) or a set of
     lines (LineCollection).
@@ -191,8 +190,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         vel_shift=False,
         **fixed_parameters,
     ):
-        """
-        Initialise the emission model.
+        """Initialise the emission model.
 
         Each instance of an emission model describes a single step in the
         process of constructing an emission. These different steps can be:
@@ -232,12 +230,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The transform to apply. This is also an alternative (but
                 less obvious) argument for passing a dust curve or IGM model
                 (both are transformers).
-            lum_intrinsic_model_key (EmissionModel):
-                The intrinsic model to use deriving the dust
-                luminosity when computing dust emission.
-            lum_attenuated_model_key (EmissionModel):
-                The attenuated model to use deriving the dust
-                luminosity when computing dust emission.
+            lum_intrinsic_model (EmissionModel):
+                The intrinsic model to use deriving the dust luminosity when
+                computing dust emission.
+            lum_attenuated_model (EmissionModel):
+                The attenuated model to use deriving the dust luminosity when
+                computing dust emission.
             mask_attr (str):
                 The component attribute to mask on.
             mask_thresh (unyt_quantity):
@@ -415,8 +413,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         lum_attenuated_model,
         vel_shift,
     ):
-        """
-        Initialise the correct parent operation.
+        """Initialise the correct parent operation.
 
         Args:
             grid (Grid):
@@ -531,8 +528,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
     def _init_masks(self, mask_attr, mask_thresh, mask_op):
-        """
-        Initialise the mask operation.
+        """Initialise the mask operation.
 
         Args:
             mask_attr (str):
@@ -658,8 +654,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return self._models.items()
 
     def __getitem__(self, label):
-        """
-        Enable label look up.
+        """Enable label look up.
 
         Lets us access the models in the tree as if an EmissionModel were a
         dictionary.
@@ -705,8 +700,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         )
 
     def _unpack_model_recursively(self, model):
-        """
-        Traverse the model tree and collect what we will need to do.
+        """Traverse the model tree and collect what we will need to do.
 
         Args:
             model (EmissionModel): The model to unpack.
@@ -818,8 +812,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     )
 
     def _set_attr(self, attr, value):
-        """
-        Set an attribute on the model.
+        """Set an attribute on the model.
 
         Args:
             attr (str): The attribute to set.
@@ -839,8 +832,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_grid", None)
 
     def set_grid(self, grid, set_all=False):
-        """
-        Set the grid to extract from.
+        """Set the grid to extract from.
 
         Args:
             grid (Grid):
@@ -873,8 +865,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_extract", None)
 
     def set_extract(self, extract):
-        """
-        Set the spectra to extract from the grid.
+        """Set the spectra to extract from the grid.
 
         Args:
             extract (str):
@@ -925,8 +916,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_apply_to", None)
 
     def set_apply_to(self, apply_to):
-        """
-        Set the spectra to apply the dust curve to.
+        """Set the spectra to apply the dust curve to.
 
         Args:
             apply_to (EmissionModel):
@@ -950,8 +940,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         apply_to=None,
         set_all=False,
     ):
-        """
-        Set the dust attenuation properties on this model.
+        """Set the dust attenuation properties on this model.
 
         Args:
             dust_curve (emission_models.attenuation.*):
@@ -990,8 +979,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_generator", None)
 
     def set_generator(self, generator):
-        """
-        Set the dust emission model on this model.
+        """Set the dust emission model on this model.
 
         Args:
             generator (EmissionModel):
@@ -1018,8 +1006,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_emitter", None)
 
     def set_emitter(self, emitter, set_all=False):
-        """
-        Set the emitter this emission model acts on.
+        """Set the emitter this emission model acts on.
 
         Args:
             emitter (str):
@@ -1043,8 +1030,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return self._per_particle
 
     def set_per_particle(self, per_particle):
-        """
-        Set the per particle flag.
+        """Set the per particle flag.
 
         For per particle spectra we need all children to also be per particle.
 
@@ -1080,8 +1066,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             return False
 
     def set_vel_shift(self, vel_shift, set_all=False):
-        """
-        Set whether we should apply velocity shifts to the spectra.
+        """Set whether we should apply velocity shifts to the spectra.
 
         Only applicable to particle emitters.
 
@@ -1103,8 +1088,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_lum_intrinsic_model", None)
 
     def set_lum_intrinsic_model(self, lum_intrinsic_model):
-        """
-        Set the intrinsic model for computing dust luminosity.
+        """Set the intrinsic model for computing dust luminosity.
 
         Args:
             lum_intrinsic_model (EmissionModel):
@@ -1128,8 +1112,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_lum_attenuated_model", None)
 
     def set_lum_attenuated_model(self, lum_attenuated_model):
-        """
-        Set the attenuated model for computing dust luminosity.
+        """Set the attenuated model for computing dust luminosity.
 
         Args:
             lum_attenuated_model (EmissionModel):
@@ -1153,8 +1136,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_combine", tuple())
 
     def set_combine(self, combine):
-        """
-        Set the models to combine on this model.
+        """Set the models to combine on this model.
 
         Args:
             combine (list):
@@ -1186,8 +1168,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return self._scale_by
 
     def set_scale_by(self, scale_by, set_all=False):
-        """
-        Set the attribute to scale the spectra by.
+        """Set the attribute to scale the spectra by.
 
         Args:
             scale_by (str/list/tuple/EmissionModel):
@@ -1225,8 +1206,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_post_processing", [])
 
     def set_post_processing(self, post_processing, set_all=False):
-        """
-        Set the post processing functions on this model.
+        """Set the post processing functions on this model.
 
         Args:
             post_processing (list):
@@ -1255,8 +1235,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_save", True)
 
     def set_save(self, save, set_all=False):
-        """
-        Set the flag for whether to save the emission.
+        """Set the flag for whether to save the emission.
 
         Args:
             save (bool):
@@ -1275,8 +1254,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self.unpack_model()
 
     def save_spectra(self, *args):
-        """
-        Set the save flag to True for the given spectra.
+        """Set the save flag to True for the given spectra.
 
         Args:
             args (str):
@@ -1295,8 +1273,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_lam_mask", None)
 
     def set_lam_mask(self, lam_mask, set_all=False):
-        """
-        Set the wavelength mask.
+        """Set the wavelength mask.
 
         Args:
             lam_mask (array_like):
@@ -1315,8 +1292,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self.unpack_model()
 
     def add_mask(self, attr, op, thresh, set_all=False):
-        """
-        Add a mask.
+        """Add a mask.
 
         Args:
             attr (str):
@@ -1352,8 +1328,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self.unpack_model()
 
     def clear_masks(self, set_all=False):
-        """
-        Clear all masks.
+        """Clear all masks.
 
         Args:
             set_all (bool):
@@ -1375,8 +1350,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return len(self.masks) > 0
 
     def replace_model(self, replace_label, *replacements, new_label=None):
-        """
-        Remove a child model from this model.
+        """Remove a child model from this model.
 
         Args:
             replace_label (str):
@@ -1481,8 +1455,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self.unpack_model()
 
     def relabel(self, old_label, new_label):
-        """
-        Change the label associated to an existing spectra.
+        """Change the label associated to an existing spectra.
 
         Args:
             old_label (str): The current label of the spectra.
@@ -1511,8 +1484,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         del self._models[old_label]
 
     def fix_parameters(self, **kwargs):
-        """
-        Fix parameters of the model.
+        """Fix parameters of the model.
 
         Args:
             **kwargs:
@@ -1521,8 +1493,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self.fixed_parameters.update(kwargs)
 
     def to_hdf5(self, group):
-        """
-        Save the model to an HDF5 group.
+        """Save the model to an HDF5 group.
 
         Args:
             group (h5py.Group):
@@ -1576,8 +1547,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
     def _get_tree_levels(self, root):
-        """
-        Get the levels of the tree.
+        """Get the levels of the tree.
 
         Args:
             root (str):
@@ -1602,8 +1572,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             model,
             level,
         ):
-            """
-            Recursively assign levels to the models.
+            """Recursively assign levels to the models.
 
             Args:
                 levels (dict):
@@ -1709,12 +1678,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return levels, links, extract_labels, masked_labels
 
     def _get_model_positions(self, levels, root, ychunk=10.0, xchunk=20.0):
-        """
-        Get the position of each model in the tree.
+        """Get the position of each model in the tree.
 
         Args:
             levels (dict):
                 The levels of the models in the tree.
+            root (str):
+                The root of the tree to get the positions for.
             ychunk (float):
                 The vertical spacing between levels.
             xchunk (float):
@@ -1726,8 +1696,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
 
         def _get_parent_pos(pos, model):
-            """
-            Get the position of the parent/s of a model.
+            """Get the position of the parent/s of a model.
 
             Args:
                 pos (dict):
@@ -1753,8 +1722,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             return np.mean([pos[parent][0] for parent in set(parents)])
 
         def _get_child_pos(x, pos, children, level, xchunk):
-            """
-            Get the position of the children of a model.
+            """Get the position of the children of a model.
 
             Args:
                 x (float):
@@ -1780,8 +1748,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             return pos
 
         def _get_level_pos(pos, level, levels, xchunk, ychunk):
-            """
-            Get the position of the models in a level.
+            """Get the position of the models in a level.
 
             Args:
                 pos (dict):
@@ -1851,10 +1818,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return _get_level_pos({root: (0.0, 0.0)}, 1, levels, xchunk, ychunk)
 
     def plot_emission_tree(
-        self, root=None, show=True, fontsize=10, figsize=(6, 6)
+        self,
+        root=None,
+        show=True,
+        fontsize=10,
+        figsize=(6, 6),
     ):
-        """
-        Plot the tree defining the spectra.
+        """Plot the tree defining the spectra.
 
         Args:
             root (str):
@@ -1863,6 +1833,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 Whether to show the plot.
             fontsize (int):
                 The fontsize to use for the labels.
+            figsize (tuple):
+                The size of the figure to plot (width, height).
         """
         # Get the tree levels
         levels, links, extract_labels, masked_labels = self._get_tree_levels(
@@ -2119,8 +2091,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         mask,
         vel_shift,
     ):
-        """
-        Apply overrides to an emission model copy.
+        """Apply overrides to an emission model copy.
 
         This function is used in _get_spectra to apply any emission model
         property overrides passed to that method before generating the
@@ -2268,8 +2239,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         grid_assignment_method="cic",
         **fixed_parameters,
     ):
-        """
-        Generate stellar spectra as described by the emission model.
+        """Generate stellar spectra as described by the emission model.
 
         NOTE: post processing methods defined on the model will be called
         once all spectra are made (these models are preceeded by post_ and
@@ -2331,28 +2301,28 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     - A dictionary of the form:
                       {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
                       to add a specific mask to a particular model.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            spectra (dict)
+            spectra (dict):
                 A dictionary of spectra to add to. This is used for recursive
                 calls to this function.
-            particle_spectra (dict)
+            particle_spectra (dict):
                 A dictionary of particle spectra to add to. This is used for
                 recursive calls to this function.
-            vel_shift (bool)
+            vel_shift (bool):
                 Overide the models flag for using peculiar velocities to apply
                 doppler shift to the generated spectra. Only applicable for
                 particle spectra.
-            _is_related (bool)
+            _is_related (bool):
                 Are we generating related model spectra? If so we don't want
                 to apply any post processing functions or delete any spectra,
                 this will be done outside the recursive call.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use when generating the spectra.
-            grid_assignment_method (str)
+            grid_assignment_method (str):
                 The method to use when assigning particles to the grid. Options
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
-            fixed_parameters (dict)
+            **fixed_parameters (dict):
                 A dictionary of fixed parameters to apply to the model. Each
                 of these will be applied to the model before generating the
                 spectra.
@@ -2637,8 +2607,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         grid_assignment_method="cic",
         **kwargs,
     ):
-        """
-        Generate stellar lines as described by the emission model.
+        """Generate stellar lines as described by the emission model.
 
         NOTE: post processing methods defined on the model will be called
         once all spectra are made (these models are preceeded by post_ and
@@ -2702,19 +2671,24 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     - A dictionary of the form:
                       {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
                       to add a specific mask to a particular model.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            lines (dict)
+            lines (dict):
                 A dictionary of lines to add to. This is used for recursive
                 calls to this function.
-            particle_lines (dict)
+            particle_lines (dict):
                 A dictionary of particle lines to add to. This is used for
                 recursive calls to this function.
-            _is_related (bool)
+            _is_related (bool):
                 Are we generating related model lines? If so we don't want
                 to apply any post processing functions or delete any lines,
                 this will be done outside the recursive call.
-            kwargs (dict)
+            nthreads (int):
+                The number of threads to use when generating the lines.
+            grid_assignment_method (str):
+                The method to use when assigning particles to the grid. Options
+                are "cic" (cloud in cell) or "ngp" (nearest grid point).
+            **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
@@ -2944,8 +2918,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         **kwargs,
     ):
-        """
-        Generate images as described by the emission model.
+        """Generate images as described by the emission model.
 
         This will create images for all models in the emission model which
         have been saved in the passed dictionary of photometry, unless
@@ -2958,7 +2931,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         further down in the tree.
 
         Args:
-            instrument (Instrument)
+            instrument (Instrument):
                 The instrument to use for the image generation.
             fov (float):
                 The field of view of the image in angular units (e.g. arcsec,
@@ -2966,30 +2939,33 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the lines for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            verbose (bool)
-                Are we talking?
-            images (dict)
+            img_type (str):
+                The type of image to generate. Options are "smoothed" or
+                "unsmoothed". If "smoothed" is selected, the image will be
+                convolved with a kernel. If "unsmoothed" is selected, the
+                image will not be convolved with a kernel.
+            images (dict):
                 A dictionary of images to add to. This is used for recursive
                 calls to this function.
-            _is_related (bool)
+            _is_related (bool):
                 Are we generating related model lines? If so we don't want
                 to apply any post processing functions or delete any lines,
                 this will be done outside the recursive call.
-            limit_to (str)
+            limit_to (str):
                 If not None, defines a specifical model to limit the image
                 generation to. Otherwise, all models with saved spectra will
                 have images generated.
-            do_flux (bool)
+            do_flux (bool):
                 If True, the images will be generated from fluxes, if False
                 they will be generated from luminosities.
-            kernel (str)
+            kernel (str):
                 The convolution kernel to use for the image generation. If
                 None, no convolution will be applied.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The threshold for the convolution kernel.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the image generation.
-            kwargs (dict)
+            **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
@@ -3173,8 +3149,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
 
 class StellarEmissionModel(EmissionModel):
-    """
-    An emission model for stellar components.
+    """An emission model for stellar components.
 
     This is a simple wrapper to quickly apply that the emitter a model
     should act on is stellar.
@@ -3191,8 +3166,7 @@ class StellarEmissionModel(EmissionModel):
 
 
 class BlackHoleEmissionModel(EmissionModel):
-    """
-    An emission model for black hole components.
+    """An emission model for black hole components.
 
     This is a simple wrapper to quickly apply that the emitter a model
     should act on is a black hole.
@@ -3209,8 +3183,7 @@ class BlackHoleEmissionModel(EmissionModel):
 
 
 class GalaxyEmissionModel(EmissionModel):
-    """
-    An emission model for whole galaxy.
+    """An emission model for whole galaxy.
 
     A galaxy model sets emitter to "galaxy" to flag to the get_spectra method
     that the model is for a galaxy. By definition a galaxy level spectra can
