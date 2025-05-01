@@ -1,3 +1,5 @@
+"""Tests for OpenMP integration."""
+
 from synthesizer.extensions.openmp_check import check_openmp
 
 

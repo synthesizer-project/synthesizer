@@ -8,9 +8,7 @@ Example usage:
 
 
 class Art:
-    """
-    A class containing art.
-    """
+    """A class containing art."""
 
     synthesizer = (
         "+-+-+-+-+-+-+-+-+-+-+-+\n"
@@ -78,21 +76,19 @@ class Art:
     )
 
 
-def get_centred_art(art, width):
-    """
-    A function to print the art centred in a width.
+def get_centred_art(art: str, width: int) -> str:
+    """Print the art centred in a width.
 
     Args:
-        art (str)
+        art (str):
             The art to be centred.
-        width (int)
+        width (int):
             The number of characters in the region to centre within.
 
     Returns:
         string
             The Art.galaxy art centred within width.
     """
-
     # Split the line into individual lines
     split_art = art.split("\n")
 
@@ -109,19 +105,16 @@ def get_centred_art(art, width):
     return new_string
 
 
-def print_centred_art(art, width):
-    """
-    A function to print the art centred in a width.
+def print_centred_art(art: str, width: int) -> None:
+    """Print the art centred in a width.
 
     Args:
-        width (int)
+        art (str):
+            The art to be centred.
+        width (int):
             The number of characters in the region to centre within.
     """
-
     # Get the centred art
     art = get_centred_art(art, width)
 
     print(art)
-
-
-""

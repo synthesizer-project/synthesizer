@@ -19,8 +19,7 @@ from synthesizer.units import Quantity, accepts, unit_is_compatible
 
 
 class ImagingBase(ABC):
-    """
-    A base class to encompass common functionality for all imaging classes.
+    """A base class to encompass common functionality for all imaging classes.
 
     This base classes handles the common geometry operations and related
     information. Of particular importance is the abstraction of
@@ -76,9 +75,9 @@ class ImagingBase(ABC):
         any imaging class should have. It is not intended to be used directly.
 
         Args:
-            resolution (unyt_quantity)
+            resolution (unyt_quantity):
                 The size of a pixel. Either in angular or Cartesian units.
-            fov (unyt_quantity/tuple, unyt_quantity)
+            fov (unyt_quantity/tuple, unyt_quantity):
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
         """
@@ -120,8 +119,7 @@ class ImagingBase(ABC):
         self.orig_npix = self.npix.copy()
 
     def _compute_npix(self, compute_fov=True):
-        """
-        Compute the number of pixels given the resolution and fov.
+        """Compute the number of pixels given the resolution and fov.
 
         Args:
             compute_fov (bool): If True, compute the fov based on the
@@ -139,8 +137,7 @@ class ImagingBase(ABC):
             self._compute_fov(compute_npix=False)
 
     def _compute_fov(self, compute_npix=True):
-        """
-        Compute the FOV given the resolution and npix.
+        """Compute the FOV given the resolution and npix.
 
         Args:
             compute_npix (bool): If True, compute the npix based on the
@@ -156,8 +153,7 @@ class ImagingBase(ABC):
             self._compute_npix(compute_fov=False)
 
     def _compute_resolution(self, compute_fov=True):
-        """
-        Compute the resolution given the FOV and npix.
+        """Compute the resolution given the FOV and npix.
 
         Args:
             compute_fov (bool): If True, compute the fov based on the
@@ -232,8 +228,7 @@ class ImagingBase(ABC):
         self._compute_npix(compute_fov=True)
 
     def set_fov(self, fov):
-        """
-        Set the field of view of the image.
+        """Set the field of view of the image.
 
         This will also update the resolution and npix to reflect the new
         fov.
@@ -271,8 +266,7 @@ class ImagingBase(ABC):
         self._compute_npix(compute_fov=True)
 
     def set_npix(self, npix):
-        """
-        Set the number of pixels in the image.
+        """Set the number of pixels in the image.
 
         This will also update the resolution and fov to reflect the new npix.
 

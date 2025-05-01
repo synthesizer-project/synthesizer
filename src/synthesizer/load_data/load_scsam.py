@@ -1,4 +1,4 @@
-"""A module for interfacing with the outputs of Semi Analytic Models.
+"""A submodule for loading SC-SAM data into Synthesizer.
 
 Currently implemented are loading methods for
 - SC-SAM (using a parametric method)
@@ -17,8 +17,7 @@ from synthesizer.particle.stars import Stars as ParticleStars
 
 
 def load_SCSAM(fname, method, grid=None, verbose=False):
-    r"""
-    Read an SC-SAM star formation data file.
+    r"""Read an SC-SAM star formation data file.
 
     Returns a list of galaxy objects, halo indices, and birth halo IDs.
     Adapted from code by Aaron Yung.
@@ -147,15 +146,18 @@ def load_SCSAM(fname, method, grid=None, verbose=False):
 
 
 def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
-    """
-    Treat each age-Z bin as a particle.
+    """Treat each age-Z bin as a particle.
 
     Args:
-    SFH: age x Z SFH array as given by SC-SAM for a single galaxy
-    age_lst: age bins in the SFH array (Gyr)
-    Z_lst: metallicity bins in the SFH array (unitless)
+        SFH (unyt_array):
+            age x Z SFH array as given by SC-SAM for a single galaxy.
+        age_lst (list):
+            age bins in the SFH array (Gyr).
+        Z_lst (list):
+            metallicity bins in the SFH array (unitless).
+        verbose (bool):
+            Are we talking?
     """
-
     # Initialise arrays for storing particle information
     p_imass = []  # initial mass
     p_age = []  # age
@@ -201,23 +203,34 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
 
 
 def _load_SCSAM_parametric_galaxy(
-    SFH, age_lst, Z_lst, method, grid, verbose=False
+    SFH,
+    age_lst,
+    Z_lst,
+    method,
+    grid,
+    verbose=False,
 ):
-    """
-    Obtain galaxy SED using the parametric method.
+    """Obtain galaxy SED using the parametric method.
+
     This is done by interpolating the grid.
     Returns a galaxy object.
     Adapted from code by Kartheik Iyer.
 
     Args:
-    SFH: age x Z SFH array as given by SC-SAM for a single galaxy
-    age_lst: age bins in the SFH array (Gyr)
-    Z_lst: metallicity bins in the SFH array (unitless)
-    method: method of interpolating the grid
-            'NNI' - scipy's nearest ND interpolator
-            'RGI' - scipy's regular grid interpolator
+        SFH (unyt_array):
+            age x Z SFH array as given by SC-SAM for a single galaxy.
+        age_lst (list):
+            age bins in the SFH array (Gyr).
+        Z_lst (list):
+            metallicity bins in the SFH array (unitless).
+        method (str):
+            'parametric_NNI' or 'parametric_RGI', depending on how you wish to
+            model your SFZH.
+        grid (grid object):
+            Grid object to extract from.
+        verbose (bool):
+            Are we talking?
     """
-
     # This the grid that we want to interpolate to
     new_age = 10**grid.log10age  # yr
     new_Z = np.log10(grid.metallicity)  # log10Z

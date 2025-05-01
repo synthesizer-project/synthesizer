@@ -1,3 +1,21 @@
+"""A submodule for loading CAMELS data into the synthesizer.
+
+Example usage:
+
+    # Load CAMELS-IllustrisTNG data
+    galaxies = load_CAMELS_IllustrisTNG(
+        _dir="path/to/data",
+        snap_name="snap_033.hdf5",
+        group_name="fof_subhalo_tab_033.hdf5",
+        group_dir="path/to/group",
+        verbose=True,
+        dtm=0.3,
+        physical=True,
+        age_lookup=True,
+        age_lookup_delta_a=1e-4,
+    )
+"""
+
 from functools import partial
 
 import h5py
@@ -6,7 +24,11 @@ from astropy.cosmology import FlatLambdaCDM
 from unyt import Mpc, Msun, kpc, yr
 
 from synthesizer.exceptions import UnmetDependency
-from synthesizer.load_data.utils import age_lookup_table, get_len, lookup_age
+from synthesizer.load_data.utils import (
+    age_lookup_table,
+    get_begin_end_pointers,
+    lookup_age,
+)
 
 from ..particle.galaxy import Galaxy
 
@@ -30,17 +52,16 @@ def _load_CAMELS(
     s_hsml=None,
     dtm=0.3,
 ):
-    """
-    Load CAMELS galaxies into a galaxy object
+    """Load CAMELS galaxies into a galaxy object.
 
     Arbitrary back end for different CAMELS simulation suites
 
     Args:
-        lens (array):
+        lens (np.ndarray of int):
             subhalo particle length array
-        imasses (array):
+        imasses (np.ndarray of float):
             initial masses particle array
-        ages (array):
+        ages (np.ndarray of float):
             particle ages array
         metallicities (array):
             particle summed metallicities array
@@ -66,7 +87,7 @@ def _load_CAMELS(
             boolean array flagging star forming gas particles
         redshift (float):
             Galaxies redshift
-        centre (array)
+        centre (array):
             Coordinates of the galaxies centre. Can be defined
             as required (e.g. can be centre of mass)
         dtm (float):
@@ -77,8 +98,7 @@ def _load_CAMELS(
             `ParticleGalaxy` object containing specified
             stars and gas objects
     """
-
-    begin, end = get_len(lens[:, 4])
+    begin, end = get_begin_end_pointers(lens[:, 4])
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
@@ -101,7 +121,7 @@ def _load_CAMELS(
             smoothing_lengths=smoothing_lengths,
         )
 
-    begin, end = get_len(lens[:, 0])
+    begin, end = get_begin_end_pointers(lens[:, 0])
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
             coordinates=g_coods[b:e] * kpc,
@@ -127,8 +147,7 @@ def load_CAMELS_IllustrisTNG(
     age_lookup_delta_a=1e-4,
     **kwargs,
 ):
-    """
-    Load CAMELS-IllustrisTNG galaxies
+    """Load CAMELS-IllustrisTNG galaxies.
 
     Args:
         dir (string):
@@ -150,12 +169,14 @@ def load_CAMELS_IllustrisTNG(
             Create a lookup table for ages
         age_lookup_delta_a (float):
             Scale factor resolution of the age lookup
+        **kwargs (dict):
+            Additional keyword arguments to pass to the
+            `_load_CAMELS` function.
 
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing star and gas particle
     """
-
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         scale_factor = hf["Header"].attrs["Time"]
         redshift = 1.0 / scale_factor - 1
@@ -284,8 +305,7 @@ def load_CAMELS_Astrid(
     age_lookup_delta_a=1e-4,
     **kwargs,
 ):
-    """
-    Load CAMELS-Astrid galaxies
+    """Load CAMELS-Astrid galaxies.
 
     Args:
         dir (string):
@@ -305,12 +325,14 @@ def load_CAMELS_Astrid(
             Create a lookup table for ages
         age_lookup_delta_a (float):
             Scale factor resolution of the age lookup
+        **kwargs (dict):
+            Additional keyword arguments to pass to the
+            `_load_CAMELS` function.
 
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing star and gas particle
     """
-
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         redshift = hf["Header"].attrs["Redshift"].astype(np.float32)[0]
         scale_factor = hf["Header"].attrs["Time"].astype(np.float32)[0]
@@ -405,8 +427,7 @@ def load_CAMELS_Simba(
     age_lookup_delta_a=1e-4,
     **kwargs,
 ):
-    """
-    Load CAMELS-SIMBA galaxies
+    """Load CAMELS-SIMBA galaxies.
 
     Args:
         dir (string):
@@ -426,12 +447,14 @@ def load_CAMELS_Simba(
             Create a lookup table for ages
         age_lookup_delta_a (float):
             Scale factor resolution of the age lookup
+        **kwargs (dict):
+            Additional keyword arguments to pass to the
+            `_load_CAMELS` function.
 
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing star and gas particle
     """
-
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         redshift = hf["Header"].attrs["Redshift"]
         scale_factor = hf["Header"].attrs["Time"]
@@ -528,8 +551,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     age_lookup_delta_a=1e-4,
     **kwargs,
 ):
-    """
-    Load CAMELS-Swift-EAGLE galaxies
+    """Load CAMELS-Swift-EAGLE galaxies.
 
     Args:
         dir (string):
@@ -549,19 +571,21 @@ def load_CAMELS_SwiftEAGLE_subfind(
             Should the coordinates be converted to physical?
         min_star_part (int):
             minimum number of star particles required to load galaxy
-        num_threads (int)
+        num_threads (int):
             number of threads to use for multiprocessing.
             Default is -1, i.e. use all available cores.
         age_lookup (bool):
             Create a lookup table for ages
         age_lookup_delta_a (int):
             Scale factor resolution of the age lookup
+        **kwargs (dict):
+            Additional keyword arguments to pass to the
+            `_load_CAMELS` function.
 
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing star and gas particle
     """
-
     try:
         import schwimmbad
     except ImportError:

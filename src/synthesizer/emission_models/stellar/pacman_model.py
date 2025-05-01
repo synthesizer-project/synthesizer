@@ -74,8 +74,7 @@ from synthesizer.emission_models.transformers import (
 
 
 class PacmanEmission(StellarEmissionModel):
-    """
-    A class defining the Pacman model.
+    """A class defining the Pacman model.
 
     This model defines both intrinsic and attenuated steller emission with or
     without dust emission. It also includes the option to include escaped
@@ -121,8 +120,7 @@ class PacmanEmission(StellarEmissionModel):
         stellar_dust=True,
         **kwargs,
     ):
-        """
-        Initialize the PacmanEmission model.
+        """Initialize the PacmanEmission model.
 
         Args:
             grid (synthesizer.grid.Grid):
@@ -187,8 +185,7 @@ class PacmanEmission(StellarEmissionModel):
         self._make_total(label, stellar_dust, **kwargs)
 
     def _make_incident(self, **kwargs):
-        """
-        Make the incident emission model.
+        """Make the incident emission model.
 
         This will ignore any escape fraction given the stellar emission
         incident onto the nebular, ism and dust components.
@@ -200,8 +197,7 @@ class PacmanEmission(StellarEmissionModel):
         return IncidentEmission(grid=self._grid, label="incident", **kwargs)
 
     def _make_transmitted(self, **kwargs):
-        """
-        Make the transmitted emission model.
+        """Make the transmitted emission model.
 
         If the grid has not been reprocessed, this will return None for all
         components because the transmitted spectra won't exist.
@@ -245,8 +241,7 @@ class PacmanEmission(StellarEmissionModel):
         )
 
     def _make_intrinsic_no_reprocessing(self, **kwargs):
-        """
-        Make the intrinsic emission model for an un-reprocessed grid.
+        """Make the intrinsic emission model for an un-reprocessed grid.
 
         This will produce the exact same emission as the incident emission but
         unlikely the incident emission, the intrinsic emission will be
@@ -368,8 +363,7 @@ class PacmanEmission(StellarEmissionModel):
 
 
 class BimodalPacmanEmission(StellarEmissionModel):
-    """
-    A class defining the Pacman model split into young and old populations.
+    """A class defining the Pacman model split into young and old populations.
 
     This model defines both intrinsic and attenuated steller emission with or
     without dust emission. It also includes the option to include escaped
@@ -481,8 +475,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         stellar_dust=True,
         **kwargs,
     ):
-        """
-        Initialize the PacmanEmission model.
+        """Initialize the PacmanEmission model.
 
         Args:
             grid (synthesizer.grid.Grid):
@@ -606,8 +599,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         self._make_total(label, stellar_dust, **kwargs)
 
     def _make_incident(self, **kwargs):
-        """
-        Make the incident emission model.
+        """Make the incident emission model.
 
         This will ignore any escape fraction given the stellar emission
         incident onto the nebular, ism and dust components.
@@ -643,8 +635,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         return young_incident, old_incident, incident
 
     def _make_transmitted(self, **kwargs):
-        """
-        Make the transmitted emission model.
+        """Make the transmitted emission model.
 
         If the grid has not been reprocessed, this will return None for all
         components because the transmitted spectra won't exist.
@@ -828,8 +819,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         return young_reprocessed, old_reprocessed, reprocessed
 
     def _make_intrinsic_no_reprocessing(self, **kwargs):
-        """
-        Make the intrinsic emission model for an un-reprocessed grid.
+        """Make the intrinsic emission model for an un-reprocessed grid.
 
         This will produce the exact same emission as the incident emission but
         unlike the incident emission, the intrinsic emission will take into
@@ -868,8 +858,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         return young_intrinsic, old_intrinsic, intrinsic
 
     def _make_intrinsic_reprocessed(self, **kwargs):
-        """
-        Make the intrinsic emission model for a reprocessed grid.
+        """Make the intrinsic emission model for a reprocessed grid.
 
         Returns:
             StellarEmissionModel:
@@ -916,8 +905,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         return young_intrinsic, old_intrinsic, intrinsic
 
     def _make_attenuated(self, **kwargs):
-        """
-        Make the attenuated emission model.
+        """Make the attenuated emission model.
 
         Returns:
             StellarEmissionModel:
@@ -1255,8 +1243,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
 
 class CharlotFall2000(BimodalPacmanEmission):
-    """
-    The Charlot & Fall (2000) emission model.
+    """The Charlot & Fall (2000) emission model.
 
     This emission model is based on the Charlot & Fall (2000) model, which
     describes the emission from a galaxy as a combination of emission from a
@@ -1298,8 +1285,7 @@ class CharlotFall2000(BimodalPacmanEmission):
         stellar_dust=True,
         **kwargs,
     ):
-        """
-        Initialize the PacmanEmission model.
+        """Initialize the PacmanEmission model.
 
         Args:
             grid (synthesizer.grid.Grid):
@@ -1348,8 +1334,7 @@ class CharlotFall2000(BimodalPacmanEmission):
 
 
 class ScreenEmission(PacmanEmission):
-    """
-    The ScreenEmission model.
+    """The ScreenEmission model.
 
     This emission model is a simple dust screen model, where the dust is
     assumed to be in a screen in front of the stars. The dust curve and
@@ -1377,12 +1362,13 @@ class ScreenEmission(PacmanEmission):
         fesc_ly_alpha=None,
         **kwargs,
     ):
-        """
-        Initialize the ScreenEmission model.
+        """Initialize the ScreenEmission model.
 
         Args:
             grid (synthesizer.grid.Grid):
                 The grid object.
+            tau_v (float):
+                The V-band optical depth for the dust screen.
             dust_curve (AttenuationLaw):
                 The assumed dust curve. Defaults to `Calzetti2000` with
                 default parameters.
@@ -1391,6 +1377,11 @@ class ScreenEmission(PacmanEmission):
             label (str):
                 The label for the total emission model. If None this will
                 be set to "total" or "emergent" if dust_emission is None.
+            fesc (float):
+                The escape fraction. This is always zero for this model.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction. This is always zero for
+                this model.
             kwargs:
                 Additional keyword arguments to pass to the models.
         """

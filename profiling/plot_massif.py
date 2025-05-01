@@ -22,8 +22,7 @@ import numpy as np
 
 
 def parse_massif_file(filename):
-    """
-    Parse a massif output file to extract time points and memory usage.
+    """Parse a massif output file to extract time points and memory usage.
 
     Args:
         filename (str):
@@ -64,8 +63,7 @@ def parse_massif_file(filename):
 
 
 def plot_massif_files(filenames):
-    """
-    Plot memory usage over time for multiple massif output files.
+    """Plot memory usage over time for multiple massif output files.
 
     Args:
         filenames (list):

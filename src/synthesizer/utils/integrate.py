@@ -15,8 +15,7 @@ from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
 
 
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
-    """
-    Integrate the last axis of an N-dimensional array.
+    """Integrate the last axis of an N-dimensional array.
 
     Args:
         xs (array-like):

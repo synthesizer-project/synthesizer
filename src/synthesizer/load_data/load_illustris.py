@@ -1,4 +1,4 @@
-"""A module to load IllustrisTNG data into galaxy objects.
+"""A submodule for loading IllustrisTNG data into Synthesizer.
 
 This module provides a function to load particle data from the IllustrisTNG
 simulation into galaxy objects. The data is loaded from the group and particle
@@ -55,8 +55,7 @@ def load_IllustrisTNG(
     age_lookup=True,
     age_lookup_delta_a=1e-4,
 ):
-    """
-    Load IllustrisTNG particle data into galaxy objects.
+    """Load IllustrisTNG particle data into galaxy objects.
 
     Uses the `illustris_python` module, which must be installed manually.
     Loads the particles associated with each subhalo individually, rather than
