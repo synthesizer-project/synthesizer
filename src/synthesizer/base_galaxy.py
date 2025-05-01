@@ -376,15 +376,17 @@ class BaseGalaxy:
             if self.stars is not None:
                 for component_key in self.stars.spectra:
                     if key in component_key:
-                        spectra[key].append(self.stars.spectra[key])
+                        spectra[key].append(self.stars.spectra[component_key])
             if self.black_holes is not None:
                 for component_key in self.black_holes.spectra:
                     if key in component_key:
-                        spectra[key].append(self.black_holes.spectra[key])
+                        spectra[key].append(
+                            self.black_holes.spectra[component_key]
+                        )
             if self.gas is not None:
                 for component_key in self.gas.spectra:
                     if key in component_key:
-                        spectra[key].append(self.gas.spectra[key])
+                        spectra[key].append(self.gas.spectra[component_key])
 
         # Now combine all spectra that have more than one contributing
         # component.
