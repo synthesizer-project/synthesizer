@@ -188,7 +188,7 @@ class Pipeline:
 
         # Check if we can use OpenMP
         if self.nthreads > 1 and not check_openmp():
-            raise exceptions.MissingPartition(
+            raise exceptions.InconsistentArguments(
                 "Can't use multiple threads without OpenMP support. "
                 " Install with: `WITH_OPENMP=1 pip install .`"
             )
