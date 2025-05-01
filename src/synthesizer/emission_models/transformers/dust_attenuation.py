@@ -455,12 +455,8 @@ class Calzetti2000(AttenuationLaw):
                 calculate optical depths (in AA, global unit).
 
         Returns:
-        <<<<<<< HEAD
-            float/np.ndarray of float: The optical depth.
-        =======
-            float/array-like, float
+            float/array-like, float:
                 The V-band noramlised optical depth.
-        >>>>>>> main
         """
         return N09Tau(
             lam=lam,
