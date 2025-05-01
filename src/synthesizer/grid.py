@@ -1282,7 +1282,7 @@ class Grid:
                 The key of the spectra grid to extract as an Sed object.
 
         Returns:
-            Sed
+            Sed:
                 An Sed object.
         """
         # If a grid point is provided call the function above ...
@@ -1358,7 +1358,7 @@ class Grid:
                 by definition.
 
         Returns:
-            synthesizer.emissions.Sed
+            Sed:
                 A synthesizer.emissions object
         """
         # First create a LineCollection containing the grid point
@@ -1400,7 +1400,9 @@ class Grid:
                 by definition.
 
         Returns:
-            lines (LineCollection)
+            lines (LineCollection):
+                A LineCollection object containing the line luminosities and
+                continuums.
         """
         # If a grid point is provided call the function above ...
         if grid_point is not None:
