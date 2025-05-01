@@ -2,9 +2,64 @@
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Mpc, unyt_array
+from unyt import Mpc, rad, unyt_array
 
 from synthesizer.units import accepts
+
+
+@accepts(phi=rad, theta=rad)
+def rotate(
+    coordinates,
+    phi=0 * rad,
+    theta=0 * rad,
+    rot_matrix=None,
+):
+    """Rotate 3D array of coordinates.
+
+    Args:
+        coordinates (np.ndarray of float):
+            1D or 2D array of coordinates
+        phi (unyt_quantity):
+            The angle in radians to rotate around the z-axis. If rot_matrix
+            is defined this will be ignored.
+        theta (unyt_quantity):
+            The angle in radians to rotate around the y-axis. If rot_matrix
+            is defined this will be ignored.
+        rot_matrix (array-like, float):
+            A 3x3 rotation matrix to apply to the coordinates
+            instead of phi and theta.
+
+    Returns:
+        coordinates (np.array)
+            transformed coordinate array
+    """
+    # if len(coordinates.shape) == 1:
+    #     coordinates = np.array([coordinates])
+
+    # Are we using angles?
+    if rot_matrix is None:
+        # Rotation matrix around z-axis (phi)
+        rot_matrix_z = np.array(
+            [
+                [np.cos(phi), -np.sin(phi), 0],
+                [np.sin(phi), np.cos(phi), 0],
+                [0, 0, 1],
+            ]
+        )
+
+        # Rotation matrix around y-axis (theta)
+        rot_matrix_y = np.array(
+            [
+                [np.cos(theta), 0, np.sin(theta)],
+                [0, 1, 0],
+                [-np.sin(theta), 0, np.cos(theta)],
+            ]
+        )
+
+        # Combined rotation matrix
+        rot_matrix = np.dot(rot_matrix_y, rot_matrix_z)
+
+    return np.dot(coordinates, rot_matrix.T)
 
 
 @accepts(coordinates=Mpc, boxsize=Mpc)

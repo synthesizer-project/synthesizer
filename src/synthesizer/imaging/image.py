@@ -21,13 +21,21 @@ import numpy as np
 from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
-from unyt import unyt_array, unyt_quantity
+from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity
+from synthesizer.extensions.timers import tic, toc
+from synthesizer.imaging.base_imaging import ImagingBase
+from synthesizer.imaging.image_generators import (
+    _generate_image_parametric_smoothed,
+    _generate_image_particle_hist,
+    _generate_image_particle_smoothed,
+)
+from synthesizer.units import accepts, unit_is_compatible
+from synthesizer.utils import TableFormatter
 
 
-class Image:
+class Image(ImagingBase):
     """A class for generating images.
 
     This class is used to generate images from particle based data with or
@@ -48,11 +56,11 @@ class Image:
             The array containing the image.
         units (unyt.Units):
             The units of the image.
+        noise_arr (array_like, float):
+            The noise array added to the image.
+        weight_map (array_like, float):
+            The weight map derived from the noise array.
     """
-
-    # Define quantities
-    resolution = Quantity("spatial")
-    fov = Quantity("spatial")
 
     def __init__(
         self,
@@ -73,16 +81,10 @@ class Image:
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
-        # Set the quantities
-        self.resolution = resolution
-        self.fov = fov
+        start = tic()
 
-        # If fov isn't a array, make it one
-        if self.fov is not None and self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # Calculate the shape of the image
-        self._compute_npix()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Attribute to hold the image array itself
         self.arr = None
@@ -99,27 +101,38 @@ class Image:
         self.noise_arr = None
         self.weight_map = None
 
-    def _compute_npix(self):
-        """Compute the number of pixels in the FOV.
+        toc("Creating Image", start)
 
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
+    @property
+    def img(self):
+        """The image array with units."""
+        if self.arr is None:
+            raise exceptions.MissingImage(
+                "The image array hasn't been generated yet. Please run "
+                "get_img_hist() or get_img_smoothed() before accessing the "
+                "image."
+            )
+        return self.arr * self.units if self.units is not None else self.arr
+
+    @img.setter
+    def img(self, value):
+        """Set the image array and units."""
+        if isinstance(value, unyt_array):
+            self.arr = value.value
+            self.units = value.units
+        else:
+            self.arr = value
+            self.units = None
+
+    @property
+    def shape(self):
+        """Return the shape of the image.
+
+        Returns:
+            tuple
+                The shape of the image.
         """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self._fov / self._resolution))
-
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
-
-    def _compute_fov(self):
-        """Compute the FOV, based on the number of pixels.
-
-        When resolution and npix are given, the FOV is computed using this
-        function.
-        """
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
+        return self.npix
 
     def resample(self, factor):
         """Resample the image by factor.
@@ -129,9 +142,9 @@ class Image:
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
         """
-        # Perform the conversion on the basic image properties
-        self.resolution /= factor
-        self._compute_npix()
+        # Resample the resoltion, this will also update the npix and fov (if
+        # necessary)
+        self._resample_resolution(factor)
 
         # Resample the image.
         # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
@@ -148,8 +161,7 @@ class Image:
         # Handle the edge case where the conversion between resolutions has
         # messed with the FOV.
         if self.npix[0] != new_shape[0] or self.npix[1] != new_shape[1]:
-            self.npix = new_shape
-            self._compute_fov()
+            self.set_npix(new_shape)
 
     def __add__(self, other_img):
         """Add 2 Images together.
@@ -170,13 +182,15 @@ class Image:
         # Ensure the images have the same resolution
         if self.resolution != other_img.resolution:
             raise exceptions.InconsistentAddition(
-                "The images must have the same resolution to be added."
+                "The images must have the same resolution to be added "
+                f"({self.resolution}, {other_img.resolution})."
             )
 
         # Ensure the images have the same fov
         if np.any(self.fov != other_img.fov):
             raise exceptions.InconsistentAddition(
-                "The images must have the same fov to be added."
+                "The images must have the same fov to be added "
+                f"({self.fov}, {other_img.fov})."
             )
 
         # Hanlde if units are involved or not
@@ -200,6 +214,18 @@ class Image:
                 f"{other_img.units if other_img.units is not None else s})."
             )
 
+    def __str__(self):
+        """Return a string representation of the Image object.
+
+        Returns:
+            table (str)
+                A string representation of the Image object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Image")
+
     def __mul__(self, mult):
         """Multiply the image by a multiplier.
 
@@ -215,7 +241,7 @@ class Image:
         new_img = Image(self.resolution, self.fov)
 
         # Associate the image array and units
-        new_img.arr = self.arr
+        new_img.arr = self.arr.copy()
         new_img.units = self.units
 
         # Multiply the image array
@@ -225,7 +251,8 @@ class Image:
     def get_img_hist(
         self,
         signal,
-        coordinates=None,
+        coordinates,
+        normalisation=None,
     ):
         """Calculate an image with no smoothing.
 
@@ -237,43 +264,21 @@ class Image:
                 The signal to be sorted into the image.
             coordinates (unyt_array, float):
                 The coordinates of the particles.
+            normalisation (array_like, float):
+                The normalisation property. This is
+                multiplied by the signal before sorting, then normalised out.
 
         Returns:
             img (array_like, float):
                 A 2D array containing the pixel values sorted into the image.
                 (npix, npix)
         """
-        # Strip off and store the units on the signal if they are present
-        if isinstance(signal, (unyt_quantity, unyt_array)):
-            self.units = signal.units
-            signal = signal.value
-
-        # Return an empty image if there are no particles
-        if signal.size == 0:
-            self.arr = np.zeros(self.npix)
-            return (
-                self.arr * self.units if self.units is not None else self.arr
-            )
-
-        # Convert coordinates and smoothing lengths to the correct units and
-        # strip them off
-        coordinates = coordinates.to(self.resolution.units).value
-
-        self.arr = np.histogram2d(
-            coordinates[:, 0],
-            coordinates[:, 1],
-            bins=(
-                np.linspace(
-                    -self._fov[0] / 2, self._fov[0] / 2, self.npix[0] + 1
-                ),
-                np.linspace(
-                    -self._fov[1] / 2, self._fov[1] / 2, self.npix[1] + 1
-                ),
-            ),
-            weights=signal,
-        )[0]
-
-        return self.arr * self.units if self.units is not None else self.arr
+        return _generate_image_particle_hist(
+            self,
+            signal,
+            coordinates,
+            normalisation=normalisation,
+        )
 
     def get_img_smoothed(
         self,
@@ -283,13 +288,15 @@ class Image:
         kernel=None,
         kernel_threshold=1,
         density_grid=None,
+        normalisation=None,
         nthreads=1,
     ):
         """Calculate a smoothed image.
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
-        calculate the image for each particle efficiently.
+        calculate the image for each particle efficiently. Images can
+        optionally be normalised by a secondary property.
 
         In the parametric case the signal is smoothed over a density grid. This
         density grid is an array defining the weight in each pixel.
@@ -307,6 +314,10 @@ class Image:
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
+            normalisation (array_like, float):
+                The normalisation property to be used for the signal. This is
+                multiplied by the signal before smoothing, then normalised out.
+                (particle case only).
             nthreads (int):
                 The number of threads to use for the C extension. (particle
                 case only)
@@ -321,89 +332,46 @@ class Image:
                 If conflicting particle and parametric arguments are passed
                 or any arguments are missing an error is raised.
         """
-        # Strip off and store the units on the signal if they are present
-        if isinstance(signal, (unyt_quantity, unyt_array)):
-            self.units = signal.units
-            signal = signal.value
-
-        # Ensure we have the right arguments
-        if density_grid is not None and (
+        # Call the correct image generation function (particle or parametric)
+        if density_grid is not None and signal is not None:
+            # Generate the images for the parametric case
+            return _generate_image_parametric_smoothed(
+                self,
+                density_grid=density_grid,
+                signal=signal,
+                normalisation=normalisation,
+            )
+        elif (
             coordinates is not None
-            or smoothing_lengths is not None
-            or kernel is not None
+            and smoothing_lengths is not None
+            and kernel is not None
+            and kernel_threshold is not None
+            and signal is not None
         ):
+            # Generate the images for the particle case
+            return _generate_image_particle_smoothed(
+                self,
+                signal,
+                cent_coords=coordinates,
+                smoothing_lengths=smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                normalisation=normalisation,
+            )
+        else:
             raise exceptions.InconsistentArguments(
-                "Parametric smoothed images only require a density grid. You "
-                "Shouldn't have particle based quantities in conjunction with "
-                "parametric properties, what are you doing?"
+                "Didn't find a valid set of arguments to generate images. "
+                "Please provide either a density grid and a signal for "
+                f"parametric imaging (found density_grid={type(density_grid)} "
+                f"signal={type(signal)}) or coordinates, smoothing "
+                f"lengths, kernel, and kernel_threshold for particle imaging "
+                f"(found coordinates={type(coordinates)}, "
+                f"smoothing_lengths={type(smoothing_lengths)}, "
+                f"kernel={type(kernel)}, "
+                f"kernel_threshold={type(kernel_threshold)}, "
+                f"signal={type(signal)})"
             )
-        if density_grid is None and (
-            coordinates is None or smoothing_lengths is None or kernel is None
-        ):
-            got_coords = "None" if coordinates is None else type(coordinates)
-            got_smls = (
-                "None"
-                if smoothing_lengths is None
-                else type(smoothing_lengths)
-            )
-            got_kernel = "None" if kernel is None else type(kernel)
-            raise exceptions.InconsistentArguments(
-                "Particle based smoothed images require the coordinates"
-                f"({got_coords}), "
-                f"smoothing_lengths ({got_smls}), and kernel arguments "
-                f"({got_kernel}) to be passed."
-            )
-
-        # Handle the parametric case
-        if density_grid is not None:
-            # Multiply the density grid by the sed to get the IFU
-            self.arr = density_grid[:, :] * signal
-
-            return (
-                self.arr * self.units if self.units is not None else self.arr
-            )
-
-        # Return an empty image if there are no particles
-        if signal.size == 0:
-            self.arr = np.zeros(self.npix)
-            return (
-                self.arr * self.units if self.units is not None else self.arr
-            )
-
-        from .extensions.image import make_img
-
-        # Convert coordinates and smoothing lengths to the correct units and
-        # strip them off
-        coordinates = coordinates.to(self.resolution.units).value
-        smoothing_lengths = smoothing_lengths.to(self.resolution.units).value
-
-        # Prepare the inputs, we need to make sure we are passing C contiguous
-        # arrays.
-        signal = np.ascontiguousarray(signal, dtype=np.float64)
-        smls = np.ascontiguousarray(smoothing_lengths, dtype=np.float64)
-        xs = np.ascontiguousarray(
-            coordinates[:, 0] + (self._fov[0] / 2), dtype=np.float64
-        )
-        ys = np.ascontiguousarray(
-            coordinates[:, 1] + (self._fov[1] / 2), dtype=np.float64
-        )
-
-        self.arr = make_img(
-            signal,
-            smls,
-            xs,
-            ys,
-            kernel,
-            self._resolution,
-            self.npix[0],
-            self.npix[1],
-            coordinates.shape[0],
-            kernel_threshold,
-            kernel.size,
-            nthreads,
-        )
-
-        return self.arr * self.units if self.units is not None else self.arr
 
     def apply_psf(self, psf):
         """Apply a Point Spread Function to this image.
@@ -442,9 +410,16 @@ class Image:
             np.ndarray
                 The weight map, derived from 1 / std^2
         """
+        # Make sure the noise has units if we have them
+        if self.units is not None and not isinstance(noise_arr, unyt_array):
+            raise exceptions.InconsistentArguments(
+                "If the Image has units then the noise array must also be "
+                f"passed with units. (image.units = {self.units})"
+            )
+
         # Add the noise array to the image
         if self.units is not None:
-            noisy_img = self.arr * self.units + noise_arr
+            noisy_img = self.arr * self.units + noise_arr.to(self.units)
         else:
             noisy_img = self.arr + noise_arr
 
@@ -507,6 +482,7 @@ class Image:
 
         return new_img
 
+    @accepts(aperture_radius=(kpc, arcsecond))
     def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
         """Apply noise derived from a SNR and depth.
 
@@ -519,9 +495,9 @@ class Image:
             snr (float):
                 The signal to noise ratio of the image.
             depth (unyt_quantity of float):
-                The depth of the image. This is the total signal in the image
-                divided by the area of the image.
-            aperture_radius (unyt_quantity of float):
+                The depth of the image, i.e. the minimum signal strength
+                detectable at the given SNR.
+            aperture_radius (unyt_quantity):
                 The radius of the aperture. If None then a point source is
                 assumed.
 
@@ -535,6 +511,13 @@ class Image:
         """
         # Convert aperture radius to consistent units if we have it
         if aperture_radius is not None:
+            # Check the aperture is compatible with the resolution
+            if not unit_is_compatible(aperture_radius, self.resolution.units):
+                raise exceptions.InconsistentArguments(
+                    "The aperture radius must be compatible with the "
+                    f"resolution units. (aperture_radius = {aperture_radius}, "
+                    f"resolution = {self.resolution})"
+                )
             aperture_radius = aperture_radius.to(self.resolution.units).value
 
         # Ensure we have units if we need them
@@ -753,10 +736,10 @@ class Image:
         figsize=(8, 8),
         title="SYNTHESIZER",
     ):
-        """Convert an image to an unknown pleasures album cover.
+        """Plot the image in the style of Unknown Pleasures.
 
-        Creates a representation of an image similar in style to Joy Division's
-        seminal 1979 album Unknown Pleasures.
+        Creates a representation of an image similar in style to Joy
+        Division's seminal 1979 album Unknown Pleasures.
 
         Borrows some code from this matplotlib examples:
         https://matplotlib.org/stable/gallery/animation/unchained.html

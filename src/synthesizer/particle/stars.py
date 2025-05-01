@@ -284,9 +284,10 @@ class Stars(Particles, StarsComponent):
         # Check the arguments we've been given
         self._check_star_args()
 
-        # Particle stars can calculate and attach a SFZH analogous to a
-        # parametric galaxy
+        # Particle stars can calculate and attach a SFZH (and SFH) analogous
+        # to a parametric galaxy
         self.sfzh = None
+        self.sfh = None
 
     def get_sfr(self, timescale=10 * Myr):
         """Return the star formation rate of the stellar particles.
@@ -333,7 +334,7 @@ class Stars(Particles, StarsComponent):
             log10ages (np.ndarray):
                 log10 stellar ages
         """
-        return np.log10(self.ages) * dimensionless
+        return np.log10(self.ages, dtype=np.float64) * dimensionless
 
     def _check_star_args(self):
         """Sanitizes inputs ensuring all arguments agree and are compatible.
@@ -1239,7 +1240,9 @@ class Stars(Particles, StarsComponent):
             nthreads=nthreads,
         )
 
-        return compute_sfzh(*args)
+        self.sfh = compute_sfzh(*args)
+
+        return self.sfh
 
     def plot_sfh(
         self,

@@ -16,6 +16,8 @@ from synthesizer.extensions.particle_spectra import (
 )
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
+from synthesizer.units import unyt_to_ndview
+from synthesizer.utils import get_attr_c_compatible_double
 
 
 class Extractor(ABC):
@@ -155,12 +157,15 @@ class Extractor(ABC):
                 not log
                 and units != "dimensionless"
                 and isinstance(value, (unyt_array, unyt_quantity))
+                and value.units != units
             ):
-                value = value.to(units).value
+                value = unyt_to_ndview(value, units)
 
-            # We need these values to be arrays for the C code
-            if not isinstance(value, np.ndarray):
-                value = np.array(value)
+            # We know that the extracted values must be arrays, this can not be
+            # the case when we only have 1 value (i.e. a single particle, or
+            # singular valued parametric property) so here we make sure that
+            # we have a 1D array for everything we are returning
+            value = np.atleast_1d(value)
 
             # Append the extracted value to the list
             extracted.append(value)
@@ -174,7 +179,7 @@ class Extractor(ABC):
 
         # Remove the units from the weight if necessary
         if isinstance(weight, (unyt_array, unyt_quantity)):
-            weight = weight.value
+            weight = weight.ndview
 
         toc("Preparing particle data for extraction", start)
 
@@ -301,6 +306,8 @@ class IntegratedParticleExtractor(Extractor):
         else:
             grid_weights = None
 
+        toc("Setting up integrated lnu calculation", start)
+
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
         spec, grid_weights = compute_integrated_sed(
@@ -329,8 +336,6 @@ class IntegratedParticleExtractor(Extractor):
             emitter._grid_weights[grid_assignment_method.lower()][
                 self._grid.grid_name
             ] = grid_weights
-
-        toc("Generating integrated lnu", start)
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -411,6 +416,8 @@ class IntegratedParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
+        toc("Setting up particle line calculation", start)
+
         # Compute the integrated line lum array
         lum, grid_weights = compute_integrated_sed(
             self._line_lum_grid,
@@ -455,8 +462,6 @@ class IntegratedParticleExtractor(Extractor):
             emitter._grid_weights[grid_assignment_method.lower()][
                 self._grid.grid_name
             ] = grid_weights
-
-        toc("Generating integrated line", start)
 
         return LineCollection(
             line_ids=self._grid.line_ids,
@@ -549,6 +554,8 @@ class DopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        toc("Setting up particle lnu (with velocity shift) calculation", start)
+
         # Compute the lnu array
         spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
@@ -556,19 +563,17 @@ class DopplerShiftedParticleExtractor(Extractor):
             self._grid_axes,
             extracted,
             weight,
-            emitter._velocities,
+            get_attr_c_compatible_double(emitter, "_velocities"),
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
             self._grid_nlam,
             grid_assignment_method.lower(),
             nthreads,
-            c.to(vel_units).value,
+            c.to(vel_units).ndview,
             mask,
             lam_mask,
         )
-
-        toc("Generating doppler shifted particle lnu", start)
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -658,6 +663,11 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        toc(
+            "Setting up integrated lnu (with velocity shift) calculation",
+            start,
+        )
+
         # Compute the lnu array
         spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
@@ -665,22 +675,22 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             self._grid_axes,
             extracted,
             weight,
-            emitter._velocities,
+            get_attr_c_compatible_double(emitter, "_velocities"),
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
             self._grid_nlam,
             grid_assignment_method.lower(),
             nthreads,
-            c.to(vel_units).value,
+            c.to(vel_units).ndview,
             mask,
             lam_mask,
         )
 
         # Sum the spectra over the particles
+        sum_start = tic()
         spec = np.sum(spec, axis=0)
-
-        toc("Generating doppler shifted integrated lnu", start)
+        toc("Summing the spectra over the particles", sum_start)
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -764,6 +774,8 @@ class ParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        toc("Setting up particle lnu calculation", start)
+
         # Compute the lnu array
         spec = compute_particle_seds(
             self._spectra_grid,
@@ -779,8 +791,6 @@ class ParticleExtractor(Extractor):
             mask,
             lam_mask,
         )
-
-        toc("Generating particle lnu", start)
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -863,6 +873,8 @@ class ParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
+        toc("Setting up particle line calculation", start)
+
         # Compute the integrated line lum array
         lum = compute_particle_seds(
             self._line_lum_grid,
@@ -894,8 +906,6 @@ class ParticleExtractor(Extractor):
             mask,
             lam_mask,
         )
-
-        toc("Generating particle line", start)
 
         return LineCollection(
             line_ids=self._grid.line_ids,

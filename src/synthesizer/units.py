@@ -80,6 +80,44 @@ def _load_and_convert_unit_categories() -> dict:
 UNIT_CATEGORIES = _load_and_convert_unit_categories()
 
 
+def unit_is_compatible(value, unit):
+    """Check if two values have compatible units.
+
+    This function checks that a unyt_quantity or unyt_array or another Unit is
+    compatible with a unit, i.e. it has the same dimensions.
+    If they are not compatible, it raises an exception.
+
+    This could also be done wrapping a conversion attempt in a try/except
+    block but this is more efficient as it avoids the overhead of
+    unyt's conversion system.
+
+    I might have missed a method in unyt for this but I couldn't find one.
+
+    Args:
+        value (unyt_quantity/unyt_array/Unit):
+            The value to check.
+        unit (Unit):
+            The unit to check against.
+
+    Returns:
+        bool
+            True if the values have compatible units, False otherwise.
+    """
+    # Handle the unyt_array/unyt_quantity cases
+    if isinstance(value, (unyt_quantity, unyt_array)):
+        return value.units.dimensions == unit.dimensions
+
+    # Handle the Unit case
+    elif isinstance(value, Unit):
+        return value.dimensions == unit.dimensions
+
+    # If we get here then we didn't get two unyt quantities or arrays
+    raise exceptions.InconsistentArguments(
+        "Can only check values with units for compatibility, "
+        f"not {type(value)} and {type(unit)}."
+    )
+
+
 class DefaultUnits:
     """The DefaultUnits class is a container for the default unit system.
 
@@ -478,9 +516,9 @@ class Quantity:
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
             if value.units != self.unit and value.units != dimensionless:
-                value = value.to(self.unit).value
+                value = unyt_to_ndview(value, self.unit)
             else:
-                value = value.value
+                value = value.ndview
 
         # Set the attribute
         setattr(obj, self.private_name, value)
@@ -504,6 +542,121 @@ def has_units(x):
         return True
 
     return False
+
+
+def unyt_to_ndview(arr, unit=None):
+    """Extract the underlying data from a `unyt_array` or `unyt_quantity`.
+
+    An ndview is a pointer to the underlying data of a `unyt_array` or
+    `unyt_quantity`.
+
+    This is a helper function to enable the extraction of the underlying data
+    from a `unyt_array` or `unyt_quantity` WITHOUT making a copy of the data.
+    This is possible with the `ndview` property on a `unyt_array` or
+    `unyt_quantity`, however, this is not implemented with an inplace unit
+    conversion.
+
+    This function can either be used to extract the underlying data in the
+    existing units, or to convert inplace to a new unit and then return the
+    view (an operation not implemented in unyt to date, as far as I can tell).
+
+    Args:
+        arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to
+            extract the data from.
+        unit (unyt.unit_object.Unit): The unit to convert to. If None, the
+            existing unit is used. If the unit is not compatible with the
+            existing unit, an error will be raised.
+
+    Returns:
+        np.ndarray: The underlying data as a numpy array WITHOUT doing a copy.
+
+    Raises:
+        UnitConversionError: If the unit is not compatible with the existing
+            unit.
+    """
+    # If we don't have a unit then just return the ndview
+    if unit is None:
+        return arr.ndview
+
+    # If the units are the same then just return the ndview
+    if arr.units == unit:
+        return arr.ndview
+
+    # Ok, we do need to do a conversion, this sucks but the best thing we
+    # can do to avoid precision issues and many other problems is to
+    # just do the conversion normally and cry about it later
+    return arr.to(unit).ndview
+
+
+def _raise_or_convert(expected_unit, name, value):
+    """Ensure we have been passed compatible units and convert if needed.
+
+    Args:
+        expected_unit (unyt.Unit/list of unyt.Unit):
+            The expected unit for the value.
+        name (str):
+            The name of the variable being checked (only used for error
+            messages).
+        value (Any):
+            The value to check.
+
+    Returns:
+        Any:
+            The value with the expected unit.
+    """
+    # Handle the unyt_array/unyt_quantity cases
+    if isinstance(value, (unyt_array, unyt_quantity)):
+        # We know we have units but are they compatible?
+        if value.units != expected_unit:
+            try:
+                value.convert_to_units(expected_unit)
+            except UnitConversionError:
+                raise exceptions.IncorrectUnits(
+                    f"{name} passed with incompatible units. "
+                    f"Expected {expected_unit} (or equivalent) but "
+                    f"got {value.units}."
+                )
+        return value
+
+    # Handle the list/tuple case
+    elif isinstance(value, (list, tuple)):
+        # Ensure the value is mutable
+        converted = list(value)
+
+        # Loop over the elements of the argument checking
+        # they have units and those units are compatible
+        for j, v in enumerate(value):
+            # Are we missing units on the passed argument?
+            if not has_units(v):
+                raise exceptions.MissingUnits(
+                    f"{name} is missing units! Expected"
+                    f"to be in {expected_unit} "
+                    "(or equivalent)."
+                )
+
+            # Convert to the expected units
+            elif v.units != expected_unit:
+                try:
+                    converted[j] = _raise_or_convert(expected_unit, name, v)
+                except UnitConversionError:
+                    raise exceptions.IncorrectUnits(
+                        f"{name}@{j} passed with "
+                        "incompatible units. "
+                        f"Expected {expected_unit[j]}"
+                        " (or equivalent) but "
+                        f"got {v.units}."
+                    )
+            else:
+                # Otherwise the value is in the expected units
+                converted[j] = v
+
+        return converted
+
+    # If None of these were true then we haven't got units.
+    raise exceptions.MissingUnits(
+        f"{name} is missing units! Expected to "
+        f"be in {expected_unit} (or equivalent)."
+    )
 
 
 def _check_arg(units, name, value):
@@ -542,61 +695,28 @@ def _check_arg(units, name, value):
     if value is None:
         return None
 
-    # Handle the unyt_array/unyt_quantity cases
-    if isinstance(value, (unyt_array, unyt_quantity)):
-        # We know we have units but are they compatible?
-        if value.units != units[name]:
+    # Unpack the units from the units dictionary
+    expected_units = units[name]
+
+    # We have two cases now, either we have a single unit and the check is
+    # trivial or we have a list of units and we need to check each one
+    if isinstance(expected_units, (list, tuple)):
+        for i, unit in enumerate(expected_units):
+            # Try each unit conversion and capture the error to raise a
+            # more informative error message for this situation
             try:
-                return value.to(units[name])
-            except UnitConversionError:
-                raise exceptions.IncorrectUnits(
-                    f"{name} passed with incompatible units. "
-                    f"Expected {units[name]} (or equivalent) but "
-                    f"got {value.units}."
-                )
-        else:
-            # Otherwise the value is in the expected units
-            return value
+                return _raise_or_convert(unit, name, value)
+            except (UnitConversionError, exceptions.IncorrectUnits):
+                continue  # we'll raise below
 
-    # Handle the list/tuple case
-    elif isinstance(value, (list, tuple)):
-        # Ensure the value is mutable
-        converted = list(value)
+        # If we get here then none of the units worked so raise an error
+        raise exceptions.IncorrectUnits(
+            f"{name} passed with incompatible units. "
+            f"Expected any of {expected_units} (or equivalent)."
+        )
 
-        # Loop over the elements of the argument checking
-        # they have units and those units are compatible
-        for j, v in enumerate(value):
-            # Are we missing units on the passed argument?
-            if not has_units(v):
-                raise exceptions.MissingUnits(
-                    f"{name} is missing units! Expected"
-                    f"to be in {units[name]} "
-                    "(or equivalent)."
-                )
-
-            # Convert to the expected units
-            elif v.units != units[name]:
-                try:
-                    converted[j] = _check_arg(units, name, v)
-                except UnitConversionError:
-                    raise exceptions.IncorrectUnits(
-                        f"{name}@{j} passed with "
-                        "incompatible units. "
-                        f"Expected {units[name][j]}"
-                        " (or equivalent) but "
-                        f"got {v.units}."
-                    )
-            else:
-                # Otherwise the value is in the expected units
-                converted[j] = v
-
-        return converted
-
-    # If None of these were true then we haven't got units.
-    raise exceptions.MissingUnits(
-        f"{name} is missing units! Expected to "
-        f"be in {units[name]} (or equivalent)."
-    )
+    else:
+        return _raise_or_convert(expected_units, name, value)
 
 
 def accepts(**units):

@@ -58,7 +58,14 @@ class AttenuationLaw(Transformer):
         Transformer.__init__(self, required_params=("tau_v",))
 
     def get_tau(self, *args):
-        """Compute the optical depth."""
+        """Compute the V-band normalised optical depth."""
+        raise exceptions.UnimplementedFunctionality(
+            "AttenuationLaw should not be instantiated directly!"
+            " Instead use one to child models (" + ", ".join(__all__) + ")"
+        )
+
+    def get_tau_at_lam(self, *args):
+        """Compute the optical depth at wavelength."""
         raise exceptions.UnimplementedFunctionality(
             "AttenuationLaw should not be instantiated directly!"
             " Instead use one to child models (" + ", ".join(__all__) + ")"
@@ -315,6 +322,9 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     attenuation (Calzetti+2000) law allowing for a varying UV slope
     and the presence of a UV bump; from Noll+2009
 
+    References:
+        https://ui.adsabs.harvard.edu/abs/2009A%26A...499...69N
+
     Args:
         lam (np.ndarray of float):
             The input wavelength array (expected in AA units,
@@ -445,7 +455,12 @@ class Calzetti2000(AttenuationLaw):
                 calculate optical depths (in AA, global unit).
 
         Returns:
+        <<<<<<< HEAD
             float/np.ndarray of float: The optical depth.
+        =======
+            float/array-like, float
+                The V-band noramlised optical depth.
+        >>>>>>> main
         """
         return N09Tau(
             lam=lam,
@@ -454,6 +469,39 @@ class Calzetti2000(AttenuationLaw):
             ampl=self.ampl,
             gamma=self.gamma,
         )
+
+    @accepts(lam=angstrom)
+    def get_tau_at_lam(self, lam):
+        """Calculate optical depth at a wavelength.
+
+        (Uses the N09Tau function defined above.)
+
+        Args:
+            lam (float/array-like, float):
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/array-like, float
+                The optical depth.
+        """
+        tau_x_v = N09Tau(
+            lam=lam,
+            slope=self.slope,
+            cent_lam=self.cent_lam,
+            ampl=self.ampl,
+            gamma=self.gamma,
+        )
+
+        # V-band wavelength in micron
+        # Since the N09Tau funciton uses micron
+        lam_v = 0.55
+
+        k_v = 4.05 + 2.659 * (
+            -2.156 + (1.509 / lam_v) - (0.198 / lam_v**2) + (0.011 / lam_v**3)
+        )
+
+        return k_v * tau_x_v
 
 
 class MWN18(AttenuationLaw):
@@ -504,6 +552,33 @@ class MWN18(AttenuationLaw):
             fill_value="extrapolate",
         )
         return func(lam) / self.tau_lam_v
+
+    @accepts(lam=angstrom)
+    def get_tau_at_lam(self, lam, interp="cubic"):
+        """Calculate the optical depth at a wavelength.
+
+        Args:
+            lam (float/array, float):
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+            interp (str):
+                The type of interpolation to use. Can be 'linear', 'nearest',
+                'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
+                'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
+                'cubic' refer to a spline interpolation of zeroth, first,
+                second or third order. Uses scipy.interpolate.interp1d.
+
+        Returns:
+            float/array, float
+                The optical depth.
+        """
+        func = interpolate.interp1d(
+            self.data.f.mw_df_lam[::-1],
+            self.data.f.mw_df_chi[::-1],
+            kind=interp,
+            fill_value="extrapolate",
+        )
+        return func(lam)
 
 
 class GrainsWD01(AttenuationLaw):
@@ -569,6 +644,42 @@ class GrainsWD01(AttenuationLaw):
             fill_value="extrapolate",
         )
         out = func(lam) / func(lam_v)
+
+        if np.isscalar(lam):
+            if lam > lam_lims[-1]:
+                out = func(lam_lims[-1])
+        elif np.sum(lam > lam_lims[-1]) > 0:
+            out[(lam > lam_lims[-1])] = func(lam_lims[-1])
+
+        return out
+
+    @accepts(lam=angstrom)
+    def get_tau_at_lam(self, lam, interp="slinear"):
+        """Calculate optical depth at a wavelength.
+
+        Args:
+            lam (float/array-like, float):
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+            interp (str):
+                The type of interpolation to use. Can be 'linear', 'nearest',
+                'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
+                'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
+                'cubic' refer to a spline interpolation of zeroth, first,
+                second or third order. Uses scipy.interpolate.interp1d.
+
+        Returns:
+            float/array-like, float
+                The optical depth.
+        """
+        lam_lims = np.logspace(2, 8, 10000) * angstrom
+        func = interpolate.interp1d(
+            lam_lims,
+            self.emodel(lam_lims.to_astropy()),
+            kind=interp,
+            fill_value="extrapolate",
+        )
+        out = func(lam)
 
         if np.isscalar(lam):
             if lam > lam_lims[-1]:
@@ -724,7 +835,7 @@ class ParametricLi08(AttenuationLaw):
                 calculate optical depths (in AA, global unit).
 
         Returns:
-            float/np.ndarray of float: The optical depth.
+            float/array-like, float: The V-band normalised optical depth.
         """
         return Li08(
             lam=lam,
@@ -733,4 +844,25 @@ class ParametricLi08(AttenuationLaw):
             FUV_slope=self.FUV_slope,
             bump=self.bump,
             model=self.model,
+        )
+
+    @accepts(lam=angstrom)
+    def get_tau_at_lam(self, lam):
+        """Calculate optical depth at a wavelength.
+
+        (Uses the Li_08 function defined above.)
+
+        Args:
+            lam (float/array-like, float):
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/array-like, float
+                The optical depth.
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "ParametricLi08 form is fit to the normalised Alam/Av values"
+            "for the different models, so does not make sense to have this"
+            "function. Use other attenuation curve models to get tau_v or Av"
         )

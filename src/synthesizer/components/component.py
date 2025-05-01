@@ -11,10 +11,13 @@ respectively.
 
 from abc import ABC, abstractmethod
 
+from unyt import arcsecond, kpc, pc
+
 from synthesizer import exceptions
 from synthesizer.emissions import plot_spectra
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
+from synthesizer.units import unit_is_compatible
 
 
 class Component(ABC):
@@ -75,6 +78,10 @@ class Component(ABC):
         self.images_lnu = {}
         self.images_fnu = {}
 
+        # Define the dictionaries to hold instrument specific spectroscopy
+        self.spectroscopy = {}
+        self.particle_spectroscopy = {}
+
         # Attach a default escape fraction
         self.fesc = fesc if fesc is not None else 0.0
 
@@ -122,6 +129,71 @@ class Component(ABC):
     def get_weighted_attr(self, attr, weights, **kwargs):
         """Return the weighted attribute."""
         pass
+
+    @property
+    def is_parametric(self):
+        """Return whether the component is parametric.
+
+        Returns:
+            bool
+                Whether the component is parametric.
+        """
+        # Import here to avoid circular imports
+        from synthesizer.parametric import BlackHole as ParametricBlackHole
+        from synthesizer.parametric import Stars as ParametricStars
+
+        return isinstance(self, (ParametricStars, ParametricBlackHole))
+
+    @property
+    def is_particle(self):
+        """Return whether the component is particle based.
+
+        Returns:
+            bool
+                Whether the component is particle based.
+        """
+        return not self.is_parametric
+
+    def get_luminosity_distance(self, cosmo):
+        """Get the luminosity distance of the component.
+
+        This requires the redshift to be set on the component.
+
+        This will use the astropy cosmology module to calculate the
+        luminosity distance. If the redshift is 0, the distance will be set to
+        10 pc to avoid any issues with 0s.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation.
+
+        Returns:
+            unyt_quantity:
+                The luminosity distance of the component in kpc.
+        """
+        # If we don't have a redshift then we can't calculate the
+        # luminosity distance
+        if not hasattr(self, "redshift"):
+            raise exceptions.InconsistentArguments(
+                "The component does not have a redshift set."
+            )
+
+        # Check redshift is set
+        if self.redshift is None:
+            raise exceptions.InconsistentArguments(
+                "The component must have a redshift set to calculate the "
+                "luminosity distance."
+            )
+
+        # At redshift > 0 we can calculate the luminosity distance explicitly
+        if self.redshift > 0:
+            return (
+                cosmo.luminosity_distance(self.redshift).to("kpc").value * kpc
+            )
+
+        # At redshift 0 just place the component at 10 pc to
+        # avoid any issues with 0s
+        return (10 * pc).to(kpc)
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """Calculate luminosity photometry using a FilterCollection object.
@@ -424,6 +496,7 @@ class Component(ABC):
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """Make an ImageCollection from component luminosities.
 
@@ -471,6 +544,10 @@ class Component(ABC):
                 returned.
             instrument (Instrument):
                 The instrument to use to generate the images.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -485,8 +562,33 @@ class Component(ABC):
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introduced some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            filters = self.particle_photo_lnu[emission_model.label].filters
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+                filters=filters,
+            )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
 
         # Get the images
         images = emission_model._get_images(
@@ -502,6 +604,7 @@ class Component(ABC):
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=False,
+            cosmo=cosmo,
         )
 
         # Store the images
@@ -525,6 +628,7 @@ class Component(ABC):
         nthreads=1,
         limit_to=None,
         instrument=None,
+        cosmo=None,
     ):
         """Make an ImageCollection from fluxes.
 
@@ -572,6 +676,10 @@ class Component(ABC):
                 returned.
             instrument (Instrument):
                 The instrument to use to generate the images.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
 
         Returns:
             Image : array-like
@@ -586,8 +694,33 @@ class Component(ABC):
             )
 
         # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introduced some premade instruments
         if instrument is None:
-            instrument = Instrument("place-holder", resolution=resolution)
+            # Get the filters from the emitters
+            filters = self.particle_photo_lnu[emission_model.label].filters
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+                filters=filters,
+            )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
 
         # Get the images
         images = emission_model._get_images(
@@ -603,6 +736,7 @@ class Component(ABC):
             nthreads=nthreads,
             limit_to=limit_to,
             do_flux=True,
+            cosmo=cosmo,
         )
 
         # Store the images
@@ -614,6 +748,51 @@ class Component(ABC):
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
+
+    def get_spectroscopy(
+        self,
+        instrument,
+    ):
+        """Get spectroscopy for the component based on a specific instrument.
+
+        This will apply the instrument's wavelength array to each
+        spectra stored on the component.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use for the spectroscopy.
+
+        Returns:
+            dict
+                The spectroscopy for the galaxy.
+        """
+        # Create an entry for the instrument in the spectroscopy
+        # dictionary if it doesn't exist
+        if instrument.label not in self.spectroscopy:
+            self.spectroscopy[instrument.label] = {}
+
+        # Loop over the spectra in the component and apply the instrument
+        for key, sed in self.spectra.items():
+            self.spectroscopy[instrument.label][key] = (
+                sed.apply_instrument_lams(instrument)
+            )
+
+        # If we have particle spectra then do the same for them
+        if (
+            hasattr(self, "particle_spectra")
+            and len(self.particle_spectra) > 0
+        ):
+            if instrument.label not in self.particle_spectroscopy:
+                self.particle_spectroscopy[instrument.label] = {}
+
+            # Loop over the spectra in the component and apply the instrument
+            for key, sed in self.particle_spectra.items():
+                self.particle_spectroscopy[instrument.label][key] = (
+                    sed.apply_instrument_lams(instrument)
+                )
+
+        # Return the spectroscopy for the component
+        return self.spectroscopy[instrument.label]
 
     def plot_spectra(
         self,
@@ -677,11 +856,106 @@ class Component(ABC):
             **kwargs,
         )
 
+    def plot_spectroscopy(
+        self,
+        instrument_label,
+        spectra_to_plot=None,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
+        fig=None,
+        ax=None,
+        **kwargs,
+    ):
+        """Plot the instrument's spectroscopy of the component.
+
+        This will plot the spectroscopy for the component using the
+        instrument's wavelength array. The spectra are plotted
+        in the order they are stored in the spectroscopy dictionary.
+
+        Can either plot specific spectroscopy (specified via spectra_to_plot)
+        or all spectroscopy on the component.
+
+        Args:
+            instrument_label (str):
+                The label of the instrument to use for the spectroscopy.
+            spectra_to_plot (string/list, string):
+                The specific spectroscopy to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool):
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple):
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100) times
+                less than the peak of the spectrum for rest_frame (observed)
+                spectra.
+            xlimits (tuple):
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple):
+                Tuple with size 2 defining the figure size.
+            fig (matplotlib.pyplot.figure):
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes):
+                The matplotlib axes object containing the plotted data.
+            **kwargs (dict):
+                Arguments to the `sed.plot_spectra` method called from this
+                wrapper.
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        # Handling whether we are plotting all spectra, specific spectra, or
+        # a single spectra
+        if spectra_to_plot is None:
+            spectra = self.spectroscopy[instrument_label]
+        elif isinstance(spectra_to_plot, (list, tuple)):
+            spectra = {
+                key: self.spectroscopy[instrument_label][key]
+                for key in spectra_to_plot
+            }
+        else:
+            spectra = self.spectroscopy[instrument_label][spectra_to_plot]
+
+        # Include the instrument label in the spectra key (i.e. plot lables)
+        if isinstance(spectra, dict):
+            spectra = {
+                f"{instrument_label}: {key}": self.spectroscopy[
+                    instrument_label
+                ][key]
+                for key in spectra
+            }
+
+        return plot_spectra(
+            spectra,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+            fig=fig,
+            ax=ax,
+            **kwargs,
+        )
+
     def clear_all_spectra(self):
         """Clear all spectra from the component."""
         self.spectra = {}
         if hasattr(self, "particle_spectra"):
             self.particle_spectra = {}
+
+    def clear_all_spectroscopy(self):
+        """Clear all spectroscopy from the component."""
+        self.spectroscopy = {}
+        if hasattr(self, "particle_spectroscopy"):
+            self.particle_spectroscopy = {}
 
     def clear_all_lines(self):
         """Clear all lines from the component."""
@@ -706,6 +980,7 @@ class Component(ABC):
         self.clear_all_spectra()
         self.clear_all_lines()
         self.clear_all_photometry()
+        self.clear_all_spectroscopy()
 
     def clear_weights(self):
         """Clear all cached grid weights from the component.

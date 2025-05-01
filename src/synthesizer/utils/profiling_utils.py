@@ -1,11 +1,11 @@
-"""A script to test the strong scaling of the particle spectra calculation.
+"""A submodule containing some utility functions for profiling Synthesizer.
 
-Usage:
-    python part_spectra_strong_scaling.py --basename test --max_threads 8
-       --nstars 10**5
+This module defines a set of helper functions for running different types
+of "onboard" performance tests on the Synthesizer package.
+
+For further details see the documentation on the functions below.
 """
 
-import argparse
 import os
 import sys
 import tempfile
@@ -14,12 +14,6 @@ import time
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Myr
-
-from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist
-from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle.stars import sample_sfzh
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -28,62 +22,37 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def part_spectra_strong_scaling(
-    basename,
-    max_threads=8,
-    nstars=10**5,
-    average_over=10,
-    gam="cic",
+def _run_averaged_scaling_test(
+    max_threads,
+    average_over,
+    log_outpath,
+    operation_function,
+    kwargs,
+    total_msg,
 ):
-    """Profile the cpu time usage of the particle spectra calculation."""
-    # Define the grid
-    grid_name = "test_grid"
-    grid_dir = "../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+    """
+    Run a scaling test and average the result at each thread count.
 
-    # Define the grid (normally this would be defined by an SPS grid)
-    log10ages = np.arange(6.0, 10.5, 0.1)
-    metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
-    metal_dist = ZDist.Normal(0.005, 0.01)
-    sfh = SFH.Constant(100 * Myr)  # constant star formation
+    Args:
+        max_threads (int): The maximum number of threads to test.
+        average_over (int): The number of times to average the test over.
+        log_outpath (str): The path to save the log file.
+        operation_function (function): The function to test.
+        kwargs (dict): The keyword arguments to pass to the function.
+        total_msg (str): The message to print for the total time.
 
-    # Generate the star formation metallicity history
-    mass = 10**10
-    param_stars = ParametricStars(
-        log10ages,
-        metallicities,
-        sf_hist=sfh,
-        metal_dist=metal_dist,
-        initial_mass=mass,
-    )
-
-    # Sample the SFZH, producing a Stars object
-    stars = sample_sfzh(
-        param_stars.sfzh,
-        param_stars.log10ages,
-        param_stars.log10metallicities,
-        nstars,
-        current_masses=np.full(nstars, 10**8.7 / nstars),
-        redshift=1,
-    )
-
-    # Get spectra in serial first to get over any overhead due to linking
-    # the first time the function is called
-    print("Initial serial spectra calculation")
-    stars.get_particle_spectra_incident(
-        grid, nthreads=1, grid_assignment_method=gam
-    )
-    print()
-
-    # Step 1: Save original stdout file descriptor and redirect
-    # stdout to a temporary file
+    Returns:
+        output (str): The captured output from the test.
+        threads (list): The list of thread counts used in the test.
+    """
+    # Save original stdout file descriptor and redirect stdout to a
+    # temporary file
     original_stdout_fd = sys.stdout.fileno()
     temp_stdout = os.dup(original_stdout_fd)
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         os.dup2(temp_file.fileno(), original_stdout_fd)
 
         # Setup lists for times
-        times = []
         threads = []
 
         # Loop over the number of threads
@@ -92,17 +61,11 @@ def part_spectra_strong_scaling(
             print(f"=== Testing with {nthreads} threads ===")
             for i in range(average_over):
                 spec_start = time.time()
-                stars.get_particle_spectra_incident(
-                    grid, nthreads=nthreads, grid_assignment_method=gam
-                )
+                operation_function(**kwargs, nthreads=nthreads)
                 execution_time = time.time() - spec_start
 
-                print(
-                    "[Total] Getting spectra execution time:",
-                    execution_time,
-                )
+                print(f"[Total] {total_msg}:", execution_time)
 
-                times.append(execution_time)
                 if i == 0:
                     threads.append(nthreads)
 
@@ -113,39 +76,57 @@ def part_spectra_strong_scaling(
                 print(f"=== Testing with {max_threads} threads ===")
                 for i in range(average_over):
                     spec_start = time.time()
-                    stars.get_particle_spectra_incident(
-                        grid,
-                        nthreads=max_threads,
-                        grid_assignment_method=gam,
-                    )
+                    operation_function(**kwargs, nthreads=max_threads)
                     execution_time = time.time() - spec_start
 
-                    print(
-                        "[Total] Getting spectra execution time:",
-                        execution_time,
-                    )
+                    print(f"[Total] {total_msg}:", execution_time)
 
-                    times.append(execution_time)
                     if i == 0:
                         threads.append(max_threads)
 
-    # Step 3: Reset stdout to original
+    # Reset stdout to original
     os.dup2(temp_stdout, original_stdout_fd)
     os.close(temp_stdout)
 
-    # Step 4: Read the captured output from the temporary file
+    # Read the captured output from the temporary file
     with open(temp_file.name, "r") as temp_file:
         output = temp_file.read()
     os.unlink(temp_file.name)
 
-    # Step 5: Parse the output lines and store in a dictionary
-    output_lines = output.splitlines()
-    atomic_runtimes = {}
+    return output, threads
 
+
+def parse_and_collect_runtimes(
+    output,
+    threads,
+    average_over,
+    log_outpath,
+    low_thresh,
+):
+    """
+    Parse the output from the scaling test and collect runtimes.
+
+    Args:
+        output (str): The captured output from the test.
+        threads (list): The list of thread counts used in the test.
+        average_over (int): The number of times to average the test over.
+        log_outpath (str): The path to save the log file.
+
+    Returns:
+        atomic_runtimes (dict):
+            A dictionary containing the runtimes for each key.
+        linestyles (dict):
+            A dictionary mapping keys to their respective linestyles.
+    """
+    # Split the output into lines
+    output_lines = output.splitlines()
+
+    # Set up our output dictionaries
+    atomic_runtimes = {}
     linestyles = {}
+
+    # Loop over the logs and collect the runtimes
     for line in output_lines:
-        if "===" in line:
-            nthreads = int(line.split()[3])
         if ":" in line:
             # Get the key and value from the line
             key, value = line.split(":")
@@ -184,6 +165,20 @@ def part_spectra_strong_scaling(
             for i in range(0, len(atomic_runtimes[key]), average_over)
         ]
 
+    # Some operations get repeated multiple times these will have
+    # more entries in atomic_runtimes lets split them
+    # into their own list
+    for key in atomic_runtimes.keys():
+        if len(atomic_runtimes[key]) > len(threads):
+            # How many times is it repeated
+            n_repeats = len(atomic_runtimes[key]) // len(threads)
+
+            # Average every n_repeats runs
+            atomic_runtimes[key] = [
+                np.sum(atomic_runtimes[key][i : i + n_repeats])
+                for i in range(0, len(atomic_runtimes[key]), n_repeats)
+            ]
+
     # Compute the overhead
     overhead = [
         atomic_runtimes["Total"][i]
@@ -208,7 +203,7 @@ def part_spectra_strong_scaling(
 
     # Save to a text file
     np.savetxt(
-        f"{basename}_particle_strong_scaling_{gam}_{nstars}.txt",
+        log_outpath,
         values,
         fmt=[
             "%.10f" if key != "Threads" else "%d"
@@ -221,6 +216,41 @@ def part_spectra_strong_scaling(
     # Remove the threads from the dictionary
     atomic_runtimes.pop("Threads")
 
+    # Remove any entries which are taking a tiny fraction of the time
+    # and are not the total
+    minimum_time = atomic_runtimes["Total"][-1] * low_thresh
+    old_keys = list(atomic_runtimes.keys())
+    for key in old_keys:
+        if key == "Total":
+            continue
+        if np.mean(atomic_runtimes[key]) < minimum_time:
+            atomic_runtimes.pop(key)
+            linestyles.pop(key)
+
+    # Return the runtimes and linestyles
+    return atomic_runtimes, linestyles
+
+
+def plot_speed_up_plot(
+    atomic_runtimes,
+    threads,
+    linestyles,
+    outpath,
+):
+    """
+    Plot a strong scaling test.
+
+    Args:
+        atomic_runtimes (dict):
+            A dictionary containing the runtimes for each key.
+        threads (list):
+            A list of thread counts.
+        linestyles (dict):
+            A dictionary mapping keys to their respective linestyles.
+        outpath (str):
+            The path to save the plot.
+
+    """
     # Create the figure and gridspec layout
     fig = plt.figure(figsize=(12, 10))
     gs = gridspec.GridSpec(
@@ -240,7 +270,6 @@ def part_spectra_strong_scaling(
         )
 
     ax_main.set_ylabel("Time (s)")
-    ax_main.set_title(f"Particle Spectra Strong Scaling ({nstars} stars)")
     ax_main.grid(True)
 
     # Speedup plot
@@ -297,59 +326,62 @@ def part_spectra_strong_scaling(
     ax_speedup.legend(handles=handles, loc="upper left")
 
     fig.savefig(
-        f"{basename}_particle_strong_scaling_{gam}_NStars"
-        f"{nstars}_TotThreahs{max_threads}.png",
+        outpath,
         dpi=300,
         bbox_inches="tight",
     )
     plt.show()
 
 
-if __name__ == "__main__":
-    # Get the command line args
-    args = argparse.ArgumentParser()
+def run_scaling_test(
+    max_threads,
+    average_over,
+    log_outpath,
+    plot_outpath,
+    operation_function,
+    kwargs,
+    total_msg,
+    low_thresh,
+):
+    """
+    Run a scaling test for the Synthesizer package.
 
-    args.add_argument(
-        "--basename",
-        type=str,
-        default="test",
-        help="The basename of the output files.",
+    For this to deliver the full profiling potential Synthesizer should be
+    installed with the ATOMIC_TIMING configuration option.
+
+    Args:
+        max_threads (int): The maximum number of threads to test.
+        average_over (int): The number of times to average the test over.
+        log_outpath (str): The path to save the log file.
+        plot_outpath (str): The path to save the plot.
+        operation_function (function): The function to test.
+        kwargs (dict): The keyword arguments to pass to the function.
+        total_msg (str): The message to print for the total time.
+        low_thresh (float): The threshold for low runtimes.
+    """
+    # Run the scaling test itself
+    output, threads = _run_averaged_scaling_test(
+        max_threads,
+        average_over,
+        log_outpath,
+        operation_function,
+        kwargs,
+        total_msg,
     )
 
-    args.add_argument(
-        "--max_threads",
-        type=int,
-        default=8,
-        help="The maximum number of threads to use.",
+    # Parse the output
+    runtimes, linestyles = parse_and_collect_runtimes(
+        output,
+        threads,
+        average_over,
+        log_outpath,
+        low_thresh,
     )
 
-    args.add_argument(
-        "--nstars",
-        type=int,
-        default=10**5,
-        help="The number of stars to use in the simulation.",
-    )
-
-    args.add_argument(
-        "--average_over",
-        type=int,
-        default=10,
-        help="The number of times to average over.",
-    )
-
-    args.add_argument(
-        "--grid_assign",
-        type=str,
-        default="cic",
-        help="The grid assignment method (cic or ngp).",
-    )
-
-    args = args.parse_args()
-
-    part_spectra_strong_scaling(
-        args.basename,
-        args.max_threads,
-        args.nstars,
-        args.average_over,
-        args.grid_assign,
+    # Plot the results
+    plot_speed_up_plot(
+        runtimes,
+        threads,
+        linestyles,
+        plot_outpath,
     )

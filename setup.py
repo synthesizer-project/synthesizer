@@ -295,6 +295,7 @@ extensions = [
         [
             "src/synthesizer/imaging/extensions/image.c",
             "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/octree.c",
             "src/synthesizer/extensions/timers.c",
         ],
         compile_flags=compile_flags,

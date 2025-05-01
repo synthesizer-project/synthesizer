@@ -267,7 +267,7 @@ class FilterCollection:
         # within the Quantity instantiation
         self.nfilters = hdf["Header"].attrs["nfilters"]
         self.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
-        self.filter_codes = hdf["Header"].attrs["filter_codes"]
+        self.filter_codes = list(hdf["Header"].attrs["filter_codes"])
 
         # Loop over the groups and make the filters
         for filter_code in self.filter_codes:

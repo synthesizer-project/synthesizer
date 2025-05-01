@@ -46,7 +46,7 @@ import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import kpc, unyt_quantity
+from unyt import arcsecond, kpc, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.operations import (
@@ -56,6 +56,11 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.extensions.timers import tic, toc
+from synthesizer.imaging import ImageCollection
+from synthesizer.imaging.image_generators import (
+    _generate_image_collection_generic,
+)
+from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 
@@ -2333,6 +2338,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
+        start = tic()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2384,7 +2391,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if label in spectra:
                 continue
             try:
-                extract_start = tic()
                 spectra, particle_spectra = self._extract_spectra(
                     emission_model[label],
                     emitters,
@@ -2394,7 +2400,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     nthreads=nthreads,
                     grid_assignment_method=grid_assignment_method,
                 )
-                toc("Extracting spectra", extract_start)
             except Exception as e:
                 if sys.version_info >= (3, 11):
                     e.add_note(f"EmissionModel.label: {label}")
@@ -2588,6 +2593,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_spectra:
                         del particle_spectra[model.label]
 
+        toc("Generating all spectra", start)
+
         return spectra, particle_spectra
 
     def _get_lines(
@@ -2698,6 +2705,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
+        start = tic()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2737,7 +2746,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 continue
 
             try:
-                extract_start = tic()
                 lines, particle_lines = self._extract_lines(
                     line_ids,
                     emission_model[label],
@@ -2748,7 +2756,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     nthreads=nthreads,
                     grid_assignment_method=grid_assignment_method,
                 )
-                toc("Extracting lines", extract_start)
             except Exception as e:
                 if sys.version_info >= (3, 11):
                     e.add_note(f"EmissionModel.label: {label}")
@@ -2900,9 +2907,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_lines:
                         del particle_lines[model.label]
 
+        toc("Generating all lines", start)
+
         return lines, particle_lines
 
-    @accepts(resolution=kpc, fov=kpc)
+    @accepts(fov=(kpc, arcsecond))
     def _get_images(
         self,
         instrument,
@@ -2915,6 +2924,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         do_flux=False,
         kernel=None,
         kernel_threshold=1.0,
+        cosmo=None,
         nthreads=1,
         **kwargs,
     ):
@@ -2951,10 +2961,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 Are we generating related model lines? If so we don't want
                 to apply any post processing functions or delete any lines,
                 this will be done outside the recursive call.
-            limit_to (str):
-                If not None, defines a specifical model to limit the image
-                generation to. Otherwise, all models with saved spectra will
-                have images generated.
+            limit_to (str, list):
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
             do_flux (bool):
                 If True, the images will be generated from fluxes, if False
                 they will be generated from luminosities.
@@ -2963,6 +2973,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 None, no convolution will be applied.
             kernel_threshold (float):
                 The threshold for the convolution kernel.
+            cosmo (Cosmology):
+                The cosmology to use for the image generation. If None,
+                the default cosmology will be used.
             nthreads (int):
                 The number of threads to use for the image generation.
             **kwargs (dict):
@@ -2974,6 +2987,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A dictionary of ImageCollections which can be attached to the
                 appropriate images attribute of the component.
         """
+        start = tic()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2984,88 +2999,45 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if images is None:
             images = {}
 
-        # Get all the images at the extraction leaves of the tree
-        for label in emission_model._extract_keys.keys():
-            # Skip it if we happen to already have the images
-            if label in images:
-                continue
+        # Convert `limit_to` to a list if it is a string
+        if limit_to is not None:
+            limit_to = (
+                [limit_to] if isinstance(limit_to, str) else limit_to.copy()
+            )
 
-            # If we are limiting to a specific model, skip all others
-            if limit_to is not None and label != limit_to:
-                continue
+        # If we are limiting to a specific model/s and these are a combination
+        # model, we need to make sure we include the models they are
+        # combining.
+        _orig_limit_to = limit_to
+        if limit_to is not None:
+            _orig_limit_to = limit_to.copy()
+            for label in limit_to:
+                # Get this model
+                this_model = emission_model._models[label]
 
-            # Also skip any models we didn't save
-            if not emission_model[label].save:
-                continue
+                # If this is a combination model, add the models it is
+                # combining to the list
+                if this_model._is_combining:
+                    limit_to.extend([m.label for m in this_model.combine])
 
-            # Get the images for this model
-            try:
-                images = self._extract_images(
-                    emission_model[label],
-                    instrument,
-                    fov,
-                    img_type,
-                    do_flux,
-                    emitters,
-                    images,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                    limit_to,
-                )
-            except Exception as e:
-                if sys.version_info >= (3, 11):
-                    e.add_note(f"EmissionModel.label: {label}")
-                    raise
-                else:
-                    raise type(e)(
-                        f"{e} [EmissionModel.label: {label}]"
-                    ).with_traceback(e.__traceback__)
+            # Remove duplicates
+            limit_to = list(set(limit_to))
 
-        # Loop through the models from bottom to top order creating the
-        # images as we go
-        for label in emission_model._bottom_to_top:
-            # If we are limiting to a specific model, skip all others
-            if limit_to is not None and label != limit_to:
-                continue
+        # Set up the list to collect all the photometry into so we can generate
+        # images for all models at once
+        photometry = {e: {} for e in emitters.keys()}
 
+        # Loop through all models and collect their photometry
+        for label in emission_model._models.keys():
             # Get this model
             this_model = emission_model._models[label]
 
-            # Get the images for the related models that don't appear in the
-            # main tree
-            for related_model in this_model.related_models:
-                if related_model.label not in images:
-                    images.update(
-                        related_model._get_images(
-                            instrument,
-                            fov,
-                            emitters,
-                            img_type,
-                            images,
-                            _is_related=True,
-                            limit_to=limit_to,
-                            do_flux=do_flux,
-                            kernel=kernel,
-                            kernel_threshold=kernel_threshold,
-                            nthreads=nthreads,
-                            **kwargs,
-                        )
-                    )
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label not in limit_to:
+                continue
 
             # Skip if we didn't save this model
             if not this_model.save:
-                continue
-
-            # Skip models for a different emitters
-            if (
-                this_model.emitter not in emitters
-                and this_model.emitter != "galaxy"
-            ):
-                continue
-
-            # Check we haven't already made this image
-            if label in images:
                 continue
 
             # Get the emitter
@@ -3074,6 +3046,107 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 if this_model.emitter != "galaxy"
                 else None
             )
+
+            # If we have no emitter, we can't generate an image. This is
+            # relevant when the emitter is a galaxy. In this case the images
+            # must be combined in the loop below.
+            if emitter is None:
+                continue
+
+            # Get the appropriate photometry (particle/integrated and
+            # flux/luminosity)
+            try:
+                if do_flux:
+                    this_phot = (
+                        emitter.particle_photo_fnu[label]
+                        if this_model.per_particle
+                        else emitter.photo_fnu[label]
+                    )
+                else:
+                    this_phot = (
+                        emitter.particle_photo_lnu[label]
+                        if this_model.per_particle
+                        else emitter.photo_lnu[label]
+                    )
+            except KeyError:
+                # Ok we are missing the photometry
+                raise exceptions.MissingSpectraType(
+                    f"Can't make an image for {label} without the photometry. "
+                    "Did you not save the spectra or produce the photometry?"
+                )
+
+            # Get only the filters we want for this instrument
+            this_phot = this_phot.select(*instrument.filters.filter_codes)
+
+            # Include this photometry in the list
+            for key, phot in this_phot.items():
+                photometry[this_model.emitter][f"{label}--{key}"] = phot
+
+        # With everything collected, we can now generate the images for each
+        # emitter in one go
+        for emitter in emitters.keys():
+            # Do we have anything to do?
+            if len(photometry[emitter]) == 0:
+                continue
+
+            # Create the combined photometry object that we'll pass to the
+            # C extension for generating the images
+            phot = PhotometryCollection(
+                instrument.filters,
+                **photometry[emitter],
+            )
+
+            # Generate the images for all the models. These will be labelled
+            # incorrectly though
+            _imgs = _generate_image_collection_generic(
+                instrument,
+                phot,
+                fov,
+                img_type=img_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                emitter=emitters[emitter],
+                cosmo=cosmo,
+            )
+
+            # Now we need to loop over the imgs we've create and split them
+            # into the correct models and populate the images dictionary
+            individual_imgs = {}
+            for key in _imgs.keys():
+                # Get the model label
+                model_label, fcode = key.split("--", 1)
+
+                # Create the entry for this model if needed
+                individual_imgs.setdefault(model_label, {})
+
+                # Get the image for this model
+                individual_imgs[model_label][fcode] = _imgs[key]
+
+            # Finally, populate the images dictionary
+            for key in individual_imgs.keys():
+                images[key] = ImageCollection(
+                    resolution=instrument.resolution,
+                    fov=fov,
+                    imgs=individual_imgs[key],
+                )
+
+        # Loop over combination models and create any images we haven't already
+        for label in emission_model._bottom_to_top:
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label not in limit_to:
+                continue
+
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # Skip if we didn't save this model
+            if not this_model.save:
+                continue
+
+            # Check we haven't already made this image
+            if label in images:
+                continue
 
             # Call the appropriate method to generate the image for this model
             if this_model._is_combining:
@@ -3099,51 +3172,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
 
-            elif this_model._is_transforming:
-                try:
-                    images = self._transform_images(
-                        instrument,
-                        fov,
-                        this_model,
-                        img_type,
-                        do_flux,
-                        emitter,
-                        images,
-                        kernel,
-                        kernel_threshold,
-                        nthreads,
-                    )
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
+        # If we are limiting to a specific model, we might might have generated
+        # images for models we don't want to hold on to. Throw them away
+        # if we are limiting to a specific model (but only if not a related
+        # call otherwise we might delete images we need for the combination
+        # models)
+        if limit_to is not None and not _is_related:
+            for key in set(images) - set(_orig_limit_to):
+                del images[key]
 
-            elif this_model._is_dust_emitting or this_model._is_generating:
-                try:
-                    images = self._generate_images(
-                        instrument,
-                        fov,
-                        this_model,
-                        img_type,
-                        do_flux,
-                        emitter,
-                        images,
-                        kernel,
-                        kernel_threshold,
-                        nthreads,
-                    )
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
+        toc("Generating all images", start)
 
         return images
 

@@ -134,7 +134,7 @@ class InstrumentCollection:
         for instrument in instruments:
             # Ensure the object is an Instrument
             if not isinstance(instrument, Instrument):
-                raise exceptions.InconsistentArgument(
+                raise exceptions.InconsistentArguments(
                     f"Object {instrument} is not an Instrument."
                 )
 

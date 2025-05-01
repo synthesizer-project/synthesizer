@@ -114,7 +114,7 @@ def scalar_to_array(value):
     # Do we have units? If so strip them away for now for simplicity
     if isinstance(value, (unyt_quantity, unyt_array)):
         units = value.units
-        value = value.value
+        value = value.ndview
     else:
         units = None
 
@@ -280,7 +280,7 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
     # If wavelengths provided as a unyt_array convert to nm otherwise assume
     # in Angstrom and convert.
     if isinstance(wavelengths, unyt_array):
-        wavelengths_ = wavelengths.to("nm").value
+        wavelengths_ = wavelengths.to("nm").ndview
     else:
         wavelengths_ = wavelengths / 10.0
 
@@ -291,7 +291,7 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
     return rgba
 
 
-def combine_arrays(arr1, arr2):
+def combine_arrays(arr1, arr2, verbose=False):
     """Combine two arrays into a single array.
 
     This function is a helper used to combine two arrays of the same length
@@ -306,6 +306,8 @@ def combine_arrays(arr1, arr2):
             The first array to combine.
         arr2 (np.ndarray):
             The second array to combine.
+        verbose (bool):
+            If True, print warnings for None arrays.
 
     Returns:
         np.ndarray or None: The combined array.
@@ -316,7 +318,9 @@ def combine_arrays(arr1, arr2):
 
     # If one is None and the other is not then return None
     elif arr1 is None or arr2 is None:
-        warn("One of the arrays is None, one is not. Returning None.")
+        if verbose:
+            warn("One of the arrays is None, one is not. Returning None.")
+
         return None
 
     # Ensure both arrays aren't 0 dimensional
@@ -381,3 +385,166 @@ def depluralize(word: str) -> str:
         return word[:-1]
 
     return word  # Return unchanged if no rule applies
+
+
+def ensure_double_precision(value):
+    """Ensure that the input value is a double precision float.
+
+    Args:
+        value (float or unyt_quantity): The value to be converted.
+
+    Returns:
+        unyt_quantity: The input value as a double precision float.
+    """
+    # If the value is None, return it as is
+    if value is None:
+        return value
+
+    # Convert the value to double precision
+    if isinstance(value, (unyt_quantity, unyt_array, np.ndarray)):
+        return value.astype(np.float64)
+    elif isinstance(value, (int, float)):
+        return np.float64(value)
+    elif np.isscalar(value):
+        return np.float64(value)
+    else:
+        raise exceptions.InconsistentArguments(
+            "Value to convert to double precision wasn't compatible:"
+            f"type(value) = {type(value)}"
+        )
+
+
+def is_c_compatible_double(arr):
+    """Check if the input array is compatible with our C extensions.
+
+    Being "compatible" means that the numpy array is both C contiguous and
+    is a double array for floating point numbers.
+
+    If we don't do this then the C extensions will produce garbage due to the
+    mismatch between the data types.
+
+    Args:
+        arr (np.ndarray): The input array to be checked.
+
+    Returns:
+        bool: True if the array is C contiguous and of double precision,
+              False otherwise.
+    """
+    return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.float64
+
+
+def is_c_compatible_int(arr):
+    """Check if the input array is compatible with our C extensions.
+
+    Being "compatible" means that the numpy array is both C contiguous and
+    is an int array for integer numbers.
+
+    If we don't do this then the C extensions will produce garbage due to the
+    mismatch between the data types.
+
+    Args:
+        arr (np.ndarray): The input array to be checked.
+
+    Returns:
+        bool: True if the array is C contiguous and of int type,
+              False otherwise.
+    """
+    return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.intc
+
+
+def ensure_array_c_compatible_double(arr):
+    """Ensure that the input array is compatible with our C extensions.
+
+    Being "compatible" means that the numpy array is both C contiguous and
+    is a double array for floating point numbers.
+
+    If we don't do this then the C extensions will produce garbage due to the
+    mismatch between the data types.
+
+    Args:
+        arr (np.ndarray): The input array to be checked.
+    """
+    # If the array is None, return it as is
+    if arr is None:
+        return arr
+
+    # Convert a list to a numpy array before we move on
+    if isinstance(arr, list):
+        arr = np.array(arr)
+
+    # If we have units we need to strip them off temporarily
+    units = None
+    if isinstance(arr, (unyt_array, unyt_quantity)):
+        units = arr.units
+        arr = arr.ndview
+
+    # If its a scalar then just return it as a double
+    if np.isscalar(arr):
+        return np.float64(arr)
+
+    # Do we need to do anything?
+    need_contiguous = False
+    need_double = False
+    if not arr.flags["C_CONTIGUOUS"]:
+        need_contiguous = True
+    if arr.dtype != np.float64:
+        need_double = True
+
+    # If there's nothing to do then just return
+    if not need_double and not need_contiguous:
+        return arr
+
+    # If we need both we can do it all at once
+    if need_double and need_contiguous:
+        arr = np.ascontiguousarray(arr, dtype=np.float64)
+
+    # If we only need to make it contiguous then do that
+    elif need_contiguous:
+        arr = np.ascontiguousarray(arr)
+
+    # If we only need to make it double then do that
+    elif need_double:
+        arr = arr.astype(np.float64)
+
+    # If we had units then reattach them
+    if units is not None:
+        arr = unyt_array(arr, units)
+
+    return arr
+
+
+def get_attr_c_compatible_double(obj, attr):
+    """Ensure an attribute of an object is compatible with our C extensions.
+
+    This function checks if the attribute of the object is a numpy array and
+    ensures that it is both C contiguous and of double precision. If the
+    attribute is not compatible, it modifies it in place.
+
+    Args:
+        obj (object): The object containing the attribute to be checked.
+        attr (str): The name of the attribute to be checked.
+    """
+    # Get the attribute from the object
+    arr = getattr(obj, attr)
+
+    # Just return it if it's None
+    if arr is None:
+        return arr
+
+    # Handle singular floats
+    if np.isscalar(arr):
+        return np.float64(arr)
+
+    # Ensure the attribute is compatible with C extensions
+    if not is_c_compatible_double(arr):
+        # It's not compatible, make it compatible
+        arr = ensure_array_c_compatible_double(arr)
+
+        # Assign it inplace so we only do this conversion once (but only if we
+        # can actually set it)
+        if hasattr(obj, attr):
+            # Set the attribute to the new array
+            setattr(obj, attr, arr)
+
+    # Also return the array
+    return arr

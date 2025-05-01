@@ -405,6 +405,55 @@ class MissingImage(Exception):
             return "Image not yet created!"
 
 
+class MissingModelSettings(Exception):
+    """Exception class for when a model is missing settings."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        return "Model is missing settings!"
+
+
+class MissingIFU(Exception):
+    """Exception class for when an IFU has not yet been made."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        else:
+            return "IFU not yet created!"
+
+
 class WavelengthOutOfRange(Exception):
     """Exception class for when a wavelength is out of range."""
 

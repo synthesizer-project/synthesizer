@@ -27,7 +27,7 @@ Example usages::
     lines.get_flux(cosmo, z=0.1)
 
     # Get the flux of the lines at redshift z=0.1 with IGM absorption
-    lines.get_flux(cosmo, z=0.1, igm=Inoue14())
+    lines.get_flux(cosmo, z=0.1, igm=Inoue14)
 
     # Get a ratio
     lines.get_ratio("R23")
@@ -181,7 +181,7 @@ class LineCollection:
         self.available_diagrams = []
         self._which_diagrams()
 
-        toc("Initialised LineCollection", start)
+        toc("Creating LineCollection", start)
 
     @property
     def id(self):
@@ -891,7 +891,11 @@ class LineCollection:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            igm_transmission = igm.get_transmission(z, self.obslam)
+            # Support both class references and instantiated objects
+            if callable(igm):
+                igm_transmission = igm().get_transmission(z, self.obslam)
+            else:
+                igm_transmission = igm.get_transmission(z, self.obslam)
             self.flux *= igm_transmission
             self.continuum_flux *= igm_transmission
 
@@ -964,7 +968,12 @@ class LineCollection:
             axis=0,
         )
 
-        return float(numer_lum / denom_lum)
+        # Return a single float if we have a single line
+        if numer_lum.ndim == 1:
+            return float(numer_lum / denom_lum)
+
+        # Otherwise return the ratio array
+        return numer_lum / denom_lum
 
     def get_ratio(self, ratio_id):
         """Measure (and return) a line ratio.

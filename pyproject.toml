@@ -89,6 +89,7 @@ dependencies = [
   "requests",
   "pathos",
   "statsmodels",
+  "pympler",
 ]
 
 # Optional dependencies for specific use cases

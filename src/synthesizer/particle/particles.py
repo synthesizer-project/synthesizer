@@ -9,12 +9,13 @@ import copy
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import Mpc, Msun, km, rad, s
+from unyt import Mpc, Msun, km, pc, rad, s
 
 from synthesizer import exceptions
+from synthesizer.particle.utils import rotate
 from synthesizer.synth_warnings import deprecation
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
 
 
@@ -108,8 +109,8 @@ class Particles:
                 The name of the particle type.
         """
         # Set phase space coordinates
-        self.coordinates = coordinates
-        self.velocities = velocities
+        self.coordinates = ensure_array_c_compatible_double(coordinates)
+        self.velocities = ensure_array_c_compatible_double(velocities)
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
@@ -124,10 +125,12 @@ class Particles:
         # Set unit information
 
         # Set the softening length
-        self.softening_lengths = softening_lengths
+        self.softening_lengths = ensure_array_c_compatible_double(
+            softening_lengths
+        )
 
         # Set the particle masses
-        self.masses = masses
+        self.masses = ensure_array_c_compatible_double(masses)
 
         # Set the redshift of the particles
         self.redshift = redshift
@@ -136,7 +139,7 @@ class Particles:
         self.nparticles = nparticles
 
         # Set the centre of the particle distribution
-        self.centre = centre
+        self.centre = ensure_array_c_compatible_double(centre)
 
         # Set the radius to None, this will be populated when needed and
         # can then be subsequently accessed
@@ -164,10 +167,10 @@ class Particles:
             "The `particle_photo_fluxes` attribute is deprecated. Use "
             "`particle_photo_fnu` instead. Will be removed in v1.0.0"
         )
-        return self.photo_fnu
+        return self.particle_photo_fnu
 
     @property
-    def photo_luminosities(self):
+    def particle_photo_luminosities(self):
         """Get the photometry luminosities.
 
         Returns:
@@ -178,7 +181,7 @@ class Particles:
             "The `particle_photo_luminosities` attribute is deprecated. Use "
             "`particle_photo_lnu` instead. Will be removed in v1.0.0"
         )
-        return self.photo_lnu
+        return self.particle_photo_lnu
 
     @property
     def centered_coordinates(self):
@@ -203,7 +206,216 @@ class Particles:
         mets = self.metallicities
         mets[mets == 0.0] = self.metallicity_floor
 
-        return np.log10(mets)
+        return np.log10(mets, dtype=np.float64)
+
+    def get_projected_angular_coordinates(
+        self,
+        cosmo=None,
+        los_dists=None,
+    ):
+        """Get the projected angular coordinates in radians.
+
+        This will return the angular coordinates of the particles in radians
+        projected along the line of sight axis (always the z-axis). The
+        coordinates along the line of sight axis will be set to 0.0, to
+        maintain the shape of coordinates array.
+
+        The coordinates will be centred on the centre of the particle
+        distribution before calculating the angular coordinates. If the centre
+        is not set then an error will be raised.
+
+        Note that a redshift is required if the los_dists aren't given to
+        convert the coordinates to angular coordinates. If this redshift
+        is 0.0 then the particles will be treated as if they are at 10 pc
+        (minimum distance) from the observer.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the luminosity
+                distance.
+            los_dists (unyt_quantity):
+                The line of sight distances to the particles. If None, this
+                will be calculated using the redshift and cosmology object.
+
+        Returns:
+            unyt_array: The projected angular coordinates of the particles
+                in radians.
+        """
+        # Either cosmo or los_dists must be provided
+        if cosmo is None and los_dists is None:
+            raise exceptions.InconsistentArguments(
+                "Either cosmo or los_dists must be provided to get "
+                "projected angular coordinates."
+            )
+
+        # Get the centered coordinates
+        cent_coords = self.centered_coordinates
+
+        # If we don't have the LOS distances then we need to calculate them
+        if los_dists is None:
+            # Get the luminosity distance
+            lum_dist = self.get_luminosity_distance(cosmo)
+
+            # Combine the luminosity distance with the line of sight distance
+            # (along the z-axis)
+            los_dists = lum_dist + cent_coords[:, 2]
+
+            # If we are at redshift 0.0 then we need to shift things to
+            # put the closest particle at 10 pc
+            if self.redshift == 0.0:
+                z_min = np.min(cent_coords[:, 2])
+                los_dists += np.abs(z_min) + 10 * pc
+        else:
+            # Ok, we have been handed LOS distances, make sure they are the
+            # right shape
+            if los_dists.size != self.nparticles:
+                raise exceptions.InconsistentArguments(
+                    "The LOS distances must be the same shape as the "
+                    f"coordinates. Got {los_dists.size} but expected "
+                    f"{self.nparticles}."
+                )
+
+        # Ensure the distances are in the right units
+        x = cent_coords[:, 0].value
+        y = cent_coords[:, 1].value
+        d = los_dists.to_value(cent_coords.units)
+
+        # Get the angular coordinates and store them in a (N, 3) array
+        coords = np.zeros((self.nparticles, 3), dtype=np.float64)
+        coords[:, 0] = np.arctan2(x, d)
+        coords[:, 1] = np.arctan2(y, d)
+
+        # Ensure the array is C-contiguous
+        coords = ensure_array_c_compatible_double(coords)
+
+        return coords * rad
+
+    def get_projected_angular_smoothing_lengths(
+        self,
+        cosmo=None,
+        los_dists=None,
+    ):
+        """Get the projected angular smoothing lengths in radians.
+
+        This will return the angular smoothing lengths of the particles in
+        radians projected along the line of sight axis (always the z-axis). The
+        coordinates along the line of sight axis will be set to 0.0, to
+        maintain the shape of coordinates array.
+
+        Note that a redshift is required if the los_dists aren't given to
+        convert the coordinates to angular coordinates. If this redshift
+        is 0.0 then the particles will be treated as if they are at 10 pc
+        (minimum distance) from the observer.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the luminosity
+                distance.
+            los_dists (unyt_quantity):
+                The line of sight distances to the particles. If None, this
+                will be calculated using the redshift and cosmology object.
+
+        Returns:
+            unyt_array: The projected angular smoothing lengths of the
+                particles in radians.
+        """
+        # Either cosmo or los_dists must be provided
+        if cosmo is None and los_dists is None:
+            raise exceptions.InconsistentArguments(
+                "Either cosmo or los_dists must be provided to get "
+                "projected angular smoothing lengths."
+            )
+
+        # Get the centered coordinates
+        cent_coords = self.centered_coordinates
+
+        # If we don't have the LOS distances then we need to calculate them
+        if los_dists is None:
+            # Get the luminosity distance
+            lum_dist = self.get_luminosity_distance(cosmo)
+
+            # Combine the luminosity distance with the line of sight distance
+            # (along the z-axis)
+            los_dists = lum_dist + cent_coords[:, 2]
+
+            # If we are at redshift 0.0 then we need to shift things to
+            # put the closest particle at 10 pc
+            if self.redshift == 0.0:
+                z_min = np.min(cent_coords[:, 2])
+                los_dists += np.abs(z_min) + 10 * pc
+        else:
+            # Ok, we have been handed LOS distances, make sure they are the
+            # right shape
+            if los_dists.size != self.nparticles:
+                raise exceptions.InconsistentArguments(
+                    "The LOS distances must be the same shape as the "
+                    f"coordinates. Got {los_dists.size} but expected "
+                    f"{self.nparticles}."
+                )
+
+        # Ensure the distances are in the right units
+        d = los_dists.to_value(self.smoothing_lengths.units)
+
+        # Calculate and return the projected angular smoothing lengths
+        projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
+
+        # Ensure the array is C-contiguous
+        projected_smoothing_lengths = ensure_array_c_compatible_double(
+            projected_smoothing_lengths
+        )
+
+        return projected_smoothing_lengths * rad
+
+    def get_projected_angular_imaging_props(self, cosmo):
+        """Get the projected angular imaging properties.
+
+        This is a convenience method to reduce repeated calculations when
+        getting angular coordinates and smoothing lengths since they both
+        require similar calculations. This method will return the
+        projected angular coordinates and projected angular smoothing
+        lengths of the particles in radians projected along the line of
+        sight axis (always the z-axis). The coordinates along the line of
+        sight axis will be set to 0.0, to maintain the shape of coordinates
+        array.
+
+        Arguments:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the luminosity
+                distance.
+
+        Returns:
+            tuple: A tuple containing the projected angular coordinates and
+                projected angular smoothing lengths of the particles in
+                radians.
+        """
+        # Get the centered coordinates
+        cent_coords = self.centered_coordinates
+
+        # Get the luminosity distance
+        lum_dist = self.get_luminosity_distance(cosmo)
+
+        # Combine the luminosity distance with the line of sight distance
+        # (along the z-axis)
+        los_dists = lum_dist + cent_coords[:, 2]
+
+        # If we are at redshift 0.0 then we need to shift things to
+        # put the closest particle at 10 pc
+        if self.redshift == 0.0:
+            z_min = np.min(cent_coords[:, 2])
+            los_dists += np.abs(z_min) + 10 * pc
+
+        # Compute the projected angular properties
+        projected_angular_coords = self.get_projected_angular_coordinates(
+            los_dists=los_dists,
+        )
+        projected_angular_smls = self.get_projected_angular_smoothing_lengths(
+            los_dists=los_dists,
+        )
+
+        return (
+            projected_angular_coords,
+            projected_angular_smls,
+        )
 
     def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
         """Calculate luminosity photometry using a FilterCollection object.
@@ -408,6 +620,18 @@ class Particles:
             radius (float):
                 The radius of the particle distribution.
         """
+        # Handle special cases
+        if frac == 0:
+            return 0 * self.radii.units
+        elif frac == 1:
+            return np.max(self.radii.value) * self.radii.units
+        elif self.nparticles == 0:
+            return 0 * self.radii.units
+        elif self.nparticles == 1:
+            return self.radii[0].value * frac * self.radii.units
+        elif np.sum(weights) == 0:
+            return 0 * self.radii.units
+
         # Get the radii if not already set
         if self.radii is None:
             self.get_radii()
@@ -786,34 +1010,13 @@ class Particles:
             Particles: A new instance of the particles with the rotated
                 coordinates, if inplace is False.
         """
-        # Are we using angles?
-        if rot_matrix is None:
-            # Rotation matrix around z-axis (phi)
-            rot_matrix_z = np.array(
-                [
-                    [np.cos(phi), -np.sin(phi), 0],
-                    [np.sin(phi), np.cos(phi), 0],
-                    [0, 0, 1],
-                ]
-            )
-
-            # Rotation matrix around y-axis (theta)
-            rot_matrix_y = np.array(
-                [
-                    [np.cos(theta), 0, np.sin(theta)],
-                    [0, 1, 0],
-                    [-np.sin(theta), 0, np.cos(theta)],
-                ]
-            )
-
-            # Combined rotation matrix
-            rot_matrix = np.dot(rot_matrix_y, rot_matrix_z)
-
         # Are we rotating in place or returning a new instance?
         if inplace:
             # Rotate the coordinates
-            self.coordinates = np.dot(self.coordinates, rot_matrix.T)
-            self.velocities = np.dot(self.velocities, rot_matrix.T)
+            self.coordinates = rotate(self.coordinates, phi, theta, rot_matrix)
+            self.velocities = rotate(self.velocities, phi, theta, rot_matrix)
+            if self.centre is not None:
+                self.centre = rotate(self.centre, phi, theta, rot_matrix)
 
             return
 
@@ -821,8 +1024,14 @@ class Particles:
         new_parts = copy.deepcopy(self)
 
         # Rotate the coordinates
-        new_parts.coordinates = np.dot(new_parts.coordinates, rot_matrix.T)
-        new_parts.velocities = np.dot(new_parts.velocities, rot_matrix.T)
+        new_parts.coordinates = rotate(
+            new_parts.coordinates, phi, theta, rot_matrix
+        )
+        new_parts.velocities = rotate(
+            new_parts.velocities, phi, theta, rot_matrix
+        )
+        if self.centre is not None:
+            new_parts.centre = rotate(new_parts.centre, phi, theta, rot_matrix)
 
         # Return the new one
         return new_parts

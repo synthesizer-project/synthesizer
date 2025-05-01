@@ -1,6 +1,6 @@
 """A module containing various reference abundance patterns."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # list of available reference patterns
 available_patterns = ["Asplund2009", "GalacticConcordance", "Gutkin2016"]
@@ -34,21 +34,20 @@ class Asplund2009:
             abundances of various elements in the pattern.
     """
 
-    def __init__(self):
-        """Intialise the Solar abundance pattern used by Asplund (2009)."""
-        # meta information
-        self.ads = (
-            "https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract"
-        )
-        self.doi = "10.1146/annurev.astro.46.060407.145222"
-        self.arxiv = "arXiv:0909.0948"
-        self.bibcode = "2009ARA&A..47..481A"
+    # meta information
+    ads: str = (
+        "https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract"
+    )
+    doi: str = "10.1146/annurev.astro.46.060407.145222"
+    arxiv: str = "arXiv:0909.0948"
+    bibcode: str = "2009ARA&A..47..481A"
 
-        # total metallicity
-        self.metallicity = 0.0134
+    # total metallicity
+    metallicity: float = 0.0134
 
-        # logarthmic abundances, i.e. log10(N_element/N_H)
-        self.abundance = {
+    # logarithmic abundances, i.e. log10(N_element/N_H)
+    abundance: dict = field(
+        default_factory=lambda: {
             "H": 0.0,
             "He": -1.07,
             "Li": -10.95,
@@ -80,6 +79,7 @@ class Asplund2009:
             "Cu": -7.81,
             "Zn": -7.44,
         }
+    )
 
 
 @dataclass
@@ -112,21 +112,18 @@ class GalacticConcordance:
             abundances of various elements in the pattern.
     """
 
-    def __init__(self):
-        """Initialise the Galactic Concordance pattern from Nicholls et al."""
-        # meta information
-        self.ads = (
-            "https://ui.adsabs.harvard.edu/abs/2017MNRAS.466.4403N/abstract"
-        )
-        self.doi = "https://doi.org/10.1093/mnras/stw3235"
-        self.arxiv = None
-        self.bibcode = "2017MNRAS.466.4403N"
+    # meta information
+    ads: str = "https://ui.adsabs.harvard.edu/abs/2017MNRAS.466.4403N/abstract"
+    doi: str = "https://doi.org/10.1093/mnras/stw3235"
+    arxiv: str = "arxiv:1612.03546"
+    bibcode: str = "2017MNRAS.466.4403N"
 
-        # total metallicity
-        self.metallicity = 0.015
+    # total metallicity
+    metallicity: float = 0.015
 
-        # logarthmic abundances, i.e. log10(N_element/N_H)
-        self.abundance = {
+    # logarithmic abundances, i.e. log10(N_element/N_H)
+    abundance: dict = field(
+        default_factory=lambda: {
             "H": 0.0,
             "He": -1.09,
             "Li": -8.722,
@@ -158,6 +155,7 @@ class GalacticConcordance:
             "Cu": -7.82,
             "Zn": -7.44,
         }
+    )
 
 
 @dataclass
@@ -188,20 +186,16 @@ class Gutkin2016:
             abundances of various elements in the pattern.
     """
 
-    def __init__(self):
-        """Initialise the Solar abundance pattern used by Gutkin (2016)."""
-        # meta information
-        self.ads = """https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/
-        abstract"""
-        self.doi = "10.1093/mnras/stw1716"
-        self.arxiv = "arXiv:1607.06086"
-        self.bibcode = "2016MNRAS.462.1757G"
+    doi: str = "10.1093/mnras/stw1716"
+    arxiv: str = "arXiv:1607.06086"
+    bibcode: str = "2016MNRAS.462.1757G"
 
-        # total metallicity
-        self.metallicity = 0.01524
+    # total metallicity
+    metallicity: float = 0.01524
 
-        # logarthmic abundances, i.e. log10(N_element/N_H)
-        self.abundance = {
+    # logarithmic abundances, i.e. log10(N_element/N_H)
+    abundance: dict = field(
+        default_factory=lambda: {
             "H": 0.0,
             "He": -1.01,
             "Li": -10.99,
@@ -233,3 +227,4 @@ class Gutkin2016:
             "Cu": -7.82,
             "Zn": -7.43,
         }
+    )

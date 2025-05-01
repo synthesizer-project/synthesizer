@@ -8,7 +8,10 @@ particle.imaging.Images and parametric.imaging.Images classes.
 Example usage::
 
     # Create an image collection
-    img_coll = ImageCollection(resolution=0.1 * unyt.arcsec, npix=100)
+    img_coll = ImageCollection(
+        resolution=0.1 * unyt.arcsec,
+        fov=(10, 10) * unyt.arcsec,
+    )
 
     # Get histograms of the particle distribution
     img_coll.get_imgs_hist(photometry, coordinates)
@@ -47,11 +50,18 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.extensions.timers import tic, toc
+from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
-from synthesizer.units import Quantity
+from synthesizer.imaging.image_generators import (
+    _generate_images_parametric_smoothed,
+    _generate_images_particle_hist,
+    _generate_images_particle_smoothed,
+)
+from synthesizer.utils import TableFormatter
 
 
-class ImageCollection:
+class ImageCollection(ImagingBase):
     """A collection of Image objects.
 
     This contains all the generic methods for creating and manipulating
@@ -60,39 +70,25 @@ class ImageCollection:
     Both parametric and particle based imaging uses this class.
 
     Attributes:
-        resolution (unyt_quantity):
-            The size of a pixel.
-        fov (unyt_quantity/tuple, unyt_quantity)
-            The width of the image.
-        npix (int/tuple, int)
-            The number of pixels in the image.
         imgs (dict):
-            A dictionary of images.
+            A dictionary of images to be turned into a collection.
         noise_maps (dict):
-            A dictionary of noise maps associated to imgs.
+            A dictionary of noise maps to be applied to the images.
         weight_maps (dict):
-            A dictionary of weight maps associated to imgs.
+            A dictionary of weight maps to be applied to the images.
         filter_codes (list):
-            A list of the filter codes of the images.
-        rgb_img (np.ndarray)
+            A list of filter codes for each image in the collection.
+        rgb_img (np.ndarray of float):
             The RGB image array.
     """
-
-    # Define quantities
-    resolution = Quantity("spatial")
-    fov = Quantity("spatial")
-    orig_resolution = Quantity("spatial")
 
     def __init__(
         self,
         resolution,
-        fov=None,
-        npix=None,
+        fov,
         imgs=None,
     ):
         """Initialize the image collection.
-
-        Either fov or npix must be specified.
 
         An ImageCollection can either generate images or be initialised with
         an image dictionary, and optionally noise and weight maps. In practice
@@ -105,45 +101,12 @@ class ImageCollection:
             fov (unyt_quantity/tuple, unyt_quantity):
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
-            npix (int/tuple, int):
-                The number of pixels in the image. If a single value is given
-                then the image is assumed to be square.
             imgs (dict):
                 A dictionary of images to be turned into a collection.
-            noise_maps (dict):
-                A dictionary of noise maps associated to imgs.
-            weight_maps (dict):
-                A dictionary of weight maps associated to imgs.
         """
-        # Check the arguments
-        self._check_args(resolution, fov, npix)
-
-        # Attach resolution, fov, and npix
-        self.resolution = resolution
-        self.fov = fov
-        self.npix = npix
-
-        # If fov isn't a array, make it one
-        if self.fov is not None and self.fov.size == 1:
-            self.fov = np.array((self.fov, self.fov))
-
-        # If npix isn't an array, make it one
-        if npix is not None and not isinstance(npix, np.ndarray):
-            if isinstance(npix, int):
-                self.npix = np.array((npix, npix))
-            else:
-                self.npix = np.array(npix)
-
-        # Keep track of the input resolution and and npix so we can handle
-        # super resolution correctly.
-        self.orig_resolution = resolution
-        self.orig_npix = npix
-
-        # Handle the different input cases
-        if npix is None:
-            self._compute_npix()
-        else:
-            self._compute_fov()
+        start = tic()
+        # Instantiate the base class holding the geometry
+        ImagingBase.__init__(self, resolution, fov)
 
         # Container for images (populated when image creation methods are
         # called)
@@ -168,57 +131,19 @@ class ImageCollection:
                 self.imgs[f] = img
                 self.filter_codes.append(f)
 
-    def _check_args(self, resolution, fov, npix):
-        """Ensure we have a valid combination of inputs.
+        toc("Creating ImageCollection", start)
 
-        Args:
-            resolution (unyt_quantity):
-                The size of a pixel.
-            fov (unyt_quantity):
-                The width of the image.
-            npix (int):
-                The number of pixels in the image.
+    @property
+    def shape(self):
+        """Return the shape of the image collection.
 
-        Raises:
-            InconsistentArguments
-               Errors when an incorrect combination of arguments is passed.
+        Returns:
+            tuple: A tuple containing (number of images, height, width) if
+                  images exist, or an empty tuple if no images are present.
         """
-        # Missing units on resolution
-        if isinstance(resolution, float):
-            raise exceptions.InconsistentArguments(
-                "Resolution is missing units! Please include unyt unit "
-                "information (e.g. resolution * arcsec or resolution * kpc)"
-            )
-
-        # Missing image size
-        if fov is None and npix is None:
-            raise exceptions.InconsistentArguments(
-                "Either fov or npix must be specified!"
-            )
-
-    def _compute_npix(self):
-        """Compute the number of pixels in the FOV.
-
-        When resolution and fov are given, the number of pixels is computed
-        using this function. This can redefine the fov to ensure the FOV
-        is an integer number of pixels.
-        """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self._fov / self._resolution))
-        if self.orig_npix is None:
-            self.orig_npix = np.int32(np.ceil(self._fov / self._resolution))
-
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
-
-    def _compute_fov(self):
-        """Compute the FOV, based on the number of pixels.
-
-        When resolution and npix are given, the FOV is computed using this
-        function.
-        """
-        # Redefine the FOV based on npix
-        self.fov = self.resolution * self.npix
+        if self.imgs is None:
+            return ()
+        return (len(self.imgs), self.npix[0], self.npix[1])
 
     def downsample(self, factor):
         """Supersamples all images contained within this instance.
@@ -282,6 +207,18 @@ class ImageCollection:
         """Overload the len operator to return how many images there are."""
         return len(self.imgs)
 
+    def __str__(self):
+        """Return a string representation of the ImageCollection.
+
+        Returns:
+            table (str)
+                A string representation of the ImageCollection.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("ImageCollection")
+
     def __getitem__(self, filter_code):
         """Enable dictionary key look up syntax.
 
@@ -303,7 +240,7 @@ class ImageCollection:
         # We may be being asked for all the images for an observatory, e.g.
         # "JWST", in which case we should return a new ImageCollection with
         # just those images.
-        out = ImageCollection(resolution=self.resolution, npix=self.npix)
+        out = ImageCollection(resolution=self.resolution, fov=self.fov)
         for f in self.imgs:
             if filter_code in f:
                 out.imgs[f.replace(filter_code + "/", "")] = self.imgs[f]
@@ -317,6 +254,30 @@ class ImageCollection:
         raise KeyError(
             f"Filter code {filter_code} not found in ImageCollection"
         )
+
+    def __setitem__(self, filter_code, img):
+        """Store the image at filter_code in the imgs dictionary.
+
+        This allows the user to store specific images with the following
+        syntax: ImageCollection["JWST/NIRCam.F150W"] = img.
+
+        Image can either be a numpy array or an Image object. If it is a numpy
+        array it is converted to an Image object.
+
+        Args:
+            filter_code (str):
+                The filter code of the desired photometry.
+            img (Image/unyt_array):
+                The image to be added to the collection.
+        """
+        if not isinstance(img, Image):
+            # Convert ndarray → Image
+            img = Image(self.resolution, self.fov, img=img)
+
+        # Insert / update while keeping filter_codes unique
+        self.imgs[filter_code] = img
+        if filter_code not in self.filter_codes:
+            self.filter_codes.append(filter_code)
 
     def keys(self):
         """Return the keys of the image collection.
@@ -411,7 +372,6 @@ class ImageCollection:
         # Initialise the composite image with the right type
         composite_img = ImageCollection(
             resolution=self.resolution,
-            npix=None,
             fov=self.fov,
         )
 
@@ -427,7 +387,12 @@ class ImageCollection:
 
         return composite_img
 
-    def get_imgs_hist(self, photometry, coordinates):
+    def get_imgs_hist(
+        self,
+        photometry,
+        coordinates,
+        normalisations=None,
+    ):
         """Calculate an image with no smoothing.
 
         Only applicable to particle based imaging.
@@ -435,21 +400,23 @@ class ImageCollection:
         Args:
             photometry (PhotometryCollection):
                 A dictionary of photometry for each filter.
-            coordinates (unyt_array, float):
+            coordinates (unyt_array of float):
                 The coordinates of the particles.
+            normalisations (array_like, float):
+                The normalisation property for each image. This is multiplied
+                by the signal before sorting, then normalised out.
+
+        Returns:
+            ImageCollection: The image collection containing the generated
+                images.
         """
-        # Need to loop over filters, calculate photometry, and
-        # return a dictionary of images
-        for f in photometry.filter_codes:
-            # Create an Image object for this filter
-            img = Image(self.resolution, self.fov)
-
-            # Get the image for this filter
-            img.get_img_hist(photometry[f], coordinates)
-
-            # Store the image
-            self.imgs[f] = img
-            self.filter_codes.append(f)
+        # Generate the images
+        return _generate_images_particle_hist(
+            self,
+            coordinates=coordinates,
+            signals=photometry,
+            normalisations=normalisations,
+        )
 
     def get_imgs_smoothed(
         self,
@@ -460,6 +427,7 @@ class ImageCollection:
         kernel_threshold=1,
         density_grid=None,
         nthreads=1,
+        normalisations=None,
     ):
         """Calculate an images from a smoothed distribution.
 
@@ -474,8 +442,8 @@ class ImageCollection:
             photometry (unyt_array, float):
                 The signal of each particle to be sorted into pixels.
             coordinates (unyt_array, float):
-                The coordinates of the particles. (Only applicable to particle
-                imaging)
+                The centered coordinates of the particles. (Only applicable to
+                particle imaging)
             smoothing_lengths (unyt_array, float):
                 The smoothing lengths of the particles. (Only applicable to
                 particle imaging)
@@ -492,26 +460,55 @@ class ImageCollection:
             nthreads (int):
                 The number of threads to use when smoothing the image. This
                 only applies to particle imaging.
-        """
-        # Loop over filters in the photometry making an image for each.
-        for f in photometry.filter_codes:
-            # Create an Image object for this filter
-            img = Image(self.resolution, self.fov)
+            normalisations (array_like, float):
+                The normalisation property. This is multiplied by the signal
+                before sorting, then normalised out. (Only applicable to
+                particle imaging)
 
-            # Get the image for this filter
-            img.get_img_smoothed(
-                signal=photometry[f],
-                coordinates=coordinates,
+        Returns:
+            ImageCollection: The image collection containing the generated
+                images.
+        """
+        # Call the correct image generation function (particle or parametric)
+        if density_grid is not None and photometry is not None:
+            # Generate the images for the parametric case
+            return _generate_images_parametric_smoothed(
+                self,
+                density_grid=density_grid,
+                signals=photometry,
+            )
+        elif (
+            coordinates is not None
+            and smoothing_lengths is not None
+            and kernel is not None
+            and kernel_threshold is not None
+            and photometry is not None
+        ):
+            # Generate the images for the particle case
+            return _generate_images_particle_smoothed(
+                self,
+                photometry.photometry,
+                cent_coords=coordinates,
                 smoothing_lengths=smoothing_lengths,
+                labels=photometry.filter_codes,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
-                density_grid=density_grid,
                 nthreads=nthreads,
+                normalisations=normalisations,
             )
-            self.filter_codes.append(f)
-
-            # Store the image
-            self.imgs[f] = img
+        else:
+            raise exceptions.InconsistentArguments(
+                "Didn't find a valid set of arguments to generate images. "
+                "Please provide either a density grid and photometry for "
+                f"parametric imaging (found density_grid={type(density_grid)} "
+                f"photometry={type(photometry)}) or coordinates, smoothing "
+                f"lengths, kernel, and kernel_threshold for particle imaging "
+                f"(found coordinates={type(coordinates)}, "
+                f"smoothing_lengths={type(smoothing_lengths)}, "
+                f"kernel={type(kernel)}, "
+                f"kernel_threshold={type(kernel_threshold)}, "
+                f"photometry={type(photometry)})"
+            )
 
     def apply_psfs(self, psfs):
         """Convolve this ImageCollection's images with their PSFs.
@@ -557,7 +554,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=psfed_imgs,
         )
 
@@ -600,7 +597,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -645,7 +642,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -712,7 +709,7 @@ class ImageCollection:
 
         return ImageCollection(
             resolution=self.resolution,
-            npix=self.npix,
+            fov=self.fov,
             imgs=noisy_imgs,
         )
 
@@ -723,6 +720,9 @@ class ImageCollection:
         vmax=None,
         scaling_func=None,
         cmap="Greys_r",
+        filters=None,
+        ncols=4,
+        individual_norm=False,
     ):
         """Plot all images.
 
@@ -752,6 +752,16 @@ class ImageCollection:
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
+            filters (list):
+                A list of filter codes to plot. If None, all filters will
+                be plotted.
+            ncols (int):
+                The number of columns to use when plotting multiple images.
+            individual_norm (bool):
+                If True, each image will be normalised individually. If
+                False, and vmin and vmax are not provided, the images will be
+                normalised to the global min and max of all images.
+                Defaults to False.
 
         Returns:
             matplotlib.pyplot.figure
@@ -771,26 +781,52 @@ class ImageCollection:
                 return x
 
         # Do we need to find the normalisation for each filter?
-        unique_norm_min = vmin is None
-        unique_norm_max = vmax is None
+        unique_norm_min = vmin is None and individual_norm
+        unique_norm_max = vmax is None and individual_norm
+
+        # Set up the minima and maxima
+        if vmin is None and not unique_norm_min:
+            vmin = np.inf
+            for f in self.imgs:
+                minimum = np.percentile(self.imgs[f].arr, 32)
+                if minimum < vmin:
+                    vmin = minimum
+        if vmax is None and not unique_norm_max:
+            vmax = -np.inf
+            for f in self.imgs:
+                maximum = np.percentile(self.imgs[f].arr, 99.9)
+                if maximum > vmax:
+                    vmax = maximum
+
+        # Are we looping over a specified set of filters?
+        if filters is not None:
+            filter_codes = filters
+        else:
+            filter_codes = self.filter_codes
 
         # Set up the figure
         fig = plt.figure(
-            figsize=(4 * 3.5, int(np.ceil(len(self.filter_codes) / 4)) * 3.5)
+            figsize=(
+                ncols * 3.5,
+                int(np.ceil(len(filter_codes) / ncols)) * 3.5,
+            )
         )
 
         # Create a gridspec grid
         gs = gridspec.GridSpec(
-            int(np.ceil(len(self.filter_codes) / 4)), 4, hspace=0.0, wspace=0.0
+            int(np.ceil(len(filter_codes) / ncols)),
+            ncols,
+            hspace=0.0,
+            wspace=0.0,
         )
 
         # Loop over filters making each image
-        for ind, f in enumerate(self.filter_codes):
+        for ind, f in enumerate(filter_codes):
             # Get the image
             img = self.imgs[f].arr
 
             # Create the axis
-            ax = fig.add_subplot(gs[int(np.floor(ind / 4)), ind % 4])
+            ax = fig.add_subplot(gs[int(np.floor(ind / ncols)), ind % ncols])
 
             # Set up minima and maxima
             if unique_norm_min:
@@ -798,14 +834,24 @@ class ImageCollection:
             if unique_norm_max:
                 vmax = np.max(img)
 
-            # Normalise the image.
-            img = (img - vmin) / (vmax - vmin)
-
             # Scale the image
             img = scaling_func(img)
 
+            # Define the normalisation
+            norm = plt.Normalize(
+                vmin=scaling_func(vmin),
+                vmax=scaling_func(vmax),
+                clip=True,
+            )
+
             # Plot the image and remove the surrounding axis
-            ax.imshow(img, origin="lower", interpolation="nearest", cmap=cmap)
+            ax.imshow(
+                img,
+                origin="lower",
+                interpolation="nearest",
+                cmap=cmap,
+                norm=norm,
+            )
             ax.axis("off")
 
             # Place a label for which filter this ised_ASCII
@@ -951,133 +997,3 @@ class ImageCollection:
             plt.show()
 
         return fig, ax, rgb_img
-
-
-def _generate_image_collection_generic(
-    instrument,
-    fov,
-    img_type,
-    do_flux,
-    per_particle,
-    kernel,
-    kernel_threshold,
-    nthreads,
-    label,
-    emitter,
-):
-    """Generate an image collection for a generic emitter.
-
-    This function can be used to avoid repeating image generation code in
-    wrappers elsewhere in the code. It'll produce an image collection based
-    on the input photometry.
-
-    Particle based imaging can either be hist or smoothed, while parametric
-    imaging can only be smoothed.
-
-    Args:
-        instrument (Instrument):
-            The instrument to create the images for.
-        fov (unyt_quantity/tuple, unyt_quantity):
-            The width of the image.
-        img_type (str):
-            The type of image to create. Options are "hist" or "smoothed".
-        do_flux (bool):
-            Whether to create a flux image or a luminosity image.
-        per_particle (bool):
-            Whether to create an image per particle or not.
-        kernel (str):
-            The array describing the kernel. This is dervied from the
-            kernel_functions module. (Only applicable to particle imaging)
-        kernel_threshold (float):
-            The threshold for the kernel. Particles with a kernel value
-            below this threshold are included in the image. (Only
-            applicable to particle imaging)
-        nthreads (int):
-            The number of threads to use when smoothing the image. This
-            only applies to particle imaging.
-        label (str):
-            The label of the photometry to use.
-        emitter (Stars/BlackHoles/BlackHole):
-            The emitter object to create the images for.
-
-    Returns:
-        ImageCollection:
-            An image collection object containing the images.
-    """
-    # Get the appropriate photometry (particle/integrated and
-    # flux/luminosity)
-    try:
-        if do_flux:
-            photometry = (
-                emitter.particle_photo_fnu[label]
-                if per_particle
-                else emitter.photo_fnu[label]
-            )
-        else:
-            photometry = (
-                emitter.particle_photo_lnu[label]
-                if per_particle
-                else emitter.photo_lnu[label]
-            )
-    except KeyError:
-        # Ok we are missing the photometry
-        raise exceptions.MissingSpectraType(
-            f"Can't make an image for {label} without the photometry. "
-            "Did you not save the spectra or produce the photometry?"
-        )
-
-    # Select only the photometry for this instrument
-    if instrument.filters is not None:
-        photometry = photometry.select(*instrument.filters.filter_codes)
-
-    # If the emitter is a particle BlackHoles object we can only make a hist
-    # image
-    if getattr(emitter, "name", None) == "Black Holes":
-        img_type = "hist"
-
-    # Instantiate the Image colection ready to make the image.
-    imgs = ImageCollection(resolution=instrument.resolution, fov=fov)
-
-    # Make the image handling the different types of image creation
-    if img_type == "hist":
-        # Compute the image (this method is only applicable to
-        # particle components)
-        imgs.get_imgs_hist(
-            photometry=photometry,
-            coordinates=emitter.centered_coordinates,
-        )
-
-    elif img_type == "smoothed":
-        # Compute the image
-        imgs.get_imgs_smoothed(
-            photometry=photometry,
-            nthreads=nthreads,
-            # Following args only applicable for particle components,
-            # They'll automatically be None otherwise
-            coordinates=getattr(
-                emitter,
-                "centered_coordinates",
-                None,
-            ),
-            smoothing_lengths=getattr(
-                emitter,
-                "smoothing_lengths",
-                None,
-            ),
-            kernel=kernel,
-            kernel_threshold=(kernel_threshold),
-            # Following args are only applicable for parametric
-            # components, they'll automatically be None otherwise
-            density_grid=emitter.morphology.get_density_grid(
-                instrument.resolution, imgs.npix
-            )
-            if hasattr(emitter, "morphology")
-            else None,
-        )
-
-    else:
-        raise exceptions.UnknownImageType(
-            f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
-        )
-
-    return imgs

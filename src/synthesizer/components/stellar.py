@@ -91,7 +91,7 @@ class StarsComponent(Component):
             log10ages (np.ndarray):
                 log10 stellar ages
         """
-        return np.log10(self._ages)
+        return np.log10(self._ages, dtype=np.float64)
 
     @property
     def log10metallicities(self):
@@ -101,7 +101,7 @@ class StarsComponent(Component):
             log10metallicities (np.ndarray):
                 log10 stellar metallicities
         """
-        return np.log10(self.metallicities)
+        return np.log10(self.metallicities, dtype=np.float64)
 
     def __str__(self):
         """Return a string representation of the stars object.
