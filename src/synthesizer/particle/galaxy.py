@@ -126,13 +126,6 @@ class Galaxy(BaseGalaxy):
         if self.gas:
             self.calculate_integrated_gas_properties()
 
-        # Ensure all attributes are initialised to None
-        for attr in Galaxy.attrs:
-            try:
-                getattr(self, attr)
-            except AttributeError:
-                setattr(self, attr, None)
-
         # Attach any additional keyword arguments
         for key, value in kwargs.items():
             setattr(self, key, value)
