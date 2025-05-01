@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # loop over available spectra and plot
     for spec_name in grid.available_spectra:
         # get Sed object
-        sed = grid.get_sed_at_grid_point(grid_point, spectra_id=spec_name)
+        sed = grid.get_sed_at_grid_point(grid_point, spectra_type=spec_name)
         # print summary of SED object
         print(sed)
         plt.plot(
