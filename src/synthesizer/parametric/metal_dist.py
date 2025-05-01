@@ -1,4 +1,4 @@
-"""A module for creating and manipulating metallicity distributions.
+"""A submodule for creating and manipulating metallicity distributions.
 
 NOTE: This module is imported as ZDist in parametric.__init__ enabling the
       syntax shown below.
@@ -28,29 +28,28 @@ parametrisations = (
 
 
 class Common:
-    """
-    The parent class for all ZDist parametrisations.
+    """The parent class for all ZDist parametrisations.
 
     Attributes:
-        name (string)
+        name (str):
            The name of this ZDist. This is set by the child and encodes
            the type of the metallicity distribution. Possible values are
            defined in parametrisations above.
-        parameters (dict)
+        parameters (dict):
             A dictionary containing the parameters of the model.
     """
 
     def __init__(self, name, **kwargs):
-        """
-        Initialise the parent.
+        """Initialise the parent.
 
         Args:
-            name (string)
+            name (str):
                 The name of this ZDist. This is set by the child and encodes
                 the type of the metallicity distribution. Possible values are
                 defined in parametrisations above.
+            **kwargs (dict):
+                A dictionary containing the parameters of the model.
         """
-
         # Set the name string
         self.name = name
 
@@ -58,10 +57,7 @@ class Common:
         self.parameters = kwargs
 
     def __str__(self):
-        """
-        Print basic summary of the parameterised star formation history.
-        """
-
+        """Print basic summary of the parameterised star formation history."""
         pstr = ""
         pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF PARAMETERISED METAL ENRICHMENT HISTORY" + "\n"
@@ -72,27 +68,23 @@ class Common:
         return pstr
 
     def _weight(self, metal):
-        """
-        Prototype for child defined distribution functions.
-        """
+        """Prototype for child defined distribution functions."""
         raise exceptions.UnimplementedFunctionality(
             "This should never be called from the parent."
             " How did you get here!?"
         )
 
     def get_dist_weight(self, metal):
-        """
-        Return the weight of the bin/s defined by metal.
+        """Return the weight of the bin/s defined by metal.
 
         Args:
-            metal (float/array-like, float)
+            metal (float/np.ndarray of float):
                 The metallicity bin/s to evaluate.
 
         Returns:
-            float
+            float:
                 The weight at metal or each value in metal.
         """
-
         # If we have been handed an array we need to loop
         if isinstance(metal, (np.ndarray, list)):
             return np.array([self._weight(z) for z in metal])
@@ -101,28 +93,26 @@ class Common:
 
 
 class DeltaConstant(Common):
-    """
-    A single metallicity "distribution".
+    """A single metallicity "distribution".
 
     Attributes:
-        metallicity_ (float)
+        metallicity_ (float):
             The single (linear) metallicity for all stellar mass in the
             distribution.
-        log10metallicity_ (float)
+        log10metallicity_ (float):
             The log base 10 of metallicity.
     """
 
     def __init__(self, metallicity=None, log10metallicity=None):
-        """
-        Initialise the metallicity distribution and parent.
+        """Initialise the metallicity distribution and parent.
 
         Either metallicity or log10metallicity must be provided.
 
         Args:
-            metallicity (float)
+            metallicity (float):
                 The single (linear) metallicity for all stellar mass in the
                 distribution.
-            log10metallcity (float)
+            log10metallicity (float):
                 The log base 10 of metallicity.
         """
         # We need one metallicity definition
@@ -149,8 +139,7 @@ class DeltaConstant(Common):
             self.metallicity_ = 10**self.log10metallicity_
 
     def get_metallicity(self, *args):
-        """
-        Return the single metallicity.
+        """Return the single metallicity.
 
         NOTE: DeltaConstant is a special case where get_dist_weight is not
         applicable because a single metallicity must always be rather than a
@@ -160,7 +149,6 @@ class DeltaConstant(Common):
             float
                 The metallicity.
         """
-
         # Check for bad behaviour
         if len(args) > 0:
             raise exceptions.InconsistentArguments(
@@ -172,8 +160,7 @@ class DeltaConstant(Common):
         return self.metallicity_
 
     def get_log10_metallicity(self, *args):
-        """
-        Return the log base 10 of the single metallicity.
+        """Return the log base 10 of the single metallicity.
 
         NOTE: DeltaConstant is a special case where get_dist_weight is not
         applicable because a single metallicity must always be rather than a
@@ -183,7 +170,6 @@ class DeltaConstant(Common):
             float
                 The log10(metallicity).
         """
-
         # Check for bad behaviour
         if len(args) > 0:
             raise exceptions.InconsistentArguments(
@@ -196,29 +182,26 @@ class DeltaConstant(Common):
 
 
 class Normal(Common):
-    """
-    A normally distributed metallicity distribution.
+    """A normally distributed metallicity distribution.
 
     Attributes:
-        mean (float)
+        mean (float):
             The mean of the normal distribution.
-        sigma (float)
+        sigma (float):
             The standard deviation of the normal distribution.
     """
 
     def __init__(self, mean, sigma):
-        """
-        Initialise the metallicity distribution and parent.
+        """Initialise the metallicity distribution and parent.
 
         Either metallicity or log10metallicity must be provided.
 
         Args:
-            mean (float)
+            mean (float):
                 The mean of the normal distribution.
-            sigma (float)
+            sigma (float):
                 The standard deviation of the normal distribution.
         """
-
         # Instantiate the parent
         Common.__init__(
             self,
@@ -232,11 +215,10 @@ class Normal(Common):
         self.sigma = sigma
 
     def _weight(self, metal):
-        """
-        Return the distribution at a metallicity.
+        """Return the distribution at a metallicity.
 
         Args:
-            metal (float)
+            metal (float):
                 The (linear) metallicity at which to evaluate the distribution.
 
         Returns:
