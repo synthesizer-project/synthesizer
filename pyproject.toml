@@ -96,7 +96,7 @@ dependencies = [
 [project.optional-dependencies]
 # Development
 dev = [
-    "ruff==0.7.4",
+    "ruff==0.11.7",
     "pre-commit",
     "nb-clean",
 ]
@@ -104,7 +104,7 @@ dev = [
 test = [
     "nbmake",
     "pytest",
-    "ruff==0.7.4",
+    "ruff==0.11.7",
     "mypy>=0.910",
 ]
 # Documentation building

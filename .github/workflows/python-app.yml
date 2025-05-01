@@ -45,7 +45,7 @@ jobs:
           cat build_synth.log
       - uses: astral-sh/ruff-action@v3 # Lint with Ruff
         with:
-          version: 0.7.0
+          version: 0.11.7
           args: "format --check --diff"
       - name: Download test data
         run: |
