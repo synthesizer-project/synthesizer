@@ -72,7 +72,7 @@ class ProcessedFraction(Transformer):
         Transformer.__init__(self, required_params=fesc_attrs)
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
-        """Apply the escape fraction to the emission.
+        """Apply the transformation to the emission.
 
         Args:
             emission (Line/Sed):
@@ -247,7 +247,7 @@ class CoveringFraction(Transformer):
         Transformer.__init__(self, required_params=covering_attrs)
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
-        """Apply the escape fraction to the emission.
+        """Apply the transformation to the emission.
 
         Args:
             emission (Line/Sed):
@@ -295,11 +295,11 @@ class CoveringFraction(Transformer):
 
 
 class EscapingFraction(Transformer):
-    """A transformer that applies a covering fraction to an emission.
+    """A transformer that applies a escaping fraction to an emission.
 
-    This is an alias for the AGN covering fraction which is effectively the
+    This is an alias for the AGN escaping fraction which is effectively the
     ProcessedFraction transformer (i.e. it transforms disc emission to get the
-    emisison not covered by a line region).
+    emission not covered by a line region).
 
     This can be thought of as an attenuation law with a single value, reducing
     the emission by a constant factor.
@@ -335,7 +335,7 @@ class EscapingFraction(Transformer):
         Transformer.__init__(self, required_params=covering_attrs)
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
-        """Apply the escape fraction to the emission.
+        """Apply the transformation to the emission.
 
         Args:
             emission (Line/Sed):

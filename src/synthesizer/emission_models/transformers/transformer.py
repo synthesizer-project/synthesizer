@@ -33,9 +33,11 @@ class Transformer(ABC):
     emissions with an EmissionModel.
 
     Attributes:
-        _transformer_type (str):
-            The type of transformer. This is used to identify the
-            transformer when applying it to an emission.
+        _required_params (tuple):
+            The name of any required parameters needed by the transformer
+            when transforming an emission. These should either be
+            available from an emitter or from the EmissionModel itself.
+            If they are missing an exception will be raised.
     """
 
     def __init__(self, required_params=()):

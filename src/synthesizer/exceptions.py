@@ -163,7 +163,17 @@ class UnknownImageType(Exception):
         if args:
             self.message = args[0]
         else:
-            return "Inconsistent parameter choice"
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Unknown image type!"
 
 
 class InconsistentAddition(Exception):

@@ -43,10 +43,10 @@ class Gas(Particles):
     Attributes:
         metallicities (np.ndarray of float):
             The gas phase metallicity of each particle (integrated)
-        star_forming (array-like, bool):
+        star_forming (np.ndarray of bool):
             Flag for whether each gas particle is star forming or not.
-        log10metallicities (float):
-            Convnience attribute containing log10(metallicity).
+        log10metallicities (np.ndarray of float):
+            Convenience attribute containing log10(metallicity).
         smoothing_lengths (np.ndarray of float):
             The smoothing lengths (describing the sph kernel) of each gas
             particle in simulation length units.
@@ -230,7 +230,7 @@ class Gas(Particles):
         )
 
     def __str__(self):
-        """Return a string representation of the stars object.
+        """Return a string representation of the gas object.
 
         Returns:
             table (str):

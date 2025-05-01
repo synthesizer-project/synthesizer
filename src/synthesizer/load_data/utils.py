@@ -87,7 +87,7 @@ def lookup_age(scale_factor, scale_factors, ages):
             Scale factors to convert to ages.
         scale_factors (np.ndarray of float):
             Array of lookup scale factors.
-        ages (unty_array of float):
+        ages (unyt_array of float):
             Array of lookup ages.
 
     Returns:

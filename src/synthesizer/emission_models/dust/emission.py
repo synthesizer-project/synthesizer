@@ -164,7 +164,7 @@ class EmissionBase:
                     An array of wavelengths (expected in AA, global unit)
 
         Returns:
-            unyt_array: The spectral luminosity density.
+            Sed: The spectral luminosity density.
         """
         # Get frequencies
         nu = (c / lam).to(Hz)
@@ -213,12 +213,10 @@ class Blackbody(EmissionBase):
     """A class to generate a blackbody emission spectrum.
 
     Attributes:
-        temperature (float):
-            The temperature of the dust.
-        cmb_heating (bool):
+        temperature_z (float):
+            The temperature of the dust at redshift z.
+        apply_cmb_heating (bool):
             Option for adding heating by CMB.
-        redshift (float):
-            Redshift.
     """
 
     temperature: unyt_quantity
@@ -277,10 +275,10 @@ class Greybody(EmissionBase):
     Attributes:
         emissivity (float):
             The emissivity of the dust (dimensionless).
-        cmb_heating (bool):
+        apply_cmb_heating (bool):
             Option for adding heating by CMB
-        redshift (float):
-            Redshift of the galaxy
+        temperature_z (unyt_quantity):
+            The temperature of the dust at redshift z.
     """
 
     temperature: unyt_quantity

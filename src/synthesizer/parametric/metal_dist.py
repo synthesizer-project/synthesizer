@@ -57,7 +57,7 @@ class Common:
         self.parameters = kwargs
 
     def __str__(self):
-        """Print basic summary of the parameterised star formation history."""
+        """Print basic summary of the metallicity distribution."""
         pstr = ""
         pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF PARAMETERISED METAL ENRICHMENT HISTORY" + "\n"

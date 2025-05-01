@@ -83,7 +83,7 @@ class Particles:
         tau_v=None,
         name="Particles",
     ):
-        """Intialise the Particles.
+        """Initialise the Particles.
 
         Args:
             coordinates (np.ndarray of float):

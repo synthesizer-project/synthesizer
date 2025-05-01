@@ -160,7 +160,7 @@ def fnu_to_apparent_mag(fnu):
             The apparent AB magnitude.
 
     Raises:
-        IncorrectUnitsL
+        IncorrectUnits:
             If units are missing an error is raised.
     """
     return -2.5 * np.log10(fnu / (10**9 * nJy)) + 8.9

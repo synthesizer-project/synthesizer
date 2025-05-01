@@ -97,7 +97,7 @@ class Common:
         return self._sfr(age)
 
     def calculate_sfh(self, t_range=(0, 10**10), dt=10**6):
-        """Calculate the age of a given star formation history.
+        """Calculate the star formation history over a specified time range.
 
         Args:
             t_range (tuple, float):
@@ -149,10 +149,8 @@ class Common:
                 The interval between age bins.
 
         Returns:
-            t (np.ndarray of float):
-                The age bins.
-            sfh (np.ndarray of float):
-                The SFH.
+            unyt_array:
+                The median age of the star formation history.
         """
         # Get the SFH first
         t, sfh = self.calculate_sfh(t_range=t_range, dt=dt)
@@ -160,7 +158,7 @@ class Common:
         return weighted_median(t, sfh) * yr
 
     def calculate_mean_age(self, t_range=(0, 10**10), dt=10**6):
-        """Calcualte the median age of a given star formation history.
+        """Calculate the median age of a given star formation history.
 
         Args:
             t_range (tuple, float):
@@ -169,10 +167,8 @@ class Common:
                 The interval between age bins.
 
         Returns:
-            t (np.ndarray of float):
-                The age bins.
-            sfh (np.ndarray of float):
-                The SFH.
+            unyt_array:
+                The mean age of the star formation history.
         """
         # Get the SFH first
         t, sfh = self.calculate_sfh(t_range=t_range, dt=dt)

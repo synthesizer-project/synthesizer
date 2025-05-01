@@ -147,7 +147,7 @@ class BaseGalaxy:
 
         return formatter.get_table("Galaxy")
 
-    def get_equivalent_width(self, feature, blue, red, spectra_type=None):
+    def get_equivalent_width(self, feature, blue, red, spectra_type):
         """Get all equivalent widths associated with a sed object.
 
         Args:

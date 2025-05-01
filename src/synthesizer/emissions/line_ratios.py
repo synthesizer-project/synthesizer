@@ -243,7 +243,8 @@ def plot_bpt_kauffman03(
         ylimits (tuple):
             The y-axis limits.
         **kwargs (dict):
-            Any additional keyword arguments to pass to the plot_bpt_kewley01.
+            Any additional keyword arguments to pass to the
+            plot.
 
     Returns:
         fig, ax

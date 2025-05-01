@@ -911,8 +911,6 @@ class Stars(StarsComponent):
         Args:
             attr (str):
                 The attribute to get.
-            axis (int):
-                The axis to sum over.
 
         Returns:
             unyt_quantity:

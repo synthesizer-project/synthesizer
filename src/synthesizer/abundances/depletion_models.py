@@ -87,7 +87,7 @@ class Jenkins2009_Gunasekera2021:
 
 
 class CloudyClassic:
-    """Implemention of the 'cloudy classic' depletion pattern.
+    """Implementation of the 'cloudy classic' depletion pattern.
 
     This is the same as the one that is built into cloudy23.
     """

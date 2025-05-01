@@ -15,7 +15,7 @@ from synthesizer.utils import TableFormatter
 
 
 class BlackholesComponent(Component):
-    """The parent class for stellar components of a galaxy.
+    """The parent class for black hole components of a galaxy.
 
     This class contains the attributes and spectra creation methods which are
     common to both parametric and particle stellar components.
@@ -283,7 +283,7 @@ class BlackholesComponent(Component):
 
         Returns:
             unyt_array
-                The black hole bolometric luminosity
+                The black hole eddington luminosity
         """
         # Note: the factor 1.257E38 comes from:
         # 4*pi*G*mp*c*Msun/sigma_thompson
@@ -311,7 +311,7 @@ class BlackholesComponent(Component):
 
         Returns:
             unyt_array:
-                The black hole bolometric luminosity
+                The black hole big bump temperature
         """
         # Calculate the big bump temperature
         self.bb_temperature = (
