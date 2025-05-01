@@ -35,8 +35,7 @@ from synthesizer.utils.ascii_table import TableFormatter
 
 
 class Instrument:
-    """
-    A class containing the properties defining an observational instrument.
+    """A class containing the properties defining an observational instrument.
 
     This class contains everything needed to define a telescope or
     spectrograph, including the filters, resolution, wavelength array,
@@ -86,8 +85,7 @@ class Instrument:
         psfs=None,
         noise_maps=None,
     ):
-        """
-        Initialize an Instrument object.
+        """Initialize an Instrument object.
 
         Args:
             label (str):
@@ -158,44 +156,40 @@ class Instrument:
 
     @property
     def can_do_photometry(self):
-        """
-        Return whether the Instrument can be used for photometry.
+        """Return whether the Instrument do photometry.
 
         Returns:
             bool:
-                Whether the Instrument can be used for photometry.
+                Whether the Instrument do photometry.
         """
         return self.filters is not None
 
     @property
     def can_do_imaging(self):
-        """
-        Return whether the Instrument can be used for simple imaging.
+        """Return whether the Instrument do simple imaging.
 
-        This flags whether the Instrument can be used for imaging basic
+        This flags whether the Instrument do imaging basic
         imaging without PSFs and noise.
 
         Returns:
             bool:
-                Whether the Instrument can be used for simple imaging.
+                Whether the Instrument do simple imaging.
         """
         return self.can_do_photometry and self.resolution is not None
 
     @property
     def can_do_psf_imaging(self):
-        """
-        Return whether the Instrument can be used for imaging with PSFs.
+        """Return whether the Instrument do imaging with PSFs.
 
         Returns:
             bool:
-                Whether the Instrument can be used for imaging with PSFs.
+                Whether the Instrument do imaging with PSFs.
         """
         return self.can_do_imaging and self.psfs is not None
 
     @property
     def can_do_noisy_imaging(self):
-        """
-        Return whether the Instrument can be used for imaging with noise.
+        """Return whether the Instrument do imaging with noise.
 
         This is a bit more complex than the other flags as it can be true
         for various different noise definitions.
@@ -205,7 +199,7 @@ class Instrument:
 
         Returns:
             bool:
-                Whether the Instrument can be used for imaging with noise.
+                Whether the Instrument do imaging with noise.
         """
         # Check we have a compatible noise definition
         have_noise = self.noise_maps is not None
@@ -215,19 +209,17 @@ class Instrument:
 
     @property
     def can_do_spectroscopy(self):
-        """
-        Return whether the Instrument can be used for spectroscopy.
+        """Return whether the Instrument do spectroscopy.
 
         Returns:
             bool:
-                Whether the Instrument can be used for spectroscopy.
+                Whether the Instrument do spectroscopy.
         """
         return self.lam is not None
 
     @property
     def can_do_noisy_spectroscopy(self):
-        """
-        Return whether the Instrument can be used for spectroscopy with noise.
+        """Return whether the Instrument can do spectroscopy with noise.
 
         This is a bit more complex than the other flags as it can be true
         for various different noise definitions.
@@ -237,7 +229,7 @@ class Instrument:
 
         Returns:
             bool:
-                Whether the Instrument can be used for spectroscopy
+                Whether the Instrument do spectroscopy
                 with noise.
         """
         # Check we have a compatible noise definition
@@ -248,32 +240,29 @@ class Instrument:
 
     @property
     def can_do_resolved_spectroscopy(self):
-        """
-        Return whether the Instrument can be used for resolved spectroscopy.
+        """Return whether the Instrument do resolved spectroscopy.
 
         Returns:
             bool:
-                Whether the Instrument can be used for simple resolved
+                Whether the Instrument do simple resolved
                 spectroscopy.
         """
         return self.can_do_spectroscopy and self.resolution is not None
 
     @property
     def can_do_psf_spectroscopy(self):
-        """
-        Return whether the Instrument can do smoothed resolved spectroscopy.
+        """Return whether the Instrument can do smoothed resolved spectroscopy.
 
         Returns:
             bool:
-                Whether the Instrument can be used for smoothed resolved
+                Whether the Instrument do smoothed resolved
                 spectroscopy.
         """
         return self.can_do_resolved_spectroscopy and self.psfs is not None
 
     @property
     def can_do_noisy_resolved_spectroscopy(self):
-        """
-        Return whether the Instrument can do noisy resolved spectroscopy.
+        """Return whether the Instrument can do noisy resolved spectroscopy.
 
         This is a bit more complex than the other flags as it can be true
         for various different noise definitions.
@@ -283,7 +272,7 @@ class Instrument:
 
         Returns:
             bool:
-                Whether the Instrument can be used for noisy resolved
+                Whether the Instrument do noisy resolved
                 spectroscopy.
         """
         # Check we have a compatible noise definition
@@ -294,8 +283,7 @@ class Instrument:
 
     @classmethod
     def _from_hdf5(cls, group):
-        """
-        Create an Instrument from an HDF5 group.
+        """Create an Instrument from an HDF5 group.
 
         Args:
             group (h5py.Group):
@@ -403,8 +391,7 @@ class Instrument:
         )
 
     def to_hdf5(self, group):
-        """
-        Save the Instrument to an HDF5 group.
+        """Save the Instrument to an HDF5 group.
 
         Args:
             group (h5py.Group):
@@ -496,10 +483,9 @@ class Instrument:
                 ds.attrs["units"] = str(self.noise_maps.units)
 
     def __str__(self):
-        """
-        Return a string representation of the Instrument.
+        """Return a string representation of the Instrument.
 
-           Returns:
+        Returns:
                str:
                    The string representation of the Instrument.
         """
@@ -508,8 +494,7 @@ class Instrument:
         return formatter.get_table("Instrument")
 
     def __add__(self, other):
-        """
-        Combine two Instruments into an Instrument Collection.
+        """Combine two Instruments into an Instrument Collection.
 
         Note, the combined instruments must have different labels, combining
         two instruments together into a new single instrument would be
@@ -553,8 +538,7 @@ class Instrument:
         return collection
 
     def add_filters(self, filters, psfs=None, noise_maps=None):
-        """
-        Add filters to the Instrument.
+        """Add filters to the Instrument.
 
         If PSFs or noise maps are provided, an entry for each new filter
         must be provided in a dict passed to the psfs or noise_maps
