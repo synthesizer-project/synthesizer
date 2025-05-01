@@ -1540,7 +1540,10 @@ class BaseGalaxy:
         psf_resample_factor=1,
         limit_to=None,
     ):
-        """Apply an instrument's PSFs this galaxy's and its component's images.
+        """Apply instrument PSFs to this galaxy's luminosity images.
+
+        This will also apply the PSF to any images attached to the galaxies
+        components, as well as those on the top level galaxy object.
 
         Args:
             instrument (Instrument):
@@ -1638,7 +1641,10 @@ class BaseGalaxy:
         psf_resample_factor=1,
         limit_to=None,
     ):
-        """Apply an instrument's PSFs this galaxy's and its component's images.
+        """Apply instrument PSFs to this galaxy's flux images.
+
+        This will also apply the PSF to any images attached to the galaxies
+        components, as well as those on the top level galaxy object.
 
         Args:
             instrument (Instrument):
@@ -1797,7 +1803,7 @@ class BaseGalaxy:
             else:
                 raise exceptions.InconsistentArguments(
                     f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise."
+                    "for applying noise because no noise attributes are set."
                 )
 
         # If we have stars, do those
@@ -1894,7 +1900,7 @@ class BaseGalaxy:
             else:
                 raise exceptions.InconsistentArguments(
                     f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise."
+                    "for applying noise because no noise attributes are set."
                 )
 
         # If we have stars, do those

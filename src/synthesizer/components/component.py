@@ -761,7 +761,7 @@ class Component(ABC):
         psf_resample_factor=1,
         limit_to=None,
     ):
-        """Apply an instrument's PSFs this component's images.
+        """Apply instrument PSFs to this component's luminosity images.
 
         Args:
             instrument (Instrument):
@@ -836,7 +836,7 @@ class Component(ABC):
         psf_resample_factor=1,
         limit_to=None,
     ):
-        """Apply an instrument's PSFs this component's images.
+        """Apply instrument PSFs to this component's flux images.
 
         Args:
             instrument (Instrument):
