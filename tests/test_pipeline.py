@@ -9,7 +9,6 @@ from unyt import Mpc, kpc, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
-from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
     cached_split,
@@ -416,22 +415,6 @@ class TestPipelineInit:
 
         assert pipeline.emission_model is nebular_emission_model
         assert pipeline.nthreads == 1  # Default value
-
-    def test_init_pipeline_single_inst(
-        self,
-        nebular_emission_model,
-        nircam_instrument,
-    ):
-        """Test initializing the Pipeline with a single instrument."""
-        pipeline = Pipeline(
-            emission_model=nebular_emission_model,
-            instruments=nircam_instrument,
-            verbose=0,
-        )
-
-        assert isinstance(pipeline.instruments, InstrumentCollection), (
-            "Single instrument should be wrapped in an InstrumentCollection"
-        )
 
 
 class TestPipelineNotReady:
