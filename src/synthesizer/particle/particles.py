@@ -209,7 +209,7 @@ class Particles:
         """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
-            filters (filters.FilterCollection):
+            filters (FilterCollection):
                 A FilterCollection object.
             verbose (bool):
                 Are we talking?
