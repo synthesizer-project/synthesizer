@@ -24,8 +24,7 @@ __all__ = ["Inoue14", "Madau96"]
 
 
 class IGMBase(Transformer):
-    """
-    Base class for IGM absorption models.
+    """Base class for IGM absorption models.
 
     Attributes:
         name (str): Name of the model.
@@ -39,8 +38,7 @@ class IGMBase(Transformer):
         Transformer.__init__(self, required_params=("redshift", "obslam"))
 
     def get_transmission(self, redshift, lam_obs):
-        """
-        Compute the IGM transmission.
+        """Compute the IGM transmission.
 
         Args:
             redshift (float): Redshift to evaluate IGM absorption.
@@ -62,8 +60,7 @@ class IGMBase(Transformer):
         ax=None,
         figsize=(8, 6),
     ):
-        """
-        Plot the IGM transmission.
+        """Plot the IGM transmission.
 
         Args:
             redshift (float): Redshift to evaluate IGM absorption.
@@ -98,8 +95,7 @@ class IGMBase(Transformer):
         return fig, ax
 
     def _transform(self, emission, emitter, model, mask=None, lam_mask=None):
-        """
-        Apply the IGM to either a Line or Sed object.
+        """Apply the IGM to either a Line or Sed object.
 
         Args:
             emission (Line/Sed): The emission to transform.
@@ -137,8 +133,7 @@ class IGMBase(Transformer):
 
 
 class Inoue14(IGMBase):
-    r"""
-    IGM absorption from Inoue et al. (2014).
+    r"""IGM absorption from Inoue et al. (2014).
 
     Adapted from py-eazy.
 
@@ -175,8 +170,7 @@ class Inoue14(IGMBase):
         self.scale_tau = scale_tau
 
     def _load_data(self):
-        """
-        Load the coefficient data.
+        """Load the coefficient data.
 
         This will load the Lyman-alpha forest (LAF) and Damped
         Lyman-alpha (DLA) coefficients from the data files.
@@ -203,8 +197,7 @@ class Inoue14(IGMBase):
 
     @accepts(lam_obs=angstrom)
     def tau_laf(self, redshift, lam_obs):
-        """
-        Compute the Lyman series and Lyman-alpha forest optical depth.
+        """Compute the Lyman series and Lyman-alpha forest optical depth.
 
         Args:
             redshift (float): Source redshift.
@@ -239,8 +232,7 @@ class Inoue14(IGMBase):
 
     @accepts(lam_obs=angstrom)
     def tau_dla(self, redshift, lam_obs):
-        """
-        Compute the Lyman series and Damped Lyman-alpha (DLA) optical depth.
+        """Compute the Lyman series and Damped Lyman-alpha (DLA) optical depth.
 
         Args:
             redshift (float): Source redshift.
@@ -272,8 +264,7 @@ class Inoue14(IGMBase):
 
     @accepts(lam_obs=angstrom)
     def tau_lc_dla(self, redshift, lam_obs):
-        """
-        Compute the Lyman continuum optical depth for DLA.
+        """Compute the Lyman continuum optical depth for DLA.
 
         Args:
             redshift (float): Source redshift.
@@ -323,8 +314,7 @@ class Inoue14(IGMBase):
 
     @accepts(lam_obs=angstrom)
     def tau_lc_laf(self, redshift, lam_obs):
-        """
-        Compute the Lyman continuum optical depth for LAF.
+        """Compute the Lyman continuum optical depth for LAF.
 
         Args:
             redshift (float): Source redshift.
@@ -393,8 +383,7 @@ class Inoue14(IGMBase):
         return tau_lc_laf_value
 
     def tau(self, redshift, lam_obs):
-        """
-        Compute the total IGM optical depth.
+        """Compute the total IGM optical depth.
 
         Args:
             redshift (float): Redshift to evaluate IGM absorption.
@@ -420,8 +409,7 @@ class Inoue14(IGMBase):
         return self.scale_tau * (tau_lc + tau_ls + tau_clip)
 
     def get_transmission(self, redshift, lam_obs):
-        """
-        Compute the IGM transmission.
+        """Compute the IGM transmission.
 
         Args:
             redshift (float): Redshift to evaluate IGM absorption.
@@ -441,8 +429,7 @@ class Inoue14(IGMBase):
 
 
 class Madau96(IGMBase):
-    """
-    IGM absorption from Madau et al. (1996).
+    """IGM absorption from Madau et al. (1996).
 
     Attributes:
         lams (list): List of wavelengths for the model.
@@ -460,8 +447,7 @@ class Madau96(IGMBase):
 
     @accepts(lam_obs=angstrom)
     def get_transmission(self, redshift, lam_obs):
-        """
-        Compute the IGM transmission.
+        """Compute the IGM transmission.
 
         Args:
             redshift (float): Redshift to evaluate IGM absorption.

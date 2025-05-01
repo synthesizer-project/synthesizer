@@ -59,8 +59,7 @@ def test_template():
 
 @pytest.fixture
 def lam():
-    """
-    Return a wavelength array.
+    """Return a wavelength array.
 
     This function generates a logarithmically spaced array of wavelengths
     ranging from 10^2 to 10^6 angstroms, with 1000 points in total.

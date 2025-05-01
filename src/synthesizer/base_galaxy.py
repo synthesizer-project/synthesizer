@@ -1,4 +1,4 @@
-"""A module for common functionality in Parametric and Particle Galaxies
+"""A module for common functionality in Parametric and Particle Galaxies.
 
 The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
@@ -16,29 +16,27 @@ from synthesizer.utils import TableFormatter
 
 
 class BaseGalaxy:
-    """
-    The base galaxy class.
+    """The base galaxy class.
 
     This should never be directly instantiated. It instead contains the common
     functionality and attributes needed for parametric and particle galaxies.
 
     Attributes:
-        spectra (dict, Sed)
+        spectra (dict, Sed):
             The dictionary containing a Galaxy's spectra. Each entry is an
             Sed object. This dictionary only contains combined spectra from
             All components that make up the Galaxy (Stars, Gas, BlackHoles).
-        stars (particle.Stars/parametric.Stars)
+        stars (particle.Stars/parametric.Stars):
             The Stars object holding information about the stellar population.
-        gas (particle.Gas/parametric.Gas)
+        gas (particle.Gas/parametric.Gas):
             The Gas object holding information about the gas distribution.
-        black_holes (particle.BlackHoles/parametric.BlackHole)
+        black_holes (particle.BlackHoles/parametric.BlackHole):
             The BlackHole/s object holding information about the black hole/s.
     """
 
     @accepts(centre=Mpc)
     def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
-        """
-        Instantiate the base Galaxy class.
+        """Instantiate the base Galaxy class.
 
         This is the parent class of both parametric.Galaxy and particle.Galaxy.
 
@@ -47,19 +45,19 @@ class BaseGalaxy:
         regardless to unify the Galaxy syntax for both cases.
 
         Args:
-            stars (particle.Stars/parametric.Stars)
+            stars (particle.Stars/parametric.Stars):
                 The Stars object holding information about the stellar
                 population.
-            gas (particle.Gas/parametric.Gas)
+            gas (particle.Gas/parametric.Gas):
                 The Gas object holding information about the gas distribution.
-            black_holes (particle.BlackHoles/parametric.BlackHole)
+            black_holes (particle.BlackHoles/parametric.BlackHole):
                 The BlackHole/s object holding information about the
                 black hole/s.
-            redshift (float)
+            redshift (float):
                 The redshift of the galaxy.
-            centre (array)
+            centre (unyt_array of float):
                 The centre of the galaxy.
-            **kwargs
+            **kwargs (dict):
                 Any additional attributes to attach to the galaxy object.
         """
         # Container for the spectra and lines
@@ -117,8 +115,7 @@ class BaseGalaxy:
 
     @property
     def photo_fluxes(self):
-        """
-        Get the photometry fluxes.
+        """Get the photometry fluxes.
 
         Returns:
             dict
@@ -132,8 +129,7 @@ class BaseGalaxy:
 
     @property
     def photo_luminosities(self):
-        """
-        Get the photometry luminosities.
+        """Get the photometry luminosities.
 
         Returns:
             dict
@@ -146,11 +142,10 @@ class BaseGalaxy:
         return self.photo_lnu
 
     def __str__(self):
-        """
-        Return a string representation of the galaxy object.
+        """Return a string representation of the galaxy object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the galaxy object.
         """
         # Intialise the table formatter
@@ -158,38 +153,42 @@ class BaseGalaxy:
 
         return formatter.get_table("Galaxy")
 
-    def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
+    def get_equivalent_width(self, feature, blue, red, spectra_type):
+        """Get all equivalent widths associated with a sed object.
+
+        Args:
+            feature (str):
+                The feature to measure the equivalent width of.
+                e.g. "Halpha", "Hbeta", "MgII", etc.
+            blue (float):
+                The blue side of the feature to measure.
+            red (float):
+                The red side of the feature to measure.
+            spectra_type (str/list):
+                The spectra type to measure the equivalent width of. Either
+                a single type (str): or a list of types.
+
+        Returns:
+            equivalent_width (float/dict of float):
+                The equivalent width of the feature in the spectra.
         """
-        Get all equivalent widths associated with a sed object
+        # If we only have one spectra type then just return the result
+        if isinstance(spectra_type, str):
+            return self.spectra[spectra_type].measure_index(feature, blue, red)
 
-        Parameters
-        ----------
-        index: float
-            the index to be used in the computation of equivalent width.
-        spectra_to_plot: float array
-            An empty list of spectra to be populated.
-
-        Returns
-        -------
-        equivalent_width : float
-            The calculated equivalent width at the current index.
-        """
-        equivalent_width = None
-
-        if not isinstance(spectra_to_plot, list):
-            spectra_to_plot = list(self.spectra.keys())
-
-        for sed_name in spectra_to_plot:
+        # If we have a list of spectra types then loop over them and store
+        # the results in a dictionary
+        equivalent_widths = {}
+        for sed_name in spectra_type:
             sed = self.spectra[sed_name]
 
             # Compute equivalent width
-            equivalent_width = sed.measure_index(feature, blue, red)
+            equivalent_widths[sed_name] = sed.measure_index(feature, blue, red)
 
-        return equivalent_width
+        return equivalent_widths
 
     def get_observed_spectra(self, cosmo, igm=Inoue14):
-        """
-        Calculate the observed spectra for all Sed objects within this galaxy.
+        """Calculate the observed spectra for all Seds within this galaxy.
 
         This will run Sed.get_fnu(...) and populate Sed.fnu (and sed.obslam
         and sed.obsnu) for all spectra in:
@@ -204,10 +203,10 @@ class BaseGalaxy:
         - Galaxy.black_holes.particle_spectra
 
         Args:
-            cosmo (astropy.cosmology.Cosmology)
+            cosmo (astropy.cosmology.Cosmology):
                 The cosmology object containing the cosmological model used
                 to calculate the luminosity distance.
-            igm (igm)
+            igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14).
 
@@ -275,8 +274,7 @@ class BaseGalaxy:
                     )
 
     def get_observed_lines(self, cosmo, igm=Inoue14):
-        """
-        Calculate the observed lines for all Line objects within this galaxy.
+        """Calculate the observed lines for all Line objects.
 
         This will run Line.get_fnu(...) and populate Line.fnu (and Line.obslam
         and Line.obsnu) for all lines in:
@@ -291,10 +289,10 @@ class BaseGalaxy:
         - Galaxy.black_holes.particle_lines
 
         Args:
-            cosmo (astropy.cosmology.Cosmology)
+            cosmo (astropy.cosmology.Cosmology):
                 The cosmology object containing the cosmological model used
                 to calculate the luminosity distance.
-            igm (igm)
+            igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14).
 
@@ -362,15 +360,14 @@ class BaseGalaxy:
                     )
 
     def get_spectra_combined(self):
-        """
-        Combine all common component spectra from components onto the galaxy.
+        """Combine all common spectra from components onto the galaxy.
 
         e.g.:
             intrinsc = stellar_intrinsic + black_hole_intrinsic.
 
         For any combined spectra all components with a valid spectra will be
         combined and stored in Galaxy.spectra under the same key, but only if
-        there are instances of that spectra key on more than 1 component.
+        there are instances of a spectra containing that name to combine.
 
         Possible combined spectra are:
             - "total"
@@ -382,15 +379,20 @@ class BaseGalaxy:
         # Get the spectra we have on the components to combine
         spectra = {"total": [], "intrinsic": [], "emergent": []}
         for key in spectra:
-            if self.stars is not None and key in self.stars.spectra:
-                spectra[key].append(self.stars.spectra[key])
-            if (
-                self.black_holes is not None
-                and key in self.black_holes.spectra
-            ):
-                spectra[key].append(self.black_holes.spectra[key])
-            if self.gas is not None and key in self.gas.spectra:
-                spectra[key].append(self.gas.spectra[key])
+            if self.stars is not None:
+                for component_key in self.stars.spectra:
+                    if key in component_key:
+                        spectra[key].append(self.stars.spectra[component_key])
+            if self.black_holes is not None:
+                for component_key in self.black_holes.spectra:
+                    if key in component_key:
+                        spectra[key].append(
+                            self.black_holes.spectra[component_key]
+                        )
+            if self.gas is not None:
+                for component_key in self.gas.spectra:
+                    if key in component_key:
+                        spectra[key].append(self.gas.spectra[component_key])
 
         # Now combine all spectra that have more than one contributing
         # component.
@@ -402,22 +404,21 @@ class BaseGalaxy:
                 self.spectra[key] = sum(lst)
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate luminosity photometry using a FilterCollection object.
+        """Calculate luminosity photometry using a FilterCollection object.
 
         Photometry is calculated in spectral luminosity density units.
 
         Args:
-            filters (filters.FilterCollection)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
 
         Returns:
-            PhotometryCollection
+            PhotometryCollection:
                 A PhotometryCollection object containing the luminosity
                 photometry in each filter in filters.
         """
@@ -461,43 +462,41 @@ class BaseGalaxy:
         "`get_photo_lnu` instead. Will be removed in v1.0.0"
     )
     def get_photo_luminosities(self, filters, verbose=True):
-        """
-        Calculate luminosity photometry using a FilterCollection object.
+        """Calculate luminosity photometry using a FilterCollection object.
 
         Alias to get_photo_lnu.
 
         Photometry is calculated in spectral luminosity density units.
 
         Args:
-            filters (filters.FilterCollection)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
 
         Returns:
-            PhotometryCollection
+            PhotometryCollection:
                 A PhotometryCollection object containing the luminosity
                 photometry in each filter in filters.
         """
         return self.get_photo_lnu(filters, verbose)
 
     def get_photo_fnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate flux photometry using a FilterCollection object.
+        """Calculate flux photometry using a FilterCollection object.
 
         Photometry is calculated in spectral flux density units.
 
         Args:
-            filters (object)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
 
         Returns:
-            PhotometryCollection
+            PhotometryCollection:
                 A PhotometryCollection object containing the flux photometry
                 in each filter in filters.
         """
@@ -541,21 +540,20 @@ class BaseGalaxy:
         "`get_photo_fnu` instead. Will be removed in v1.0.0"
     )
     def get_photo_fluxes(self, filters, verbose=True):
-        """
-        Calculate flux photometry using a FilterCollection object.
+        """Calculate flux photometry using a FilterCollection object.
 
         Alias to get_photo_fnu.
 
         Photometry is calculated in spectral flux density units.
 
         Args:
-            filters (object)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
 
         Returns:
-            PhotometryCollection
+            PhotometryCollection:
                 A PhotometryCollection object containing the flux photometry
                 in each filter in filters.
         """
@@ -573,47 +571,48 @@ class BaseGalaxy:
         figsize=(3.5, 5),
         quantity_to_plot="lnu",
     ):
-        """
+        """Plot spectra on this galaxy.
+
         Plots either specific observed spectra (specified via combined_spectra,
         stellar_spectra, gas_spectra, and/or black_hole_spectra) or all spectra
         for any of the spectra arguments that are True. If any are false that
         component is ignored.
 
         Args:
-            combined_spectra (bool/list, string/string)
+            combined_spectra (bool/list, string/string):
                 The specific combined galaxy spectra to plot. (e.g "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            stellar_spectra (bool/list, string/string)
+            stellar_spectra (bool/list, string/string):
                 The specific stellar spectra to plot. (e.g. "incident")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            gas_spectra (bool/list, string/string)
+            gas_spectra (bool/list, string/string):
                 The specific gas spectra to plot. (e.g. "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            black_hole_spectra (bool/list, string/string)
+            black_hole_spectra (bool/list, string/string):
                 The specific black hole spectra to plot. (e.g "blr")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            show (bool)
+            show (bool):
                 Flag for whether to show the plot or just return the
                 figure and axes.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits to apply to the y axis. If not provided the limits
                 will be calculated with the lower limit set to 1000 (100)
                 times less than the peak of the spectrum for rest_frame
                 (observed) spectra.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
-            figsize (tuple)
+            figsize (tuple):
                 Tuple with size 2 defining the figure size.
-            quantity_to_plot (string)
+            quantity_to_plot (string):
                 The sed property to plot. Can be "lnu", "luminosity" or "llam"
                 for rest frame spectra or "fnu", "flam" or "flux" for observed
                 spectra. Defaults to "lnu".
@@ -735,50 +734,51 @@ class BaseGalaxy:
         filters=None,
         quantity_to_plot="fnu",
     ):
-        """
+        """Plot observed spectra on this galaxy.
+
         Plots either specific observed spectra (specified via combined_spectra,
         stellar_spectra, gas_spectra, and/or black_hole_spectra) or all spectra
         for any of the spectra arguments that are True. If any are false that
         component is ignored.
 
         Args:
-            combined_spectra (bool/list, string/string)
+            combined_spectra (bool/list, string/string):
                 The specific combined galaxy spectra to plot. (e.g "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            stellar_spectra (bool/list, string/string)
+            stellar_spectra (bool/list, string/string):
                 The specific stellar spectra to plot. (e.g. "incident")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            gas_spectra (bool/list, string/string)
+            gas_spectra (bool/list, string/string):
                 The specific gas spectra to plot. (e.g. "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            black_hole_spectra (bool/list, string/string)
+            black_hole_spectra (bool/list, string/string):
                 The specific black hole spectra to plot. (e.g "blr")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            show (bool)
+            show (bool):
                 Flag for whether to show the plot or just return the
                 figure and axes.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits to apply to the y axis. If not provided the limits
                 will be calculated with the lower limit set to 1000 (100)
                 times less than the peak of the spectrum for rest_frame
                 (observed) spectra.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
-            figsize (tuple)
+            figsize (tuple):
                 Tuple with size 2 defining the figure size.
-            filters (FilterCollection)
+            filters (FilterCollection):
                 If given then the photometry is computed and both the
                 photometry and filter curves are plotted
-            quantity_to_plot (string)
+            quantity_to_plot (string):
                 The sed property to plot. Can be "lnu", "luminosity" or "llam"
                 for rest frame spectra or "fnu", "flam" or "flux" for observed
                 spectra. Defaults to "lnu".
@@ -901,8 +901,7 @@ class BaseGalaxy:
         verbose=True,
         **kwargs,
     ):
-        """
-        Generate spectra as described by the emission model.
+        """Generate spectra as described by the emission model.
 
         Args:
             emission_model (EmissionModel):
@@ -933,6 +932,16 @@ class BaseGalaxy:
                       to use a specific escape fraction with a particular
                       model or {<label>: str(<attribute>)} to use an
                       attribute of the component as the escape fraction.
+            covering_fraction (dict):
+                An override to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                        emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form
+                        {<label>: float(<covering_fraction>)}
+                        to use a specific covering fraction with a particular
+                        model or {<label>: str(<attribute>)} to use an
+                        attribute of the component as the covering fraction.
             mask (dict):
                 An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
@@ -940,9 +949,12 @@ class BaseGalaxy:
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
-            verbose (bool)
+            vel_shift (bool):
+                An overide to the model level velocity shift flag. If True
+                then the velocity shift is applied when generating all spectra.
+            verbose (bool):
                 Are we talking?
-            kwargs (dict)
+            kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
@@ -1020,8 +1032,7 @@ class BaseGalaxy:
         verbose=True,
         **kwargs,
     ):
-        """
-        Generate lines as described by the emission model.
+        """Generate lines as described by the emission model.
 
         Args:
             line_ids (list):
@@ -1054,6 +1065,16 @@ class BaseGalaxy:
                       to use a specific escape fraction with a particular
                       model or {<label>: str(<attribute>)} to use an
                       attribute of the component as the escape fraction.
+            covering_fraction (dict):
+                An override to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                        emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form
+                        {<label>: float(<covering_fraction>)}
+                        to use a specific covering fraction with a particular
+                        model or {<label>: str(<attribute>)} to use an
+                        attribute of the component as the covering fraction.
             mask (dict):
                 An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
@@ -1061,9 +1082,9 @@ class BaseGalaxy:
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            kwargs (dict)
+            kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
@@ -1142,8 +1163,7 @@ class BaseGalaxy:
         instrument=None,
         cosmo=None,
     ):
-        """
-        Make an ImageCollection from luminosities.
+        """Make an ImageCollection from luminosities.
 
         For Parametric Galaxy objects, images can only be smoothed. An
         exception will be raised if a histogram is requested.
@@ -1166,35 +1186,34 @@ class BaseGalaxy:
         collection at the root of the emission model will also be returned.
 
         Args:
-            resolution (Quantity, float)
+            resolution (unyt_quantity of float):
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
+            fov (unyt_quantity of float):
                 The width of the image in image coordinates.
-            emission_model (EmissionModel)
+            emission_model (EmissionModel):
                 The emission model to use to generate the images.
-            img_type : str
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            stellar_photometry (string)
+            stellar_photometry (str):
                 The stellar spectra key from which to extract photometry
                 to use for the image.
-            blackhole_photometry (string)
+            blackhole_photometry (str):
                 The black hole spectra key from which to extract photometry
                 to use for the image.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            limit_to (str, list)
-                If not None, defines a specific model (or list of models) to
-                limit the image generation to. Otherwise, all models with saved
-                spectra will have images generated.
-            instrument (Instrument)
+            limit_to (str/list):
+                Optionally pass a single model label to limit image generation
+                to only that model.
+            instrument (Instrument):
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
                 the images by instrument.
@@ -1342,8 +1361,7 @@ class BaseGalaxy:
         instrument=None,
         cosmo=None,
     ):
-        """
-        Make an ImageCollection from fluxes.
+        """Make an ImageCollection from fluxes.
 
         For Parametric Galaxy objects, images can only be smoothed. An
         exception will be raised if a histogram is requested.
@@ -1366,29 +1384,29 @@ class BaseGalaxy:
         collection at the root of the emission model will also be returned.
 
         Args:
-            resolution (Quantity, float)
+            resolution (unyt_quantity of float):
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
+            fov (unyt_quantity of float):
                 The width of the image in image coordinates.
-            emission_model (EmissionModel)
+            emission_model (EmissionModel):
                 The emission model to use to generate the images.
-            img_type : str
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            limit_to (str, list)
+            limit_to (str, list):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
                 spectra will have images generated.
-            instrument (Instrument)
+            instrument (Instrument):
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
                 the images by instrument.
@@ -1522,8 +1540,7 @@ class BaseGalaxy:
         psf_resample_factor=1,
         limit_to=None,
     ):
-        """
-        Apply an instrument's PSFs this galaxy's and its component's images.
+        """Apply an instrument's PSFs this galaxy's and its component's images.
 
         Args:
             instrument (Instrument):
@@ -1621,8 +1638,7 @@ class BaseGalaxy:
         psf_resample_factor=1,
         limit_to=None,
     ):
-        """
-        Apply an instrument's PSFs this galaxy's and its component's images.
+        """Apply an instrument's PSFs this galaxy's and its component's images.
 
         Args:
             instrument (Instrument):
@@ -1720,8 +1736,7 @@ class BaseGalaxy:
         limit_to=None,
         apply_to_psf=True,
     ):
-        """
-        Apply instrument noise to this galaxy's and its component's images.
+        """Apply instrument noise to this galaxy's and its component's images.
 
         Args:
             instrument (Instrument):
@@ -1818,8 +1833,7 @@ class BaseGalaxy:
         limit_to=None,
         apply_to_psf=True,
     ):
-        """
-        Apply instrument noise to this galaxy's and its component's images.
+        """Apply instrument noise to this galaxy's and its component's images.
 
         Args:
             instrument (Instrument):
@@ -1914,8 +1928,7 @@ class BaseGalaxy:
         self,
         instrument,
     ):
-        """
-        Get spectroscopy for the galaxy based on a specific instrument.
+        """Get spectroscopy for the galaxy based on a specific instrument.
 
         This will apply the instrument's wavelength array to each
         spectra stored on the galaxy and its components.
@@ -1966,8 +1979,7 @@ class BaseGalaxy:
         return self.spectroscopy[instrument.label]
 
     def clear_all_spectra(self):
-        """
-        Clear all spectra.
+        """Clear all spectra.
 
         This method is a quick helper to clear all spectra from the
         galaxy object and its components. This will cover both integrated and
@@ -1981,8 +1993,7 @@ class BaseGalaxy:
             self.black_holes.clear_all_spectra()
 
     def clear_all_spectroscopy(self):
-        """
-        Clear all spectroscopy.
+        """Clear all spectroscopy.
 
         This method is a quick helper to clear all spectroscopy from the
         galaxy object and its components. This will cover both integrated and
@@ -1996,8 +2007,7 @@ class BaseGalaxy:
             self.black_holes.clear_all_spectroscopy()
 
     def clear_all_lines(self):
-        """
-        Clear all lines.
+        """Clear all lines.
 
         This method is a quick helper to clear all lines from the galaxy object
         and its components. This will cover both integrated and per particle
@@ -2011,8 +2021,7 @@ class BaseGalaxy:
             self.black_holes.clear_all_lines()
 
     def clear_all_photometry(self):
-        """
-        Clear all photometry.
+        """Clear all photometry.
 
         This method is a quick helper to clear all photometry from the galaxy
         object and its components. This will cover both integrated and per
@@ -2027,8 +2036,7 @@ class BaseGalaxy:
             self.black_holes.clear_all_photometry()
 
     def clear_all_emissions(self):
-        """
-        Clear all spectra, lines and photometry.
+        """Clear all spectra, lines and photometry.
 
         This method is a quick helper to clear all spectra, lines, and
         photometry from the galaxy object and its components. This will cover
@@ -2047,8 +2055,7 @@ class BaseGalaxy:
         self.clear_all_spectroscopy()
 
     def clear_weights(self):
-        """
-        Clear all cached grid weights.
+        """Clear all cached grid weights.
 
         This clears all grid weights calculated using different
         methods from this base galaxy, and resets the
@@ -2076,57 +2083,56 @@ class BaseGalaxy:
         fig=None,
         ax=None,
     ):
-        """
-        Plot an instrument's spectroscopy.
+        """Plot an instrument's spectroscopy.
 
         This will plot the spectroscopy for the galaxy and its components
         using the instrument's wavelength array. The spectra are plotted
         in the order they are stored in the spectroscopy dictionary.
 
         Args:
-            instrument_label (str)
+            instrument_label (str):
                 The label of the instrument whose spectroscopy to plot.
-            combined_spectra (bool/list, string/string)
+            combined_spectra (bool/list, string/string):
                 The specific combined galaxy spectra to plot. (e.g "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            stellar_spectra (bool/list, string/string)
+            stellar_spectra (bool/list, string/string):
                 The specific stellar spectra to plot. (e.g. "incident")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            gas_spectra (bool/list, string/string)
+            gas_spectra (bool/list, string/string):
                 The specific gas spectra to plot. (e.g. "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            black_hole_spectra (bool/list, string/string)
+            black_hole_spectra (bool/list, string/string):
                 The specific black hole spectra to plot. (e.g "blr")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            show (bool)
+            show (bool):
                 Flag for whether to show the plot or just return the
                 figure and axes.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits to apply to the y axis. If not provided the limits
                 will be calculated with the lower limit set to 1000 (100)
                 times less than the peak of the spectrum for rest_frame
                 (observed) spectra.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
-            figsize (tuple)
+            figsize (tuple):
                 Tuple with size 2 defining the figure size.
-            quantity_to_plot (string)
+            quantity_to_plot (string):
                 The sed property to plot. Can be "lnu", "luminosity" or "llam"
                 for rest frame spectra or "fnu", "flam" or "flux" for observed
                 spectra. Defaults to "lnu".
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The matplotlib figure object to plot on. If None a new
                 figure is created.
-            ax (matplotlib.axes)
+            ax (matplotlib.axes):
                 The matplotlib axes object to plot on. If None a new
                 axes is created.
 
@@ -2274,58 +2280,57 @@ class BaseGalaxy:
         fig=None,
         ax=None,
     ):
-        """
-        Plot an instrument's spectroscopy.
+        """Plot an instrument's spectroscopy.
 
         This will plot the spectroscopy for the galaxy and its components
         using the instrument's wavelength array. The spectra are plotted
         in the order they are stored in the spectroscopy dictionary.
 
         Args:
-            instrument_label (str)
+            instrument_label (str):
                 The label of the instrument whose spectroscopy to plot.
-            combined_spectra (bool/list, string/string)
+            combined_spectra (bool/list, string/string):
                 The specific combined galaxy spectroscopy to plot.
                 (e.g "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            stellar_spectra (bool/list, string/string)
+            stellar_spectra (bool/list, string/string):
                 The specific stellar spectroscopy to plot. (e.g. "incident")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            gas_spectra (bool/list, string/string)
+            gas_spectra (bool/list, string/string):
                 The specific gas spectroscopy to plot. (e.g. "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            black_hole_spectra (bool/list, string/string)
+            black_hole_spectra (bool/list, string/string):
                 The specific black hole spectroscopy to plot. (e.g "blr")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            show (bool)
+            show (bool):
                 Flag for whether to show the plot or just return the
                 figure and axes.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits to apply to the y axis. If not provided the limits
                 will be calculated with the lower limit set to 1000 (100)
                 times less than the peak of the spectrum for rest_frame
                 (observed) spectra.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
-            figsize (tuple)
+            figsize (tuple):
                 Tuple with size 2 defining the figure size.
-            quantity_to_plot (string)
+            quantity_to_plot (string):
                 The sed property to plot. Can be "lnu", "luminosity" or "llam"
                 for rest frame spectra or "fnu", "flam" or "flux" for observed
                 spectra. Defaults to "lnu".
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The matplotlib figure object to plot on. If None a new
                 figure is created.
-            ax (matplotlib.axes)
+            ax (matplotlib.axes):
                 The matplotlib axes object to plot on. If None a new
                 axes is created.
 

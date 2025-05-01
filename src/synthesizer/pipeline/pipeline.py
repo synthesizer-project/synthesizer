@@ -47,8 +47,7 @@ from synthesizer.utils.art import Art
 
 
 class Pipeline:
-    """
-    A class for running observable generation pipelines on a set of galaxies.
+    """A class for running observable generation pipelines on galaxies.
 
     To use this class the user must instantiate it with a galaxy loading
     function, an emission model defining the different emissions that will be
@@ -126,8 +125,7 @@ class Pipeline:
         verbose=1,
         report_memory=False,
     ):
-        """
-        Initialise the Pipeline object.
+        """Initialise the Pipeline object.
 
         This will not perform any part of the calculation, it only sets it up.
 
@@ -191,7 +189,7 @@ class Pipeline:
 
         # Check if we can use OpenMP
         if self.nthreads > 1 and not check_openmp():
-            raise exceptions.MissingPartition(
+            raise exceptions.InconsistentArguments(
                 "Can't use multiple threads without OpenMP support. "
                 " Install with: `WITH_OPENMP=1 pip install .`"
             )
@@ -551,8 +549,7 @@ class Pipeline:
         self._print("Goodbye!")
 
     def _print(self, *args, **kwargs):
-        """
-        Print a message to the screen with extra information.
+        """Print a message to the screen with extra information.
 
         The prints behave differently depending on whether we are using MPI or
         not. We can also set the verbosity level at the Pipeline level which
@@ -564,7 +561,8 @@ class Pipeline:
             2: Outputs with timings on all ranks (when using MPI).
 
         Args:
-            message (str): The message to print.
+            *args: The message to print.
+            **kwargs: Any additional arguments to pass to the print function.
         """
         # At verbosity 0 we are silent
         if self.verbose == 0:
@@ -597,8 +595,7 @@ class Pipeline:
         print(prefix, *args, **kwargs)
 
     def _took(self, start, message):
-        """
-        Print a message with the time taken since the start time.
+        """Print a message with the time taken since the start time.
 
         Args:
             start (float): The start time of the process.
@@ -621,8 +618,7 @@ class Pipeline:
 
     @property
     def results_memory_usage(self):
-        """
-        Return the memory usage of the various results stored on the Pipeline.
+        """Return the memory usage of the results stored on the Pipeline.
 
         Returns:
             float: The memory usage in Megabytes.
@@ -654,8 +650,7 @@ class Pipeline:
 
     @property
     def galaxies_memory_usage(self):
-        """
-        Return the memory usage of the galaxies loaded into the Pipeline.
+        """Return the memory usage of the galaxies loaded into the Pipeline.
 
         Returns:
             float: The memory usage in Megabytes.
@@ -664,8 +659,7 @@ class Pipeline:
 
     @property
     def all_galaxies_memory_usage(self):
-        """
-        Return the memory usage of all galaxies across all ranks.
+        """Return the memory usage of all galaxies across all ranks.
 
         Returns:
             float: The memory usage in Megabytes.
@@ -676,8 +670,7 @@ class Pipeline:
 
     @property
     def memory_usage(self):
-        """
-        Return the memory usage of the Pipeline object.
+        """Return the memory usage of the Pipeline object.
 
         Returns:
             float: The memory usage in Megabytes.
@@ -730,8 +723,7 @@ class Pipeline:
         self._print_progress_footer()
 
     def _add_progress_row(self, gal, igal, start):
-        """
-        Print a row for the progress report.
+        """Print a row for the progress report.
 
         Args:
             gal (Galaxy): The galaxy object to report on.
@@ -906,8 +898,7 @@ class Pipeline:
                 self._print(f"Computing {key} took {elapsed:.2f} {units}")
 
     def report_operations(self):
-        """
-        Print the operations that will be performed by the Pipeline.
+        """Print the operations that will be performed by the Pipeline.
 
         This will print out the operations that will be performed by the
         pipeline, including which will be written out and which will just be
@@ -991,8 +982,7 @@ class Pipeline:
         self._print("-" * 60)
 
     def add_analysis_func(self, func, result_key, *args, **kwargs):
-        """
-        Add an analysis function to the Pipeline.
+        """Add an analysis function to the Pipeline.
 
         The provided function will be called on each galaxy in the Pipeline
         once all data has been generated. The function should take a galaxy
@@ -1031,6 +1021,9 @@ class Pipeline:
                 The key to use when storing the results of the analysis
                 function in the output. This can include slashes to denote
                 nesting, e.g. "Gas/Nested/Result".
+            *args: Any additional arguments to pass to the analysis function.
+            **kwargs: Any additional keyword arguments to pass to the
+                analysis function.
         """
         # Ensure we have a callable function
         if not callable(func):
@@ -1064,8 +1057,7 @@ class Pipeline:
         self._print(f"Added analysis function: {result_key}")
 
     def add_galaxies(self, galaxies):
-        """
-        Add galaxies to the Pipeline.
+        """Add galaxies to the Pipeline.
 
         This function will add the provided galaxies to the Pipeline. This is
         useful if you have already loaded the galaxies and want to add them to
@@ -1129,8 +1121,7 @@ class Pipeline:
         kernel_threshold=1.0,
         kappa=0.0795,
     ):
-        """
-        Flag that the Pipeline should compute the LOS optical depths.
+        """Flag that the Pipeline should compute the LOS optical depths.
 
         This will signal the Pipeline to compute the LOS optical depths when
         the run method is called.
@@ -1160,8 +1151,7 @@ class Pipeline:
         self._do_los_optical_depths = True
 
     def _get_los_optical_depths(self, galaxy):
-        """
-        Compute the Line of Sight optical depths for all particles.
+        """Compute the Line of Sight optical depths for all particles.
 
         This will compute the optical depths based on the line of sight dust
         column density for all non-gas components. We project a ray along the
@@ -1221,8 +1211,7 @@ class Pipeline:
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
 
     def get_sfzh(self, log10ages, log10metallicities):
-        """
-        Flag that the Pipeline should compute the SFZH grid.
+        """Flag that the Pipeline should compute the SFZH grid.
 
         This will signal the Pipeline to compute the SFZH grid when the run
         method is called.
@@ -1249,8 +1238,7 @@ class Pipeline:
         self._write_sfzh = True
 
     def _get_sfzh(self, galaxy):
-        """
-        Compute the SFZH grid for each galaxy.
+        """Compute the SFZH grid for each galaxy.
 
         This is also the integrated weights of each star particle onto the SPS
         grid.
@@ -1298,8 +1286,7 @@ class Pipeline:
         self._op_timing["SFZH"] += time.perf_counter() - start
 
     def get_sfh(self, log10ages):
-        """
-        Flag that the Pipeline should compute the binned SFH.
+        """Flag that the Pipeline should compute the binned SFH.
 
         This will signal the Pipeline to compute the binned SFH when the run
         method is called.
@@ -1322,8 +1309,7 @@ class Pipeline:
         self._write_sfh = True
 
     def _get_sfh(self, galaxy):
-        """
-        Compute the binned SFH for each galaxy.
+        """Compute the binned SFH for each galaxy.
 
         Args:
             galaxy (Galaxy):
@@ -1356,8 +1342,7 @@ class Pipeline:
         self._op_timing["SFH"] += time.perf_counter() - start
 
     def get_spectra(self):
-        """
-        Flag that the Pipeline should compute the rest frame spectra.
+        """Flag that the Pipeline should compute the rest frame spectra.
 
         This will signal the Pipeline to compute the rest frame spectral
         luminosity density for each galaxy when the run method is called.
@@ -1375,8 +1360,7 @@ class Pipeline:
         self._write_lnu_spectra = True
 
     def _get_spectra(self, galaxy):
-        """
-        Generate the spectra for the galaxies based on the EmissionModel.
+        """Generate the spectra for the galaxies based on the EmissionModel.
 
         Args:
             galaxy (Galaxy):
@@ -1404,8 +1388,7 @@ class Pipeline:
         self._op_timing["Lnu Spectra"] += time.perf_counter() - start
 
     def get_observed_spectra(self, cosmo, igm=Inoue14):
-        """
-        Flag that the Pipeline should compute the observed spectra.
+        """Flag that the Pipeline should compute the observed spectra.
 
         This will signal the Pipeline to compute the observed spectral flux
         density for each galaxy when the run method is called.
@@ -1437,8 +1420,7 @@ class Pipeline:
         self._write_fnu_spectra = True
 
     def _get_observed_spectra(self, galaxy):
-        """
-        Compute the observed spectra for each galaxy.
+        """Compute the observed spectra for each galaxy.
 
         Args:
             galaxy (Galaxy):
@@ -1469,8 +1451,7 @@ class Pipeline:
         self._op_timing["Fnu Spectra"] += time.perf_counter() - start
 
     def get_photometry_luminosities(self, *instruments):
-        """
-        Flag that the Pipeline should compute the photometric luminosities.
+        """Flag that the Pipeline should compute the photometric luminosities.
 
         This will signal the Pipeline to compute the photometric luminosities
         for each galaxy when the run method is called using the passed
@@ -1528,8 +1509,7 @@ class Pipeline:
         ).add_instruments(*_instruments)
 
     def _get_photometry_luminosities(self, galaxy):
-        """
-        Compute the photometric luminosities from the generated spectra.
+        """Compute the photometric luminosities from the generated spectra.
 
         Args:
             galaxy (Galaxy):
@@ -1568,8 +1548,7 @@ class Pipeline:
         cosmo=None,
         igm=None,
     ):
-        """
-        Flag that the Pipeline should compute the photometric fluxes.
+        """Flag that the Pipeline should compute the photometric fluxes.
 
         This will signal the Pipeline to compute the photometric fluxes for
         each galaxy when the run method is called.
@@ -1653,8 +1632,7 @@ class Pipeline:
         ).add_instruments(*_instruments)
 
     def _get_photometry_fluxes(self, galaxy):
-        """
-        Compute the photometric fluxes from the generated spectra.
+        """Compute the photometric fluxes from the generated spectra.
 
         Args:
             galaxy (Galaxy):
@@ -1688,8 +1666,7 @@ class Pipeline:
         self._op_timing["Fluxes"] += time.perf_counter() - start
 
     def get_lines(self, line_ids):
-        """
-        Flag that the Pipeline should compute the emission lines.
+        """Flag that the Pipeline should compute the emission lines.
 
         This will signal the Pipeline to compute the emission lines for each
         galaxy when the run method is called.
@@ -1721,8 +1698,7 @@ class Pipeline:
         self.line_ids = line_ids
 
     def _get_lines(self, galaxy):
-        """
-        Generate the emission lines for the galaxies.
+        """Generate the emission lines for the galaxies.
 
         This function will generate the emission lines for all spectra types
         that were saved when spectra were generated.
@@ -1776,8 +1752,7 @@ class Pipeline:
         )
 
     def get_observed_lines(self, cosmo, igm=Inoue14, line_ids=None):
-        """
-        Flag that the Pipeline should compute the observed emission lines.
+        """Flag that the Pipeline should compute the observed emission lines.
 
         This will signal the Pipeline to compute the observed emission lines
         for each galaxy when the run method is called.
@@ -1827,8 +1802,7 @@ class Pipeline:
         self._write_flux_lines = True
 
     def _get_observed_lines(self, galaxy):
-        """
-        Compute the observed emission lines for each galaxy.
+        """Compute the observed emission lines for each galaxy.
 
         Args:
             galaxy (Galaxy):
@@ -1885,8 +1859,7 @@ class Pipeline:
         spectra_type=None,
         psf_resample_factor=1,
     ):
-        """
-        Flag that the Pipeline should compute the luminosity images.
+        """Flag that the Pipeline should compute the luminosity images.
 
         This will signal the Pipeline to compute the luminosity images for each
         galaxy when the run method is called.
@@ -2007,8 +1980,7 @@ class Pipeline:
                 self._write_images_lum = True
 
     def _get_images_luminosity(self, galaxy):
-        """
-        Compute the luminosity images for the galaxies.
+        """Compute the luminosity images for the galaxies.
 
         This function will compute the luminosity images for all spectra types
         that were saved when spectra were generated, in all filters included in
@@ -2162,8 +2134,7 @@ class Pipeline:
         spectra_type=None,
         psf_resample_factor=1,
     ):
-        """
-        Flag that the Pipeline should compute the flux images.
+        """Flag that the Pipeline should compute the flux images.
 
         This will signal the Pipeline to compute the flux images for each
         galaxy when the run method is called.
@@ -2315,8 +2286,7 @@ class Pipeline:
                 self._write_images_flux = True
 
     def _get_images_flux(self, galaxy):
-        """
-        Compute the flux images for the galaxies.
+        """Compute the flux images for the galaxies.
 
         This function will compute the flux images for all spectra types that
         were saved when spectra were generated, in all filters included in the
@@ -2477,8 +2447,7 @@ class Pipeline:
         self._took(start, "Getting fnu data cubes")
 
     def get_spectroscopy_lnu(self, *instruments):
-        """
-        Flag that the Pipeline should compute the spectral luminosity density.
+        """Flag that the Pipeline should compute spectral luminosity density.
 
         This will signal the Pipeline to compute the spectral luminosity
         density for each galaxy when the run method is called.
@@ -2535,8 +2504,7 @@ class Pipeline:
         pass
 
     def get_spectroscopy_fnu(self, *instruments):
-        """
-        Flag that the Pipeline should compute the spectral flux density.
+        """Flag that the Pipeline should compute the spectral flux density.
 
         This will signal the Pipeline to compute the spectral flux density
         for each galaxy when the run method is called.
@@ -2593,8 +2561,7 @@ class Pipeline:
         pass
 
     def _run_extra_analysis(self, galaxy):
-        """
-        Call any user provided analysis functions.
+        """Call any user provided analysis functions.
 
         We will call this last when running the pipeline. This ensures that
         all data generated by the pipeline exists before performing the user
@@ -2649,8 +2616,7 @@ class Pipeline:
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
     def _unpack_results(self, galaxy):
-        """
-        Unpack the results from the galaxy into the pipeline.
+        """Unpack the results from the galaxy into the pipeline.
 
         This will extract all the calculated data from the galaxy and store it
         on the pipeline for writing out. All data not flagged to be saved will
@@ -2943,8 +2909,7 @@ class Pipeline:
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
     def run(self):
-        """
-        Run the pipeline.
+        """Run the pipeline.
 
         This will churn throuh the attached galaxies generating all the data
         requested using the get_* methods.
@@ -3079,8 +3044,7 @@ class Pipeline:
         self._analysis_complete = True
 
     def _clean_outputs(self):
-        """
-        Clean up the lists attached to the pipeline.
+        """Clean up the lists attached to the pipeline.
 
         This prepares the results for writing out to a file.
         """
@@ -3258,8 +3222,7 @@ class Pipeline:
         self._took(start, "Cleaning outputs")
 
     def write(self, outpath, verbose=None):
-        """
-        Write what we have produced to a HDF5 file.
+        """Write what we have produced to a HDF5 file.
 
         Any get_* methods that have been called will have their results written
         to the HDF5 file. We consider the call to get_* to be the signal to
@@ -3279,8 +3242,7 @@ class Pipeline:
         # running old pipelines that don't call run before write)
         if not self._analysis_complete:
             self._print(
-                "Pipeline has not been run. "
-                "Running pipeline before writing."
+                "Pipeline has not been run. Running pipeline before writing."
             )
             self.run()
 
@@ -3588,8 +3550,7 @@ class Pipeline:
         self._say_goodbye()
 
     def combine_files(self):
-        """
-        Combine inidividual rank files into a single file.
+        """Combine inidividual rank files into a single file.
 
         Only applicable to MPI runs.
 
@@ -3623,8 +3584,7 @@ class Pipeline:
         self._took(start, "Combining files")
 
     def combine_files_virtual(self):
-        """
-        Combine inidividual rank files into a single virtual file.
+        """Combine inidividual rank files into a single virtual file.
 
         Only applicable to MPI runs.
 
@@ -3660,8 +3620,7 @@ class Pipeline:
         raise NotImplementedError("Repartitioning is not yet implemented.")
 
     def _report_balance(self):
-        """
-        Report the balance of galaxies across the ranks.
+        """Report the balance of galaxies across the ranks.
 
         This function will print out a nice horizontal bar graph showing the
         distribution of galaxies across the ranks.

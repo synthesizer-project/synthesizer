@@ -9,6 +9,7 @@ from unyt import Mpc, kpc, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
+from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
     cached_split,
@@ -143,8 +144,7 @@ class TestDiscoveryUtils:
 
 
 class TestCountAndCheck:
-    """
-    Tests for the count_and_check_dict_recursive function.
+    """Tests for the count_and_check_dict_recursive function.
 
     This is used liberally for reporting progress to the user, so it's
     important that it works as expected.
@@ -417,6 +417,22 @@ class TestPipelineInit:
         assert pipeline.emission_model is nebular_emission_model
         assert pipeline.nthreads == 1  # Default value
 
+    def test_init_pipeline_single_inst(
+        self,
+        nebular_emission_model,
+        nircam_instrument,
+    ):
+        """Test initializing the Pipeline with a single instrument."""
+        pipeline = Pipeline(
+            emission_model=nebular_emission_model,
+            instruments=nircam_instrument,
+            verbose=0,
+        )
+
+        assert isinstance(pipeline.instruments, InstrumentCollection), (
+            "Single instrument should be wrapped in an InstrumentCollection"
+        )
+
 
 class TestPipelineNotReady:
     """Test that the Pipeline behaves as expected when things are missing."""
@@ -447,7 +463,8 @@ class TestPipelineNotReady:
         base_pipeline,
         uvj_nircam_insts,
     ):
-        """
+        """Test erroring in get_photometry_fluxes without a cosmology.
+
         Test that calling get_photometry_fluxes without providing a cosmology
         (and with no prior call to get_observed_spectra)
         raises PipelineNotReady.
@@ -459,7 +476,8 @@ class TestPipelineNotReady:
         )
 
     def test_get_observed_lines_without_line_ids(self, base_pipeline):
-        """
+        """Test erroring in get_observed_lines without line IDs.
+
         Test that calling get_observed_lines without previously having
         line IDs (via get_lines) or without providing them directly raises
         PipelineNotReady.
@@ -476,7 +494,8 @@ class TestPipelineNotReady:
         base_pipeline,
         nircam_instrument,
     ):
-        """
+        """Test erroring in get_images_luminosity_psfs.
+
         Test that calling get_images_luminosity_psfs without required
         arguments (fov, img_type, kernel, kernel_threshold)
         when get_images_luminosity has not been called raises PipelineNotReady.
@@ -490,7 +509,8 @@ class TestPipelineNotReady:
         base_pipeline,
         nircam_instrument,
     ):
-        """
+        """Test erroring in get_images_flux_psfs.
+
         Test that calling get_images_flux_psfs without required arguments
         (fov, img_type, kernel, kernel_threshold)
         when get_images_flux has not been called raises PipelineNotReady.
@@ -512,7 +532,8 @@ class TestPipelineNotReady:
     def test_run_with_no_operations(
         self, base_pipeline, list_of_random_particle_galaxies
     ):
-        """
+        """Test running the pipeline with no operations.
+
         Test that running the pipeline without any get_* operations signalled
         (i.e. no operation flag is True) raises PipelineNotReady.
         """
@@ -550,12 +571,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_lnu_spectra
-        ), "Spectra not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_lnu_spectra, (
+            "Spectra not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.lnu_spectra)
             > 0
@@ -571,12 +592,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_fnu_spectra
-        ), "Spectra not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_fnu_spectra, (
+            "Spectra not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.fnu_spectra)
             > 0
@@ -593,12 +614,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_luminosities
-        ), "Luminosities not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_luminosities, (
+            "Luminosities not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.luminosities)
             > 0
@@ -617,12 +638,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_fluxes
-        ), "Fluxes not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_fluxes, (
+            "Fluxes not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.fluxes) > 0
         ), "No fluxes were calculated"
@@ -638,12 +659,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_lines
-        ), "Lines not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_lines, (
+            "Lines not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.line_lums)
             > 0
@@ -654,12 +675,12 @@ class TestPipelineOperations:
             )
             > 0
         ), "No line continua were calculated"
-        assert (
-            pipeline_with_galaxies.line_lams is not None
-        ), "Line wavelengths not calculated"
-        assert (
-            pipeline_with_galaxies.line_ids is not None
-        ), "Line IDs not included"
+        assert pipeline_with_galaxies.line_lams is not None, (
+            "Line wavelengths not calculated"
+        )
+        assert pipeline_with_galaxies.line_ids is not None, (
+            "Line IDs not included"
+        )
 
     def test_run_pipeline_lines_flux(
         self,
@@ -675,12 +696,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_flux_lines
-        ), "Lines not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_flux_lines, (
+            "Lines not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.line_fluxes)
             > 0
@@ -691,9 +712,9 @@ class TestPipelineOperations:
             )
             > 0
         ), "No line continua were calculated"
-        assert (
-            pipeline_with_galaxies.line_obs_lams is not None
-        ), "Line wavelengths not calculated"
+        assert pipeline_with_galaxies.line_obs_lams is not None, (
+            "Line wavelengths not calculated"
+        )
 
     def test_run_pipeline_lines_luminosity_subset(
         self,
@@ -706,12 +727,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_lines
-        ), "Lines not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_lines, (
+            "Lines not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.line_lums)
             > 0
@@ -722,12 +743,12 @@ class TestPipelineOperations:
             )
             > 0
         ), "No line continua were calculated"
-        assert (
-            pipeline_with_galaxies.line_lams is not None
-        ), "Line wavelengths not calculated"
-        assert (
-            pipeline_with_galaxies.line_ids is not None
-        ), "Line IDs not included"
+        assert pipeline_with_galaxies.line_lams is not None, (
+            "Line wavelengths not calculated"
+        )
+        assert pipeline_with_galaxies.line_ids is not None, (
+            "Line IDs not included"
+        )
         assert np.all(
             pipeline_with_galaxies.line_ids == test_grid.available_lines[:10]
         ), "Line IDs do not match requested subset"
@@ -748,12 +769,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies_per_particle.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies_per_particle._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies_per_particle._write_images_lum
-        ), "Images not flagged for writing"
+        assert pipeline_with_galaxies_per_particle._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies_per_particle._write_images_lum, (
+            "Images not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(
                 pipeline_with_galaxies_per_particle.images_lum
@@ -779,12 +800,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies_per_particle.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies_per_particle._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies_per_particle._write_images_flux
-        ), "Images not flagged for writing"
+        assert pipeline_with_galaxies_per_particle._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies_per_particle._write_images_flux, (
+            "Images not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(
                 pipeline_with_galaxies_per_particle.images_flux
@@ -808,12 +829,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies_per_particle.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies_per_particle._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies_per_particle._write_images_lum_psf
-        ), "Images not flagged for writing"
+        assert pipeline_with_galaxies_per_particle._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies_per_particle._write_images_lum_psf, (
+            "Images not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(
                 pipeline_with_galaxies_per_particle.images_lum_psf
@@ -844,12 +865,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies_per_particle.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies_per_particle._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies_per_particle._write_images_flux_psf
-        ), "Images not flagged for writing"
+        assert pipeline_with_galaxies_per_particle._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies_per_particle._write_images_flux_psf, (
+            "Images not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(
                 pipeline_with_galaxies_per_particle.images_flux_psf
@@ -877,12 +898,12 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
-        assert (
-            pipeline_with_galaxies._write_sfzh
-        ), "SFZH not flagged for writing"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies._write_sfzh, (
+            "SFZH not flagged for writing"
+        )
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.sfzhs) > 0
         ), "No SFZH was calculated"
@@ -898,9 +919,9 @@ class TestPipelineOperations:
         pipeline_with_galaxies.run()
 
         # Check that the pipeline has run
-        assert (
-            pipeline_with_galaxies._analysis_complete
-        ), "Pipeline did not run"
+        assert pipeline_with_galaxies._analysis_complete, (
+            "Pipeline did not run"
+        )
         assert pipeline_with_galaxies._write_sfh, "SFH not flagged for writing"
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0

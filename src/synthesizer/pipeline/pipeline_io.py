@@ -30,8 +30,7 @@ from synthesizer.synth_warnings import warn
 
 
 class PipelineIO:
-    """
-    A class for writing data to an HDF5 file.
+    """A class for writing data to an HDF5 file.
 
     This class provides methods for writing data to an HDF5 file. It can
     handle writing data in parallel using MPI if the h5py library has been
@@ -64,14 +63,12 @@ class PipelineIO:
         verbose=1,
         parallel_io=False,
     ):
-        """
-        Initialize the HDF5Writer class.
+        """Initialize the HDF5Writer class.
 
         Args:
-            hdf (h5py.File): The HDF5 file to write to.
+            filepath (str): The path to the HDF5 file to write to.
             comm (mpi.Comm, optional): The MPI communicator.
             ngalaxies_local (int, optional): The local number of galaxies.
-            pipeline (Pipeline): The pipeline object.
             start_time (float, optional): The start time of the pipeline, used
                 for timing information.
             verbose (int, optional): How verbose the output should be. 1 will
@@ -159,8 +156,7 @@ class PipelineIO:
             self.end = ngalaxies_local
 
     def _print(self, *args, **kwargs):
-        """
-        Print a message to the screen with extra information.
+        """Print a message to the screen with extra information.
 
         The prints behave differently depending on whether we are using MPI or
         not. We can also set the verbosity level at the Pipeline level which
@@ -172,7 +168,8 @@ class PipelineIO:
             2: Outputs with timings on all ranks (when using MPI).
 
         Args:
-            message (str): The message to print.
+            *args: The message to print.
+            **kwargs: Additional arguments to pass to the print function.
         """
         # At verbosity 0 we are silent
         if self.verbose == 0:
@@ -205,8 +202,7 @@ class PipelineIO:
         print(prefix, *args, **kwargs)
 
     def _took(self, start, message):
-        """
-        Print a message with the time taken since the start time.
+        """Print a message with the time taken since the start time.
 
         Args:
             start (float): The start time of the process.
@@ -228,8 +224,7 @@ class PipelineIO:
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
     def create_file_with_metadata(self, instruments, emission_model):
-        """
-        Write metadata to the HDF5 file.
+        """Write metadata to the HDF5 file.
 
         This writes useful metadata to the root group of the HDF5 file and
         outputs the instruments and emission model to the appropriate groups.
@@ -281,8 +276,7 @@ class PipelineIO:
             self.comm.Barrier()
 
     def write_dataset(self, data, key):
-        """
-        Write a dataset to an HDF5 file.
+        """Write a dataset to an HDF5 file.
 
         We handle various different cases here:
         - If the data is a unyt object, we write the value and units.
@@ -315,8 +309,7 @@ class PipelineIO:
             dset.attrs["Units"] = units
 
     def write_dataset_parallel(self, data, key):
-        """
-        Write a dataset to an HDF5 file in parallel.
+        """Write a dataset to an HDF5 file in parallel.
 
         This function requires that h5py has been built with parallel support.
 
@@ -342,8 +335,7 @@ class PipelineIO:
         self._print(f"Wrote dataset {key} with shape {data.shape}")
 
     def write_datasets_recursive(self, data, key):
-        """
-        Write a dictionary to an HDF5 file recursively.
+        """Write a dictionary to an HDF5 file recursively.
 
         Args:
             data (dict): The data to write.
@@ -368,14 +360,14 @@ class PipelineIO:
             self.write_datasets_recursive(v, f"{key}/{k}")
 
     def write_datasets_parallel(self, data, key, paths):
-        """
-        Write a dictionary to an HDF5 file recursively in parallel.
+        """Write a dictionary to an HDF5 file recursively in parallel.
 
         This function requires that h5py has been built with parallel support.
 
         Args:
             data (dict): The data to write.
             key (str): The key to write the data to.
+            paths (list): The paths (key structure) of the datasets to write.
         """
         # Loop over each path and write the data
         for path in paths:
@@ -385,16 +377,15 @@ class PipelineIO:
             self.write_dataset_parallel(d, f"{key}/{path}")
 
     def create_datasets_parallel(self, data, key):
-        """
-        Create datasets ready to be populated in parallel.
+        """Create datasets ready to be populated in parallel.
 
         This is only needed for collective I/O operations. We will first make
         the datasets here in serial so they can be written to in any order on
         any rank.
 
         Args:
-            shapes (dict): The shapes of the datasets to create.
-            dtypes (dict): The data types of the datasets to create.
+            data (dict): The data to write.
+            key (str): The key to write the data to.
         """
         start = time.perf_counter()
 
@@ -417,12 +408,12 @@ class PipelineIO:
         return paths
 
     def write_data(self, data, key, indexes=None, root=0):
-        """
-        Write data using the appropriate method based on the environment.
+        """Write data using the appropriate method based on the environment.
 
         Args:
             data (any): The data to write.
             key (str): The key to write the data to.
+            indexes (list, optional): The indexes to write the data to.
             root (int, optional): The root rank for gathering and writing.
         """
         try:
@@ -455,8 +446,7 @@ class PipelineIO:
             self._print(f"Failed to write {key} - {e}")
 
     def combine_rank_files(self):
-        """
-        Combine the rank files into a single file.
+        """Combine the rank files into a single file.
 
         Args:
             output_file (str): The name of the output file.
@@ -464,8 +454,7 @@ class PipelineIO:
         start = time.perf_counter()
 
         def _recursive_copy(src, dest, slice):
-            """
-            Recursively copy the contents of an HDF5 group.
+            """Recursively copy the contents of an HDF5 group.
 
             Args:
                 src (h5py.Group): The source group.
@@ -576,8 +565,7 @@ class PipelineIO:
         self._took(start, "Combining files")
 
     def combine_rank_files_virtual(self):
-        """
-        Combine the rank files into a single virtual file.
+        """Combine the rank files into a single virtual file.
 
         Note that the virtual file this produces requires the rank files to
         remain in the same location as when they were created.

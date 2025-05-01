@@ -21,10 +21,14 @@ from synthesizer.parametric import Stars as ParametricStars
 
 # Mock Extractor implementation for testing abstract base class methods
 class MockExtractor(Extractor):
+    """Mock implementation of the Extractor class for testing purposes."""
+
     def generate_lnu(self, *args, **kwargs):
+        """Mock implementation of generate_lnu method."""
         return "mock_lnu"
 
     def generate_line(self, *args, **kwargs):
+        """Mock implementation of generate_line method."""
         return "mock_line"
 
 

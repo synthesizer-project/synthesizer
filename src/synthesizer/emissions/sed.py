@@ -46,27 +46,26 @@ from synthesizer.utils.integrate import integrate_last_axis
 
 
 class Sed:
-    """
-    A class representing a spectral energy distribution (SED).
+    """A class representing a spectral energy distribution (SED).
 
     Attributes:
-        lam (Quantity, array-like, float)
+        lam (Quantity, np.ndarray of float)
             The rest frame wavelength array.
-        nu (Quantity, array-like, float)
+        nu (Quantity, np.ndarray of float)
             The rest frame frequency array.
-        lnu (Quantity, array-like, float)
+        lnu (Quantity, np.ndarray of float)
             The spectral luminosity density.
         bolometric_luminosity (Quantity, float)
             The bolometric luminosity.
-        fnu (Quantity, array-like, float)
+        fnu (Quantity, np.ndarray of float)
             The spectral flux density.
-        obslam (Quantity, array-like, float)
+        obslam (Quantity, np.ndarray of float)
             The observed wavelength array.
-        obsnu (Quantity, array-like, float)
+        obsnu (Quantity, np.ndarray of float)
             The observed frequency array.
-        description (string)
+        description (str):
             An optional descriptive string defining the Sed.
-        redshift (float)
+        redshift (float):
             The redshift of the Sed.
         photo_lnu (dict, float)
             The rest frame broadband photometry in arbitrary filters
@@ -86,17 +85,16 @@ class Sed:
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(self, lam, lnu=None, description=None):
-        """
-        Initialise a new spectral energy distribution object.
+        """Initialise a new spectral energy distribution object.
 
         Args:
-            lam (array-like, float)
+            lam (np.ndarray of float):
                 The rest frame wavelength array. Default units are defined
                 in `synthesizer.units`. If unmodified these will be Angstroms.
-            lnu (array-like, float)
+            lnu (np.ndarray of float):
                 The spectral luminosity density. Default units are defined in
                 `synthesizer.units`. If unmodified these will be erg/s/Hz
-            description (string)
+            description (str):
                 An optional descriptive string defining the Sed.
         """
         start = tic()
@@ -132,12 +130,13 @@ class Sed:
         toc("Creating Sed", start)
 
     def sum(self):
-        """
+        """Sum the SED over all dimensions.
+
         For multidimensional `sed`'s, sum the luminosity to provide a 1D
         integrated SED.
 
         Returns:
-            sed (object, Sed)
+            sed (object, Sed):
                 Summed 1D SED.
         """
         start = tic()
@@ -169,8 +168,7 @@ class Sed:
             return self
 
     def concat(self, *other_seds):
-        """
-        Concatenate the spectra arrays of multiple Sed objects.
+        """Concatenate the spectra arrays of multiple Sed objects.
 
         This will combine the arrays along the first axis. For example
         concatenating two Seds with Sed.lnu.shape = (10, 1000) and
@@ -181,7 +179,7 @@ class Sed:
         Incompatible spectra shapes will raise an error.
 
         Args:
-            other_seds (object, Sed)
+            other_seds (object, Sed):
                 Any number of Sed objects to concatenate with self. These must
                 have the same wavelength array.
 
@@ -193,7 +191,6 @@ class Sed:
             InconsistentAddition
                 If wavelength arrays are incompatible an error is raised.
         """
-
         # Define the new lnu to accumalate in
         new_lnu = self._lnu
 
@@ -227,12 +224,13 @@ class Sed:
         return Sed(self.lam, new_lnu * self.lnu.units)
 
     def __add__(self, second_sed):
-        """
-        Overide addition operator to allow two Sed objects to be added
+        """Add two Sed objects together.
+
+        Overloads the addition operator to allow two Sed objects to be added
         together.
 
         Args:
-            second_sed (object, Sed)
+            second_sed (object, Sed):
                 The Sed object to combine with self.
 
         Returns:
@@ -244,7 +242,6 @@ class Sed:
                 If wavelength arrays or lnu arrays are incompatible an error
                 is raised.
         """
-
         # Ensure the wavelength arrays are compatible
         if not (
             self._lam[0] == second_sed._lam[0]
@@ -280,15 +277,20 @@ class Sed:
         return new_sed
 
     def __radd__(self, second_sed):
-        """
+        """Add two Sed objects together (reverse order).
+
         Overloads "reflected" addition to allow sed objects to be added
         together when in reverse order, i.e. second_sed + self.
 
         This may seem superfluous, but it is needed to enable the use of sum()
         on lists of Seds.
 
+        Args:
+            second_sed (object, Sed):
+                The Sed object to combine with self.
+
         Returns:
-            Sed
+            Sed:
                 A new instance of Sed with added lnu arrays.
 
         Raises:
@@ -302,24 +304,23 @@ class Sed:
         return self.__add__(second_sed)
 
     def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
-        """
-        Scale the lnu of the Sed object.
+        """Scale the lnu of the Sed object.
 
         Note: only acts on the rest frame spectra. To get the
         scaled fnu get_fnu must be called on the newly scaled
         Sed object.
 
         Args:
-            scaling (float)
+            scaling (float):
                 The scaling to apply to lnu.
-            inplace (bool)
+            inplace (bool):
                 If True, the Sed object is modified in place. If False, a new
                 Sed object is returned with the scaled lnu.
-            mask (array-like, bool)
+            mask (array-like, bool):
                 A mask for the lnu array to apply the scaling to. This must
                 be the same shape as the lnu array excluding the wavelength
                 axis.
-            lam_mask (array-like, bool)
+            lam_mask (array-like, bool):
                 A mask for the wavelength array to apply the scaling to.
 
         Returns:
@@ -414,8 +415,7 @@ class Sed:
         return self
 
     def __mul__(self, scaling):
-        """
-        Scale the lnu of the Sed object.
+        """Scale the lnu of the Sed object.
 
         Overide multiplication operator to allow lnu to be scaled.
         This only works scaling * x.
@@ -425,7 +425,7 @@ class Sed:
         Sed object.
 
         Args:
-            scaling (float)
+            scaling (float):
                 The scaling to apply to lnu.
 
         Returns:
@@ -435,8 +435,7 @@ class Sed:
         return self.scale(scaling)
 
     def __rmul__(self, scaling):
-        """
-        Scale the lnu of the Sed object.
+        """Scale the lnu of the Sed object.
 
         As above but for x * scaling.
 
@@ -445,7 +444,7 @@ class Sed:
         scaled Sed object.
 
         Args:
-            scaling (float)
+            scaling (float):
                 The scaling to apply to lnu.
 
         Returns:
@@ -455,11 +454,10 @@ class Sed:
         return self.scale(scaling)
 
     def __str__(self):
-        """
-        Return a string representation of the SED object.
+        """Return a string representation of the SED object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the SED object.
         """
         # Intialise the table formatter
@@ -469,98 +467,89 @@ class Sed:
 
     @property
     def luminosity(self):
-        """
-        Get the spectra in terms of luminosity.
+        """Get the spectra in terms of luminosity.
 
-        Returns
-            luminosity (unyt_array)
+        Returns:
+            luminosity (unyt_array):
                 The luminosity array.
         """
         return self.lnu * self.nu
 
     @property
     def flux(self):
-        """
-        Get the spectra in terms fo flux.
+        """Get the spectra in terms fo flux.
 
         Returns:
-            flux (unyt_array)
+            flux (unyt_array):
                 The flux array.
         """
         return self.fnu * self.obsnu
 
     @property
     def llam(self):
-        """
-        Get the spectral luminosity density per Angstrom.
+        """Get the spectral luminosity density per Angstrom.
 
-        Returns
-            luminosity (unyt_array)
+        Returns:
+            luminosity (unyt_array):
                 The spectral luminosity density per Angstrom array.
         """
         return self.nu * self.lnu / self.lam
 
     @property
     def luminosity_nu(self):
-        """
-        Alias to lnu.
+        """Alias to lnu.
 
-        Returns
-            luminosity (unyt_array)
+        Returns:
+            luminosity (unyt_array):
                 The spectral luminosity density per Hz array.
         """
         return self.lnu
 
     @property
     def luminosity_lambda(self):
-        """
-        Alias to llam.
+        """Alias to llam.
 
-        Returns
-            luminosity (unyt_array)
+        Returns:
+            luminosity (unyt_array):
                 The spectral luminosity density per Angstrom array.
         """
         return self.llam
 
     @property
     def wavelength(self):
-        """
-        Alias to lam (wavelength array).
+        """Alias to lam (wavelength array).
 
-        Returns
-            wavelength (unyt_array)
+        Returns:
+            wavelength (unyt_array):
                 The wavelength array.
         """
         return self.lam
 
     @property
     def frequency(self):
-        """
-        Alias to nu (frequency array).
+        """Alias to nu (frequency array).
 
-        Returns
-            frequency (unyt_array)
+        Returns:
+            frequency (unyt_array):
                 The frequency array.
         """
         return self.nu
 
     @property
     def energy(self):
-        """
-        Get the wavelengths in terms of photon energies in eV.
+        """Get the wavelengths in terms of photon energies in eV.
 
-        Returns
-            energy (unyt_array)
+        Returns:
+            energy (unyt_array):
                 The energy coordinate.
         """
         return (h * c / self.lam).to(eV)
 
     @property
     def ndim(self):
-        """
-        Get the dimensions of the spectra array.
+        """Get the dimensions of the spectra array.
 
-        Returns
+        Returns:
             Tuple
                 The shape of self.lnu
         """
@@ -568,10 +557,9 @@ class Sed:
 
     @property
     def shape(self):
-        """
-        Get the shape of the spectra array.
+        """Get the shape of the spectra array.
 
-        Returns
+        Returns:
             Tuple
                 The shape of self.lnu
         """
@@ -579,8 +567,7 @@ class Sed:
 
     @property
     def nlam(self):
-        """
-        Get the number of wavelength elements.
+        """Get the number of wavelength elements.
 
         Returns:
             int: The number of wavelength elements.
@@ -589,15 +576,14 @@ class Sed:
 
     @property
     def bolometric_luminosity(self):
-        """
-        Return the bolometric luminosity of the SED with units.
+        """Return the bolometric luminosity of the SED with units.
 
         This will integrate the SED using the trapezium method over the
         final axis (which is always the wavelength axis) for an arbitrary
         number of dimensions.
 
         Returns:
-            bolometric_luminosity (unyt_array)
+            bolometric_luminosity (unyt_array):
                 The bolometric luminosity.
         """
         # Calculate the bolometric luminosity using the trapezium rule.
@@ -615,55 +601,52 @@ class Sed:
 
     @property
     def _bolometric_luminosity(self):
-        """
-        Return the bolometric luminosity of the SED without units.
+        """Return the bolometric luminosity of the SED without units.
 
         This will integrate the SED using the trapezium method over the
         final axis (which is always the wavelength axis) for an arbitrary
         number of dimensions.
 
         Returns:
-            bolometric_luminosity (float)
+            bolometric_luminosity (float):
                 The bolometric luminosity.
         """
         return self.bolometric_luminosity.value
 
     @accepts(nu=Hz)
     def get_lnu_at_nu(self, nu, kind=False):
-        """
-        Return lnu with units at a provided frequency using 1d interpolation.
+        """Return lnu at a provided frequency using 1d interpolation.
 
         Args:
-            wavelength (float/array-like, float)
-                The wavelength(s) of interest.
-            kind (str)
+            nu (float/np.ndarray of float):
+                The frequency(s) of interest.
+            kind (str):
                 Interpolation kind, see scipy.interp1d docs for more
                 information. Possible values are 'linear', 'nearest',
                 'zero', 'slinear', 'quadratic', 'cubic', 'previous', and
                 'next'.
 
         Returns:
-            luminosity (unyt_array)
+            unyt_array:
                 The luminosity (lnu) at the provided wavelength.
         """
         return interp1d(self._nu, self._lnu, kind=kind)(nu) * self.lnu.units
 
     @accepts(lam=angstrom)
     def get_lnu_at_lam(self, lam, kind=False):
-        """
-        Return lnu at a provided wavelength.
+        """Return lnu at a provided wavelength.
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                 The wavelength(s) of interest.
-            kind (str)
+            kind (str):
                 Interpolation kind, see scipy.interp1d docs for more
                 information. Possible values are 'linear', 'nearest',
                 'zero', 'slinear', 'quadratic', 'cubic', 'previous', and
                 'next'.
 
         Returns:
-            luminosity (unyt-array)
+            luminosity (unyt-array):
                 The luminosity (lnu) at the provided wavelength.
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
@@ -676,22 +659,21 @@ class Sed:
     def measure_bolometric_luminosity(
         self, integration_method="trapz", nthreads=1
     ):
-        """
-        Calculate the bolometric luminosity of the SED.
+        """Calculate the bolometric luminosity of the SED.
 
         This will integrate the SED over the final axis (which is always the
         wavelength axis) for an arbitrary number of dimensions.
 
         Args:
-            integration_method (str)
+            integration_method (str):
                 The integration method used to calculate the bolometric
                 luminosity. Options include 'trapz' and 'simps'.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
 
         Returns:
-            bolometric_luminosity (float)
+            bolometric_luminosity (float):
                 The bolometric luminosity.
 
         Raises:
@@ -699,7 +681,6 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-
         start = tic()
 
         # Calculate the bolometric luminosity
@@ -720,21 +701,20 @@ class Sed:
     def measure_window_luminosity(
         self, window, integration_method="trapz", nthreads=1
     ):
-        """
-        Measure the luminosity in a spectral window.
+        """Measure the luminosity in a spectral window.
 
         Args:
-            window (tuple, float)
+            window (tuple, float):
                 The window in wavelength.
-            integration_method (str)
+            integration_method (str):
                 The integration method used to calculate the window
                 luminosity. Options include 'trapz' and 'simps'.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
 
         Returns:
-            luminosity (float)
+            luminosity (float):
                 The luminosity in the window.
 
         Raises:
@@ -766,24 +746,23 @@ class Sed:
     def measure_window_lnu(
         self, window, integration_method="trapz", nthreads=1
     ):
-        """
-        Measure lnu in a spectral window.
+        """Measure lnu in a spectral window.
 
         Args:
-            window (tuple, float)
+            window (tuple, float):
                 The window in wavelength.
-            integration_method (str)
+            integration_method (str):
                 The integration method to use on the window. Options include
                 'average', or for integration 'trapz', and 'simps'.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
 
         Returns:
-            luminosity (float)
+            luminosity (float):
                 The luminosity in the window.
 
-         Raises:
+        Raises:
             UnrecognisedOption
                 If `integration_method` is an incompatible option an error
                 is raised.
@@ -837,23 +816,22 @@ class Sed:
 
     @accepts(blue=angstrom, red=angstrom)
     def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
-        """
-        Measure a spectral break (e.g. the Balmer break) using two windows.
+        """Measure a spectral break (e.g. the Balmer break) using two windows.
 
         Args:
-            blue (tuple, float)
+            blue (tuple, float):
                 The wavelength limits of the blue window.
-            red (tuple, float)
+            red (tuple, float):
                 The wavelength limits of the red window.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            integration_method (str)
+            integration_method (str):
                 The integration method used. Options include 'trapz'
                 and 'simps'.
 
         Returns:
-            break
+            float:
                 The ratio of the luminosity in the two windows.
 
         Raises:
@@ -875,16 +853,15 @@ class Sed:
         )
 
     def measure_balmer_break(self, nthreads=1, integration_method="trapz"):
-        """
-        Measure the Balmer break.
+        """Measure the Balmer break.
 
         This will use two windows at (3400,3600) and (4150,4250).
 
         Args:
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            integration_method (str)
+            integration_method (str):
                 The integration method used. Options include 'trapz'
                 and 'simps'.
 
@@ -907,18 +884,17 @@ class Sed:
     def measure_d4000(
         self, definition="Bruzual83", nthreads=1, integration_method="trapz"
     ):
-        """
-        Measure the D4000 index.
+        """Measure the D4000 index.
 
         This can optionally use either the Bruzual83 or Balogh definitions.
 
         Args:
-            definition
+            definition (str):
                 The choice of definition: 'Bruzual83' or 'Balogh'.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            integration_method (str)
+            integration_method (str):
                 The integration method used. Options include 'trapz'
                 and 'simps'.
 
@@ -926,7 +902,7 @@ class Sed:
             float
                 The Balmer break strength.
 
-         Raises:
+        Raises:
             UnrecognisedOption
                 If `definition` or `integration_method` is an
                 incompatible option an error is raised.
@@ -959,25 +935,24 @@ class Sed:
         nthreads=1,
         integration_method="trapz",
     ):
-        """
-        Measure the UV continuum slope (beta).
+        """Measure the UV continuum slope (beta).
 
         If the provided window is len(2) a full fit to the spectra is performed
         otherwise the luminosity in two windows is calculated and used to
         determine the slope, similar to observations.
 
         Args:
-            window (tuple, float)
+            window (tuple, float):
                 The window in which to measure in terms of wavelength.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            integration_method (str)
+            integration_method (str):
                 The integration method used to calculate the window luminosity.
                 Options include 'trapz' and 'simps'.
 
         Returns:
-            float
+            float:
                 The UV continuum slope (beta)
 
         Raises:
@@ -1053,8 +1028,7 @@ class Sed:
         return beta
 
     def get_fnu0(self):
-        """
-        Calculate the rest frame spectral flux density.
+        """Calculate the rest frame spectral flux density.
 
         Uses a standard distance of 10 pcs.
 
@@ -1062,7 +1036,7 @@ class Sed:
         which in this case are the same as the emitted arrays.
 
         Returns:
-            fnu (ndarray)
+            fnu (ndarray):
                 Spectral flux density calcualted at d=10 pc.
         """
         # Get the observed wavelength and frequency arrays
@@ -1075,8 +1049,7 @@ class Sed:
         return self.fnu
 
     def get_fnu(self, cosmo, z, igm=None):
-        """
-        Calculate the observed frame spectral energy distribution.
+        """Calculate the observed frame spectral energy distribution.
 
         This will also populate the observed wavelength and frequency arrays
         with the observer frame values.
@@ -1086,11 +1059,11 @@ class Sed:
         IGM contribution makes no sense.
 
         Args:
-            cosmo (astropy.cosmology)
+            cosmo (astropy.cosmology):
                 astropy cosmology instance.
-            z (float)
+            z (float):
                 The redshift of the spectra.
-            igm (igm)
+            igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
 
@@ -1129,20 +1102,19 @@ class Sed:
         return self.fnu
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate broadband luminosities using a FilterCollection object.
+        """Calculate broadband luminosities using a FilterCollection object.
 
         Args:
-            filters (filters.FilterCollection)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
 
         Returns:
-            photo_lnu (dict)
+            photo_lnu (dict):
                 A dictionary of rest frame broadband luminosities.
         """
         # Intialise result dictionary
@@ -1161,20 +1133,19 @@ class Sed:
         return self.photo_lnu
 
     def get_photo_fnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate broadband fluxes using a FilterCollection object.
+        """Calculate broadband fluxes using a FilterCollection object.
 
         Args:
-            filters (object)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
 
         Returns:
-            (dict)
+            (dict):
                 A dictionary of fluxes in each filter in filters.
         """
         # Ensure fluxes actually exist
@@ -1206,20 +1177,18 @@ class Sed:
         return self.photo_fnu
 
     def measure_colour(self, f1, f2):
-        """
-        Measure a broadband colour.
+        """Measure a broadband colour.
 
         Args:
-            f1 (str)
+            f1 (str):
                 The blue filter code.
-            f2 (str)
+            f2 (str):
                 The red filter code.
 
         Returns:
-            (float)
+            (float):
                 The broadband colour.
         """
-
         # Ensure fluxes exist
         if not bool(self.photo_fnu):
             raise ValueError(
@@ -1234,22 +1203,20 @@ class Sed:
 
     @accepts(feature=angstrom, blue=angstrom, red=angstrom)
     def measure_index(self, feature, blue, red):
-        """
-        Measure an absorption feature index.
+        """Measure an absorption feature index.
 
         Args:
-            feature (tuple)
+            feature (tuple):
                 Absorption feature window.
-            blue (tuple)
+            blue (tuple):
                 Blue continuum window for fitting.
-            red (tuple)
+            red (tuple):
                 Red continuum window for fitting.
 
         Returns:
-            index (float)
+            index (float):
                Absorption feature index in units of wavelength
         """
-
         # self.lnu = np.array([self.lnu, self.lnu*2])
 
         # Measure the red and blue windows
@@ -1318,18 +1285,17 @@ class Sed:
         return index
 
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
-        """
-        Resample the spectra onto a new set of wavelength points.
+        """Resample the spectra onto a new set of wavelength points.
 
         This resampling can either be done by an integer number of wavelength
         elements per original wavelength element (i.e. up sampling),
         or by providing a new wavelength grid to resample on to.
 
         Args:
-            resample_factor (int)
+            resample_factor (int):
                 The number of additional wavelength elements to
                 resample to.
-            new_lam (array-like, float)
+            new_lam (np.ndarray of float):
                 The wavelength array to resample onto.
 
         Returns:
@@ -1398,8 +1364,7 @@ class Sed:
         return sed
 
     def apply_instrument_lams(self, instrument, nthreads=1):
-        """
-        Apply an instrument to the spectra.
+        """Apply an instrument to the spectra.
 
         This will resample a Sed object on to the instrument's wavelength
         array. It is actually just an intuitive wrapper around
@@ -1408,9 +1373,9 @@ class Sed:
         wavelength array.
 
         Args:
-            instrument (Instrument)
+            instrument (Instrument):
                 An instance of the Instrument class.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
 
@@ -1431,16 +1396,15 @@ class Sed:
         dust_curve,
         mask=None,
     ):
-        """
-        Apply attenuation to spectra.
+        """Apply attenuation to spectra.
 
         Args:
-            tau_v (float/array-like, float)
+            tau_v (float/np.ndarray of float):
                 The V-band optical depth for every star particle.
-            dust_curve (synthesizer.emission_models.attenuation.*)
+            dust_curve (synthesizer.emission_models.attenuation.*):
                 An instance of one of the dust attenuation models. (defined in
                 synthesizer/emission_models.attenuation.py)
-            mask (array-like, bool)
+            mask (array-like, bool):
                 A mask array with an entry for each spectra. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for Sed's holding an (N, Nlam) array.
@@ -1498,21 +1462,20 @@ class Sed:
     def calculate_ionising_photon_production_rate(
         self, ionisation_energy=13.6 * eV, limit=100, nthreads=1
     ):
-        """
-        Calculate the ionising photon production rate.
+        """Calculate the ionising photon production rate.
 
         Args:
-            ionisation_energy (unyt_array)
+            ionisation_energy (unyt_array):
                 The ionisation energy.
-            limit (float/int)
+            limit (float/int):
                 An upper bound on the number of subintervals
                 used in the integration adaptive algorithm.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
 
-        Returns
-            float
+        Returns:
+            float:
                 Ionising photon luminosity (s^-1).
         """
         # Convert lnu to llam
@@ -1554,24 +1517,21 @@ class Sed:
         return ion_photon_prod_rate
 
     def plot_spectra(self, **kwargs):
-        """
-        Plot the spectra.
+        """Plot the spectra.
 
         A wrapper for synthesizer.emissions.plot_spectra()
         """
         return plot_spectra(self, **kwargs)
 
     def plot_observed_spectra(self, **kwargs):
-        """
-        Plot the observed spectra.
+        """Plot the observed spectra.
 
         A wrapper for synthesizer.emissions.plot_observed_spectra()
         """
         return plot_observed_spectra(self, self.redshift, **kwargs)
 
     def plot_spectra_as_rainbow(self, **kwargs):
-        """
-        Plot the spectra as a rainbow.
+        """Plot the spectra as a rainbow.
 
         A wrapper for synthesizer.emissions.plot_spectra_as_rainbow()
         """
@@ -1590,8 +1550,7 @@ class Sed:
         vmax=None,
         xlimits=(),
     ):
-        """
-        Plot a stack of the top nbin spectra in a multi-spectra sed.
+        """Plot a stack of the top nbin spectra in a multi-spectra sed.
 
         This is only applicable for Sed object with ndim == 2. It will plot
         bin the top nbin spectra into nbin wavelength bins, populate a grid
@@ -1607,7 +1566,7 @@ class Sed:
         Args:
             nbin (int):
                 The number of bins to use for the stacking.
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The figure containing the axis. By default one is created in
                 this function.
             ax (matplotlib.axes):
@@ -1845,8 +1804,7 @@ def plot_spectra(
     y_units=None,
     quantity_to_plot="lnu",
 ):
-    """
-    Plot a spectra or dictionary of spectra.
+    """Plot a spectra or dictionary of spectra.
 
     Plots either a specific spectra or all spectra provided in a dictionary.
     The plotted "type" of spectra is defined by the quantity_to_plot keyword
@@ -1856,51 +1814,51 @@ def plot_spectra(
     wrapped by helper methods through Synthesizer.
 
     Args:
-        spectra (dict/Sed)
+        spectra (dict/Sed):
             The Sed objects from which to plot. This can either be a dictionary
             of Sed objects to plot multiple or a single Sed object to only plot
             one.
-        fig (matplotlib.pyplot.figure)
+        fig (matplotlib.pyplot.figure):
             The figure containing the axis. By default one is created in this
             function.
-        ax (matplotlib.axes)
+        ax (matplotlib.axes):
             The axis to plot the data on. By default one is created in this
             function.
-        show (bool)
+        show (bool):
             Flag for whether to show the plot or just return the
             figure and axes.
-        ylimits (tuple)
+        ylimits (tuple):
             The limits to apply to the y axis. If not provided the limits
             will be calculated with the lower limit set to 1000 (100) times
             less than the peak of the spectrum for rest_frame (observed)
             spectra.
-        xlimits (tuple)
+        xlimits (tuple):
             The limits to apply to the x axis. If not provided the optimal
             limits are found based on the ylimits.
-        figsize (tuple)
+        figsize (tuple):
             Tuple with size 2 defining the figure size.
-        label (string)
+        label (str):
             The label to give the spectra. Only applicable when Sed is a single
             spectra.
-        draw_legend (bool)
+        draw_legend (bool):
             Whether to draw the legend.
-        x_units (unyt.unit_object.Unit)
+        x_units (unyt.unit_object.Unit):
             The units of the x axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
-        y_units (unyt.unit_object.Unit)
+        y_units (unyt.unit_object.Unit):
             The units of the y axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
-        quantity_to_plot (string)
+        quantity_to_plot (str):
             The sed property to plot. Can be "lnu", "luminosity" or "llam"
             for rest frame spectra or "fnu", "flam" or "flux" for observed
             spectra. Defaults to "lnu".
 
     Returns:
-        fig (matplotlib.pyplot.figure)
+        fig (matplotlib.pyplot.figure):
             The matplotlib figure object for the plot.
-        ax (matplotlib.axes)
+        ax (matplotlib.axes):
             The matplotlib axes object containing the plotted data.
     """
     # Check we have been given a valid quantity_to_plot
@@ -2100,8 +2058,7 @@ def plot_observed_spectra(
     filters=None,
     quantity_to_plot="fnu",
 ):
-    """
-    Plot a spectra or dictionary of spectra.
+    """Plot a spectra or dictionary of spectra.
 
     Plots either a specific observed spectra or all observed spectra
     provided in a dictionary.
@@ -2112,48 +2069,48 @@ def plot_observed_spectra(
     wrapped by helper methods through Synthesizer.
 
     Args:
-        spectra (dict/Sed)
+        spectra (dict/Sed):
             The Sed objects from which to plot. This can either be a dictionary
             of Sed objects to plot multiple or a single Sed object to only plot
             one.
-        redshift (float)
+        redshift (float):
             The redshift of the observation.
-        fig (matplotlib.pyplot.figure)
+        fig (matplotlib.pyplot.figure):
             The figure containing the axis. By default one is created in this
             function.
-        ax (matplotlib.axes)
+        ax (matplotlib.axes):
             The axis to plot the data on. By default one is created in this
             function.
-        show (bool)
+        show (bool):
             Flag for whether to show the plot or just return the
             figure and axes.
-        ylimits (tuple)
+        ylimits (tuple):
             The limits to apply to the y axis. If not provided the limits
             will be calculated with the lower limit set to 1000 (100) times
             less than the peak of the spectrum for rest_frame (observed)
             spectra.
-        xlimits (tuple)
+        xlimits (tuple):
             The limits to apply to the x axis. If not provided the optimal
             limits are found based on the ylimits.
-        figsize (tuple)
+        figsize (tuple):
             Tuple with size 2 defining the figure size.
-        label (string)
+        label (str):
             The label to give the spectra. Only applicable when Sed is a single
             spectra.
-        draw_legend (bool)
+        draw_legend (bool):
             Whether to draw the legend.
-        x_units (unyt.unit_object.Unit)
+        x_units (unyt.unit_object.Unit):
             The units of the x axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
-        y_units (unyt.unit_object.Unit)
+        y_units (unyt.unit_object.Unit):
             The units of the y axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
-        filters (FilterCollection)
+        filters (FilterCollection):
             If given then the photometry is computed and both the photometry
             and filter curves are plotted
-        quantity_to_plot (string)
+        quantity_to_plot (str):
             The sed property to plot. Can be "fnu", "flam", or "flux".
             Defaults to "fnu".
 
@@ -2232,25 +2189,24 @@ def plot_spectra_as_rainbow(
     min_log_lnu=-2.0,
     use_fnu=False,
 ):
-    """
-    Create a plot of the spectrum as a rainbow.
+    """Create a plot of the spectrum as a rainbow.
 
     Arguments:
-        sed (synthesizer.emissions.Sed)
+        sed (synthesizer.emissions.Sed):
             A synthesizer.emissions object.
-        figsize (tuple)
+        figsize (tuple):
             Fig-size tuple (width, height).
-        lam_min (float)
+        lam_min (float):
             The min wavelength to plot in Angstroms.
-        lam_max (float)
+        lam_max (float):
             The max wavelength to plot in Angstroms.
-        include_xaxis (bool)
+        include_xaxis (bool):
             Flag whther to include x-axis ticks and label.
-        logged (bool)
+        logged (bool):
             Flag whether to use logged luminosity.
-        min_log_lnu (float)
+        min_log_lnu (float):
             Minium luminosity to plot relative to the maximum.
-        use_fnu (bool)
+        use_fnu (bool):
             Whether to plot fluxes or luminosities. If True
             fluxes are plotted, otherwise luminosities.
 

@@ -35,7 +35,9 @@ def galaxy(
     name="galaxy",
     **kwargs,
 ):
-    """A factory fucntion to return the desired type of galaxy.
+    """Return a Galaxy object.
+
+    A factory function to return the desired type of galaxy.
 
     This function provides a simple interface to ensure the user doesn't try to
     utilise the wrong flavour of Galaxy object.
@@ -46,24 +48,24 @@ def galaxy(
     error is raised.
 
     Args:
-        name (str)
+        name (str):
             A name to identify the galaxy. Only used for external labelling,
             has no internal use.
-        stars (object, Stars/Stars)
+        stars (Stars/Stars):
             An instance of Stars containing the stellar particle data or an
             instance of Stars containing the combined star formation and
             metallicity histories. The former is only applicable to a
             particle.Galaxy while the latter is only applicable to a
             parametric.Galaxy.
-        gas (object, Gas)
+        gas (Gas):
             An instance of Gas containing the gas particle data.
             Only applicable to a particle.Galaxy.
-        black_holes (object, BlackHoles)
+        black_holes (BlackHoles):
             An instance of BlackHoles containing the black hole particle data.
             Only applicable to a particle.Galaxy.
-        redshift (float)
+        redshift (float):
             The redshift of the galaxy.
-        **kwargs
+        **kwargs (dict):
             Additional keyword arguments that are passed to the appropriate
             galaxy object.
 
@@ -76,7 +78,6 @@ def galaxy(
             If passed both particle and parametric arguments an error is
             raised.
     """
-
     # Ensure the passed arguments make sense
     if isinstance(stars, ParametricStars):
         if gas is not None or black_holes is not None:
