@@ -46,8 +46,7 @@ jobs:
       - uses: astral-sh/ruff-action@v3 # Lint with Ruff
         with:
           version: 0.7.0
-          args: "format --check"
-          changed-files: "true"
+          args: "format --check --diff"
       - name: Download test data
         run: |
           # Download test grid data
