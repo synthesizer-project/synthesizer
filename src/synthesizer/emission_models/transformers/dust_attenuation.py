@@ -460,7 +460,7 @@ class MWN18(AttenuationLaw):
     """Milky Way attenuation curve used in Narayanan+2018.
 
     Attributes:
-        data (np.ndarray of float)
+        data (np.ndarray of float):
             The data describing the dust curve, loaded from MW_N18.npz.
         tau_lam_v (float):
             The V band optical depth.
@@ -653,7 +653,7 @@ class ParametricLi08(AttenuationLaw):
         bump (float):
             Dimensionless parameter describing the UV bump
             strength (0< bump <1)
-        model (string)
+        model (str):
             Fixing attenuation/extinction curve to one of the known
             templates: MW, SMC, LMC, Calzetti
 

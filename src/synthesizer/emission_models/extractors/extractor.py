@@ -32,11 +32,11 @@ class Extractor(ABC):
     the necessary attributes.
 
     Attributes:
-        _emitter_attributes (tuple)
+        _emitter_attributes (tuple):
             The attributes to extract from the emitter.
-        _grid_axes (tuple)
+        _grid_axes (tuple):
             The grid axes corresponding to the emitter attributes.
-        _axes_units (tuple)
+        _axes_units (tuple):
             The units for each grid axis.
         _weight_var (str):
             The weight variable to extract from the emitter and use to weight
@@ -49,17 +49,17 @@ class Extractor(ABC):
             wavelength axis.
         _grid_nlam (int):
             The number of spectra grid wavelength elements.
-        _log_emitter_attr (tuple)
+        _log_emitter_attr (tuple):
             Whether to log the emitter data.
         _grid (Grid):
             The grid from which to extract the emission.
-        _spectra_grid (unyt_array)
+        _spectra_grid (unyt_array):
             The grid of spectra.
-        _line_lum_grid (unyt_array)
+        _line_lum_grid (unyt_array):
             The grid of line luminosities.
-        _line_cont_grid (unyt_array)
+        _line_cont_grid (unyt_array):
             The grid of line continua.
-        _line_lams (unyt_array)
+        _line_lams (unyt_array):
             The line wavelengths.
     """
 

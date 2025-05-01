@@ -512,7 +512,7 @@ class IR_templates:
             The dust-to-gas ratio of the galaxy
         MH (float):
             The mass in hydrogen of the galaxy
-        template (string)
+        template (str):
             The IR template model to be used
             (Currently only Draine and Li 2007 model implemented)
         ldust (float):
