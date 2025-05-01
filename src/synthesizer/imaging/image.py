@@ -28,8 +28,7 @@ from synthesizer.units import Quantity
 
 
 class Image:
-    """
-    A class for generating images.
+    """A class for generating images.
 
     This class is used to generate images from particle based data with or
     without smoothing, and from parametric data with smoothing defined by a
@@ -39,9 +38,9 @@ class Image:
     an ImageCollection to generate a collection of images in various filters.
 
     Attributes:
-        resolution (unyt_quantity, float):
+        resolution (unyt_quantity of float):
             The resolution of the image.
-        fov (unyt_quantity, float):
+        fov (unyt_quantity of float):
             The field of view of the image.
         npix (tuple):
             The number of pixels in the image.
@@ -61,13 +60,12 @@ class Image:
         fov,
         img=None,
     ):
-        """
-        Create an image with the images metadata.
+        """Create an image with the images metadata.
 
         Args:
-            resolution (unyt_quantity, float):
+            resolution (unyt_quantity of float):
                 The resolution of the image.
-            fov (unyt_quantity, float):
+            fov (unyt_quantity of float):
                 The field of view of the image. If a single value is passed
                 then the FOV is assumed to be square.
             img (unyt_array/array_like, float):
@@ -102,8 +100,7 @@ class Image:
         self.weight_map = None
 
     def _compute_npix(self):
-        """
-        Compute the number of pixels in the FOV.
+        """Compute the number of pixels in the FOV.
 
         When resolution and fov are given, the number of pixels is computed
         using this function. This can redefine the fov to ensure the FOV
@@ -116,8 +113,7 @@ class Image:
         self.fov = self.resolution * self.npix
 
     def _compute_fov(self):
-        """
-        Compute the FOV, based on the number of pixels.
+        """Compute the FOV, based on the number of pixels.
 
         When resolution and npix are given, the FOV is computed using this
         function.
@@ -126,11 +122,10 @@ class Image:
         self.fov = self.resolution * self.npix
 
     def resample(self, factor):
-        """
-        Resample the image by factor.
+        """Resample the image by factor.
 
         Args:
-            factor (float)
+            factor (float):
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
         """
@@ -157,19 +152,18 @@ class Image:
             self._compute_fov()
 
     def __add__(self, other_img):
-        """
-        Add 2 Images together.
+        """Add 2 Images together.
 
         Args:
-            other_img (Image)
+            other_img (Image):
                 The other image to be added.
 
         Returns:
-            Image
+            Image:
                 The new image containing the added arrays.
 
         Raises:
-            InconsistentArguments
+            InconsistentArguments:
                 If the images have different resolutions or fovs, or if the
                 combination of units is incompatible an error is raised.
         """
@@ -207,15 +201,14 @@ class Image:
             )
 
     def __mul__(self, mult):
-        """
-        Multiply the image by a multiplier.
+        """Multiply the image by a multiplier.
 
         Args:
-            mult (int/float/array-like)
+            mult (int/float/array-like):
                 The number to multiply the image array by.
 
         Returns:
-            Image
+            Image:
                 The new image containing the multipled array.
         """
         # Create the new image
@@ -234,8 +227,7 @@ class Image:
         signal,
         coordinates=None,
     ):
-        """
-        Calculate an image with no smoothing.
+        """Calculate an image with no smoothing.
 
         This is only applicable to particle based images and is just a
         wrapper for numpy.histogram2d.
@@ -247,7 +239,7 @@ class Image:
                 The coordinates of the particles.
 
         Returns:
-            img (array_like, float)
+            img (array_like, float):
                 A 2D array containing the pixel values sorted into the image.
                 (npix, npix)
         """
@@ -293,8 +285,7 @@ class Image:
         density_grid=None,
         nthreads=1,
     ):
-        """
-        Calculate a smoothed image.
+        """Calculate a smoothed image.
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
@@ -321,7 +312,7 @@ class Image:
                 case only)
 
         Returns:
-            img : array_like (float)
+            img : array_like (float):
                 A 2D array containing particles sorted into an image.
                 (npix[0], npix[1])
 
@@ -415,11 +406,10 @@ class Image:
         return self.arr * self.units if self.units is not None else self.arr
 
     def apply_psf(self, psf):
-        """
-        Apply a Point Spread Function to this image.
+        """Apply a Point Spread Function to this image.
 
         Args:
-            psf (np.ndarray)
+            psf (np.ndarray of float):
                 An array describing the point spread function.
 
         Returns:
@@ -440,11 +430,10 @@ class Image:
         )
 
     def apply_noise_array(self, noise_arr):
-        """
-        Apply a noise array.
+        """Apply a noise array.
 
         Args:
-            noise_arr (np.ndarray)
+            noise_arr (np.ndarray of float):
                 The noise array to add to the image.
 
         Returns:
@@ -477,14 +466,13 @@ class Image:
         return new_img
 
     def apply_noise_from_std(self, noise_std):
-        """
-        Apply noise derived from a standard deviation.
+        """Apply noise derived from a standard deviation.
 
         This creates noise with a normal distribution centred on 0 with the
         passed standard deviation.
 
         Args:
-            noise_std (float)
+            noise_std (float):
                 The standard deviation of the noise to add to the image.
 
         Returns:
@@ -520,8 +508,7 @@ class Image:
         return new_img
 
     def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
-        """
-        Apply noise derived from a SNR and depth.
+        """Apply noise derived from a SNR and depth.
 
         This can either be for a point source or an aperture if aperture_radius
         is passed.
@@ -529,6 +516,14 @@ class Image:
         This assumes the SNR is defined as SNR = S / sqrt(noise_std)
 
         Args:
+            snr (float):
+                The signal to noise ratio of the image.
+            depth (unyt_quantity of float):
+                The depth of the image. This is the total signal in the image
+                divided by the area of the image.
+            aperture_radius (unyt_quantity of float):
+                The radius of the aperture. If None then a point source is
+                assumed.
 
         Returns:
             Image
@@ -590,26 +585,25 @@ class Image:
         fig=None,
         ax=None,
     ):
-        """
-        Plot an image.
+        """Plot an image.
 
         Args:
-            show (bool)
+            show (bool):
                 Whether to show the plot or not (Default False).
-            cmap (str)
+            cmap (str):
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
-            norm (function)
+            norm (function):
                 A normalisation function. This can be custom made or one of
                 matplotlib's normalisation functions. It must take an array and
                 return the same array after normalisation.
-            tick_formatter (matplotlib.ticker.FuncFormatter)
+            tick_formatter (matplotlib.ticker.FuncFormatter):
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The figure object to plot on. If None a new figure is created.
-            ax (matplotlib.pyplot.figure.axis)
+            ax (matplotlib.pyplot.figure.axis):
                 The axis object to plot on. If None a new axis is created.
 
         Returns:
@@ -653,32 +647,31 @@ class Image:
         fig=None,
         ax=None,
     ):
-        """
-        Plot a map.
+        """Plot a map.
 
         Unlike an image we want a colorbar and axes for a map.
 
         Args:
-            show (bool)
+            show (bool):
                 Whether to show the plot or not (Default False).
-            extent (array_like)
+            extent (list):
                 The extent of the x and y axes.
-            cmap (str)
+            cmap (str):
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
-            cbar_label (str)
+            cbar_label (str):
                 The label for the colorbar.
-            norm (function)
+            norm (function):
                 A normalisation function. This can be custom made or one of
                 matplotlib's normalisation functions. It must take an array and
                 return the same array after normalisation.
-            tick_formatter (matplotlib.ticker.FuncFormatter)
+            tick_formatter (matplotlib.ticker.FuncFormatter):
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The figure object to plot on. If None a new figure is created.
-            ax (matplotlib.pyplot.figure.axis)
+            ax (matplotlib.pyplot.figure.axis):
                 The axis object to plot on. If None a new axis is created.
 
         Returns:
@@ -755,25 +748,29 @@ class Image:
 
     def plot_unknown_pleasures(
         self,
-        constrast=100,
+        contrast=100,
         target_lines=50,
         figsize=(8, 8),
         title="SYNTHESIZER",
     ):
-        """
-        Create a representation of an image similar in style to Joy Division's
+        """Convert an image to an unknown pleasures album cover.
+
+        Creates a representation of an image similar in style to Joy Division's
         seminal 1979 album Unknown Pleasures.
 
         Borrows some code from this matplotlib examples:
         https://matplotlib.org/stable/gallery/animation/unchained.html
 
-        Arguments
-            constrast (float)
-                The contrast.
-            target_lines (int)
+        Arguments:
+            contrast (float):
+                The contrast, i.e. the maximum value in the image.
+            target_lines (int):
                 The target number of individual lines to use.
+            figsize (tuple):
+                The size of the figure to create.
+            title (str):
+                The title to add to the image. If None no title is added.
         """
-
         # extract data
         data = 1 * self.arr
 
@@ -784,10 +781,10 @@ class Image:
         data = np.log10(data)
 
         # set any -np.inf values to zero (once renormalised)
-        data[data == -np.inf] = -np.log10(constrast)
+        data[data == -np.inf] = -np.log10(contrast)
 
         # define normalising function
-        norm = Normalize(vmin=-np.log10(constrast), vmax=0.0)
+        norm = Normalize(vmin=-np.log10(contrast), vmax=0.0)
 
         # normalise data
         data = norm(data) * 5
@@ -856,21 +853,20 @@ class Image:
         aperture_cent=None,
         nthreads=1,
     ):
-        """
-        Return the sum of the image within an aperture.
+        """Return the sum of the image within an aperture.
 
         This uses fractional pixel coverage to calculate the overlap between
         the aperture and each pixel.
 
         Args:
-            aperture_radius (unyt_quantity, float)
+            aperture_radius (unyt_quantity of float):
                 The radius of the aperture.
-            aperture_cent (unyt_array, float)
+            aperture_cent (unyt_array, float):
                 The centre of the aperture (in pixel coordinates, i.e. the
                 centre is [npix/2, npix/2], top left is [0, 0], and bottom
                 right is [npix, npix]). If None then the centre is assumed to
                 be the maximum pixel.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the calculation. Default is 1.
 
         Returns:

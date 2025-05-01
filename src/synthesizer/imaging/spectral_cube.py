@@ -44,8 +44,7 @@ from synthesizer.units import Quantity
 
 
 class SpectralCube:
-    """
-    The Spectral data cube object.
+    """The Spectral data cube object.
 
     This object is used to generate and store spectral data cube. This can be
     done in two ways: by sorting particle spectra into the data cube or by
@@ -85,8 +84,7 @@ class SpectralCube:
         fov=None,
         npix=None,
     ):
-        """
-        Intialise the SpectralCube.
+        """Intialise the SpectralCube.
 
         Either fov or npix must be given. If both are given, fov is used.
 
@@ -146,8 +144,7 @@ class SpectralCube:
 
     @property
     def data_cube(self):
-        """
-        Return the data cube.
+        """Return the data cube.
 
         This is a property to allow the data cube to be accessed as an
         attribute.
@@ -160,8 +157,7 @@ class SpectralCube:
         return self.arr * self.units
 
     def _compute_npix(self):
-        """
-        Compute the number of pixels in the FOV.
+        """Compute the number of pixels in the FOV.
 
         When resolution and fov are given, the number of pixels is computed
         using this function. This can redefine the fov to ensure the FOV
@@ -176,8 +172,7 @@ class SpectralCube:
         self.fov = self.resolution * self.npix
 
     def _compute_fov(self):
-        """
-        Compute the FOV, based on the number of pixels.
+        """Compute the FOV, based on the number of pixels.
 
         When resolution and npix are given, the FOV is computed using this
         function.
@@ -186,8 +181,7 @@ class SpectralCube:
         self.fov = self.resolution * self.npix
 
     def __add__(self, other):
-        """
-        Add two SpectralCubes together.
+        """Add two SpectralCubes together.
 
         This is done by adding the IFU arrays together but SpectralCubes can
         only be added if they have the same units, resolution, FOV, and
@@ -254,8 +248,7 @@ class SpectralCube:
         quantity="lnu",
         nthreads=1,
     ):
-        """
-        Calculate a spectral data cube with no smoothing.
+        """Calculate a spectral data cube with no smoothing.
 
         This is only applicable to particle based spectral cubes.
 
@@ -338,8 +331,7 @@ class SpectralCube:
         quantity="lnu",
         nthreads=1,
     ):
-        """
-        Calculate a spectral data cube with smoothing.
+        """Calculate a spectral data cube with smoothing.
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
@@ -462,6 +454,11 @@ class SpectralCube:
         return self.arr * self.units
 
     def apply_psf(self):
+        """Apply a PSF to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -470,6 +467,11 @@ class SpectralCube:
         )
 
     def apply_noise_array(self):
+        """Apply noise to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -478,6 +480,11 @@ class SpectralCube:
         )
 
     def apply_noise_from_std(self):
+        """Apply noise to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -486,6 +493,11 @@ class SpectralCube:
         )
 
     def apply_noise_from_snr(self):
+        """Apply noise to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -501,8 +513,7 @@ class SpectralCube:
         vmin=None,
         vmax=None,
     ):
-        """
-        Create an animation of the spectral cube.
+        """Create an animation of the spectral cube.
 
         Each frame of the animation is a wavelength bin.
 
@@ -515,9 +526,9 @@ class SpectralCube:
             fps (int, optional):
                 the number of frames per second in the output animation.
                 Default is 30 frames per second.
-            vmin (float)
+            vmin (float):
                 The minimum of the normalisation.
-            vmax (float)
+            vmax (float):
                 The maximum of the normalisation.
 
         Returns:
