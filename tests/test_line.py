@@ -124,9 +124,9 @@ class TestLineCollectionOperations:
             f"{scaled_lines.continuum.value} !="
             f" {simple_line_collection.continuum.value * 2.0}"
         )
-        assert (
-            scaled_lines.luminosity.units == erg / s
-        ), f"{scaled_lines.luminosity.units} != erg/s"
+        assert scaled_lines.luminosity.units == erg / s, (
+            f"{scaled_lines.luminosity.units} != erg/s"
+        )
 
         # Scale with scalar continuum units
         scaled_lines = simple_line_collection.scale(2.0 * erg / s / Hz)
@@ -203,11 +203,11 @@ class TestLineCollectionOperations:
         ), (
             "Scaled continuum doesn't match "
             f"{scaled_lines.continuum.value} !="
-            f" {lines.continuum.value * 2.0/ lines.nu.value}"
+            f" {lines.continuum.value * 2.0 / lines.nu.value}"
         )
-        assert (
-            scaled_lines.luminosity.units == erg / s
-        ), f"{scaled_lines.luminosity.units} != erg/s"
+        assert scaled_lines.luminosity.units == erg / s, (
+            f"{scaled_lines.luminosity.units} != erg/s"
+        )
 
         # Scale with scalar continuum units
         scaled_lines = lines.scale(2.0 * erg / s / Hz)
@@ -905,7 +905,6 @@ class TestLineCollectionWeights:
         random_part_stars,
     ):
         """Test reusing weights to calculate lines for the same grid."""
-
         # Compute the lines the first time
         first_lines = random_part_stars.get_lines(
             test_grid.available_lines,
@@ -914,12 +913,12 @@ class TestLineCollectionWeights:
         )
 
         # Ensure we have the weights
-        assert hasattr(
-            random_part_stars, "_grid_weights"
-        ), "The grid weights are not stored."
-        assert (
-            "test_grid" in random_part_stars._grid_weights["ngp"]
-        ), "The grid weights are not stored."
+        assert hasattr(random_part_stars, "_grid_weights"), (
+            "The grid weights are not stored."
+        )
+        assert "test_grid" in random_part_stars._grid_weights["ngp"], (
+            "The grid weights are not stored."
+        )
 
         # Compute the lines the second time which will reuse the weights
         random_part_stars.clear_all_emissions()
@@ -946,7 +945,6 @@ class TestLineCollectionWeights:
         random_part_stars,
     ):
         """Test reusing weights to calculate lines for the same grid."""
-
         # Compute the lines the first time
         first_lines = random_part_stars.get_lines(
             test_grid.available_lines,
@@ -955,12 +953,12 @@ class TestLineCollectionWeights:
         )
 
         # Ensure we have the weights
-        assert hasattr(
-            random_part_stars, "_grid_weights"
-        ), "The grid weights are not stored."
-        assert (
-            "test_grid" in random_part_stars._grid_weights["cic"]
-        ), "The grid weights are not stored."
+        assert hasattr(random_part_stars, "_grid_weights"), (
+            "The grid weights are not stored."
+        )
+        assert "test_grid" in random_part_stars._grid_weights["cic"], (
+            "The grid weights are not stored."
+        )
 
         # Compute the lines the second time which will reuse the weights
         random_part_stars.clear_all_emissions()
@@ -1114,13 +1112,13 @@ class TestLineCollectionGenerationMasked:
             op=">",
         )
 
-        assert np.any(
-            new_mask
-        ), f"The mask is empty (defined in yr): {new_mask}"
+        assert np.any(new_mask), (
+            f"The mask is empty (defined in yr): {new_mask}"
+        )
         assert False in new_mask, f"The mask is all True: {new_mask}"
-        assert np.all(
-            mask == new_mask
-        ), "The masks with different units are not the same."
+        assert np.all(mask == new_mask), (
+            "The masks with different units are not the same."
+        )
 
         dif_units_masked_lines = particle_stars_B.get_lines(
             test_grid.available_lines,
@@ -1237,9 +1235,9 @@ class TestLineCollectionGenerationMasked:
         particle_stars_B.clear_all_emissions()
 
         # Ensure there is some emission
-        assert (
-            np.sum(old_lines._luminosity) > 0
-        ), "The old lines has no emission."
+        assert np.sum(old_lines._luminosity) > 0, (
+            "The old lines has no emission."
+        )
 
         # And now swap the mask to a young mask
         nebular_emission_model.clear_masks(True)
@@ -1261,9 +1259,9 @@ class TestLineCollectionGenerationMasked:
         particle_stars_B.clear_all_emissions()
 
         # Ensure there is some emission
-        assert (
-            np.sum(young_lines._luminosity) > 0
-        ), "The young lines has no emission."
+        assert np.sum(young_lines._luminosity) > 0, (
+            "The young lines has no emission."
+        )
 
         # Combine the two masked lines
         combined_lines = old_lines + young_lines
@@ -1327,17 +1325,17 @@ class TestLineCollectionGenerationSubsets:
         )
 
         # Ensure the subset has the correct number of lines
-        assert (
-            subset_lines.nlines == 1
-        ), "The subset has the wrong number of lines."
+        assert subset_lines.nlines == 1, (
+            "The subset has the wrong number of lines."
+        )
 
         # Ensure the luminosity and continuum is an array of length 1
-        assert (
-            subset_lines.luminosity.shape[-1] == 1
-        ), "The luminosity is not an array of length 1."
-        assert (
-            subset_lines.continuum.shape[-1] == 1
-        ), "The continuum is not an array of length 1."
+        assert subset_lines.luminosity.shape[-1] == 1, (
+            "The luminosity is not an array of length 1."
+        )
+        assert subset_lines.continuum.shape[-1] == 1, (
+            "The continuum is not an array of length 1."
+        )
 
     def test_subset_int_lines(
         self,
@@ -1356,27 +1354,27 @@ class TestLineCollectionGenerationSubsets:
         )
 
         # Ensure the subset has the correct number of lines
-        assert (
-            subset_lines.nlines == 2
-        ), "The subset has the wrong number of lines."
+        assert subset_lines.nlines == 2, (
+            "The subset has the wrong number of lines."
+        )
 
         # Ensure the luminosity is an array of length 2
-        assert (
-            subset_lines.luminosity.shape[-1] == 2
-        ), "The luminosity is not an array of length 2."
+        assert subset_lines.luminosity.shape[-1] == 2, (
+            "The luminosity is not an array of length 2."
+        )
 
         # Ensure the continuum is an array of length 2
-        assert (
-            subset_lines.continuum.shape[-1] == 2
-        ), "The continuum is not an array of length 2."
+        assert subset_lines.continuum.shape[-1] == 2, (
+            "The continuum is not an array of length 2."
+        )
 
         # Ensure the lines are 1D (i.e. intrgrated)
-        assert (
-            len(subset_lines.luminosity.shape) == 1
-        ), "The luminosity is not 1D."
-        assert (
-            len(subset_lines.continuum.shape) == 1
-        ), "The continuum is not 1D."
+        assert len(subset_lines.luminosity.shape) == 1, (
+            "The luminosity is not 1D."
+        )
+        assert len(subset_lines.continuum.shape) == 1, (
+            "The continuum is not 1D."
+        )
 
     def test_singular_part_lines(
         self,
@@ -1396,25 +1394,25 @@ class TestLineCollectionGenerationSubsets:
         )
 
         # Ensure the subset has the correct number of lines
-        assert (
-            subset_lines.nlines == 1
-        ), "The subset has the wrong number of lines."
+        assert subset_lines.nlines == 1, (
+            "The subset has the wrong number of lines."
+        )
 
         # Ensure the luminosity and continuum is an array of length 1
-        assert (
-            subset_lines.luminosity.shape[-1] == 1
-        ), "The luminosity is not an array of length 1."
-        assert (
-            subset_lines.continuum.shape[-1] == 1
-        ), "The continuum is not an array of length 1."
+        assert subset_lines.luminosity.shape[-1] == 1, (
+            "The luminosity is not an array of length 1."
+        )
+        assert subset_lines.continuum.shape[-1] == 1, (
+            "The continuum is not an array of length 1."
+        )
 
         # Ensure the lines are 2D (i.e. per particle)
-        assert (
-            len(subset_lines.luminosity.shape) == 2
-        ), "The luminosity is not 2D."
-        assert (
-            len(subset_lines.continuum.shape) == 2
-        ), "The continuum is not 2D."
+        assert len(subset_lines.luminosity.shape) == 2, (
+            "The luminosity is not 2D."
+        )
+        assert len(subset_lines.continuum.shape) == 2, (
+            "The continuum is not 2D."
+        )
 
     def test_subset_part_lines(
         self,
@@ -1435,27 +1433,27 @@ class TestLineCollectionGenerationSubsets:
         )
 
         # Ensure the subset has the correct number of lines
-        assert (
-            subset_lines.nlines == 2
-        ), "The subset has the wrong number of lines."
+        assert subset_lines.nlines == 2, (
+            "The subset has the wrong number of lines."
+        )
 
         # Ensure the luminosity is an array of length 2
-        assert (
-            subset_lines.luminosity.shape[-1] == 2
-        ), "The luminosity is not an array of length 2."
+        assert subset_lines.luminosity.shape[-1] == 2, (
+            "The luminosity is not an array of length 2."
+        )
 
         # Ensure the continuum is an array of length 2
-        assert (
-            subset_lines.continuum.shape[-1] == 2
-        ), "The continuum is not an array of length 2."
+        assert subset_lines.continuum.shape[-1] == 2, (
+            "The continuum is not an array of length 2."
+        )
 
         # Ensure the lines are 2D (i.e. per particle)
-        assert (
-            len(subset_lines.luminosity.shape) == 2
-        ), "The luminosity is not 2D."
-        assert (
-            len(subset_lines.continuum.shape) == 2
-        ), "The continuum is not 2D."
+        assert len(subset_lines.luminosity.shape) == 2, (
+            "The luminosity is not 2D."
+        )
+        assert len(subset_lines.continuum.shape) == 2, (
+            "The continuum is not 2D."
+        )
 
     def test_subset_with_composites(
         self,
@@ -1471,19 +1469,19 @@ class TestLineCollectionGenerationSubsets:
         )
 
         # Ensure the subset has the correct number of lines
-        assert (
-            subset_lines.nlines == 5
-        ), "The subset has the wrong number of lines."
+        assert subset_lines.nlines == 5, (
+            "The subset has the wrong number of lines."
+        )
 
         # Ensure the luminosity is an array of length 5
-        assert (
-            subset_lines.luminosity.shape[-1] == 5
-        ), "The luminosity is not an array of length 5."
+        assert subset_lines.luminosity.shape[-1] == 5, (
+            "The luminosity is not an array of length 5."
+        )
 
         # Ensure the continuum is an array of length 5
-        assert (
-            subset_lines.continuum.shape[-1] == 5
-        ), "The continuum is not an array of length 5."
+        assert subset_lines.continuum.shape[-1] == 5, (
+            "The continuum is not an array of length 5."
+        )
 
 
 if __name__ == "__main__":

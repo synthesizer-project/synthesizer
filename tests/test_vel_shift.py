@@ -65,7 +65,7 @@ def test_velocity_shift_conservation_cic(
     ), (
         f"The total flux of the spectra is not conserved (seed: {seed}, "
         "with-without/without: "
-        f"{(with_shift_sum - without_shift_sum)/without_shift_sum}, "
+        f"{(with_shift_sum - without_shift_sum) / without_shift_sum}, "
         f"with: {with_shift_sum}, without: {without_shift_sum})"
     )
 
@@ -125,6 +125,6 @@ def test_velocity_shift_conservation_ngp(
     ), (
         f"The total flux of the spectra is not conserved (seed: {seed}, "
         "with-without/without: "
-        f"{(with_shift_sum - without_shift_sum)/without_shift_sum}, "
+        f"{(with_shift_sum - without_shift_sum) / without_shift_sum}, "
         f"with: {with_shift_sum}, without: {without_shift_sum})"
     )

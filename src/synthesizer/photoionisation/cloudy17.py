@@ -1,4 +1,5 @@
-"""
+"""A module defining cloudy 17 helper utilities.
+
 Given an SED (from an SPS model, for example), generate a cloudy atmosphere
 grid. Can optionally generate an array of input files for selected parameters.
 """
@@ -13,34 +14,35 @@ from synthesizer.photoionisation import calculate_Q_from_U
 
 
 class ShapeCommands:
-    """
-    A class for holding different cloudy shape commands
+    """A class for holding different cloudy shape commands.
 
+    This class is used to create the shape commands for the cloudy input file.
+    It contains methods for creating a cloudy input file using a tabulated SED
+    or a cloudy AGN model. The class also contains methods for creating the
+    shape commands for the AGN model and the SED model.
     """
 
     def table_sed(model_name, lam, lnu, output_dir="./"):
-        """
-        A function for creating a cloudy input file using a tabulated SED.
+        """Create a cloudy input file using a tabulated SED.
 
         TODO: allow the user to instead specify nu and to automatically convert
         units if provided
 
         Args:
-            model_name (str)
+            model_name (str):
                 User defined name of the model used for cloudy inputs
                 and outputs.
-            lam (array or unyt_array)
+            lam (array or unyt_array):
                 Wavelength grid with or without units (via unyt)
-            lnu (array)
+            lnu (array or unyt_array):
                 Spectral luminosity density
-            output_dir (str)
+            output_dir (str):
                 Output directory path
 
         Returns:
             list
                 a list of strings with the cloudy input commands
         """
-
         # if lam is not a unyt_array assume it has units of angstrom and
         # convert to a unyt_array
         if not isinstance(lam, unyt_array):
@@ -72,27 +74,27 @@ class ShapeCommands:
         return shape_commands
 
     def cloudy_agn(TBB, aox=-1.4, auv=-0.5, ax=-1.35):
-        """
-        A function for specifying the cloudy AGN model. See 6.2 Hazy1.pdf.
+        """Define the cloudy AGN model.
+
+        See 6.2 Hazy1.pdf.
 
         Args:
-            model_name (str)
+            model_name (str):
                 User defined name of the model used for cloudy inputs and
                 outputs
-            TBB (float)
+            TBB (float):
                 The Big Bump temperature
-            aox (float)
+            aox (float):
                 The x-ray slope (default value from Calabro CEERS AGN model)
-            auv (float)
+            auv (float):
                 The uv-slope (default value from Calabro CEERS AGN model)
-            ax (float)
+            ax (float):
                 Slope normalisation
 
         Returns:
             list
                 a list of strings with the cloudy input commands
         """
-
         # collect cloudy shape commands
         shape_commands = []
         shape_commands.append(
@@ -104,28 +106,31 @@ class ShapeCommands:
 
 
 def create_cloudy_input(
-    model_name, shape_commands, abundances, output_dir="./", **kwargs
+    model_name,
+    shape_commands,
+    abundances,
+    output_dir="./",
+    **kwargs,
 ):
-    """
-    A generic function for creating a cloudy input file
+    """Create a cloudy input file.
 
     Args:
-
-        model_name (str)
-            The model name. Used in the naming of the outputs
-        shape_commands (list)
-            List of strings describing the cloudy input commands
-        abundances: (Abundances object)
-            A synthsizer Abundances object
-        output_dir (str)
-            The output dir
+        model_name (str):
+            The model name. Used in the naming of the outputs.
+        shape_commands (list):
+            List of strings describing the cloudy input commands.
+        abundances: (Abundances):
+            A synthsizer Abundances object.
+        output_dir (str):
+            The output directory.
+        **kwargs (**dict):
+            Additional parameters to be passed to the cloudy input file.
 
     Returns:
         list
             A list of cloudy commands
 
     """
-
     default_params = {
         # ionisation parameter
         "ionisation_parameter": 0.01,
@@ -271,7 +276,7 @@ def create_cloudy_input(
                 reference_Si_abund = -4.4841
             else:
                 raise UnrecognisedOption(
-                    "Only Orion and ISM grain types are " "available in cloudy"
+                    "Only Orion and ISM grain types are available in cloudy"
                 )
 
             PAH_abund = -4.446
@@ -312,7 +317,7 @@ def create_cloudy_input(
             calculate_Q_from_U(U, params["hydrogen_density"])
         )
         cinput.append(f"Q(H) = {log10_specific_ionising_lum}\n")
-        cinput.append(f'radius {np.log10(params["radius"])} log parsecs\n')
+        cinput.append(f"radius {np.log10(params['radius'])} log parsecs\n")
         cinput.append("sphere\n")
 
     # add background continuum
@@ -320,7 +325,7 @@ def create_cloudy_input(
         cinput.append("cosmic rays, background\n")
 
     if params["CMB"]:
-        cinput.append(f'CMB {params["z"]}\n')
+        cinput.append(f"CMB {params['z']}\n")
 
     # define hydrogend density
     if params["hydrogen_density"]:
@@ -334,24 +339,24 @@ def create_cloudy_input(
 
     # covering factor
     if params["covering_factor"]:
-        cinput.append(f'covering factor {params["covering_factor"]} linear\n')
+        cinput.append(f"covering factor {params['covering_factor']} linear\n")
 
     # Processing commands
     cinput.append("iterate to convergence\n")
     if params["T_floor"]:
-        cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
+        cinput.append(f"set temperature floor {params['T_floor']} linear\n")
 
     if params["stop_T"]:
-        cinput.append(f'stop temperature {params["stop_T"]}K\n')
+        cinput.append(f"stop temperature {params['stop_T']}K\n")
 
     if params["stop_efrac"]:
-        cinput.append(f'stop efrac {params["stop_efrac"]}\n')
+        cinput.append(f"stop efrac {params['stop_efrac']}\n")
 
     # --- output commands
 
     # cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
     cinput.append(
-        f'set continuum resolution {params["resolution"]}\n'
+        f"set continuum resolution {params['resolution']}\n"
     )  # set the continuum resolution
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
 
@@ -395,29 +400,27 @@ def create_cloudy_input(
 
 
 def read_lines(filename, extension="lines"):
-    """
-    Read a full line list from a cloudy output file.
+    """Read a full line list from a cloudy output file.
 
     Args:
-        filename (str)
+        filename (str):
             The cloudy filename
-        extension (str)
+        extension (str):
             The extension of the file
 
     Returns:
-        line_ids (list)
+        line_ids (list):
             A list of line identificaitons
-        blends (list)
+        blends (list):
             A list containing flags whether the line is a blend
-        wavelengths (list)
+        wavelengths (list):
             A list of the line wavelengths
-        intrinsic (list)
+        intrinsic (list):
             A list of the intrinsic luminosities
-        emergent (list)
+        emergent (list):
             A list of emergent luminosities
 
     """
-
     # open file and read columns
     wavelengths, cloudy_ids, intrinsic, emergent = np.loadtxt(
         f"{filename}.{extension}",
@@ -448,19 +451,16 @@ def read_lines(filename, extension="lines"):
 
 
 def convert_cloudy_wavelength(x):
-    """
-    Convert a cloudy wavelength string (e.g. 6562.81A, 1.008m) to a wavelength
-    float in units of angstroms.
+    """Convert a wavelength string (e.g. 6562.81A, 1.008m) to a unyt_quantity.
 
     Args:
-        x (str)
+        x (str):
             A cloudy wavelength string
 
     Returns:
         float
             The wavelength in Angstroms
     """
-
     value = float(x[:-1])
     unit = x[-1]
 
@@ -474,22 +474,22 @@ def convert_cloudy_wavelength(x):
 
 
 def read_linelist(filename, extension="elin"):
-    """
+    """Read a line list from a cloudy output file.
+
     Args:
-        filename (str)
+        filename (str):
             The cloudy filename
-        extension (str)
+        extension (str):
             The extension of the file
 
     Returns:
-        line_ids (list)
+        line_ids (list):
             A list of line identificaitons
-        wavelengths (list)
+        wavelengths (list):
             A list of the line wavelengths
-        luminosities (list)
+        luminosities (list):
             A list of the luminosities
     """
-
     # read file
     with open(f"{filename}.{extension}", "r") as f:
         d = f.readlines()
@@ -520,20 +520,18 @@ def read_linelist(filename, extension="elin"):
 
 
 def read_wavelength(filename):
-    """
-    Extract just the wavelength grid from cloudy .cont file and reverse the
-    order
+    """Extract the wavelength grid from cloudy .cont file.
+
+    Note that the order will be reversed relative to the original file.
 
     Args:
-        filename (str)
+        filename (str):
             The cloudy filename
 
     Returns:
         ndnarray
             The wavelength grid
-
     """
-
     lam = np.loadtxt(f"{filename}.cont", delimiter="\t", usecols=(0)).T
     lam = lam[::-1]  # reverse order
 
@@ -541,35 +539,36 @@ def read_wavelength(filename):
 
 
 def read_continuum(filename, return_dict=False):
-    """
-    Extract just the spectra from a cloudy.cont file
+    """Extract just the spectra from a cloudy.cont file.
 
     Args:
-        filename (str)
+        filename (str):
             The cloudy filename
+        return_dict (bool):
+            If True, return a dictionary of the spectra.
+            If False, return a tuple of the spectra.
 
     Returns:
-        lam (array-like, float)
+        lam (np.ndarray of float):
             The wavelength grid
-        nu (array-like, float)
+        nu (np.ndarray of float):
             The frequency grid
-        incident (array-like, float)
+        incident (np.ndarray of float):
             The incident spectrum
-        transmitted (array-like, float)
+        transmitted (np.ndarray of float):
             The transmitted spectrum
-        nebular (array-like, float)
+        nebular (np.ndarray of float):
             The nebular spectrum
-        nebular_continuum (array-like, float)
+        nebular_continuum (np.ndarray of float):
             The nebular continuum spectrum
-        total (array-like, float)
+        total (np.ndarray of float):
             The total spectrum
-        linecont (array-like, float)
+        linecont (np.ndarray of float):
             The line contribution spectrum
 
         alternatively returns a dictionary
 
     """
-
     # ----- Open SED
 
     """

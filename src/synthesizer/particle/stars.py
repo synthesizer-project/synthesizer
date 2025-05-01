@@ -37,8 +37,7 @@ from synthesizer.utils.util_funcs import combine_arrays
 
 
 class Stars(Particles, StarsComponent):
-    """
-    The base Stars class.
+    """The base Stars class.
 
     This contains all data a collection of stars could contain. It inherits
     from the base Particles class holding attributes and
@@ -52,32 +51,32 @@ class Stars(Particles, StarsComponent):
     number of optional attributes which are set to None if not provided.
 
     Attributes:
-        initial_masses (array-like, float)
+        initial_masses (np.ndarray of float):
             The intial stellar mass of each particle in Msun.
-        ages (array-like, float)
+        ages (np.ndarray of float):
             The age of each stellar particle in yrs.
-        metallicities (array-like, float)
+        metallicities (np.ndarray of float):
             The metallicity of each stellar particle.
-        tau_v (array-like, float)
+        tau_v (np.ndarray of float):
             V-band dust optical depth of each stellar particle.
-        alpha_enhancement (array-like, float)
+        alpha_enhancement (np.ndarray of float):
             The alpha enhancement [alpha/Fe] of each stellar particle.
-        resampled (bool)
+        resampled (bool):
             Flag for whether the young particles have been resampled.
-        current_masses (array-like, float)
+        current_masses (np.ndarray of float):
             The current mass of each stellar particle in Msun.
-        smoothing_lengths (array-like, float)
+        smoothing_lengths (np.ndarray of float):
             The smoothing lengths (describing the sph kernel) of each stellar
             particle in simulation length units.
-        s_oxygen (array-like, float)
+        s_oxygen (np.ndarray of float):
             fractional oxygen abundance.
-        s_hydrogen (array-like, float)
+        s_hydrogen (np.ndarray of float):
             fractional hydrogen abundance.
-        imf_hmass_slope (float)
+        imf_hmass_slope (float):
             The slope of high mass end of the initial mass function (WIP).
-        nstars (int)
+        nstars (int):
             The number of stellar particles in the object.
-        fesc (array-like, float)
+        fesc (np.ndarray of float):
             The escape fractions of each stellar particle (i.e. the fraction of
             incident photons that escape the galaxy unreprocessed by the
             interstellar medium).
@@ -141,51 +140,55 @@ class Stars(Particles, StarsComponent):
         fesc_ly_alpha=None,
         **kwargs,
     ):
-        """
-        Intialise the Stars instance.
+        """Intialise the Stars instance.
 
         The first 3 arguments are always required. All other arguments are
         optional attributes applicable in different situations.
 
         Args:
-            initial_masses (array-like, float)
+            initial_masses (np.ndarray of float):
                 The intial stellar mass of each particle in Msun.
-            ages (array-like, float)
+            ages (np.ndarray of float):
                 The age of each stellar particle in yrs.
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The metallicity of each stellar particle.
-            redshift (float)
+            redshift (float):
                 The redshift/s of the stellar particles.
-            tau_v (array-like, float)
+            tau_v (np.ndarray of float):
                 V-band dust optical depth of each stellar particle.
-            alpha_enhancement (array-like, float)
+            alpha_enhancement (np.ndarray of float):
                 The alpha enhancement [alpha/Fe] of each stellar particle.
-            coordinates (array-like, float)
+            coordinates (np.ndarray of float):
                 The 3D positions of the particles.
-            velocities (array-like, float)
+            velocities (np.ndarray of float):
                 The 3D velocities of the particles.
-            current_masses (array-like, float)
+            current_masses (np.ndarray of float):
                 The current mass of each stellar particle in Msun.
-            smoothing_lengths (array-like, float)
+            smoothing_lengths (np.ndarray of float):
                 The smoothing lengths (describing the sph kernel) of each
                 stellar particle in simulation length units.
-            s_oxygen (array-like, float)
+            s_oxygen (np.ndarray of float):
                 The fractional oxygen abundance.
-            s_hydrogen (array-like, float)
+            s_hydrogen (np.ndarray of float):
                 The fractional hydrogen abundance.
-            softening_lengths (float)
+            softening_lengths (float):
                 The gravitational softening lengths of each stellar
                 particle in simulation units
-            centre (array-like, float)
+            centre (np.ndarray of float):
                 The centre of the star particle. Can be defined in
                 a number of way (e.g. centre of mass)
-            metallicity_floor (float)
+            metallicity_floor (float):
                 The minimum metallicity allowed in the simulation.
-            fesc (array-like, float)
+            fesc (np.ndarray of float):
                 The escape fraction of each stellar particle, i.e. the
                 fraction of incident photons that escape the galaxy
                 unreprocessed by the interstellar medium.
-            **kwargs
+            fesc_ly_alpha (np.ndarray of float):
+                The escape fraction of Ly-alpha photons for each stellar
+                particle, i.e. the fraction of incident Ly-alpha photons
+                that escape the galaxy unreprocessed by the interstellar
+                medium.
+            **kwargs (dict):
                 Additional keyword arguments to be set as attributes.
         """
         # Instantiate parents
@@ -287,15 +290,14 @@ class Stars(Particles, StarsComponent):
         self.sfh = None
 
     def get_sfr(self, timescale=10 * Myr):
-        """
-        Return the star formation rate of the stellar particles.
+        """Return the star formation rate of the stellar particles.
 
         Args:
-            timescale (float)
+            timescale (float):
                 The timescale over which to calculate the star formation rate.
 
         Returns:
-            sfr (float)
+            sfr (float):
                 The star formation rate of the stellar particles.
         """
         age_mask = self.ages < timescale
@@ -304,11 +306,10 @@ class Stars(Particles, StarsComponent):
 
     @property
     def total_mass(self):
-        """
-        Return the total mass of the stellar particles.
+        """Return the total mass of the stellar particles.
 
         Returns:
-            total_mass (float)
+            total_mass (float):
                 The total mass of the stellar particles.
         """
         total_mass = 0.0
@@ -327,25 +328,22 @@ class Stars(Particles, StarsComponent):
 
     @property
     def log10ages(self):
-        """
-        Return stellar particle ages in log (base 10).
+        """Return stellar particle ages in log (base 10).
 
         Returns:
-            log10ages (array)
+            log10ages (np.ndarray):
                 log10 stellar ages
         """
         return np.log10(self.ages, dtype=np.float64) * dimensionless
 
     def _check_star_args(self):
-        """
-        Sanitizes the inputs ensuring all arguments agree and are compatible.
+        """Sanitizes inputs ensuring all arguments agree and are compatible.
 
         Raises:
             InconsistentArguments
                 If any arguments are incompatible or not as expected an error
                 is thrown.
         """
-
         # Ensure all arrays are the expected length
         for key in self.attrs:
             attr = getattr(self, key)
@@ -357,12 +355,10 @@ class Stars(Particles, StarsComponent):
                     )
 
     def __str__(self):
-        """
-        Return a string representation of the stars object.
+        """Return a string representation of the stars object.
 
         Returns:
-            table (str)
-                A string representation of the particle object.
+            table (str): A string representation of the particle object.
         """
         # Intialise the table formatter
         formatter = TableFormatter(self)
@@ -370,17 +366,15 @@ class Stars(Particles, StarsComponent):
         return formatter.get_table("Stars")
 
     def _concatenate_stars_arrays(self, other):
-        """
-        Create a dictionary of attributes from two stars objects combined.
+        """Create a dictionary of attributes from two stars objects combined.
 
         Args:
-            other (Stars)
+            other (Stars):
                 The other Stars object to add to this one.
 
         Returns:
-            dict
-                A dictionary of all the attributes of the combined Stars
-                objects
+            dict: A dictionary of all the attributes of the combined Stars
+                objects.
         """
         # Check the other object is the same type
         if not isinstance(other, Stars):
@@ -553,8 +547,7 @@ class Stars(Particles, StarsComponent):
         return kwargs
 
     def __add__(self, other):
-        """
-        Add two Stars objects together.
+        """Add two Stars objects together.
 
         This will correctly combine named arguments and create a new Stars
         object with the combined particles. Any extra keyword arguments will
@@ -565,7 +558,7 @@ class Stars(Particles, StarsComponent):
         also have None for that attribute.
 
         Args:
-            other (Stars)
+            other (Stars):
                 The other Stars object to add to this one.
 
         Returns:
@@ -577,11 +570,10 @@ class Stars(Particles, StarsComponent):
         return Stars(**kwargs)
 
     def _remove_stars(self, pmask):
-        """
-        Update stars attribute arrays based on a mask, `pmask`.
+        """Update stars attribute arrays based on a mask, `pmask`.
 
         Args:
-            pmask (array-like, bool)
+            pmask (array-like, bool):
                 A boolean mask to remove stars from the object.
         """
         # Remove the masked stars from this object
@@ -625,24 +617,26 @@ class Stars(Particles, StarsComponent):
         grid,
         **kwargs,
     ):
-        """
-        Replace young stars with individual parametric SFH's.
+        """Replace young stars with individual parametric SFH's.
 
         Can be either a constant or truncated exponential, selected with the
         `parametric_sfh` argument. The metallicity is set to the metallicity
         of the parent star particle.
 
         Args:
-            age (float)
+            age (float):
                 Age in Myr below which we replace Star particles.
                 Used to set the duration of parametric SFH
-            parametric_sfh (string)
+            parametric_sfh (string):
                 Form of the parametric SFH to use for young stars.
                 Currently two are supported, `Constant` and
                 `TruncatedExponential`, selected using the keyword
                 arguments `constant` and `exponential`.
-            grid (Grid)
+            grid (Grid):
                 The spectral grid object.
+            **kwargs (dict):
+                Additional keyword arguments to be passed to the SFH
+                object.
         """
         if self.young_stars_parametrisation is not False:
             warn(
@@ -772,8 +766,7 @@ class Stars(Particles, StarsComponent):
 
     @accepts(young=yr, old=yr)
     def _get_masks(self, young=None, old=None):
-        """
-        Get masks for which components we are handling.
+        """Get masks for which components we are handling.
 
         If a sub-component has not been requested it's necessarily
         all particles.
@@ -814,40 +807,38 @@ class Stars(Particles, StarsComponent):
 
     @accepts(stellar_mass=Msun.in_base("galactic"))
     def renormalise_mass(self, stellar_mass):
-        """
-        Renormalises and overwrites the initial masses. Useful when rescaling
-        the mass of the system of stellar particles.
+        """Renormalise the initial masses of the stars.
+
+        Renormalises and overwrites the initial masses inplace based on the
+        input total stellar mass.
 
         Args:
-            stellar_mass (array-like, float)
+            stellar_mass (np.ndarray of float):
                 The stellar mass array to be renormalised.
         """
-
         self.initial_masses *= stellar_mass / np.sum(self.initial_masses)
 
     def _power_law_sample(self, low_lim, upp_lim, g, size=1):
-        """
-        Sample from a power law over an interval not containing zero.
+        """Sample from a power law over an interval not containing zero.
 
         Power-law gen for pdf(x) propto x^{g-1} for a<=x<=b
 
         Args:
-            low_lim (float)
+            low_lim (float):
                 The lower bound of the interval over which to calulcate the
                 power law.
-            upp_lim (float)
+            upp_lim (float):
                 The upper bound of the interval over which to calulcate the
                 power law.
-            g (float)
+            g (float):
                 The power law index.
-            size (int)
+            size (int):
                 The number of samples in the interval.
 
         Returns:
-            array-like (float)
+            array-like (float):
                 The samples derived from the power law.
         """
-
         # Get a random sample
         rand = np.random.random(size=size)
 
@@ -871,7 +862,8 @@ class Stars(Particles, StarsComponent):
         force_resample=False,
         verbose=False,
     ):
-        """
+        """Resample stars below a given age.
+
         Resample young stellar particles into individual HII regions, with a
         power law distribution of masses. A young stellar particle is a
         stellar particle with an age < min_age (defined in Myr?).
@@ -883,26 +875,25 @@ class Stars(Particles, StarsComponent):
               is thrown.
 
         Args:
-            min_age (float)
+            min_age (float):
                 The age below which stars will be resampled, in yrs.
-            min_mass (float)
+            min_mass (float):
                 The lower bound of the mass interval used in the power law
                 sampling, in Msun.
-            max_mass (float)
+            max_mass (float):
                 The upper bound of the mass interval used in the power law
                 sampling, in Msun.
-            power_law_index (float)
+            power_law_index (float):
                 The index of the power law from which to sample stellar
-            n_samples (int)
+            n_samples (int):
                 The number of samples to generate for each stellar particles
                 younger than min_age.
-            force_resample (bool)
+            force_resample (bool):
                 A flag for whether resampling should be forced. Only applicable
                 if trying to resample and already resampled Stars object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
         """
-
         # Warn the user we are resampling a resampled population
         if self.resampled and not force_resample:
             warn(
@@ -1018,19 +1009,21 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method,
         nthreads,
     ):
-        """
-        Prepare the arguments for SFZH computation with the C functions.
+        """Prepare the arguments for SFZH computation with the C functions.
 
         Args:
-            log10ages (array-like, float)
+            log10ages (np.ndarray of float):
                 The log10 ages of the desired SFZH.
-            log10metallicities (array-like, float)
+            log10metallicities (np.ndarray of float):
                 The logged metallicities of the desired SFZH.
-            grid_assignment_method (string)
+            grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int):
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used.
 
         Returns:
             tuple
@@ -1084,8 +1077,7 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
     ):
-        """
-        Generate the binned SFZH history of these stars.
+        """Generate the binned SFZH history of these stars.
 
         The binned SFZH is calculated by binning the particles onto the
         desired grid defined by the input log10ages and metallicities.
@@ -1094,16 +1086,16 @@ class Stars(Particles, StarsComponent):
         used to extract spectra from the grid.
 
         Args:
-            log10ages (array-like, float)
+            log10ages (np.ndarray of float):
                 The log10 ages of the desired SFZH.
-            log10metallicities (array-like, float)
+            log10metallicities (np.ndarray of float):
                 The logged metallicities of the desired SFZH.
-            grid_assignment_method (string)
+            grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or their uppercase equivalents (CIC, NGP).
                 Defaults to cic.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the computation. If set to -1
                 all available threads will be used.
 
@@ -1136,18 +1128,15 @@ class Stars(Particles, StarsComponent):
         self,
         show=True,
     ):
-        """
-        Plot the binned SZFH.
+        """Plot the binned SZFH.
 
         Args:
-            show (bool)
+            show (bool):
                 Should we invoke plt.show()?
 
         Returns:
-            fig
-                The Figure object contain the plot axes.
-            ax
-                The Axes object containing the plotted data.
+            fig: The Figure object contain the plot axes.
+            ax: The Axes object containing the plotted data.
         """
         # Ensure we have the SFZH
         if self.sfzh is None:
@@ -1162,17 +1151,19 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method,
         nthreads,
     ):
-        """
-        Prepare the arguments for SFH computation with the C functions.
+        """Prepare the arguments for SFH computation with the C functions.
 
         Args:
-            grid (Grid)
-                The SPS grid object to extract spectra from.
-            grid_assignment_method (string)
+            log10ages (np.ndarray of float):
+                The log10 ages of the desired SFH.
+            grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int):
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used.
 
         Returns:
             tuple
@@ -1218,21 +1209,20 @@ class Stars(Particles, StarsComponent):
         )
 
     def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
-        """
-        Generate the SFH of these stars in terms of mass.
+        """Generate the SFH of these stars in terms of mass.
 
         The SFH is calculated by summing the mass of the particles in each age
         bin defined by the input log10ages.
 
         Args:
-            log10ages (array-like, float)
+            log10ages (np.ndarray of float):
                 The log10 ages of the desired SFH.
-            grid_assignment_method (string)
+            grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or their uppercase equivalents (CIC, NGP).
                 Defaults to cic.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the computation. If set to -1
                 all available threads will be used. Defaults to 0.
 
@@ -1262,22 +1252,21 @@ class Stars(Particles, StarsComponent):
         ylimits=(),
         show=True,
     ):
-        """
-        Plot the SFH in terms of mass.
+        """Plot the SFH in terms of mass.
 
         Args:
-            log10ages (array-like, float)
+            log10ages (np.ndarray of float):
                 The log10 ages of the desired SFH.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the computation. If set to -1
                 all available threads will be used. Defaults to 0.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits of the x-axis. If not set, the limits are set to the
                 minimum and maximum of the log10ages.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits of the y-axis. If not set, the limits are set to the
                 minimum and maximum of the SFH.
-            show (bool)
+            show (bool):
                 Should we invoke plt.show()?
 
         Returns:
@@ -1315,19 +1304,21 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method,
         nthreads,
     ):
-        """
-        Prepare the arguments for metalicity computation with the C functions.
+        """Prepare arguments for metalicity computation with the C functions.
 
         Args:
-            log10ages (array-like, float)
+            log10ages (np.ndarray of float):
                 The log10 ages of the desired SFZH.
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The metallicities of the desired SFZH.
-            grid_assignment_method (string)
+            grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int):
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used. Defaults to 0.
 
         Returns:
             tuple
@@ -1378,18 +1369,17 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
     ):
-        """
-        Generate the metallicity distribution of these stars in terms of mass.
+        """Generate the metallicity distribution in terms of mass.
 
         Args:
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The metallicity bins of the desired metallicity distribution.
-            grid_assignment_method (string)
+            grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or their uppercase equivalents (CIC, NGP).
                 Defaults to cic.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the computation. If set to -1
                 all available threads will be used. Defaults to 0.
 
@@ -1417,22 +1407,21 @@ class Stars(Particles, StarsComponent):
         ylimits=(),
         show=True,
     ):
-        """
-        Plot the metallicity distribution in terms of mass.
+        """Plot the metallicity distribution in terms of mass.
 
         Args:
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The metallicity bins of the desired metallicity distribution.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the computation. If set to -1
                 all available threads will be used. Defaults to 0.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits of the x-axis. If not set, the limits are set to the
                 minimum and maximum of the log10ages.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits of the y-axis. If not set, the limits are set to the
                 minimum and maximum of the SFH.
-            show (bool)
+            show (bool):
                 Should we invoke plt.show()?
 
         Returns:
@@ -1480,8 +1469,7 @@ class Stars(Particles, StarsComponent):
         verbose=True,
         **kwargs,
     ):
-        """
-        Generate stellar spectra as described by the emission model.
+        """Generate stellar spectra as described by the emission model.
 
         Note: Now deprecated in favour of get_spectra and emission models
         knowing which spectra should be per particle.
@@ -1562,8 +1550,7 @@ class Stars(Particles, StarsComponent):
         verbose=True,
         **kwargs,
     ):
-        """
-        Generate stellar lines as described by the emission model.
+        """Generate stellar lines as described by the emission model.
 
         Note: Now deprecated in favour of get_lines and emission models
         knowing which lines should be per particle.
@@ -1643,21 +1630,23 @@ def sample_sfzh(
     initial_mass=1 * Msun,
     **kwargs,
 ):
-    """
-    Create "fake" stellar particles by sampling a SFZH.
+    """Create "fake" stellar particles by sampling a SFZH.
 
     Args:
-        sfhz (array-like, float)
+        sfzh (np.ndarray of float):
             The Star Formation Metallicity History grid
             (from parametric.Stars).
-        log10ages (array-like, float)
+        log10ages (np.ndarray of float):
             The log of the SFZH age axis.
-        log10metallicities (array-like, float)
+        log10metallicities (np.ndarray of float):
             The log of the SFZH metallicities axis.
-        nstar (int)
+        nstar (int):
             The number of stellar particles to produce.
-        intial_mass (int)
+        initial_mass (int):
             The intial mass of the fake stellar particles.
+        **kwargs:
+            Any additional keyword arguments to pass to the Stars
+            constructor.
 
     Returns:
         stars (Stars)

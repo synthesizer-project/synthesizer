@@ -14,11 +14,10 @@ def rotate(
     theta=0 * rad,
     rot_matrix=None,
 ):
-    """
-    Rotate 3D array of coordinates
+    """Rotate 3D array of coordinates.
 
     Args:
-        coordinates (np.array)
+        coordinates (np.ndarray of float):
             1D or 2D array of coordinates
         phi (unyt_quantity):
             The angle in radians to rotate around the z-axis. If rot_matrix
@@ -30,11 +29,10 @@ def rotate(
             A 3x3 rotation matrix to apply to the coordinates
             instead of phi and theta.
 
-    returns
+    Returns:
         coordinates (np.array)
             transformed coordinate array
     """
-
     # if len(coordinates.shape) == 1:
     #     coordinates = np.array([coordinates])
 
@@ -72,9 +70,8 @@ def calculate_smoothing_lengths(
     speedup_fac: int = 2,
     dimension: int = 3,
     boxsize: unyt_array = None,
-) -> unyt_array:
-    """
-    Calculate smoothing lengths based on the kth nearest neighbour distance.
+) -> unyt_array[Mpc]:
+    """Calculate smoothing lengths based on the kth nearest neighbour distance.
 
     This is approximately what is done in SPH codes to calculate the smoothing
     length for each particle.
@@ -83,13 +80,13 @@ def calculate_smoothing_lengths(
     (https://github.com/SWIFTSIM/swiftsimio)
 
     Args:
-        coordinates
+        coordinates (unyt_array):
             The coordinates to calculate the smoothing lengths for.
-        kernel_gamma (optional)
+        kernel_gamma (float, optional):
             The kernel gamma of the kernel being used. (default: 1.4)
-        num_neighbours (optional)
+        num_neighbours (int, optional):
             The number of neighbours to encompass.
-        speedup_fac (optional)
+        speedup_fac (int, optional):
             A parameter that neighbours is divided by to provide a speed-up
             by only searching for a lower number of neighbours. For example,
             if neighbours is 32, and speedup_fac is 2, we only search for 16
@@ -98,16 +95,15 @@ def calculate_smoothing_lengths(
             higher number of neighbours. A factor of 2 gives smoothing lengths
             the same as the full search within 10%, good enough for
             visualisation.
-        dimension (optional)
+        dimension (int, optional):
             The dimensionality of the problem (used for speedup_fac
             calculation).
-        boxsize (optional)
+        boxsize (unyt_array, optional):
             The boxsize to use for the periodic boundary conditions. If None,
             no periodic boundary conditions are used
 
     Returns:
-        smoothing lengths:
-            An unyt array of smoothing lengths.
+        unyt_array: An unyt array of smoothing lengths.
     """
     nparts: int = coordinates.shape[0]
 

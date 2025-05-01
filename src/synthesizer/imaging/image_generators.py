@@ -32,8 +32,7 @@ def _generate_image_particle_hist(
     coordinates,
     normalisation=None,
 ):
-    """
-    Generate a histogram image for a particle emitter.
+    """Generate a histogram image for a particle emitter.
 
     Args:
         img (Image):
@@ -150,8 +149,7 @@ def _generate_images_particle_hist(
     signals,
     normalisations=None,
 ):
-    """
-    Generate histogram images for a particle emitter.
+    """Generate histogram images for a particle emitter.
 
     This is a wrapper around _generate_image_particle_hist to allow for
     multiple signals to be passed in at once to generate an ImageCollection.
@@ -202,8 +200,7 @@ def _generate_image_particle_smoothed(
     nthreads,
     normalisation=None,
 ):
-    """
-    Generate smoothed images for a particle emitter.
+    """Generate smoothed images for a particle emitter.
 
     Args:
         img (Image):
@@ -371,8 +368,7 @@ def _generate_images_particle_smoothed(
     nthreads,
     normalisations=None,
 ):
-    """
-    Generate smoothed images for a particle emitter.
+    """Generate smoothed images for a particle emitter.
 
     Args:
         imgs (ImageCollection):
@@ -551,8 +547,7 @@ def _generate_image_parametric_smoothed(
     density_grid,
     signal,
 ):
-    """
-    Generate a smoothed image for a parametric emitter.
+    """Generate a smoothed image for a parametric emitter.
 
     Args:
         img (Image):
@@ -581,8 +576,7 @@ def _generate_images_parametric_smoothed(
     density_grid,
     signals,
 ):
-    """
-    Generate smoothed images for a parametric emitter.
+    """Generate smoothed images for a parametric emitter.
 
     Args:
         imgs (ImageCollection):
@@ -625,8 +619,7 @@ def _generate_image_collection_generic(
     emitter,
     cosmo,
 ):
-    """
-    Generate an image collection for a generic emitter.
+    """Generate an image collection for a generic emitter.
 
     This function can be used to avoid repeating image generation code in
     wrappers elsewhere in the code. It'll produce an image collection based
@@ -636,28 +629,28 @@ def _generate_image_collection_generic(
     imaging can only be smoothed.
 
     Args:
-        instrument (Instrument)
+        instrument (Instrument):
             The instrument to create the images for.
-        photometry (PhotometryCollection)
+        photometry (PhotometryCollection):
             The photometry to use for the images. This should be a a collection
             of 2D arrays of photometry with shape (Nfilters, Nparticles).
-        fov (unyt_quantity/tuple, unyt_quantity)
+        fov (unyt_quantity/tuple, unyt_quantity):
             The width of the image.
-        img_type (str)
+        img_type (str):
             The type of image to create. Options are "hist" or "smoothed".
-        kernel (str)
+        kernel (str):
             The array describing the kernel. This is dervied from the
             kernel_functions module. (Only applicable to particle imaging)
-        kernel_threshold (float)
+        kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
             below this threshold are included in the image. (Only
             applicable to particle imaging)
-        nthreads (int)
+        nthreads (int):
             The number of threads to use when smoothing the image. This
             only applies to particle imaging.
-        emitter (Stars/BlackHoles/BlackHole)
+        emitter (Stars/BlackHoles/BlackHole):
             The emitter object to create the images for.
-        cosmo (astropy.cosmology.Cosmology)
+        cosmo (astropy.cosmology.Cosmology):
             A cosmology object defining the cosmology to use for the images.
             This is only relevant for angular images where a conversion to
             projected angular coordinates is needed.
@@ -703,8 +696,7 @@ def _generate_image_collection_generic(
 
     elif img_type == "hist":
         raise exceptions.InconsistentArguments(
-            "Parametric images can only be made using the smoothed "
-            "image type."
+            "Parametric images can only be made using the smoothed image type."
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
@@ -762,8 +754,7 @@ def _generate_ifu_particle_hist(
     cent_coords,
     nthreads,
 ):
-    """
-    Generate a histogram IFU for a particle emitter.
+    """Generate a histogram IFU for a particle emitter.
 
     Args:
         ifu (SpectralCube):
@@ -887,8 +878,7 @@ def _generate_ifu_particle_smoothed(
     kernel_threshold,
     nthreads,
 ):
-    """
-    Generate a histogram IFU for a particle emitter.
+    """Generate a histogram IFU for a particle emitter.
 
     Args:
         ifu (SpectralCube):
@@ -1024,8 +1014,7 @@ def _generate_ifu_parametric_smoothed(
     quantity,
     density_grid,
 ):
-    """
-    Generate a smoothed IFU for a parametric emitter.
+    """Generate a smoothed IFU for a parametric emitter.
 
     Args:
         ifu (SpectralCube):
@@ -1090,8 +1079,7 @@ def _generate_ifu_generic(
     emitter,
     cosmo,
 ):
-    """
-    Generate a spectral cube.
+    """Generate a spectral cube.
 
     This function can be used to avoid repeating IFU generation code in
     wrappers elsewhere in the code. It'll produce a SpectralCube based
@@ -1101,35 +1089,35 @@ def _generate_ifu_generic(
     imaging can only be smoothed.
 
     Args:
-        instrument (Instrument)
+        instrument (Instrument):
             The instrument to create the images for.
-        fov (unyt_quantity/tuple, unyt_quantity)
+        fov (unyt_quantity/tuple, unyt_quantity):
             The width of the image.
-        lam (unyt_array)
+        lam (unyt_array):
             The wavelength array of the spectra.
-        img_type (str)
+        img_type (str):
             The type of image to create. Options are "hist" or "smoothed".
-        quantity (str)
+        quantity (str):
             The quantity to use for the spectra. This can be any valid
             spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
             'flux', etc.
-        per_particle (bool)
+        per_particle (bool):
             Whether to create an image per particle or not.
-        kernel (str)
+        kernel (str):
             The array describing the kernel. This is dervied from the
             kernel_functions module. (Only applicable to particle imaging)
-        kernel_threshold (float)
+        kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
             below this threshold are included in the image. (Only
             applicable to particle imaging)
-        nthreads (int)
+        nthreads (int):
             The number of threads to use when smoothing the image. This
             only applies to particle imaging.
-        label (str)
+        label (str):
             The label of the photometry to use.
-        emitter (Stars/BlackHoles/BlackHole)
+        emitter (Stars/BlackHoles/BlackHole):
             The emitter object to create the images for.
-        cosmo (astropy.cosmology.Cosmology)
+        cosmo (astropy.cosmology.Cosmology):
             A cosmology object defining the cosmology to use for the IFU.
             This is only relevant for angular IFUs where a conversion to
             projected angular coordinates is needed.
