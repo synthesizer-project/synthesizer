@@ -1,11 +1,12 @@
-import numpy as np
+r"""A module defining depletion model for use in photoionization models.
 
-"""
 Module containing various depletion models. Depletion models relate the gas
 phase depleted abundances to the total abundances, i.e.:
     (X/H)_{gas,dep} = D_{x}\times (X/H)_{total}
     (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
 """
+
+import numpy as np
 
 available_patterns = [
     "Jenkins2009_Gunasekera2021",
@@ -15,8 +16,7 @@ available_patterns = [
 
 
 class Jenkins2009_Gunasekera2021:
-    """
-    Implemention of the Jenkins (2009) depletion pattern.
+    """Implemention of the Jenkins (2009) depletion pattern.
 
     This is the model that is built into cloudy23 as described by
     Gunasekera (2021). This modification adds in additional elements that
@@ -66,14 +66,16 @@ class Jenkins2009_Gunasekera2021:
     }
 
     def __init__(self, fstar=0.5, limit=1.0):
-        """
-        Initialise the class.
+        """Initialise the class.
 
         Args:
-            fstar (float)
+            fstar (float):
                 The Jenkins (2009) scaling parameter.
+            limit (float):
+                The maximum depletion value. This is used to limit the
+                depletion to a maximum value. This is useful for elements
+                that are not depleted in the ISM, e.g. H and He.
         """
-
         self.depletion = {}
         for element, parameters in self.parameters.items():
             # unpack parameters. Despite convention I've chosen to use
@@ -85,9 +87,9 @@ class Jenkins2009_Gunasekera2021:
 
 
 class CloudyClassic:
-    """
-    Implemention of the 'cloudy classic' depletion pattern that is built into
-    cloudy23.
+    """Implemention of the 'cloudy classic' depletion pattern.
+
+    This is the same as the one that is built into cloudy23.
     """
 
     depletion_ = {
@@ -124,9 +126,10 @@ class CloudyClassic:
     }
 
     def __init__(self, scale=1.0):
-        """
+        """Initialise the cloudy classic depletion pattern.
+
         Args:
-            scale (float)
+            scale (float):
                 Scale factor for the depletion.
         """
         self.depletion = {
@@ -136,8 +139,7 @@ class CloudyClassic:
 
 
 class Gutkin2016:
-    """
-    Depletion pattern created for Synthesizer 2024.
+    """Depletion pattern created for Synthesizer 2024.
 
     Gutkin+2016 (ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract)
 
@@ -181,9 +183,10 @@ class Gutkin2016:
     }
 
     def __init__(self, scale=1.0):
-        """
+        """Initialise the Gutkin (2016) depletion pattern.
+
         Args:
-            scale (float)
+            scale (float):
                 Scale factor for the depletion.
         """
         self.depletion = {
