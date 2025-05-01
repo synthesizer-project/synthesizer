@@ -13,15 +13,15 @@ class TestBlackHolesInit:
         """Test that scalar_to_array works in various situations."""
         # Scalar with no units
         arr = scalar_to_array(1)
-        assert isinstance(
-            arr, np.ndarray
-        ), f"Scalar with no units failed: 1->{arr}"
+        assert isinstance(arr, np.ndarray), (
+            f"Scalar with no units failed: 1->{arr}"
+        )
 
         # Scalar with units
         arr = scalar_to_array(1 * s)
-        assert isinstance(
-            arr, unyt_array
-        ), f"Scalar with units failed: 1 * s->{arr}"
+        assert isinstance(arr, unyt_array), (
+            f"Scalar with units failed: 1 * s->{arr}"
+        )
         assert arr.units == s, f"Scalar with units failed: 1 * s->{arr}"
         assert arr.shape == (1,), (
             f"Scalar with units shape is wrong: {arr.shape} "
@@ -30,18 +30,18 @@ class TestBlackHolesInit:
 
         # Check that an array without units is returned as is
         arr = scalar_to_array(np.arange(10))
-        assert isinstance(
-            arr, np.ndarray
-        ), f"Array without units failed: {np.arange(10)}->{arr}"
+        assert isinstance(arr, np.ndarray), (
+            f"Array without units failed: {np.arange(10)}->{arr}"
+        )
 
         # Check that an array with units is returned as is
         arr = scalar_to_array(np.arange(10) * s)
-        assert isinstance(
-            arr, unyt_array
-        ), f"Array with units failed: {np.arange(10) * s}->{arr}"
-        assert (
-            arr.units == s
-        ), f"Array with units failed: {np.arange(10) * s}->{arr}"
+        assert isinstance(arr, unyt_array), (
+            f"Array with units failed: {np.arange(10) * s}->{arr}"
+        )
+        assert arr.units == s, (
+            f"Array with units failed: {np.arange(10) * s}->{arr}"
+        )
 
         # Check that a ndim = 2 array without units is returned as is
         arr = scalar_to_array(np.arange(10).reshape(2, 5))
@@ -59,12 +59,12 @@ class TestBlackHolesInit:
 
         # Check that a 1 element aray without units is returned as is
         arr = scalar_to_array(np.array([1]))
-        assert isinstance(
-            arr, np.ndarray
-        ), f"1 element array without units failed: {np.array([1])}->{arr}"
-        assert arr.shape == (
-            1,
-        ), f"1 element array without units failed: {np.array([1])}->{arr}"
-        assert (
-            arr.ndim == 1
-        ), f"1 element array without units failed: {np.array([1])}->{arr}"
+        assert isinstance(arr, np.ndarray), (
+            f"1 element array without units failed: {np.array([1])}->{arr}"
+        )
+        assert arr.shape == (1,), (
+            f"1 element array without units failed: {np.array([1])}->{arr}"
+        )
+        assert arr.ndim == 1, (
+            f"1 element array without units failed: {np.array([1])}->{arr}"
+        )

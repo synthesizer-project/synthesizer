@@ -21,9 +21,9 @@ def test_integrated_generation_ngp(nebular_emission_model, random_part_stars):
     per_particle_spec = per_particle_spec.sum()
 
     # Ensure that the integrated spectra are different
-    assert np.allclose(
-        integrated_spec._lnu, per_particle_spec._lnu
-    ), "The integrated and summed per particle spectra are not the same."
+    assert np.allclose(integrated_spec._lnu, per_particle_spec._lnu), (
+        "The integrated and summed per particle spectra are not the same."
+    )
 
 
 def test_masked_integrated_generation_ngp(
@@ -54,9 +54,9 @@ def test_masked_integrated_generation_ngp(
     per_particle_spec = per_particle_spec.sum()
 
     # Ensure that the integrated spectra are the same
-    assert np.allclose(
-        integrated_spec._lnu, per_particle_spec._lnu
-    ), "The integrated and summed per particle spectra are not the same."
+    assert np.allclose(integrated_spec._lnu, per_particle_spec._lnu), (
+        "The integrated and summed per particle spectra are not the same."
+    )
 
 
 def test_integrated_generation_cic(nebular_emission_model, random_part_stars):
@@ -76,9 +76,9 @@ def test_integrated_generation_cic(nebular_emission_model, random_part_stars):
     per_particle_spec = per_particle_spec.sum()
 
     # Ensure that the integrated spectra are different
-    assert np.allclose(
-        integrated_spec._lnu, per_particle_spec._lnu
-    ), "The integrated and summed per particle spectra are not the same."
+    assert np.allclose(integrated_spec._lnu, per_particle_spec._lnu), (
+        "The integrated and summed per particle spectra are not the same."
+    )
 
 
 def test_masked_integrated_generation_cic(
@@ -109,9 +109,9 @@ def test_masked_integrated_generation_cic(
     per_particle_spec = per_particle_spec.sum()
 
     # Ensure that the integrated spectra are the same
-    assert np.allclose(
-        integrated_spec._lnu, per_particle_spec._lnu
-    ), "The integrated and summed per particle spectra are not the same."
+    assert np.allclose(integrated_spec._lnu, per_particle_spec._lnu), (
+        "The integrated and summed per particle spectra are not the same."
+    )
 
 
 def test_threaded_generation_ngp_per_particle(
@@ -135,9 +135,9 @@ def test_threaded_generation_ngp_per_particle(
     )
 
     # Ensure that the integrated spectra are different
-    assert np.allclose(
-        serial_spec._lnu, threaded_spec._lnu
-    ), "The serial and threaded spectra are not the same."
+    assert np.allclose(serial_spec._lnu, threaded_spec._lnu), (
+        "The serial and threaded spectra are not the same."
+    )
 
 
 def test_threaded_generation_ngp_integrated(
@@ -161,9 +161,9 @@ def test_threaded_generation_ngp_integrated(
     )
 
     # Ensure that the integrated spectra are different
-    assert np.allclose(
-        serial_spec._lnu, threaded_spec._lnu
-    ), "The serial and threaded spectra are not the same."
+    assert np.allclose(serial_spec._lnu, threaded_spec._lnu), (
+        "The serial and threaded spectra are not the same."
+    )
 
 
 def test_threaded_generation_cic_per_particle(
@@ -187,9 +187,9 @@ def test_threaded_generation_cic_per_particle(
     )
 
     # Ensure that the integrated spectra are different
-    assert np.allclose(
-        serial_spec._lnu, threaded_spec._lnu
-    ), "The serial and threaded spectra are not the same."
+    assert np.allclose(serial_spec._lnu, threaded_spec._lnu), (
+        "The serial and threaded spectra are not the same."
+    )
 
 
 def test_threaded_generation_cic_integrated(
@@ -213,9 +213,9 @@ def test_threaded_generation_cic_integrated(
     )
 
     # Ensure that the integrated spectra are different
-    assert np.allclose(
-        serial_spec._lnu, threaded_spec._lnu
-    ), "The serial and threaded spectra are not the same."
+    assert np.allclose(serial_spec._lnu, threaded_spec._lnu), (
+        "The serial and threaded spectra are not the same."
+    )
 
 
 def test_reusing_weights_ngp(nebular_emission_model, random_part_stars):
@@ -227,12 +227,12 @@ def test_reusing_weights_ngp(nebular_emission_model, random_part_stars):
     )
 
     # Ensure we have the weights
-    assert hasattr(
-        random_part_stars, "_grid_weights"
-    ), "The grid weights are not stored."
-    assert (
-        "test_grid" in random_part_stars._grid_weights["ngp"]
-    ), "The grid weights are not stored."
+    assert hasattr(random_part_stars, "_grid_weights"), (
+        "The grid weights are not stored."
+    )
+    assert "test_grid" in random_part_stars._grid_weights["ngp"], (
+        "The grid weights are not stored."
+    )
 
     # Compute the spectra the second time which will reuse the weights
     random_part_stars.clear_all_emissions()
@@ -257,12 +257,12 @@ def test_reusing_weights_cic(nebular_emission_model, random_part_stars):
     )
 
     # Ensure we have the weights
-    assert hasattr(
-        random_part_stars, "_grid_weights"
-    ), "The grid weights are not stored."
-    assert (
-        "test_grid" in random_part_stars._grid_weights["cic"]
-    ), "The grid weights are not stored."
+    assert hasattr(random_part_stars, "_grid_weights"), (
+        "The grid weights are not stored."
+    )
+    assert "test_grid" in random_part_stars._grid_weights["cic"], (
+        "The grid weights are not stored."
+    )
 
     # Compute the spectra the second time which will reuse the weights
     random_part_stars.clear_all_emissions()
@@ -382,9 +382,9 @@ def test_masked_int_spectra_diff_units(
 
     assert np.any(new_mask), f"The mask is empty (defined in yr): {new_mask}"
     assert False in new_mask, f"The mask is all True: {new_mask}"
-    assert np.all(
-        mask == new_mask
-    ), "The masks with different units are not the same."
+    assert np.all(mask == new_mask), (
+        "The masks with different units are not the same."
+    )
 
     dif_units_masked_spec = particle_stars_B.get_spectra(
         reprocessed_emission_model,

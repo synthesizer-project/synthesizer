@@ -21,20 +21,20 @@ class TestTemplateInit:
         template = Template(lam, lnu)
 
         # Check that the wavelength and luminosity arrays are stored correctly
-        assert np.allclose(
-            template.lam.value, lam.value
-        ), f"Wavelengths differ {template.lam.value} != {lam.value}"
-        assert (
-            template.lam.units == lam.units
-        ), f"Units differ {template.lam.units} != {lam.units}"
+        assert np.allclose(template.lam.value, lam.value), (
+            f"Wavelengths differ {template.lam.value} != {lam.value}"
+        )
+        assert template.lam.units == lam.units, (
+            f"Units differ {template.lam.units} != {lam.units}"
+        )
 
         # Check that normalization happened
-        assert isinstance(
-            template.normalisation, unyt_quantity
-        ), f"Normalisation is not a unyt_quantity {template.normalisation}"
-        assert (
-            template.normalisation > 0
-        ), f"Normalisation is not positive {template.normalisation}"
+        assert isinstance(template.normalisation, unyt_quantity), (
+            f"Normalisation is not a unyt_quantity {template.normalisation}"
+        )
+        assert template.normalisation > 0, (
+            f"Normalisation is not positive {template.normalisation}"
+        )
 
     def test_template_normalization(self):
         """Test that the template luminosity is normalized correctly."""
@@ -46,9 +46,10 @@ class TestTemplateInit:
         template = Template(lam, lnu)
 
         # Check that the internal SED has been normalized
-        assert np.isclose(
-            template._sed._bolometric_luminosity, 1.0
-        ), f"Template is not normalized {template._sed._bolometric_luminosity}"
+        assert np.isclose(template._sed._bolometric_luminosity, 1.0), (
+            "Template is not normalized "
+            f"{template._sed._bolometric_luminosity}"
+        )
 
     def test_template_unify_with_grid(self, test_grid):
         """Test unifying the template with a grid."""
@@ -130,12 +131,12 @@ class TestTemplateGeneration:
         assert isinstance(sed, Sed)
 
         # Ensure the Sed has the correct shape (i.e. ndim = 2 and (nbh, nlam))
-        assert (
-            sed.shape[0] == particle_black_hole.nbh
-        ), f"Sed has the wrong shape {sed.shape}"
-        assert sed.shape[1] == len(
-            template_emission_model_bh.lam
-        ), f"Sed has the wrong shape {sed.shape}"
+        assert sed.shape[0] == particle_black_hole.nbh, (
+            f"Sed has the wrong shape {sed.shape}"
+        )
+        assert sed.shape[1] == len(template_emission_model_bh.lam), (
+            f"Sed has the wrong shape {sed.shape}"
+        )
 
         # Check that the bolometric luminosity is correct
         assert np.all(
@@ -163,12 +164,12 @@ class TestTemplateGeneration:
         assert isinstance(sed, Sed)
 
         # Ensure the Sed has the correct shape (i.e. ndim = 2 and (nbh, nlam))
-        assert (
-            sed.shape[0] == single_particle_black_hole.nbh
-        ), f"Sed has the wrong shape {sed.shape}"
-        assert sed.shape[1] == len(
-            template_emission_model_bh.lam
-        ), f"Sed has the wrong shape {sed.shape}"
+        assert sed.shape[0] == single_particle_black_hole.nbh, (
+            f"Sed has the wrong shape {sed.shape}"
+        )
+        assert sed.shape[1] == len(template_emission_model_bh.lam), (
+            f"Sed has the wrong shape {sed.shape}"
+        )
 
         # Check that the bolometric luminosity is correct
         assert np.isclose(
@@ -194,12 +195,12 @@ class TestTemplateGeneration:
         assert isinstance(sed, Sed)
 
         # Ensure the Sed has the correct shape (i.e. ndim = 2 and (nbh, nlam))
-        assert (
-            sed.shape[0] == single_particle_black_hole_scalars.nbh
-        ), f"Sed has the wrong shape {sed.shape}"
-        assert sed.shape[1] == len(
-            template_emission_model_bh.lam
-        ), f"Sed has the wrong shape {sed.shape}"
+        assert sed.shape[0] == single_particle_black_hole_scalars.nbh, (
+            f"Sed has the wrong shape {sed.shape}"
+        )
+        assert sed.shape[1] == len(template_emission_model_bh.lam), (
+            f"Sed has the wrong shape {sed.shape}"
+        )
 
         # Check that the bolometric luminosity is correct
         assert np.isclose(

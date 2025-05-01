@@ -40,7 +40,7 @@ def test_single_star_extraction(
     ), (
         f"The SFZH's are not equivalent (non-zero elements: "
         f"particle={np.where(single_star_particle.sfzh.sfzh > 0)}, "
-        f"parametric={np.where(single_star_parametric.sfzh >0)})"
+        f"parametric={np.where(single_star_parametric.sfzh > 0)})"
     )
 
     # Ok, we know the SFZH's are equivalent, let's now get the spectra

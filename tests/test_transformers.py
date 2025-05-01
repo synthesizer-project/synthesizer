@@ -26,9 +26,9 @@ def test_fesc_model_level(
     spec_fesc1 = random_part_stars.get_spectra(model)
 
     # Ensure the two differ
-    assert not np.all(
-        spec_fesc0.lnu == spec_fesc1.lnu
-    ), "The spectra are the same with different fesc values"
+    assert not np.all(spec_fesc0.lnu == spec_fesc1.lnu), (
+        "The spectra are the same with different fesc values"
+    )
 
 
 def test_fesc_override(

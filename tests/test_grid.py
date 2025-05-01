@@ -36,12 +36,12 @@ class TestSPSGridLines:
         # Ensure that all values aren't the same for the whole grid
         luminosities = test_grid.line_lums["nebular"]
         conts = test_grid.line_conts["nebular"]
-        assert (
-            not np.unique(luminosities).size == 1
-        ), f"All line luminosities are the same {luminosities.min()}"
-        assert (
-            not np.unique(conts).size == 1
-        ), f"All line conts are the same {conts.min()}"
+        assert not np.unique(luminosities).size == 1, (
+            f"All line luminosities are the same {luminosities.min()}"
+        )
+        assert not np.unique(conts).size == 1, (
+            f"All line conts are the same {conts.min()}"
+        )
 
         # Ensure that none of the lines are all the same
         non_unique_lum_lines = []
