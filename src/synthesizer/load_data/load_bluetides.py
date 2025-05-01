@@ -28,8 +28,7 @@ from ..particle.galaxy import Galaxy
 
 
 class BlueTidesDataHolder:
-    """
-    A holder for BlueTides data that makes it easier to work with.
+    """A holder for BlueTides data that makes it easier to work with.
 
     The class can be pickled as follows::
 
@@ -52,8 +51,7 @@ class BlueTidesDataHolder:
         end_of_arr=108001,
         sort_bhar=True,
     ):
-        """
-        Initialize the BlueTidesDataHolder object.
+        """Initialize the BlueTidesDataHolder object.
 
         Args:
             z (str):
@@ -245,8 +243,7 @@ def load_BlueTides(
     bluetides_data_folder="",
     center=False,
 ):
-    """
-    Load BlueTides galaxies into a galaxy object
+    """Load BlueTides galaxies into a galaxy object.
 
     Args:
         redshift (str):
@@ -273,6 +270,7 @@ def load_BlueTides(
         center (bool):
              whether or not to center the galaxy on the Bh
              (default is False)
+
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing specified
