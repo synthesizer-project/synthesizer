@@ -197,7 +197,7 @@ class Particles:
         which is set on initialisation of this particle object.
 
         Returns:
-            log10metallicities (array)
+            log10metallicities (np.ndarray):
                 log10 particle metallicities.
         """
         mets = self.metallicities
@@ -269,7 +269,7 @@ class Particles:
                 Optionally, a mask to combine with the new mask.
 
         Returns:
-            mask (array)
+            mask (np.ndarray):
                 The mask array.
         """
         # Get the attribute

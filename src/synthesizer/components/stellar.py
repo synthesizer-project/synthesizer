@@ -88,7 +88,7 @@ class StarsComponent(Component):
         """Return stellar particle ages in log (base 10).
 
         Returns:
-            log10ages (array)
+            log10ages (np.ndarray):
                 log10 stellar ages
         """
         return np.log10(self._ages)
@@ -98,7 +98,7 @@ class StarsComponent(Component):
         """Return stellar particle metallicities in log (base 10).
 
         Returns:
-            log10metallicities (array)
+            log10metallicities (np.ndarray):
                 log10 stellar metallicities
         """
         return np.log10(self.metallicities)

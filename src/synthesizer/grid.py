@@ -882,7 +882,7 @@ class Grid:
 
         Returns:
             int
-                The index of the closet point in the grid (array)
+                The index of the closet point in the grid (np.ndarray):
         """
         # Handle units on both value and array
         # First do we need a conversion?

@@ -330,7 +330,7 @@ class Stars(Particles, StarsComponent):
         """Return stellar particle ages in log (base 10).
 
         Returns:
-            log10ages (array)
+            log10ages (np.ndarray):
                 log10 stellar ages
         """
         return np.log10(self.ages) * dimensionless
