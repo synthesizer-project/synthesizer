@@ -15,8 +15,7 @@ from synthesizer.utils import TableFormatter
 
 
 class BlackholesComponent(Component):
-    """
-    The parent class for stellar components of a galaxy.
+    """The parent class for stellar components of a galaxy.
 
     This class contains the attributes and spectra creation methods which are
     common to both parametric and particle stellar components.
@@ -28,47 +27,47 @@ class BlackholesComponent(Component):
     Attributes:
         spectra (dict, Sed)
             A dictionary containing black hole spectra.
-        mass (array-like, float)
+        mass (np.ndarray of float):
             The mass of each blackhole.
-        accretion_rate (array-like, float)
+        accretion_rate (np.ndarray of float):
             The accretion rate of each blackhole.
-        epsilon (array-like, float)
+        epsilon (np.ndarray of float):
             The radiative efficiency of the blackhole.
-        accretion_rate_eddington (array-like, float)
+        accretion_rate_eddington (np.ndarray of float):
             The accretion rate expressed as a fraction of the Eddington
             accretion rate.
-        inclination (array-like, float)
+        inclination (np.ndarray of float):
             The inclination of the blackhole disc.
-        spin (array-like, float)
+        spin (np.ndarray of float):
             The dimensionless spin of the blackhole.
-        bolometric_luminosity (array-like, float)
+        bolometric_luminosity (np.ndarray of float):
             The bolometric luminosity of the blackhole.
-        metallicity (array-like, float)
+        metallicity (np.ndarray of float):
             The metallicity of the blackhole which is assumed for the line
             emitting regions.
 
     Attributes (For EmissionModels):
-        ionisation_parameter_blr (array-like, float)
+        ionisation_parameter_blr (np.ndarray of float):
             The ionisation parameter of the broad line region.
-        hydrogen_density_blr (array-like, float)
+        hydrogen_density_blr (np.ndarray of float):
             The hydrogen density of the broad line region.
-        covering_fraction_blr (array-like, float)
+        covering_fraction_blr (np.ndarray of float):
             The covering fraction of the broad line region (effectively
             the escape fraction).
-        velocity_dispersion_blr (array-like, float)
+        velocity_dispersion_blr (np.ndarray of float):
             The velocity dispersion of the broad line region.
-        ionisation_parameter_nlr (array-like, float)
+        ionisation_parameter_nlr (np.ndarray of float):
             The ionisation parameter of the narrow line region.
-        hydrogen_density_nlr (array-like, float)
+        hydrogen_density_nlr (np.ndarray of float):
             The hydrogen density of the narrow line region.
-        covering_fraction_nlr (array-like, float)
+        covering_fraction_nlr (np.ndarray of float):
             The covering fraction of the narrow line region (effectively
             the escape fraction).
-        velocity_dispersion_nlr (array-like, float)
+        velocity_dispersion_nlr (np.ndarray of float):
             The velocity dispersion of the narrow line region.
-        theta_torus (array-like, float)
+        theta_torus (np.ndarray of float):
             The angle of the torus.
-        torus_fraction (array-like, float)
+        torus_fraction (np.ndarray of float):
             The fraction of the torus angle to 90 degrees.
     """
 
@@ -114,52 +113,53 @@ class BlackholesComponent(Component):
         theta_torus=10 * deg,
         **kwargs,
     ):
-        """
-        Initialise the BlackholeComponent.
+        """Initialise the BlackholeComponent.
 
         Where they're not provided missing quantities are automatically
         calcualted. Not all parameters need to be set for every emission model.
 
         Args:
-            mass (array-like, float)
+            fesc (float):
+                The escape fraction of the blackhole.
+            mass (np.ndarray of float):
                 The mass of each blackhole.
-            accretion_rate (array-like, float)
+            accretion_rate (np.ndarray of float):
                 The accretion rate of each blackhole.
-            epsilon (array-like, float)
+            epsilon (np.ndarray of float):
                 The radiative efficiency of the blackhole.
-            accretion_rate_eddington (array-like, float)
+            accretion_rate_eddington (np.ndarray of float):
                 The accretion rate expressed as a fraction of the Eddington
                 accretion rate.
-            inclination (array-like, float)
+            inclination (np.ndarray of float):
                 The inclination of the blackhole disc.
-            spin (array-like, float)
+            spin (np.ndarray of float):
                 The dimensionless spin of the blackhole.
-            bolometric_luminosity (array-like, float)
+            bolometric_luminosity (np.ndarray of float):
                 The bolometric luminosity of the blackhole.
-            metallicity (array-like, float)
+            metallicity (np.ndarray of float):
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
-            ionisation_parameter_blr (array-like, float)
+            ionisation_parameter_blr (np.ndarray of float):
                 The ionisation parameter of the broadline region.
-            hydrogen_density_blr (array-like, float)
+            hydrogen_density_blr (np.ndarray of float):
                 The hydrogen density of the broad line region.
-            covering_fraction_blr (array-like, float)
+            covering_fraction_blr (np.ndarray of float):
                 The covering fraction of the broad line region (effectively
                 the escape fraction).
-            velocity_dispersion_blr (array-like, float)
+            velocity_dispersion_blr (np.ndarray of float):
                 The velocity dispersion of the broad line region.
-            ionisation_parameter_nlr (array-like, float)
+            ionisation_parameter_nlr (np.ndarray of float):
                 The ionisation parameter of the narrow line region.
-            hydrogen_density_nlr (array-like, float)
+            hydrogen_density_nlr (np.ndarray of float):
                 The hydrogen density of the narrow line region.
-            covering_fraction_nlr (array-like, float)
+            covering_fraction_nlr (np.ndarray of float):
                 The covering fraction of the narrow line region (effectively
                 the escape fraction).
-            velocity_dispersion_nlr (array-like, float)
+            velocity_dispersion_nlr (np.ndarray of float):
                 The velocity dispersion of the narrow line region.
-            theta_torus (array-like, float)
+            theta_torus (np.ndarray of float):
                 The angle of the torus.
-            kwargs (dict)
+            **kwargs (dict):
                 Any other parameter for the emission models can be provided as
                 kwargs.
         """
@@ -268,28 +268,23 @@ class BlackholesComponent(Component):
             )
 
     def calculate_bolometric_luminosity(self):
-        """
-        Calculate the black hole bolometric luminosity. This is by itself
-        useful but also used for some emission models.
+        """Calculate the black hole bolometric luminosity.
 
-        Returns
-            unyt_array
+        Returns:
+            unyt_array:
                 The black hole bolometric luminosity
         """
-
         self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
 
         return self.bolometric_luminosity
 
     def calculate_eddington_luminosity(self):
-        """
-        Calculate the eddington luminosity of the black hole.
+        """Calculate the eddington luminosity of the black hole.
 
-        Returns
+        Returns:
             unyt_array
                 The black hole bolometric luminosity
         """
-
         # Note: the factor 1.257E38 comes from:
         # 4*pi*G*mp*c*Msun/sigma_thompson
         self.eddington_luminosity = 1.257e38 * self._mass
@@ -297,14 +292,12 @@ class BlackholesComponent(Component):
         return self.eddington_luminosity
 
     def calculate_eddington_ratio(self):
-        """
-        Calculate the eddington ratio of the black hole.
+        """Calculate the eddington ratio of the black hole.
 
-        Returns
-            unyt_array
+        Returns:
+            unyt_array:
                 The black hole eddington ratio
         """
-
         self.eddington_ratio = (
             self._bolometric_luminosity / self._eddington_luminosity
         )
@@ -312,15 +305,14 @@ class BlackholesComponent(Component):
         return self.eddington_ratio
 
     def calculate_bb_temperature(self):
-        """
-        Calculate the black hole big bump temperature. This is used for the
-        cloudy disc model.
+        """Calculate the black hole big bump temperature.
 
-        Returns
-            unyt_array
+        This is used in the cloudy disc model.
+
+        Returns:
+            unyt_array:
                 The black hole bolometric luminosity
         """
-
         # Calculate the big bump temperature
         self.bb_temperature = (
             2.24e9 * self._accretion_rate ** (1 / 4) * self._mass**-0.5
@@ -329,14 +321,12 @@ class BlackholesComponent(Component):
         return self.bb_temperature
 
     def calculate_accretion_rate_eddington(self):
-        """
-        Calculate the black hole accretion in units of the Eddington rate.
+        """Calculate the black hole accretion in units of the Eddington rate.
 
-        Returns
+        Returns:
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
-
         self.accretion_rate_eddington = (
             self._bolometric_luminosity / self._eddington_luminosity
         )
@@ -344,11 +334,10 @@ class BlackholesComponent(Component):
         return self.accretion_rate_eddington
 
     def __str__(self):
-        """
-        Return a string representation of the particle object.
+        """Return a string representation of the particle object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the particle object.
         """
         # Intialise the table formatter
