@@ -17,7 +17,6 @@ repos:
       - id: ruff
         args:
           - --fix
-          - --verbose
       # Run the formatter.
       - id: ruff-format
 
