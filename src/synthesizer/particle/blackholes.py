@@ -50,7 +50,7 @@ class BlackHoles(Particles, BlackholesComponent):
     Attributes:
         nbh (int):
             The number of black hole particles in the object.
-        smoothing_lengths (np.ndarray of float)
+        smoothing_lengths (np.ndarray of float):
             The smoothing length describing the black holes neighbour kernel.
         particle_spectra (dict):
             A dictionary of Sed objects containing any of the generated

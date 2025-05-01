@@ -147,7 +147,7 @@ class BaseGalaxy:
                 The red side of the feature to measure.
             spectra_type (str/list):
                 The spectra type to measure the equivalent width of. Either
-                a single type (string) or a list of types.
+                a single type (str): or a list of types.
 
         Returns:
             equivalent_width (float/dict of float):

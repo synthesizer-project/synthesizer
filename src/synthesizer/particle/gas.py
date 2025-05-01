@@ -47,10 +47,10 @@ class Gas(Particles):
             Flag for whether each gas particle is star forming or not.
         log10metallicities (float):
             Convnience attribute containing log10(metallicity).
-        smoothing_lengths (np.ndarray of float)
+        smoothing_lengths (np.ndarray of float):
             The smoothing lengths (describing the sph kernel) of each gas
             particle in simulation length units.
-        dust_to_metal_ratio (np.ndarray of float)
+        dust_to_metal_ratio (np.ndarray of float):
             The ratio between dust and total metal content in a gas
             particle. This can either be a single float or an array of
             values for each gas particle.

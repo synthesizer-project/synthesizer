@@ -187,7 +187,7 @@ def parse_grid_id(grid_id):
     if imf in ["salpeter", "135all"]:
         imf = "Salpeter (1955)"
     if imf.isnumeric():
-        imf = rf"$\alpha={float(imf)/100}$"
+        imf = rf"$\alpha={float(imf) / 100}$"
 
     return {
         "sps_model": sps_model,
@@ -228,7 +228,7 @@ def wavelength_to_rgba(
 
 
     Returns:
-        rgba (tuple)
+        rgba (tuple):
             RGBA tuple.
     """
     if wavelength < 380:
