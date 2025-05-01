@@ -361,7 +361,7 @@ class BaseGalaxy:
 
         For any combined spectra all components with a valid spectra will be
         combined and stored in Galaxy.spectra under the same key, but only if
-        there are instances of that spectra key on more than 1 component.
+        there are instances of a spectra containing that name to combine.
 
         Possible combined spectra are:
             - "total"
