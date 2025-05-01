@@ -47,23 +47,22 @@ from . import __file__ as filepath
 
 
 class Grid:
-    """
-    The Grid class containing tabulated spectral and line data.
+    """The Grid class containing tabulated spectral and line data.
 
     This object contains attributes and methods for reading and
     manipulating the spectral grids which underpin all spectra/line
     generation in synthesizer.
 
     Attributes:
-        grid_dir (str)
+        grid_dir (str):
             The directory containing the grid HDF5 file.
-        grid_name (str)
+        grid_name (str):
             The name of the grid (as defined by the file name)
             with no extension.
-        grid_ext (str)
+        grid_ext (str):
             The grid extension. Either ".hdf5" or ".h5". If the passed
             grid_name has no extension then ".hdf5" is assumed.
-        grid_filename (str)
+        grid_filename (str):
             The full path to the grid file.
         available_lines (bool/list)
             A list of lines on the Grid.
@@ -71,7 +70,7 @@ class Grid:
             A list of spectra on the Grid.
         lam (Quantity, float)
             The wavelengths at which the spectra are defined.
-        spectra (dict, array-like, float)
+        spectra (dict, np.ndarray of float)
             The spectra array from the grid. This is an N-dimensional
             grid where N is the number of axes of the SPS grid. The final
             dimension is always wavelength.
@@ -81,18 +80,18 @@ class Grid:
             A dictionary of line luminosities.
         line_conts (dict, dict, float)
             A dictionary of line continuum luminosities.
-        parameters (dict)
+        parameters (dict):
             A dictionary containing the grid's parameters used in its
             generation.
         axes (list, str)
             A list of the names of the spectral grid axes.
         naxes
             The number of axes the spectral grid has.
-        logQ10 (dict)
+        logQ10 (dict):
             A dictionary of ionisation Q parameters. (DEPRECATED)
-        log10_specific_ionising_luminosity (dict)
+        log10_specific_ionising_luminosity (dict):
             A dictionary of log10 specific ionising luminosities.
-        <grid_axis> (array-like, float)
+        <grid_axis> (np.ndarray of float):
             A Grid will always contain 1D arrays corresponding to the axes
             of the spectral grid. These are read dynamically from the HDF5
             file so can be anything but usually contain at least stellar ages
@@ -113,28 +112,27 @@ class Grid:
         new_lam=None,
         lam_lims=(),
     ):
-        """
-        Initialise the grid object.
+        """Initialise the grid object.
 
         This will open the grid file and extract the axes, spectra (if
         requested), and lines (if requested) and any other relevant data.
 
         Args:
-            grid_name (str)
+            grid_name (str):
                 The file name of the grid (if no extension is provided then
                 hdf5 is assumed).
-            grid_dir (str)
+            grid_dir (str):
                 The file path to the directory containing the grid file.
-            spectra_to_read (list)
+            spectra_to_read (list):
                 A list of spectra to read in. If None then all available
                 spectra will be read. Default is None.
-            read_lines (bool)
+            read_lines (bool):
                 Should we read lines? If a list then a subset of lines will be
                 read.
-            new_lam (array-like, float)
+            new_lam (np.ndarray of float):
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
-            lam_lims (tuple, float)
+            lam_lims (tuple, float):
                 A tuple of the lower and upper wavelength limits to truncate
                 the grid to (i.e. (lower_lam, upper_lam)). If new_lam is
                 provided these limits will be ignored.
@@ -240,8 +238,7 @@ class Grid:
                 setattr(self, k, v)
 
     def __getattr__(self, name):
-        """
-        Return an attribute handling arbitrary axis names.
+        """Return an attribute handling arbitrary axis names.
 
         This method allows for the dynamic extraction of axes with units,
         either logged or not or using singular or plural axis names (to handle
@@ -446,8 +443,7 @@ class Grid:
                     ]
 
     def _get_spectra_grid(self, spectra_to_read):
-        """
-        Get the spectra grid from the HDF5 file.
+        """Get the spectra grid from the HDF5 file.
 
         If using a cloudy reprocessed grid this method will automatically
         calculate 2 spectra not native to the grid file:
@@ -455,7 +451,7 @@ class Grid:
             nebular_continuum = nebular - linecont
 
         Args:
-            spectra_to_read (list)
+            spectra_to_read (list):
                 A list of spectra to read in. If None then all available
                 spectra will be read.
         """
@@ -506,11 +502,10 @@ class Grid:
             self.available_spectra.append("nebular_continuum")
 
     def _get_lines_grid(self, read_lines):
-        """
-        Get the lines grid from the HDF5 file.
+        """Get the lines grid from the HDF5 file.
 
         Args:
-            read_lines (bool/list)
+            read_lines (bool/list):
                 Flag for whether to read all available lines or subset of
                 lines to read.
         """
@@ -652,8 +647,7 @@ class Grid:
         new_lam,
         lam_lims,
     ):
-        """
-        Modify the grid wavelength axis to adhere to user defined wavelengths.
+        """Modify the grid wavelength axis to match user defined wavelengths.
 
         This method will do nothing if the user has not provided new_lam
         or lam_lims.
@@ -667,10 +661,10 @@ class Grid:
           limits.
 
         Args:
-            new_lam (array-like, float)
+            new_lam (np.ndarray of float):
                 An optional user defined wavelength array the spectra will be
                 interpolated onto.
-            lam_lims (tuple, float)
+            lam_lims (tuple, float):
                 A tuple of the lower and upper wavelength limits to truncate
                 the grid to (i.e. (lower_lam, upper_lam)).
         """
@@ -694,8 +688,7 @@ class Grid:
 
     @property
     def reprocessed(self):
-        """
-        Flag for whether grid has been reprocessed through cloudy.
+        """Flag for whether grid has been reprocessed through cloudy.
 
         This will only access the file the first time this property is
         accessed.
@@ -715,8 +708,7 @@ class Grid:
 
     @property
     def lines_available(self):
-        """
-        Flag for whether line emission exists.
+        """Flag for whether line emission exists.
 
         This will only access the file the first time this property is
         accessed.
@@ -758,8 +750,7 @@ class Grid:
         return self.available_lines
 
     def _get_spectra_ids_from_file(self):
-        """
-        Get a list of the spectra available in a grid file.
+        """Get a list of the spectra available in a grid file.
 
         Returns:
             list:
@@ -778,8 +769,7 @@ class Grid:
         return spectra_keys
 
     def _get_line_ids_from_file(self):
-        """
-        Get a list of the lines available on a grid.
+        """Get a list of the lines available on a grid.
 
         Returns:
             list:
@@ -800,17 +790,16 @@ class Grid:
 
     @accepts(new_lam=angstrom)
     def interp_spectra(self, new_lam, loop_grid=False):
-        """
-        Interpolates the spectra grid onto the provided wavelength grid.
+        """Interpolates the spectra grid onto the provided wavelength grid.
 
         NOTE: this will overwrite self.lam and self.spectra, overwriting
         the attributes loaded from the grid file. To get these back a new grid
         will need to instantiated with no lam argument passed.
 
         Args:
-            new_lam (unyt_array/array-like, float)
+            new_lam (unyt_array/np.ndarray of float):
                 The new wavelength array to interpolate the spectra onto.
-            loop_grid (bool)
+            loop_grid (bool):
                 flag for whether to do the interpolation over the whole
                 grid, or loop over the first axes. The latter is less memory
                 intensive, but slower. Defaults to False.
@@ -848,11 +837,10 @@ class Grid:
         self.lam = new_lam
 
     def __str__(self):
-        """
-        Return a string representation of the particle object.
+        """Return a string representation of the particle object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the particle object.
         """
         # Intialise the table formatter
@@ -882,16 +870,14 @@ class Grid:
 
     @staticmethod
     def get_nearest_index(value, array):
-        """
-        Calculate the closest index in an array for a given value.
+        """Calculate the closest index in an array for a given value.
 
         TODO: What is this doing here!?
 
         Args:
-            value (float/unyt_quantity)
+            value (float/unyt_quantity):
                 The target value.
-
-            array (np.ndarray/unyt_array)
+            array (np.ndarray/unyt_array):
                 The array to search.
 
         Returns:
@@ -913,13 +899,12 @@ class Grid:
         return (np.abs(array - value)).argmin()
 
     def get_grid_point(self, **kwargs):
-        """
-        Identify the nearest grid point for a tuple of values.
+        """Identify the nearest grid point for a tuple of values.
 
         Any axes not specified will be returned as a full slice.
 
         Args:
-            **kwargs (dict)
+            **kwargs (dict):
                 Pairs of axis names and values for the desired grid point,
                 e.g. log10ages=9.3, log10metallicities=-2.1.
 
@@ -989,13 +974,12 @@ class Grid:
         return tuple(indices)
 
     def _collapse_grid_marginalize(self, axis, marginalize_function):
-        """
-        Collapse the grid by marginalizing over an entire axis.
+        """Collapse the grid by marginalizing over an entire axis.
 
         Args:
-            axis (str)
+            axis (str):
                 The name of the axis to collapse.
-            marginalize_function (function)
+            marginalize_function (function):
                 The function to use for marginalizing over the axis.
         """
         # Get the index of the axis to collapse
@@ -1016,15 +1000,14 @@ class Grid:
             )
 
     def _collapse_grid_interpolate(self, axis, value, pre_interp_function):
-        """
-        Collapse the grid by interpolating to the specified value.
+        """Collapse the grid by interpolating to the specified value.
 
         Args:
-            axis (str)
+            axis (str):
                 The name of the axis to collapse.
-            value (float)
+            value (float):
                 The value to collapse the grid at.
-            pre_interp_function (function)
+            pre_interp_function (function):
                 A function to apply to the axis values before interpolation.
         """
         # Get the index of the axis to collapse
@@ -1111,13 +1094,12 @@ class Grid:
             )
 
     def _collapse_grid_nearest(self, axis, value):
-        """
-        Collapse the grid by extracting the nearest value of the axis.
+        """Collapse the grid by extracting the nearest value of the axis.
 
         Args:
-            axis (str)
+            axis (str):
                 The name of the axis to collapse.
-            value (float)
+            value (float):
                 The value to collapse the grid at.
         """
         # Get the index of the axis to collapse
@@ -1164,8 +1146,7 @@ class Grid:
         marginalize_function=np.average,
         pre_interp_function=None,
     ):
-        """
-        Collapse the grid in place along a specified axis.
+        """Collapse the grid in place along a specified axis.
 
         Reduces the dimensionality of the grid by collapsing along the
         specified axis, using the specified method. The method can be
@@ -1174,19 +1155,19 @@ class Grid:
         particularly coarse, and should be used with caution.
 
         Args:
-            axis (str)
+            axis (str):
                 The name of the axis to collapse.
-            method (str)
+            method (str):
                 The method to use for collapsing the grid. Options are
                 "marginalize", "interpolate", or "nearest". Defaults
                 to "marginalize".
-            value (float)
+            value (float):
                 The value to collapse the grid at. Required if method
                 is "interpolate" or "nearest".
-            marginalize_function (function)
+            marginalize_function (function):
                 The function to use for marginalizing over the axis.
                 Defaults to np.average.
-            pre_interp_function (function)
+            pre_interp_function (function):
                 A function to apply to the axis values before interpolation.
                 Can be used to interpolate in logarithmic space, for example.
                 Defaults to None, i.e., interpolation in linear space.
@@ -1227,13 +1208,12 @@ class Grid:
         self.naxes -= 1
 
     def get_spectra(self, grid_point, spectra_id="incident"):
-        """
-        Create an Sed object for a specific grid point.
+        """Create an Sed object for a specific grid point.
 
         Args:
-            grid_point (tuple)
+            grid_point (tuple):
                 A tuple of integers specifying the closest grid point.
-            spectra_id (str)
+            spectra_id (str):
                 The name of the spectra (in the grid) that is desired.
 
         Returns:
@@ -1267,19 +1247,18 @@ class Grid:
             )
 
     def get_lines(self, grid_point, line_id=None, spectra_type="nebular"):
-        """
-        Create a Line object for a given line_id and grid_point.
+        """Create a Line object for a given line_id and grid_point.
 
         Args:
-            grid_point (tuple)
+            grid_point (tuple):
                 A tuple of integers specifying the closest grid point.
-            line_id (str/list)
+            line_id (str/list):
                 The id/s of the line. If a string contains a comma separated
                 list of line_ids a composite line will be returned containing
                 the sum of the luminosities and the mean of the wavelengths.
                 If a list of line_ids is provided a subset of lines will be
                 returned. If None then all available lines will be returned.
-            spectra_type (str)
+            spectra_type (str):
                 The spectra type to extract the line from. Default is
                 "nebular", all other spectra will have line luminosities of 0
                 by definition.
@@ -1325,34 +1304,27 @@ class Grid:
         vmax=None,
         max_log10age=None,
     ):
-        """
-        Make a simple plot of the specific ionising photon luminosity.
+        """Make a simple plot of the specific ionising photon luminosity.
 
         The resulting figure will show the (log) specific ionsing photon
         luminosity as a function of (log) age and metallicity for a given grid
         and ion.
 
         Args:
-           ion (str)
+            ion (str):
                 The desired ion. Most grids only have HI and HII calculated by
                 default.
-
-            hsize (float)
+            hsize (float):
                 The horizontal size of the figure
-
-            vsize (float)
+            vsize (float):
                 The vertical size of the figure
-
-            cmap (object/str)
+            cmap (object/str):
                 A colourmap object or string defining the matplotlib colormap.
-
-            vmin (float)
+            vmin (float):
                 The minimum specific ionising luminosity used in the colourmap
-
-            vmax (float)
+            vmax (float):
                 The maximum specific ionising luminosity used in the colourmap
-
-            max_log10age (float)
+            max_log10age (float):
                 The maximum log10(age) to plot
 
         Returns:
@@ -1447,11 +1419,10 @@ class Grid:
         return fig, ax
 
     def get_delta_lambda(self, spectra_id="incident"):
-        """
-        Calculate the delta lambda for the given spectra.
+        """Calculate the delta lambda for the given spectra.
 
         Args:
-            spectra_id (str)
+            spectra_id (str):
                 Identifier for the spectra (default is "incident").
 
         Returns:
@@ -1465,14 +1436,13 @@ class Grid:
         return self.lam, delta_lambda
 
     def get_sed(self, spectra_type):
-        """
-        Get the spectra grid as an Sed object.
+        """Get the spectra grid as an Sed object.
 
         This enables grid wide use of Sed methods for flux, photometry,
         indices, ionising photons, etc.
 
         Args:
-            spectra_type (string)
+            spectra_type (str):
                 The key of the spectra grid to extract as an Sed object.
 
         Returns:
@@ -1483,17 +1453,16 @@ class Grid:
 
     @accepts(min_lam=angstrom, max_lam=angstrom)
     def truncate_grid_lam(self, min_lam, max_lam):
-        """
-        Truncate the grid to a specific wavelength range.
+        """Truncate the grid to a specific wavelength range.
 
         If out of range wavlengths are requested, the grid will be
         truncated to the nearest wavelength within the grid.
 
         Args:
-            min_lam (unyt_quantity)
+            min_lam (unyt_quantity):
                 The minimum wavelength to truncate the grid to.
 
-            max_lam (unyt_quantity)
+            max_lam (unyt_quantity):
                 The maximum wavelength to truncate the grid to.
         """
         # Get the indices of the wavelengths to keep
@@ -1515,8 +1484,7 @@ class Grid:
         fps=30,
         spectra_type="incident",
     ):
-        """
-        Create an animation of the grid stepping through wavelength.
+        """Create an animation of the grid stepping through wavelength.
 
         Each frame of the animation is a wavelength bin.
 
@@ -1529,6 +1497,8 @@ class Grid:
             fps (int, optional):
                 the number of frames per second in the output animation.
                 Default is 30 frames per second.
+            spectra_type (str):
+                The spectra type to animate. Default is "incident".
 
         Returns:
             matplotlib.animation.FuncAnimation: The animation object.
@@ -1600,8 +1570,7 @@ class Grid:
 
 
 class Template:
-    """
-    A simplified grid contain only a single template spectra.
+    """A simplified grid contain only a single template spectra.
 
     The model is different to all other emission models in that it scales a
     template by bolometric luminosity.
@@ -1609,7 +1578,7 @@ class Template:
     Attributes:
         sed (Sed)
             The template spectra for the AGN.
-        normalisation (unyt_quantity)
+        normalisation (unyt_quantity):
             The normalisation for the spectra. In reality this is the
             bolometric luminosity.
     """
@@ -1626,18 +1595,18 @@ class Template:
         unify_with_grid=None,
         **kwargs,
     ):
-        """
-        Initialise the Template.
+        """Initialise the Template.
 
         Args:
-            lam (array)
+            lam (unyt_array):
                 Wavelength array.
-            lnu (array)
+            lnu (unyt_array):
                 Luminosity array.
-            unify_with_grid (Grid)
+            unify_with_grid (Grid):
                 A grid object to unify the template with. This will ensure
                 the template has the same wavelength array as the grid.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the Sed object.
 
         """
         # It's convenient to have an sed object for the next steps
@@ -1658,11 +1627,10 @@ class Template:
 
     @accepts(bolometric_luminosity=erg / s)
     def get_spectra(self, bolometric_luminosity):
-        """
-        Calculate the blackhole spectra by scaling the template.
+        """Calculate the blackhole spectra by scaling the template.
 
         Args:
-            bolometric_luminosity (float)
+            bolometric_luminosity (float):
                 The bolometric luminosity of the blackhole(s) for scaling.
 
         """
