@@ -26,8 +26,7 @@ from unyt import unyt_array
 
 
 class TableFormatter:
-    """
-    A class to format an arbitrary object's attributes into a table.
+    """A class to format an arbitrary object's attributes into a table.
 
     Attributes:
         obj (object):
@@ -37,8 +36,7 @@ class TableFormatter:
     """
 
     def __init__(self, obj):
-        """
-        Initialize the TableFormatter with the given object.
+        """Initialize the TableFormatter with the given object.
 
         Args:
             obj (object):
@@ -80,8 +78,7 @@ class TableFormatter:
         }
 
     def format_array(self, array):
-        """
-        Format numpy arrays to show their mean value.
+        """Format numpy arrays to show their mean value.
 
         Args:
             array (numpy.ndarray):
@@ -106,8 +103,7 @@ class TableFormatter:
         )
 
     def format_dict(self, dictionary):
-        """
-        Format dictionaries to show their keys and the types of their values.
+        """Format dictionaries to show their keys and their value types.
 
         Args:
             dictionary (dict):
@@ -132,8 +128,7 @@ class TableFormatter:
         return out
 
     def format_list(self, lst):
-        """
-        Format lists content to spead out the values over multiple lines.
+        """Format lists content to spead out the values over multiple lines.
 
         Args:
             lst (list):
@@ -183,8 +178,7 @@ class TableFormatter:
         return out
 
     def get_value_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -221,8 +215,7 @@ class TableFormatter:
         return rows
 
     def get_array_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -245,8 +238,7 @@ class TableFormatter:
         return rows
 
     def get_dict_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -265,8 +257,7 @@ class TableFormatter:
         return rows
 
     def get_list_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -285,8 +276,7 @@ class TableFormatter:
         return rows
 
     def get_table(self, title_text):
-        """
-        Generate a formatted table.
+        """Generate a formatted table.
 
         Args:
             title_text (str):

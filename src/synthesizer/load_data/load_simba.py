@@ -1,4 +1,6 @@
-"""Load Simba galaxy data from a caesar file and snapshot
+"""A submodule for loading Simba data into Synthesizer.
+
+Load Simba galaxy data from a caesar file and snapshot.
 
 Method for loading galaxy and particle data for
 the [Simba](http://simba.roe.ac.uk/) simulation
@@ -23,8 +25,7 @@ def load_Simba(
     age_lookup=True,
     age_lookup_delta_a=1e-4,
 ):
-    """
-    Load Simba galaxy data from a caesar file and snapshot
+    """Load Simba galaxy data from a caesar file and snapshot.
 
     Args:
         directory (string):
@@ -48,7 +49,6 @@ def load_Simba(
         galaxies (object):
             `ParticleGalaxy` object containing star and gas particles
     """
-
     with h5py.File(f"{directory}/{snap_name}", "r") as hf:
         scale_factor = hf["Header"].attrs["Time"]
         Om0 = hf["Header"].attrs["Omega0"]

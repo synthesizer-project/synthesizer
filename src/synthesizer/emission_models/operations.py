@@ -24,8 +24,7 @@ from synthesizer.parametric import BlackHole
 
 
 class Extraction:
-    """
-    A class to define the extraction of spectra from a grid.
+    """A class to define the extraction of spectra from a grid.
 
     Attributes:
         grid (Grid):
@@ -35,8 +34,7 @@ class Extraction:
     """
 
     def __init__(self, grid, extract, vel_shift):
-        """
-        Initialise the extraction model.
+        """Initialise the extraction model.
 
         Args:
             grid (Grid):
@@ -74,8 +72,7 @@ class Extraction:
         nthreads,
         grid_assignment_method,
     ):
-        """
-        Extract spectra from the grid.
+        """Extract spectra from the grid.
 
         Args:
             this_model (EmissionModel):
@@ -172,8 +169,7 @@ class Extraction:
         nthreads,
         grid_assignment_method,
     ):
-        """
-        Extract lines from the grid.
+        """Extract lines from the grid.
 
         Args:
             line_ids (list):
@@ -331,8 +327,7 @@ class Extraction:
 
 
 class Generation:
-    """
-    A class to define the generation of spectra.
+    """A class to define the generation of spectra.
 
     This can be used either to generate spectra for dust emission with the
     intrinsic and attenuated spectra used to scale the emission or to simply
@@ -351,8 +346,7 @@ class Generation:
     """
 
     def __init__(self, generator, lum_intrinsic_model, lum_attenuated_model):
-        """
-        Initialise the generation model.
+        """Initialise the generation model.
 
         Args:
             generator (EmissionModel):
@@ -382,8 +376,7 @@ class Generation:
         lam,
         emitter,
     ):
-        """
-        Generate the spectra for a given model.
+        """Generate the spectra for a given model.
 
         Args:
             this_model (EmissionModel):
@@ -480,8 +473,7 @@ class Generation:
         particle_lines,
         emitter,
     ):
-        """
-        Generate the lines for a given model.
+        """Generate the lines for a given model.
 
         This involves first generating the spectra and then extracting the
         emission at the line wavelengths.
@@ -610,8 +602,7 @@ class Generation:
 
 
 class Transformation:
-    """
-    A class to define the transformation of an emission.
+    """A class to define the transformation of an emission.
 
     A transformation can include attenuation of the spectra by an extinction
     curve, or it can involve any scaling of the emission.
@@ -630,8 +621,7 @@ class Transformation:
     """
 
     def __init__(self, transformer, apply_to):
-        """
-        Initialise the dust attenuation model.
+        """Initialise the dust attenuation model.
 
         Args:
             transformer (Transformer):
@@ -653,8 +643,7 @@ class Transformation:
         emitter,
         this_mask,
     ):
-        """
-        Transform an emission.
+        """Transform an emission.
 
         This can act on either an Sed or a LineCollection using dependency
         injection, i.e. the appropriate transform will be applied based
@@ -725,8 +714,7 @@ class Transformation:
 
 
 class Combination:
-    """
-    A class to define the combination of spectra.
+    """A class to define the combination of spectra.
 
     Attributes:
         combine (list):
@@ -734,8 +722,7 @@ class Combination:
     """
 
     def __init__(self, combine):
-        """
-        Initialise the combination model.
+        """Initialise the combination model.
 
         Args:
             combine (list):
@@ -751,8 +738,7 @@ class Combination:
         particle_spectra,
         this_model,
     ):
-        """
-        Combine the extracted spectra.
+        """Combine the extracted spectra.
 
         Args:
             emission_model (EmissionModel):
@@ -818,8 +804,7 @@ class Combination:
         particle_lines,
         this_model,
     ):
-        """
-        Combine the extracted lines.
+        """Combine the extracted lines.
 
         Args:
             emission_model (EmissionModel):
@@ -872,8 +857,7 @@ class Combination:
         kernel_threshold,
         nthreads,
     ):
-        """
-        Combine the images by addition.
+        """Combine the images by addition.
 
         Args:
             images (dict):

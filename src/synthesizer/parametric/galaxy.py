@@ -1,4 +1,29 @@
-""" """
+"""A submodule defining a parametric galaxy object.
+
+This module defines a parametric galaxy object, which is a subclass of the
+BaseGalaxy class. The parametric galaxy object is used to represent a galaxy
+comprised of parametric components.
+
+Example usage:
+
+    from synthesizer.parametric import Galaxy
+
+    # Create a parametric galaxy object
+    galaxy = Galaxy(stars=stars, black_holes=black_holes, redshift=0.1)
+
+    # Get the galaxies spectra
+    spectra = galaxy.get_spectra(model)
+
+    # Get the ionising photon luminosity for a given SFZH
+    ionising_photon_luminosity = galaxy.get_Q(grid)
+
+    # Create a spectral cube from the galaxy's spectra
+    spectral_cube = galaxy.get_data_cube(resolution=0.1, fov=10, lam=lam)
+
+    # Add two parametric galaxies together
+    new_galaxy = galaxy1 + galaxy2
+
+"""
 
 import numpy as np
 from unyt import Mpc
@@ -6,11 +31,34 @@ from unyt import Mpc
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import SpectralCube
+from synthesizer.synth_warnings import deprecated
 from synthesizer.units import accepts
 
 
 class Galaxy(BaseGalaxy):
-    """A class defining parametric galaxy objects"""
+    """A class defining parametric galaxy objects.
+
+    This class is a subclass of the BaseGalaxy class and is used to
+    represent a galaxy comprised of parametric components. The class
+    provides methods for creating and manipulating parametric galaxies,
+    including adding galaxies together, getting spectra, and creating
+    spectral cubes.
+
+    Attributes:
+        stars (Stars):
+            An instance of Stars containing the combined star
+            formation and metallicity history of this galaxy.
+        name (str):
+            A name to identify the galaxy. Only used for external
+            labelling, has no internal use.
+        redshift (float):
+            The redshift of the galaxy.
+        centre (unyt_array):
+            The centre of the galaxy.
+        black_holes (BlackHole):
+            An instance of BlackHole containing the black hole
+            particle data.
+    """
 
     @accepts(centre=Mpc)
     def __init__(
@@ -22,30 +70,29 @@ class Galaxy(BaseGalaxy):
         centre=None,
         **kwargs,
     ):
-        """__init__ method for ParametricGalaxy
+        """Initialise a parametric galaxy object.
 
         Args:
-            stars (parametric.Stars)
-                An instance of parametric.Stars containing the combined star
+            stars (Stars):
+                An instance of Stars containing the combined star
                 formation and metallicity history of this galaxy.
-            name (str)
+            name (str):
                 A name to identify the galaxy. Only used for external
                 labelling, has no internal use.
-            redshift (float)
+            redshift (float):
                 The redshift of the galaxy.
-            centre (unyt_array)
+            centre (unyt_array):
                 The centre of the galaxy.
-            black_holes (parametric.BlackHoles)
-                An instance of parametric.BlackHoles containing the black hole
+            black_holes (BlackHole):
+                An instance of BlackHole containing the black hole
                 particle data.
-            **kwargs
+            **kwargs (dict):
                 Additional keyword arguments to be passed to the BaseGalaxy
                 __init__ method.
 
         Raises:
             InconsistentArguments
         """
-
         # Set the type of galaxy
         self.galaxy_type = "Parametric"
 
@@ -76,22 +123,19 @@ class Galaxy(BaseGalaxy):
             setattr(self, key, value)
 
     def __add__(self, second_galaxy):
-        """Allows two Galaxy objects to be added together.
-
-        Parameters
-        ----------
-        second_galaxy : ParametricGalaxy
-            A second ParametricGalaxy to be added to this one.
+        """Add a parametric Galaxy.
 
         NOTE: functionality for adding lines and images not yet implemented.
 
-        Returns
-        -------
-        ParametricGalaxy
-            New ParametricGalaxy object containing summed SFZHs, SEDs, lines,
-            and images.
-        """
+        Args:
+            second_galaxy (Galaxy):
+                The second galaxy to be added to this one.
 
+        Returns:
+            ParametricGalaxy:
+                A new galaxy object containing the combined
+                properties of both galaxies.
+        """
         # Sum the Stellar populations
         new_stars = self.stars + second_galaxy.stars
 
@@ -151,10 +195,12 @@ class Galaxy(BaseGalaxy):
 
         return new_galaxy
 
+    @deprecated(
+        "get_Q is deprecared due to incorrect naming converntion. Please use "
+        "get_ionising_photon_luminosity instead."
+    )
     def get_Q(self, grid):
-        """
-        Return the ionising photon luminosity (log10_specific_ionising_lum) for
-        a given SFZH.
+        """Calculate the ionising photon luminosity.
 
         Args:
             grid (object, Grid):
@@ -163,7 +209,18 @@ class Galaxy(BaseGalaxy):
         Returns:
             Log of the ionising photon luminosity over the grid dimensions
         """
+        return self.get_ionising_photon_luminosity(grid)
 
+    def get_ionising_photon_luminosity(self, grid):
+        """Calculate the ionising photon luminosity.
+
+        Args:
+            grid (object, Grid):
+                The SPS Grid object from which to extract spectra.
+
+        Returns:
+            Log of the ionising photon luminosity over the grid dimensions
+        """
         return np.sum(
             10 ** grid.log10_specific_ionising_lum["HI"] * self.sfzh,
             axis=(0, 1),
@@ -178,8 +235,7 @@ class Galaxy(BaseGalaxy):
         blackhole_spectra=None,
         quantity="lnu",
     ):
-        """
-        Make a SpectralCube from an Sed.
+        """Make a SpectralCube from an Sed.
 
         Data cubes are calculated by smoothing spectra over the component
         morphology. The Sed used is defined by <component>_spectra.
@@ -190,16 +246,16 @@ class Galaxy(BaseGalaxy):
         NOTE: Either npix or fov must be defined.
 
         Args:
-            resolution (Quantity, float)
+            resolution (unyt_quantity of float):
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
+            fov (unyt_quantity of float):
                 The width of the image in image coordinates.
-            lam (unyt_array, float)
+            lam (unyt_array, float):
                 The wavelength array to use for the data cube.
-            stellar_spectra (string)
+            stellar_spectra (str):
                 The stellar spectra key to make into a data cube.
-            blackhole_spectra (string)
+            blackhole_spectra (str):
                 The black hole spectra key to make into a data cube.
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.

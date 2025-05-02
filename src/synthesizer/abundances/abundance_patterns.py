@@ -1,4 +1,4 @@
-"""A module for creating and manipulating abundance patterns
+"""A module for creating and manipulating abundance patterns.
 
 Abundance patterns describe the relative abundances of elements in a particular
 component of a galaxy (e.g. stars, gas, dust). This code is used to define
@@ -25,25 +25,28 @@ from synthesizer.abundances import (
 
 
 class Abundances:
-    """
-    A class for calculating elemental abundances including various
-    scaling and depletion on to dust.
+    """A class calculating elemental abundances.
+
+    This class is used to calculate the elemental abundances in a galaxy
+    component (e.g. stars, gas, dust) as a function of metallicity and
+    alpha-enhancement. The class can also apply a depletion pattern to the
+    abundances to account for the presence of dust.
 
     Attributes:
-        metallicity (float)
+        metallicity (float):
             Mass fraction in metals, default is reference metallicity.
             Optional initialisation argument. If not provided is calculated
             from the provided abundance pattern.
-        alpha (float)
+        alpha (float):
             Enhancement of the alpha elements relative to the reference
             abundance pattern. Optional initialisation argument. Defaults to
             0.0 (no alpha-enhancement).
-        abundances (dict, float/str)
+        abundances (dict, float/str):
             A dictionary containing the abundances for specific elements or
             functions to calculate them for the specified metallicity. Optional
             initialisation argument. Defaults to None.
-        reference (object)
-            reference abundance pattern. Optional initialisation argument.
+        reference (AbundancePattern):
+            Reference abundance pattern. Optional initialisation argument.
             Defaults to the GalacticConcordance pattern.
         depletion (dict, float)
             The depletion pattern to use. Should not be provided with
@@ -52,13 +55,13 @@ class Abundances:
         depletion_model (object)
             The depletion model object. Should not be provided with
             depletion. Optional initialisation argument. Defaults to None.
-        depletion_scale (float)
+        depletion_scale (float):
             The depletion scale factor. Sometimes this is linear, but for
             some models (e.g. Jenkins (2009)) it's more complex. Optional
             initialisation argument. Defaults to None.
-        helium_mass_fraction (float)
+        helium_mass_fraction (float):
             The helium mass fraction (more commonly denoted as "Y").
-        hydrogen_mass_fraction (float)
+        hydrogen_mass_fraction (float):
             The hydrogen mass fraction (more commonly denoted as "X").
         total (dict, float)
             The total logarithmic abundance of each element.
@@ -67,12 +70,12 @@ class Abundances:
             phase.
         dust (dict, float)
             The logarithmic abundance of each element in the dust phase.
-        metal_mass_fraction (float)
+        metal_mass_fraction (float):
             Mass fraction in metals. Since this should be metallicity it is
             redundant but serves as a useful test.
-        dust_mass_fraction (float)
+        dust_mass_fraction (float):
             Mass fraction in metals.
-        dust_to_metal_ratio (float)
+        dust_to_metal_ratio (float):
             Dust-to-metal ratio.
     """
 
@@ -86,33 +89,31 @@ class Abundances:
         depletion_model=None,
         depletion_scale=None,
     ):
-        """
-        Initialise an abundance pattern
+        """Initialise an abundance pattern.
 
         Args:
-            metallicity (float)
+            metallicity (float):
                 Mass fraction in metals, default is reference metallicity.
-            alpha (float)
+            alpha (float):
                 Enhancement of the alpha elements relative to the reference
                 abundance pattern.
-            abundances (dict, float/str)
+            abundances (dict, float/str):
                 A dictionary containing the abundances for specific elements or
                 functions to calculate them for the specified metallicity.
-            reference (class or str)
+            reference (class or str):
                 Reference abundance pattern object or str defining the class.
-            depletion (dict, float)
+            depletion (dict, float):
                 The depletion pattern to use. Should not be provided with
                 depletion_model.
-            depletion_model (class or str)
+            depletion_model (class or str):
                 The depletion model class or string defining the class.
                 Should not be provided with depletion.
-            depletion_scale (float)
+            depletion_scale (float):
                 The depletion scale factor. Sometimes this is linear, but for
                 some models (e.g. Jenkins (2009)) it's more complex.
 
         """
-
-        # basic element info
+        # Basic element info
         self.metals = elements.Elements().metals
         self.non_metals = elements.Elements().non_metals
         self.all_elements = elements.Elements().all_elements
@@ -120,12 +121,12 @@ class Abundances:
         self.element_name = elements.Elements().name
         self.atomic_mass = elements.Elements().atomic_mass
 
-        # define dictionary for element_name to element_id
+        # Define dictionary for element_name to element_id
         self.element_name_to_id = {
             name: id for id, name in self.element_name.items()
         }
 
-        # save all arguments to object
+        # Save all arguments to object
         self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
         self.reference = reference
@@ -147,7 +148,7 @@ class Abundances:
                 pattern not recognised!"""
                 )
 
-        # check if self.reference is instantiated and if not initialise class
+        # Check if self.reference is instantiated and if not initialise class
         if isinstance(self.reference, type):
             self.reference = self.reference()
 
@@ -166,10 +167,10 @@ class Abundances:
             1.0 - self.helium_mass_fraction - self.metallicity
         )
 
-        # logathrimic total abundance of element relative to H
+        # Logathrimic total abundance of element relative to H
         total = {}
 
-        # hydrogen is by definition 0.0
+        # Hydrogen is by definition 0.0
         total["H"] = 0.0
         total["He"] = np.log10(
             self.helium_mass_fraction
@@ -195,19 +196,19 @@ class Abundances:
 
         # If abundances argument is provided go ahead and set the abundances.
         if abundances is not None:
-            # if abundances are given as a single string, then use that model
+            # If abundances are given as a single string, then use that model
             # to scale every available element.
             if isinstance(abundances, str):
-                # get the scaling study
+                # Get the scaling study
                 scaling_study = getattr(abundance_scalings, abundances)()
 
-                # loop over each element in the dictionary
+                # Loop over each element in the dictionary
                 for element in scaling_study.available_elements:
-                    # get the full element name since scaling methods are
+                    # Get the full element name since scaling methods are
                     # labelled with the full name PEP8 reasons.
                     element_name = self.element_name[element]
 
-                    # get the specific function request by value
+                    # Get the specific function request by value
                     scaling_function = getattr(scaling_study, element_name)
                     total[element] = scaling_function(metallicity)
 
@@ -238,7 +239,7 @@ class Abundances:
                         element_name, ratio_element_name = element_key.split(
                             "_to_"
                         )
-                        # convert these names to element ids instead
+                        # Convert these names to element ids instead
                         element = self.element_name_to_id[element_name]
                         ratio_element = self.element_name_to_id[
                             ratio_element_name
@@ -266,20 +267,20 @@ class Abundances:
                         if isinstance(value, float):
                             total[element] = value
 
-                        # if value is a str use this to call the specific
+                        # If value is a str use this to call the specific
                         # function to calculate the abundance from the
                         # metallicity.
                         elif isinstance(value, str):
-                            # get the class holding functions for this element
+                            # Get the class holding functions for this element
                             scaling_study = getattr(
                                 abundance_scalings, value
                             )()
 
-                            # get the full element name since scaling methods
+                            # Get the full element name since scaling methods
                             # are labelled with the full name PEP8 reasons.
                             element_name = self.element_name[element]
 
-                            # get the specific function request by value
+                            # Get the specific function request by value
                             scaling_function = getattr(
                                 scaling_study, element_name
                             )
@@ -344,31 +345,30 @@ class Abundances:
     def add_depletion(
         self, depletion=None, depletion_model=None, depletion_scale=None
     ):
-        """
-        Add depletion using a provided depletion pattern or model.
+        """Add depletion using a provided depletion pattern or model.
 
         This method creates the following attributes:
-            gas (dict, float)
+            gas (dict, float):
                 The logarithmic abundances of the gas, including depletion.
-            dust (dict, float)
+            dust (dict, float):
                 The logarithmic abundances of the dust. Set to -np.inf is no
                 contribution.
-            metal_mass_fraction (float)
+            metal_mass_fraction (float):
                 Mass fraction in metals. Since this should be metallicity it is
                 redundant but serves as a useful test.
-            dust_mass_fraction (float)
+            dust_mass_fraction (float):
                 Mass fraction in metals.
-            dust_to_metal_ratio (float)
+            dust_to_metal_ratio (float):
                 Dust-to-metal ratio.
 
         Args:
-            depletion (dict, float)
+            depletion (dict, float):
                 The depletion pattern to use. Should not be provided with
                 depletion_model.
-            depletion_model (object)
+            depletion_model (object):
                 The depletion model object. Should not be provided with
                 depletion.
-            depletion_scale (float)
+            depletion_scale (float):
                 The depletion scale factor. Sometimes this is linear, but for
                 some models (e.g. Jenkins (2009)) it's more complex.
         """
@@ -466,21 +466,21 @@ class Abundances:
             self.depletion_model = depletion_model
 
     def __getitem__(self, arg):
-        """
-        A method to return the logarithmic abundance for a particular element
-        relative to H or relative reference.
+        """Return the abundance for a particular element.
+
+        This method overloads [] syntax to return the logarithmic abundance
+        for a particular element relative to H or relative reference.
 
         Arguments:
-            arg (str)
+            arg (str):
                 The element (e.g. "O") or an element, reference element pair
                 (e.g. "[O/Fe]").
 
         Returns:
-            (float)
+            (float):
                 The abundance relevant to H or relative to reference when a
                 reference element is also provided.
         """
-
         # default case, just return log10(k/H)
         if arg in self.all_elements:
             return self.total[arg]
@@ -493,14 +493,12 @@ class Abundances:
             )
 
     def __str__(self):
-        """
-        Method to print a basic summary of the Abundances object.
+        """Print a basic summary of the Abundances object.
 
         Returns:
-            summary (str)
+            summary (str):
                 String containing summary information.
         """
-
         # Set up string for printing
         summary = ""
 
@@ -535,8 +533,8 @@ class Abundances:
             quantities = (
                 f"{self.element_name[ele]}",
                 f"{self.total[ele]:.2f}",
-                f"{self.total[ele]+12:.2f}",
-                f"{self.total[ele]-self.reference.abundance[ele]:.2f}",
+                f"{self.total[ele] + 12:.2f}",
+                f"{self.total[ele] - self.reference.abundance[ele]:.2f}",
                 f"{self.depletion[ele]:.2f}",
                 f"{self.gas[ele]:.2f}",
                 f"{self.dust[ele]:.2f}",
@@ -547,43 +545,39 @@ class Abundances:
         return summary
 
     def calculate_integrated_abundance(self, elements, a=None):
-        """
-        Method to get the integrated abundance for a collection of elements.
+        """Calculate the integrated abundance for a collection of elements.
 
         Args:
-            elements (list, str)
+            elements (list of str):
                 A list of element names.
-            a (dict)
+            a (dict):
                 The component to use.
 
         Returns:
-            integrated abundance (float)
+            integrated abundance (float):
                 The mass in those elements. Normally this needs to be
                 normalised to be useful.
         """
-
-        # if the component is not provided, assume it's the total
+        # If the component is not provided, assume it's the total
         if not a:
             a = self.total
 
         return np.sum([10 ** (a[i]) for i in elements])
 
     def calculate_mass(self, elements, a=None):
-        """
-        Method to get the mass for a collection of elements.
+        """Calculate the mass for a collection of elements.
 
         Args:
-            elements (list, str)
+            elements (list of str):
                 A list of element names.
-            a (dict)
+            a (dict):
                 The component to use.
 
         Returns:
-            mass (float)
+            mass (float):
                 The mass in those elements. Normally this needs to be
                 normalised to be useful.
         """
-
         # if the component is not provided, assume it's the total
         if not a:
             a = self.total
@@ -591,39 +585,39 @@ class Abundances:
         return np.sum([self.atomic_mass[i] * 10 ** (a[i]) for i in elements])
 
     def calculate_mass_fraction(self, elements, a=None):
-        """
-        Method to get the mass fraction for a collection of elements.
+        """Calculate the mass fraction for a collection of elements.
 
         Args:
-            elements (list, str)
+            elements (list of str):
                 A list of element names.
-            a (dict)
+            a (dict):
                 The component to use.
 
         Returns:
-            mass (float)
+            mass (float):
                 The mass in those elements. Normally this needs to be
                 normalised to be useful.
         """
-
         # calculate the total mass
         total_mass = self.calculate_mass(self.all_elements)
 
         return self.calculate_mass(elements, a=a) / total_mass
 
     def reference_relative_abundance(self, element, ref_element="H"):
-        """
-        A method to return an element's abundance relative to that in the Sun,
-        i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
+        """Return the relative abundance of an element.
+
+        This method will return an element's abundance relative to that
+        in the Sun,
+            i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 
         Arguments:
-            element (str)
+            element (str):
                 The element of interest.
-            ref_element (str)
+            ref_element (str):
                 The reference element.
 
         Returns:
-            abundance (float)
+            abundance (float):
                 The logarithmic relative abundance of an element, relative to
                 the sun.
 
@@ -635,21 +629,24 @@ class Abundances:
 
 
 def plot_abundance_pattern(a, show=False, ylim=None, components=["total"]):
-    """
-    Funtion to plot a single abundance pattern, but possibly including all
-    components.
+    """Plot a single abundance pattern.
+
+    This method plots the abundance pattern of a single galaxy component
+    (e.g. stars, gas, dust) as a function of element. The x-axis is the
+    element number, and the y-axis is the logarithmic abundance of each
+    element relative to H. The plot also includes a legend indicating the
+    abundance pattern used for each element.
 
     Args:
-        a (abundances.Abundance)
+        a (abundances.Abundance):
             Abundance pattern object.
-        components (list, str)
+        components (list of str):
             List of components to plot. By default only plot "total".
-        show (Bool)
+        show (bool):
             Toggle whether to show the plot.
-        ylim (list/tuple, float)
+        ylim (list/tuple, float):
             Limits of y-axis.
     """
-
     fig = plt.figure(figsize=(7.0, 4.0))
 
     left = 0.15
@@ -701,20 +698,18 @@ def plot_multiple_abundance_patterns(
     show=False,
     ylim=None,
 ):
-    """
-    Function to plot multiple abundance patterns.
+    """Plot multiple abundance patterns.
 
     Args:
-        a (abundances.Abundance)
+        abundance_patterns (abundances.Abundance):
             Abundance pattern object.
-        components (list, str)
+        labels (list of str):
             List of components to plot. By default only plot "total".
-        show (Bool)
+        show (bool):
             Toggle whether to show the plot.
-        ylim (list/tuple, float)
+        ylim (list/tuple, float):
             Limits of y-axis.
     """
-
     fig = plt.figure(figsize=(7.0, 4.0))
 
     left = 0.15

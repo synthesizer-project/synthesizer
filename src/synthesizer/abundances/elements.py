@@ -1,9 +1,12 @@
+"""A module implementing a data class for atomic elements."""
+
 from dataclasses import dataclass, field
 
 
 @dataclass
 class Elements:
-    """
+    """A data class for atomic elements.
+
     This is a data class containing a various useful information about atomic
     elements. These include lists of elements classified as non-metals, metals
     , alpha elements, as well as all elements. Also contains a dictionary
@@ -153,5 +156,11 @@ class Elements:
     )
 
     def __post_init__(self):
+        """Post-initialization processing.
+
+        This method is called after the dataclass is initialized. It creates
+        a list of all elements by concatenating the non-metals and metals
+        lists. This list is stored in the `all_elements` attribute.
+        """
         # create list of all elements
         self.all_elements = self.non_metals + self.metals

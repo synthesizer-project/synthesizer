@@ -67,9 +67,9 @@ class TestPacmanEmission:
         # Now check that passing an override to get_spectra works
         with_fesc_spec = random_part_stars.get_spectra(model, fesc=0.1)
 
-        assert (
-            spec.lnu.sum() > with_fesc_spec.lnu.sum()
-        ), "fesc override had no effect"
+        assert spec.lnu.sum() > with_fesc_spec.lnu.sum(), (
+            "fesc override had no effect"
+        )
 
         expected_keys = [
             "full_transmitted",
@@ -219,9 +219,9 @@ class TestScreenEmission:
         # Now check that passing an override to get_spectra works
         with_fesc_spec = random_part_stars.get_spectra(model, fesc=0.1)
 
-        assert (
-            spec.lnu.sum() > with_fesc_spec.lnu.sum()
-        ), "fesc override had no effect"
+        assert spec.lnu.sum() > with_fesc_spec.lnu.sum(), (
+            "fesc override had no effect"
+        )
 
         expected_keys = [
             "full_transmitted",
@@ -449,9 +449,9 @@ class TestBimodalPacmanEmission:
         # Now check that passing an override to get_spectra works
         with_fesc_spec = random_part_stars.get_spectra(model, fesc=0.1)
 
-        assert (
-            spec.lnu.sum() > with_fesc_spec.lnu.sum()
-        ), "fesc override had no effect"
+        assert spec.lnu.sum() > with_fesc_spec.lnu.sum(), (
+            "fesc override had no effect"
+        )
 
         expected_keys = [
             "full_old_transmitted",

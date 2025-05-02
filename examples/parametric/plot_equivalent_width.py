@@ -19,8 +19,7 @@ from synthesizer.parametric.galaxy import Galaxy
 
 
 def set_index():
-    """
-    A function to define a dictionary of uv indices.
+    """Define a dictionary of uv indices.
 
     Each index has a defined absorption window.
     A pseudo-continuum is defined, made up of a blue and red shifted window.
@@ -32,7 +31,6 @@ def set_index():
             - blue_window (int): List of blue shifted window bounds.
             - red_window (int): List of red shifted window bounds.
     """
-
     index = [1370, 1400, 1425, 1460, 1501, 1533, 1550, 1719, 1853]
     index_window = [
         [1360, 1380],
@@ -72,8 +70,7 @@ def set_index():
 
 
 def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
-    """
-    Calculate equivalent widths for specified UV indices.
+    """Calculate equivalent widths for specified UV indices.
 
     Args:
         grids (str): Grid name.
@@ -85,7 +82,6 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     Returns:
         None
     """
-
     # Define the parameters of the star formation and metal
     # enrichment histories.
     grid = Grid(grids, grid_dir=grid_dir)
@@ -157,8 +153,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
 def measure_equivalent_width(
     index, feature, blue, red, Z, smass, grid, eqw, mode
 ):
-    """
-    Calculate equivalent width for a specified UV index.
+    """Calculate equivalent width for a specified UV index.
 
     Args:
         index (int): The UV index for which the equivalent width is calculated.

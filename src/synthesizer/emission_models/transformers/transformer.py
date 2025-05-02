@@ -16,8 +16,7 @@ from synthesizer.emission_models.utils import get_params
 
 
 class Transformer(ABC):
-    """
-    An abstract base class defining the Transformer interface.
+    """An abstract base class defining the Transformer interface.
 
     A Transformer defines an object which takes some form of emission and
     transforms it in some way. This could include attenuation, scaling,
@@ -34,17 +33,18 @@ class Transformer(ABC):
     emissions with an EmissionModel.
 
     Attributes:
-        _transformer_type (str)
-            The type of transformer. This is used to identify the
-            transformer when applying it to an emission.
+        _required_params (tuple):
+            The name of any required parameters needed by the transformer
+            when transforming an emission. These should either be
+            available from an emitter or from the EmissionModel itself.
+            If they are missing an exception will be raised.
     """
 
     def __init__(self, required_params=()):
-        """
-        Initialise the Transformer.
+        """Initialise the Transformer.
 
         Args:
-            required_params (tuple, optional)
+            required_params (tuple, optional):
                 The name of any required parameters needed by the transformer
                 when transforming an emission. These should either be
                 available from an emitter or from the EmissionModel itself.
@@ -55,8 +55,7 @@ class Transformer(ABC):
 
     @abstractmethod
     def _transform(self, emission, emitter, model, *args, **kwargs):
-        """
-        Transform the emission in some way.
+        """Transform the emission in some way.
 
         This method must look for the required parameters in
         model.fixed_parameters, on the emission, and on the emitter (in
@@ -73,15 +72,15 @@ class Transformer(ABC):
         producing a new emission object which is returned.
 
         Args:
-            emission (Line/Sed)
+            emission (Line/Sed):
                 The emission to transform.
-            emitter (Stars/Gas/BlackHole/Galaxy)
+            emitter (Stars/Gas/BlackHole/Galaxy):
                 The object emitting the emission.
-            model (EmissionModel)
+            model (EmissionModel):
                 The emission model generating the emission.
-            args
+            *args (tuple):
                 Any additional arguments required for the transformation.
-            kwargs
+            **kwargs (dict):
                 Any additional keyword arguments required for the
                 transformation.
 
@@ -92,8 +91,7 @@ class Transformer(ABC):
         pass
 
     def _extract_params(self, model, emission, emitter):
-        """
-        Extract the required parameters for the transformation.
+        """Extract the required parameters for the transformation.
 
         This method should look for the required parameters in
         model.fixed_parameters, on the emission, and on the emitter (in
@@ -101,11 +99,11 @@ class Transformer(ABC):
         missing an exception will be raised.
 
         Args:
-            model (EmissionModel)
+            model (EmissionModel):
                 The emission model generating the emission.
-            emission (Line/Sed)
+            emission (Line/Sed):
                 The emission to transform.
-            emitter (Stars/Gas/BlackHole/Galaxy)
+            emitter (Stars/Gas/BlackHole/Galaxy):
                 The object emitting the emission.
 
         Returns:

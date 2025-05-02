@@ -1,4 +1,46 @@
-"""A submodule containing utility functions for working with emission lines."""
+"""A submodule containing utility functions for working with emissions.
+
+This module contains functions for converting between different line
+identifiers, calculating attenuation and transmission, and
+flattening lists of lines. It also includes functions for working with
+spectral energy distributions (SEDs) and calculating attenuation at
+specific wavelengths.
+
+Example usage:
+
+    # Example usage of the functions
+    line_id = ["H 1 4861.32A", "H 1 6562.80A"]
+    composite_line_id = get_composite_line_id_from_list(line_id)
+    print(composite_line_id)  # Output: "H 1 4861.32A, H 1 6562.80A"
+
+    # Example usage of the get_line_label function
+    line_label = get_line_label(line_id)
+    print(line_label)  # Output: "HII4861.32A+HII6562.80A"
+
+    # Example usage of the flatten_linelist function
+    list_to_flatten = [["H 1 4861.32A"], ["H 1 6562.80A"]]
+    flattened_list = flatten_linelist(list_to_flatten)
+    print(flattened_list)  # Output: ["H 1 4861.32A", "H 1 6562.80A"]
+
+    # Example usage of the get_transmission function
+    intrinsic_sed = Sed(...)
+    attenuated_sed = Sed(...)
+    transmission = get_transmission(intrinsic_sed, attenuated_sed)
+
+    # Example usage of the get_attenuation function
+    intrinsic_sed = Sed(...)
+    attenuated_sed = Sed(...)
+    attenuation = get_attenuation(intrinsic_sed, attenuated_sed)
+
+    # Example usage of the get_attenuation_at_lam function
+    lam = 5500.0 * angstrom
+    intrinsic_sed = Sed(...)
+    attenuated_sed = Sed(...)
+    attenuation_at_lam = get_attenuation_at_lam(
+        lam, intrinsic_sed, attenuated_sed
+    )
+
+"""
 
 import numpy as np
 from unyt import angstrom
@@ -8,8 +50,7 @@ from synthesizer.units import accepts
 
 
 def get_composite_line_id_from_list(id):
-    """
-    Convert a list of line ids to a single string describing a composite line.
+    """Convert a list of line ids to a string describing a composite line.
 
     A composite line is a line that is made up of multiple lines, e.g.
     a doublet or triplet. This function takes a list of line ids and converts
@@ -17,12 +58,12 @@ def get_composite_line_id_from_list(id):
 
     e.g. ["H 1 4861.32A", "H 1 6562.80A"] -> "H 1 4861.32A, H 1 6562.80A"
 
-    Args
-        id (list, tuple)
+    Args:
+        id (list, tuple):
             a str, list, or tuple containing the id(s) of the lines
 
-    Returns
-        id (str)
+    Returns:
+        id (str):
             string representation of the id
     """
     if isinstance(id, list):
@@ -32,20 +73,19 @@ def get_composite_line_id_from_list(id):
 
 
 def get_line_label(line_id):
-    """
-    Get a line label for a given line_id, ratio, or diagram.
+    """Get a line label for a given line_id, ratio, or diagram.
 
     Where the line_id is one of several predifined lines in line_labels this
     label is used, otherwise the label is constructed from the line_id.
 
     Argumnents
-        line_id (str)
+        line_id (str):
             The line_id either as a list of individual lines or a string. If
             provided as a list this is automatically converted to a single
             string so it can be used as a key.
 
-    Returns
-        line_label (str)
+    Returns:
+        line_label (str):
             A nicely formatted line label.
     """
     # if the line_id is a list (denoting a doublet or higher)
@@ -80,18 +120,17 @@ def get_line_label(line_id):
 
 
 def flatten_linelist(list_to_flatten):
-    """
-    Flatten a mixed list of lists and strings and remove duplicates.
+    """Flatten a mixed list of lists and strings and remove duplicates.
 
     Used when converting a line list which may contain single lines
     and doublets.
 
     Args:
-        list_to_flatten (list)
+        list_to_flatten (list):
             list containing lists and/or strings and integers
 
     Returns:
-        (list)
+        (list):
             flattened list
     """
     flattened_list = []
@@ -120,17 +159,16 @@ def flatten_linelist(list_to_flatten):
 
 
 def get_roman_numeral(number):
-    """
-    Convert an integer into a roman numeral str.
+    """Convert an integer into a roman numeral str.
 
     Used for renaming emission lines from the cloudy defaults.
 
     Args:
-        number (int)
+        number (int):
             The number to convert into a roman numeral.
 
     Returns:
-        number_representation (str)
+        number_representation (str):
             String reprensentation of the roman numeral.
     """
     num = [1, 4, 5, 9, 10, 40, 50, 90, 100, 400, 500, 900, 1000]
@@ -208,15 +246,14 @@ line_labels = {
 
 
 def alias_to_line_id(alias):
-    """
-    Convert a line alias to a line id.
+    """Convert a line alias to a line id.
 
     Args:
-        alias (str)
+        alias (str):
             The line alias.
 
     Returns:
-        line_id (str)
+        line_id (str):
             The line id.
     """
     if alias in aliases:
@@ -225,20 +262,19 @@ def alias_to_line_id(alias):
 
 
 def get_transmission(intrinsic_sed, attenuated_sed):
-    """
-    Calculate transmission as a function of wavelength.
+    """Calculate transmission as a function of wavelength.
 
     The transmission is defined as the ratio between an attenuated and
     an intrinsic sed.
 
     Args:
-        intrinsic_sed (Sed)
+        intrinsic_sed (Sed):
             The intrinsic spectra object.
-        attenuated_sed (Sed)
+        attenuated_sed (Sed):
             The attenuated spectra object.
 
     Returns:
-        array-like, float
+        np.ndarray of float:
             The transmission array.
     """
     # Ensure wavelength arrays are equal
@@ -251,17 +287,16 @@ def get_transmission(intrinsic_sed, attenuated_sed):
 
 
 def get_attenuation(intrinsic_sed, attenuated_sed):
-    """
-    Calculate attenuation as a function of wavelength.
+    """Calculate attenuation as a function of wavelength.
 
     Args:
-        intrinsic_sed (Sed)
+        intrinsic_sed (Sed):
             The intrinsic spectra object.
-        attenuated_sed (Sed)
+        attenuated_sed (Sed):
             The attenuated spectra object.
 
     Returns:
-        array-like, float
+        np.ndarray of float
             The attenuation array in magnitudes.
     """
     # Calculate the transmission array
@@ -272,20 +307,19 @@ def get_attenuation(intrinsic_sed, attenuated_sed):
 
 @accepts(lam=angstrom)
 def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
-    """
-    Calculate attenuation at a given wavelength.
+    """Calculate attenuation at a given wavelength.
 
     Args:
-        lam (float/array-like, float)
+        lam (float/np.ndarray of float):
             The wavelength/s at which to evaluate the attenuation in
             the same units as sed.lam (by default angstrom).
-        intrinsic_sed (Sed)
+        intrinsic_sed (Sed):
             The intrinsic spectra object.
-        attenuated_sed (Sed)
+        attenuated_sed (Sed):
             The attenuated spectra object.
 
     Returns:
-        float/array-like, float
+        float/np.ndarray of float
             The attenuation at the passed wavelength/s in magnitudes.
     """
     # Ensure lam is in the same units as the sed
@@ -299,13 +333,12 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
 
 
 def get_attenuation_at_5500(intrinsic_sed, attenuated_sed):
-    """
-    Calculate rest-frame FUV attenuation at 5500 angstrom.
+    """Calculate rest-frame FUV attenuation at 5500 angstrom.
 
     Args:
-        intrinsic_sed (Sed)
+        intrinsic_sed (Sed):
             The intrinsic spectra object.
-        attenuated_sed (Sed)
+        attenuated_sed (Sed):
             The attenuated spectra object.
 
     Returns:
@@ -320,13 +353,12 @@ def get_attenuation_at_5500(intrinsic_sed, attenuated_sed):
 
 
 def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
-    """
-    Calculate rest-frame FUV attenuation at 1500 angstrom.
+    """Calculate rest-frame FUV attenuation at 1500 angstrom.
 
     Args:
-        intrinsic_sed (Sed)
+        intrinsic_sed (Sed):
             The intrinsic spectra object.
-        attenuated_sed (Sed)
+        attenuated_sed (Sed):
             The attenuated spectra object.
 
     Returns:
@@ -341,15 +373,14 @@ def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
 
 
 def combine_list_of_seds(sed_list):
-    """
-    Convert a list of Seds into a single Sed object.
+    """Convert a list of Seds into a single Sed object.
 
     Combines a list of `Sed` objects (length `Ngal`) into a single
     `Sed` object, with dimensions `Ngal x Nlam`. Each `Sed` object
     in the list should have an identical wavelength range.
 
     Args:
-        sed_list (list)
+        sed_list (list):
             list of `Sed` objects
     """
     out_sed = sed_list[0]

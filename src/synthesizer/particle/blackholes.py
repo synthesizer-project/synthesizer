@@ -34,8 +34,9 @@ from synthesizer.utils import scalar_to_array
 
 
 class BlackHoles(Particles, BlackholesComponent):
-    """
-    The base BlackHoles class. This contains all data a collection of black
+    """The particle BlackHoles class.
+
+    This contains all data a collection of black
     holes could contain. It inherits from the base Particles class holding
     attributes and methods common to all particle types.
 
@@ -43,16 +44,15 @@ class BlackHoles(Particles, BlackholesComponent):
     about the stars needed in other computations. For example a Galaxy object
     can be initialised with a BlackHoles object for use with any of the Galaxy
     helper methods.
-
     Note that due to the many possible operations, this class has a large
     number ofoptional attributes which are set to None if not provided.
 
     Attributes:
-        nbh (int)
+        nbh (int):
             The number of black hole particles in the object.
-        smoothing_lengths (array-like, float)
+        smoothing_lengths (np.ndarray of float):
             The smoothing length describing the black holes neighbour kernel.
-        particle_spectra (dict)
+        particle_spectra (dict):
             A dictionary of Sed objects containing any of the generated
             particle spectra.
     """
@@ -118,63 +118,65 @@ class BlackHoles(Particles, BlackholesComponent):
         fesc=None,
         **kwargs,
     ):
-        """
-        Intialise the Stars instance. The first two arguments are always
-        required. All other arguments are optional attributes applicable
-        in different situations.
+        """Intialise the BlackHoles instance.
 
         Args:
-            masses (array-like, float)
+            masses (np.ndarray of float):
                 The mass of each particle in Msun.
-            metallicities (array-like, float)
-                The metallicity of the region surrounding the/each black hole.
-            epsilons (array-like, float)
+            accretion_rates (np.ndarray of float):
+                The accretion rate of the/each black hole in Msun/yr.
+            epsilons (np.ndarray of float):
                 The radiative efficiency. By default set to 0.1.
-            inclination (array-like, float)
+            inclinations (np.ndarray of float):
                 The inclination of the blackhole. Necessary for many emission
                 models.
-            redshift (float)
+            spins (np.ndarray of float):
+                The spin of the black hole. Necessary for many emission
+                models.
+            metallicities (np.ndarray of float):
+                The metallicity of the region surrounding the/each black hole.
+            redshift (float):
                 The redshift/s of the black hole particles.
-            accretion_rates (array-like, float)
-                The accretion rate of the/each black hole in Msun/yr.
-            coordinates (array-like, float)
+            coordinates (np.ndarray of float):
                 The 3D positions of the particles.
-            velocities (array-like, float)
+            velocities (np.ndarray of float):
                 The 3D velocities of the particles.
-            softening_length (float)
+            softening_lengths (float):
                 The physical gravitational softening length.
-            smoothing_lengths (array-like, float)
+            smoothing_lengths (np.ndarray of float):
                 The smoothing length describing the black holes neighbour
                 kernel.
-            ionisation_parameter_blr (array-like, float)
+            centre (np.ndarray of float):
+                The centre of the black hole particles. This will be used for
+                centered calculations (e.g. imaging or angular momentum).
+            ionisation_parameter_blr (np.ndarray of float):
                 The ionisation parameter of the broad line region.
-            hydrogen_density_blr (array-like, float)
+            hydrogen_density_blr (np.ndarray of float):
                 The hydrogen density of the broad line region.
-            covering_fraction_blr (array-like, float)
+            covering_fraction_blr (np.ndarray of float):
                 The covering fraction of the broad line region (effectively
                 the escape fraction).
-            velocity_dispersion_blr (array-like, float)
+            velocity_dispersion_blr (np.ndarray of float):
                 The velocity dispersion of the broad line region.
-            ionisation_parameter_nlr (array-like, float)
+            ionisation_parameter_nlr (np.ndarray of float):
                 The ionisation parameter of the narrow line region.
-            hydrogen_density_nlr (array-like, float)
+            hydrogen_density_nlr (np.ndarray of float):
                 The hydrogen density of the narrow line region.
-            covering_fraction_nlr (array-like, float)
+            covering_fraction_nlr (np.ndarray of float):
                 The covering fraction of the narrow line region (effectively
                 the escape fraction).
-            velocity_dispersion_nlr (array-like, float)
+            velocity_dispersion_nlr (np.ndarray of float):
                 The velocity dispersion of the narrow line region.
-            theta_torus (array-like, float)
+            theta_torus (np.ndarray of float):
                 The angle of the torus.
-            tau_v (array-like, float)
+            tau_v (np.ndarray of float):
                 The optical depth of the dust model.
-            fesc (array-like, float)
+            fesc (np.ndarray of float):
                 The escape fraction of the black hole emission.
-            kwargs (dict)
+            **kwargs (dict):
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
         """
-
         # Handle singular values being passed (arrays are just returned)
         masses = scalar_to_array(masses)
         accretion_rates = scalar_to_array(accretion_rates)
@@ -246,8 +248,7 @@ class BlackHoles(Particles, BlackholesComponent):
         self._check_bh_args()
 
     def _check_bh_args(self):
-        """
-        Sanitizes the inputs ensuring all arguments agree and are compatible.
+        """Sanitize the inputs ensuring all arguments agree and are compatible.
 
         Raises:
             InconsistentArguments
@@ -292,8 +293,7 @@ class BlackHoles(Particles, BlackholesComponent):
         verbose=True,
         **kwargs,
     ):
-        """
-        Generate blackhole spectra as described by the emission model.
+        """Generate blackhole spectra as described by the emission model.
 
         Args:
             emission_model (EmissionModel):
@@ -315,13 +315,13 @@ class BlackHoles(Particles, BlackholesComponent):
                       to use a specific optical depth with a particular
                       model or {<label>: str(<attribute>)} to use an attribute
                       of the component as the optical depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
+            covering_fraction (dict):
+                An override to the emission model covering fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
-                    - A float to use as the escape fraction for all models.
+                    - A float to use as the covering fraction for all models.
                     - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
+                      to use a specific covering fraction with a particular
                       model or {<label>: str(<attribute>)} to use an
                       attribute of the component as the escape fraction.
             mask (dict):
@@ -331,9 +331,11 @@ class BlackHoles(Particles, BlackholesComponent):
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
-            verbose (bool)
+            vel_shift (bool):
+                Whether to apply a velocity shift to the spectra.
+            verbose (bool):
                 Are we talking?
-            kwargs (dict)
+            **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
@@ -374,8 +376,7 @@ class BlackHoles(Particles, BlackholesComponent):
         verbose=True,
         **kwargs,
     ):
-        """
-        Generate stellar lines as described by the emission model.
+        """Generate stellar lines as described by the emission model.
 
         Args:
             line_ids (list):
@@ -400,13 +401,13 @@ class BlackHoles(Particles, BlackholesComponent):
                       to use a specific optical depth with a particular
                       model or {<label>: str(<attribute>)} to use an attribute
                       of the component as the optical depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
+            covering_fraction (dict):
+                An override to the emission model covering fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
-                    - A float to use as the escape fraction for all models.
+                    - A float to use as the covering fraction for all models.
                     - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
+                      to use a specific covering fraction with a particular
                       model or {<label>: str(<attribute>)} to use an
                       attribute of the component as the escape fraction.
             mask (dict):
@@ -416,9 +417,9 @@ class BlackHoles(Particles, BlackholesComponent):
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            kwargs (dict)
+            **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
