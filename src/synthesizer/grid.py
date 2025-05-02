@@ -1207,13 +1207,13 @@ class Grid:
         self._axes_units.pop(axis)
         self.naxes -= 1
 
-    def get_spectra(self, grid_point, spectra_id="incident"):
+    def get_sed_at_grid_point(self, grid_point, spectra_type="incident"):
         """Create an Sed object for a specific grid point.
 
         Args:
             grid_point (tuple):
                 A tuple of integers specifying the closest grid point.
-            spectra_id (str):
+            spectra_type (str):
                 The name of the spectra (in the grid) that is desired.
 
         Returns:
@@ -1221,7 +1221,7 @@ class Grid:
                 A synthesizer.emissions object
         """
         # Throw exception if the spectra_id not in list of available spectra
-        if spectra_id not in self.available_spectra:
+        if spectra_type not in self.available_spectra:
             raise exceptions.InconsistentParameter(
                 "Provided spectra_id is not in the list of available spectra."
             )
@@ -1237,7 +1237,7 @@ class Grid:
         try:
             return Sed(
                 self.lam,
-                lnu=self.spectra[spectra_id][grid_point] * erg / s / Hz,
+                lnu=self.spectra[spectra_type][grid_point] * erg / s / Hz,
             )
         except IndexError:
             # Modify the error message for clarity
@@ -1246,8 +1246,62 @@ class Grid:
                 f"grid_point={grid_point})"
             )
 
-    def get_lines(self, grid_point, line_id=None, spectra_type="nebular"):
-        """Create a Line object for a given line_id and grid_point.
+    def get_sed_for_full_grid(self, spectra_type="incident"):
+        """Create an Sed object for the full grid.
+
+        Args:
+            spectra_type (str):
+                The name of the spectra (in the grid) that is desired.
+
+        Returns:
+            synthesizer.emissions.Sed:
+                A synthesizer.emissions object
+        """
+        # Throw exception if the spectra_id not in list of available spectra
+        if spectra_type not in self.available_spectra:
+            raise exceptions.InconsistentParameter(
+                "Provided spectra_id is not in the list of available spectra."
+            )
+
+        return Sed(self.lam, self.spectra[spectra_type] * erg / s / Hz)
+
+    def get_sed(self, grid_point=None, spectra_type="incident"):
+        """Create an Sed object from the grid.
+
+        This can either get an Sed containing the entire grid (if
+        grid_point=False) or for a specific grid point.
+
+        This enables grid wide use of Sed methods for flux, photometry,
+        indices, ionising photons, etc.
+
+        Args:
+            grid_point (tuple/bool):
+                A tuple of integers specifying the closest grid point or a
+                bool.
+            spectra_type (str):
+                The key of the spectra grid to extract as an Sed object.
+
+        Returns:
+            Sed:
+                An Sed object.
+        """
+        # If a grid point is provided call the function above ...
+        if grid_point is not None:
+            return self.get_sed_at_grid_point(
+                grid_point=grid_point,
+                spectra_type=spectra_type,
+            )
+
+        # ... otherwise, return the entire Sed grid.
+        else:
+            return self.get_sed_for_full_grid(
+                spectra_type=spectra_type,
+            )
+
+    def get_lines_at_grid_point(
+        self, grid_point, line_id=None, spectra_type="nebular"
+    ):
+        """Create a LineCollection object for a specific grid point.
 
         Args:
             grid_point (tuple):
@@ -1264,15 +1318,9 @@ class Grid:
                 by definition.
 
         Returns:
-            lines (LineCollection)
+            synthesizer.emissions.Sed
+                A synthesizer.emissions object
         """
-        # Throw exception if the grid_point has a different shape from the grid
-        if len(grid_point) != self.naxes:
-            raise exceptions.InconsistentParameter(
-                "The grid_point tuple provided"
-                "as an argument should have the same shape as the grid."
-            )
-
         # First create a LineCollection containing the grid point
         all_lines = LineCollection(
             line_ids=self.available_lines,
@@ -1293,6 +1341,81 @@ class Grid:
         del all_lines
 
         return line
+
+    def get_lines_for_full_grid(self, line_id=None, spectra_type="nebular"):
+        """Create a LineCollection object for a the full grid.
+
+        Args:
+            line_id (str/list):
+                The id/s of the line. If a string contains a comma separated
+                list of line_ids a composite line will be returned containing
+                the sum of the luminosities and the mean of the wavelengths.
+                If a list of line_ids is provided a subset of lines will be
+                returned. If None then all available lines will be returned.
+            spectra_type (str):
+                The spectra type to extract the line from. Default is
+                "nebular", all other spectra will have line luminosities of 0
+                by definition.
+
+        Returns:
+            Sed:
+                A synthesizer.emissions object
+        """
+        # First create a LineCollection containing the grid point
+        all_lines = LineCollection(
+            line_ids=self.available_lines,
+            lam=self.line_lams,
+            lum=self.line_lums[spectra_type],
+            cont=self.line_conts[spectra_type],
+        )
+
+        # If we have no line_id we are done and can return the full collection
+        if line_id is None:
+            return all_lines
+
+        # Now we simply extract the line we want from the collection
+        line = all_lines[line_id]
+
+        # Formally delete the all_lines object, gargabe collection would
+        # probably do this anyway but we do it here to be sure.
+        del all_lines
+
+        return line
+
+    def get_lines(self, grid_point=None, line_id=None, spectra_type="nebular"):
+        """Create a Line object for a given line_id and grid_point.
+
+        Args:
+            grid_point (tuple/bool):
+                A tuple of integers specifying the closest grid point.
+            line_id (str/list):
+                The id/s of the line. If a string contains a comma separated
+                list of line_ids a composite line will be returned containing
+                the sum of the luminosities and the mean of the wavelengths.
+                If a list of line_ids is provided a subset of lines will be
+                returned. If None then all available lines will be returned.
+            spectra_type (str):
+                The spectra type to extract the line from. Default is
+                "nebular", all other spectra will have line luminosities of 0
+                by definition.
+
+        Returns:
+            lines (LineCollection):
+                A LineCollection object containing the line luminosities and
+                continuums.
+        """
+        # If a grid point is provided call the function above ...
+        if grid_point is not None:
+            return self.get_lines_at_grid_point(
+                grid_point=grid_point,
+                line_id=line_id,
+                spectra_type=spectra_type,
+            )
+        # ... otherwise return the full grid.
+        else:
+            return self.get_lines_for_full_grid(
+                line_id=line_id, spectra_type=spectra_type
+            )
 
     def plot_specific_ionising_lum(
         self,
@@ -1461,22 +1584,6 @@ class Grid:
         }
 
         return flattened_axes_values
-
-    def get_sed(self, spectra_type):
-        """Get the spectra grid as an Sed object.
-
-        This enables grid wide use of Sed methods for flux, photometry,
-        indices, ionising photons, etc.
-
-        Args:
-            spectra_type (str):
-                The key of the spectra grid to extract as an Sed object.
-
-        Returns:
-            Sed
-                The spectra grid as an Sed object.
-        """
-        return Sed(self.lam, self.spectra[spectra_type] * erg / s / Hz)
 
     @accepts(min_lam=angstrom, max_lam=angstrom)
     def truncate_grid_lam(self, min_lam, max_lam):
