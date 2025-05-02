@@ -1,3 +1,22 @@
+"""A script for creating a small CAMELS snapshot and subhalo file.
+
+This script will extract a small number of galaxies from a full CAMELS
+snapshot and subhalo file and save them to a new HDF5 file. The
+script will ignore the first `ignore_N` galaxies in the subhalo file, which are
+often massive galaxies.
+
+The script will also extract the relevant properties from the snapshot file,
+including stellar formation time, coordinates, masses, initial mass, metals,
+metallicity, and smoothing lengths.
+
+The script will also extract the relevant properties for the gas particles,
+including star formation rate, masses, metallicity, coordinates, and
+smoothing lengths.
+
+Example usage:
+    python create_camels_small_snap.py
+"""
+
 import h5py
 import numpy as np
 

@@ -49,8 +49,8 @@ galaxy.stars.velocities = (
 start_with_shift = time.time()
 galaxy.stars.get_spectra(model)
 print(
-    "Time to get spectra with velocity shift: "
-    f"{time.time() - start_with_shift}"
+    "Time to get spectra with velocity shift:"
+    f" {time.time() - start_with_shift}"
 )
 
 # Unpack the spectra with the velocity broadening
@@ -66,8 +66,8 @@ galaxy.clear_all_emissions()
 start_without_shift = time.time()
 galaxy.stars.get_spectra(model, vel_shift=False)
 print(
-    "Time to get spectra without velocity shift: "
-    f"{time.time() - start_without_shift}"
+    "Time to get spectra without velocity shift:"
+    f" {time.time() - start_without_shift}"
 )
 
 # Unpack the spectra without the velocity broadening

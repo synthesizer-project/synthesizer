@@ -1,29 +1,46 @@
+"""A submodule for loading FLARES data into Synthesizer.
+
+Example usage:
+
+    from synthesizer.load_data import load_FLARES
+
+    # Load FLARES data
+    galaxies = load_FLARES(
+        master_file="path/to/master_file.hdf5",
+        region="region_name",
+        tag="snapshot_tag",
+        read_abundances=True,
+    )
+"""
+
 import h5py
 import numpy as np
 from unyt import Mpc, Msun, yr
 
-from synthesizer.load_data.utils import get_len
+from synthesizer.load_data.utils import get_begin_end_pointers
 
 from ..particle.galaxy import Galaxy
 
 
 def load_FLARES(master_file, region, tag, read_abundances=False):
-    """
-    Load FLARES galaxies from a FLARES master file
+    """Load FLARES galaxies from a FLARES master file.
 
     Args:
-        f (string):
-            master file location
-        region (string):
-            FLARES region to load
-        tag (string):
-            snapshot tag to load
+        master_file (str):
+            The path to the master file.
+        region (str):
+            The region to load data from.
+        tag (str):
+            The snapshot tag to load data from.
+        read_abundances (bool):
+            Whether to read the abundances of the stars.
+            If True, the oxygen and hydrogen abundances are loaded.
+            If False, only the metallicity is loaded.
 
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing stars
     """
-
     zed = float(tag[5:].replace("p", "."))
     scale_factor = 1.0 / (1.0 + zed)
 
@@ -61,7 +78,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
     g_masses = g_masses * 1e10  # Msol
 
     # Get the star particle begin / end indices
-    begin, end = get_len(slens)
+    begin, end = get_begin_end_pointers(slens)
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
@@ -92,7 +109,7 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
             )
 
     # Get the gas particle begin / end indices
-    begin, end = get_len(glens)
+    begin, end = get_begin_end_pointers(glens)
 
     for i, (b, e) in enumerate(zip(begin, end)):
         # Use gas particle SFR for star forming mask

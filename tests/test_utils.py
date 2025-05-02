@@ -30,33 +30,33 @@ class TestEnsureCompatibles:
             "Expected a list to be converted to a numpy array "
             f"but got {result}"
         )
-        assert (
-            result.dtype == np.float64
-        ), f"Expected a numpy array of type float64 but got {result.dtype}"
+        assert result.dtype == np.float64, (
+            f"Expected a numpy array of type float64 but got {result.dtype}"
+        )
 
     def test_c_compatible_array_numpy32(self):
         """Test the ensure_array_c_compatible_double function."""
         # Test with a numpy array of type float32
         value = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         result = ensure_array_c_compatible_double(value)
-        assert isinstance(
-            result, np.ndarray
-        ), f"Expected a numpy array to be returned but got {result}"
-        assert (
-            result.dtype == np.float64
-        ), f"Expected a numpy array of type float64 but got {result.dtype}"
+        assert isinstance(result, np.ndarray), (
+            f"Expected a numpy array to be returned but got {result}"
+        )
+        assert result.dtype == np.float64, (
+            f"Expected a numpy array of type float64 but got {result.dtype}"
+        )
 
     def test_c_compatible_array_numpy64(self):
         """Test the ensure_array_c_compatible_double function."""
         # Test with a numpy array of type float64
         value = np.array([1.0, 2.0, 3.0], dtype=np.float64)
         result = ensure_array_c_compatible_double(value)
-        assert isinstance(
-            result, np.ndarray
-        ), f"Expected a numpy array to be returned but got {result}"
-        assert (
-            result.dtype == np.float64
-        ), f"Expected a numpy array of type float64 but got {result.dtype}"
+        assert isinstance(result, np.ndarray), (
+            f"Expected a numpy array to be returned but got {result}"
+        )
+        assert result.dtype == np.float64, (
+            f"Expected a numpy array of type float64 but got {result.dtype}"
+        )
 
     def test_c_compatible_array_unyt32(self):
         """Test the ensure_array_c_compatible_double function."""
@@ -65,12 +65,12 @@ class TestEnsureCompatibles:
             "cm",
         )
         result = ensure_array_c_compatible_double(value)
-        assert isinstance(
-            result, unyt.unyt_array
-        ), f"Expected a numpy array to be returned but got {result}"
-        assert (
-            result.dtype == np.float64
-        ), f"Expected a numpy array of type float64 but got {result.dtype}"
+        assert isinstance(result, unyt.unyt_array), (
+            f"Expected a numpy array to be returned but got {result}"
+        )
+        assert result.dtype == np.float64, (
+            f"Expected a numpy array of type float64 but got {result.dtype}"
+        )
         assert result.units == value.units, (
             f"Expected a numpy array of type {value.units} but "
             f"got {result.units}"
@@ -83,12 +83,12 @@ class TestEnsureCompatibles:
             "cm",
         )
         result = ensure_array_c_compatible_double(value)
-        assert isinstance(
-            result, unyt.unyt_array
-        ), f"Expected a numpy array to be returned but got {result}"
-        assert (
-            result.dtype == np.float64
-        ), f"Expected a numpy array of type float64 but got {result.dtype}"
+        assert isinstance(result, unyt.unyt_array), (
+            f"Expected a numpy array to be returned but got {result}"
+        )
+        assert result.dtype == np.float64, (
+            f"Expected a numpy array of type float64 but got {result.dtype}"
+        )
         assert result.units == value.units, (
             f"Expected a numpy array of type {value.units} but "
             f"got {result.units}"

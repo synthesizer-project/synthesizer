@@ -14,8 +14,7 @@ _NO_DEFAULT = object()
 
 
 def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
-    """
-    Extract a parameter from a model, emission, and emitter.
+    """Extract a parameter from a model, emission, and emitter.
 
     The priority of extraction is:
         1. Model (EmissionModel)
@@ -26,15 +25,15 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
     attribute, so we will recursively look for that attribute.
 
     Args:
-        param (str)
+        param (str):
             The parameter to extract.
-        model (EmissionModel)
+        model (EmissionModel):
             The model object.
-        emission (Sed/LineCollection)
+        emission (Sed/LineCollection):
             The emission object.
-        emitter (Stars/Gas/Galaxy)
+        emitter (Stars/Gas/Galaxy):
             The emitter object.
-        default (object, optional)
+        default (object, optional):
             The default value to return if the parameter is not found.
 
     Returns:
@@ -127,8 +126,7 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
 
 
 def get_params(params, model, emission, emitter):
-    """
-    Extract a list of parameters from a model, emission, and emitter.
+    """Extract a list of parameters from a model, emission, and emitter.
 
     Missing parameters will return None.
 
@@ -138,17 +136,17 @@ def get_params(params, model, emission, emitter):
         3. Emitter (Stars/Gas/Galaxy)
 
     Args:
-        params (list)
+        params (list):
             The parameters to extract.
-        model (EmissionModel)
+        model (EmissionModel):
             The model object.
-        emission (Sed/LineCollection)
+        emission (Sed/LineCollection):
             The emission object.
-        emitter (Stars/BlackHoles/Gas/Galaxy)
+        emitter (Stars/BlackHoles/Gas/Galaxy):
             The emitter object.
 
     Returns:
-        values (dict)
+        values (dict):
             A dictionary of the values of the parameters extracted from the
             appropriate object.
     """

@@ -21,28 +21,27 @@ from synthesizer.units import unit_is_compatible
 
 
 class Component(ABC):
-    """
-    The parent class for all components in the synthesizer.
+    """The parent class for all components in the synthesizer.
 
     This class contains the basic structure of a component and the methods
     that all components should have.
 
     Attributes:
-        component_type (str)
+        component_type (str):
             The type of component, either "Stars" or "BlackHole".
-        spectra (dict)
+        spectra (dict):
             A dictionary to hold the stellar spectra.
-        lines (dict)
+        lines (dict):
             A dictionary to hold the stellar emission lines.
-        photo_lnu (dict)
+        photo_lnu (dict):
             A dictionary to hold the stellar photometry in luminosity units.
-        photo_fnu (dict)
+        photo_fnu (dict):
             A dictionary to hold the stellar photometry in flux units.
-        images_lnu (dict)
+        images_lnu (dict):
             A dictionary to hold the images in luminosity units.
-        images_fnu (dict)
+        images_fnu (dict):
             A dictionary to hold the images in flux units
-        fesc (float)
+        fesc (float):
             The escape fraction of the component.
     """
 
@@ -52,15 +51,14 @@ class Component(ABC):
         fesc,
         **kwargs,
     ):
-        """
-        Initialise the Component.
+        """Initialise the Component.
 
         Args:
-            component_type (str)
+            component_type (str):
                 The type of component, either "Stars" or "BlackHole".
-            fesc (float)
+            fesc (float):
                 The escape fraction of the component.
-            **kwargs
+            **kwargs (dict):
                 Any additional keyword arguments to attach to the Component.
         """
         # Attach the component type and name to the object
@@ -96,8 +94,7 @@ class Component(ABC):
 
     @property
     def photo_fluxes(self):
-        """
-        Get the photometric fluxes.
+        """Get the photometric fluxes.
 
         Returns:
             dict
@@ -111,8 +108,7 @@ class Component(ABC):
 
     @property
     def photo_luminosities(self):
-        """
-        Get the photometric luminosities.
+        """Get the photometric luminosities.
 
         Returns:
             dict
@@ -136,8 +132,7 @@ class Component(ABC):
 
     @property
     def is_parametric(self):
-        """
-        Return whether the component is parametric.
+        """Return whether the component is parametric.
 
         Returns:
             bool
@@ -151,8 +146,7 @@ class Component(ABC):
 
     @property
     def is_particle(self):
-        """
-        Return whether the component is particle based.
+        """Return whether the component is particle based.
 
         Returns:
             bool
@@ -161,8 +155,7 @@ class Component(ABC):
         return not self.is_parametric
 
     def get_luminosity_distance(self, cosmo):
-        """
-        Get the luminosity distance of the component.
+        """Get the luminosity distance of the component.
 
         This requires the redshift to be set on the component.
 
@@ -203,20 +196,19 @@ class Component(ABC):
         return (10 * pc).to(kpc)
 
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate luminosity photometry using a FilterCollection object.
+        """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
-            filters (filters.FilterCollection)
+            filters (filters.FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
 
         Returns:
-            photo_lnu (dict)
+            photo_lnu (dict):
                 A dictionary of rest frame broadband luminosities.
         """
         # Loop over spectra in the component
@@ -235,17 +227,16 @@ class Component(ABC):
         "`get_photo_lnu` instead. Will be removed in v1.0.0"
     )
     def get_photo_luminosities(self, filters, verbose=True):
-        """
-        Calculate luminosity photometry using a FilterCollection object.
+        """Calculate luminosity photometry using a FilterCollection object.
 
         Alias to get_photo_lnu.
 
         Photometry is calculated in spectral luminosity density units.
 
         Args:
-            filters (filters.FilterCollection)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
 
         Returns:
@@ -256,20 +247,19 @@ class Component(ABC):
         return self.get_photo_lnu(filters, verbose)
 
     def get_photo_fnu(self, filters, verbose=True, nthreads=1):
-        """
-        Calculate flux photometry using a FilterCollection object.
+        """Calculate flux photometry using a FilterCollection object.
 
         Args:
-            filters (object)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
 
         Returns:
-            (dict)
+            dict:
                 A dictionary of fluxes in each filter in filters.
         """
         # Loop over spectra in the component
@@ -288,21 +278,20 @@ class Component(ABC):
         "`get_photo_fnu` instead. Will be removed in v1.0.0"
     )
     def get_photo_fluxes(self, filters, verbose=True):
-        """
-        Calculate flux photometry using a FilterCollection object.
+        """Calculate flux photometry using a FilterCollection object.
 
         Alias to get_photo_fnu.
 
         Photometry is calculated in spectral flux density units.
 
         Args:
-            filters (object)
+            filters (FilterCollection):
                 A FilterCollection object.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
 
         Returns:
-            PhotometryCollection
+            PhotometryCollection:
                 A PhotometryCollection object containing the flux photometry
                 in each filter in filters.
         """
@@ -321,8 +310,7 @@ class Component(ABC):
         grid_assignment_method="cic",
         **kwargs,
     ):
-        """
-        Generate stellar spectra as described by the emission model.
+        """Generate stellar spectra as described by the emission model.
 
         Args:
             emission_model (EmissionModel):
@@ -360,17 +348,17 @@ class Component(ABC):
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
-            shift (bool):
+            vel_shift (bool):
                 Flags whether to apply doppler shift to the spectra.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the tree search. If -1, all
                 available threads will be used.
-            grid_assignment_method (str)
+            grid_assignment_method (str):
                 The method to use for assigning particles to the grid. Options
                 are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
-            kwargs (dict)
+            **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
@@ -419,8 +407,7 @@ class Component(ABC):
         verbose=True,
         **kwargs,
     ):
-        """
-        Generate stellar lines as described by the emission model.
+        """Generate stellar lines as described by the emission model.
 
         Args:
             line_ids (list):
@@ -461,9 +448,9 @@ class Component(ABC):
                     - A dictionary of the form {<label>: {"attr": attr,
                       "thresh": thresh, "op": op}} to add a specific mask to
                       a particular model.
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
-            kwargs (dict)
+            kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
@@ -511,8 +498,7 @@ class Component(ABC):
         instrument=None,
         cosmo=None,
     ):
-        """
-        Make an ImageCollection from component luminosities.
+        """Make an ImageCollection from component luminosities.
 
         For Parametric components, images can only be smoothed. An
         exception will be raised if a histogram is requested.
@@ -535,31 +521,28 @@ class Component(ABC):
         collection at the root of the emission model will also be returned.
 
         Args:
-            resolution (Quantity, float)
+            resolution (unyt_quantity of float):
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
+            fov (float):
                 The width of the image in image coordinates.
-            emission_model (EmissionModel)
+            emission_model (EmissionModel):
                 The emission model to use to generate the images.
-            img_type : str
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            stellar_photometry (string)
-                The stellar spectra key from which to extract photometry
-                to use for the image.
-            blackhole_photometry (string)
-                The black hole spectra key from which to extract photometry
-                to use for the image.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            instrument (Instrument)
+            limit_to (str):
+                The label of the image to limit to. If None, all images are
+                returned.
+            instrument (Instrument):
                 The instrument to use to generate the images.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
@@ -647,8 +630,7 @@ class Component(ABC):
         instrument=None,
         cosmo=None,
     ):
-        """
-        Make an ImageCollection from fluxes.
+        """Make an ImageCollection from fluxes.
 
         For Parametric components, images can only be smoothed. An
         exception will be raised if a histogram is requested.
@@ -671,31 +653,28 @@ class Component(ABC):
         collection at the root of the emission model will also be returned.
 
         Args:
-            resolution (Quantity, float)
+            resolution (unyt_quantity of float):
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
-            fov : float
+            fov (float):
                 The width of the image in image coordinates.
-            emission_model (EmissionModel)
+            emission_model (EmissionModel):
                 The emission model to use to generate the images.
-            img_type : str
+            img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            stellar_photometry (string)
-                The stellar spectra key from which to extract photometry
-                to use for the image.
-            blackhole_photometry (string)
-                The black hole spectra key from which to extract photometry
-                to use for the image.
-            kernel (array-like, float)
+            kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            instrument (Instrument)
+            limit_to (str):
+                The label of the image to limit to. If None, all images are
+                returned.
+            instrument (Instrument):
                 The instrument to use to generate the images.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
@@ -774,8 +753,7 @@ class Component(ABC):
         self,
         instrument,
     ):
-        """
-        Get spectroscopy for the component based on a specific instrument.
+        """Get spectroscopy for the component based on a specific instrument.
 
         This will apply the instrument's wavelength array to each
         spectra stored on the component.
@@ -825,32 +803,31 @@ class Component(ABC):
         figsize=(3.5, 5),
         **kwargs,
     ):
-        """
-        Plot the spectra of the component.
+        """Plot the spectra of the component.
 
         Can either plot specific spectra (specified via spectra_to_plot) or
         all spectra on the child object.
 
         Args:
-            spectra_to_plot (string/list, string)
+            spectra_to_plot (string/list, string):
                 The specific spectra to plot.
                     - If None all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            show (bool)
+            show (bool):
                 Flag for whether to show the plot or just return the
                 figure and axes.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits to apply to the y axis. If not provided the limits
                 will be calculated with the lower limit set to 1000 (100) times
                 less than the peak of the spectrum for rest_frame (observed)
                 spectra.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
-            figsize (tuple)
+            figsize (tuple):
                 Tuple with size 2 defining the figure size.
-            kwargs (dict)
+            kwargs (dict):
                 Arguments to the `sed.plot_spectra` method called from this
                 wrapper.
 
@@ -891,8 +868,7 @@ class Component(ABC):
         ax=None,
         **kwargs,
     ):
-        """
-        Plot the instrument's spectroscopy of the component.
+        """Plot the instrument's spectroscopy of the component.
 
         This will plot the spectroscopy for the component using the
         instrument's wavelength array. The spectra are plotted
@@ -902,29 +878,31 @@ class Component(ABC):
         or all spectroscopy on the component.
 
         Args:
-            spectra_to_plot (string/list, string)
+            instrument_label (str):
+                The label of the instrument to use for the spectroscopy.
+            spectra_to_plot (string/list, string):
                 The specific spectroscopy to plot.
                     - If None all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            show (bool)
+            show (bool):
                 Flag for whether to show the plot or just return the
                 figure and axes.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits to apply to the y axis. If not provided the limits
                 will be calculated with the lower limit set to 1000 (100) times
                 less than the peak of the spectrum for rest_frame (observed)
                 spectra.
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
-            figsize (tuple)
+            figsize (tuple):
                 Tuple with size 2 defining the figure size.
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The matplotlib figure object for the plot.
-            ax (matplotlib.axes)
+            ax (matplotlib.axes):
                 The matplotlib axes object containing the plotted data.
-            kwargs (dict)
+            **kwargs (dict):
                 Arguments to the `sed.plot_spectra` method called from this
                 wrapper.
 
@@ -995,8 +973,7 @@ class Component(ABC):
             self.particle_photo_fnu = {}
 
     def clear_all_emissions(self):
-        """
-        Clear all emissions from the component.
+        """Clear all emissions from the component.
 
         This clears all spectra, lines, and photometry.
         """
@@ -1006,8 +983,7 @@ class Component(ABC):
         self.clear_all_spectroscopy()
 
     def clear_weights(self):
-        """
-        Clear all cached grid weights from the component.
+        """Clear all cached grid weights from the component.
 
         This clears all grid weights calculated using different
         methods from this component, and resets the `_grid_weights`

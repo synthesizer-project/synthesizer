@@ -27,8 +27,7 @@ from synthesizer.units import accepts
 
 
 class BlackHole(BlackholesComponent):
-    """
-    The base parametric BlackHole class.
+    """The base parametric BlackHole class.
 
     Attributes:
         morphology (PointSource)
@@ -70,55 +69,52 @@ class BlackHole(BlackholesComponent):
         fesc=None,
         **kwargs,
     ):
-        """
-        Intialise the Stars instance. The first two arguments are always
-        required. All other arguments are optional attributes applicable
-        in different situations.
+        """Intialise the BlackHole instance.
 
         Args:
-            mass (float)
+            mass (float):
                 The mass of each particle in Msun.
-            accretion_rate (float)
+            accretion_rate (float):
                 The accretion rate of the/each black hole in Msun/yr.
-            epsilon (float)
+            epsilon (float):
                 The radiative efficiency. By default set to 0.1.
-            inclination (float)
+            inclination (float):
                 The inclination of the blackhole. Necessary for some disc
                 models.
-            spin (float)
+            spin (float):
                 The spin of the blackhole. Necessary for some disc models.
-            offset (unyt_array)
+            offset (unyt_array):
                 The (x,y) offsets of the blackhole relative to the centre of
                 the image. Units can be length or angle but should be
                 consistent with the scene.
-            bolometric_luminosity (float)
+            bolometric_luminosity (float):
                 The bolometric luminosity
-            metallicity (float)
+            metallicity (float):
                 The metallicity of the region surrounding the/each black hole.
-            ionisation_parameter_blr (array-like, float)
+            ionisation_parameter_blr (np.ndarray of float):
                 The ionisation parameter of the broad line region.
-            hydrogen_density_blr (array-like, float)
+            hydrogen_density_blr (np.ndarray of float):
                 The hydrogen density of the broad line region.
-            covering_fraction_blr (array-like, float)
+            covering_fraction_blr (np.ndarray of float):
                 The covering fraction of the broad line region (effectively
                 the escape fraction).
-            velocity_dispersion_blr (array-like, float)
+            velocity_dispersion_blr (np.ndarray of float):
                 The velocity dispersion of the broad line region.
-            ionisation_parameter_nlr (array-like, float)
+            ionisation_parameter_nlr (np.ndarray of float):
                 The ionisation parameter of the narrow line region.
-            hydrogen_density_nlr (array-like, float)
+            hydrogen_density_nlr (np.ndarray of float):
                 The hydrogen density of the narrow line region.
-            covering_fraction_nlr (array-like, float)
+            covering_fraction_nlr (np.ndarray of float):
                 The covering fraction of the narrow line region (effectively
                 the escape fraction).
-            velocity_dispersion_nlr (array-like, float)
+            velocity_dispersion_nlr (np.ndarray of float):
                 The velocity dispersion of the narrow line region.
-            theta_torus (array-like, float)
+            theta_torus (np.ndarray of float):
                 The angle of the torus.
-            fesc (array-like, float)
+            fesc (np.ndarray of float):
                 The escape fraction of the black hole. If None then the
                 escape fraction is set to 0.0.
-            kwargs (dict)
+            kwargs (dict):
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
         """
@@ -155,22 +151,21 @@ class BlackHole(BlackholesComponent):
         self.morphology = PointSource(offset=offset)
 
     def get_mask(self, attr, thresh, op, mask=None):
-        """
-        Create a mask using a threshold and attribute on which to mask.
+        """Create a mask using a threshold and attribute on which to mask.
 
         Args:
-            attr (str)
+            attr (str):
                 The attribute to derive the mask from.
-            thresh (float)
+            thresh (float):
                 The threshold value.
-            op (str)
+            op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
                 or "!=".
-            mask (array)
+            mask (np.ndarray):
                 Optionally, a mask to combine with the new mask.
 
         Returns:
-            mask (array)
+            mask (np.ndarray):
                 The mask array.
         """
         # Get the attribute
@@ -202,8 +197,7 @@ class BlackHole(BlackholesComponent):
         return new_mask
 
     def get_weighted_attr(self, *args, **kwargs):
-        """
-        Raise an error, weighted attributes are meaningless for a BlackHole.
+        """Raise an error, weighted attributes are meaningless for a BlackHole.
 
         Raises:
             NotImplementedError

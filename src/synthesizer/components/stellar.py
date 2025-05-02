@@ -6,7 +6,7 @@ common between them. StarsComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Myr, unyt_quantity
+from unyt import Myr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -15,8 +15,7 @@ from synthesizer.utils import TableFormatter
 
 
 class StarsComponent(Component):
-    """
-    The parent class for stellar components of a galaxy.
+    """The parent class for stellar components of a galaxy.
 
     This class contains the attributes and spectra creation methods which are
     common to both parametric and particle stellar components.
@@ -29,7 +28,7 @@ class StarsComponent(Component):
         metallicities (Quantity)
             The metallicity of each stellar particle/bin
             (particle/parametric).
-        fesc_ly_alpha (float)
+        fesc_ly_alpha (float):
             The escape fraction of the component for Lyman Alpha photons.
     """
 
@@ -46,21 +45,26 @@ class StarsComponent(Component):
         fesc_ly_alpha=None,
         **kwargs,
     ):
-        """
-        Initialise the StellarComponent.
+        """Initialise the StellarComponent.
 
         Args:
-            ages (array-like, float)
+            ages (np.ndarray of float):
                 The age of each stellar particle/bin (particle/parametric).
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The metallicity of each stellar particle/bin
                 (particle/parametric).
-            _star_type (str)
+            _star_type (str):
                 The type of stars object (parametric or particle).
                 This is useful for determining the type of stars object
                 without relying on isinstance and possible circular imports.
-            fesc (float)
+            fesc (float):
                 The escape fraction of incident radiation.
+            fesc_ly_alpha (float):
+                The escape fraction of Lyman Alpha photons.
+                If None, defaults to 1.0.
+            **kwargs (dict):
+                Any additional keyword arguments to pass to the parent class.
+                These will be set as attributes of the class.
         """
         # Initialise the parent class
         Component.__init__(self, "Stars", fesc, **kwargs)
@@ -81,11 +85,10 @@ class StarsComponent(Component):
 
     @property
     def log10ages(self):
-        """
-        Return stellar particle ages in log (base 10).
+        """Return stellar particle ages in log (base 10).
 
         Returns:
-            log10ages (array)
+            log10ages (np.ndarray):
                 log10 stellar ages
         """
         # Have we already calculated the log10 ages?
@@ -101,11 +104,10 @@ class StarsComponent(Component):
 
     @property
     def log10metallicities(self):
-        """
-        Return stellar particle metallicities in log (base 10).
+        """Return stellar particle metallicities in log (base 10).
 
         Returns:
-            log10metallicities (array)
+            log10metallicities (np.ndarray):
                 log10 stellar metallicities
         """
         # Have we already calculated the log10 metallicities?
@@ -120,11 +122,10 @@ class StarsComponent(Component):
         return self._log10metallicities
 
     def __str__(self):
-        """
-        Return a string representation of the stars object.
+        """Return a string representation of the stars object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the particle object.
         """
         # Intialise the table formatter
@@ -132,43 +133,11 @@ class StarsComponent(Component):
 
         return formatter.get_table("Stars")
 
-    def _check_young_old_units(self, young, old):
-        """
-        Checks whether the `young` and `old` arguments to many
-        spectra generation methods are in the right units (Myr)
-
-        Args:
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
-        """
-
-        if young is not None:
-            if isinstance(young, (unyt_quantity)):
-                young = young.to("Myr")
-            else:
-                raise exceptions.InconsistentArguments(
-                    "young must be a unyt_quantity (i.e. a value with units)"
-                )
-        if old is not None:
-            if isinstance(old, (unyt_quantity)):
-                old = old.to("Myr")
-            else:
-                raise exceptions.InconsistentArguments(
-                    "young must be a unyt_quantity (i.e. a value with units)"
-                )
-
-        return young, old
-
     def get_mass_weighted_age(self):
-        """
-        Calculate the mass-weighted age of the stellar component.
+        """Calculate the mass-weighted age of the stellar component.
 
         Returns:
-            mass_weighted_age (unyt_quantity)
+            mass_weighted_age (unyt_quantity):
                 The mass-weighted age of the stellar component.
         """
         if self._star_type == "particle":
@@ -179,11 +148,10 @@ class StarsComponent(Component):
         return self.get_weighted_attr("ages")
 
     def get_mass_weighted_metallicity(self):
-        """
-        Calculate the mass-weighted metallicity of the stellar component.
+        """Calculate the mass-weighted metallicity of the stellar component.
 
         Returns:
-            mass_weighted_metallicity (unyt_quantity)
+            mass_weighted_metallicity (unyt_quantity):
                 The mass-weighted metallicity of the stellar component.
         """
         if self._star_type == "particle":
@@ -194,11 +162,10 @@ class StarsComponent(Component):
         return self.get_weighted_attr("metallicities")
 
     def get_mass_weighted_optical_depth(self):
-        """
-        Calculate the mass-weighted optical depth of the stellar component.
+        """Calculate the mass-weighted optical depth of the stellar component.
 
         Returns:
-            mass_weighted_tau_v (unyt_quantity)
+            mass_weighted_tau_v (unyt_quantity):
                 The mass-weighted optical depth of the stellar component.
         """
         if self._star_type == "particle":
@@ -211,17 +178,16 @@ class StarsComponent(Component):
         )
 
     def get_lum_weighted_age(self, spectra_type, filter_code):
-        """
-        Calculate the luminosity-weighted age of the stars.
+        """Calculate the luminosity-weighted age of the stars.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use for weighting.
-            filter_code (str)
+            filter_code (str):
                 The filter code to use for weighting.
 
         Returns:
-            lum_weighted_age (unyt_quantity)
+            lum_weighted_age (unyt_quantity):
                 The luminosity-weighted age of the stellar component.
         """
         if self._star_type == "particle":
@@ -236,17 +202,16 @@ class StarsComponent(Component):
         )
 
     def get_lum_weighted_metallicity(self, spectra_type, filter_code):
-        """
-        Calculate the luminosity-weighted metallicity of the stars.
+        """Calculate the luminosity-weighted metallicity of the stars.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use for weighting.
-            filter_code (str)
+            filter_code (str):
                 The filter code to use for weighting.
 
         Returns:
-            lum_weighted_metallicity (unyt_quantity)
+            lum_weighted_metallicity (unyt_quantity):
                 The luminosity-weighted metallicity of the stellar component.
         """
         if self._star_type == "particle":
@@ -261,17 +226,16 @@ class StarsComponent(Component):
         )
 
     def get_lum_weighted_optical_depth(self, spectra_type, filter_code):
-        """
-        Calculate the luminosity-weighted optical depth of the stars.
+        """Calculate the luminosity-weighted optical depth of the stars.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use for weighting.
-            filter_code (str)
+            filter_code (str):
                 The filter code to use for weighting.
 
         Returns:
-            lum_weighted_tau_v (unyt_quantity)
+            lum_weighted_tau_v (unyt_quantity):
                 The luminosity-weighted optical depth of the stellar component.
         """
         if self._star_type == "particle":
@@ -286,17 +250,16 @@ class StarsComponent(Component):
         )
 
     def get_flux_weighted_age(self, spectra_type, filter_code):
-        """
-        Calculate the flux-weighted age of the stars.
+        """Calculate the flux-weighted age of the stars.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use for weighting.
-            filter_code (str)
+            filter_code (str):
                 The filter code to use for weighting.
 
         Returns:
-            flux_weighted_age (unyt_quantity)
+            flux_weighted_age (unyt_quantity):
                 The flux-weighted age of the stellar component.
         """
         if self._star_type == "particle":
@@ -311,17 +274,16 @@ class StarsComponent(Component):
         )
 
     def get_flux_weighted_metallicity(self, spectra_type, filter_code):
-        """
-        Calculate the flux-weighted metallicity of the stars.
+        """Calculate the flux-weighted metallicity of the stars.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use for weighting.
-            filter_code (str)
+            filter_code (str):
                 The filter code to use for weighting.
 
         Returns:
-            flux_weighted_metallicity (unyt_quantity)
+            flux_weighted_metallicity (unyt_quantity):
                 The flux-weighted metallicity of the stellar component.
         """
         if self._star_type == "particle":
@@ -336,17 +298,16 @@ class StarsComponent(Component):
         )
 
     def get_flux_weighted_optical_depth(self, spectra_type, filter_code):
-        """
-        Calculate the flux-weighted optical depth of the stars.
+        """Calculate the flux-weighted optical depth of the stars.
 
         Args:
-            spectra_type (str)
+            spectra_type (str):
                 The type of spectra to use for weighting.
-            filter_code (str)
+            filter_code (str):
                 The filter code to use for weighting.
 
         Returns:
-            flux_weighted_tau_v (unyt_quantity)
+            flux_weighted_tau_v (unyt_quantity):
                 The flux-weighted optical depth of the stellar component.
         """
         if self._star_type == "particle":

@@ -62,8 +62,7 @@ from synthesizer.utils import TableFormatter
 
 
 class ImageCollection(ImagingBase):
-    """
-    A collection of Image objects.
+    """A collection of Image objects.
 
     This contains all the generic methods for creating and manipulating
     images. In addition to generating images it can also apply PSFs and noise.
@@ -71,15 +70,15 @@ class ImageCollection(ImagingBase):
     Both parametric and particle based imaging uses this class.
 
     Attributes:
-        imgs (dict)
+        imgs (dict):
             A dictionary of images to be turned into a collection.
-        noise_maps (dict)
+        noise_maps (dict):
             A dictionary of noise maps to be applied to the images.
-        weight_maps (dict)
+        weight_maps (dict):
             A dictionary of weight maps to be applied to the images.
-        filter_codes (list)
+        filter_codes (list):
             A list of filter codes for each image in the collection.
-        rgb_img (np.ndarray)
+        rgb_img (np.ndarray of float):
             The RGB image array.
     """
 
@@ -97,12 +96,12 @@ class ImageCollection(ImagingBase):
         new images from an existing ImageCollection.
 
         Args:
-            resolution (unyt_quantity)
+            resolution (unyt_quantity):
                 The size of a pixel.
-            fov (unyt_quantity/tuple, unyt_quantity)
+            fov (unyt_quantity/tuple, unyt_quantity):
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
-            imgs (dict)
+            imgs (dict):
                 A dictionary of images to be turned into a collection.
         """
         start = tic()
@@ -136,8 +135,7 @@ class ImageCollection(ImagingBase):
 
     @property
     def shape(self):
-        """
-        Return the shape of the image collection.
+        """Return the shape of the image collection.
 
         Returns:
             tuple: A tuple containing (number of images, height, width) if
@@ -148,8 +146,7 @@ class ImageCollection(ImagingBase):
         return (len(self.imgs), self.npix[0], self.npix[1])
 
     def downsample(self, factor):
-        """
-        Supersamples all images contained within this instance.
+        """Supersamples all images contained within this instance.
 
         Useful when applying a PSF to get more accurate convolution results.
 
@@ -158,7 +155,7 @@ class ImageCollection(ImagingBase):
         version.
 
         Args:
-            factor (float)
+            factor (float):
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
 
@@ -178,8 +175,7 @@ class ImageCollection(ImagingBase):
             self.imgs[f].resample(factor)
 
     def supersample(self, factor):
-        """
-        Supersample all images contained within this instance.
+        """Supersample all images contained within this instance.
 
         Useful when applying a PSF to get more accurate convolution results.
 
@@ -188,7 +184,7 @@ class ImageCollection(ImagingBase):
         version.
 
         Args:
-            factor (float)
+            factor (float):
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
 
@@ -212,8 +208,7 @@ class ImageCollection(ImagingBase):
         return len(self.imgs)
 
     def __str__(self):
-        """
-        Return a string representation of the ImageCollection.
+        """Return a string representation of the ImageCollection.
 
         Returns:
             table (str)
@@ -225,14 +220,13 @@ class ImageCollection(ImagingBase):
         return formatter.get_table("ImageCollection")
 
     def __getitem__(self, filter_code):
-        """
-        Enable dictionary key look up syntax.
+        """Enable dictionary key look up syntax.
 
         This allows the user to extract specific images with the following
         syntax: ImageCollection["JWST/NIRCam.F150W"].
 
         Args:
-            filter_code (str)
+            filter_code (str):
                 The filter code of the desired photometry.
 
         Returns:
@@ -262,8 +256,7 @@ class ImageCollection(ImagingBase):
         )
 
     def __setitem__(self, filter_code, img):
-        """
-        Store the image at filter_code in the imgs dictionary.
+        """Store the image at filter_code in the imgs dictionary.
 
         This allows the user to store specific images with the following
         syntax: ImageCollection["JWST/NIRCam.F150W"] = img.
@@ -272,9 +265,9 @@ class ImageCollection(ImagingBase):
         array it is converted to an Image object.
 
         Args:
-            filter_code (str)
+            filter_code (str):
                 The filter code of the desired photometry.
-            img (Image/array)
+            img (Image/unyt_array):
                 The image to be added to the collection.
         """
         if not isinstance(img, Image):
@@ -287,28 +280,47 @@ class ImageCollection(ImagingBase):
             self.filter_codes.append(filter_code)
 
     def keys(self):
-        """Return the keys of the image collection."""
+        """Return the keys of the image collection.
+
+        This enables dict.keys() behaviour.
+
+        Returns:
+            list:
+                The keys of the image collection.
+        """
         return self.imgs.keys()
 
     def values(self):
-        """Return the images in the image collection."""
+        """Return the values of the image collection.
+
+        This enables dict.values() behaviour.
+
+        Returns:
+            list:
+                The values of the image collection.
+        """
         return self.imgs.values()
 
     def items(self):
-        """Return the keys and images in the image collection."""
+        """Return the items of the image collection.
+
+        This enables dict.items() behaviour.
+
+        Returns:
+            list:
+                The items of the image collection.
+        """
         return self.imgs.items()
 
     def __iter__(self):
-        """
-        Overload iteration to allow simple looping over Image objects.
+        """Overload iteration to allow simple looping over Image objects.
 
         Combined with __next__ this enables for f in ImageCollection syntax
         """
         return self
 
     def __next__(self):
-        """
-        Overload iteration to allow simple looping over Image objects.
+        """Overload iteration to allow simple looping over Image objects.
 
         Combined with __iter__ this enables for f in ImageCollection syntax
         """
@@ -324,8 +336,7 @@ class ImageCollection(ImagingBase):
             return self.imgs[self.filter_codes[self._current_ind - 1]]
 
     def __add__(self, other_img):
-        """
-        Add two ImageCollections together.
+        """Add two ImageCollections together.
 
         This combines all images with a common key.
 
@@ -333,16 +344,16 @@ class ImageCollection(ImagingBase):
         img = img1 + img2, img will inherit the attributes of img1.
 
         Args:
-            other_img (ImageCollection)
+            other_img (ImageCollection):
                 The other image collection to be combined with self.
 
         Returns:
-            composite_img (ImageCollection)
+            composite_img (ImageCollection):
                 A new Image object containing the composite image of self and
                 other_img.
 
         Raises:
-            InconsistentAddition
+            InconsistentAddition:
                 If the ImageCollections can't be added and error is thrown.
         """
         # Make sure the images are compatible dimensions
@@ -382,8 +393,7 @@ class ImageCollection(ImagingBase):
         coordinates,
         normalisations=None,
     ):
-        """
-        Calculate an image with no smoothing.
+        """Calculate an image with no smoothing.
 
         Only applicable to particle based imaging.
 
@@ -419,8 +429,7 @@ class ImageCollection(ImagingBase):
         nthreads=1,
         normalisations=None,
     ):
-        """
-        Calculate an images from a smoothed distribution.
+        """Calculate an images from a smoothed distribution.
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
@@ -430,28 +439,28 @@ class ImageCollection(ImagingBase):
         density grid is an array defining the weight in each pixel.
 
         Args:
-            signal (unyt_array, float)
+            photometry (unyt_array, float):
                 The signal of each particle to be sorted into pixels.
-            coordinates (unyt_array, float)
+            coordinates (unyt_array, float):
                 The centered coordinates of the particles. (Only applicable to
                 particle imaging)
-            smoothing_lengths (unyt_array, float)
+            smoothing_lengths (unyt_array, float):
                 The smoothing lengths of the particles. (Only applicable to
                 particle imaging)
-            kernel (str)
+            kernel (str):
                 The array describing the kernel. This is dervied from the
                 kernel_functions module. (Only applicable to particle imaging)
-            kernel_threshold (float)
+            kernel_threshold (float):
                 The threshold for the kernel. Particles with a kernel value
                 below this threshold are included in the image. (Only
                 applicable to particle imaging)
-            density_grid (np.ndarray)
+            density_grid (np.ndarray of float):
                 The density grid to be smoothed over. (Only applicable to
                 parametric imaging).
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use when smoothing the image. This
                 only applies to particle imaging.
-            normalisations (array_like, float)
+            normalisations (array_like, float):
                 The normalisation property. This is multiplied by the signal
                 before sorting, then normalised out. (Only applicable to
                 particle imaging)
@@ -502,8 +511,7 @@ class ImageCollection(ImagingBase):
             )
 
     def apply_psfs(self, psfs):
-        """
-        Convolve this ImageCollection's images with their PSFs.
+        """Convolve this ImageCollection's images with their PSFs.
 
         To more accurately apply the PSF we recommend using a super resolution
         image. This can be done via the supersample method and then
@@ -512,7 +520,7 @@ class ImageCollection(ImagingBase):
         and then downsample after the fact.
 
         Args:
-            psfs (dict)
+            psfs (dict):
                 A dictionary with a point spread function for each image within
                 the ImageCollection. The key of each PSF must be the
                 filter_code of the image it should be applied to.
@@ -551,11 +559,10 @@ class ImageCollection(ImagingBase):
         )
 
     def apply_noise_arrays(self, noise_arrs):
-        """
-        Apply an existing noise array to each image.
+        """Apply an existing noise array to each image.
 
         Args:
-            noise_arrs (dict)
+            noise_arrs (dict):
                 A dictionary with a noise array for each image within the
                 ImageCollection. The key of each noise array must be the
                 filter_code of the image it should be applied to.
@@ -579,8 +586,7 @@ class ImageCollection(ImagingBase):
         missing = [f for f in self.filter_codes if f not in noise_arrs]
         if len(missing) > 0:
             raise exceptions.InconsistentArguments(
-                "Missing a noise array for the following "
-                f"filters: {missing}"
+                f"Missing a noise array for the following filters: {missing}"
             )
 
         # Loop over each images getting the noisy version
@@ -596,11 +602,10 @@ class ImageCollection(ImagingBase):
         )
 
     def apply_noise_from_stds(self, noise_stds):
-        """
-        Apply noise based on standard deviations of the noise distribution.
+        """Apply noise based on standard deviations of the noise distribution.
 
         Args:
-            noise_stds (dict)
+            noise_stds (dict):
                 A dictionary with a standard deviation for each image within
                 the ImageCollection. The key of each standard deviation must
                 be the filter_code of the image it should be applied to.
@@ -642,19 +647,18 @@ class ImageCollection(ImagingBase):
         )
 
     def apply_noise_from_snrs(self, snrs, depths, aperture_radius=None):
-        """
-        Apply noise based on SNRs and depths for each image.
+        """Apply noise based on SNRs and depths for each image.
 
         Args:
-            snrs (dict)
+            snrs (dict):
                 A dictionary containing the signal to noise ratio for each
                 image within the ImageCollection. The key of each SNR must
                 be the filter_code of the image it should be applied to.
-            depths (dict)
+            depths (dict):
                 A dictionary containing the depth for each image within the
                 ImageCollection. The key of each dpeth must be the filter_code
                 of the image it should be applied to.
-            aperture_radius (unyt_quantity)
+            aperture_radius (unyt_quantity):
                 The radius of the aperture in which the SNR and depth is
                 defined. This must have units attached and be in the same
                 system as the images resolution (e.g. cartesian or angular).
@@ -682,12 +686,11 @@ class ImageCollection(ImagingBase):
         missing_depths = [f for f in self.filter_codes if f not in depths]
         if len(missing_snrs) > 0:
             raise exceptions.InconsistentArguments(
-                "Missing a SNR for the following " f"filters: {missing_snrs}"
+                f"Missing a SNR for the following filters: {missing_snrs}"
             )
         if len(missing_depths) > 0:
             raise exceptions.InconsistentArguments(
-                "Missing a depth for the following "
-                f"filters: {missing_depths}"
+                f"Missing a depth for the following filters: {missing_depths}"
             )
         if aperture_radius is not None and not isinstance(
             aperture_radius, unyt_quantity
@@ -721,8 +724,7 @@ class ImageCollection(ImagingBase):
         ncols=4,
         individual_norm=False,
     ):
-        """
-        Plot all images.
+        """Plot all images.
 
         If this image object contains multiple filters each with an image and
         the filter_code argument is not specified, then all images will be
@@ -736,26 +738,26 @@ class ImageCollection(ImagingBase):
         across all filters.
 
         Args:
-            show (bool)
+            show (bool):
                 Whether to show the plot or not (Default False).
-            vmin (float)
+            vmin (float):
                 The minimum value of the normalisation range.
-            vmax (float)
+            vmax (float):
                 The maximum value of the normalisation range.
-            scaling_func (function)
+            scaling_func (function):
                 A function to scale the image by. This function should take a
                 single array and produce an array of the same shape but scaled
                 in the desired manner.
-            cmap (str)
+            cmap (str):
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
-            filters (list)
+            filters (list):
                 A list of filter codes to plot. If None, all filters will
                 be plotted.
-            ncols (int)
+            ncols (int):
                 The number of columns to use when plotting multiple images.
-            individual_norm (bool)
+            individual_norm (bool):
                 If True, each image will be normalised individually. If
                 False, and vmin and vmax are not provided, the images will be
                 normalised to the global min and max of all images.
@@ -879,14 +881,13 @@ class ImageCollection(ImagingBase):
         weights=None,
         scaling_func=None,
     ):
-        """
-        Make an rgb image from the ImageCollection.
+        """Make an rgb image from the ImageCollection.
 
         The filters in each channel are defined via the rgb_filters dict,
         with the option of providing weights for each filter.
 
         Args:
-            rgb_filters (dict, array_like, str)
+            rgb_filters (dict, array_like, str):
                 A dictionary containing lists of each filter to combine to
                 create the red, green, and blue channels.
                 e.g.
@@ -895,10 +896,10 @@ class ImageCollection(ImagingBase):
                 "G": "Webb/NIRCam.F150W",
                 "B": "Webb/NIRCam.F090W",
                 }.
-            weights (dict, array_like, float)
+            weights (dict, array_like, float):
                 A dictionary of weights for each filter. Defaults to equal
                 weights.
-            scaling_func (function)
+            scaling_func (function):
                 A function to scale the image by. This function should take a
                 single array and produce an array of the same shape but scaled
                 in the desired manner. The scaling is done to each channel
@@ -944,15 +945,14 @@ class ImageCollection(ImagingBase):
         return rgb_img
 
     def plot_rgb_image(self, show=False, vmin=None, vmax=None):
-        """
-        Plot an RGB image.
+        """Plot an RGB image.
 
         Args:
-            show (bool)
+            show (bool):
                 Whether to show the plot or not (Default False).
-            vmin (float)
+            vmin (float):
                 The minimum value of the normalisation range.
-            vmax (float)
+            vmax (float):
                 The maximum value of the normalisation range.
 
         Returns:

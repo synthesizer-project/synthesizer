@@ -9,8 +9,7 @@ def test_fesc_model_level(
     test_grid,
     random_part_stars,
 ):
-    """
-    Test setting fesc on the emission model.
+    """Test setting fesc on the emission model.
 
     This test ensures that the fesc set during instantiation of a model
     is set correctly. We only do this for the IntrinsicEmission model here
@@ -27,9 +26,9 @@ def test_fesc_model_level(
     spec_fesc1 = random_part_stars.get_spectra(model)
 
     # Ensure the two differ
-    assert not np.all(
-        spec_fesc0.lnu == spec_fesc1.lnu
-    ), "The spectra are the same with different fesc values"
+    assert not np.all(spec_fesc0.lnu == spec_fesc1.lnu), (
+        "The spectra are the same with different fesc values"
+    )
 
 
 def test_fesc_override(
@@ -40,8 +39,7 @@ def test_fesc_override(
     intrinsic_emission_model,
     pacman_emission_model,
 ):
-    """
-    Test the get_spectra fesc override in the emission model.
+    """Test the get_spectra fesc override in the emission model.
 
     This test ensures that the fesc override on get_spectra methods is working
     correctly. Unlike above, we test all the models here to ensure the

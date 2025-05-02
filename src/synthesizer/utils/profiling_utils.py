@@ -30,8 +30,7 @@ def _run_averaged_scaling_test(
     kwargs,
     total_msg,
 ):
-    """
-    Run a scaling test and average the result at each thread count.
+    """Run a scaling test and average the result at each thread count.
 
     Args:
         max_threads (int): The maximum number of threads to test.
@@ -103,14 +102,14 @@ def parse_and_collect_runtimes(
     log_outpath,
     low_thresh,
 ):
-    """
-    Parse the output from the scaling test and collect runtimes.
+    """Parse the output from the scaling test and collect runtimes.
 
     Args:
         output (str): The captured output from the test.
         threads (list): The list of thread counts used in the test.
         average_over (int): The number of times to average the test over.
         log_outpath (str): The path to save the log file.
+        low_thresh (float): The threshold for low runtimes.
 
     Returns:
         atomic_runtimes (dict):
@@ -238,8 +237,7 @@ def plot_speed_up_plot(
     outpath,
     figsize=(3.5, 2 * 3.5),
 ):
-    """
-    Plot a strong scaling test.
+    """Plot a strong scaling test.
 
     Args:
         atomic_runtimes (dict):
@@ -353,8 +351,7 @@ def run_scaling_test(
     low_thresh,
     figsize=(6, 6),
 ):
-    """
-    Run a scaling test for the Synthesizer package.
+    """Run a scaling test for the Synthesizer package.
 
     For this to deliver the full profiling potential Synthesizer should be
     installed with the ATOMIC_TIMING configuration option.

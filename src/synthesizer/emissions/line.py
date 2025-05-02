@@ -64,8 +64,7 @@ from synthesizer.utils import TableFormatter
 
 
 class LineCollection:
-    """
-    A class holding a collection of emission lines.
+    """A class holding a collection of emission lines.
 
     The LineCollection class holds a collection of emission lines, each with a
     rest frame wavelength, a luminosity, and a continuum. The LineCollection
@@ -79,31 +78,31 @@ class LineCollection:
     this time.
 
     Attributes:
-        line_ids (list)
+        line_ids (list):
             A list of the line ids.
-        lam (unyt_array)
+        lam (unyt_array):
             An array of rest frame line wavelengths.
-        luminosity (unyt_array)
+        luminosity (unyt_array):
             An array of rest frame line luminosities.
-        continuum (unyt_array)
+        continuum (unyt_array):
             An array of rest frame line continuum.
-        description (str)
+        description (str):
             An optional description of the line collection.
-        obslam (unyt_array)
+        obslam (unyt_array):
             An array of observed line wavelengths.
-        flux (unyt_array)
+        flux (unyt_array):
             An array of line fluxes.
-        continuum_flux (unyt_array)
+        continuum_flux (unyt_array):
             An array of line continuum fluxes.
-        vacuum_wavelength (unyt_array)
+        vacuum_wavelength (unyt_array):
             An array of vacuum wavelengths.
-        available_ratios (list)
+        available_ratios (list):
             A list of the available line ratios based on the lines in the
             collection.
-        available_diagrams (list)
+        available_diagrams (list):
             A list of the available line diagrams based on the lines in the
             collection.
-        nlines (int)
+        nlines (int):
             The number of lines in the collection.
     """
 
@@ -118,19 +117,18 @@ class LineCollection:
 
     @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
     def __init__(self, line_ids, lam, lum, cont, description=None):
-        """
-        Initialise the collection of emission lines.
+        """Initialise the collection of emission lines.
 
         Args:
-            line_ids (list)
+            line_ids (list):
                 A list or array of line ids.
-            lam (unyt_array)
+            lam (unyt_array):
                 An array of rest frame line wavelengths.
-            lum (unyt_array)
+            lum (unyt_array):
                 An array of rest frame line luminosities.
-            cont (unyt_array)
+            cont (unyt_array):
                 An array of rest frame line continuum.
-            description (str)
+            description (str):
                 A optional description of the line collection.
         """
         start = tic()
@@ -187,13 +185,12 @@ class LineCollection:
 
     @property
     def id(self):
-        """
-        Return the line id.
+        """Return the line id.
 
         This is an alias to be used when theres a single line id.
 
         Returns:
-            line_ids (list)
+            line_ids (list):
                 A list of the line ids.
         """
         if self.nlines == 1:
@@ -205,34 +202,31 @@ class LineCollection:
 
     @property
     def lum(self):
-        """
-        Return the luminosity of the lines.
+        """Return the luminosity of the lines.
 
         This is an alias for the luminosity property.
 
         Returns:
-            luminosity (unyt_array)
+            luminosity (unyt_array):
                 The luminosity of the lines.
         """
         return self.luminosity
 
     @property
     def cont(self):
-        """
-        Return the continuum of the lines.
+        """Return the continuum of the lines.
 
         This is an alias for the continuum property.
 
         Returns:
-            continuum (unyt_array)
+            continuum (unyt_array):
                 The continuum of the lines.
         """
         return self.continuum
 
     @property
     def elements(self):
-        """
-        Return the elements of the lines.
+        """Return the elements of the lines.
 
         We relegate this to a property method to reduce the duplication of
         memory. This is rarely used in expensive use cases and is inexpensive
@@ -240,7 +234,7 @@ class LineCollection:
         prohibitive.
 
         Returns:
-            elements (list)
+            elements (list):
                 A list of the elements of the lines.
         """
         return list(
@@ -251,8 +245,7 @@ class LineCollection:
 
     @property
     def vacuum_wavelengths(self):
-        """
-        Return the vacuum wavelengths of the lines.
+        """Return the vacuum wavelengths of the lines.
 
         We relegate this to a property method to reduce the duplication of
         memory. This is rarely used in expensive use cases and is inexpensive
@@ -260,15 +253,14 @@ class LineCollection:
         is not prohibitive.
 
         Returns:
-            vacuum_wavelengths (unyt_array)
+            vacuum_wavelengths (unyt_array):
                 The vacuum wavelengths of the lines.
         """
         return standard_to_vacuum(self.lam)
 
     @property
     def _individual_line_ids(self):
-        """
-        Return the individual line ids.
+        """Return the individual line ids.
 
         We relegate this to a property method to reduce the duplication of
         memory. This is rarely used in expensive use cases and is inexpensive
@@ -276,7 +268,7 @@ class LineCollection:
         is not prohibitive.
 
         Returns:
-            individual_line_ids (list)
+            individual_line_ids (list):
                 A list of the individual line ids.
         """
         return np.array(
@@ -285,22 +277,20 @@ class LineCollection:
 
     @property
     def nu(self):
-        """
-        Return the frequency of the line.
+        """Return the frequency of the line.
 
         Returns:
-            nu (unyt_quantity)
+            nu (unyt_quantity):
                 The frequency of the line in Hz.
         """
         return (c / self.lam).to(Hz)
 
     @property
     def obsnu(self):
-        """
-        Return the observed frequency of the line.
+        """Return the observed frequency of the line.
 
         Returns:
-            obsnu (unyt_quantity)
+            obsnu (unyt_quantity):
                 The observed frequency of the line in Hz.
         """
         if self.obslam is None:
@@ -309,43 +299,39 @@ class LineCollection:
 
     @property
     def energy(self):
-        """
-        Get the wavelengths in terms of photon energies in eV.
+        """Get the wavelengths in terms of photon energies in eV.
 
-        Returns
-            energy (unyt_array)
+        Returns:
+            energy (unyt_array):
                 The energy coordinate.
         """
         return (h * c / self.lam).to(eV)
 
     @property
     def continuum_llam(self):
-        """
-        Return the continuum in units of Llam (erg/s/AA).
+        """Return the continuum in units of Llam (erg/s/AA).
 
         Returns:
-            continuum_llam (unyt_quantity)
+            continuum_llam (unyt_quantity):
                 The continuum in units of Llam (erg/s/AA).
         """
         return lnu_to_llam(self.lam, self.continuum)
 
     @property
     def equivalent_width(self):
-        """
-        Return the equivalent width.
+        """Return the equivalent width.
 
         Returns:
-            equivalent_width (unyt_quantity)
+            equivalent_width (unyt_quantity):
                 The equivalent width of the line.
         """
         return self.luminosity / self.continuum_llam
 
     @property
     def ndim(self):
-        """
-        Get the dimensions of the spectra array.
+        """Get the dimensions of the spectra array.
 
-        Returns
+        Returns:
             Tuple
                 The shape of self.lnu
         """
@@ -353,10 +339,9 @@ class LineCollection:
 
     @property
     def shape(self):
-        """
-        Get the shape of the spectra array.
+        """Get the shape of the spectra array.
 
-        Returns
+        Returns:
             Tuple
                 The shape of self.lnu
         """
@@ -364,21 +349,19 @@ class LineCollection:
 
     @property
     def nlam(self):
-        """
-        Get the number of wavelength bins.
+        """Get the number of wavelength bins.
 
-        Returns
+        Returns:
             int
                 The number of wavelength bins.
         """
         return len(self.line_ids)
 
     def __str__(self):
-        """
-        Return a string representation of the SED object.
+        """Return a string representation of the SED object.
 
         Returns:
-            table (str)
+            table (str):
                 A string representation of the SED object.
         """
         # Intialise the table formatter
@@ -387,8 +370,7 @@ class LineCollection:
         return formatter.get_table("LineCollection")
 
     def __iter__(self):
-        """
-        Allow iteration over the LineCollection object.
+        """Allow iteration over the LineCollection object.
 
         Overload iteration to allow simple looping over Line objects,
         combined with __next__ this enables for l in LineCollection syntax
@@ -400,14 +382,13 @@ class LineCollection:
         return self
 
     def __next__(self):
-        """
-        Return the next line ID in the LineCollection object.
+        """Return the next line ID in the LineCollection object.
 
         Overload iteration to allow simple looping over Line objects,
         combined with __iter__ this enables for l in LineCollection syntax
 
         Returns:
-            line_id (str)
+            line_id (str):
                 The line ID.
         """
         # Check we haven't finished
@@ -426,32 +407,29 @@ class LineCollection:
         return self.nlines
 
     def __mul__(self, scaling):
-        """
-        Scale the line by a given factor.
+        """Scale the line by a given factor.
 
         Overloads * operator to allow direct scaling of Line objects.
 
-        Returns
+        Returns:
             (Line)
                 New instance of Line containing the scaled line.
         """
         return self.scale(scaling)
 
     def __rmul__(self, scaling):
-        """
-        Scale the line by a given factor.
+        """Scale the line by a given factor.
 
         Overloads * operator to allow direct scaling of Line objects.
 
-        Returns
+        Returns:
             (Line)
                 New instance of Line containing the scaled line.
         """
         return self.scale(scaling)
 
     def __add__(self, other):
-        """
-        Add two Line objects together.
+        """Add two Line objects together.
 
         Overloads + operator to allow direct addition of Line objects.
 
@@ -459,7 +437,7 @@ class LineCollection:
         flux of the summed lines get_flux must be called on the new Line
         object.
 
-        Returns
+        Returns:
             (Line)
                 New instance of Line containing the summed lines.
         """
@@ -483,8 +461,7 @@ class LineCollection:
         )
 
     def __getitem__(self, key):
-        """
-        Return a subset of lines from the collection.
+        """Return a subset of lines from the collection.
 
         This method enables the extraction of various stored and derived line
         properties. The key can be one of the following:
@@ -501,7 +478,7 @@ class LineCollection:
            lines["OHNO"]), to return the line diagram (see get_diagram).
 
         Args:
-            key (str/list)
+            key (str/list):
                 The id/s of the line/ratio/diagram. If a string contains a
                 comma separated list of line_ids a composite line will be
                 returned containing the sum of the luminosities and the mean
@@ -690,11 +667,10 @@ class LineCollection:
         )
 
     def sum(self, axis=None):
-        """
-        Sum the lines in the collection.
+        """Sum the lines in the collection.
 
         Args:
-            axis (int/tuple)
+            axis (int/tuple):
                 The axis/axes to sum over. By default this will sum over all
                 but the final axis (the axis containing different lines).
         """
@@ -729,8 +705,7 @@ class LineCollection:
         )
 
     def concat(self, *other_lines):
-        """
-        Concatenate LineCollections together.
+        """Concatenate LineCollections together.
 
         This will combine the array along the first axis. For example, if we
         have two LineCollections with LineCollection.shape = (10, 100) and
@@ -739,7 +714,7 @@ class LineCollection:
         This cannot combine LineCollections with different line_ids.
 
         Args:
-            other_lines (LineCollection)
+            other_lines (LineCollection):
                 The other LineCollections to concatenate.
 
         Returns:
@@ -766,14 +741,13 @@ class LineCollection:
         )
 
     def extend(self, *other_lines):
-        """
-        Extend the LineCollection with additional lines.
+        """Extend the LineCollection with additional lines.
 
         This will add the lines to the end of the LineCollection. The combined
         LineCollections must not contain any duplicate lines.
 
         Args:
-            other_lines (LineCollection)
+            other_lines (LineCollection):
                 The other LineCollections to extend with.
 
         Returns:
@@ -851,8 +825,7 @@ class LineCollection:
                 self.available_diagrams.append(diagram_id)
 
     def get_flux0(self):
-        """
-        Calculate the rest frame line flux.
+        """Calculate the rest frame line flux.
 
         Uses a standard distance of 10pc to calculate the flux.
 
@@ -861,7 +834,7 @@ class LineCollection:
         same as the emitted wavelength).
 
         Returns:
-            flux (unyt_quantity)
+            flux (unyt_quantity):
                 Flux of the line in units of erg/s/cm2 by default.
         """
         # Compute flux
@@ -875,8 +848,7 @@ class LineCollection:
         return self.flux
 
     def get_flux(self, cosmo, z, igm=None):
-        """
-        Calculate the line flux given a redshift and cosmology.
+        """Calculate the line flux given a redshift and cosmology.
 
         This will also populate the observed_wavelength attribute with the
         wavelength of the line when observed.
@@ -886,16 +858,16 @@ class LineCollection:
         IGM contribution makes no sense.
 
         Args:
-            cosmo (astropy.cosmology.)
+            cosmo (astropy.cosmology.Cosmology):
                 Astropy cosmology object.
-            z (float)
+            z (float):
                 The redshift.
-            igm (igm)
+            igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
 
         Returns:
-            flux (unyt_quantity)
+            flux (unyt_quantity):
                 Flux of the line in units of erg/s/cm2 by default.
         """
         # If the redshift is 0 we can assume a distance of 10pc and ignore
@@ -930,13 +902,12 @@ class LineCollection:
         return self.flux
 
     def _get_ratio(self, numer_line, denom_line):
-        """
-        Measure (and return) a line ratio.
+        """Measure (and return) a line ratio.
 
         Args:
-            numer_line (str/list)
+            numer_line (str/list):
                 The line or lines in the numerator.
-            denom_line (str/list)
+            denom_line (str/list):
                 The line or lines in the denominator.
 
         Returns:
@@ -1005,11 +976,10 @@ class LineCollection:
         return numer_lum / denom_lum
 
     def get_ratio(self, ratio_id):
-        """
-        Measure (and return) a line ratio.
+        """Measure (and return) a line ratio.
 
         Args:
-            ratio_id (str, list)
+            ratio_id (str, list):
                 Either a ratio_id where the ratio lines are defined in
                 line_ratios or a list of lines.
 
@@ -1052,16 +1022,15 @@ class LineCollection:
         return self._get_ratio(line1, line2)
 
     def get_diagram(self, diagram_id):
-        """
-        Return a pair of line ratios for a given diagram_id (E.g. BPT).
+        """Return a pair of line ratios for a given diagram_id (E.g. BPT).
 
         Args:
-            diagram_id (str, list)
+            diagram_id (str, list):
                 Either a diagram_id where the pairs of ratio lines are defined
                 in line_ratios or a list of lists defining the ratios.
 
         Returns:
-            tuple (float)
+            tuple (float):
                 a pair of line ratios
         """
         # If ratio_id is a string interpret as a ratio_id for the ratios
@@ -1089,22 +1058,23 @@ class LineCollection:
         return self._get_ratio(*ab), self._get_ratio(*cd)
 
     def scale(self, scaling, inplace=False, mask=None, **kwargs):
-        """
-        Scale the lines by a given factor.
+        """Scale the lines by a given factor.
 
         Note: this will only scale the rest frame continuum and luminosity.
         To get the scaled flux get_flux must be called on the new Line object.
 
         Args:
-            scaling (float)
+            scaling (float):
                 The factor by which to scale the line.
-            inplace (bool)
+            inplace (bool):
                 If True the Line object will be scaled in place, otherwise a
                 new Line object will be returned.
-            mask (array-like, bool)
+            mask (array-like, bool):
                 A mask array with an entry for each line. Masked out
                 spectra will not be scaled. Only applicable for
                 multidimensional lines.
+            **kwargs (dict):
+                Additional keyword arguments to pass to the scaling function.
 
         Returns:
             LineCollection
@@ -1292,16 +1262,15 @@ class LineCollection:
         dust_curve,
         mask=None,
     ):
-        """
-        Apply attenuation to this LineCollection.
+        """Apply attenuation to this LineCollection.
 
         Args:
-            tau_v (float/array-like, float)
+            tau_v (float/np.ndarray of float):
                 The V-band optical depth for every star particle.
-            dust_curve (synthesizer.emission_models.attenuation.*)
+            dust_curve (synthesizer.emission_models.attenuation.*):
                 An instance of one of the dust attenuation models. (defined in
                 synthesizer/emission_models.attenuation.py)
-            mask (array-like, bool)
+            mask (array-like, bool):
                 A mask array with an entry for each line. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for multidimensional lines.
@@ -1365,16 +1334,21 @@ class LineCollection:
         xlimits=(),
         ylimits=(),
     ):
-        """
-        Plot the lines in the LineCollection.
+        """Plot the lines in the LineCollection.
 
         Args:
-            show (bool)
+            subset (str/list):
+                The line_id or list of line_ids to plot. If None, all lines
+                will be plotted.
+            figsize (tuple):
+                The size of the figure (width, height) in inches. Defaults
+                to (8, 6).
+            show (bool):
                 Whether to show the plot.
-            xlimits (tuple)
+            xlimits (tuple):
                 The x-axis limits. Must be a length 2 tuple.
                 Defaults to (), in which case the default limits are used.
-            ylimits (tuple)
+            ylimits (tuple):
                 The y-axis limits. Must be a length 2 tuple.
                 Defaults to (), in which case the default limits are used.
 
@@ -1458,8 +1432,7 @@ class LineCollection:
 
     @accepts(wavelength_bins=angstrom)
     def get_blended_lines(self, wavelength_bins):
-        """
-        Blend lines based on a set of wavelength bins.
+        """Blend lines based on a set of wavelength bins.
 
         We use a set of wavelength bins to enable the user to control exactly
         which lines are blended together. This also enables an array to be
@@ -1469,7 +1442,7 @@ class LineCollection:
         B are blended, and B and C are blended, but A and C are not.
 
         Args:
-            wavelength_bins (unyt_array)
+            wavelength_bins (unyt_array):
                 The wavelength bin edges into which the lines will be blended.
                 Any lines outside the range of the bins will be ignored.
 

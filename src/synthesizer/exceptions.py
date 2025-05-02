@@ -1,134 +1,201 @@
-"""
-The definitions for Synthesizer specific errors.
-"""
+"""The definitions for Synthesizer specific errors."""
 
 
 class MissingArgument(Exception):
-    """
-    Generic exception class for when an argument is missing.
-    """
+    """Generic exception class for when an argument is missing."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Missing argument"
 
 
 class IncorrectUnits(Exception):
-    """
-    Generic exception class for when incorrect units are provided.
-    """
+    """Generic exception class for when incorrect units are provided."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Inconsistent units"
 
 
 class MissingUnits(Exception):
-    """
-    Generic exception class for when expected units aren't provided.
-    """
+    """Generic exception class for when expected units aren't provided."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Units are missing"
 
 
 class InconsistentParameter(Exception):
-    """
-    Generic exception class for inconsistent parameters.
-    """
+    """Generic exception class for inconsistent parameters."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Inconsistent parameter choice"
 
 
 class InconsistentArguments(Exception):
-    """
-    Generic exception class for inconsistent combinations of arguments.
-    """
+    """Generic exception class for inconsistent combinations of arguments."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Inconsistent parameter choice"
 
 
 class UnimplementedFunctionality(Exception):
-    """
-    Generic exception class for functionality not yet implemented.
-    """
+    """Generic exception class for functionality not yet implemented."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Unimplemented functionality!"
 
 
 class UnknownImageType(Exception):
-    """
-    Generic exception class for functionality not yet implemented.
-    """
+    """Generic exception class for functionality not yet implemented."""
 
     def __init__(self, *args):
-        if args:
-            self.message = args[0]
-        else:
-            return "Inconsistent parameter choice"
+        """Initialise the exception with an optional message.
 
-
-class InconsistentAddition(Exception):
-    """
-    Generic exception class for when adding two objects is impossible.
-    """
-
-    def __init__(self, *args):
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Unknown image type!"
+
+
+class InconsistentAddition(Exception):
+    """Generic exception class for when adding two objects is impossible."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -136,17 +203,25 @@ class InconsistentAddition(Exception):
 
 
 class InconsistentMultiplication(Exception):
-    """
-    Generic exception class for when multiplying two objects is impossible.
-    """
+    """Generic exception class for impossible multiplications."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -154,17 +229,25 @@ class InconsistentMultiplication(Exception):
 
 
 class InconsistentCoordinates(Exception):
-    """
-    Generic exception class for when coordinates are inconsistent.
-    """
+    """Generic exception class for when coordinates are inconsistent."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -172,18 +255,25 @@ class InconsistentCoordinates(Exception):
 
 
 class SVOFilterNotFound(Exception):
-    """
-    Exception class for when an SVO filter code does not match one in
-    the database.
-    """
+    """Exception class for when an SVO filter code isn't in the database."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -191,19 +281,30 @@ class SVOFilterNotFound(Exception):
 
 
 class SVOTransmissionHasUnits(Exception):
-    """
-    Exception class for when an SVO filter returns units, which should not be
-    the case for the transmission. For example, where the effective area is
-    provided.
+    """Exception class for when an SVO filter returns units.
+
+    This should not be the case for a transmission curve. For example, where
+    the effective area is provided instead of a transmission curve, which is
+    a case we currently don't support.
     """
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -211,17 +312,25 @@ class SVOTransmissionHasUnits(Exception):
 
 
 class InconsistentWavelengths(Exception):
-    """
-    Exception class for when array dimensions don't
-    """
+    """Exception class for when wavelengths are inconsistent."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -229,17 +338,25 @@ class InconsistentWavelengths(Exception):
 
 
 class MissingSpectraType(Exception):
-    """
-    Exception class for when an SPS grid is missing
-    """
+    """Exception class for when a spectra type is missing."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -247,17 +364,25 @@ class MissingSpectraType(Exception):
 
 
 class MissingLines(Exception):
-    """
-    Exception class for when a line is missing from a spectrum
-    """
+    """Exception class for when a line is missing from a spectrum."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -265,17 +390,25 @@ class MissingLines(Exception):
 
 
 class MissingImage(Exception):
-    """
-    Exception class for when an image has not yet been made
-    """
+    """Exception class for when an image has not yet been made."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -286,12 +419,22 @@ class MissingModelSettings(Exception):
     """Exception class for when a model is missing settings."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         return "Model is missing settings!"
 
 
@@ -299,12 +442,22 @@ class MissingIFU(Exception):
     """Exception class for when an IFU has not yet been made."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -312,18 +465,25 @@ class MissingIFU(Exception):
 
 
 class WavelengthOutOfRange(Exception):
-    """
-    Exception class for when a wavelength is not accessible to
-    Filters in a FilterCollection.
-    """
+    """Exception class for when a wavelength is out of range."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         else:
@@ -331,143 +491,185 @@ class WavelengthOutOfRange(Exception):
 
 
 class SVOInaccessible(Exception):
-    """
-    Generic exception class for when SVO is inaccessible.
-    """
+    """Generic exception class for when SVO is inaccessible."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "SVO database is down!"
 
 
 class UnrecognisedOption(Exception):
-    """
-    Generic exception class for when a string argument is not a recognised
-    option.
-    """
+    """Exception class string arguments not being a recognised option."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Unrecognised option."
 
 
 class MissingAttribute(Exception):
-    """
-    Generic exception class for when a required attribute is missing on an
-    object.
-    """
+    """Exception class for when a required attribute is missing."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Missing attribute"
 
 
 class GridError(Exception):
-    """
-    Generic exception class for anything to with grid issues, such as particles
-    not lying within a grid, missing axes etc.
-    """
+    """Exception class Grid related issues."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Theres an issues with the grid."
 
 
 class UnmetDependency(Exception):
-    """
-    Generic exception class for anything to do with not having specific
+    """Exception for missing dependencies.
+
+    A generic exception class for anything to do with not having specific
     packages not mentioned in the requirements. This is usually when there
     are added dependency due to including extraneous capabilities.
     """
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "There are unmet package dependencies."
 
 
 class DownloadError(Exception):
-    """
-    Generic exception class for anything to do with not having specific
+    """Exception for failed downloads.
+
+    A generic exception class for anything to do with not having specific
     packages not mentioned in the requirements. This is usually when there
     are added dependency due to including extraneous capabilities.
     """
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "There was an error downloading the data."
 
 
-class MissingPartition(Exception):
-    """
-    Exception class for when the partition hasn't been run for a Pipeline.
-    """
-
-    def __init__(self, *args):
-        if args:
-            self.message = args[0]
-        else:
-            self.message = None
-
-    def __str__(self):
-        if self.message:
-            return "{0} ".format(self.message)
-        return "Partition hasn't been done yet."
-
-
 class PipelineNotReady(Exception):
-    """
-    Exception class for when a required pipeline step hasn't been run.
-    """
+    """Exception class for when a required pipeline step hasn't been run."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Pipeline isn't ready to run current operation."
@@ -477,12 +679,22 @@ class BadResult(Exception):
     """Exception class for when a result is not as expected."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Result is not as expected."
@@ -492,12 +704,22 @@ class MissingMaskAttribute(Exception):
     """Exception class for when the masking attribute is missing."""
 
     def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
         if args:
             self.message = args[0]
         else:
             self.message = None
 
     def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
         if self.message:
             return "{0} ".format(self.message)
         return "Mask is missing an attribute."
