@@ -13,28 +13,6 @@
 #include "macros.h"
 #include "property_funcs.h"
 
-struct part_grid_cell {
-  int part_ind;
-  int sort_grid_ind;
-  double mass;
-  double *fracs;
-  int *grid_inds;
-};
-
-void _get_part_ind_frac_cic(struct part_grid_cell *cell_struct, int *dims,
-                            int ndim, double **grid_props, double *part_props);
-
-static int compare_part_grid_cells(const void *a, const void *b) {
-  const struct part_grid_cell *A = (const struct part_grid_cell *)a;
-  const struct part_grid_cell *B = (const struct part_grid_cell *)b;
-
-  if (A->sort_grid_ind < B->sort_grid_ind)
-    return -1;
-  if (A->sort_grid_ind > B->sort_grid_ind)
-    return +1;
-  return 0;
-}
-
 /**
  * @brief Compute an ndimensional index from a flat index.
  *

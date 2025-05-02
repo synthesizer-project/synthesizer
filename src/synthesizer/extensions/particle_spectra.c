@@ -336,179 +336,92 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
   /* Calculate the number of cell in a patch of the grid. */
   int ncells = 1 << ndim;
 
-  /* Allocate the array of particle grid cell structs, we'll populate these
-   * with the fraction in each grid cell below. */
-  struct part_grid_cell *part_cells =
-      synth_malloc(npart * sizeof(struct part_grid_cell), "part cells");
-
-  /* Loop over the particles calculating their grid indices and fractions. */
-  double frac_start = tic();
 #pragma omp parallel for schedule(static) num_threads(nthreads)
+  /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
     /* Skip masked particles. */
-    if (parts->mask != NULL && !parts->mask[p]) {
+    if (mask != NULL && !mask[p]) {
       continue;
     }
 
-    /* Construct the part_props */
-    double _part_props[ndim];
-    for (int idim = 0; idim < ndim; idim++) {
-      _part_props[idim] = parts->props[idim][p];
-    }
+    /* Get this particle's mass. */
+    const double mass = part_masses[p];
 
-    /* Get this entry in the part_cells array. */
-    struct part_grid_cell *restrict _part_cell = &part_cells[p];
-
-    /* Set up this entry in the part_cells array. */
-    _part_cell->part_ind = p;
-    _part_cell->mass = parts->mass[p];
-    int grid_indices[ndim];
-    double part_axis_fracs[ndim];
-    _part_cell->fracs = part_axis_fracs;
-    _part_cell->grid_inds = grid_indices;
+    /* Setup the index and mass fraction arrays. */
+    int part_indices[ndim];
+    double axis_fracs[ndim];
 
     /* Get the grid indices and cell fractions for the particle. */
-    _get_part_ind_frac_cic(_part_cell, dims, ndim, grid_props, _part_props);
+    get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                          part_props, p);
 
-    /* Set the grid ind we will use for sorting. */
-    _part_cell->sort_grid_ind = get_flat_index(grid_indices, dims, ndim);
+    /* To combine fractions we will need an array of dimensions for the
+     * subset. These are always two in size, one for the low and one for high
+     * grid point. */
+    int sub_dims[ndim];
+    for (int idim = 0; idim < ndim; idim++) {
+      sub_dims[idim] = 2;
+    }
+
+    /* Now loop over this collection of cells collecting and setting their
+     * weights. */
+    for (int icell = 0; icell < ncells; icell++) {
+
+      /* Set up some index arrays we'll need. */
+      int subset_ind[ndim];
+      int frac_ind[ndim];
+
+      /* Get the multi-dimensional version of icell. */
+      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+      /* Multiply all contributing fractions and get the fractions index
+       * in the grid. */
+      double frac = 1;
+      for (int idim = 0; idim < ndim; idim++) {
+        if (subset_ind[idim] == 0) {
+          frac *= (1 - axis_fracs[idim]);
+          frac_ind[idim] = part_indices[idim] - 1;
+        } else {
+          frac *= axis_fracs[idim];
+          frac_ind[idim] = part_indices[idim];
+        }
+      }
+
+      /* Nothing to do if fraction is 0. */
+      if (frac == 0) {
+        continue;
+      }
+
+      /* Define the weight. */
+      double weight = frac * mass;
+
+      /* Get the weight's index. */
+      const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < nlam; ilam++) {
+
+        /* Skip if this wavelength is masked. */
+        if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
+          continue;
+        }
+
+        /* Add the contribution to this wavelength. */
+        part_spectra[p * nlam + ilam] +=
+            grid_spectra[spectra_ind + ilam] * weight;
+        spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
+      }
+    }
   }
-  toc("Getting fractions and indices", frac_start);
-
-  /* Sort the particles by their grid indices. */
-  double sort_start = tic();
-  qsort(part_cells, npart, sizeof(struct part_grid_cell),
-        compare_part_grid_cells);
-  toc("Sorting particles", sort_start);
-
-  //   /* Ok, we are now in grid cell order so things should be nice and
-  //    * cache friendly now we just need to loop over the grid cells and
-  //    combine
-  //    * the weights with the spectra. */
-  //   double spectra_start = tic();
-  // #pragma omp parallel for schedule(static) num_threads(nthreads)
-  //   for (int ipcell = 0; ipcell < npart; ipcell++) {
-  //
-  //     /* Get this entry in the part_cells array. */
-  //     struct part_grid_cell *restrict _part_cell = &part_cells[ipcell];
-  //
-  //     /* Unpack the properties we have for this cell entry. */
-  //     int p = _part_cell->part_ind;
-  //     double *restrict axis_fracs = _part_cell->fracs;
-  //     int *restrict grid_indices = _part_cell->grid_inds;
-  //     double mass = _part_cell->mass;
-  //
-  //     /* Early exit if this particle is masked. */
-  //     if (parts->mask != NULL && !parts->mask[p]) {
-  //       continue;
-  //     }
-  //
-  //     /* To combine fractions we will need an array of dimensions for the
-  //      * subset. These are always two in size, one for the low and one for
-  //      high
-  //      * grid point. */
-  //     int sub_dims[ndim];
-  //     for (int idim = 0; idim < ndim; idim++) {
-  //       sub_dims[idim] = 2;
-  //     }
-  //
-  //     /* Now loop over this collection of cells collecting and setting their
-  //      * weights. */
-  //     for (int icell = 0; icell < ncells; icell++) {
-  //       /* Set up some index arrays we'll need. */
-  //       int subset_ind[ndim];
-  //       int frac_ind[ndim];
-  //
-  //       /* Multiply all contributing fractions and get the fractions index in
-  //       the
-  //        * grid. */
-  //       double frac = 1;
-  //       for (int idim = 0; idim < ndim; idim++) {
-  //         if (subset_ind[idim] == 0) {
-  //           frac *= (1 - axis_fracs[idim]);
-  //           frac_ind[idim] = grid_indices[idim] - 1;
-  //         } else {
-  //           frac *= axis_fracs[idim];
-  //           frac_ind[idim] = grid_indices[idim];
-  //         }
-  //       }
-  //
-  //       if (frac == 0) {
-  //         continue;
-  //       }
-  //
-  //       /* Get the multi-dimensional version of icell. */
-  //       get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-  //
-  //       /* Define the weight. */
-  //       double weight = frac * mass;
-  //
-  //       /* Get the weight's index. */
-  //       const int grid_ind = get_flat_index(frac_ind, dims, ndim);
-  //
-  //       /* Get the spectra ind. */
-  //       int unraveled_ind[ndim + 1];
-  //       get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-  //       unraveled_ind[ndim] = 0;
-  //       int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-  //
-  //       /* Grab a pointer to the grid spectra. */
-  //       double *gspec = grid_spectra + spectra_ind;
-  //       npy_bool *lam_mask = grid->lam_mask;
-  //
-  //       /* Do we have a wavelength mask? If not we don't need to keep
-  //       checking
-  //        * whether it exists. */
-  //       if (lam_mask == NULL) {
-  //
-  //         /* Add this grid cell's contribution to the spectra */
-  //         for (int ilam = 0; ilam < nlam; ilam++) {
-  //           double contrib = gspec[ilam] * weight;
-  //           spectra[ilam] += contrib;
-  //           part_spectra[p * nlam + ilam] += contrib;
-  //         }
-  //
-  //       } else {
-  //
-  //         /* Add this grid cell's contribution to the spectra */
-  //         for (int ilam = 0; ilam < nlam; ilam++) {
-  //
-  //           /* Skip if this wavelength is masked. */
-  //           if (!lam_mask[ilam]) {
-  //             continue;
-  //           }
-  //
-  //           /* Add the contribution to this wavelength. */
-  //           double contrib = gspec[ilam] * weight;
-  //           spectra[ilam] += contrib;
-  //           part_spectra[p * nlam + ilam] += contrib;
-  //         }
-  //       }
-  //     }
-  //   }
-  //
-  // #pragma omp critical
-  //     {
-  //       /* Now add the thread local spectra to the global spectra. */
-  //       for (int ilam = 0; ilam < nlam; ilam++) {
-  //         spectra[ilam] += ispec[ilam];
-  //       }
-  //
-  //       free(ispec);
-  //     }
-  //
-  //     /* Combine the thread local particle spectra into the global
-  //     particle
-  //      * spectra. */
-  //     for (int p = 0; p < npart_on_thread; p++) {
-  //       for (int ilam = 0; ilam < nlam; ilam++) {
-  //         part_spectra[(p + start) * nlam + ilam] +=
-  //             ipart_spectra[p * nlam + ilam];
-  //       }
-  //     }
 }
-#endif
+#endif /* WITH_OPENMP */
 
 /**
  * @brief This calculates the grid weights in each grid cell using a cloud
@@ -972,68 +885,45 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
   int npart = parts->npart;
   npy_bool *mask = parts->mask;
 
-#pragma omp parallel num_threads(nthreads)
-  {
-    /* Get the thread id. */
-    int tid = omp_get_thread_num();
+/* Loop over particles. */
+#pragma omp parallel for schedule(static) num_threads(nthreads)
+  for (int p = 0; p < npart; p++) {
 
-    /* We will give each thread a chunk of the spectra to work on. */
-
-    /* How many wavelength elements should each thread get? */
-    int nlam_per_thread = (grid->nlam + nthreads - 1) / nthreads;
-
-    /* Calculate the start and end indices for this thread. */
-    int start = tid * nlam_per_thread;
-    int end = start + nlam_per_thread;
-    if (end >= grid->nlam) {
-      end = grid->nlam;
+    /* Skip masked particles. */
+    if (mask != NULL && !mask[p]) {
+      continue;
     }
 
-    /* Loop over wavelengths. */
-    for (int ilam = 0; ilam < end - start; ilam++) {
+    /* Get this particle's mass. */
+    const double weight = part_masses[p];
+
+    /* Setup the index array. */
+    int part_indices[ndim];
+
+    /* Get the grid indices for the particle */
+    get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+
+    /* Get the weight's index. */
+    const int grid_ind = get_flat_index(part_indices, dims, ndim);
+
+    /* Get the spectra ind. */
+    int unraveled_ind[ndim + 1];
+    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+    unraveled_ind[ndim] = 0;
+    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+    /* Add this grid cell's contribution to the spectra */
+    for (int ilam = 0; ilam < nlam; ilam++) {
 
       /* Skip if this wavelength is masked. */
-      if (grid->lam_mask != NULL && !grid->lam_mask[start + ilam]) {
+      if (grid->lam_mask != NULL && !grid->lam_mask[ilam]) {
         continue;
       }
 
-      /* Temporary value to hold the the spectra for this wavelength. */
-      double this_element = 0.0;
-
-      /* Loop over particles. */
-      for (int p = 0; p < npart; p++) {
-
-        /* Skip masked particles. */
-        if (mask != NULL && !mask[p]) {
-          continue;
-        }
-
-        /* Get this particle's mass. */
-        const double weight = part_masses[p];
-
-        /* Setup the index array. */
-        int part_indices[ndim];
-
-        /* Get the grid indices for the particle */
-        get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
-
-        /* Get the weight's index. */
-        const int grid_ind = get_flat_index(part_indices, dims, ndim);
-
-        /* Get the spectra ind. */
-        int unraveled_ind[ndim + 1];
-        get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-        unraveled_ind[ndim] = 0;
-        int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-        /* Add the contribution to this wavelength. */
-        this_element += grid->spectra[spectra_ind + start + ilam] * weight;
-        /* Add the contribution to this wavelength. */
-        part_spectra[p * nlam + ilam] +=
-            grid_spectra[spectra_ind + ilam] * weight;
-      }
-
-      spectra[start + ilam] = this_element;
+      /* Add the contribution to this wavelength. */
+      part_spectra[p * nlam + ilam] +=
+          grid_spectra[spectra_ind + ilam] * weight;
+      spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
     }
   }
 }
