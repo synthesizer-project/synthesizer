@@ -79,6 +79,10 @@ class InstrumentCollection:
         self.instruments = {}
         self.instrument_labels = []
 
+        # Create a helper attribute for getting all filters in the collection
+        # without having to iterate over the collection
+        self.all_filters = None
+
         # Variables to keep track of the current instrument when iterating
         # over the collection
         self._current_ind = 0
@@ -135,12 +139,12 @@ class InstrumentCollection:
             # Ensure the object is an Instrument
             if not isinstance(instrument, Instrument):
                 raise exceptions.InconsistentArguments(
-                    f"Object {instrument} is not an Instrument."
+                    f"Object {type(instrument)} is not an Instrument."
                 )
 
             # Ensure the label doesn't already exist in the Collection
             if instrument.label in self.instruments:
-                raise exceptions.DuplicateInstrument(
+                raise exceptions.InconsistentArguments(
                     f"Instrument {instrument.label} already exists."
                 )
 
@@ -148,6 +152,13 @@ class InstrumentCollection:
             self.instruments[instrument.label] = instrument
             self.instrument_labels.append(instrument.label)
             self.ninstruments += 1
+
+            # Add the filters to the collection
+            if instrument.can_do_photometry:
+                if self.all_filters is None:
+                    self.all_filters = instrument.filters
+                else:
+                    self.all_filters += instrument.filters
 
     def write_instruments(self, filepath):
         """Save the instruments in the collection to a file.
@@ -272,6 +283,19 @@ class InstrumentCollection:
         self.add_instruments(other)
 
         return self
+
+    def __contains__(self, key):
+        """Check if an instrument is in the collection.
+
+        Args:
+            key (str):
+                The label of the instrument to check for.
+
+        Returns:
+            bool:
+                True if the instrument is in the collection, False otherwise.
+        """
+        return key in self.instruments
 
     def items(self):
         """Get the items in the InstrumentCollection.

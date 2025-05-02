@@ -21,6 +21,7 @@ import numpy as np
 from unyt import unyt_array
 
 from synthesizer._version import __version__
+from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline_utils import (
     get_dataset_properties,
     unify_dict_structure_across_ranks,
@@ -233,6 +234,16 @@ class PipelineIO:
             emission_model (dict): A dictionary of emission model objects.
         """
         start = time.perf_counter()
+
+        # Unpack the instruments into a single instrument collection containing
+        # all unique instruments
+        unique_instruments = InstrumentCollection()
+        for insts in instruments.values():
+            for inst in insts:
+                if inst.label in unique_instruments:
+                    continue
+                unique_instruments.add_instruments(inst)
+        instruments = unique_instruments
 
         # Only write this metadata once
         if self.is_root:
