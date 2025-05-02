@@ -322,8 +322,7 @@ class Gaussian2D(MorphologyBase):
 
 
 class Gaussian2D_rings(Gaussian2D):
-    """
-    A subclass of Gaussian2D that supports masking of concentric annuli.
+    """A subclass of Gaussian2D that supports masking of concentric annuli.
 
     Attributes:
         radii (list of float): The radii defining the annuli.
@@ -340,10 +339,14 @@ class Gaussian2D_rings(Gaussian2D):
         radii=None,
         annulus_index=None,
     ):
-        """
-        Initialise the Gaussian morphology with optional annulus masking.
+        """Initialise the Gaussian morphology with optional annulus masking.
 
         Args:
+            x_mean (float): The mean of the Gaussian along the x-axis.
+            y_mean (float): The mean of the Gaussian along the y-axis.
+            stddev_x (float): The standard deviation along the x-axis.
+            stddev_y (float): The standard deviation along the y-axis.
+            rho (float): The correlation coefficient between x and y.
             radii (list of float, optional): The radii defining the annuli.
             annulus_index (int, optional): The index of the annulus to use.
         """
@@ -352,8 +355,7 @@ class Gaussian2D_rings(Gaussian2D):
         self.annulus_index = annulus_index
 
     def compute_density_grid(self, x, y, units=kpc):
-        """
-        Compute the Gaussian density grid with optional annulus masking.
+        """Compute the Gaussian density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
@@ -575,8 +577,7 @@ class Sersic2D(MorphologyBase):
 
 
 class Sersic2D_rings(Sersic2D):
-    """
-    A subclass of Sersic2D that supports masking of concentric annuli.
+    """A subclass of Sersic2D that supports masking of concentric annuli.
 
     Attributes:
         radii (list of float): The radii defining the annuli.
@@ -597,10 +598,18 @@ class Sersic2D_rings(Sersic2D):
         radii=None,
         annulus_index=None,
     ):
-        """
-        Initialise the morphology with optional annulus masking.
+        """Initialise the morphology with optional annulus masking.
 
         Args:
+            r_eff (unyt_array of float): Effective radius.
+            amplitude (float): Surface brightness at r_eff.
+            sersic_index (float): Sersic index.
+            x_0 (unyt_quantity of float): x centre of the Sersic profile.
+            y_0 (unyt_quantity of float): y centre of the Sersic profile.
+            theta (float): Inclination angle.
+            ellipticity (float): Ellipticity.
+            cosmo (astropy.cosmology.Cosmology): astropy cosmology object.
+            redshift (float): Redshift.
             radii (list of float, optional): The radii defining the annuli.
             annulus_index (int, optional): The index of the annulus to use.
         """
@@ -620,8 +629,7 @@ class Sersic2D_rings(Sersic2D):
         self.annulus_index = annulus_index
 
     def compute_density_grid(self, x, y, units="kpc"):
-        """
-        Compute the density grid with optional annulus masking.
+        """Compute the density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
