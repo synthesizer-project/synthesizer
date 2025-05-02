@@ -327,12 +327,12 @@ class Gaussian2D(MorphologyBase):
         g_2d_mat = coeff * np.exp(-0.5 * exp)
 
         return g_2d_mat
-    
+
 
 class Gaussian2D_rings(Gaussian2D):
     """
     A subclass of Gaussian2D that supports masking of concentric annuli.
-    
+
     Attributes:
         radii (list of float): The radii defining the annuli.
         annulus_index (int): Index of the annulus to be used.
@@ -346,7 +346,7 @@ class Gaussian2D_rings(Gaussian2D):
         stddev_y,
         rho=0,
         radii=None,
-        annulus_index=None
+        annulus_index=None,
     ):
         """
         Initialise the Gaussian morphology with optional annulus masking.
@@ -374,16 +374,15 @@ class Gaussian2D_rings(Gaussian2D):
         density_grid = super().compute_density_grid(x, y, units)
 
         if self.annulus_index is not None:
-            if self.radii is None or not (0 <= self.annulus_index < len(self.radii) - 1):
+            if self.radii is None or not (
+                0 <= self.annulus_index < len(self.radii) - 1
+            ):
                 raise ValueError("Invalid annulus index.")
 
             # Compute elliptical radius from (x, y)
             dx = x - self.x_mean
             dy = y - self.y_mean
             radius = np.sqrt(dx**2 + dy**2)  # If you want circular rings
-
-            # Elliptical ring alternative:
-            # radius = np.sqrt((dx / self.stddev_x)**2 + (dy / self.stddev_y)**2)
 
             inner_radius = self.radii[self.annulus_index]
             outer_radius = self.radii[self.annulus_index + 1]
@@ -580,8 +579,8 @@ class Sersic2D(MorphologyBase):
                 "Only kpc and milliarcsecond (mas) units are supported "
                 "for morphologies."
             )
-        
-        
+
+
 class Sersic2D_rings(Sersic2D):
     """
     A subclass of Sersic2D that supports masking of concentric annuli.
@@ -613,7 +612,15 @@ class Sersic2D_rings(Sersic2D):
             annulus_index (int, optional): The index of the annulus to use.
         """
         super().__init__(
-            r_eff, amplitude, sersic_index, x_0, y_0, theta, ellipticity, cosmo, redshift
+            r_eff,
+            amplitude,
+            sersic_index,
+            x_0,
+            y_0,
+            theta,
+            ellipticity,
+            cosmo,
+            redshift,
         )
 
         self.radii = radii
@@ -634,12 +641,18 @@ class Sersic2D_rings(Sersic2D):
         density_grid = super().compute_density_grid(x, y, units)
 
         if self.annulus_index is not None:
-            if self.radii is None or not (0 <= self.annulus_index < len(self.radii) - 1):
+            if self.radii is None or not (
+                0 <= self.annulus_index < len(self.radii) - 1
+            ):
                 raise ValueError("Invalid annulus index.")
 
             # Compute radius from (x, y)
-            a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(self.theta)
-            b = -(x - self.x_0) * np.sin(self.theta) + (y - self.y_0) * np.cos(self.theta)
+            a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
+                self.theta
+            )
+            b = -(x - self.x_0) * np.sin(self.theta) + (y - self.y_0) * np.cos(
+                self.theta
+            )
             radius = np.sqrt(a**2 + (b / (1 - self.ellipticity)) ** 2)
 
             # Define the inner and outer radius of the annulus
