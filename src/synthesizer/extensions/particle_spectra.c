@@ -330,8 +330,10 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
   double *grid_spectra = grid->spectra;
 
   /* Unpack the particles properties. */
+  double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
+  npy_bool *mask = parts->mask;
 
   /* Calculate the number of cell in a patch of the grid. */
   int ncells = 1 << ndim;
