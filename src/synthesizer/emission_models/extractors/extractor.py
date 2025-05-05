@@ -751,15 +751,43 @@ class ParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
-            return Sed(
-                model.lam,
-                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
+
+            # Return empty Sed objects with the correct shape
+            return (
+                Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                ),
             )
         elif mask is not None and not np.all(mask):
             warn("A mask has filtered out all particles, returning empty Sed")
-            return Sed(
-                model.lam,
-                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
+
+            # Return empty Sed objects with the correct shape
+            return (
+                Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                ),
             )
 
         # Get the attributes from the emitter
@@ -839,29 +867,56 @@ class ParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Line")
-            return LineCollection(
-                line_ids=self._grid.line_ids,
-                lam=self._line_lams,
-                lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s,
-                cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s
-                / Hz,
+            return (
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s,
+                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s,
+                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s
+                    / Hz,
+                ),
             )
+
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Line")
-            return LineCollection(
-                line_ids=self._grid.line_ids,
-                lam=self._line_lams,
-                lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s,
-                cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s
-                / Hz,
+            return (
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s,
+                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s,
+                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s
+                    / Hz,
+                ),
             )
 
         # Get the attributes from the emitter
