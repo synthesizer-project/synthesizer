@@ -100,29 +100,6 @@ struct particles *get_part_struct(PyObject *part_tuple,
                                   const int ndim);
 
 /**
- * @brief A Python capsule destructor function to free a buffer.
- *
- * This function is called when the capsule is deleted, and it frees
- * the buffer associated with the capsule.
- *
- * @param capsule The capsule object containing the buffer to free.
- */
-static void _free_capsule(PyObject *capsule) {
-  void *buf = PyCapsule_GetPointer(capsule, NULL);
-
-  /* Check we haven't already freed the buffer. */
-  if (buf == NULL) {
-    return;
-  }
-
-  /* Free the buffer. */
-  free(buf);
-
-  /* Set the point to NULL to avoid double free. */
-  PyCapsule_SetPointer(capsule, NULL);
-}
-
-/**
  * @brief Wraps a malloc’ed buffer into a NumPy array, taking ownership.
  *
  * @param ndim     Number of dimensions
