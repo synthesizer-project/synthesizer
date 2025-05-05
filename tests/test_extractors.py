@@ -267,7 +267,7 @@ def test_doppler_shifted_generate_lnu(
     mock_compute_part_seds.return_value = mock_spectrum
 
     # Call generate_lnu
-    result = extractor.generate_lnu(
+    result, _ = extractor.generate_lnu(
         random_part_stars, nebular_emission_model, None, None, "cic", 1, False
     )
 
