@@ -769,7 +769,7 @@ class ParticleExtractor(Extractor):
                     / Hz,
                 ),
             )
-        elif mask is not None and not np.all(mask):
+        elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
 
             # Return empty Sed objects with the correct shape
