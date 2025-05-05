@@ -35,10 +35,10 @@ void *synth_malloc(size_t n, char *msg) {
  * @param np_arr: The numpy array to extract.
  * @param name: The name of the numpy array. (For error messages)
  */
-double *extract_data_double(PyArrayObject *np_arr, char *name) {
+double *extract_data_double(PyArrayObject *np_arr, const char *name) {
 
   /* Extract a pointer to the spectra grids */
-  double *data = PyArray_DATA(np_arr);
+  double *data = reinterpret_cast<double *>(PyArray_DATA(np_arr));
   if (data == NULL) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
@@ -54,10 +54,10 @@ double *extract_data_double(PyArrayObject *np_arr, char *name) {
  * @param np_arr: The numpy array to extract.
  * @param name: The name of the numpy array. (For error messages)
  */
-int *extract_data_int(PyArrayObject *np_arr, char *name) {
+int *extract_data_int(PyArrayObject *np_arr, const char *name) {
 
   /* Extract a pointer to the spectra grids */
-  int *data = PyArray_DATA(np_arr);
+  int *data = reinterpret_cast<int *>(np_arr);
   if (data == NULL) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
@@ -77,8 +77,8 @@ int *extract_data_int(PyArrayObject *np_arr, char *name) {
  * @param name: The name of the numpy array (for error messages).
  * @return Pointer to the npy_bool data, or NULL on error.
  */
-npy_bool *extract_data_bool(PyArrayObject *np_arr, char *name) {
-  npy_bool *data = (npy_bool *)PyArray_DATA(np_arr);
+npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name) {
+  npy_bool *data = reinterpret_cast<npy_bool *>(PyArray_DATA(np_arr));
   if (data == NULL) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
@@ -101,7 +101,8 @@ double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims) {
   int nprops = 0;
   for (int dim = 0; dim < ndim; dim++)
     nprops += dims[dim];
-  double **grid_props = malloc(nprops * sizeof(double *));
+  double **grid_props =
+      reinterpret_cast<double **>(malloc(nprops * sizeof(double *)));
   if (grid_props == NULL) {
     PyErr_SetString(PyExc_MemoryError,
                     "Failed to allocate memory for grid_props.");
@@ -113,12 +114,12 @@ double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims) {
 
     /* Extract the data from the numpy array. */
     PyArrayObject *np_grid_arr =
-        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
+        reinterpret_cast<PyArrayObject *>(PyTuple_GetItem(grid_tuple, idim));
     if (np_grid_arr == NULL) {
       PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
       return NULL;
     }
-    double *grid_arr = PyArray_DATA(np_grid_arr);
+    double *grid_arr = reinterpret_cast<double *>(np_grid_arr);
     if (grid_arr == NULL) {
       PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
       return NULL;
@@ -143,7 +144,8 @@ double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims) {
 double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
 
   /* Allocate a single array for particle properties. */
-  double **part_props = malloc(npart * ndim * sizeof(double *));
+  double **part_props =
+      reinterpret_cast<double **>(malloc(npart * ndim * sizeof(double *)));
   if (part_props == NULL) {
     PyErr_SetString(PyExc_MemoryError,
                     "Failed to allocate memory for part_props.");
@@ -160,7 +162,7 @@ double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
       PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
       return NULL;
     }
-    double *part_arr = PyArray_DATA(np_part_arr);
+    double *part_arr = reinterpret_cast<double *>(np_part_arr);
     if (part_arr == NULL) {
       PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
       return NULL;
@@ -199,7 +201,8 @@ struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      const int nlam) {
 
   /* Initialise the grid struct. */
-  struct grid *grid = malloc(sizeof(struct grid));
+  struct grid *grid =
+      reinterpret_cast<struct grid *>(malloc(sizeof(struct grid)));
   bzero(grid, sizeof(struct grid));
 
   /* Quick check to make sure our inputs are valid. */
@@ -257,7 +260,8 @@ struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
 
   /* Extract the wavelength mask array, if this is Py_None then we will
    * treat it as NULL. */
-  if (np_lam_mask != NULL && np_lam_mask != Py_None) {
+  if (np_lam_mask != NULL &&
+      reinterpret_cast<PyObject *>(np_lam_mask) != Py_None) {
     grid->lam_mask = extract_data_bool(np_lam_mask, "lam_mask");
     if (grid->lam_mask == NULL) {
       return NULL;
@@ -290,7 +294,8 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    const int ndim, const int nlam) {
 
   /* Initialise the grid struct. */
-  struct grid *grid = malloc(sizeof(struct grid));
+  struct grid *grid =
+      reinterpret_cast<struct grid *>(malloc(sizeof(struct grid)));
   bzero(grid, sizeof(struct grid));
 
   /* Quick check to make sure our inputs are valid. */
@@ -366,7 +371,8 @@ struct particles *get_part_struct(PyObject *part_tuple,
                                   const int ndim) {
 
   /* Initialise the particles struct. */
-  struct particles *particles = malloc(sizeof(struct particles));
+  struct particles *particles =
+      reinterpret_cast<struct particles *>(malloc(sizeof(struct particles)));
   bzero(particles, sizeof(struct particles));
 
   /* Quick check to make sure our inputs are valid. */
@@ -404,7 +410,7 @@ struct particles *get_part_struct(PyObject *part_tuple,
 
   /* Extract a pointer to the particle mask, if this is Py_None then we will
    * treat it as NULL. */
-  if (np_mask != NULL && np_mask != Py_None) {
+  if (np_mask != NULL && reinterpret_cast<PyObject *>(np_mask) != Py_None) {
     particles->mask = extract_data_bool(np_mask, "mask");
     if (particles->mask == NULL) {
       return NULL;
@@ -414,4 +420,131 @@ struct particles *get_part_struct(PyObject *part_tuple,
   }
 
   return particles;
+}
+
+/**
+ * @brief Constructor for the particles class.
+ *
+ * @param np_weights: The numpy array holding the particle weights.
+ * @param np_velocities: The numpy array holding the particle velocities.
+ * @param np_mask: The numpy array holding the particle mask.
+ * @param part_tuple: The tuple of numpy arrays holding the particle properties.
+ */
+Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
+                     PyArrayObject *np_mask, PyObject *part_tuple, int npart_)
+    : np_weights_(np_weights), np_velocities_(np_velocities), np_mask_(np_mask),
+      part_tuple_(part_tuple) {
+
+  /* Assign the number of particles. */
+  npart = npart_;
+}
+
+/**
+ * @brief Destructor for the particles class.
+ */
+Particles::~Particles() {
+  /* Deallocate the numpy arrays. */
+  // Py_XDECREF(np_weights_);
+  // Py_XDECREF(np_velocities_);
+  // Py_XDECREF(np_mask_);
+  // Py_XDECREF(part_tuple_);
+}
+
+/**
+ * @brief Get the weights of the particles.
+ *
+ * @return The weights of the particles.
+ */
+double *Particles::get_weights() const {
+  return (double *)PyArray_DATA(np_weights_);
+}
+
+/**
+ * @brief Get the velocities of the particles.
+ *
+ * @return The velocities of the particles.
+ */
+double *Particles::get_velocities() const {
+  return (double *)PyArray_DATA(np_velocities_);
+}
+
+/**
+ * @brief Get the mask of the particles.
+ *
+ * @return The mask of the particles.
+ */
+npy_bool *Particles::get_mask_arr() const {
+  return (npy_bool *)PyArray_DATA(np_mask_);
+}
+
+/**
+ * @brief Get the properties of the particles.
+ *
+ * @return The properties of the particles.
+ */
+double *Particles::get_part_props(int idim) const {
+  /* Get the array stored at idim. */
+  PyArrayObject *np_part_arr =
+      (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
+  if (np_part_arr == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+    return NULL;
+  }
+
+  /* Extract the data from the numpy array. */
+  double *part_arr = (double *)PyArray_DATA(np_part_arr);
+  if (part_arr == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+    return NULL;
+  }
+  return part_arr;
+}
+
+/**
+ * @brief Get the weight of a particle at a given index.
+ *
+ * @param pind: The index of the particle.
+ * @return The weight of the particle at the given index.
+ */
+double Particles::get_weight_at_ind(int pind) const {
+  return get_double_at_ind(np_weights_, pind);
+}
+
+/**
+ * @brief Get the velocity of a particle at a given index.
+ *
+ * @param pind: The index of the particle.
+ * @return The velocity of the particle at the given index.
+ */
+double Particles::get_vel_at_ind(int pind) const {
+  return get_double_at_ind(np_velocities_, pind);
+}
+
+/**
+ * @brief Get the mask of a particle at a given index.
+ *
+ * @param pind: The index of the particle.
+ * @return The mask of the particle at the given index.
+ */
+npy_bool Particles::get_mask_at_ind(int pind) const {
+  return get_bool_at_ind(np_mask_, pind);
+}
+
+/**
+ * @brief Get the property of a particle at a given index.
+ *
+ * @param idim: The index of the property.
+ * @param pind: The index of the particle.
+ * @return The property of the particle at the given index.
+ */
+double Particles::get_part_prop_at_ind(int idim, int pind) const {
+  /* Get the array stored at idim. */
+  PyArrayObject *np_part_arr =
+      (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
+  if (np_part_arr == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+    return NULL;
+  }
+
+  return get_double_at_ind(np_part_arr, pind);
 }

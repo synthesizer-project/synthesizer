@@ -239,8 +239,9 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   /* Allocate the grid weights. */
   double *grid_weights = NULL;
-  if (np_grid_weights == Py_None) {
-    grid_weights = calloc(grid_props->size, sizeof(double));
+  if (np_grid_weights == reinterpret_cast<PyArrayObject *>(Py_None)) {
+    grid_weights =
+        reinterpret_cast<double *>(calloc(grid_props->size, sizeof(double)));
     if (grid_weights == NULL) {
       PyErr_SetString(PyExc_MemoryError,
                       "Could not allocate memory for grid weights.");
@@ -254,7 +255,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  if (np_grid_weights == Py_None) {
+  if (np_grid_weights == reinterpret_cast<PyArrayObject *>(Py_None)) {
     if (strcmp(method, "cic") == 0) {
       weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
                       nthreads);

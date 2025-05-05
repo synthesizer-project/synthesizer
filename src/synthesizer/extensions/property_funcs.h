@@ -72,6 +72,62 @@ struct particles {
   npy_bool *mask;
 };
 
+/**
+ * @brief A class to hold particle related numpy arrays with getters and
+ * setters.
+ *
+ * This is used to hold the particle properties and mass.
+ */
+class Particles {
+public:
+  /* The number of particles. */
+  int npart;
+
+  /* Constructor */
+  Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
+            PyArrayObject *np_mask, PyObject *part_tuple, int npart);
+
+  /* Destructor */
+  ~Particles();
+
+  /* Prototypes for getters. */
+  double *get_weights() const;
+  double *get_velocities() const;
+  npy_bool *get_mask_arr() const;
+  double *get_part_props(int idim) const;
+  double get_weight_at_ind(int pind) const;
+  double get_vel_at_ind(int pind) const;
+  npy_bool get_mask_at_ind(int pind) const;
+  double get_part_prop_at_ind(int idim, int pind) const;
+
+private:
+  /* The numpy array holding the particle weights (e.g. initial mass for
+   * SPS grid weighting). */
+  PyArrayObject *np_weights_;
+
+  /* The numpy array holding the particle velocities. */
+  PyArrayObject *np_velocities_;
+
+  /* The mask (can be Py_None). */
+  PyArrayObject *np_mask_;
+
+  /* The particle properties corresponding to the grid axes, this is a tuple
+   * of numpy arrays. */
+  PyObject *part_tuple_;
+};
+
+static inline double get_double_at_ind(PyArrayObject *np_arr, int ind) {
+  return *reinterpret_cast<npy_bool *>(PyArray_GETPTR1(np_arr, ind));
+}
+
+static inline int get_int_at_ind(PyArrayObject *np_arr, int ind) {
+  return *reinterpret_cast<int *>(PyArray_GETPTR1(np_arr, ind));
+}
+
+static inline npy_bool get_bool_at_ind(PyArrayObject *np_arr, int ind) {
+  return *reinterpret_cast<npy_bool *>(PyArray_GETPTR1(np_arr, ind));
+}
+
 /* Prototypes */
 void *synth_malloc(size_t n, char *msg);
 double *extract_data_double(PyArrayObject *np_arr, char *name);

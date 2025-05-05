@@ -167,10 +167,11 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
     /* Get local pointers to the particle properties. */
     double *local_part_masses = part_masses + start;
-    int *local_mask = (mask == NULL) ? mask : mask + start;
+    npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
-    double *local_out_arr = calloc(out_size, sizeof(double));
+    double *local_out_arr =
+        reinterpret_cast<double *>(calloc(out_size, sizeof(double)));
     if (local_out_arr == NULL) {
       PyErr_SetString(PyExc_MemoryError,
                       "Failed to allocate memory for output.");
@@ -391,7 +392,8 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
     npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
-    double *local_out_arr = calloc(out_size, sizeof(double));
+    double *local_out_arr =
+        reinterpret_cast<double *>(calloc(out_size, sizeof(double)));
     if (local_out_arr == NULL) {
       PyErr_SetString(PyExc_MemoryError,
                       "Failed to allocate memory for output.");
@@ -521,7 +523,8 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
     return NULL;
   }
   /* Allocate the sfzh array to output. */
-  double *grid_weights = calloc(grid_props->size, sizeof(double));
+  double *grid_weights =
+      reinterpret_cast<double *>(calloc(grid_props->size, sizeof(double)));
   if (grid_weights == NULL) {
     PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
     return NULL;

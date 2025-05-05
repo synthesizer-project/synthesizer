@@ -1283,6 +1283,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Create instance of particle class. */
+  Particles *particles =
+      new Particles(np_part_mass, NULL, np_mask, part_tuple, npart);
+
   /* Extract the grid struct. */
   struct grid *grid_props =
       get_spectra_grid_struct(grid_tuple, np_ndims, np_grid_spectra,
