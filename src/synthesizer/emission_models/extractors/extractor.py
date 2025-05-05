@@ -763,10 +763,7 @@ class ParticleExtractor(Extractor):
                 ),
                 Sed(
                     model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
+                    np.zeros(self._grid_nlam) * erg / s / Hz,
                 ),
             )
         elif mask is not None and np.sum(mask) == 0:
@@ -783,10 +780,7 @@ class ParticleExtractor(Extractor):
                 ),
                 Sed(
                     model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
+                    np.zeros(self._grid_nlam) * erg / s / Hz,
                 ),
             )
 
@@ -882,13 +876,8 @@ class ParticleExtractor(Extractor):
                 LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s,
-                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s
-                    / Hz,
+                    lum=np.zeros(self._grid.nlines) * erg / s,
+                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
                 ),
             )
 
@@ -909,13 +898,8 @@ class ParticleExtractor(Extractor):
                 LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s,
-                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s
-                    / Hz,
+                    lum=np.zeros(self._grid.nlines) * erg / s,
+                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
                 ),
             )
 
