@@ -180,7 +180,7 @@ class Image(ImagingBase):
                 combination of units is incompatible an error is raised.
         """
         # Ensure the images have the same resolution
-        if self.resolution != other_img.resolution:
+        if not np.isclose(self.resolution, other_img.resolution):
             raise exceptions.InconsistentAddition(
                 "The images must have the same resolution to be added "
                 f"({self.resolution}, {other_img.resolution})."
