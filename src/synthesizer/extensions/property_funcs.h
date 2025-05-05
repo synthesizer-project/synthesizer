@@ -109,7 +109,17 @@ struct particles *get_part_struct(PyObject *part_tuple,
  */
 static void _free_capsule(PyObject *capsule) {
   void *buf = PyCapsule_GetPointer(capsule, NULL);
+
+  /* Check we haven't already freed the buffer. */
+  if (buf == NULL) {
+    return;
+  }
+
+  /* Free the buffer. */
   free(buf);
+
+  /* Set the point to NULL to avoid double free. */
+  PyCapsule_SetPointer(capsule, NULL);
 }
 
 /**
@@ -118,33 +128,37 @@ static void _free_capsule(PyObject *capsule) {
  * @param ndim     Number of dimensions
  * @param dims     Array of length ndim, giving each dimension size
  * @param typenum  NumPy typenum (e.g. NPY_FLOAT64)
- * @param buf      Pointer returned by malloc() (must be at least
- * product(dims)*itemsize)
+ * @param out      Pointer returned by malloc() (must be at least
+ *                 product(dims)*itemsize)
  *
- * @return A new reference to a PyArrayObject which owns 'buf', or NULL on
- * error.
+ * @return A new reference to a PyArrayObject which owns 'out', or NULL on
+ *         error (buffer is freed on error).
  */
 static PyArrayObject *c_array_to_numpy(int ndim, npy_intp *dims, int typenum,
                                        void *out) {
+  PyArray_Descr *descr = NULL;
+  PyArrayObject *arr = NULL;
 
-  /* Create the new NumPy array from the buffer. */
-  PyArrayObject *arr =
-      (PyArrayObject *)PyArray_SimpleNewFromData(ndim, dims, typenum, out);
+  /* Build a dtype descriptor from the typenum */
+  descr = PyArray_DescrFromType(typenum);
+  if (!descr) {
+    free(out);
+    return NULL;
+  }
+
+  /* Create the numpy array:
+   *    - out: the malloc’d memory
+   *    - NPY_ARRAY_CARRAY: ensure C-contiguous, aligned, writeable
+   *    - NPY_ARRAY_OWNDATA: NumPy will call free(out) when the array dies
+   */
+  arr = (PyArrayObject *)PyArray_NewFromDescr(
+      &PyArray_Type, descr, ndim, dims, NULL, out,
+      NPY_ARRAY_CARRAY | NPY_ARRAY_OWNDATA, NULL);
   if (!arr) {
+    /* On failure, descriptor was already DECREF’d */
     free(out);
     return NULL;
   }
-
-  /* Create a capsule to hold the buffer, and set the destructor. */
-  PyObject *capsule = PyCapsule_New(out, NULL, _free_capsule);
-  if (!capsule) {
-    Py_DECREF(arr);
-    free(out);
-    return NULL;
-  }
-
-  /* Tell NumPy to steal a reference to the capsule on array deletion */
-  PyArray_SetBaseObject(arr, capsule);
 
   return arr;
 }
