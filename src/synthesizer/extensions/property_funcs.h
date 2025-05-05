@@ -5,6 +5,9 @@
 #ifndef PROPERTY_FUNCS_H_
 #define PROPERTY_FUNCS_H_
 
+/* Standard includes */
+#include <stdlib.h>
+
 /* We need the below because numpy triggers warnings which are errors
  * when we compiled with RUTHLESS. */
 #pragma GCC diagnostic push
@@ -95,5 +98,55 @@ struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_velocities,
                                   PyArrayObject *np_mask, const int npart,
                                   const int ndim);
+
+/**
+ * @brief A Python capsule destructor function to free a buffer.
+ *
+ * This function is called when the capsule is deleted, and it frees
+ * the buffer associated with the capsule.
+ *
+ * @param capsule The capsule object containing the buffer to free.
+ */
+static void _free_capsule(PyObject *capsule) {
+  void *buf = PyCapsule_GetPointer(capsule, NULL);
+  free(buf);
+}
+
+/**
+ * @brief Wraps a malloc’ed buffer into a NumPy array, taking ownership.
+ *
+ * @param ndim     Number of dimensions
+ * @param dims     Array of length ndim, giving each dimension size
+ * @param typenum  NumPy typenum (e.g. NPY_FLOAT64)
+ * @param buf      Pointer returned by malloc() (must be at least
+ * product(dims)*itemsize)
+ *
+ * @return A new reference to a PyArrayObject which owns 'buf', or NULL on
+ * error.
+ */
+static PyArrayObject *c_array_to_numpy(int ndim, npy_intp *dims, int typenum,
+                                       void *out) {
+
+  /* Create the new NumPy array from the buffer. */
+  PyArrayObject *arr =
+      (PyArrayObject *)PyArray_SimpleNewFromData(ndim, dims, typenum, out);
+  if (!arr) {
+    free(out);
+    return NULL;
+  }
+
+  /* Create a capsule to hold the buffer, and set the destructor. */
+  PyObject *capsule = PyCapsule_New(out, NULL, _free_capsule);
+  if (!capsule) {
+    Py_DECREF(arr);
+    free(out);
+    return NULL;
+  }
+
+  /* Tell NumPy to steal a reference to the capsule on array deletion */
+  PyArray_SetBaseObject(arr, capsule);
+
+  return arr;
+}
 
 #endif // PROPERTY_FUNCS_H_

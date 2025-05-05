@@ -585,22 +585,14 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   free(grid_props);
 
   /* Construct the particle spectra output numpy array. */
-  npy_intp np_dims[2] = {
-      npart,
-      nlam,
-  };
-  PyObject *part_spectra_capsule = PyCapsule_New(part_spectra, NULL, free);
-  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
-      2, np_dims, NPY_FLOAT64, part_spectra);
-  PyArray_SetBaseObject(out_spectra, part_spectra_capsule);
+  npy_intp np_dims[2] = {npart, nlam};
+  PyArrayObject *out_spectra =
+      c_array_to_numpy(2, np_dims, NPY_FLOAT64, part_spectra);
 
   /* Construct the integrated spectra output numpy array. */
   npy_intp np_dims_int[1] = {nlam};
-  PyObject *spectra_capsule = PyCapsule_New(spectra, NULL, free);
   PyArrayObject *out_integrated_spectra =
-      (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
-                                                 spectra);
-  PyArray_SetBaseObject(out_integrated_spectra, spectra_capsule);
+      c_array_to_numpy(1, np_dims_int, NPY_FLOAT64, spectra);
 
   /* Construct the output tuple. */
   PyObject *out_tuple =
@@ -1391,22 +1383,14 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   free(grid_props);
 
   /* Construct the particle spectra output numpy array. */
-  npy_intp np_dims[2] = {
-      npart,
-      nlam,
-  };
-  PyObject *part_spectra_capsule = PyCapsule_New(part_spectra, NULL, free);
-  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
-      2, np_dims, NPY_FLOAT64, part_spectra);
-  PyArray_SetBaseObject(out_spectra, part_spectra_capsule);
+  npy_intp np_dims[2] = {npart, nlam};
+  PyArrayObject *out_spectra =
+      c_array_to_numpy(2, np_dims, NPY_FLOAT64, part_spectra);
 
   /* Construct the integrated spectra output numpy array. */
   npy_intp np_dims_int[1] = {nlam};
-  PyObject *spectra_capsule = PyCapsule_New(spectra, NULL, free);
   PyArrayObject *out_integrated_spectra =
-      (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
-                                                 spectra);
-  PyArray_SetBaseObject(out_integrated_spectra, spectra_capsule);
+      c_array_to_numpy(1, np_dims_int, NPY_FLOAT64, spectra);
 
   /* Construct the output tuple. */
   PyObject *out_tuple =
