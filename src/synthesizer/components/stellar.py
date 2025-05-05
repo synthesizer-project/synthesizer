@@ -6,7 +6,7 @@ common between them. StarsComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Myr
+from unyt import Myr, dimensionless
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -96,9 +96,12 @@ class StarsComponent(Component):
             return self._log10ages
 
         # Ok, we need to calculate them
-        self._log10ages = np.log10(
-            self._ages,
-            dtype=np.float64,
+        self._log10ages = (
+            np.log10(
+                self._ages,
+                dtype=np.float64,
+            )
+            * dimensionless
         )
         return self._log10ages
 
@@ -115,10 +118,14 @@ class StarsComponent(Component):
             return self._log10metallicities
 
         # Ok, we need to calculate them
-        self._log10metallicities = np.log10(
-            self.metallicities,
-            dtype=np.float64,
+        self._log10metallicities = (
+            np.log10(
+                self.metallicities,
+                dtype=np.float64,
+            )
+            * dimensionless
         )
+
         return self._log10metallicities
 
     def __str__(self):
