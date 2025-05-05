@@ -50,7 +50,7 @@ def test_masked_integrated_generation_ngp(
     nebular_emission_model.add_mask(
         attr="ages",
         op=">=",
-        thresh=5 * Myr,
+        thresh=np.median(random_part_stars.ages),
         set_all=True,
     )
 
