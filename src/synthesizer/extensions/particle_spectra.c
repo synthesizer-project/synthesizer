@@ -1354,9 +1354,11 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   if (strcmp(method, "cic") == 0) {
-    spectra_loop_cic(grid_props, part_props, spectra, part_spectra, nthreads);
+    shifted_spectra_loop_cic(grid_props, part_props, spectra, part_spectra,
+                             nthreads, c);
   } else if (strcmp(method, "ngp") == 0) {
-    spectra_loop_ngp(grid_props, part_props, spectra, part_spectra, nthreads);
+    shifted_spectra_loop_ngp(grid_props, part_props, spectra, part_spectra,
+                             nthreads, c);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;

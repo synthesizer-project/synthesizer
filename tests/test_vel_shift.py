@@ -23,6 +23,7 @@ def test_velocity_shift_applys_cic(random_part_stars, nebular_emission_model):
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
+    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
     np.random.seed(seed)
 
     # Ensure that the spectra are different
@@ -35,7 +36,7 @@ def test_velocity_shift_applys_cic_on_model(
 ):
     """Test the velocity shift of particle spectra."""
     # Tell the model to use the velocity shift
-    nebular_emission_model.set_vel_shift(True)
+    nebular_emission_model.set_vel_shift(True, set_all=True)
 
     # Compute the spectra with and without velocity shift
     with_shift_spec = random_part_stars.get_spectra(
@@ -43,15 +44,16 @@ def test_velocity_shift_applys_cic_on_model(
         grid_assignment_method="cic",
     )
     random_part_stars.clear_all_emissions()
+    nebular_emission_model.set_vel_shift(False, set_all=True)
     without_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=False,
         grid_assignment_method="cic",
     )
     random_part_stars.clear_all_emissions()
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
+    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
     np.random.seed(seed)
 
     # Ensure that the spectra are different
@@ -79,6 +81,7 @@ def test_velocity_shift_conservation_cic(
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
+    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
     np.random.seed(seed)
 
     # Ensure that the overall flux is conserved, since we know it won't
@@ -115,6 +118,7 @@ def test_velocity_shift_applys_ngp(random_part_stars, nebular_emission_model):
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
+    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
     np.random.seed(seed)
 
     # Ensure that the spectra are different
@@ -127,21 +131,23 @@ def test_velocity_shift_applys_ngp_on_model(
 ):
     """Test the velocity shift of particle spectra."""
     # Tell the model to use the velocity shift
-    nebular_emission_model.set_vel_shift(True)
+    nebular_emission_model.set_vel_shift(True, set_all=True)
 
     # Compute the spectra with and without velocity shift
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
         grid_assignment_method="ngp",
     )
+    random_part_stars.clear_all_emissions()
+    nebular_emission_model.set_vel_shift(False, set_all=True)
     without_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=False,
         grid_assignment_method="ngp",
     )
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
+    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
     np.random.seed(seed)
 
     # Ensure that the spectra are different
@@ -166,6 +172,7 @@ def test_velocity_shift_conservation_ngp(
 
     # Get and print a seed for reproducibility
     seed = int(time.time())
+    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
     np.random.seed(seed)
 
     # Ensure that the overall flux is conserved, since we know it won't
