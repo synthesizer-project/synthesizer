@@ -618,7 +618,9 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
  */
 static void shifted_spectra_loop_cic_serial(struct grid *grid,
                                             struct particles *parts,
-                                            double *spectra, const double c) {
+                                            double *spectra,
+                                            double *part_spectra,
+                                            const double c) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
@@ -756,9 +758,12 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
         double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
         /* Add the contribution to the corresponding wavelength element. */
-        spectra[p * nlam + ilam_shifted - 1] +=
+        part_spectra[p * nlam + ilam_shifted - 1] +=
             (1.0 - frac_shifted) * grid_spectra_value;
-        spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
+        part_spectra[p * nlam + ilam_shifted] +=
+            frac_shifted * grid_spectra_value;
+        spectra[ilam_shifted - 1] += (1.0 - frac_shifted) * grid_spectra_value;
+        spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
       }
     }
   }
@@ -783,8 +788,8 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid,
 #ifdef WITH_OPENMP
 static void shifted_spectra_loop_cic_omp(struct grid *grid,
                                          struct particles *parts,
-                                         double *spectra, int nthreads,
-                                         const double c) {
+                                         double *spectra, double *part_spectra,
+                                         int nthreads, const double c) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
@@ -922,9 +927,12 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
         double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
         /* Add the contribution to the corresponding wavelength element. */
-        spectra[p * nlam + ilam_shifted - 1] +=
+        part_spectra[p * nlam + ilam_shifted - 1] +=
             (1.0 - frac_shifted) * grid_spectra_value;
-        spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
+        part_spectra[p * nlam + ilam_shifted] +=
+            frac_shifted * grid_spectra_value;
+        spectra[ilam_shifted - 1] += (1.0 - frac_shifted) * grid_spectra_value;
+        spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
       }
     }
   }
@@ -948,8 +956,8 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid,
  * @param nthreads: The number of threads to use.
  */
 void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
-                              double *spectra, const int nthreads,
-                              const double c) {
+                              double *spectra, double *part_spectra,
+                              const int nthreads, const double c) {
 
   double start_time = tic();
 
@@ -959,11 +967,12 @@ void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    shifted_spectra_loop_cic_omp(grid, parts, spectra, nthreads, c);
+    shifted_spectra_loop_cic_omp(grid, parts, spectra, part_spectra, nthreads,
+                                 c);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
+    shifted_spectra_loop_cic_serial(grid, parts, spectra, part_spectra, c);
   }
 
 #else
@@ -971,7 +980,7 @@ void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  shifted_spectra_loop_cic_serial(grid, parts, spectra, c);
+  shifted_spectra_loop_cic_serial(grid, parts, spectra, part_spectra, c);
 
 #endif
   toc("Cloud in Cell particle loop", start_time);
@@ -989,7 +998,9 @@ void shifted_spectra_loop_cic(struct grid *grid, struct particles *parts,
  */
 static void shifted_spectra_loop_ngp_serial(struct grid *grid,
                                             struct particles *parts,
-                                            double *spectra, const double c) {
+                                            double *spectra,
+                                            double *part_spectra,
+                                            const double c) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
@@ -1082,9 +1093,12 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
       double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
       /* Add the contribution to the corresponding wavelength element. */
-      spectra[p * nlam + ilam_shifted - 1] +=
+      part_spectra[p * nlam + ilam_shifted - 1] +=
           (1.0 - frac_shifted) * grid_spectra_value;
-      spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
+      part_spectra[p * nlam + ilam_shifted] +=
+          frac_shifted * grid_spectra_value;
+      spectra[ilam_shifted - 1] += (1.0 - frac_shifted) * grid_spectra_value;
+      spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
     }
   }
 
@@ -1106,8 +1120,8 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid,
 #ifdef WITH_OPENMP
 static void shifted_spectra_loop_ngp_omp(struct grid *grid,
                                          struct particles *parts,
-                                         double *spectra, int nthreads,
-                                         const double c) {
+                                         double *spectra, double *part_spectra,
+                                         int nthreads, const double c) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
@@ -1201,9 +1215,12 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
       double grid_spectra_value = grid_spectra[spectra_ind + ilam] * weight;
 
       /* Add the contribution to the corresponding wavelength element. */
-      spectra[p * nlam + ilam_shifted - 1] +=
+      part_spectra[p * nlam + ilam_shifted - 1] +=
           (1.0 - frac_shifted) * grid_spectra_value;
-      spectra[p * nlam + ilam_shifted] += frac_shifted * grid_spectra_value;
+      part_spectra[p * nlam + ilam_shifted] +=
+          frac_shifted * grid_spectra_value;
+      spectra[ilam_shifted - 1] += (1.0 - frac_shifted) * grid_spectra_value;
+      spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
     }
   }
   /* Free the allocated arrays. */
@@ -1225,8 +1242,8 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid,
  * @param nthreads: The number of threads to use.
  */
 void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
-                              double *spectra, const int nthreads,
-                              const double c) {
+                              double *spectra, double *part_spectra,
+                              const int nthreads, const double c) {
 
   double start_time = tic();
 
@@ -1236,11 +1253,12 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    shifted_spectra_loop_ngp_omp(grid, parts, spectra, nthreads, c);
+    shifted_spectra_loop_ngp_omp(grid, parts, spectra, part_spectra, nthreads,
+                                 c);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
+    shifted_spectra_loop_ngp_serial(grid, parts, spectra, part_spectra, c);
   }
 
 #else
@@ -1248,7 +1266,7 @@ void shifted_spectra_loop_ngp(struct grid *grid, struct particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  shifted_spectra_loop_ngp_serial(grid, parts, spectra, c);
+  shifted_spectra_loop_ngp_serial(grid, parts, spectra, part_spectra, c);
 
 #endif
   toc("Nearest Grid Point particle spectra loop", start_time);
