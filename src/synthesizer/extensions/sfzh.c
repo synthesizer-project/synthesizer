@@ -100,8 +100,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     np_dims[idim] = grid_props->dims[idim];
   }
 
-  PyArrayObject *out_sfzh = (PyArrayObject *)PyArray_SimpleNewFromData(
-      ndim, np_dims, NPY_FLOAT64, sfzh);
+  PyArrayObject *out_sfzh = c_array_to_numpy(ndim, np_dims, NPY_FLOAT64, sfzh);
 
   /* Clean up memory! */
   free(part_props);
