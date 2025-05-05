@@ -499,6 +499,12 @@ class Particles:
         attr_str = attr
         attr = getattr(self, attr_str)
 
+        # Strip dimensionless units since they are inconsequential
+        if hasattr(attr, "units") and attr.units.is_dimensionless:
+            attr = attr.ndveiw
+        if hasattr(thresh, "units") and thresh.units.is_dimensionless:
+            thresh = thresh.ndview
+
         # Ensure the attribute is not None
         if attr is None:
             raise exceptions.MissingMaskAttribute(

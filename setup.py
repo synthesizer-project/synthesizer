@@ -325,30 +325,6 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
-        "synthesizer.extensions.integrated_line",
-        [
-            "src/synthesizer/extensions/integrated_line.cpp",
-            "src/synthesizer/extensions/weights.cpp",
-            "src/synthesizer/extensions/property_funcs.cpp",
-            "src/synthesizer/extensions/timers.cpp",
-        ],
-        compile_flags=compile_flags,
-        links=link_args,
-        include_dirs=include_dirs,
-    ),
-    create_extension(
-        "synthesizer.extensions.particle_line",
-        [
-            "src/synthesizer/extensions/particle_line.cpp",
-            "src/synthesizer/extensions/weights.cpp",
-            "src/synthesizer/extensions/property_funcs.cpp",
-            "src/synthesizer/extensions/timers.cpp",
-        ],
-        compile_flags=compile_flags,
-        links=link_args,
-        include_dirs=include_dirs,
-    ),
-    create_extension(
         "synthesizer.extensions.integration",
         [
             "src/synthesizer/extensions/integration.cpp",
@@ -359,17 +335,17 @@ extensions = [
         links=link_args,
         include_dirs=include_dirs,
     ),
-    create_extension(
-        "synthesizer.imaging.extensions.circular_aperture",
-        [
-            "src/synthesizer/imaging/extensions/circular_aperture.cpp",
-            "src/synthesizer/extensions/property_funcs.cpp",
-            "src/synthesizer/extensions/timers.cpp",
-        ],
-        compile_flags=compile_flags,
-        links=link_args,
-        include_dirs=include_dirs,
-    ),
+    # create_extension(
+    #     "synthesizer.imaging.extensions.circular_aperture",
+    #     [
+    #         "src/synthesizer/imaging/extensions/circular_aperture.cpp",
+    #         "src/synthesizer/extensions/property_funcs.cpp",
+    #         "src/synthesizer/extensions/timers.cpp",
+    #     ],
+    #     compile_flags=compile_flags,
+    #     links=link_args,
+    #     include_dirs=include_dirs,
+    # ),
 ]
 
 # Setup configuration

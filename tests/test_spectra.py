@@ -77,7 +77,9 @@ def test_integrated_generation_cic(nebular_emission_model, random_part_stars):
 
     # Ensure that the integrated spectra are different
     assert np.allclose(integrated_spec._lnu, per_particle_spec._lnu), (
-        "The integrated and summed per particle spectra are not the same."
+        "The integrated and summed per particle spectra are not the same. "
+        f"(integrated={np.sum(integrated_spec._lnu)} vs"
+        f" per particle={np.sum(per_particle_spec._lnu)})"
     )
 
 

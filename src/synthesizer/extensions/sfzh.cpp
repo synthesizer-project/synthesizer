@@ -70,11 +70,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   }
 
   /* Allocate the sfzh array to output. */
-  double *sfzh = calloc(grid_props->size, sizeof(double));
-  if (sfzh == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
-    return NULL;
-  }
+  double *sfzh =
+      synth_malloc<double>(grid_props->size * sizeof(double), "sfzh");
 
   toc("Extracting Python data", setup_start);
 

@@ -68,7 +68,7 @@ void populate_smoothed_image_serial(const double *pix_values,
   }
 
   /* Allocate the particle kernel. */
-  double *part_kernel = synth_malloc(
+  double *part_kernel = synth_malloc<double>(
       max_kernel_cdim * max_kernel_cdim * sizeof(double), "part_kernel");
 
   /* Loop over positions including the sed */
@@ -225,7 +225,7 @@ void populate_smoothed_image_parallel(
   {
 
     /* Allocate the per thread particle kernel. */
-    double *part_kernel = synth_malloc(
+    double *part_kernel = synth_malloc<double>(
         max_kernel_cdim * max_kernel_cdim * sizeof(double), "part_kernel");
 
     /* Loop over positions including the sed */
@@ -441,7 +441,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Allocate the image.. */
   const int npix = npix_x * npix_y * nimgs;
-  double *img = synth_malloc(npix * sizeof(double), "image");
+  double *img = synth_malloc<double>(npix * sizeof(double), "image");
   memset(img, 0, npix * sizeof(double));
 
   toc("Extracting Python data", setup_start);

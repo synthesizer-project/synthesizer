@@ -52,7 +52,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* We need to split... get the progeny. */
   c->split = 1;
-  c->progeny = synth_malloc(8 * sizeof(struct cell), "progeny");
+  c->progeny = synth_malloc<struct cell>(8 * sizeof(struct cell), "progeny");
   *ncells += 8;
   for (int ip = 0; ip < 8; ip++) {
 
@@ -110,7 +110,8 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
     }
 
     /* Allocate the particles. */
-    c->progeny[ip].particles = malloc(part_count[ip] * sizeof(struct particle));
+    c->progeny[ip].particles = synth_malloc<struct particle>(
+        part_count[ip] * sizeof(struct particle), "progeny particles");
     c->progeny[ip].part_count = 0;
   }
 
@@ -316,8 +317,8 @@ void construct_cell_tree(const double *pos, const double *sml,
   root->depth = 0;
 
   /* Allocate the array of tree particles. */
-  struct particle *parts =
-      synth_malloc(npart * sizeof(struct particle), "particles");
+  struct particle *parts = synth_malloc<struct particle>(
+      npart * sizeof(struct particle), "particles");
 
   /* Create the particles and attach them to the root. */
   construct_particles(parts, pos, sml, surf_den_val, npart, root);

@@ -5,29 +5,11 @@
 
 /* C headers. */
 #include <Python.h>
+#include <iostream>
 #include <string.h>
 
 /* Header */
 #include "property_funcs.h"
-
-/**
- * @brief Allocate an array.
- *
- * Just a wrapper around malloc with a check for NULL.
- *
- * @param n: The number of pointers to allocate.
- */
-void *synth_malloc(size_t n, char *msg) {
-  void *ptr = malloc(n);
-  if (ptr == NULL) {
-    char error_msg[100];
-    snprintf(error_msg, sizeof(error_msg), "Failed to allocate memory for %s.",
-             msg);
-    PyErr_SetString(PyExc_MemoryError, error_msg);
-  }
-  bzero(ptr, n);
-  return ptr;
-}
 
 /**
  * @brief Extract double data from a numpy array.
@@ -57,7 +39,7 @@ double *extract_data_double(PyArrayObject *np_arr, const char *name) {
 int *extract_data_int(PyArrayObject *np_arr, const char *name) {
 
   /* Extract a pointer to the spectra grids */
-  int *data = reinterpret_cast<int *>(np_arr);
+  int *data = reinterpret_cast<int *>(PyArray_DATA(np_arr));
   if (data == NULL) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
@@ -469,12 +451,35 @@ double *Particles::get_velocities() const {
 }
 
 /**
- * @brief Get the mask of the particles.
+ * @brief Get the properties of the particles.
  *
- * @return The mask of the particles.
+ * @return The properties of the particles.
  */
-npy_bool *Particles::get_mask_arr() const {
-  return (npy_bool *)PyArray_DATA(np_mask_);
+double **Particles::get_all_props(int ndim) const {
+  /* Allocate a single array for particle properties. */
+  double **part_props =
+      reinterpret_cast<double **>(malloc(ndim * sizeof(double *)));
+  if (part_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for part_props.");
+    return NULL;
+  }
+
+  /* Unpack the particle property arrays into a single contiguous array. */
+  for (int idim = 0; idim < ndim; idim++) {
+
+    /* Extract the data from the numpy array. */
+    PyArrayObject *np_part_arr =
+        (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
+    if (np_part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+      return NULL;
+    }
+    part_props[idim] = (double *)PyArray_DATA(np_part_arr);
+  }
+
+  /* Success. */
+  return part_props;
 }
 
 /**
@@ -506,8 +511,8 @@ double *Particles::get_part_props(int idim) const {
  * @param pind: The index of the particle.
  * @return The weight of the particle at the given index.
  */
-double Particles::get_weight_at_ind(int pind) const {
-  return get_double_at_ind(np_weights_, pind);
+double Particles::get_weight_at(int pind) const {
+  return get_double_at(np_weights_, pind);
 }
 
 /**
@@ -516,8 +521,8 @@ double Particles::get_weight_at_ind(int pind) const {
  * @param pind: The index of the particle.
  * @return The velocity of the particle at the given index.
  */
-double Particles::get_vel_at_ind(int pind) const {
-  return get_double_at_ind(np_velocities_, pind);
+double Particles::get_vel_at(int pind) const {
+  return get_double_at(np_velocities_, pind);
 }
 
 /**
@@ -526,8 +531,19 @@ double Particles::get_vel_at_ind(int pind) const {
  * @param pind: The index of the particle.
  * @return The mask of the particle at the given index.
  */
-npy_bool Particles::get_mask_at_ind(int pind) const {
-  return get_bool_at_ind(np_mask_, pind);
+npy_bool Particles::get_mask_at(int pind) const {
+  /* If the mask is NULL, return true (i.e. not masked). */
+  if (np_mask_ == NULL) {
+    return true;
+  }
+
+  /* If the mask is Py_None, return true (i.e. not masked). */
+  if (reinterpret_cast<PyObject *>(np_mask_) == Py_None) {
+    return true;
+  }
+
+  /* Otherwise, is this element masked? */
+  return get_bool_at(np_mask_, pind);
 }
 
 /**
@@ -537,7 +553,7 @@ npy_bool Particles::get_mask_at_ind(int pind) const {
  * @param pind: The index of the particle.
  * @return The property of the particle at the given index.
  */
-double Particles::get_part_prop_at_ind(int idim, int pind) const {
+double Particles::get_part_prop_at(int idim, int pind) const {
   /* Get the array stored at idim. */
   PyArrayObject *np_part_arr =
       (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
@@ -546,5 +562,26 @@ double Particles::get_part_prop_at_ind(int idim, int pind) const {
     return NULL;
   }
 
-  return get_double_at_ind(np_part_arr, pind);
+  return get_double_at(np_part_arr, pind);
+}
+
+/**
+ * @brief Check if a particle is masked.
+ *
+ * @param pind: The index of the particle.
+ * @return True if the particle is masked, false otherwise.
+ */
+bool Particles::part_is_masked(int pind) const {
+  /* If the mask is NULL, return false (i.e. not masked). */
+  if (np_mask_ == NULL) {
+    return false;
+  }
+
+  /* If the mask is Py_None, return false (i.e. not masked). */
+  if (reinterpret_cast<PyObject *>(np_mask_) == Py_None) {
+    return false;
+  }
+
+  /* Otherwise, is this element masked? */
+  return !get_bool_at(np_mask_, pind);
 }

@@ -73,8 +73,8 @@ void populate_smoothed_data_cube_serial(
     const int kernel_cdim = 2 * delta_pix + 1;
 
     /* Create an empty kernel for this particle. */
-    double *part_kernel =
-        synth_malloc(kernel_cdim * kernel_cdim * sizeof(double), "part_kernel");
+    double *part_kernel = synth_malloc<double>(
+        kernel_cdim * kernel_cdim * sizeof(double), "part_kernel");
 
     /* Track the kernel sum for normalisation. */
     double kernel_sum = 0;
@@ -231,8 +231,8 @@ void populate_smoothed_data_cube_parallel(
     const int kernel_cdim = 2 * delta_pix + 1;
 
     /* Create an empty kernel for this particle. */
-    double *part_kernel =
-        synth_malloc(kernel_cdim * kernel_cdim * sizeof(double), "part_kernel");
+    double *part_kernel = synth_malloc<double>(
+        kernel_cdim * kernel_cdim * sizeof(double), "part_kernel");
 
     /* Track the kernel sum for normalisation. */
     double kernel_sum = 0;
@@ -570,7 +570,8 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
 
   /* Allocate the data cube. */
   const int npix = npix_x * npix_y;
-  double *data_cube = synth_malloc(npix * nlam * sizeof(double), "data_cube");
+  double *data_cube =
+      synth_malloc<double>(npix * nlam * sizeof(double), "data_cube");
 
   /* Populate the data cube. */
   populate_hist_data_cube(sed_values, xs, ys, res, npix_x, npix_y, npart, nlam,
@@ -637,7 +638,8 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
   /* Allocate DATA_CUBE. */
   const int npix = npix_x * npix_y;
-  double *data_cube = synth_malloc(npix * nlam * sizeof(double), "data_cube");
+  double *data_cube =
+      synth_malloc<double>(npix * nlam * sizeof(double), "data_cube");
 
   /* Populate the DATA_CUBE. */
   populate_smoothed_data_cube(sed_values, smoothing_lengths, xs, ys, kernel,

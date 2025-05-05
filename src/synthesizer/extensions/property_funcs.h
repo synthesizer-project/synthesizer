@@ -19,6 +19,25 @@
 
 #pragma GCC diagnostic pop
 
+/**
+ * @brief Allocate an array.
+ *
+ * Just a wrapper around malloc with a check for NULL.
+ *
+ * @param n: The number of pointers to allocate.
+ */
+template <typename T> T *synth_malloc(size_t n, const char *msg) {
+  T *ptr = reinterpret_cast<T *>(malloc(n));
+  if (ptr == NULL) {
+    char error_msg[100];
+    snprintf(error_msg, sizeof(error_msg), "Failed to allocate memory for %s.",
+             msg);
+    PyErr_SetString(PyExc_MemoryError, error_msg);
+  }
+  bzero(ptr, n);
+  return ptr;
+}
+
 /* A struct to hold grid properties. */
 struct grid {
 
@@ -93,12 +112,15 @@ public:
   /* Prototypes for getters. */
   double *get_weights() const;
   double *get_velocities() const;
-  npy_bool *get_mask_arr() const;
+  double **get_all_props(int ndim) const;
   double *get_part_props(int idim) const;
-  double get_weight_at_ind(int pind) const;
-  double get_vel_at_ind(int pind) const;
-  npy_bool get_mask_at_ind(int pind) const;
-  double get_part_prop_at_ind(int idim, int pind) const;
+  double get_weight_at(int pind) const;
+  double get_vel_at(int pind) const;
+  npy_bool get_mask_at(int pind) const;
+  double get_part_prop_at(int idim, int pind) const;
+
+  /* Is a particle masked? */
+  bool part_is_masked(int pind) const;
 
 private:
   /* The numpy array holding the particle weights (e.g. initial mass for
@@ -116,23 +138,22 @@ private:
   PyObject *part_tuple_;
 };
 
-static inline double get_double_at_ind(PyArrayObject *np_arr, int ind) {
-  return *reinterpret_cast<npy_bool *>(PyArray_GETPTR1(np_arr, ind));
+static inline double get_double_at(PyArrayObject *np_arr, int ind) {
+  return *reinterpret_cast<double *>(PyArray_GETPTR1(np_arr, ind));
 }
 
-static inline int get_int_at_ind(PyArrayObject *np_arr, int ind) {
+static inline int get_int_at(PyArrayObject *np_arr, int ind) {
   return *reinterpret_cast<int *>(PyArray_GETPTR1(np_arr, ind));
 }
 
-static inline npy_bool get_bool_at_ind(PyArrayObject *np_arr, int ind) {
+static inline npy_bool get_bool_at(PyArrayObject *np_arr, int ind) {
   return *reinterpret_cast<npy_bool *>(PyArray_GETPTR1(np_arr, ind));
 }
 
 /* Prototypes */
-void *synth_malloc(size_t n, char *msg);
-double *extract_data_double(PyArrayObject *np_arr, char *name);
-int *extract_data_int(PyArrayObject *np_arr, char *name);
-npy_bool *extract_data_bool(PyArrayObject *np_arr, char *name);
+double *extract_data_double(PyArrayObject *np_arr, const char *name);
+int *extract_data_int(PyArrayObject *np_arr, const char *name);
+npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,

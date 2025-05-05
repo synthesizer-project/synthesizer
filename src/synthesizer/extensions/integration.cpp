@@ -11,6 +11,7 @@
 
 /* Local includes. */
 #include "property_funcs.h"
+#include "timers.h"
 
 /**
  * @brief Serial trapezoidal integration.
