@@ -360,7 +360,7 @@ class ImageCollection(ImagingBase):
         if (
             not np.isclose(self.resolution, other_img.resolution)
             or not np.allclose(self.fov, other_img.fov)
-            or not np.allclose(self.npix != other_img.npix)
+            or not np.allclose(self.npix, other_img.npix)
         ):
             raise exceptions.InconsistentAddition(
                 f"Cannot add Images: resolution=({str(self.resolution)} + "
