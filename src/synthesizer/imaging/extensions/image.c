@@ -453,8 +453,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Construct a numpy python array to return the IFU. */
   npy_intp dims[3] = {nimgs, npix_x, npix_y};
-  PyArrayObject *out_img =
-      (PyArrayObject *)PyArray_SimpleNewFromData(3, dims, NPY_FLOAT64, img);
+  PyArrayObject *out_img = c_array_to_numpy(3, dims, NPY_DOUBLE, img);
 
   toc("Computing smoothed image", start_time);
 

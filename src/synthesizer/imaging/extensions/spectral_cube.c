@@ -646,8 +646,8 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
   /* Construct a numpy python array to return the DATA_CUBE. */
   npy_intp dims[3] = {npix_x, npix_y, nlam};
-  PyArrayObject *out_data_cube = (PyArrayObject *)PyArray_SimpleNewFromData(
-      3, dims, NPY_FLOAT64, data_cube);
+  PyArrayObject *out_data_cube =
+      c_array_to_numpy(3, dims, NPY_FLOAT64, data_cube);
 
   return Py_BuildValue("N", out_data_cube);
 }

@@ -281,16 +281,16 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
 
   /* Reconstruct the python array to return. */
-  npy_intp np_dims[1] = {
-      nlam,
-  };
+  npy_intp np_dims[1] = {nlam};
+  PyArrayObject *out_spectra =
+      c_array_to_numpy(1, np_dims, NPY_FLOAT64, spectra);
+
+  /* Construct the grid weights output numpy array. */
   npy_intp np_dims_weights[grid_props->ndim];
   for (int i = 0; i < grid_props->ndim; i++) {
     np_dims_weights[i] = grid_props->dims[i];
   }
-  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
-      1, np_dims, NPY_FLOAT64, spectra);
-  PyArrayObject *out_grid_weights = (PyArrayObject *)PyArray_SimpleNewFromData(
+  PyArrayObject *out_grid_weights = c_array_to_numpy(
       grid_props->ndim, np_dims_weights, NPY_FLOAT64, grid_weights);
 
   /* Clean up memory! */
