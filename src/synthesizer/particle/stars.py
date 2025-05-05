@@ -594,6 +594,10 @@ class Stars(Particles, StarsComponent):
             if isinstance(self.smoothing_lengths, np.ndarray):
                 self.smoothing_lengths = self.smoothing_lengths[~pmask]
 
+        # Blank out the cached properties
+        self._log10ages = None
+        self._log10metallicities = None
+
         self.nparticles = len(self.initial_masses)
         self.nstars = self.nparticles
 
