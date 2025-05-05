@@ -566,7 +566,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   } else if (strcmp(method, "ngp") == 0) {
     spectra_loop_ngp(grid_props, part_props, spectra, part_spectra, nthreads);
   } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
+                 method);
     return NULL;
   }
 
@@ -588,14 +589,18 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       npart,
       nlam,
   };
+  PyObject *part_spectra_capsule = PyCapsule_New(part_spectra, NULL, free);
   PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
       2, np_dims, NPY_FLOAT64, part_spectra);
+  PyArray_SetBaseObject(out_spectra, part_spectra_capsule);
 
   /* Construct the integrated spectra output numpy array. */
   npy_intp np_dims_int[1] = {nlam};
+  PyObject *spectra_capsule = PyCapsule_New(spectra, NULL, free);
   PyArrayObject *out_integrated_spectra =
       (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
                                                  spectra);
+  PyArray_SetBaseObject(out_integrated_spectra, spectra_capsule);
 
   /* Construct the output tuple. */
   PyObject *out_tuple =
@@ -1390,14 +1395,18 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
       npart,
       nlam,
   };
+  PyObject *part_spectra_capsule = PyCapsule_New(part_spectra, NULL, free);
   PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
       2, np_dims, NPY_FLOAT64, part_spectra);
+  PyArray_SetBaseObject(out_spectra, part_spectra_capsule);
 
   /* Construct the integrated spectra output numpy array. */
   npy_intp np_dims_int[1] = {nlam};
+  PyObject *spectra_capsule = PyCapsule_New(spectra, NULL, free);
   PyArrayObject *out_integrated_spectra =
       (PyArrayObject *)PyArray_SimpleNewFromData(1, np_dims_int, NPY_FLOAT64,
                                                  spectra);
+  PyArray_SetBaseObject(out_integrated_spectra, spectra_capsule);
 
   /* Construct the output tuple. */
   PyObject *out_tuple =
