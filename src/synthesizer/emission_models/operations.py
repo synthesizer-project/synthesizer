@@ -19,6 +19,7 @@ from synthesizer.emission_models.extractors.extractor import (
     ParticleExtractor,
 )
 from synthesizer.emissions import LineCollection, Sed
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
 from synthesizer.parametric import BlackHole
 
@@ -107,11 +108,14 @@ class Extraction:
         emitter = emitters[this_model.emitter]
 
         # Do we have to define a property mask?
+        mask_start = tic()
         this_mask = None
         for mask_dict in this_model.masks:
             this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+        toc("Getting the mask", mask_start)
 
         # Get the appropriate extractor
+        extractor_start = tic()
         if this_model.per_particle and this_model.vel_shift:
             extractor = DopplerShiftedParticleExtractor(
                 this_model.grid,
@@ -137,8 +141,12 @@ class Extraction:
                 this_model.grid,
                 this_model.extract,
             )
+        toc("Getting the extractor", extractor_start)
 
-        sed = extractor.generate_lnu(
+        # Get the spectra (note that result is a tuple containing the
+        # particle spectra and the integrated spectra if per_particle
+        # is True, otherwise it is just the integrated spectra)
+        result = extractor.generate_lnu(
             emitter,
             this_model,
             mask=this_mask,
@@ -148,13 +156,12 @@ class Extraction:
             do_grid_check=False,
         )
 
-        # Store the spectra in the right place (integrating if we
-        # need to)
+        # Store the spectra in the right place
         if this_model.per_particle:
-            particle_spectra[label] = sed
-            spectra[label] = sed.sum()
+            particle_spectra[label] = result[0]
+            spectra[label] = result[1]
         else:
-            spectra[label] = sed
+            spectra[label] = result
 
         return spectra, particle_spectra
 
@@ -275,7 +282,10 @@ class Extraction:
                 if not this_model._lam_mask[ind]:
                     lam_mask[ind] = False
 
-        out_lines = extractor.generate_line(
+        # Get the spectra (note that result is a tuple containing the
+        # particle line and the integrated line if per_particle is True,
+        # otherwise it is just the integrated line)
+        result = extractor.generate_line(
             emitter,
             this_model,
             mask=this_mask,
@@ -285,19 +295,21 @@ class Extraction:
             do_grid_check=False,
         )
 
-        # Ok, we have our lines but this contains all lines currentlty
+        # Store the lines in the right place
+        if this_model.per_particle:
+            particle_lines[label] = result[0]
+            lines[label] = result[1]
+        else:
+            lines[label] = result
+
+        # Ok, we have our lines but this contains all lines currently
         # with any not asked for set to zero. We need to filter this
         # down to just the lines we want. Note that this will also
         # handle composite lines
-        if len(passed_line_ids) < out_lines.nlines:
-            out_lines = out_lines[passed_line_ids]
-
-        # Store the lines in the right place (integrating if we need to)
-        if this_model.per_particle:
-            particle_lines[label] = out_lines
-            lines[label] = out_lines.sum()
-        else:
-            lines[label] = out_lines
+        if len(passed_line_ids) < lines[label].nlines:
+            lines[label] = lines[label][passed_line_ids]
+            if this_model.per_particle:
+                particle_lines[label] = particle_lines[label][passed_line_ids]
 
         return lines, particle_lines
 
