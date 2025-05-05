@@ -6,7 +6,7 @@ common between them. StarsComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Myr, dimensionless
+from unyt import Myr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -91,19 +91,7 @@ class StarsComponent(Component):
             log10ages (np.ndarray):
                 log10 stellar ages
         """
-        # Have we already calculated the log10 ages?
-        if hasattr(self, "_log10ages"):
-            return self._log10ages
-
-        # Ok, we need to calculate them
-        self._log10ages = (
-            np.log10(
-                self._ages,
-                dtype=np.float64,
-            )
-            * dimensionless
-        )
-        return self._log10ages
+        return np.log10(self._ages, dtype=np.float64)
 
     @property
     def log10metallicities(self):
@@ -113,20 +101,7 @@ class StarsComponent(Component):
             log10metallicities (np.ndarray):
                 log10 stellar metallicities
         """
-        # Have we already calculated the log10 metallicities?
-        if hasattr(self, "_log10metallicities"):
-            return self._log10metallicities
-
-        # Ok, we need to calculate them
-        self._log10metallicities = (
-            np.log10(
-                self.metallicities,
-                dtype=np.float64,
-            )
-            * dimensionless
-        )
-
-        return self._log10metallicities
+        return np.log10(self.metallicities, dtype=np.float64)
 
     def __str__(self):
         """Return a string representation of the stars object.

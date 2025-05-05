@@ -23,7 +23,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Mpc, Msun, Myr, km, s, yr
+from unyt import Mpc, Msun, Myr, dimensionless, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
@@ -326,6 +326,16 @@ class Stars(Particles, StarsComponent):
 
         return total_mass
 
+    @property
+    def log10ages(self):
+        """Return stellar particle ages in log (base 10).
+
+        Returns:
+            log10ages (np.ndarray):
+                log10 stellar ages
+        """
+        return np.log10(self.ages, dtype=np.float64) * dimensionless
+
     def _check_star_args(self):
         """Sanitizes inputs ensuring all arguments agree and are compatible.
 
@@ -593,10 +603,6 @@ class Stars(Particles, StarsComponent):
         if self.smoothing_lengths is not None:
             if isinstance(self.smoothing_lengths, np.ndarray):
                 self.smoothing_lengths = self.smoothing_lengths[~pmask]
-
-        # Blank out the cached properties
-        self._log10ages = None
-        self._log10metallicities = None
 
         self.nparticles = len(self.initial_masses)
         self.nstars = self.nparticles
