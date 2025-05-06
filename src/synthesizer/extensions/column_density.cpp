@@ -587,11 +587,9 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   cleanup_cell_tree(root);
 
   /* Reconstruct the python array to return. */
-  npy_intp np_dims[1] = {
-      npart_i,
-  };
-  PyArrayObject *out_surf_dens = (PyArrayObject *)PyArray_SimpleNewFromData(
-      1, np_dims, NPY_FLOAT64, surf_dens);
+  npy_intp np_dims[1] = {npart_i};
+  PyArrayObject *out_surf_dens =
+      c_array_to_numpy(1, np_dims, NPY_FLOAT64, surf_dens);
 
   toc("Calculating surface densities (with cells)", start);
 

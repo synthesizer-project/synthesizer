@@ -556,8 +556,8 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
     np_dims[idim] = grid_props->dims[idim];
   }
 
-  PyArrayObject *out_weights = (PyArrayObject *)PyArray_SimpleNewFromData(
-      grid_props->ndim, np_dims, NPY_FLOAT64, grid_weights);
+  PyArrayObject *out_weights =
+      c_array_to_numpy(grid_props->ndim, np_dims, NPY_FLOAT64, grid_weights);
 
   /* Clean up memory! */
   free(part_props);

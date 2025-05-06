@@ -34,6 +34,7 @@ from synthesizer import exceptions
 from synthesizer._version import __version__
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.integrate import integrate_last_axis
 
 
@@ -114,7 +115,7 @@ class FilterCollection:
         path=None,
         new_lam=None,
         fill_gaps=True,
-        verbose=True,
+        verbose=False,
     ):
         """Intialise the FilterCollection.
 
@@ -233,10 +234,6 @@ class FilterCollection:
         if new_lam is not None:
             self.resample_filters(new_lam=new_lam, verbose=verbose)
 
-        # Calculate mean and pivot wavelengths for each filter
-        self.mean_lams = self.calc_mean_lams()
-        self.pivot_lams = self.calc_pivot_lams()
-
     def _load_filters(self, path=None):
         """Load a `FilterCollection` from a HDF5 file.
 
@@ -314,7 +311,7 @@ class FilterCollection:
         # within the Quantity instantiation
         fc.nfilters = hdf["Header"].attrs["nfilters"]
         fc.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
-        fc.filter_codes = hdf["Header"].attrs["filter_codes"]
+        fc.filter_codes = list(hdf["Header"].attrs["filter_codes"])
 
         # Loop over the groups and make the filters
         for filter_code in fc.filter_codes:
@@ -498,6 +495,17 @@ class FilterCollection:
         self.resample_filters(new_lam=new_lam)
 
         return self
+
+    def __str__(self):
+        """Return a string representation of the FilterCollection.
+
+        Returns:
+            str: A string representation of the FilterCollection.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("FilterCollection")
 
     def __len__(self):
         """Return how many filters there are."""
@@ -919,7 +927,7 @@ class FilterCollection:
                 filter in the same order as self.filter_codes.
         """
         # Calculate each filters pivot wavelength
-        pivot_lams = np.zeros(len(self))
+        pivot_lams = np.zeros(len(self)) * self.lam.units
         for ind, f in enumerate(self):
             pivot_lams[ind] = f.pivwv()
 
@@ -934,11 +942,33 @@ class FilterCollection:
                 filter in the same order as self.filter_codes.
         """
         # Calculate each filters pivot wavelength
-        mean_lams = np.zeros(len(self))
+        mean_lams = np.zeros(len(self)) * self.lam.units
         for ind, f in enumerate(self):
             mean_lams[ind] = f.meanwv()
 
         return mean_lams
+
+    @property
+    def mean_lams(self):
+        """Return the mean wavelengths of all filters in the FilterCollection.
+
+        Returns:
+            mean_lams (ndarray, float)
+                An array containing the rest frame mean wavelengths of each
+                filter in the same order as self.filter_codes.
+        """
+        return self.calc_mean_lams()
+
+    @property
+    def pivot_lams(self):
+        """Return the pivot wavelengths of all filters in the FilterCollection.
+
+        Returns:
+            pivot_lams (ndarray, float)
+                An array containing the rest frame pivot wavelengths of each
+                filter in the same order as self.filter_codes.
+        """
+        return self.calc_pivot_lams()
 
     @accepts(rest_frame_lam=angstrom)
     def find_filter(self, rest_frame_lam, redshift=None, method="pivot"):
@@ -1323,73 +1353,31 @@ class Filter:
         """Alias for self.t."""
         return self.t
 
-    def __str__(self):
-        """Return a string representation of the filter.
+    def __add__(self, other_filter):
+        """Add two filters together.
+
+        This combines two filters into a new FilterCollection.
+
+        Args:
+            other_filter (Filter):
+                The other filter to be added to this one.
 
         Returns:
-            string
-                A string representation of the filter.
+            FilterCollection: The new FilterCollection containing both filters.
         """
-        details = [
-            f"Filter Code: {self.filter_code}",
-            f"Observatory: {self.observatory}",
-            f"Instrument: {self.instrument}",
-            f"Filter: {self.filter_}",
-            f"Filter Type: {self.filter_type}",
-        ]
+        # Create a new FilterCollection with the two filters
+        return FilterCollection(filters=[self, other_filter])
 
-        if self.filter_type == "TopHat":
-            details.extend(
-                [
-                    f"Lambda Min: {self.lam_min}",
-                    f"Lambda Max: {self.lam_max}",
-                    f"Lambda Eff: {self.lam_eff}",
-                    f"Lambda FWHM: {self.lam_fwhm}",
-                ]
-            )
-        elif self.filter_type == "SVO":
-            details.extend(
-                [
-                    f"SVO URL: {self.svo_url}",
-                ]
-            )
+    def __str__(self):
+        """Return a string representation of the Filter.
 
-        if self.lam is not None:
-            details.append(
-                f"Wavelength Array: shape = {self.lam.shape}, "
-                f"min = {self.lam.min()}, max = {self.lam.max()}"
-            )
-        if self.nu is not None:
-            details.append(
-                f"Frequency Array: shape = {self.nu.shape}, "
-                f"min = {self.nu.min():.2e}, max = {self.nu.max():.2e}"
-            )
-        if self.original_lam is not None:
-            details.append(
-                "Original Wavelength Array: shape = "
-                f"{self.original_lam.shape},"
-                f" min = {self.original_lam.min()}, "
-                f"max = {self.original_lam.max()}"
-            )
-        if self.original_nu is not None:
-            details.append(
-                f"Original Frequency Array: shape = {self.original_nu.shape},"
-                f" min = {self.original_nu.min():.2e}, "
-                f"max = {self.original_nu.max():.2e}"
-            )
-        if self.t is not None:
-            details.append(
-                f"Transmission Curve: shape = {self.t.shape}, "
-                f"min = {self.t.min()}, max = {self.t.max()}"
-            )
-        if self.original_t is not None:
-            details.append(
-                "Original Transmission Curve: shape = "
-                f"{self.original_t.shape}, "
-                f"min = {self.original_t.min()}, max = {self.original_t.max()}"
-            )
+        Returns:
+            str: A string representation of the Filter.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        return "\n".join(details)
+        return formatter.get_table("Filter")
 
     def _load_filter_from_hdf5(self, hdf):
         """Load a filter from an HDF5 group.

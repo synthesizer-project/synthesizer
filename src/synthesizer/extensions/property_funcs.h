@@ -5,6 +5,9 @@
 #ifndef PROPERTY_FUNCS_H_
 #define PROPERTY_FUNCS_H_
 
+/* Standard includes */
+#include <stdlib.h>
+
 /* We need the below because numpy triggers warnings which are errors
  * when we compiled with RUTHLESS. */
 #pragma GCC diagnostic push
@@ -172,5 +175,46 @@ struct particles *get_part_struct(PyObject *part_tuple,
                                   PyArrayObject *np_velocities,
                                   PyArrayObject *np_mask, const int npart,
                                   const int ndim);
+
+/**
+ * @brief Wraps a malloc’ed buffer into a NumPy array, taking ownership.
+ *
+ * @param ndim     Number of dimensions
+ * @param dims     Array of length ndim, giving each dimension size
+ * @param typenum  NumPy typenum (e.g. NPY_FLOAT64)
+ * @param out      Pointer returned by malloc() (must be at least
+ *                 product(dims)*itemsize)
+ *
+ * @return A new reference to a PyArrayObject which owns 'out', or NULL on
+ *         error (buffer is freed on error).
+ */
+static PyArrayObject *c_array_to_numpy(int ndim, npy_intp *dims, int typenum,
+                                       void *out) {
+  PyArray_Descr *descr = NULL;
+  PyArrayObject *arr = NULL;
+
+  /* Build a dtype descriptor from the typenum */
+  descr = PyArray_DescrFromType(typenum);
+  if (!descr) {
+    free(out);
+    return NULL;
+  }
+
+  /* Create the numpy array:
+   *    - out: the malloc’d memory
+   *    - NPY_ARRAY_CARRAY: ensure C-contiguous, aligned, writeable
+   *    - NPY_ARRAY_OWNDATA: NumPy will call free(out) when the array dies
+   */
+  arr = (PyArrayObject *)PyArray_NewFromDescr(
+      &PyArray_Type, descr, ndim, dims, NULL, out,
+      NPY_ARRAY_CARRAY | NPY_ARRAY_OWNDATA, NULL);
+  if (!arr) {
+    /* On failure, descriptor was already DECREF’d */
+    free(out);
+    return NULL;
+  }
+
+  return arr;
+}
 
 #endif // PROPERTY_FUNCS_H_
