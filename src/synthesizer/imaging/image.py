@@ -781,10 +781,13 @@ class Image(ImagingBase):
         # Calcualate the eventual number of lines.
         nlines = int(data.shape[0] / (data.shape[0] // target_lines))
 
-        # Reshape data to keep the x-axis resolution but reduced number of
-        # lines.
-        new_shape = nlines, data.shape[0] // nlines, data.shape[1], 1
-        data = data.reshape(new_shape).mean(-1).mean(1)
+        # Resample the data to have the same x resolution but nlines y
+        # resolution.
+        data = zoom(
+            data,
+            (nlines / data.shape[0], 1),
+            order=3,
+        )
 
         # Create new Figure with black background
         fig = plt.figure(figsize=figsize, facecolor="black")
