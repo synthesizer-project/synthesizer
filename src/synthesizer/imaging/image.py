@@ -754,25 +754,23 @@ class Image(ImagingBase):
             title (str):
                 The title to add to the image. If None no title is added.
         """
-        # extract data
-        data = 1 * self.arr
+        # Extract data
+        data = self.arr
 
-        # normalise to the maximum
+        # Normalise to the maximum and take the log10
         data /= np.max(data)
-
-        # log10
         data = np.log10(data)
 
-        # set any -np.inf values to zero (once renormalised)
+        # Set any -np.inf values to zero (once renormalised)
         data[data == -np.inf] = -np.log10(contrast)
 
-        # define normalising function
+        # Define normalising function
         norm = Normalize(vmin=-np.log10(contrast), vmax=0.0)
 
-        # normalise data
+        # Normalise data
         data = norm(data) * 5
 
-        # set any data <0.0 to zero
+        # Set any data <0.0 to zero
         data[data < 0.0] = 0.0
 
         # Unknown Pleasures works best with about 50 lines so reshape the data
