@@ -754,25 +754,23 @@ class Image(ImagingBase):
             title (str):
                 The title to add to the image. If None no title is added.
         """
-        # extract data
-        data = 1 * self.arr
+        # Extract data
+        data = self.arr
 
-        # normalise to the maximum
+        # Normalise to the maximum and take the log10
         data /= np.max(data)
-
-        # log10
         data = np.log10(data)
 
-        # set any -np.inf values to zero (once renormalised)
+        # Set any -np.inf values to zero (once renormalised)
         data[data == -np.inf] = -np.log10(contrast)
 
-        # define normalising function
+        # Define normalising function
         norm = Normalize(vmin=-np.log10(contrast), vmax=0.0)
 
-        # normalise data
+        # Normalise data
         data = norm(data) * 5
 
-        # set any data <0.0 to zero
+        # Set any data <0.0 to zero
         data[data < 0.0] = 0.0
 
         # Unknown Pleasures works best with about 50 lines so reshape the data
@@ -781,10 +779,13 @@ class Image(ImagingBase):
         # Calcualate the eventual number of lines.
         nlines = int(data.shape[0] / (data.shape[0] // target_lines))
 
-        # Reshape data to keep the x-axis resolution but reduced number of
-        # lines.
-        new_shape = nlines, data.shape[0] // nlines, data.shape[1], 1
-        data = data.reshape(new_shape).mean(-1).mean(1)
+        # Resample the data to have the same x resolution but nlines y
+        # resolution.
+        data = zoom(
+            data,
+            (nlines / data.shape[0], 1),
+            order=3,
+        )
 
         # Create new Figure with black background
         fig = plt.figure(figsize=figsize, facecolor="black")
