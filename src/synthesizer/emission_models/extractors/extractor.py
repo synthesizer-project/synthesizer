@@ -557,7 +557,7 @@ class DopplerShiftedParticleExtractor(Extractor):
         toc("Setting up particle lnu (with velocity shift) calculation", start)
 
         # Compute the lnu array
-        spec = compute_part_seds_with_vel_shift(
+        spec, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
             self._grid_axes,
@@ -575,7 +575,11 @@ class DopplerShiftedParticleExtractor(Extractor):
             lam_mask,
         )
 
-        return Sed(model.lam, spec * erg / s / Hz)
+        # Make the Sed objects themselves
+        part_sed = Sed(model.lam, spec * erg / s / Hz)
+        integrated_sed = Sed(model.lam, integrated_spec * erg / s / Hz)
+
+        return part_sed, integrated_sed
 
     def generate_line(self, *args, **kwargs):
         """Doppler shifted line luminosities make no sense."""
@@ -669,7 +673,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         )
 
         # Compute the lnu array
-        spec = compute_part_seds_with_vel_shift(
+        _, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
             self._grid_axes,
@@ -687,12 +691,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             lam_mask,
         )
 
-        # Sum the spectra over the particles
-        sum_start = tic()
-        spec = np.sum(spec, axis=0)
-        toc("Summing the spectra over the particles", sum_start)
-
-        return Sed(model.lam, spec * erg / s / Hz)
+        return Sed(model.lam, integrated_spec * erg / s / Hz)
 
     def generate_line(self, *args, **kwargs):
         """Doppler shifted line luminosities make no sense."""
@@ -752,15 +751,37 @@ class ParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
-            return Sed(
-                model.lam,
-                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
+
+            # Return empty Sed objects with the correct shape
+            return (
+                Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                Sed(
+                    model.lam,
+                    np.zeros(self._grid_nlam) * erg / s / Hz,
+                ),
             )
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
-            return Sed(
-                model.lam,
-                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
+
+            # Return empty Sed objects with the correct shape
+            return (
+                Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                Sed(
+                    model.lam,
+                    np.zeros(self._grid_nlam) * erg / s / Hz,
+                ),
             )
 
         # Get the attributes from the emitter
@@ -777,7 +798,7 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle lnu calculation", start)
 
         # Compute the lnu array
-        spec = compute_particle_seds(
+        spec, integrated_spec = compute_particle_seds(
             self._spectra_grid,
             self._grid_axes,
             extracted,
@@ -792,7 +813,15 @@ class ParticleExtractor(Extractor):
             lam_mask,
         )
 
-        return Sed(model.lam, spec * erg / s / Hz)
+        # Make the Sed objects themselves
+        part_lnu = unyt_array(spec, erg / s / Hz, bypass_validation=True)
+        int_lnu = unyt_array(
+            integrated_spec, erg / s / Hz, bypass_validation=True
+        )
+        part_sed = Sed(model.lam, part_lnu)
+        integrated_sed = Sed(model.lam, int_lnu)
+
+        return part_sed, integrated_sed
 
     def generate_line(
         self,
@@ -832,29 +861,46 @@ class ParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Line")
-            return LineCollection(
-                line_ids=self._grid.line_ids,
-                lam=self._line_lams,
-                lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s,
-                cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s
-                / Hz,
+            return (
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s,
+                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros(self._grid.nlines) * erg / s,
+                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                ),
             )
+
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Line")
-            return LineCollection(
-                line_ids=self._grid.line_ids,
-                lam=self._line_lams,
-                lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s,
-                cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                * erg
-                / s
-                / Hz,
+            return (
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s,
+                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                    * erg
+                    / s
+                    / Hz,
+                ),
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros(self._grid.nlines) * erg / s,
+                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                ),
             )
 
         # Get the attributes from the emitter
@@ -876,7 +922,7 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle line calculation", start)
 
         # Compute the integrated line lum array
-        lum = compute_particle_seds(
+        lum, integrated_lum = compute_particle_seds(
             self._line_lum_grid,
             self._grid_axes,
             extracted,
@@ -892,7 +938,7 @@ class ParticleExtractor(Extractor):
         )
 
         # Compute the integrated continuum array
-        cont = compute_particle_seds(
+        cont, integrated_cont = compute_particle_seds(
             self._line_cont_grid,
             self._grid_axes,
             extracted,
@@ -907,12 +953,21 @@ class ParticleExtractor(Extractor):
             lam_mask,
         )
 
-        return LineCollection(
+        # Make the LineCollection objects themselves
+        part_line = LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
             lum=lum * erg / s,
             cont=cont * erg / s / Hz,
         )
+        integrated_line = LineCollection(
+            line_ids=self._grid.line_ids,
+            lam=self._line_lams,
+            lum=integrated_lum * erg / s,
+            cont=integrated_cont * erg / s / Hz,
+        )
+
+        return part_line, integrated_line
 
 
 class IntegratedParametricExtractor(Extractor):

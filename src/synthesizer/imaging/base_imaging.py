@@ -126,7 +126,7 @@ class ImagingBase(ABC):
                 resolution and new npix. Defaults to True.
         """
         # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self.fov / self.resolution))
+        self.npix = np.int32(self.fov / self.resolution)
 
         # Ensure that the npix is an array of 2 values
         if self.npix.size == 1:

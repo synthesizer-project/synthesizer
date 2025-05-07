@@ -21,70 +21,6 @@
 #endif
 
 /**
- * @brief Get the grid indices of a particle based on it's properties.
- *
- * This will also calculate the fractions of the particle's mass in each grid
- * cell. (uncessary for NGP below)
- *
- * @param part_indices: The output array of indices.
- * @param axis_fracs: The output array of fractions.
- * @param dims: The size of each dimension.
- * @param ndim: The number of dimensions.
- * @param grid_props: The properties of the grid.
- * @param part_props: The properties of the particle.
- * @param p: The particle index.
- */
-void get_part_ind_frac_cic(int *part_indices, double *axis_fracs, int *dims,
-                           int ndim, double **grid_props, double **part_props,
-                           int p) {
-
-  /* Loop over dimensions finding the mass weightings and indicies. */
-  for (int dim = 0; dim < ndim; dim++) {
-
-    /* Get this array of grid properties for this dimension */
-    const double *grid_prop = grid_props[dim];
-
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
-
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    int part_cell;
-    double frac;
-    if (part_val <= grid_prop[0]) {
-
-      /* Use the grid edge. */
-      part_cell = 0;
-      frac = 0;
-
-    } else if (part_val > grid_prop[dims[dim] - 1]) {
-
-      /* Use the grid edge. */
-      part_cell = dims[dim] - 1;
-      frac = 1;
-
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      part_cell =
-          binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
-
-      /* Calculate the fraction. Note, here we do the "low" cell, the cell
-       * above is calculated from this fraction. */
-      frac = (grid_prop[part_cell] - part_val) /
-             (grid_prop[part_cell] - grid_prop[part_cell - 1]);
-    }
-
-    /* Set the fraction for this dimension. */
-    axis_fracs[dim] = (1 - frac);
-
-    /* Set this index. */
-    part_indices[dim] = part_cell;
-  }
-}
-
-/**
  * @brief This calculates the grid weights in each grid cell using a cloud
  *        in cell approach.
  *
@@ -353,67 +289,6 @@ void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
 }
 
 /**
- * @brief Get the grid indices of a particle based on it's properties.
- *
- * @param part_indices: The output array of indices.
- * @param dims: The size of each dimension.
- * @param ndim: The number of dimensions.
- * @param grid_props: The properties of the grid.
- * @param part_props: The properties of the particle.
- * @param p: The particle index.
- */
-void get_part_inds_ngp(int *part_indices, int *dims, int ndim,
-                       double **grid_props, double **part_props, int p) {
-
-  /* Loop over dimensions finding the indicies. */
-  for (int dim = 0; dim < ndim; dim++) {
-
-    /* Get this array of grid properties for this dimension */
-    const double *grid_prop = grid_props[dim];
-
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
-
-    /* Handle weird grids with only 1 grid cell on a particuar axis.  */
-    int part_cell;
-    if (dims[dim] == 1) {
-      part_cell = 0;
-    }
-
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    else if (part_val <= grid_prop[0]) {
-
-      /* Use the grid edge. */
-      part_cell = 0;
-
-    } else if (part_val > grid_prop[dims[dim] - 1]) {
-
-      /* Use the grid edge. */
-      part_cell = dims[dim] - 1;
-
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      part_cell =
-          binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
-    }
-
-    /* Set the index to the closest grid point either side of part_val. */
-    if (part_cell == 0) {
-      /* Handle the case where part_cell - 1 doesn't exist. */
-      part_indices[dim] = part_cell;
-    } else if ((part_val - grid_prop[part_cell - 1]) <
-               (grid_prop[part_cell] - part_val)) {
-      part_indices[dim] = part_cell - 1;
-    } else {
-      part_indices[dim] = part_cell;
-    }
-  }
-}
-
-/**
  * @brief This calculates the grid weights in each grid cell using a nearest
  *       grid point approach.
  *
@@ -678,8 +553,8 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
     np_dims[idim] = grid_props->dims[idim];
   }
 
-  PyArrayObject *out_weights = (PyArrayObject *)PyArray_SimpleNewFromData(
-      grid_props->ndim, np_dims, NPY_FLOAT64, grid_weights);
+  PyArrayObject *out_weights =
+      c_array_to_numpy(grid_props->ndim, np_dims, NPY_FLOAT64, grid_weights);
 
   /* Clean up memory! */
   free(part_props);
