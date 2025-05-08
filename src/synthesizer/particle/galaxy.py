@@ -185,7 +185,7 @@ class Galaxy(BaseGalaxy):
             mask = self.gas.star_forming
             if np.sum(mask) == 0:
                 self.sf_gas_mass = 0.0 * Msun
-                self.sf_gas_metallicity = 0.0 * Msun
+                self.sf_gas_metallicity = 0.0
             else:
                 self.sf_gas_mass = np.sum(self.gas.masses[mask])
 
