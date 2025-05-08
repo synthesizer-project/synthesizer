@@ -115,7 +115,7 @@ class NebularLineEmission(StellarEmissionModel):
             extract="linecont",
             grid=grid,
             save=False,
-            **kwargs,
+            **{key: val for key, val in kwargs.items() if key != 'save'},
         )
 
         # We can't define fesc and fesc_ly_alpha in the same model if
@@ -321,7 +321,7 @@ class NebularEmission(StellarEmissionModel):
             label=label + "_combined",
             combine=(nebular_line, nebular_continuum),
             save=False,
-            **kwargs,
+            **{key: val for key, val in kwargs.items() if key != 'save'},
         )
 
         StellarEmissionModel.__init__(
