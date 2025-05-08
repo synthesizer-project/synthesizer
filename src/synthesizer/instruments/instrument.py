@@ -161,6 +161,26 @@ class Instrument:
         # resolved spectroscopy)
         self.noise_maps = noise_maps
 
+        # If we have a depth make sure we have a SNR
+        if self.depth is not None and self.snrs is None:
+            raise exceptions.MissingArgument(
+                "If you set a depth you must also set the SNRs"
+            )
+
+        # If we have a SNR make sure we have a depth
+        if self.snrs is not None and self.depth is None:
+            raise exceptions.MissingArgument(
+                "If you set a SNR you must also set the depth"
+            )
+
+        # Make sure we don't have both a SNR and a noise map (only one
+        # can be used at a time)
+        if self.snrs is not None and self.noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as "
+                " noise maps"
+            )
+
     @property
     def _resolution(self):
         """Return the resolution of the Instrument without the units.
