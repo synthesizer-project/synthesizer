@@ -58,15 +58,14 @@ available_diagrams = tuple(diagrams.keys())
 
 
 def get_ratio_label(ratio_id):
-    """
-    Get a label for a given ratio_id.
+    """Get a label for a given ratio_id.
 
     Args:
-        ratio_id (str)
+        ratio_id (str):
             The ratio identificantion, e.g. R23.
 
     Returns:
-        label (str)
+        label (str):
             A string representation of the label.
     """
     # If the id is a string get the lines from the line_ratios sub-module
@@ -83,17 +82,16 @@ def get_ratio_label(ratio_id):
 
 
 def get_diagram_labels(diagram_id):
-    """
-    Get a x and y labels for a given diagram_id.
+    """Get a x and y labels for a given diagram_id.
 
     Args:
-        diagram_id (str)
+        diagram_id (str):
             The diagram identificantion, e.g. OHNO.
 
     Returns:
-        xlabel (str)
+        xlabel (str):
             A string representation of the x-label.
-        ylabel (str)
+        ylabel (str):
             A string representation of the y-label.
     """
     # Get the list of lines for a given ratio_id
@@ -105,8 +103,7 @@ def get_diagram_labels(diagram_id):
 
 
 def get_bpt_kewley01(logNII_Ha):
-    """
-    BPT-NII demarcations from Kewley+2001.
+    """BPT-NII demarcations from Kewley+2001.
 
     Kewley+03: https://arxiv.org/abs/astro-ph/0106324
 
@@ -115,12 +112,12 @@ def get_bpt_kewley01(logNII_Ha):
     log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
 
     Args:
-        logNII_Ha (array)
+        logNII_Ha (np.ndarray of float):
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line
 
     Returns:
-        array
+        array:
             Corresponding log([OIII]/Hb) ratio array
     """
     return 0.61 / (logNII_Ha - 0.47) + 1.19
@@ -135,8 +132,7 @@ def plot_bpt_kewley01(
     ylimits=(0.05, 20),
     **kwargs,
 ):
-    """
-    Plot the BPT-NII demarcations from Kewley+2001.
+    """Plot the BPT-NII demarcations from Kewley+2001.
 
     Kewley+03: https://arxiv.org/abs/astro-ph/0106324
 
@@ -145,20 +141,20 @@ def plot_bpt_kewley01(
     log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
 
     Args:
-        logNII_Ha (array)
+        logNII_Ha (np.ndarray of float):
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line.
-        fig (matplotlib.figure.Figure)
+        fig (matplotlib.figure.Figure):
             Optional figure to plot on,
-        ax (matplotlib.axes.Axes)
+        ax (matplotlib.axes.Axes):
             Optional axis to plot on.
-        show (bool)
+        show (bool):
             Should we show the plot?
-        xlimits (tuple)
+        xlimits (tuple):
             The x-axis limits.
-        ylimits (tuple)
+        ylimits (tuple):
             The y-axis limits.
-        kwargs
+        **kwargs (dict):
             Any additional keyword arguments to pass to the plot.
 
     Returns:
@@ -195,8 +191,7 @@ def plot_bpt_kewley01(
 
 
 def get_bpt_kauffman03(logNII_Ha):
-    """
-    BPT-NII demarcations from Kauffman+2003.
+    """BPT-NII demarcations from Kauffman+2003.
 
     Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
 
@@ -205,7 +200,7 @@ def get_bpt_kauffman03(logNII_Ha):
     log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
 
     Args:
-        logNII_Ha (array)
+        logNII_Ha (np.ndarray of float):
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line
 
@@ -225,8 +220,7 @@ def plot_bpt_kauffman03(
     ylimits=(0.05, 20),
     **kwargs,
 ):
-    """
-    Plot the BPT-NII demarcations from Kauffman+2003.
+    """Plot the BPT-NII demarcations from Kauffman+2003.
 
     Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
 
@@ -235,21 +229,22 @@ def plot_bpt_kauffman03(
     log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
 
     Args:
-        logNII_Ha (array)
+        logNII_Ha (np.ndarray of float):
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line.
-        fig (matplotlib.figure.Figure)
+        fig (matplotlib.figure.Figure):
             Optional figure to plot on.
-        ax (matplotlib.axes.Axes)
+        ax (matplotlib.axes.Axes):
             Optional axis to plot on.
-        show (bool)
+        show (bool):
             Should we show the plot?
-        xlimits (tuple)
+        xlimits (tuple):
             The x-axis limits.
-        ylimits (tuple)
+        ylimits (tuple):
             The y-axis limits.
-        kwargs
-            Any additional keyword arguments to pass to the plot_bpt_kewley01.
+        **kwargs (dict):
+            Any additional keyword arguments to pass to the
+            plot.
 
     Returns:
         fig, ax

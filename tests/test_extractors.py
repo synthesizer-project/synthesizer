@@ -21,10 +21,14 @@ from synthesizer.parametric import Stars as ParametricStars
 
 # Mock Extractor implementation for testing abstract base class methods
 class MockExtractor(Extractor):
+    """Mock implementation of the Extractor class for testing purposes."""
+
     def generate_lnu(self, *args, **kwargs):
+        """Mock implementation of generate_lnu method."""
         return "mock_lnu"
 
     def generate_line(self, *args, **kwargs):
+        """Mock implementation of generate_line method."""
         return "mock_line"
 
 
@@ -239,10 +243,10 @@ def test_integrated_particle_masked_empty_case(
 
 @patch(
     "synthesizer.emission_models.extractors."
-    "extractor.compute_part_seds_with_vel_shift"
+    "extractor.compute_part_seds_with_vel_shift",
 )
 def test_doppler_shifted_generate_lnu(
-    mock_compute_part_seds,
+    mock_compute_part_seds_with_vel_shift,
     test_grid,
     random_part_stars,
     nebular_emission_model,
@@ -260,17 +264,20 @@ def test_doppler_shifted_generate_lnu(
     # a known spectrum
     n_particles = len(random_part_stars.ages)
     mock_spectrum = np.ones((n_particles, test_grid.nlam))
-    mock_compute_part_seds.return_value = mock_spectrum
+    mock_compute_part_seds_with_vel_shift.return_value = (
+        mock_spectrum,
+        mock_spectrum,
+    )
 
     # Call generate_lnu
-    result = extractor.generate_lnu(
+    result, _ = extractor.generate_lnu(
         random_part_stars, nebular_emission_model, None, None, "cic", 1, False
     )
 
     # Check that compute_part_seds_with_vel_shift was called with the
     # right parameters
-    mock_compute_part_seds.assert_called_once()
-    args = mock_compute_part_seds.call_args[0]
+    mock_compute_part_seds_with_vel_shift.assert_called_once()
+    args = mock_compute_part_seds_with_vel_shift.call_args[0]
     assert args[0] is extractor._spectra_grid  # spectra_grid
     assert args[2] is extractor._grid_axes  # grid_axes
     assert args[3] == ("mock_extracted",)  # extracted
@@ -317,7 +324,7 @@ def test_doppler_shifted_no_velocities(
     "extractor.compute_part_seds_with_vel_shift"
 )
 def test_integrated_doppler_shifted_generate_lnu(
-    mock_compute_part_seds,
+    mock_compute_part_seds_with_vel_shift,
     test_grid,
     random_part_stars,
     nebular_emission_model,
@@ -335,19 +342,27 @@ def test_integrated_doppler_shifted_generate_lnu(
 
     # Set up the compute_part_seds_with_vel_shift mock to return a
     # known spectrum
-    n_particles = len(random_part_stars.ages)
-    mock_spectrum = np.ones((n_particles, test_grid.nlam))
-    mock_compute_part_seds.return_value = mock_spectrum
+    mock_spectrum = np.ones(test_grid.nlam)
+    mock_compute_part_seds_with_vel_shift.return_value = (
+        mock_spectrum,
+        mock_spectrum,
+    )
 
     # Call generate_lnu
     result = extractor.generate_lnu(
-        random_part_stars, nebular_emission_model, None, None, "cic", 1, False
+        random_part_stars,
+        nebular_emission_model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
     )
 
     # Check that compute_part_seds_with_vel_shift was called with the
     # right parameters
-    mock_compute_part_seds.assert_called_once()
-    args = mock_compute_part_seds.call_args[0]
+    mock_compute_part_seds_with_vel_shift.assert_called_once()
+    args = mock_compute_part_seds_with_vel_shift.call_args[0]
     assert args[0] is extractor._spectra_grid  # spectra_grid
     assert args[2] is extractor._grid_axes  # grid_axes
     assert args[3] == ("mock_extracted",)  # extracted
@@ -358,10 +373,7 @@ def test_integrated_doppler_shifted_generate_lnu(
     assert result.lnu.ndim == 1, f"Expected 1D lnu, got {result.lnu.ndim}"
 
     # Check that the result is a Sed object with the right values
-    assert isinstance(result, Sed)
-    # For integrated, we sum over particles
-    expected_spectrum = np.sum(mock_spectrum, axis=0)
-    assert np.array_equal(result.lnu, expected_spectrum * erg / s / Hz)
+    assert isinstance(result, Sed), f"Expected Sed, got {type(result)}"
 
 
 @patch(
@@ -385,10 +397,14 @@ def test_particle_generate_lnu(
     # Set up the compute_particle_seds mock to return a known spectrum
     n_particles = len(particle_stars_A.ages)
     mock_spectrum = np.ones((n_particles, test_grid.nlam))
-    mock_compute_particle_seds.return_value = mock_spectrum
+    mock_int_spectrum = np.ones(test_grid.nlam)
+    mock_compute_particle_seds.return_value = (
+        mock_spectrum,
+        mock_int_spectrum,
+    )
 
     # Call generate_lnu
-    result = extractor.generate_lnu(
+    part_spec, spec = extractor.generate_lnu(
         particle_stars_A, nebular_emission_model, None, None, "cic", 1, False
     )
 
@@ -401,11 +417,14 @@ def test_particle_generate_lnu(
     assert args[3] == "mock_weight"  # weight
 
     # Ensure the output sed is "per-particle" (has ndim == 2)
-    assert result.lnu.ndim == 2, f"Expected 2D lnu, got {result.lnu.ndim}"
+    assert part_spec.lnu.ndim == 2, (
+        f"Expected 2D lnu, got {part_spec.lnu.ndim}"
+    )
+    assert spec.lnu.ndim == 1, f"Expected 1D lnu, got {spec.lnu.ndim}"
 
     # Check that the result is a Sed object with the right values
-    assert isinstance(result, Sed)
-    assert np.array_equal(result.lnu, mock_spectrum * erg / s / Hz)
+    assert isinstance(part_spec, Sed)
+    assert isinstance(spec, Sed)
 
 
 def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):

@@ -22,8 +22,7 @@ from synthesizer.emission_models.base_model import EmissionModel
 
 
 class DustEmission(EmissionModel):
-    """
-    An emission model that defines the dust emission.
+    """An emission model that defines the dust emission.
 
     This defines the dust emission model to use.
 
@@ -46,8 +45,7 @@ class DustEmission(EmissionModel):
         grid=None,
         **kwargs,
     ):
-        """
-        Initialise the DustEmission object.
+        """Initialise the DustEmission object.
 
         Args:
             dust_emission_model (synthesizer.dust.DustEmissionModel): The dust
@@ -59,6 +57,8 @@ class DustEmission(EmissionModel):
                 when calculating dust luminosity.
             label (str): The label for this emission model.
             grid (synthesizer.grid.Grid): The grid object.
+            **kwargs (dict): Additional keyword arguments to pass to the
+                parent class.
         """
         EmissionModel.__init__(
             self,
@@ -73,8 +73,7 @@ class DustEmission(EmissionModel):
 
 
 class AttenuatedEmission(EmissionModel):
-    """
-    An emission model that defines the attenuated emission.
+    """An emission model that defines the attenuated emission.
 
     This defines the attenuation of the reprocessed emission by dust.
 
@@ -96,8 +95,7 @@ class AttenuatedEmission(EmissionModel):
         grid=None,
         **kwargs,
     ):
-        """
-        Initialise the AttenuatedEmission object.
+        """Initialise the AttenuatedEmission object.
 
         Args:
             dust_curve (AttenuationLaw): The dust curve to use.
@@ -105,6 +103,8 @@ class AttenuatedEmission(EmissionModel):
             emitter (string): The emitter this model is associated with.
             label (str): The label for this emission model.
             grid (synthesizer.grid.Grid): The grid object.
+            **kwargs (dict): Additional keyword arguments to pass to the
+                parent class.
         """
         EmissionModel.__init__(
             self,
@@ -118,25 +118,24 @@ class AttenuatedEmission(EmissionModel):
 
 
 class TemplateEmission(EmissionModel):
-    """
-    An emission model that uses a template for emission extraction.
+    """An emission model that uses a template for emission extraction.
 
     This is a child of the EmisisonModel class, for a full description of the
     parameters see the EmissionModel class.
     """
 
     def __init__(self, template, emitter, label="template", **kwargs):
-        """
-        Initialise the TemplateEmission model.
+        """Initialise the TemplateEmission model.
 
         Args:
-            template (Template)
+            template (Template):
                 The template object containing the AGN emission.
-            emitter (str)
+            emitter (str):
                 The emitter this model is associated with.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         EmissionModel.__init__(

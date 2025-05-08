@@ -56,8 +56,7 @@ def _download(
     filename,
     save_dir,
 ):
-    """
-    Download the file from the data server.
+    """Download the file from the data server.
 
     We extract the link for the file and its name on the server from the
     AVAILABLE_FILES dictionary.
@@ -65,9 +64,9 @@ def _download(
     We are now using Box
 
     Args:
-        filename (str)
+        filename (str):
             The name of the file to download.
-        save_dir (str)
+        save_dir (str):
             The directory in which to save the file.
     """
     # Unpack the file details for extraction
@@ -101,11 +100,10 @@ def _download(
 
 
 def download_test_grids(destination):
-    """
-    Download the test grids for synthesizer.
+    """Download the test grids for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download each file
@@ -118,11 +116,10 @@ def download_test_grids(destination):
 
 
 def download_stellar_test_grids(destination):
-    """
-    Download the SPS test grids for synthesizer.
+    """Download the SPS test grids for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download the stellar grid
@@ -130,11 +127,10 @@ def download_stellar_test_grids(destination):
 
 
 def download_agn_test_grids(destination):
-    """
-    Download the AGN test grids for synthesizer.
+    """Download the AGN test grids for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download each file
@@ -143,11 +139,10 @@ def download_agn_test_grids(destination):
 
 
 def download_dust_grid(destination):
-    """
-    Download the Drain and Li (2007) dust emission grid for synthesizer.
+    """Download the Drain and Li (2007) dust emission grid for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download the dust grid
@@ -155,11 +150,10 @@ def download_dust_grid(destination):
 
 
 def download_camels_data(destination):
-    """
-    Download the CAMELS data.
+    """Download the CAMELS data.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     _download("camels_snap.hdf5", destination)
@@ -167,11 +161,10 @@ def download_camels_data(destination):
 
 
 def download_sc_sam_test_data(destination):
-    """
-    Download the SC-SAM test data.
+    """Download the SC-SAM test data.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     _download("sc-sam_sfhist.dat", destination)

@@ -14,15 +14,19 @@ from synthesizer.grid import Grid
 
 
 def simple_UVJ(grid, target_metallicity=0.01):
-    """Calculate UVJ colours as a function of age for single metallicity"""
+    """Calculate UVJ colours as a function of age for single metallicity.
 
+    Args:
+        grid (Grid): The grid object.
+        target_metallicity (float): The metallicity to use for the calculation.
+    """
     iZ = grid.get_nearest_index(target_metallicity, grid.metallicity)
 
     fc = UVJ(new_lam=grid.lam)
     # fc.plot_transmission_curves()
 
     for ia, log10age in enumerate(grid.log10age):
-        sed = grid.get_spectra(
+        sed = grid.get_sed_at_grid_point(
             (ia, iZ)
         )  # creates an SED object from a given grid point
 
@@ -36,18 +40,18 @@ def simple_UVJ(grid, target_metallicity=0.01):
         print(
             (
                 f"log10(age/Myr): {log10age - 6:.1f} "
-                f'U-V: {sed.measure_colour("U", "V"):.2f} '
-                f'V-J: {sed.measure_colour("V", "J"):.2f}'
+                f"U-V: {sed.measure_colour('U', 'V'):.2f} "
+                f"V-J: {sed.measure_colour('V', 'J'):.2f}"
             )
         )
 
 
 def UVJ_metallicity(grid):
-    """
-    Calculate UVJ as a function of metallicity and save as a .ecsv file
-    and make a figure
-    """
+    """Calculate UVJ as a function of metallicity and save as a .ecsv file.
 
+    Args:
+        grid (Grid): The grid object.
+    """
     fc = UVJ(new_lam=grid.lam)
 
     table = Table()
@@ -59,7 +63,7 @@ def UVJ_metallicity(grid):
             table[f"{Z}_{f}"] = np.zeros(len(grid.log10age))
 
         for ia, log10age in enumerate(grid.log10age):
-            sed = grid.get_spectra(
+            sed = grid.get_sed_at_grid_point(
                 (ia, iZ)
             )  # creates an SED object from a given grid point
 

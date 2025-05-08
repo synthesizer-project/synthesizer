@@ -36,8 +36,7 @@ from synthesizer.utils import TableFormatter
 
 
 class Image(ImagingBase):
-    """
-    A class for generating images.
+    """A class for generating images.
 
     This class is used to generate images from particle based data with or
     without smoothing, and from parametric data with smoothing defined by a
@@ -47,9 +46,9 @@ class Image(ImagingBase):
     an ImageCollection to generate a collection of images in various filters.
 
     Attributes:
-        resolution (unyt_quantity, float):
+        resolution (unyt_quantity of float):
             The resolution of the image.
-        fov (unyt_quantity, float):
+        fov (unyt_quantity of float):
             The field of view of the image.
         npix (tuple):
             The number of pixels in the image.
@@ -69,13 +68,12 @@ class Image(ImagingBase):
         fov,
         img=None,
     ):
-        """
-        Create an image with the images metadata.
+        """Create an image with the images metadata.
 
         Args:
-            resolution (unyt_quantity, float):
+            resolution (unyt_quantity of float):
                 The resolution of the image.
-            fov (unyt_quantity, float):
+            fov (unyt_quantity of float):
                 The field of view of the image. If a single value is passed
                 then the FOV is assumed to be square.
             img (unyt_array/array_like, float):
@@ -128,8 +126,7 @@ class Image(ImagingBase):
 
     @property
     def shape(self):
-        """
-        Return the shape of the image.
+        """Return the shape of the image.
 
         Returns:
             tuple
@@ -138,11 +135,10 @@ class Image(ImagingBase):
         return self.npix
 
     def resample(self, factor):
-        """
-        Resample the image by factor.
+        """Resample the image by factor.
 
         Args:
-            factor (float)
+            factor (float):
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
         """
@@ -168,24 +164,23 @@ class Image(ImagingBase):
             self.set_npix(new_shape)
 
     def __add__(self, other_img):
-        """
-        Add 2 Images together.
+        """Add 2 Images together.
 
         Args:
-            other_img (Image)
+            other_img (Image):
                 The other image to be added.
 
         Returns:
-            Image
+            Image:
                 The new image containing the added arrays.
 
         Raises:
-            InconsistentArguments
+            InconsistentArguments:
                 If the images have different resolutions or fovs, or if the
                 combination of units is incompatible an error is raised.
         """
         # Ensure the images have the same resolution
-        if self.resolution != other_img.resolution:
+        if not np.isclose(self.resolution, other_img.resolution):
             raise exceptions.InconsistentAddition(
                 "The images must have the same resolution to be added "
                 f"({self.resolution}, {other_img.resolution})."
@@ -220,8 +215,7 @@ class Image(ImagingBase):
             )
 
     def __str__(self):
-        """
-        Return a string representation of the Image object.
+        """Return a string representation of the Image object.
 
         Returns:
             table (str)
@@ -233,15 +227,14 @@ class Image(ImagingBase):
         return formatter.get_table("Image")
 
     def __mul__(self, mult):
-        """
-        Multiply the image by a multiplier.
+        """Multiply the image by a multiplier.
 
         Args:
-            mult (int/float/array-like)
+            mult (int/float/array-like):
                 The number to multiply the image array by.
 
         Returns:
-            Image
+            Image:
                 The new image containing the multipled array.
         """
         # Create the new image
@@ -261,8 +254,7 @@ class Image(ImagingBase):
         coordinates,
         normalisation=None,
     ):
-        """
-        Calculate an image with no smoothing.
+        """Calculate an image with no smoothing.
 
         This is only applicable to particle based images and is just a
         wrapper for numpy.histogram2d.
@@ -277,7 +269,7 @@ class Image(ImagingBase):
                 multiplied by the signal before sorting, then normalised out.
 
         Returns:
-            img (array_like, float)
+            img (array_like, float):
                 A 2D array containing the pixel values sorted into the image.
                 (npix, npix)
         """
@@ -299,8 +291,7 @@ class Image(ImagingBase):
         normalisation=None,
         nthreads=1,
     ):
-        """
-        Calculate a smoothed image.
+        """Calculate a smoothed image.
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
@@ -332,7 +323,7 @@ class Image(ImagingBase):
                 case only)
 
         Returns:
-            img : array_like (float)
+            img : array_like (float):
                 A 2D array containing particles sorted into an image.
                 (npix[0], npix[1])
 
@@ -383,11 +374,10 @@ class Image(ImagingBase):
             )
 
     def apply_psf(self, psf):
-        """
-        Apply a Point Spread Function to this image.
+        """Apply a Point Spread Function to this image.
 
         Args:
-            psf (np.ndarray)
+            psf (np.ndarray of float):
                 An array describing the point spread function.
 
         Returns:
@@ -408,11 +398,10 @@ class Image(ImagingBase):
         )
 
     def apply_noise_array(self, noise_arr):
-        """
-        Apply a noise array.
+        """Apply a noise array.
 
         Args:
-            noise_arr (np.ndarray)
+            noise_arr (np.ndarray of float):
                 The noise array to add to the image.
 
         Returns:
@@ -452,14 +441,13 @@ class Image(ImagingBase):
         return new_img
 
     def apply_noise_from_std(self, noise_std):
-        """
-        Apply noise derived from a standard deviation.
+        """Apply noise derived from a standard deviation.
 
         This creates noise with a normal distribution centred on 0 with the
         passed standard deviation.
 
         Args:
-            noise_std (float)
+            noise_std (float):
                 The standard deviation of the noise to add to the image.
 
         Returns:
@@ -496,8 +484,7 @@ class Image(ImagingBase):
 
     @accepts(aperture_radius=(kpc, arcsecond))
     def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
-        """
-        Apply noise derived from a SNR and depth.
+        """Apply noise derived from a SNR and depth.
 
         This can either be for a point source or an aperture if aperture_radius
         is passed.
@@ -507,7 +494,7 @@ class Image(ImagingBase):
         Args:
             snr (float):
                 The signal to noise ratio of the image.
-            depth (float):
+            depth (unyt_quantity of float):
                 The depth of the image, i.e. the minimum signal strength
                 detectable at the given SNR.
             aperture_radius (unyt_quantity):
@@ -581,26 +568,25 @@ class Image(ImagingBase):
         fig=None,
         ax=None,
     ):
-        """
-        Plot an image.
+        """Plot an image.
 
         Args:
-            show (bool)
+            show (bool):
                 Whether to show the plot or not (Default False).
-            cmap (str)
+            cmap (str):
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
-            norm (function)
+            norm (function):
                 A normalisation function. This can be custom made or one of
                 matplotlib's normalisation functions. It must take an array and
                 return the same array after normalisation.
-            tick_formatter (matplotlib.ticker.FuncFormatter)
+            tick_formatter (matplotlib.ticker.FuncFormatter):
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The figure object to plot on. If None a new figure is created.
-            ax (matplotlib.pyplot.figure.axis)
+            ax (matplotlib.pyplot.figure.axis):
                 The axis object to plot on. If None a new axis is created.
 
         Returns:
@@ -644,32 +630,31 @@ class Image(ImagingBase):
         fig=None,
         ax=None,
     ):
-        """
-        Plot a map.
+        """Plot a map.
 
         Unlike an image we want a colorbar and axes for a map.
 
         Args:
-            show (bool)
+            show (bool):
                 Whether to show the plot or not (Default False).
-            extent (array_like)
+            extent (list):
                 The extent of the x and y axes.
-            cmap (str)
+            cmap (str):
                 The name of the matplotlib colormap for image plotting. Can be
                 any valid string that can be passed to the cmap argument of
                 imshow. Defaults to "Greys_r".
-            cbar_label (str)
+            cbar_label (str):
                 The label for the colorbar.
-            norm (function)
+            norm (function):
                 A normalisation function. This can be custom made or one of
                 matplotlib's normalisation functions. It must take an array and
                 return the same array after normalisation.
-            tick_formatter (matplotlib.ticker.FuncFormatter)
+            tick_formatter (matplotlib.ticker.FuncFormatter):
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
-            fig (matplotlib.pyplot.figure)
+            fig (matplotlib.pyplot.figure):
                 The figure object to plot on. If None a new figure is created.
-            ax (matplotlib.pyplot.figure.axis)
+            ax (matplotlib.pyplot.figure.axis):
                 The axis object to plot on. If None a new axis is created.
 
         Returns:
@@ -746,13 +731,12 @@ class Image(ImagingBase):
 
     def plot_unknown_pleasures(
         self,
-        constrast=100,
+        contrast=100,
         target_lines=50,
         figsize=(8, 8),
         title="SYNTHESIZER",
     ):
-        """
-        Plot the image in the style of Unknown Pleasures.
+        """Plot the image in the style of Unknown Pleasures.
 
         Creates a representation of an image similar in style to Joy
         Division's seminal 1979 album Unknown Pleasures.
@@ -760,31 +744,33 @@ class Image(ImagingBase):
         Borrows some code from this matplotlib examples:
         https://matplotlib.org/stable/gallery/animation/unchained.html
 
-        Arguments
-            constrast (float)
-                The contrast.
-            target_lines (int)
+        Arguments:
+            contrast (float):
+                The contrast, i.e. the maximum value in the image.
+            target_lines (int):
                 The target number of individual lines to use.
+            figsize (tuple):
+                The size of the figure to create.
+            title (str):
+                The title to add to the image. If None no title is added.
         """
-        # extract data
-        data = 1 * self.arr
+        # Extract data
+        data = self.arr
 
-        # normalise to the maximum
+        # Normalise to the maximum and take the log10
         data /= np.max(data)
-
-        # log10
         data = np.log10(data)
 
-        # set any -np.inf values to zero (once renormalised)
-        data[data == -np.inf] = -np.log10(constrast)
+        # Set any -np.inf values to zero (once renormalised)
+        data[data == -np.inf] = -np.log10(contrast)
 
-        # define normalising function
-        norm = Normalize(vmin=-np.log10(constrast), vmax=0.0)
+        # Define normalising function
+        norm = Normalize(vmin=-np.log10(contrast), vmax=0.0)
 
-        # normalise data
+        # Normalise data
         data = norm(data) * 5
 
-        # set any data <0.0 to zero
+        # Set any data <0.0 to zero
         data[data < 0.0] = 0.0
 
         # Unknown Pleasures works best with about 50 lines so reshape the data
@@ -793,10 +779,13 @@ class Image(ImagingBase):
         # Calcualate the eventual number of lines.
         nlines = int(data.shape[0] / (data.shape[0] // target_lines))
 
-        # Reshape data to keep the x-axis resolution but reduced number of
-        # lines.
-        new_shape = nlines, data.shape[0] // nlines, data.shape[1], 1
-        data = data.reshape(new_shape).mean(-1).mean(1)
+        # Resample the data to have the same x resolution but nlines y
+        # resolution.
+        data = zoom(
+            data,
+            (nlines / data.shape[0], 1),
+            order=3,
+        )
 
         # Create new Figure with black background
         fig = plt.figure(figsize=figsize, facecolor="black")
@@ -848,21 +837,20 @@ class Image(ImagingBase):
         aperture_cent=None,
         nthreads=1,
     ):
-        """
-        Return the sum of the image within an aperture.
+        """Return the sum of the image within an aperture.
 
         This uses fractional pixel coverage to calculate the overlap between
         the aperture and each pixel.
 
         Args:
-            aperture_radius (unyt_quantity, float)
+            aperture_radius (unyt_quantity of float):
                 The radius of the aperture.
-            aperture_cent (unyt_array, float)
+            aperture_cent (unyt_array, float):
                 The centre of the aperture (in pixel coordinates, i.e. the
                 centre is [npix/2, npix/2], top left is [0, 0], and bottom
                 right is [npix, npix]). If None then the centre is assumed to
                 be the maximum pixel.
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use for the calculation. Default is 1.
 
         Returns:

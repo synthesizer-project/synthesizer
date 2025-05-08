@@ -23,8 +23,7 @@ import warnings
 
 
 def deprecation(message, category=FutureWarning):
-    """
-    Issue a deprecation warning to the end user.
+    """Issue a deprecation warning to the end user.
 
     A message must be specified, and a category can be optionally specified.
     FutureWarning will, by default, warn the end user, DeprecationWarning
@@ -33,9 +32,9 @@ def deprecation(message, category=FutureWarning):
     deprecations.
 
     Args:
-        message (str)
+        message (str):
             The message to be displayed to the end user.
-        category (Warning)
+        category (Warning):
             The warning category to use. `FutureWarning` by default.
 
     """
@@ -43,8 +42,7 @@ def deprecation(message, category=FutureWarning):
 
 
 def deprecated(message=None, category=FutureWarning):
-    """
-    Decorate a function to mark it as deprecated.
+    """Decorate a function to mark it as deprecated.
 
     This decorator will issue a warning to the end user when the function is
     called. The message and category can be optionally specified, if not a
@@ -52,10 +50,10 @@ def deprecated(message=None, category=FutureWarning):
     by default warn the end user unless explicitly silenced).
 
     Args:
-        message (str)
+        message (str):
             The message to be displayed to the end user. If None a default
             message will be used.
-        category (Warning)
+        category (Warning):
             The warning category to use. `FutureWarning` by default.
 
     """
@@ -84,8 +82,7 @@ def deprecated(message=None, category=FutureWarning):
 
 
 def warn(message, category=RuntimeWarning, stacklevel=3):
-    """
-    Issue a warning to the end user.
+    """Issue a warning to the end user.
 
     A message must be specified, and a category can be optionally specified.
     RuntimeWarning will, by default, warn the end user, and can be silenced by
@@ -95,11 +92,11 @@ def warn(message, category=RuntimeWarning, stacklevel=3):
     with a default stacklevel of 3, removing the need to specify it each time.
 
     Args:
-        message (str)
+        message (str):
             The message to be displayed to the end user.
-        category (Warning)
+        category (Warning):
             The warning category to use. `RuntimeWarning` by default.
-        stacklevel (int)
+        stacklevel (int):
             The number of stack levels to skip when displaying the warning.
 
     """

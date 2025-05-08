@@ -110,7 +110,7 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
     result_shape[i] = shape[i];
   }
   PyObject *result =
-      PyArray_SimpleNewFromData(ndim - 1, result_shape, NPY_DOUBLE, integral);
+      c_array_to_numpy(ndim - 1, result_shape, NPY_DOUBLE, integral);
 
   return result; /* Return the computed integral */
 }
@@ -232,7 +232,7 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
     result_shape[i] = shape[i];
   }
   PyObject *result =
-      PyArray_SimpleNewFromData(ndim - 1, result_shape, NPY_DOUBLE, integral);
+      c_array_to_numpy(ndim - 1, result_shape, NPY_DOUBLE, integral);
 
   return result; /* Return the computed integral */
 }

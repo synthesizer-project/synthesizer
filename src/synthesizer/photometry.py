@@ -18,8 +18,7 @@ from synthesizer.units import Quantity, default_units
 
 
 class PhotometryCollection:
-    """
-    A container for photometry data.
+    """A container for photometry data.
 
     This represents a collection of photometry values and provides unit
     association and plotting functionality.
@@ -49,8 +48,7 @@ class PhotometryCollection:
     photo_fnu = Quantity("flux_density_frequency")
 
     def __init__(self, filters, **kwargs):
-        """
-        Instantiate the photometry collection.
+        """Instantiate the photometry collection.
 
         To enable quantities a PhotometryCollection will store the data
         as arrays but enable access via dictionary syntax.
@@ -59,9 +57,9 @@ class PhotometryCollection:
         units of the photometry passed.
 
         Args:
-            filters (FilterCollection)
+            filters (FilterCollection):
                 The FilterCollection used to produce the photometry.
-            kwargs (dict)
+            kwargs (dict):
                 A dictionary of keyword arguments containing all the photometry
                 of the form {"filter_code": photometry}.
         """
@@ -116,8 +114,7 @@ class PhotometryCollection:
         self.units = self.photometry.units
 
     def __getitem__(self, filter_code):
-        """
-        Enable dictionary key look up syntax to extract specific photometry.
+        """Enable dictionary key look up syntax to extract specific photometry.
 
         e.g. Sed.photo_lnu["JWST/NIRCam.F150W"].
 
@@ -128,7 +125,7 @@ class PhotometryCollection:
         would be used) should always return with units.
 
         Args:
-            filter_code (str)
+            filter_code (str):
                 The filter code of the desired photometry.
         """
         # Perform the look up
@@ -153,8 +150,7 @@ class PhotometryCollection:
         )
 
     def keys(self):
-        """
-        Enable dict.keys() behaviour.
+        """Return the filter codes (keys) of the photometry.
 
         Returns:
             list
@@ -163,8 +159,7 @@ class PhotometryCollection:
         return self._look_up.keys()
 
     def values(self):
-        """
-        Enable dict.values() behaviour.
+        """Return the photometry values.
 
         Returns:
             dict_values
@@ -173,8 +168,7 @@ class PhotometryCollection:
         return self._look_up.values()
 
     def __len__(self):
-        """
-        Return the number of photometry filters in the collection.
+        """Return the number of photometry filters in the collection.
 
         Returns:
             int
@@ -183,8 +177,7 @@ class PhotometryCollection:
         return len(self._look_up)
 
     def items(self):
-        """
-        Enable dict.items() behaviour.
+        """Return a tuple of both the filter codes and photometry.
 
         Returns:
             dict_items
@@ -194,8 +187,7 @@ class PhotometryCollection:
         return self._look_up.items()
 
     def __len__(self):
-        """
-        Enable len() behaviour.
+        """Enable len() behaviour.
 
         Returns:
             int
@@ -205,8 +197,7 @@ class PhotometryCollection:
 
     @property
     def shape(self):
-        """
-        Return the shape of the photometry array.
+        """Return the shape of the photometry array.
 
         Returns:
             tuple
@@ -216,8 +207,7 @@ class PhotometryCollection:
 
     @property
     def ndim(self):
-        """
-        Return the number of dimensions of the photometry array.
+        """Return the number of dimensions of the photometry array.
 
         Returns:
             int
@@ -226,8 +216,7 @@ class PhotometryCollection:
         return self.photometry.ndim
 
     def __iter__(self):
-        """
-        Enable dict iter behaviour.
+        """Enable dict iter behaviour.
 
         Returns:
             iter
@@ -236,8 +225,7 @@ class PhotometryCollection:
         return iter(self._look_up.items())
 
     def __str__(self):
-        """
-        Allow for a summary to be printed.
+        """Allow for a summary to be printed.
 
         Returns:
             str: A formatted string representation of the PhotometryCollection.
@@ -300,8 +288,7 @@ class PhotometryCollection:
         return table
 
     def select(self, *filter_codes):
-        """
-        Return a PhotometryCollection with only the specified filters.
+        """Return a PhotometryCollection with only the specified filters.
 
         Args:
             filter_codes (list, string):
@@ -337,8 +324,7 @@ class PhotometryCollection:
         marker="+",
         figsize=(3.5, 5),
     ):
-        """
-        Plot the photometry alongside the filter curves.
+        """Plot the photometry alongside the filter curves.
 
         Args:
             fig (matplotlib.figure.Figure, optional):

@@ -37,18 +37,17 @@ from setuptools.errors import CompileError
 
 
 def has_flags(compiler, flags):
-    """
-    Check whether the C compiler allows for a flag to be passed.
+    """Check whether the C compiler allows for a flag to be passed.
 
     This is tested by compiling a small temporary test program.
 
     Args:
-        compiler
+        compiler (distutils.ccompiler.CCompiler):
             The loaded C compiler.
-        flags (list)
+        flags (list):
             A list of compiler flags to test the compiler with.
 
-    Returns
+    Returns:
         bool
             Success/Failure
     """
@@ -69,12 +68,23 @@ def create_extension(
     links=[],
     include_dirs=[],
 ):
-    """
-    Create a C extension module.
+    """Create a C extension module.
 
     Args:
-        name: The name of the extension module.
-        sources: A list of source files.
+        name (str):
+            The name of the extension module.
+        sources (list):
+            A list of source files to compile.
+        compile_flags (list):
+            A list of compiler flags to pass to the compiler.
+        links (list):
+            A list of linker flags to pass to the linker.
+        include_dirs (list):
+            A list of directories to search for header files.
+
+    Returns:
+        Extension:
+            The extension module.
     """
     logger.info(
         f"### Creating extension {name} with compile args: "
