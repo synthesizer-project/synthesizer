@@ -324,12 +324,15 @@ class Instrument:
         return self.can_do_resolved_spectroscopy and have_noise
 
     @classmethod
-    def _from_hdf5(cls, group):
+    def _from_hdf5(cls, group, **kwargs):
         """Create an Instrument from an HDF5 group.
 
         Args:
             group (h5py.Group):
                 The group containing the Instrument attributes.
+            **kwargs:
+                Keyword arguments to override the attributes stored in the
+                HDF5 file.
 
         Returns:
             Instrument:
@@ -427,6 +430,25 @@ class Instrument:
             )
         else:
             noise_maps = None
+
+        # Overrise any of the attributes with the kwargs if they are present
+        # in the kwargs
+        if "filters" in kwargs:
+            filters = kwargs["filters"]
+        if "resolution" in kwargs:
+            resolution = kwargs["resolution"]
+        if "lam" in kwargs:
+            lam = kwargs["lam"]
+        if "depth" in kwargs:
+            depth = kwargs["depth"]
+        if "depth_app_radius" in kwargs:
+            depth_app_radius = kwargs["depth_app_radius"]
+        if "snrs" in kwargs:
+            snrs = kwargs["snrs"]
+        if "psfs" in kwargs:
+            psfs = kwargs["psfs"]
+        if "noise_maps" in kwargs:
+            noise_maps = kwargs["noise_maps"]
 
         # Create the Instrument
         return cls(
