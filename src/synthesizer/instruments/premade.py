@@ -28,6 +28,19 @@ from synthesizer import exceptions
 from synthesizer.instruments import Instrument
 from synthesizer.instruments.filters import FilterCollection
 
+__all__ = [
+    "JWSTNIRCamWide",
+    "JWSTNIRCamMedium",
+    "JWSTNIRCamNarrow",
+]
+
+# We need the relative path to the instruments_cache directory
+# to store and retrieve the instrument files
+INSTRUMENT_CACHE_DIR = os.path.join(
+    os.path.dirname(__file__),
+    "instrument_cache",
+)
+
 
 class PremadeInstrument(Instrument):
     """A base class for premade instruments.
@@ -239,7 +252,7 @@ class JWSTNIRCamWide(PremadeInstrument):
 
     # Define the filepath to the instrument cache file (it will be here
     # after downloading)
-    _instrument_cache_file = "instruments_cache/JWST_NIRCam_Wide.hdf5"
+    _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Wide.hdf5"
 
     def __init__(
         self,
@@ -356,7 +369,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
 
     # Define the filepath to the instrument cache file (it will be here
     # after downloading)
-    _instrument_cache_file = "instruments_cache/JWST_NIRCam_Medium.hdf5"
+    _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Medium.hdf5"
 
     def __init__(
         self,
@@ -471,7 +484,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
 
     # Define the filepath to the instrument cache file (it will be here
     # after downloading)
-    _instrument_cache_file = "instruments_cache/JWST_NIRCam_Narrow.hdf5"
+    _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Narrow.hdf5"
 
     def __init__(
         self,
