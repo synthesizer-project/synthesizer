@@ -5,6 +5,21 @@ for download from Box, while it is included as part of the package, it is not
 intended to be used by the user. It is used to generate the _data_ids.yaml
 file, which will be updated in new releases as and when new data is added to
 the database.
+
+This requires the Box SDK to be installed. You can install it with
+`pip install boxsdk`. You will also need to set the environment variables
+`SYNTH_BOX_ID` and `SYNTH_BOX_SECRET` to the client ID and secret of your
+Box application. You can create a Box application at
+https://developer.box.com/console/apps (assuming you have a Box account with
+edit permissions to the folder).
+
+Once you run this script, it will prompt you to visit a URL to authorize
+access to your Box account. After you authorize access, it will error, this
+is a bit of a horrid hack. On the error page you will see a URL with
+`code=` in it. Copy the code and paste it into the prompt. This will
+generate an access token and refresh token, which will be used to
+authenticate the Box client. Now the script will run and generate the
+_data_ids.yaml file in the current directory.
 """
 
 import os
@@ -21,7 +36,7 @@ except ImportError:
     )
 
 
-def categorise_links(filepath: str) -> str:
+def _categorise_links(filepath: str) -> str:
     """Categorise the links based on the filename.
 
     This function is used to categorise the links based on the filename.
@@ -51,7 +66,7 @@ def categorise_links(filepath: str) -> str:
         )
 
 
-def get_files_recursive(folder, client, path=""):
+def _get_files_recursive(folder, client, path=""):
     """Get all the files in a folder recursively.
 
     Args:
@@ -67,7 +82,7 @@ def get_files_recursive(folder, client, path=""):
     for item in folder.get_items():
         if item.type == "folder":
             all_files.extend(
-                get_files_recursive(
+                _get_files_recursive(
                     client.folder(item.id), client, path + item.name + "/"
                 )
             )
@@ -76,7 +91,7 @@ def get_files_recursive(folder, client, path=""):
     return all_files
 
 
-def update_box_links_database():
+def _update_box_links_database():
     """Update the _data_ids.yaml database of downloads.
 
     This function is used for maintenance of the package and the data
@@ -119,7 +134,7 @@ def update_box_links_database():
     folder_id = shared_item.id
 
     # Get all the files in the folder recursively
-    all_files = get_files_recursive(client.folder(folder_id), client)
+    all_files = _get_files_recursive(client.folder(folder_id), client)
 
     output = {
         "TestData": {},
@@ -154,7 +169,7 @@ def update_box_links_database():
             )
 
         direct_url = file.shared_link.get("download_url") or None
-        category = categorise_links(subfolder + file.name)
+        category = _categorise_links(subfolder + file.name)
 
         output[category][file.name] = {
             "file": file.name,
