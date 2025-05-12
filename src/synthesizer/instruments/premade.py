@@ -308,7 +308,7 @@ class JWSTNIRCamWide(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Wide.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "JWST/NIRCam.F070W",
         "JWST/NIRCam.F090W",
         "JWST/NIRCam.F115W",
@@ -366,7 +366,7 @@ class JWSTNIRCamWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -425,7 +425,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Medium.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "JWST/NIRCam.F140M",
         "JWST/NIRCam.F162M",
         "JWST/NIRCam.F182M",
@@ -486,7 +486,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -540,7 +540,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Narrow.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "JWST/NIRCam.F164N",
         "JWST/NIRCam.F187N",
         "JWST/NIRCam.F212N",
@@ -596,7 +596,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -671,7 +671,7 @@ class JWSTNIRCam(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "JWST/NIRCam.F070W",
         "JWST/NIRCam.F090W",
         "JWST/NIRCam.F115W",
@@ -748,7 +748,7 @@ class JWSTNIRCam(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -808,7 +808,7 @@ class JWSTMIRI(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_MIRI.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "JWST/MIRI.F560W",
         "JWST/MIRI.F770W",
         "JWST/MIRI.F1000W",
@@ -870,7 +870,7 @@ class JWSTMIRI(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -923,7 +923,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_UVIS_Wide.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/WFC3_UVIS1.F218W",
         "HST/WFC3_UVIS1.F225W",
         "HST/WFC3_UVIS1.F275W",
@@ -986,7 +986,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1034,7 +1034,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
     )
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/WFC3_UVIS1.F410M",
         "HST/WFC3_UVIS1.F467M",
         "HST/WFC3_UVIS1.F547M",
@@ -1090,7 +1090,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1169,7 +1169,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
     )
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/WFC3_UVIS1.F280N",
         "HST/WFC3_UVIS1.F343N",
         "HST/WFC3_UVIS1.F373N",
@@ -1256,7 +1256,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1355,7 +1355,7 @@ class HSTWFC3UVIS(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_UVIS.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         # Wide
         "HST/WFC3_UVIS1.F218W",
         "HST/WFC3_UVIS1.F225W",
@@ -1458,7 +1458,7 @@ class HSTWFC3UVIS(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1502,7 +1502,7 @@ class HSTWFC3IRWide(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR_Wide.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/WFC3_IR.F105W",
         "HST/WFC3_IR.F110W",
         "HST/WFC3_IR.F125W",
@@ -1556,7 +1556,7 @@ class HSTWFC3IRWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1599,7 +1599,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR_Medium.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/WFC3_IR.F098M",
         "HST/WFC3_IR.F127M",
         "HST/WFC3_IR.F139M",
@@ -1652,7 +1652,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1697,7 +1697,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR_Narrow.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/WFC3_IR.F126N",
         "HST/WFC3_IR.F128N",
         "HST/WFC3_IR.F130N",
@@ -1752,7 +1752,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1806,7 +1806,7 @@ class HSTWFC3IR(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/WFC3_IR.F098M",
         "HST/WFC3_IR.F105W",
         "HST/WFC3_IR.F110W",
@@ -1870,7 +1870,7 @@ class HSTWFC3IR(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -1917,7 +1917,7 @@ class HSTACSWFCWide(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC_Wide.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/ACS_WFC.F435W",
         "HST/ACS_WFC.F475W",
         "HST/ACS_WFC.F555W",
@@ -1974,7 +1974,7 @@ class HSTACSWFCWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -2014,7 +2014,7 @@ class HSTACSWFCMedium(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC_Medium.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/ACS_WFC.F550M",
     ]
 
@@ -2064,7 +2064,7 @@ class HSTACSWFCMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -2106,7 +2106,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC_Narrow.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/ACS_WFC.F502N",
         "HST/ACS_WFC.F658N",
         "HST/ACS_WFC.F660N",
@@ -2158,7 +2158,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -2209,7 +2209,7 @@ class HSTACSWFC(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "HST/ACS_WFC.F435W",
         "HST/ACS_WFC.F475W",
         "HST/ACS_WFC.F502N",
@@ -2270,7 +2270,7 @@ class HSTACSWFC(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -2312,7 +2312,7 @@ class EuclidNISP(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/Euclid_NISP.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "Euclid/NISP.Y",
         "Euclid/NISP.J",
         "Euclid/NISP.H",
@@ -2364,7 +2364,7 @@ class EuclidNISP(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -2404,7 +2404,7 @@ class EuclidVIS(PremadeInstrument):
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/Euclid_VIS.hdf5"
 
     # Define the available filters
-    _available_filters = [
+    available_filters = [
         "Euclid/VIS.vis",
     ]
 
@@ -2454,7 +2454,7 @@ class EuclidVIS(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or self._available_filters
+        filter_codes = filter_subset or self.available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(

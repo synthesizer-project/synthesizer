@@ -92,8 +92,8 @@ def print_premade_instruments() -> None:
         name = cls.__name__
         try:
             num_filters = (
-                len(getattr(cls, "_available_filters", None))
-                if getattr(cls, "_available_filters", None) is not None
+                len(getattr(cls, "available_filters", None))
+                if getattr(cls, "available_filters", None) is not None
                 else "N/A"
             )
             cache_file = getattr(cls, "_instrument_cache_file", None)
