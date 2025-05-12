@@ -8,7 +8,7 @@ Note that this script requires extra dependencies not installed by default
 in Synthesizer (nor listed as optional dependencies since they are
 telescope specific). These include:
 
-    - webbpsf (For Webb filters)
+    - stpsf (For Webb filters)
 
 Example usage:
     python get_instruments.py
@@ -17,9 +17,9 @@ Example usage:
 import os
 
 import h5py
-import webbpsf
+import stpsf
 
-from synthesizer.insrtuments import (
+from synthesizer.instruments import (
     HSTACSWFC,
     HSTWFC3IR,
     HSTWFC3UVIS,
@@ -42,9 +42,12 @@ from synthesizer.insrtuments import (
 )
 
 # Get the cache file location
-INSTRUMENT_CACHE_DIR = (
-    os.path.abspath(__file__) + "../synthesizer/instruments/instrument_cache/"
+this_filepath = "/".join(os.path.abspath(__file__).split("/")[:-1])
+print(this_filepath)
+INSTRUMENT_CACHE_DIR = os.path.join(
+    this_filepath, "..", "synthesizer", "instruments", "instrument_cache"
 )
+print(INSTRUMENT_CACHE_DIR)
 
 
 def make_and_write_jwst_nircam():
@@ -57,8 +60,9 @@ def make_and_write_jwst_nircam():
     """
     # First create the PSFs for all the NIRCam filters
     psfs = {}
-    nc = webbpsf.NIRCam()
+    nc = stpsf.NIRCam()
     for nc_filt in JWSTNIRCam.available_filters:
+        print(f"Generating PSF for {nc_filt}")
         nc.filter = nc_filt.split(".")[-1]
         psf = nc.calc_psf(oversample=2)
         psfs[nc_filt] = psf[0].data
@@ -111,8 +115,9 @@ def make_and_write_jwst_miri():
     """
     # First create the PSFs for all the MIRI filters
     psfs = {}
-    miri = webbpsf.MIRI()
+    miri = stpsf.MIRI()
     for miri_filt in JWSTMIRI.available_filters:
+        print(f"Generating PSF for {miri_filt}")
         miri.filter = miri_filt.split(".")[-1]
         psf = miri.calc_psf(oversample=2)
         psfs[miri_filt] = psf[0].data
@@ -256,7 +261,10 @@ def make_and_write_euclid():
 if __name__ == "__main__":
     # Create the cache directory if it doesn't exist
     if not os.path.exists(INSTRUMENT_CACHE_DIR):
-        os.makedirs(INSTRUMENT_CACHE_DIR)
+        raise FileNotFoundError(
+            f"Cache directory {INSTRUMENT_CACHE_DIR} does not exist. "
+            "Please create it before running this script."
+        )
 
     # Generate the instruments
     make_and_write_jwst_nircam()
