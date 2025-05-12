@@ -295,6 +295,13 @@ def download():
         default=[],
     )
 
+    # Add a flag to download all instruments
+    parser.add_argument(
+        "--all-instruments",
+        action="store_true",
+        help="Download all available instruments",
+    )
+
     # Add a flag to go ham and download everything
     parser.add_argument(
         "--all",
@@ -327,6 +334,7 @@ def download():
     scsam = args.scsam_data
     all_sim_data = args.all_sim_data
     instruments = args.instruments
+    all_instruments = args.all_instruments
 
     # Check if the destination directory exists
     if dest is not None and not os.path.exists(dest):
@@ -336,7 +344,7 @@ def download():
         )
 
     # Warn that dest is ignored for instruments
-    if len(instruments) > 0 and dest is not None:
+    if (len(instruments) > 0 or all_instruments) and dest is not None:
         warn(
             "The destination argument is ignored for instruments. "
             "Instruments are always downloaded to the cache directory "
@@ -368,6 +376,10 @@ def download():
     # Instruments?
     if len(instruments) > 0:
         download_instruments(INSTRUMENT_CACHE_DIR, instruments)
+
+    # All instruments?
+    if all_instruments:
+        download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
 
     # Dust data?
     if dust:
