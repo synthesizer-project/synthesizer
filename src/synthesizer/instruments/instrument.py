@@ -450,18 +450,21 @@ class Instrument:
         if "noise_maps" in kwargs:
             noise_maps = kwargs["noise_maps"]
 
-        # Create the Instrument
-        return cls(
-            label=group.attrs["label"],
-            filters=filters,
-            resolution=resolution,
-            lam=lam,
-            depth=depth,
-            depth_app_radius=depth_app_radius,
-            snrs=snrs,
-            psfs=psfs,
-            noise_maps=noise_maps,
-        )
+        # Create a new instance of the Instrument class
+        instance = cls.__new__(cls)
+
+        # Set the label of the Instrument
+        instance.label = group.attrs["label"]
+        instance.filters = filters
+        instance.resolution = resolution
+        instance.lam = lam
+        instance.depth = depth
+        instance.depth_app_radius = depth_app_radius
+        instance.snrs = snrs
+        instance.psfs = psfs
+        instance.noise_maps = noise_maps
+
+        return instance
 
     def to_hdf5(self, group):
         """Save the Instrument to an HDF5 group.
