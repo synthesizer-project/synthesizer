@@ -227,6 +227,7 @@ class PremadeInstrument(Instrument):
         snrs=None,
         psfs=None,
         noise_maps=None,
+        **kwargs,
     ):
         """Initialize the PremadeInstrument class.
 
@@ -259,7 +260,7 @@ class PremadeInstrument(Instrument):
                 be a dictionary of noise maps with an entry for each filter.
                 If doing resolved spectroscopy this should be an array with
                 noise as a function of wavelength. Default is None.
-
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Call the parent constructor
         Instrument.__init__(
@@ -267,11 +268,13 @@ class PremadeInstrument(Instrument):
             label=label,
             filters=filters,
             resolution=resolution,
+            lam=lam,
             depth=depth,
             depth_app_radius=depth_app_radius,
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -328,6 +331,7 @@ class JWSTNIRCamWide(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the JWST NIRCam Wide instrument.
 
@@ -362,6 +366,7 @@ class JWSTNIRCamWide(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -384,6 +389,7 @@ class JWSTNIRCamWide(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -448,6 +454,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the JWST NIRCam Medium instrument.
 
@@ -482,6 +489,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -504,6 +512,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -558,6 +567,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the JWST NIRCam Narrow instrument.
 
@@ -592,6 +602,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -614,6 +625,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -708,6 +720,7 @@ class JWSTNIRCam(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the JWST NIRCam instrument.
 
@@ -742,6 +755,7 @@ class JWSTNIRCam(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -763,6 +777,7 @@ class JWSTNIRCam(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -830,6 +845,7 @@ class JWSTMIRI(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the JWST MIRI instrument.
 
@@ -864,6 +880,7 @@ class JWSTMIRI(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -885,6 +902,7 @@ class JWSTMIRI(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -946,6 +964,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/UVIS Wide instrument.
 
@@ -980,6 +999,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1001,6 +1021,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1050,6 +1071,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/UVIS Medium instrument.
 
@@ -1084,6 +1106,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1105,6 +1128,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1212,6 +1236,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/UVIS Narrow instrument.
 
@@ -1246,6 +1271,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1267,6 +1293,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1409,6 +1436,7 @@ class HSTWFC3UVIS(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/UVIS instrument.
 
@@ -1443,6 +1471,7 @@ class HSTWFC3UVIS(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1464,6 +1493,7 @@ class HSTWFC3UVIS(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1507,6 +1537,7 @@ class HSTWFC3IRWide(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/IR Wide instrument.
 
@@ -1541,6 +1572,7 @@ class HSTWFC3IRWide(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1562,6 +1594,7 @@ class HSTWFC3IRWide(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1603,6 +1636,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/IR Medium instrument.
 
@@ -1637,6 +1671,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1658,6 +1693,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1703,6 +1739,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/IR Narrow instrument.
 
@@ -1737,6 +1774,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1758,6 +1796,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1821,6 +1860,7 @@ class HSTWFC3IR(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST WFC3/IR instrument.
 
@@ -1855,6 +1895,7 @@ class HSTWFC3IR(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1876,6 +1917,7 @@ class HSTWFC3IR(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -1925,6 +1967,7 @@ class HSTACSWFCWide(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST ACS/WFC Wide instrument.
 
@@ -1959,6 +2002,7 @@ class HSTACSWFCWide(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -1980,6 +2024,7 @@ class HSTACSWFCWide(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -2015,6 +2060,7 @@ class HSTACSWFCMedium(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST ACS/WFC Medium instrument.
 
@@ -2049,6 +2095,7 @@ class HSTACSWFCMedium(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -2070,6 +2117,7 @@ class HSTACSWFCMedium(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -2109,6 +2157,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST ACS/WFC Narrow instrument.
 
@@ -2143,6 +2192,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -2164,6 +2214,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -2221,6 +2272,7 @@ class HSTACSWFC(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the HST ACS/WFC instrument.
 
@@ -2255,6 +2307,7 @@ class HSTACSWFC(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -2276,6 +2329,7 @@ class HSTACSWFC(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -2315,6 +2369,7 @@ class EuclidNISP(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the Euclid NISP instrument.
 
@@ -2349,6 +2404,7 @@ class EuclidNISP(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -2370,6 +2426,7 @@ class EuclidNISP(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
 
 
@@ -2405,6 +2462,7 @@ class EuclidVIS(PremadeInstrument):
         psfs=None,
         noise_maps=None,
         filter_subset=(),
+        **kwargs,
     ):
         """Initialize the Euclid VIS instrument.
 
@@ -2439,6 +2497,7 @@ class EuclidVIS(PremadeInstrument):
                 in the instrument. This should be a list of strings with the
                 filter names. If this is not provided, all filters defined in
                 this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Create the list of SVO filters to get
         filter_codes = filter_subset or self.available_filters
@@ -2460,4 +2519,5 @@ class EuclidVIS(PremadeInstrument):
             snrs=snrs,
             psfs=psfs,
             noise_maps=noise_maps,
+            **kwargs,
         )
