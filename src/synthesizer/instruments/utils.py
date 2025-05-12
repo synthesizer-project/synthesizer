@@ -10,6 +10,8 @@ Example usage:
     lams = generate_wavelength_array(400, 700, func)
 """
 
+import inspect
+import os
 from typing import Callable, Union
 
 import numpy as np
@@ -63,3 +65,71 @@ def get_lams_from_resolving_power(
             wavelengths.append(current_wav)
 
     return np.array(wavelengths) * angstrom
+
+
+def print_premade_instruments() -> None:
+    """List all available premade instruments.
+
+    This will also count the filters (if any) available for each instrument
+    and check whether the cached instrument file has been downloaded or not.
+    """
+    # Avoid circular import
+    from synthesizer.instruments import premade as instruments
+
+    # Find all subclasses of PremadeInstrument
+    instrument_classes = []
+    for name, obj in inspect.getmembers(instruments):
+        if (
+            inspect.isclass(obj)
+            and issubclass(obj, instruments.PremadeInstrument)
+            and obj is not instruments.PremadeInstrument
+        ):
+            instrument_classes.append(obj)
+
+    # Prepare table rows
+    rows = []
+    for cls in instrument_classes:
+        name = cls.__name__
+        try:
+            num_filters = (
+                len(getattr(cls, "_available_filters", None))
+                if getattr(cls, "_available_filters", None) is not None
+                else "N/A"
+            )
+            cache_file = getattr(cls, "_instrument_cache_file", None)
+            available = (
+                "Yes" if cache_file and os.path.exists(cache_file) else "No"
+            )
+        except Exception:
+            num_filters = "N/A"
+            available = "Error"
+        rows.append((name, str(num_filters), available))
+
+    # Determine column widths
+    col_widths = [
+        max(len(row[0]) for row in rows + [("Instrument", "", "")]),
+        max(len(row[1]) for row in rows + [("", "NFilters", "")]),
+        max(len(row[2]) for row in rows + [("", "", "Cached?")]),
+    ]
+
+    # Build the table
+    separator = (
+        f"+{'-' * (col_widths[0] + 2)}+"
+        f"{'-' * (col_widths[1] + 2)}+"
+        f"{'-' * (col_widths[2] + 2)}+"
+    )
+    header = (
+        f"| {'Instrument':<{col_widths[0]}} | "
+        f"{'NFilters':<{col_widths[1]}} | "
+        f" {'Cached?':<{col_widths[2]}} |"
+    )
+    lines = [separator, header, separator]
+    for row in rows:
+        lines.append(
+            f"| {row[0]:<{col_widths[0]}} | "
+            f"{row[1]:<{col_widths[1]}} | "
+            f" {row[2]:<{col_widths[2]}} |"
+        )
+    lines.append(separator)
+
+    print("\n".join(lines))
