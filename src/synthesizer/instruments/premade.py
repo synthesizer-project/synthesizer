@@ -86,6 +86,7 @@ __all__ = [
     "EuclidVIS",
 ]
 
+
 # We need the relative path to the instruments_cache directory
 # to store and retrieve the instrument files
 INSTRUMENT_CACHE_DIR = os.path.join(
@@ -306,6 +307,19 @@ class JWSTNIRCamWide(PremadeInstrument):
     # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Wide.hdf5"
 
+    # Define the available filters
+    _available_filters = [
+        "JWST/NIRCam.F070W",
+        "JWST/NIRCam.F090W",
+        "JWST/NIRCam.F115W",
+        "JWST/NIRCam.F150W",
+        "JWST/NIRCam.F150W2",
+        "JWST/NIRCam.F200W",
+        "JWST/NIRCam.F277W",
+        "JWST/NIRCam.F356W",
+        "JWST/NIRCam.F444W",
+    ]
+
     def __init__(
         self,
         label="JWST.NIRCam.Wide",
@@ -352,17 +366,7 @@ class JWSTNIRCamWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "JWST/NIRCam.F070W",
-            "JWST/NIRCam.F090W",
-            "JWST/NIRCam.F115W",
-            "JWST/NIRCam.F150W",
-            "JWST/NIRCam.F150W2",
-            "JWST/NIRCam.F200W",
-            "JWST/NIRCam.F277W",
-            "JWST/NIRCam.F356W",
-            "JWST/NIRCam.F444W",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -420,6 +424,22 @@ class JWSTNIRCamMedium(PremadeInstrument):
     # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Medium.hdf5"
 
+    # Define the available filters
+    _available_filters = [
+        "JWST/NIRCam.F140M",
+        "JWST/NIRCam.F162M",
+        "JWST/NIRCam.F182M",
+        "JWST/NIRCam.F210M",
+        "JWST/NIRCam.F250M",
+        "JWST/NIRCam.F300M",
+        "JWST/NIRCam.F335M",
+        "JWST/NIRCam.F360M",
+        "JWST/NIRCam.F410M",
+        "JWST/NIRCam.F430M",
+        "JWST/NIRCam.F460M",
+        "JWST/NIRCam.F480M",
+    ]
+
     def __init__(
         self,
         label="JWST.NIRCam.Medium",
@@ -466,20 +486,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "JWST/NIRCam.F140M",
-            "JWST/NIRCam.F162M",
-            "JWST/NIRCam.F182M",
-            "JWST/NIRCam.F210M",
-            "JWST/NIRCam.F250M",
-            "JWST/NIRCam.F300M",
-            "JWST/NIRCam.F335M",
-            "JWST/NIRCam.F360M",
-            "JWST/NIRCam.F410M",
-            "JWST/NIRCam.F430M",
-            "JWST/NIRCam.F460M",
-            "JWST/NIRCam.F480M",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -532,6 +539,17 @@ class JWSTNIRCamNarrow(PremadeInstrument):
     # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam_Narrow.hdf5"
 
+    # Define the available filters
+    _available_filters = [
+        "JWST/NIRCam.F164N",
+        "JWST/NIRCam.F187N",
+        "JWST/NIRCam.F212N",
+        "JWST/NIRCam.F323N",
+        "JWST/NIRCam.F405N",
+        "JWST/NIRCam.F466N",
+        "JWST/NIRCam.F470N",
+    ]
+
     def __init__(
         self,
         label="JWST.NIRCam.Narrow",
@@ -578,15 +596,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "JWST/NIRCam.F164N",
-            "JWST/NIRCam.F187N",
-            "JWST/NIRCam.F212N",
-            "JWST/NIRCam.F323N",
-            "JWST/NIRCam.F405N",
-            "JWST/NIRCam.F466N",
-            "JWST/NIRCam.F470N",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -658,8 +668,39 @@ class JWSTNIRCam(PremadeInstrument):
 
     # Define the filepath to the instrument cache file (it will be here
     # after downloading)
-
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_NIRCam.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "JWST/NIRCam.F070W",
+        "JWST/NIRCam.F090W",
+        "JWST/NIRCam.F115W",
+        "JWST/NIRCam.F140M",
+        "JWST/NIRCam.F150W",
+        "JWST/NIRCam.F150W2",
+        "JWST/NIRCam.F162M",
+        "JWST/NIRCam.F164N",
+        "JWST/NIRCam.F182M",
+        "JWST/NIRCam.F187N",
+        "JWST/NIRCam.F200W",
+        "JWST/NIRCam.F210M",
+        "JWST/NIRCam.F212N",
+        "JWST/NIRCam.F250M",
+        "JWST/NIRCam.F277W",
+        "JWST/NIRCam.F300M",
+        "JWST/NIRCam.F323N",
+        "JWST/NIRCam.F335M",
+        "JWST/NIRCam.F356W",
+        "JWST/NIRCam.F360M",
+        "JWST/NIRCam.F405N",
+        "JWST/NIRCam.F410M",
+        "JWST/NIRCam.F430M",
+        "JWST/NIRCam.F444W",
+        "JWST/NIRCam.F460M",
+        "JWST/NIRCam.F466N",
+        "JWST/NIRCam.F470N",
+        "JWST/NIRCam.F480M",
+    ]
 
     def __init__(
         self,
@@ -707,36 +748,7 @@ class JWSTNIRCam(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "JWST/NIRCam.F070W",
-            "JWST/NIRCam.F090W",
-            "JWST/NIRCam.F115W",
-            "JWST/NIRCam.F140M",
-            "JWST/NIRCam.F150W",
-            "JWST/NIRCam.F150W2",
-            "JWST/NIRCam.F162M",
-            "JWST/NIRCam.F164N",
-            "JWST/NIRCam.F182M",
-            "JWST/NIRCam.F187N",
-            "JWST/NIRCam.F200W",
-            "JWST/NIRCam.F210M",
-            "JWST/NIRCam.F212N",
-            "JWST/NIRCam.F250M",
-            "JWST/NIRCam.F277W",
-            "JWST/NIRCam.F300M",
-            "JWST/NIRCam.F323N",
-            "JWST/NIRCam.F335M",
-            "JWST/NIRCam.F356W",
-            "JWST/NIRCam.F360M",
-            "JWST/NIRCam.F405N",
-            "JWST/NIRCam.F410M",
-            "JWST/NIRCam.F430M",
-            "JWST/NIRCam.F444W",
-            "JWST/NIRCam.F460M",
-            "JWST/NIRCam.F466N",
-            "JWST/NIRCam.F470N",
-            "JWST/NIRCam.F480M",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -795,6 +807,23 @@ class JWSTMIRI(PremadeInstrument):
     # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/JWST_MIRI.hdf5"
 
+    # Define the available filters
+    _available_filters = [
+        "JWST/MIRI.F560W",
+        "JWST/MIRI.F770W",
+        "JWST/MIRI.F1000W",
+        "JWST/MIRI.F1065C",
+        "JWST/MIRI.F1130W",
+        "JWST/MIRI.F1140C",
+        "JWST/MIRI.F1280W",
+        "JWST/MIRI.F1500W",
+        "JWST/MIRI.F1550C",
+        "JWST/MIRI.F1800W",
+        "JWST/MIRI.F2100W",
+        "JWST/MIRI.F2300C",
+        "JWST/MIRI.F2550W",
+    ]
+
     def __init__(
         self,
         label="JWST.MIRI",
@@ -841,21 +870,7 @@ class JWSTMIRI(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "JWST/MIRI.F560W",
-            "JWST/MIRI.F770W",
-            "JWST/MIRI.F1000W",
-            "JWST/MIRI.F1065C",
-            "JWST/MIRI.F1130W",
-            "JWST/MIRI.F1140C",
-            "JWST/MIRI.F1280W",
-            "JWST/MIRI.F1500W",
-            "JWST/MIRI.F1550C",
-            "JWST/MIRI.F1800W",
-            "JWST/MIRI.F2100W",
-            "JWST/MIRI.F2300C",
-            "JWST/MIRI.F2550W",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
         # Get the filters from SVO
         filters = FilterCollection(
@@ -903,7 +918,27 @@ class HSTWFC3UVISWide(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_UVIS_Wide.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/WFC3_UVIS1.F218W",
+        "HST/WFC3_UVIS1.F225W",
+        "HST/WFC3_UVIS1.F275W",
+        "HST/WFC3_UVIS1.F336W",
+        "HST/WFC3_UVIS1.F350LP",
+        "HST/WFC3_UVIS1.F390W",
+        "HST/WFC3_UVIS1.F438W",
+        "HST/WFC3_UVIS1.F475W",
+        "HST/WFC3_UVIS1.F555W",
+        "HST/WFC3_UVIS1.F606W",
+        "HST/WFC3_UVIS1.F625W",
+        "HST/WFC3_UVIS1.F775W",
+        "HST/WFC3_UVIS1.F814W",
+        "HST/WFC3_UVIS1.F850LP",
+    ]
 
     def __init__(
         self,
@@ -951,28 +986,15 @@ class HSTWFC3UVISWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/WFC3_UVIS1.F218W",
-            "HST/WFC3_UVIS1.F225W",
-            "HST/WFC3_UVIS1.F275W",
-            "HST/WFC3_UVIS1.F336W",
-            "HST/WFC3_UVIS1.F350LP",
-            "HST/WFC3_UVIS1.F390W",
-            "HST/WFC3_UVIS1.F438W",
-            "HST/WFC3_UVIS1.F475W",
-            "HST/WFC3_UVIS1.F555W",
-            "HST/WFC3_UVIS1.F606W",
-            "HST/WFC3_UVIS1.F625W",
-            "HST/WFC3_UVIS1.F775W",
-            "HST/WFC3_UVIS1.F814W",
-            "HST/WFC3_UVIS1.F850LP",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1005,9 +1027,22 @@ class HSTWFC3UVISMedium(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = (
         f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_UVIS_Medium.hdf5"
     )
+
+    # Define the available filters
+    _available_filters = [
+        "HST/WFC3_UVIS1.F410M",
+        "HST/WFC3_UVIS1.F467M",
+        "HST/WFC3_UVIS1.F547M",
+        "HST/WFC3_UVIS1.F621M",
+        "HST/WFC3_UVIS1.F689M",
+        "HST/WFC3_UVIS1.F763M",
+        "HST/WFC3_UVIS1.F845M",
+    ]
 
     def __init__(
         self,
@@ -1055,21 +1090,15 @@ class HSTWFC3UVISMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/WFC3_UVIS1.F410M",
-            "HST/WFC3_UVIS1.F467M",
-            "HST/WFC3_UVIS1.F547M",
-            "HST/WFC3_UVIS1.F621M",
-            "HST/WFC3_UVIS1.F689M",
-            "HST/WFC3_UVIS1.F763M",
-            "HST/WFC3_UVIS1.F845M",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1133,9 +1162,53 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = (
         f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_UVIS_Narrow.hdf5"
     )
+
+    # Define the available filters
+    _available_filters = [
+        "HST/WFC3_UVIS1.F280N",
+        "HST/WFC3_UVIS1.F343N",
+        "HST/WFC3_UVIS1.F373N",
+        "HST/WFC3_UVIS1.F395N",
+        "HST/WFC3_UVIS1.F410N",
+        "HST/WFC3_UVIS1.F467N",
+        "HST/WFC3_UVIS1.F469N",
+        "HST/WFC3_UVIS1.F487N",
+        "HST/WFC3_UVIS1.F502N",
+        "HST/WFC3_UVIS1.F631N",
+        "HST/WFC3_UVIS1.F645N",
+        "HST/WFC3_UVIS1.F656N",
+        "HST/WFC3_UVIS1.F657N",
+        "HST/WFC3_UVIS1.F658N",
+        "HST/WFC3_UVIS1.F665N",
+        "HST/WFC3_UVIS1.F673N",
+        "HST/WFC3_UVIS1.F680N",
+        "HST/WFC3_UVIS1.F953N",
+        "HST/WFC3_UVIS1.FQ232N",
+        "HST/WFC3_UVIS1.FQ243N",
+        "HST/WFC3_UVIS1.FQ378N",
+        "HST/WFC3_UVIS1.FQ387N",
+        "HST/WFC3_UVIS1.FQ422M",
+        "HST/WFC3_UVIS1.FQ436N",
+        "HST/WFC3_UVIS1.FQ437N",
+        "HST/WFC3_UVIS1.FQ492N",
+        "HST/WFC3_UVIS1.FQ508N",
+        "HST/WFC3_UVIS1.FQ575N",
+        "HST/WFC3_UVIS1.FQ619N",
+        "HST/WFC3_UVIS1.FQ634N",
+        "HST/WFC3_UVIS1.FQ672N",
+        "HST/WFC3_UVIS1.FQ674N",
+        "HST/WFC3_UVIS1.FQ727N",
+        "HST/WFC3_UVIS1.FQ750N",
+        "HST/WFC3_UVIS1.FQ889N",
+        "HST/WFC3_UVIS1.FQ906N",
+        "HST/WFC3_UVIS1.FQ924N",
+        "HST/WFC3_UVIS1.FQ937N",
+    ]
 
     def __init__(
         self,
@@ -1183,52 +1256,15 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/WFC3_UVIS1.F280N",
-            "HST/WFC3_UVIS1.F343N",
-            "HST/WFC3_UVIS1.F373N",
-            "HST/WFC3_UVIS1.F395N",
-            "HST/WFC3_UVIS1.F410N",
-            "HST/WFC3_UVIS1.F467N",
-            "HST/WFC3_UVIS1.F469N",
-            "HST/WFC3_UVIS1.F487N",
-            "HST/WFC3_UVIS1.F502N",
-            "HST/WFC3_UVIS1.F631N",
-            "HST/WFC3_UVIS1.F645N",
-            "HST/WFC3_UVIS1.F656N",
-            "HST/WFC3_UVIS1.F657N",
-            "HST/WFC3_UVIS1.F658N",
-            "HST/WFC3_UVIS1.F665N",
-            "HST/WFC3_UVIS1.F673N",
-            "HST/WFC3_UVIS1.F680N",
-            "HST/WFC3_UVIS1.F953N",
-            "HST/WFC3_UVIS1.FQ232N",
-            "HST/WFC3_UVIS1.FQ243N",
-            "HST/WFC3_UVIS1.FQ378N",
-            "HST/WFC3_UVIS1.FQ387N",
-            "HST/WFC3_UVIS1.FQ422M",
-            "HST/WFC3_UVIS1.FQ436N",
-            "HST/WFC3_UVIS1.FQ437N",
-            "HST/WFC3_UVIS1.FQ492N",
-            "HST/WFC3_UVIS1.FQ508N",
-            "HST/WFC3_UVIS1.FQ575N",
-            "HST/WFC3_UVIS1.FQ619N",
-            "HST/WFC3_UVIS1.FQ634N",
-            "HST/WFC3_UVIS1.FQ672N",
-            "HST/WFC3_UVIS1.FQ674N",
-            "HST/WFC3_UVIS1.FQ727N",
-            "HST/WFC3_UVIS1.FQ750N",
-            "HST/WFC3_UVIS1.FQ889N",
-            "HST/WFC3_UVIS1.FQ906N",
-            "HST/WFC3_UVIS1.FQ924N",
-            "HST/WFC3_UVIS1.FQ937N",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1314,7 +1350,67 @@ class HSTWFC3UVIS(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_UVIS.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        # Wide
+        "HST/WFC3_UVIS1.F218W",
+        "HST/WFC3_UVIS1.F225W",
+        "HST/WFC3_UVIS1.F275W",
+        "HST/WFC3_UVIS1.F336W",
+        "HST/WFC3_UVIS1.F350LP",
+        "HST/WFC3_UVIS1.F390W",
+        "HST/WFC3_UVIS1.F438W",
+        "HST/WFC3_UVIS1.F475W",
+        "HST/WFC3_UVIS1.F555W",
+        "HST/WFC3_UVIS1.F606W",
+        "HST/WFC3_UVIS1.F625W",
+        "HST/WFC3_UVIS1.F775W",
+        "HST/WFC3_UVIS1.F814W",
+        "HST/WFC3_UVIS1.F850LP",
+        # Medium
+        "HST/WFC3_UVIS1.F410M",
+        "HST/WFC3_UVIS1.F467M",
+        "HST/WFC3_UVIS1.F547M",
+        "HST/WFC3_UVIS1.F621M",
+        "HST/WFC3_UVIS1.F689M",
+        "HST/WFC3_UVIS1.F763M",
+        "HST/WFC3_UVIS1.F845M",
+        # Narrow
+        "HST/WFC3_UVIS1.F280N",
+        "HST/WFC3_UVIS1.F343N",
+        "HST/WFC3_UVIS1.F373N",
+        "HST/WFC3_UVIS1.F395N",
+        "HST/WFC3_UVIS1.F410N",
+        "HST/WFC3_UVIS1.F467N",
+        "HST/WFC3_UVIS1.F469N",
+        "HST/WFC3_UVIS1.F487N",
+        "HST/WFC3_UVIS1.F502N",
+        "HST/WFC3_UVIS1.FQ232N",
+        "HST/WFC3_UVIS1.FQ243N",
+        "HST/WFC3_UVIS1.FQ378N",
+        "HST/WFC3_UVIS1.FQ387N",
+        "HST/WFC3_UVIS1.FQ422M",
+        "HST/WFC3_UVIS1.FQ436N",
+        "HST/WFC3_UVIS1.FQ437N",
+        "HST/WFC3_UVIS1.FQ492N",
+        "HST/WFC3_UVIS1.FQ508N",
+        "HST/WFC3_UVIS1.FQ575N",
+        "HST/WFC3_UVIS1.FQ619N",
+        "HST/WFC3_UVIS1.FQ634N",
+        "HST/WFC3_UVIS1.FQ672N",
+        "HST/WFC3_UVIS1.FQ674N",
+        "HST/WFC3_UVIS1.FQ727N",
+        "HST/WFC3_UVIS1.FQ750N",
+        "HST/WFC3_UVIS1.FQ889N",
+        "HST/WFC3_UVIS1.FQ906N",
+        "HST/WFC3_UVIS1.FQ924N",
+        "HST/WFC3_UVIS1.FQ937N",
+        "HST/WFC3_UVIS1.FQ953N",
+    ]
 
     def __init__(
         self,
@@ -1362,68 +1458,15 @@ class HSTWFC3UVIS(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            # Wide
-            "HST/WFC3_UVIS1.F218W",
-            "HST/WFC3_UVIS1.F225W",
-            "HST/WFC3_UVIS1.F275W",
-            "HST/WFC3_UVIS1.F336W",
-            "HST/WFC3_UVIS1.F350LP",
-            "HST/WFC3_UVIS1.F390W",
-            "HST/WFC3_UVIS1.F438W",
-            "HST/WFC3_UVIS1.F475W",
-            "HST/WFC3_UVIS1.F555W",
-            "HST/WFC3_UVIS1.F606W",
-            "HST/WFC3_UVIS1.F625W",
-            "HST/WFC3_UVIS1.F775W",
-            "HST/WFC3_UVIS1.F814W",
-            "HST/WFC3_UVIS1.F850LP",
-            # Medium
-            "HST/WFC3_UVIS1.F410M",
-            "HST/WFC3_UVIS1.F467M",
-            "HST/WFC3_UVIS1.F547M",
-            "HST/WFC3_UVIS1.F621M",
-            "HST/WFC3_UVIS1.F689M",
-            "HST/WFC3_UVIS1.F763M",
-            "HST/WFC3_UVIS1.F845M",
-            # Narrow
-            "HST/WFC3_UVIS1.F280N",
-            "HST/WFC3_UVIS1.F343N",
-            "HST/WFC3_UVIS1.F373N",
-            "HST/WFC3_UVIS1.F395N",
-            "HST/WFC3_UVIS1.F410N",
-            "HST/WFC3_UVIS1.F467N",
-            "HST/WFC3_UVIS1.F469N",
-            "HST/WFC3_UVIS1.F487N",
-            "HST/WFC3_UVIS1.F502N",
-            "HST/WFC3_UVIS1.FQ232N",
-            "HST/WFC3_UVIS1.FQ243N",
-            "HST/WFC3_UVIS1.FQ378N",
-            "HST/WFC3_UVIS1.FQ387N",
-            "HST/WFC3_UVIS1.FQ422M",
-            "HST/WFC3_UVIS1.FQ436N",
-            "HST/WFC3_UVIS1.FQ437N",
-            "HST/WFC3_UVIS1.FQ492N",
-            "HST/WFC3_UVIS1.FQ508N",
-            "HST/WFC3_UVIS1.FQ575N",
-            "HST/WFC3_UVIS1.FQ619N",
-            "HST/WFC3_UVIS1.FQ634N",
-            "HST/WFC3_UVIS1.FQ672N",
-            "HST/WFC3_UVIS1.FQ674N",
-            "HST/WFC3_UVIS1.FQ727N",
-            "HST/WFC3_UVIS1.FQ750N",
-            "HST/WFC3_UVIS1.FQ889N",
-            "HST/WFC3_UVIS1.FQ906N",
-            "HST/WFC3_UVIS1.FQ924N",
-            "HST/WFC3_UVIS1.FQ937N",
-            "HST/WFC3_UVIS1.FQ953N",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1454,7 +1497,18 @@ class HSTWFC3IRWide(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR_Wide.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/WFC3_IR.F105W",
+        "HST/WFC3_IR.F110W",
+        "HST/WFC3_IR.F125W",
+        "HST/WFC3_IR.F140W",
+        "HST/WFC3_IR.F160W",
+    ]
 
     def __init__(
         self,
@@ -1502,19 +1556,15 @@ class HSTWFC3IRWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/WFC3_IR.F105W",
-            "HST/WFC3_IR.F110W",
-            "HST/WFC3_IR.F125W",
-            "HST/WFC3_IR.F140W",
-            "HST/WFC3_IR.F160W",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1544,7 +1594,17 @@ class HSTWFC3IRMedium(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR_Medium.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/WFC3_IR.F098M",
+        "HST/WFC3_IR.F127M",
+        "HST/WFC3_IR.F139M",
+        "HST/WFC3_IR.F153M",
+    ]
 
     def __init__(
         self,
@@ -1592,18 +1652,15 @@ class HSTWFC3IRMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/WFC3_IR.F098M",
-            "HST/WFC3_IR.F127M",
-            "HST/WFC3_IR.F139M",
-            "HST/WFC3_IR.F153M",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1635,7 +1692,19 @@ class HSTWFC3IRNarrow(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR_Narrow.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/WFC3_IR.F126N",
+        "HST/WFC3_IR.F128N",
+        "HST/WFC3_IR.F130N",
+        "HST/WFC3_IR.F132N",
+        "HST/WFC3_IR.F164N",
+        "HST/WFC3_IR.F167N",
+    ]
 
     def __init__(
         self,
@@ -1683,20 +1752,15 @@ class HSTWFC3IRNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/WFC3_IR.F126N",
-            "HST/WFC3_IR.F128N",
-            "HST/WFC3_IR.F130N",
-            "HST/WFC3_IR.F132N",
-            "HST/WFC3_IR.F164N",
-            "HST/WFC3_IR.F167N",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1737,7 +1801,28 @@ class HSTWFC3IR(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_WFC3_IR.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/WFC3_IR.F098M",
+        "HST/WFC3_IR.F105W",
+        "HST/WFC3_IR.F110W",
+        "HST/WFC3_IR.F125W",
+        "HST/WFC3_IR.F126N",
+        "HST/WFC3_IR.F127M",
+        "HST/WFC3_IR.F128N",
+        "HST/WFC3_IR.F130N",
+        "HST/WFC3_IR.F132N",
+        "HST/WFC3_IR.F139M",
+        "HST/WFC3_IR.F140W",
+        "HST/WFC3_IR.F153M",
+        "HST/WFC3_IR.F160W",
+        "HST/WFC3_IR.F164N",
+        "HST/WFC3_IR.F167N",
+    ]
 
     def __init__(
         self,
@@ -1785,29 +1870,15 @@ class HSTWFC3IR(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/WFC3_IR.F098M",
-            "HST/WFC3_IR.F105W",
-            "HST/WFC3_IR.F110W",
-            "HST/WFC3_IR.F125W",
-            "HST/WFC3_IR.F126N",
-            "HST/WFC3_IR.F127M",
-            "HST/WFC3_IR.F128N",
-            "HST/WFC3_IR.F130N",
-            "HST/WFC3_IR.F132N",
-            "HST/WFC3_IR.F139M",
-            "HST/WFC3_IR.F140W",
-            "HST/WFC3_IR.F153M",
-            "HST/WFC3_IR.F160W",
-            "HST/WFC3_IR.F164N",
-            "HST/WFC3_IR.F167N",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1841,7 +1912,21 @@ class HSTACSWFCWide(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC_Wide.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/ACS_WFC.F435W",
+        "HST/ACS_WFC.F475W",
+        "HST/ACS_WFC.F555W",
+        "HST/ACS_WFC.F606W",
+        "HST/ACS_WFC.F625W",
+        "HST/ACS_WFC.F775W",
+        "HST/ACS_WFC.F814W",
+        "HST/ACS_WFC.F850LP",
+    ]
 
     def __init__(
         self,
@@ -1889,22 +1974,15 @@ class HSTACSWFCWide(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/ACS_WFC.F435W",
-            "HST/ACS_WFC.F475W",
-            "HST/ACS_WFC.F555W",
-            "HST/ACS_WFC.F606W",
-            "HST/ACS_WFC.F625W",
-            "HST/ACS_WFC.F775W",
-            "HST/ACS_WFC.F814W",
-            "HST/ACS_WFC.F850LP",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -1931,7 +2009,14 @@ class HSTACSWFCMedium(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC_Medium.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/ACS_WFC.F550M",
+    ]
 
     def __init__(
         self,
@@ -1979,15 +2064,15 @@ class HSTACSWFCMedium(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/ACS_WFC.F550M",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -2016,7 +2101,16 @@ class HSTACSWFCNarrow(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC_Narrow.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/ACS_WFC.F502N",
+        "HST/ACS_WFC.F658N",
+        "HST/ACS_WFC.F660N",
+    ]
 
     def __init__(
         self,
@@ -2064,17 +2158,15 @@ class HSTACSWFCNarrow(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/ACS_WFC.F502N",
-            "HST/ACS_WFC.F658N",
-            "HST/ACS_WFC.F660N",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -2112,7 +2204,25 @@ class HSTACSWFC(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/HST_ACS_WFC.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "HST/ACS_WFC.F435W",
+        "HST/ACS_WFC.F475W",
+        "HST/ACS_WFC.F502N",
+        "HST/ACS_WFC.F550M",
+        "HST/ACS_WFC.F555W",
+        "HST/ACS_WFC.F606W",
+        "HST/ACS_WFC.F625W",
+        "HST/ACS_WFC.F658N",
+        "HST/ACS_WFC.F660N",
+        "HST/ACS_WFC.F775W",
+        "HST/ACS_WFC.F814W",
+        "HST/ACS_WFC.F850LP",
+    ]
 
     def __init__(
         self,
@@ -2160,26 +2270,15 @@ class HSTACSWFC(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "HST/ACS_WFC.F435W",
-            "HST/ACS_WFC.F475W",
-            "HST/ACS_WFC.F502N",
-            "HST/ACS_WFC.F550M",
-            "HST/ACS_WFC.F555W",
-            "HST/ACS_WFC.F606W",
-            "HST/ACS_WFC.F625W",
-            "HST/ACS_WFC.F658N",
-            "HST/ACS_WFC.F660N",
-            "HST/ACS_WFC.F775W",
-            "HST/ACS_WFC.F814W",
-            "HST/ACS_WFC.F850LP",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -2208,7 +2307,16 @@ class EuclidNISP(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/Euclid_NISP.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "Euclid/NISP.Y",
+        "Euclid/NISP.J",
+        "Euclid/NISP.H",
+    ]
 
     def __init__(
         self,
@@ -2256,17 +2364,15 @@ class EuclidNISP(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "Euclid/NISP.Y",
-            "Euclid/NISP.J",
-            "Euclid/NISP.H",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
@@ -2293,7 +2399,14 @@ class EuclidVIS(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the filepath to the instrument cache file (it will be here
+    # after downloading)
     _instrument_cache_file = f"{INSTRUMENT_CACHE_DIR}/Euclid_VIS.hdf5"
+
+    # Define the available filters
+    _available_filters = [
+        "Euclid/VIS.vis",
+    ]
 
     def __init__(
         self,
@@ -2341,15 +2454,15 @@ class EuclidVIS(PremadeInstrument):
                 this class will be included.
         """
         # Create the list of SVO filters to get
-        filter_codes = filter_subset or [
-            "Euclid/VIS.vis",
-        ]
+        filter_codes = filter_subset or self._available_filters
 
+        # Get the filters from SVO
         filters = FilterCollection(
             filter_codes=filter_codes,
             new_lam=filter_lams,
         )
 
+        # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
