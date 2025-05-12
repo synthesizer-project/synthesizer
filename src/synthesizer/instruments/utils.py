@@ -116,7 +116,7 @@ def print_premade_instruments() -> None:
     separator = (
         f"+{'-' * (col_widths[0] + 2)}+"
         f"{'-' * (col_widths[1] + 2)}+"
-        f"{'-' * (col_widths[2] + 2)}+"
+        f"{'-' * (col_widths[2] + 3)}+"
     )
     header = (
         f"| {'Instrument':<{col_widths[0]}} | "
