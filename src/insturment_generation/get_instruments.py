@@ -43,11 +43,9 @@ from synthesizer.instruments import (
 
 # Get the cache file location
 this_filepath = "/".join(os.path.abspath(__file__).split("/")[:-1])
-print(this_filepath)
 INSTRUMENT_CACHE_DIR = os.path.join(
     this_filepath, "..", "synthesizer", "instruments", "instrument_cache"
 )
-print(INSTRUMENT_CACHE_DIR)
 
 
 def make_and_write_jwst_nircam():
