@@ -287,7 +287,6 @@ class JWSTNIRCamWide(PremadeInstrument):
         - F090W
         - F115W
         - F150W
-        - F150W2
         - F200W
         - F277W
         - F356W
@@ -313,7 +312,6 @@ class JWSTNIRCamWide(PremadeInstrument):
         "JWST/NIRCam.F090W",
         "JWST/NIRCam.F115W",
         "JWST/NIRCam.F150W",
-        "JWST/NIRCam.F150W2",
         "JWST/NIRCam.F200W",
         "JWST/NIRCam.F277W",
         "JWST/NIRCam.F356W",
@@ -632,7 +630,6 @@ class JWSTNIRCam(PremadeInstrument):
         - F115W
         - F140M
         - F150W
-        - F150W2
         - F162M
         - F164N
         - F182M
@@ -677,7 +674,6 @@ class JWSTNIRCam(PremadeInstrument):
         "JWST/NIRCam.F115W",
         "JWST/NIRCam.F140M",
         "JWST/NIRCam.F150W",
-        "JWST/NIRCam.F150W2",
         "JWST/NIRCam.F162M",
         "JWST/NIRCam.F164N",
         "JWST/NIRCam.F182M",
@@ -1124,8 +1120,6 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
         - F343N
         - F373N
         - F395N
-        - F410N
-        - F467N
         - F469N
         - F487N
         - F502N
@@ -1174,8 +1168,6 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
         "HST/WFC3_UVIS1.F343N",
         "HST/WFC3_UVIS1.F373N",
         "HST/WFC3_UVIS1.F395N",
-        "HST/WFC3_UVIS1.F410N",
-        "HST/WFC3_UVIS1.F467N",
         "HST/WFC3_UVIS1.F469N",
         "HST/WFC3_UVIS1.F487N",
         "HST/WFC3_UVIS1.F502N",
@@ -1311,8 +1303,6 @@ class HSTWFC3UVIS(PremadeInstrument):
         - F343N
         - F373N
         - F395N
-        - F410N
-        - F467N
         - F469N
         - F487N
         - F502N
@@ -1384,8 +1374,6 @@ class HSTWFC3UVIS(PremadeInstrument):
         "HST/WFC3_UVIS1.F343N",
         "HST/WFC3_UVIS1.F373N",
         "HST/WFC3_UVIS1.F395N",
-        "HST/WFC3_UVIS1.F410N",
-        "HST/WFC3_UVIS1.F467N",
         "HST/WFC3_UVIS1.F469N",
         "HST/WFC3_UVIS1.F487N",
         "HST/WFC3_UVIS1.F502N",
@@ -1409,7 +1397,6 @@ class HSTWFC3UVIS(PremadeInstrument):
         "HST/WFC3_UVIS1.FQ906N",
         "HST/WFC3_UVIS1.FQ924N",
         "HST/WFC3_UVIS1.FQ937N",
-        "HST/WFC3_UVIS1.FQ953N",
     ]
 
     def __init__(
