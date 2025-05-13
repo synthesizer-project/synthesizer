@@ -782,6 +782,11 @@ class JWSTNIRCam(PremadeInstrument):
 
 
 class JWSTNIRSpec(PremadeInstrument):
+    """A placeholder for JWST's NIRSpec instrument.
+
+    This class will be implemented in a future update.
+    """
+    # TODO: Implement NIRSpec class with appropriate filters, resolution, etc.
     pass
 
 
