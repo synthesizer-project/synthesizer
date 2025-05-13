@@ -109,8 +109,8 @@ def _update_box_links_database():
     )
 
     # Define the name of the yaml file we will write to
-    OUTPUT_YAML = "_data_ids_.yml"
-
+    # Keep identical to the filename expected by downloader/_data_ids.yml
+    OUTPUT_YAML = "_data_ids.yml"
     # Check if the environment variables are set
     if not CLIENT_ID or not CLIENT_SECRET:
         raise RuntimeError(
