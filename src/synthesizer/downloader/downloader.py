@@ -122,6 +122,9 @@ def _download(
         save_dir (str):
             The directory in which to save the file.
     """
+    # Define the filename we will save under (this will ignore any aliases)
+    savename = filename
+
     # Do we have an file with an alias?
     if filename in TEST_DATA_TRANSLATION:
         # If the filename is in the translation dict, use the alias
@@ -134,7 +137,7 @@ def _download(
     url = file_details["direct_link"]
 
     # Define the save path
-    save_path = f"{save_dir}/{filename}"
+    save_path = f"{save_dir}/{savename}"
 
     # Download the file
     response = requests.get(url, stream=True)
