@@ -52,7 +52,7 @@ jobs:
           # Download test grid data
           synthesizer-download --test-grids --dust-grid -d tests/test_grid/
           synthesizer-download --all-sim-data -d tests/data/
-          synthersizer-download --instruments EuclidNISP
+          synthesizer-download --instruments EuclidNISP
       - name: Test with pytest
         run: |
           pytest -n auto
