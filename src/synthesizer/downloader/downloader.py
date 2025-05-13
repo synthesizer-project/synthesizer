@@ -94,6 +94,15 @@ INSTRUMENT_TRANSLATION = {
     key.replace(".hdf5", "").replace("_", ""): key for key in INSTRUMENT_FILES
 }
 
+# Define a translation for the test data files that converts the true
+# filename into the "test data alias"
+TEST_DATA_TRANSLATION = {
+    "test_grid.hdf5": "bpass-2.2.1-bin_chabrier03-0.1,300.0"
+    "_cloudy-c23.01-sps.hdf5",
+    "test_grid_agn-blr.hdf5": "qsosed-test_cloudy-c23.01-agn-test.hdf5",
+    "test_grid_agn-nlr.hdf5": "qsosed-test_cloudy-c23.01-agn-test.hdf5",
+}
+
 
 def _download(
     filename,
@@ -112,6 +121,11 @@ def _download(
         save_dir (str):
             The directory in which to save the file.
     """
+    # Do we have an file with an alias?
+    if filename in TEST_DATA_TRANSLATION:
+        # If the filename is in the translation dict, use the alias
+        filename = TEST_DATA_TRANSLATION[filename]
+
     # Unpack the file details for extraction
     file_details = AVAILABLE_FILES[filename]
 
