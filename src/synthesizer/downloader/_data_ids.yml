@@ -166,9 +166,9 @@ InstrumentData:
   HST_ACS_WFCMedium.hdf5:
     direct_link: https://sussex.box.com/shared/static/544ody8lmor106anpz3fi7aayfnz3sb8.hdf5
     file: HST_ACS_WFCMedium.hdf5
-  HST_ACS_WFCSNarrow.hdf5:
+  HST_ACS_WFCNarrow.hdf5:
     direct_link: https://sussex.box.com/shared/static/tjm9c9x35u6aj3ylb7ef47z3cxnxeq8a.hdf5
-    file: HST_ACS_WFCSNarrow.hdf5
+    file: HST_ACS_WFCNarrow.hdf5
   HST_ACS_WFCWide.hdf5:
     direct_link: https://sussex.box.com/shared/static/yrys4oiv022q9gcswmugdq8xuqskr0xm.hdf5
     file: HST_ACS_WFCWide.hdf5
