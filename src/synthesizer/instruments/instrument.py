@@ -161,6 +161,10 @@ class Instrument:
         # resolved spectroscopy)
         self.noise_maps = noise_maps
 
+        self._validate()
+
+    def _validate(self):
+        """Validate the Instrument object."""
         # If we have a depth make sure we have a SNR
         if self.depth is not None and self.snrs is None:
             raise exceptions.MissingArgument(
@@ -463,6 +467,8 @@ class Instrument:
         instance.snrs = snrs
         instance.psfs = psfs
         instance.noise_maps = noise_maps
+
+        instance._validate()
 
         return instance
 
