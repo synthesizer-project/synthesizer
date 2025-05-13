@@ -64,7 +64,8 @@ def get_lams_from_resolving_power(
         if current_wav <= lam_max:
             wavelengths.append(current_wav)
 
-    return np.array(wavelengths) * angstrom
+    # Preserve existing units without squaring them
+    return unyt_array(wavelengths)
 
 
 def print_premade_instruments() -> None:
