@@ -3,18 +3,19 @@
 Example usage:
 
     # Generate a wavelength array with a constant resolving power of 10000
-    lams = generate_wavelength_array(400, 700, 10000)
+    lams = get_lams_from_resolving_power(400 * angstrom, 700 * angstrom, 10000)
 
     # Generate a wavelength array with a variable resolving power
-    func = lambda wav: 10000 + (wav - 400) / 300 * 5000
-    lams = generate_wavelength_array(400, 700, func)
+    func = lambda wav: 10000 + (wav.value - 400) / 300 * 5000
+    lams = get_lams_from_resolving_power(
+        400 * angstrom, 700 * angstrom, func
+    )
 """
 
 import inspect
 import os
 from typing import Callable, Union
 
-import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer.units import accepts
