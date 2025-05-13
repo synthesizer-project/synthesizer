@@ -1,6 +1,6 @@
 """This script will generate all instrument cache files.
 
-This script holds the definitions for all cached insturment files available
+This script holds the definitions for all cached instrument files available
 through the synthesizer-download tool and importable from the
 synthesizer.instruments module.
 
