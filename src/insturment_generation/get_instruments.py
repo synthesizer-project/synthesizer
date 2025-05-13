@@ -227,7 +227,7 @@ def make_and_write_hst_acswfc():
     ) as hdf:
         acswfc_medium.to_hdf5(hdf)
     with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_ACS_WFCSNarrow.hdf5"), "w"
+        os.path.join(INSTRUMENT_CACHE_DIR, "HST_ACS_WFCNarrow.hdf5"), "w"
     ) as hdf:
         acswfc_narrow.to_hdf5(hdf)
 
