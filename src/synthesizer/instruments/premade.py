@@ -13,7 +13,7 @@ The premade instruments are:
     - HST/WFC3.UVIS.Wide
     - HST/WFC3.UVIS.Medium
     - HST/WFC3.UVIS.Narrow
-    - HST/WFC3.UVIS
+    - HST/WFC3.UVI
     - HST/WFC3.IR.Wide
     - HST/WFC3.IR.Medium
     - HST/WFC3.IR.Narrow
@@ -786,6 +786,7 @@ class JWSTNIRSpec(PremadeInstrument):
 
     This class will be implemented in a future update.
     """
+
     # TODO: Implement NIRSpec class with appropriate filters, resolution, etc.
     pass
 
@@ -1067,7 +1068,6 @@ class HSTWFC3UVISMedium(PremadeInstrument):
     ]
 
     def __init__(
-    def __init__(
         self,
         label="HST.WFC3.UVIS.Medium",
         filter_lams=None,
@@ -1083,11 +1083,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
 
         Args:
             label (str):
--                The label of the instrument. Default is "JWST.MIRI".
-+                The label of the instrument. Default is "HST.WFC3.UVIS.Medium".
-            filter_lams (array-like or None):
-                Wavelength grid to interpolate the filters onto. If None, uses a default grid...
-        """
+                The label of the instrument. Default is "HST.WFC3.UVIS.Medium".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
