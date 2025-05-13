@@ -1062,6 +1062,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
     ]
 
     def __init__(
+    def __init__(
         self,
         label="HST.WFC3.UVIS.Medium",
         filter_lams=None,
@@ -1077,7 +1078,11 @@ class HSTWFC3UVISMedium(PremadeInstrument):
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+-                The label of the instrument. Default is "JWST.MIRI".
++                The label of the instrument. Default is "HST.WFC3.UVIS.Medium".
+            filter_lams (array-like or None):
+                Wavelength grid to interpolate the filters onto. If None, uses a default grid...
+        """
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
