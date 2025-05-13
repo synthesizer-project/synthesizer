@@ -637,7 +637,7 @@ ProductionGrids:
     file: relqso-test_cloudy-c23.01-nlr-test.hdf5
 TestData:
   bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5:
-    direct_link: https://sussex.box.com/shared/static/ckmq6bzj8r99nsjia0aqtp2odjr5ufk4.hdf5
+    direct_link: https://sussex.box.com/shared/static/likxc5lhv7qgyqdg5cz8pb40hh834qrz.hdf5
     file: bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5
   qsosed-test_cloudy-c23.01-agn-test.hdf5:
     direct_link: https://sussex.box.com/shared/static/b9ct3ah1zcp5v9xuy2e3t6fwo9d4v9dm.hdf5
