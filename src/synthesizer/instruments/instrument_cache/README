@@ -1,0 +1,12 @@
+This is the directory where any downloaded cached instruments are stored. 
+
+Instruments can be downloaded using the synthesizer-download CLI.
+
+    synthesizer-download --instrument <instrument class name>
+
+The instruments can be downloaded by passing the class name of the instrument to the synthesizer-download command. For instance
+
+    synthesizer-download --instrument JWSTNIRCamWide 
+    synthesizer-download --instrument JWSTNIRCamNarrow
+    synthesizer-download --instrument JWSTNIRSpec 
+    synthesizer-download --instrument Euclid

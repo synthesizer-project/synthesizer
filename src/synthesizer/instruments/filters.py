@@ -1560,6 +1560,17 @@ class Filter:
                 )
             )
 
+        # Throw an error if we didn't find the filter.
+        if field is None:
+            raise exceptions.SVOFilterNotFound(
+                (
+                    f"Filter ({self.filter_code}) not in the database. "
+                    "Double check the database: http://svo2.cab.inta-csic.es/"
+                    "svo/theory/fps3/. This could also mean you have no"
+                    " connection."
+                )
+            )
+
         if field.attrib["unit"] not in ["", "ephot"]:
             raise exceptions.SVOTransmissionHasUnits(
                 (
@@ -1570,17 +1581,6 @@ class Filter:
                     "area is returned instead. Please check "
                     "that the filter you are querying returns "
                     "the transmission / response."
-                )
-            )
-
-        # Throw an error if we didn't find the filter.
-        if field is None:
-            raise exceptions.SVOFilterNotFound(
-                (
-                    f"Filter ({self.filter_code}) not in the database. "
-                    "Double check the database: http://svo2.cab.inta-csic.es/"
-                    "svo/theory/fps3/. This could also mean you have no"
-                    " connection."
                 )
             )
 

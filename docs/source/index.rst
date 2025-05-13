@@ -26,6 +26,7 @@ Contents
    lines/lines
    filters/filters
    instrumentation/instrument_example
+   instrumentation/premade_instruments
    photometry/photometry
    imaging/imaging
    pipelines/pipeline_example
