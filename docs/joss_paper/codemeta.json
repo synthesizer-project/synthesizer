@@ -1,0 +1,23 @@
+{
+  "@context": "https://raw.githubusercontent.com/codemeta/codemeta/master/codemeta.jsonld",
+  "@type": "Code",
+  "author": [
+    {
+      "@id": "https://orcid.org/0000-0002-3257-8806",
+      "@type": "Person",
+      "email": "w.roper@sussex.ac.uk",
+      "name": "Will Roper",
+      "affiliation": "Astronomy Centre, University of Sussex"
+    }
+  ],
+  "identifier": "",
+  "codeRepository": "https://github.com/synthesizer-project/synthesizer",
+  "datePublished": "2025-05-15",
+  "dateModified": "2025-05-15",
+  "dateCreated": "2025-05-15",
+  "description": "Synthesizer - a code for creating synthetic astrophysical observables",
+  "keywords": "astronomy, astrophysics, forward modelling, simulations",
+  "license": "GPL v3.0",
+  "title": "Synthesizer",
+  "version": "v0.9.2"
+}
