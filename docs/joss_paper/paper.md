@@ -94,6 +94,8 @@ bibliography: paper.bib
 
 # Summary
 
+Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and simulation outputs. It provides a unified framework to translate astrophysical emitters (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a variety of stellar population synthesis, photoionisation, dust, and instrument models. Synthesizer's main goal is to enable the user to perform rapid forward modelling across large simulation catalogs, and/or explore the impact of modelling choices with a simple and performant set of tools.
+
 # Statement of need
 
 # Design Ethos
