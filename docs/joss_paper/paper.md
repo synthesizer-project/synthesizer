@@ -94,11 +94,39 @@ bibliography: paper.bib
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and simulation outputs. It provides a unified framework to translate astrophysical emitters (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a variety of stellar population synthesis, photoionisation, dust, and instrument models. Synthesizer's main goal is to enable the user to perform rapid forward modelling across large simulation catalogs, and/or explore the impact of modelling choices with a simple and performant set of tools.
+Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and simulation outputs. It provides a unified framework to translate astrophysical emitters (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust prescriptions. To ensure the package is as performant as possible, Synthesizer employs shared memory parallelism with OpenMP in C extensions for all computationally intensive calculations with the scope for the user to leverage hybrid parallelism with MPI in the users ecosystem. Synthesizer enables rapid forward modelling of large simulation catalogs, and exploration of the impact of modelling choices with a simple, well documented, and performant set of tools.
 
 # Statement of need
 
+Comparing theoretical models of galaxy formation with observations traditionally relies on computationally expensive radiative transfer codes (e.g. ...) to translate models inot the observer space, or simplified inverse modelling approaches (e.g., SED fitting ...) to translate observations into the theoretical space. The latter of these approaches introduces numerous biases and uncertainties based not only on observational effects but also model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right meaning they must often simplify down the parameter space they explore to ensure convergence in a reasonable time. Both these problems make the former option of forward modelling from the theoretical space to the observer space an attractive prospect.
+
+However, many existing forward modelling tools lack the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide rage of modelling assumptions, the performance necessary to explore a large parameter space and process modern day large datasets, and in many cases they lack documentation and thus consistency and reproducibility across a range datasets.
+
+Synthesizer addresses these shortcomings by offering:
+
+- Flexibility: Nearly every model component (e.g., SPS, photoionisation, dust attenuation) can be configured, replaced, or extended without modifying core code.
+
+- Performance: Core operations are optimized (C extensions/OpenMP) to enable fast generation of observables, suitable for large simulation volumes or training datasets for simulation-based inference.
+
+- Modularity: The code is designed from the ground up around building block objects (e.g. Grid, Components, EmissionModel, AttenuationLaw), allowing users to mix and match components, and importantly, allowing users to easily swap out parts of their forward modelling pipeline with minimal effort.
+
+- Extensibility: Users can easily construct their own bespoke models, adding new SPS grids, photoionisation recipes, dust models, and instrument definitions without ever modifying the core code.
+
+Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations, promotes reproducible science, and enables the forward modelling of large datasets previously considered impractical.
+
 # Design Ethos
+
+Synthesizer is structured around 5 core abstractions:
+
+Galaxy and Components:
+
+Grids: Precomputed N-dimensional arrays of spectra and lines indexed by parameters such as age, metallicity, ionisation parameter, or density (all axes are arbitrary).
+
+Emission Models:
+
+Instruments:
+
+Emissions & Observables: Definitions of filters, PSFs, and noise models to convert SEDs into photometry, images, and data cubes in observer frame.
 
 # Citations
 
