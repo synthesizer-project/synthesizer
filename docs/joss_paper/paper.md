@@ -94,7 +94,7 @@ bibliography: paper.bib
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and simulation outputs. It provides a unified framework to translate astrophysical emitters (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust prescriptions. To ensure the package is as performant as possible, Synthesizer employs shared memory parallelism with OpenMP in C extensions for all computationally intensive calculations with the scope for the user to leverage hybrid parallelism with MPI in the users ecosystem. Synthesizer enables rapid forward modelling of large simulation catalogs, and exploration of the impact of modelling choices with a simple, well documented, and performant set of tools.
+Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and numerical simulation outputs. It provides a unified framework to translate astrophysical components (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust prescriptions. To ensure the package is as performant as possible, Synthesizer employs shared memory parallelism with OpenMP in C extensions for all computationally intensive calculations with the scope for the user to leverage hybrid parallelism with MPI in the users ecosystem. Synthesizer enables rapid forward modelling of large simulation catalogs, and exploration of the impact of modelling choices with a simple, well documented, and performant set of tools.
 
 # Statement of need
 
@@ -104,11 +104,11 @@ However, many existing forward modelling tools lack the flexibility to explore m
 
 Synthesizer addresses these shortcomings by offering:
 
-- Flexibility: Nearly every model component (e.g., SPS, photoionisation, dust attenuation) can be configured, replaced, or extended without modifying core code.
+- Flexibility: Nearly every model component (e.g. input spectra grid, escape fraction, dust attenuation law) can be configured, replaced, or extended without modifying core code. Indeed, entire models can be swapped out with minimal effort.
 
-- Performance: Core operations are optimized (C extensions/OpenMP) to enable fast generation of observables, suitable for large simulation volumes or training datasets for simulation-based inference.
+- Performance: Core operations are optimized by employing C extensions with OpenMP threading to enable fast generation of observables, suitable for large simulation volumes or training datasets for simulation-based inference.
 
-- Modularity: The code is designed from the ground up around building block objects (e.g. Grid, Components, EmissionModel, AttenuationLaw), allowing users to mix and match components, and importantly, allowing users to easily swap out parts of their forward modelling pipeline with minimal effort.
+- Modularity: The code is designed from the ground up around building block objects (e.g. Grid, Components, EmissionModel, AttenuationLaw), each
 
 - Extensibility: Users can easily construct their own bespoke models, adding new SPS grids, photoionisation recipes, dust models, and instrument definitions without ever modifying the core code.
 
@@ -126,7 +126,7 @@ Emission Models:
 
 Instruments:
 
-Emissions & Observables: Definitions of filters, PSFs, and noise models to convert SEDs into photometry, images, and data cubes in observer frame.
+Emissions & Observables:
 
 # Citations
 
