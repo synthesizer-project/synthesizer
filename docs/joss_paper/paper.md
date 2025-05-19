@@ -94,13 +94,13 @@ bibliography: synthesizer.bib
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and numerical simulation outputs. It provides a unified framework to translate astrophysical components (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust model prescriptions. To ensure the package is as performant as possible, Synthesizer offloads all computationally intensive calculations to C extensions and employs explicit shared memory parallelism with OpenMP in these while leaving the user free to employ hybrid parallelism with MPI themselves. Synthesizer enables rapid forward modelling and exploration of modelling choice impact with a simple, well documented, and performant set of tools.
+Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and numerical simulation outputs. It provides a unified framework to translate astrophysical components (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust model prescriptions. To ensure the package is as performant as possible, Synthesizer offloads all computationally intensive calculations to C extensions and employs explicit shared memory parallelism with OpenMP within them, leaving the user free to employ hybrid parallelism with MPI themselves. Synthesizer enables rapid forward modelling and exploration of modelling choice impact with a simple, well documented, and performant set of tools.
 
-# Statement of need
+# Statement Of Need
 
-Comparing theoretical models of galaxy formation with observations traditionally relies on computationally expensive radiative transfer codes (e.g. ...) to translate models inot the observer space, or simplified inverse modelling approaches (e.g., SED fitting ...) to translate observations into the theoretical space. The latter of these approaches introduces numerous biases and uncertainties based not only on observational effects but also model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right meaning they must often simplify down the parameter space they explore to ensure convergence in a reasonable time. Both these problems make the former option of forward modelling from the theoretical space to the observer space an attractive prospect.
+Comparing theoretical models of galaxy formation with observations traditionally relies on computationally expensive radiative transfer codes (e.g. @SKIRT) or bespoke piplines to translate models into the observer space, or simplified inverse modelling approaches like SED fitting (e.g. @EAZY; @BAGPIPES; @PROSPECTOR) to translate observations into the theoretical space. The latter of these approaches introduces numerous biases and uncertainties based not only on observational effects but also model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right meaning they must often simplify down the parameter space they explore to ensure convergence in a reasonable time. Both these problems make the former option of forward modelling from the theoretical space to the observer space an attractive prospect.
 
-However, many existing forward modelling tools lack the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide rage of modelling assumptions, the performance necessary to explore a large parameter space and process modern day large datasets, and in many cases they lack documentation and thus consistency and reproducibility across a range datasets.
+However, many existing forward modelling tools (WHAT TOOLS?) lack the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide rage of modelling assumptions, the performance necessary to explore a large parameter space and process modern day large datasets, or in many cases they lack documentation and thus consistency and reproducibility across a range datasets.
 
 Synthesizer addresses these shortcomings by offering:
 
@@ -116,7 +116,7 @@ Synthesizer's design facilitates apples-to-apples comparisons between simulation
 
 # Design and implmentation
 
-Synthesizer is structured around 6 core abstractions, each with a part to play in the forward modelling process. These abstractions are detailed below.
+Synthesizer is structured around 6 core abstractions, each with an important part to play in the forward modelling process. These abstractions are detailed below.
 
 ## Component and Galaxy objects
 
@@ -132,11 +132,18 @@ Synthesizer provides a suite of precomputed SPS grids from models including BC03
 
 ## EmissionModel objects
 
-Templates that define every step in the process of translating Components and a Galaxy into emissions and observables. These templates are a modular network of Emission Models, each of which can be swapped out for an alternative Emission Model (or many models). This is the core of Synthesizer's flexibility and modularity.
+Templates that define every step in the process of translating Components and a Galaxy into emissions and observables. An EmissionModel can define one of 4 operations:
+
+- Extraction: Extracting emissions from an N-dimensional grid of emissions (e.g. extracting stellar spectra for a Stars component from a BPASS grid).
+- Generation: Generating emissions from a parametric model (e.g. generating dust emission from a blackbody using an energy balance approach).
+- Transfomation: Transforming an emission into a different emission (e.g. scaling or applying a dust law).
+- Combination: Combining multiple emissions together (e.g. combining nebular emission with pure stellar emission).
+
+Combining these different EmissionModel operations together results in a modular network, where each of the individual models can be swapped out for an alternative EmissionModel (or multiple models). This is the core of Synthesizer's flexibility and modularity.
 
 ## Emission objects
 
-The result of applying an Emission Model to a Galaxy and its Components, these Emissions include Seds which hold spectra and LineCollections which hold emission lines.
+The result of applying an Emission Model to a Galaxy and its Components, these Emissions include Seds, which hold spectra, and LineCollections, which hold emission lines. "Emissions" differ from "Observables" since they remain in the theoretical space, having not yet been combined with observational effects. That said, both objects enable translation from rest frame quantities to observed frame quantities. Emissions can be converted into Observables by applying an Instrument object to them. Seds and LineCollections are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
 
 ## Instrument objects
 
@@ -146,10 +153,10 @@ An instrument defining a photometric imager will also contain a FilterCollection
 
 ## Observables
 
-# Citations
+These are the final outputs, combining emissions with observational effects to produce synthetic observables. Observables include spectra (Sed objects, now with observational effects), photometry (PhotometryCollection objects), images (Image and ImageCollection objects), and spectral data cubes (SpectralDataCube objects). Just like Emissions, Observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
 
-# Figures
+Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthesizer) and is available on [PyPI](https://pypi.org/project/cosmos-synthesizer/). The documentation is available through [ReadTheDocs](https://synthesizer-project.github.io/synthesizer/).
 
 # Acknowledgements
 
-# References
+We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/).
