@@ -1,5 +1,5 @@
 ---
-title: "Synthesizer: Forward modelling with everything but the kitchen sink"
+title: "Synthesizer: Synthetic Observables For Modern Astronomy"
 tags:
   - Python
   - astronomy
@@ -89,12 +89,12 @@ affiliations:
     index: 10
 
 date: 15 May 2025
-bibliography: paper.bib
+bibliography: synthesizer.bib
 ---
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and numerical simulation outputs. It provides a unified framework to translate astrophysical components (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust prescriptions. To ensure the package is as performant as possible, Synthesizer employs shared memory parallelism with OpenMP in C extensions for all computationally intensive calculations with the scope for the user to leverage hybrid parallelism with MPI in the users ecosystem. Synthesizer enables rapid forward modelling of large simulation catalogs, and exploration of the impact of modelling choices with a simple, well documented, and performant set of tools.
+Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and numerical simulation outputs. It provides a unified framework to translate astrophysical components (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust model prescriptions. To ensure the package is as performant as possible, Synthesizer offloads all computationally intensive calculations to C extensions and employs explicit shared memory parallelism with OpenMP in these while leaving the user free to employ hybrid parallelism with MPI themselves. Synthesizer enables rapid forward modelling and exploration of modelling choice impact with a simple, well documented, and performant set of tools.
 
 # Statement of need
 
@@ -104,29 +104,47 @@ However, many existing forward modelling tools lack the flexibility to explore m
 
 Synthesizer addresses these shortcomings by offering:
 
-- Flexibility: Nearly every model component (e.g. input spectra grid, escape fraction, dust attenuation law) can be configured, replaced, or extended without modifying core code. Indeed, entire models can be swapped out with minimal effort.
+- Flexibility: Anything that could potentially be changed by the user is designed from the ground up to either be variable (e.g. escape and covering fractions, dust law parameters, model parameters) or swappable with an alternative (e.g. input SPS/AGN grids of spectra, dust law parametrisation, thermal emission parametrisation). This means that users can easily vary any parts of a model in a reproducible way without needing to modify the core code.
 
-- Performance: Core operations are optimized by employing C extensions with OpenMP threading to enable fast generation of observables, suitable for large simulation volumes or training datasets for simulation-based inference.
+- Performance: Computationally intensive operations are optimized by employing C extensions with OpenMP threading where applicable, to enable fast generation of observables, suitable for large simulation volumes or training datasets for simulation-based inference. Without this performance the aforementioned flexbility is moot, only by coupling flexibility with the performance to utilise it can we explore large parameter spaces in a reasonable time.
 
-- Modularity: The code is designed from the ground up around building block objects (e.g. Grid, Components, EmissionModel, AttenuationLaw), each
+- Modularity: Synthesizer is object-orientated, with a focus on decoupled classes that can be specialised and then swapped out at will. This modularity, in conjunction with Synthesizer's reliance on templating (where different modular in Synthesizer are templated together) and dependency injection (where the template is translated into an emission), is what enables Synthesizer's flexibility.
 
-- Extensibility: Users can easily construct their own bespoke models, adding new SPS grids, photoionisation recipes, dust models, and instrument definitions without ever modifying the core code.
+- Extensibility: Each of Synthesizer's modular building blocks are designed with a clear API, enabling users to extend the package with their own calculations, input models, and parametrisations. From the beginning, Synthesizer has been designed to be an ecosystem which can be expanded to fit the needs of all users, even as astronomy and astrophysics evolves.
 
-Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations, promotes reproducible science, and enables the forward modelling of large datasets previously considered impractical.
+Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations, exhaustive tests of modelling parameter impact, promotes reproducible science, and enables the forward modelling of large datasets previously considered impractical.
 
-# Design Ethos
+# Design and implmentation
 
-Synthesizer is structured around 5 core abstractions:
+Synthesizer is structured around 6 core abstractions, each with a part to play in the forward modelling process. These abstractions are detailed below.
 
-Galaxy and Components:
+## Component and Galaxy objects
 
-Grids: Precomputed N-dimensional arrays of spectra and lines indexed by parameters such as age, metallicity, ionisation parameter, or density (all axes are arbitrary).
+Containers that hold the particle or parametric data from which emissions and observables will be generated.
 
-Emission Models:
+These classes are containers for the user's parametric models, Semi-Analytic Model outputs or hydrodynamical simulation outputs, and thus are the main computation element in Synthesizer. A Component can be a Stars, Gas, or BlackHoles object, and a Galaxy is a container for these components. Each of these objects defines a number of methods for calculating properties (e.g. star formation histories, integrated quantities, bolometric luminosities etc.), setting up a model (e.g. calculating line of sight optical depths, dust screens optical depths, dust to metal ratios etc.), and generating observables (e.g. spectra, emission lines, images, and spectral data cubes), along with a number of helper methods for working with the resulting emissions and observables (e.g. analysing and plotting).
 
-Instruments:
+## Grid objects
 
-Emissions & Observables:
+Precomputed N-dimensional arrays of spectra and lines indexed by parameters such as age, metallicity, ionisation parameter, or density (all axes are arbitrary).
+
+Synthesizer provides a suite of precomputed SPS grids from models including BC03 [@bc03], BPASS [@bpass], FSPS [@fsps1, @fsps2]. All of which having been photoionisation-processed grids using Cloudy for a number of different photoionisation prescriptions. Users can also generate custom grids via the accompanying [grid-generation package](https://github.com/synthesizer-project/grid-generation), specifying variations in IMF, ionisation parameter, density, and geometry.
+
+## EmissionModel objects
+
+Templates that define every step in the process of translating Components and a Galaxy into emissions and observables. These templates are a modular network of Emission Models, each of which can be swapped out for an alternative Emission Model (or many models). This is the core of Synthesizer's flexibility and modularity.
+
+## Emission objects
+
+The result of applying an Emission Model to a Galaxy and its Components, these Emissions include Seds which hold spectra and LineCollections which hold emission lines.
+
+## Instrument objects
+
+These objects define the properties of an instrument. When combined with a Galaxy and its Components these can be used to translate emissions into observables from an instrument with a specific set of properties. As with all other objects in Synthesizer, these objects are modular and can be swapped out for an alternative Instrument object. Instruments can be combined together to produce IntrumentCollections, which can be used to produce observables from multiple instruments at once.
+
+An instrument defining a photometric imager will also contain a FilterCollection object, which defines the properties of the filters used by the instrument. These filters can be user defined, using an explicit transmission curve or defining a top hat filter. Importantly, Synthesizer provides an interface to the Spanish Virtual Observatory (SVO) filter database, which also allows users to easily use any filter from the database in an Instrument object or in a standalone FilterCollection object.
+
+## Observables
 
 # Citations
 
