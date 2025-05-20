@@ -7,7 +7,7 @@ tags:
   - forward modelling
   - simulations
 authors:
-  - name: Will Roper
+  - name: Will J. Roper
     orcid: 0000-0002-3257-8806
     corresponding: true
     equal-contrib: true
@@ -89,6 +89,7 @@ affiliations:
     index: 10
 
 date: 15 May 2025
+license: GPL-3.0
 bibliography: synthesizer.bib
 ---
 
@@ -100,9 +101,9 @@ Synthesizer is a fast, flexible, modular, and extensible Python package that emp
 
 Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches. The first uses computationally expensive radiative transfer codes—where fidelity is prioritized over performance (e.g. @sunrise, @SKIRT, @powderday)—to translate models into observer space (forward modelling). The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets (e.g. @Fortuni2023, @Marshall2025).
 
-Simplified inverse modelling approaches, such as SED fitting (e.g. @EAZY; @BAGPIPES; @PROSPECTOR), work in the opposite direction by translating observations into the theoretical space. However, these methods introduce biases and uncertainties from both observational effects and model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right, necesitating a simplified parameter space to ensure convergence in a reasonable time. Forward modelling is therefore becoming increasingly important not only for probing the validity of theoretical models, but also for quantifying the uncertainties in the modelling assumptions themselves.
+Simplified inverse modelling approaches, such as SED fitting (e.g. @EAZY; @BAGPIPES; @PROSPECTOR), work in the opposite direction by translating observations into the theoretical space. However, these methods introduce biases and uncertainties from both observational effects and model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right, necessitating a simplified parameter space to ensure convergence in a reasonable time. Forward modelling is therefore becoming increasingly important not only for probing the validity of theoretical models, but also for quantifying the uncertainties in the modelling assumptions themselves.
 
-However, existing forward modelling tools often lack one the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide rage of modelling assumptions, the performance necessary to explore a large parameter space and process modern day large datasets, or documentation, and thus consistency, and reproducibility across a range datasets.
+However, existing forward modelling tools often lack the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide rage of modelling assumptions, the performance necessary to explore a large parameter space and process modern day large datasets, or documentation, and thus consistency, and reproducibility across a range datasets.
 
 Synthesizer addresses these shortcomings by offering:
 
@@ -116,7 +117,7 @@ Synthesizer addresses these shortcomings by offering:
 
 Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations, exhaustive tests of modelling parameter impact, promotes reproducible science, and enables the forward modelling of large datasets previously considered impractical.
 
-# Implementation and architecture overview
+# Implementation overview
 
 Synthesizer is structured around a set of core abstractions, here we give a brief outline of these abstractions and a link to the documentation for each.
 
@@ -133,3 +134,5 @@ Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthes
 # Acknowledgements
 
 We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/).
+
+WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. ...
