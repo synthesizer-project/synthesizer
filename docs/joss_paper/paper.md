@@ -118,46 +118,15 @@ Synthesizer's design facilitates apples-to-apples comparisons between simulation
 
 # Implementation and architecture overview
 
-Synthesizer is structured around a set of core abstractions, here we give a brief outline of these abstractions and their purpose to explain the design ethos behind Synthesizer.
+Synthesizer is structured around a set of core abstractions, here we give a brief outline of these abstractions and a link to the documentation for each.
 
-## Components
-
-Components are containers for the user's parametric models, Semi-Analytic Model outputs or hydrodynamical simulation outputs, and thus form the main computation element in Synthesizer. Components include `Stars`, `Gas`, and `BlackHoles` objects, which are used to represent the stellar, gaseous, and black hole components of a galaxy respectively. Each of these objects defines methods for calculating properties (e.g. star formation histories, integrated quantities, bolometric luminosities etc.), setting up a model (e.g. calculating line of sight optical depths, dust screens optical depths, dust to metal ratios etc.), and generating observables (e.g. spectra, emission lines, images, and spectral data cubes), along with a number of helper methods for working with the resulting emissions and observables (e.g. analysing and plotting).
-
-## Galaxies
-
-While the user is free to work with components directly, a `Galaxy` object can be used to combine components. Like the components, the Galaxy object provides methods for calculating properties, setting up a model, and generating observables. However, the `Galaxy` object also provides methods for utilising multiple components at once for more complex models.
-
-## Emission Grids
-
-A `Grid` object holds an N-dimensional array of spectra and lines indexed by parameters such as age, metallicity, ionisation parameter, or density (all axes are arbitrary). These grids of emissions are combined with properties of a component to produce the components emission.
-
-Synthesizer provides a suite of precomputed SPS grids from models including BC03 [@bc03], BPASS [@bpass], FSPS (@fsps1, @fsps2), Maraston (@maraston05, @newman25). All of which having been reprocessed using Cloudy for a number of different photoionisation prescriptions. Users can also generate custom grids via the accompanying [grid-generation package](https://github.com/synthesizer-project/grid-generation), specifying variations in IMF, ionisation parameter, density, and geometry.
-
-## Emission Models
-
-The core of Synthesizer's flexibility and modularity are `EmissionModel` objects. These are templates defining every step in the process of producing emissions from components. An EmissionModel can define one of 4 operations:
-
-- Extraction: Extracting emissions from a `Grid`.
-- Generation: Generating emissions from a parametric model.
-- Transfomation: Transforming an emission into a new emission.
-- Combination: Combining multiple emissions together.
-
-Combining these different EmissionModel operations together results in a modular network, where each of the individual models can be swapped out for an alternative EmissionModel (or multiple models).
-
-## Emissions
-
-Applying an Emission Model to a `Galaxy` and its components, yields an `Sed` object, holding spectra, or a `LineCollection` object, holding emission lines. Emissions can be converted into observables by applying an Instrument object to them. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes.
-
-## Instruments
-
-To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the `Instrument` object, a flexible container for the properties of any type of observatory.
-
-A photometric `Instrument` can contain a `FilterCollection` object, defining the transmission curves of photometric filters. These filters can be user defined, using an explicit transmission curve or limits of a top-hat filter. Additionally, Synthesizer provides an interface to the [Spanish Virtual Observatory (SVO) filter database](https://svo2.cab.inta-csic.es/theory/fps/), which allows users to easily use any filter from the database.
-
-## Observables
-
-Observables include spectra with observational effects (`Sed` objects), photometry (`PhotometryCollection` objects), images (`Image` and `ImageCollection` objects), and spectral data cubes (`SpectralDataCube` objects). Just like Emissions, Observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
+- **Components**: Represent [stars](https://synthesizer-project.github.io/synthesizer/components/stars.html), [gas](https://synthesizer-project.github.io/synthesizer/components/gas.html), and [black holes](https://synthesizer-project.github.io/synthesizer/components/blackholes.html), encapsulating physical properties, and emission and observable generator methods. For more details see the [components documentation](https://synthesizer-project.github.io/synthesizer/components/components.html).
+- **Galaxies**: Combine multiple components into a single object for cohesive calculations with all components. For more detials see the [galaxies documentation](https://synthesizer-project.github.io/synthesizer/galaxy/galaxy.html).
+- **Emission Grids**: N-dimensional lookup tables of precomputed spectra and lines. Precomputed grids are available for models including BC03 [@bc03], BPASS [@bpass], FSPS (@fsps1, @fsps2), Maraston (@maraston05, @newman25), all reprocessed using Cloudy [@cloudy]. Users can also generate custom grids via the accompanying [grid-generation package](https://github.com/synthesizer-project/grid-generation). For more details see the [grids documentation](https://synthesizer-project.github.io/synthesizer/grids/grids.html).
+- **Emission Models**: Modular templates defining the process of producing emissions from components. These models can be used to extract, generate, transform, or combine emissions. These are the backbone of Synthesizer's flexibility and modularity. For more details see the [emission models documentation](https://synthesizer-project.github.io/synthesizer/emission_models/emission_models.html).
+- **Emissions**: The output of combining components with an emission model. These emissions are either spectra stored in [`Sed` objects](https://synthesizer-project.github.io/synthesizer/sed/sed.html), or line emissions stored in [`LineCollection` objects](https://synthesizer-project.github.io/synthesizer/lines/lines.html).
+- **Instruments**: Definitions of filters, resolutions, PSFs, and noise models to convert emissions into photometry, spectroscopy, images, and data cubes. For more details see the [instruments documentation](https://synthesizer-project.github.io/synthesizer/instrumentation/instrument_example.html) and [filters documentation](https://synthesizer-project.github.io/synthesizer/filters/filters.html).
+- **Observables**: Containers for the output spectra with observational effects ([`Sed` objects](https://synthesizer-project.github.io/synthesizer/sed/sed.html)), photometry ([`PhotometryCollection` objects](https://synthesizer-project.github.io/synthesizer/photometry/photometry.html)), images ([`Image` and `ImageCollection` objects](https://synthesizer-project.github.io/synthesizer/imaging/imaging.html)), and spectral data cubes ([`SpectralDataCube` objects](https://synthesizer-project.github.io/synthesizer/imaging/imaging.html)).
 
 Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthesizer) and is available on [PyPI](https://pypi.org/project/cosmos-synthesizer/). The documentation is available through [ReadTheDocs](https://synthesizer-project.github.io/synthesizer/).
 
