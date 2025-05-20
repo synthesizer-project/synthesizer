@@ -26,43 +26,33 @@ authors:
     affiliation: 1
   - name: Hollis Akins
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: 3
   - name: Sabrina Berger
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: "4, 5"
   - name: Connor Sant Fournier
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: 6
   - name: Thomas Harvey
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: 7
   - name: Kartheik Iyer
     orcid: 0000-0001-9298-3523
-    equal-contrib: true
     affiliation: 8
   - name: Marco Leonardi
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: 9
   - name: Sophie Newman
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: 2
   - name: Ashley Perry
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: 1
   - name: Louise Seeyave
     orcid: 0000-0000-0000-0000
-    equal-contrib: true
     affiliation: 1
   - name: Laura Sommovigo
     orcid: 0000-0002-2906-2200
-    equal-contrib: true
     affiliation: 10
 
 affiliations:
