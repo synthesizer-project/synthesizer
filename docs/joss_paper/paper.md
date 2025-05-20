@@ -94,66 +94,70 @@ bibliography: synthesizer.bib
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible C accelerated Python package for forward modelling both parametric models and numerical simulation outputs. It provides a unified framework to translate astrophysical components (stars, gas, black holes) into synthetic observables—including spectra, photometry, imaging, and spectral data cubes—using a wide variety of stellar population synthesis models, photoionisation assumptions, and dust model prescriptions. To ensure the package is as performant as possible, Synthesizer offloads all computationally intensive calculations to C extensions and employs explicit shared memory parallelism with OpenMP within them, leaving the user free to employ hybrid parallelism with MPI themselves. Synthesizer enables rapid forward modelling and exploration of modelling choice impact with a simple, well documented, and performant set of tools.
+Synthesizer is a fast, flexible, modular, and extensible Python package that empowers astronomers to turn theoretical galaxy models into realistic synthetic observations-spectra, photometry, images, and spectral cubes-with a focus on interchangeable modelling assumptions. By offloading computationally intensive tasks to threaded C extensions, Synthesizer delivers both simplicity and speed, enabling rapid forward-modelling workflows without requiring users to manage low-level details.
 
-# Statement Of Need
+# Statement of need
 
-Comparing theoretical models of galaxy formation with observations traditionally relies on computationally expensive radiative transfer codes (e.g. @SKIRT) or bespoke piplines to translate models into the observer space, or simplified inverse modelling approaches like SED fitting (e.g. @EAZY; @BAGPIPES; @PROSPECTOR) to translate observations into the theoretical space. The latter of these approaches introduces numerous biases and uncertainties based not only on observational effects but also model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right meaning they must often simplify down the parameter space they explore to ensure convergence in a reasonable time. Both these problems make the former option of forward modelling from the theoretical space to the observer space an attractive prospect.
+Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches. The first uses computationally expensive radiative transfer codes—where fidelity is prioritized over performance (e.g. @sunrise, @SKIRT, @powderday)—to translate models into observer space (forward modelling). The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets (e.g. @Fortuni2023, @Marshall2025).
 
-However, many existing forward modelling tools (WHAT TOOLS?) lack the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide rage of modelling assumptions, the performance necessary to explore a large parameter space and process modern day large datasets, or in many cases they lack documentation and thus consistency and reproducibility across a range datasets.
+Simplified inverse modelling approaches, such as SED fitting (e.g. @EAZY; @BAGPIPES; @PROSPECTOR), work in the opposite direction by translating observations into the theoretical space. However, these methods introduce biases and uncertainties from both observational effects and model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right, necesitating a simplified parameter space to ensure convergence in a reasonable time. Forward modelling is therefore becoming increasingly important not only for probing the validity of theoretical models, but also for quantifying the uncertainties in the modelling assumptions themselves.
+
+However, existing forward modelling tools often lack one the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide rage of modelling assumptions, the performance necessary to explore a large parameter space and process modern day large datasets, or documentation, and thus consistency, and reproducibility across a range datasets.
 
 Synthesizer addresses these shortcomings by offering:
 
-- Flexibility: Anything that could potentially be changed by the user is designed from the ground up to either be variable (e.g. escape and covering fractions, dust law parameters, model parameters) or swappable with an alternative (e.g. input SPS/AGN grids of spectra, dust law parametrisation, thermal emission parametrisation). This means that users can easily vary any parts of a model in a reproducible way without needing to modify the core code.
+- Flexibility: Anything that could potentially be changed by the user is designed from the ground up to either be variable or swappable with an alternative. This means that users can easily vary everything in a reproducible way without needing to modify the core code.
 
-- Performance: Computationally intensive operations are optimized by employing C extensions with OpenMP threading where applicable, to enable fast generation of observables, suitable for large simulation volumes or training datasets for simulation-based inference. Without this performance the aforementioned flexbility is moot, only by coupling flexibility with the performance to utilise it can we explore large parameter spaces in a reasonable time.
+- Performance: Computationally intensive operations are optimized by employing C extensions with OpenMP threading. Without this performance the aforementioned flexbility is moot, only by coupling flexibility with the performance to utilise it can we explore large parameter spaces in a reasonable time.
 
-- Modularity: Synthesizer is object-orientated, with a focus on decoupled classes that can be specialised and then swapped out at will. This modularity, in conjunction with Synthesizer's reliance on templating (where different modular in Synthesizer are templated together) and dependency injection (where the template is translated into an emission), is what enables Synthesizer's flexibility.
+- Modularity: Synthesizer is object-orientated, with a focus on decoupled classes that can be specialised and then swapped out at will. This modularity, in conjunction with a reliance on templating and dependency injection (see Emission Models below), is what enables Synthesizer's flexibility.
 
-- Extensibility: Each of Synthesizer's modular building blocks are designed with a clear API, enabling users to extend the package with their own calculations, input models, and parametrisations. From the beginning, Synthesizer has been designed to be an ecosystem which can be expanded to fit the needs of all users, even as astronomy and astrophysics evolves.
+- Extensibility: Extensive documentation and a clear API enables users to extend the package with their own calculations, and parametrisations. From the beginning, Synthesizer has been designed to be expanded to fit the needs of all users, even as astronomy and astrophysics evolves.
 
 Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations, exhaustive tests of modelling parameter impact, promotes reproducible science, and enables the forward modelling of large datasets previously considered impractical.
 
-# Design and implmentation
+# Implementation and architecture overview
 
-Synthesizer is structured around 6 core abstractions, each with an important part to play in the forward modelling process. These abstractions are detailed below.
+Synthesizer is structured around a set of core abstractions, here we give a brief outline of these abstractions and their purpose to explain the design ethos behind Synthesizer.
 
-## Component and Galaxy objects
+## Components
 
-Containers that hold the particle or parametric data from which emissions and observables will be generated.
+Components are containers for the user's parametric models, Semi-Analytic Model outputs or hydrodynamical simulation outputs, and thus form the main computation element in Synthesizer. Components include `Stars`, `Gas`, and `BlackHoles` objects, which are used to represent the stellar, gaseous, and black hole components of a galaxy respectively. Each of these objects defines methods for calculating properties (e.g. star formation histories, integrated quantities, bolometric luminosities etc.), setting up a model (e.g. calculating line of sight optical depths, dust screens optical depths, dust to metal ratios etc.), and generating observables (e.g. spectra, emission lines, images, and spectral data cubes), along with a number of helper methods for working with the resulting emissions and observables (e.g. analysing and plotting).
 
-These classes are containers for the user's parametric models, Semi-Analytic Model outputs or hydrodynamical simulation outputs, and thus are the main computation element in Synthesizer. A Component can be a Stars, Gas, or BlackHoles object, and a Galaxy is a container for these components. Each of these objects defines a number of methods for calculating properties (e.g. star formation histories, integrated quantities, bolometric luminosities etc.), setting up a model (e.g. calculating line of sight optical depths, dust screens optical depths, dust to metal ratios etc.), and generating observables (e.g. spectra, emission lines, images, and spectral data cubes), along with a number of helper methods for working with the resulting emissions and observables (e.g. analysing and plotting).
+## Galaxies
 
-## Grid objects
+While the user is free to work with components directly, a `Galaxy` object can be used to combine components. Like the components, the Galaxy object provides methods for calculating properties, setting up a model, and generating observables. However, the `Galaxy` object also provides methods for utilising multiple components at once for more complex models.
 
-Precomputed N-dimensional arrays of spectra and lines indexed by parameters such as age, metallicity, ionisation parameter, or density (all axes are arbitrary).
+## Emission Grids
 
-Synthesizer provides a suite of precomputed SPS grids from models including BC03 [@bc03], BPASS [@bpass], FSPS [@fsps1, @fsps2]. All of which having been photoionisation-processed grids using Cloudy for a number of different photoionisation prescriptions. Users can also generate custom grids via the accompanying [grid-generation package](https://github.com/synthesizer-project/grid-generation), specifying variations in IMF, ionisation parameter, density, and geometry.
+A `Grid` object holds an N-dimensional array of spectra and lines indexed by parameters such as age, metallicity, ionisation parameter, or density (all axes are arbitrary). These grids of emissions are combined with properties of a component to produce the components emission.
 
-## EmissionModel objects
+Synthesizer provides a suite of precomputed SPS grids from models including BC03 [@bc03], BPASS [@bpass], FSPS (@fsps1, @fsps2), Maraston (@maraston05, @newman25). All of which having been reprocessed using Cloudy for a number of different photoionisation prescriptions. Users can also generate custom grids via the accompanying [grid-generation package](https://github.com/synthesizer-project/grid-generation), specifying variations in IMF, ionisation parameter, density, and geometry.
 
-Templates that define every step in the process of translating Components and a Galaxy into emissions and observables. An EmissionModel can define one of 4 operations:
+## Emission Models
 
-- Extraction: Extracting emissions from an N-dimensional grid of emissions (e.g. extracting stellar spectra for a Stars component from a BPASS grid).
-- Generation: Generating emissions from a parametric model (e.g. generating dust emission from a blackbody using an energy balance approach).
-- Transfomation: Transforming an emission into a different emission (e.g. scaling or applying a dust law).
-- Combination: Combining multiple emissions together (e.g. combining nebular emission with pure stellar emission).
+The core of Synthesizer's flexibility and modularity are `EmissionModel` objects. These are templates defining every step in the process of producing emissions from components. An EmissionModel can define one of 4 operations:
 
-Combining these different EmissionModel operations together results in a modular network, where each of the individual models can be swapped out for an alternative EmissionModel (or multiple models). This is the core of Synthesizer's flexibility and modularity.
+- Extraction: Extracting emissions from a `Grid`.
+- Generation: Generating emissions from a parametric model.
+- Transfomation: Transforming an emission into a new emission.
+- Combination: Combining multiple emissions together.
 
-## Emission objects
+Combining these different EmissionModel operations together results in a modular network, where each of the individual models can be swapped out for an alternative EmissionModel (or multiple models).
 
-The result of applying an Emission Model to a Galaxy and its Components, these Emissions include Seds, which hold spectra, and LineCollections, which hold emission lines. "Emissions" differ from "Observables" since they remain in the theoretical space, having not yet been combined with observational effects. That said, both objects enable translation from rest frame quantities to observed frame quantities. Emissions can be converted into Observables by applying an Instrument object to them. Seds and LineCollections are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
+## Emissions
 
-## Instrument objects
+Applying an Emission Model to a `Galaxy` and its components, yields an `Sed` object, holding spectra, or a `LineCollection` object, holding emission lines. Emissions can be converted into observables by applying an Instrument object to them. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes.
 
-These objects define the properties of an instrument. When combined with a Galaxy and its Components these can be used to translate emissions into observables from an instrument with a specific set of properties. As with all other objects in Synthesizer, these objects are modular and can be swapped out for an alternative Instrument object. Instruments can be combined together to produce IntrumentCollections, which can be used to produce observables from multiple instruments at once.
+## Instruments
 
-An instrument defining a photometric imager will also contain a FilterCollection object, which defines the properties of the filters used by the instrument. These filters can be user defined, using an explicit transmission curve or defining a top hat filter. Importantly, Synthesizer provides an interface to the Spanish Virtual Observatory (SVO) filter database, which also allows users to easily use any filter from the database in an Instrument object or in a standalone FilterCollection object.
+To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the `Instrument` object, a flexible container for the properties of any type of observatory.
+
+A photometric `Instrument` can contain a `FilterCollection` object, defining the transmission curves of photometric filters. These filters can be user defined, using an explicit transmission curve or limits of a top-hat filter. Additionally, Synthesizer provides an interface to the [Spanish Virtual Observatory (SVO) filter database](https://svo2.cab.inta-csic.es/theory/fps/), which allows users to easily use any filter from the database.
 
 ## Observables
 
-These are the final outputs, combining emissions with observational effects to produce synthetic observables. Observables include spectra (Sed objects, now with observational effects), photometry (PhotometryCollection objects), images (Image and ImageCollection objects), and spectral data cubes (SpectralDataCube objects). Just like Emissions, Observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
+Observables include spectra with observational effects (`Sed` objects), photometry (`PhotometryCollection` objects), images (`Image` and `ImageCollection` objects), and spectral data cubes (`SpectralDataCube` objects). Just like Emissions, Observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
 
 Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthesizer) and is available on [PyPI](https://pypi.org/project/cosmos-synthesizer/). The documentation is available through [ReadTheDocs](https://synthesizer-project.github.io/synthesizer/).
 
