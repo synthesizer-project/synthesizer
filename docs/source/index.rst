@@ -31,6 +31,7 @@ Contents
    advanced/advanced
    notebook_examples/cookbook
    auto_examples/index
+   publications/publications
    API
 
 Citation & Acknowledgement
