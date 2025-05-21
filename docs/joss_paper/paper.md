@@ -67,7 +67,7 @@ affiliations:
     index: 4
   - name: ARC Centre of Excellence for All Sky Astrophysics in 3 Dimensions (ASTRO 3D). Australia
     index: 5
-  - name: Department of Physics, University of Malta, Msida MSD 2080, Malta
+  - name: Institute of Space Sciences and Astronomy, University of Malta, Msida MSD 2080, Malta
     index: 6
   - name: Jodrell Bank Centre for Astrophysics, University of Manchester, Oxford Road, Manchester M13 9PL, UK
     index: 7
