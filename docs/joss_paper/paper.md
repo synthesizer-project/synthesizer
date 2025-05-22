@@ -13,7 +13,7 @@ authors:
     equal-contrib: true
     affiliation: 1
   - name: Christopher Lovell
-    orcid: 0000-0000-0000-0000
+    orcid: 0000-0001-7964-5933
     equal-contrib: true
     affiliation: 2
   - name: Aswin Vijayan
@@ -28,22 +28,22 @@ authors:
     orcid: 0000-0000-0000-0000
     affiliation: 3
   - name: Sabrina Berger
-    orcid: 0000-0000-0000-0000
-    affiliation: "4, 5"
+    orcid: 0000-0002-4064-7883
+    affiliation: 4
   - name: Connor Sant Fournier
     orcid: 0000-0000-0000-0000
-    affiliation: 6
+    affiliation: 5
   - name: Thomas Harvey
     orcid: 0000-0000-0000-0000
-    affiliation: 7
+    affiliation: 6
   - name: Kartheik Iyer
     orcid: 0000-0001-9298-3523
-    affiliation: 8
+    affiliation: 7
   - name: Marco Leonardi
-    orcid: 0000-0000-0000-0000
-    affiliation: 9
+    orcid: 0009-0008-3592-7830
+    affiliation: 8
   - name: Sophie Newman
-    orcid: 0000-0000-0000-0000
+    orcid: 0009-0001-3422-3048
     affiliation: 2
   - name: Ashley Perry
     orcid: 0000-0000-0000-0000
@@ -53,7 +53,7 @@ authors:
     affiliation: 1
   - name: Laura Sommovigo
     orcid: 0000-0002-2906-2200
-    affiliation: 10
+    affiliation: 9
 
 affiliations:
   - name: Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK
@@ -65,18 +65,16 @@ affiliations:
     index: 3
   - name: School of Physics, University of Melbourne, Parkville, VIC 3010, Australia
     index: 4
-  - name: ARC Centre of Excellence for All Sky Astrophysics in 3 Dimensions (ASTRO 3D). Australia
-    index: 5
   - name: Institute of Space Sciences and Astronomy, University of Malta, Msida MSD 2080, Malta
-    index: 6
+    index: 5
   - name: Jodrell Bank Centre for Astrophysics, University of Manchester, Oxford Road, Manchester M13 9PL, UK
-    index: 7
+    index: 6
   - name: Columbia Astrophysics Laboratory, Columbia University, 550 West 120th Street, New York, NY 10027, USA
-    index: 8
+    index: 7
   - name: Leiden Observatory, Leiden University, PO Box 9513, NL-2300 RA Leiden, The Netherlands
-    index: 9
+    index: 8
   - name: Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA
-    index: 10
+    index: 9
 
 date: 15 May 2025
 license: GPL-3.0
@@ -85,21 +83,21 @@ bibliography: synthesizer.bib
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible Python package that empowers astronomers to turn theoretical galaxy models into realistic synthetic observations - spectra, photometry, images, and spectral cubes - with a focus on interchangeable modelling assumptions. By offloading computationally intensive tasks to threaded C extensions, Synthesizer delivers both simplicity and speed, enabling rapid forward-modelling workflows without requiring users to manage low-level data processing and computational details
+Synthesizer is a fast, flexible, modular, and extensible Python package that empowers astronomers to turn theoretical galaxy models into realistic synthetic observations - including spectra, photometry, images, and spectral cubes - with a focus on interchangeable modelling assumptions. By offloading computationally intensive tasks to threaded C extensions, Synthesizer delivers both simplicity and speed, enabling rapid forward-modelling workflows without requiring users to manage low-level data processing and computational details.
 
 # Statement of need
 
-Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches. The first uses computationally expensive dust radiative transfer codes, e.g. @sunrise, @SKIRT, @powderday, to translate models into observer space (forward modelling). These codes are typically computationally expensive, prioritising fidelity. The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets (e.g. @Fortuni2023, @Marshall2025).
+Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches, both translating theoretical models into the observer space (a technique known as forward modelling). The first uses computationally expensive dust radiative transfer codes (e.g. @sunrise, @SKIRT, @powderday); these codes are typically computationally expensive, prioritising fidelity. The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets (e.g. @Fortuni2023, @Marshall2025).
 
 Simplified inverse modelling approaches, such as SED fitting, e.g. @EAZY; @BAGPIPES; @PROSPECTOR, work in the opposite direction, translating observables into intrinsic physical quantities. However, these methods can introduce biases and uncertainties from both observational effects and model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right, necessitating a simplified parameter space to ensure convergence in a reasonable time. Forward modelling is therefore becoming increasingly important not only for probing the validity of theoretical models, but also for quantifying the uncertainties in the modelling assumptions themselves.
 
-However, existing forward modelling tools often lack the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide range of modelling assumptions, and the performance necessary to explore a large parameter space and process modern-day large datasets. Furthermore, they often also frequently lack comprehensive documentation, hindering consistency and reproducibility across a range of datasets.
+However, existing forward modelling tools often lack the flexibility to explore modelling uncertainties, the usability and modularity to explore a wide range of modelling assumptions, and the performance necessary to explore a large parameter space and process modern-day large datasets. Furthermore, they often also frequently lack comprehensive documentation, hindering consistency, and reproducibility across a range of datasets.
 
 Synthesizer addresses these shortcomings by offering:
 
-- Flexibility: Anything that could potentially be changed by the user is explicitly designed to be variable (for a quantitative parameter) or exchangeable (for a qualitative modelling choice). This means that users can easily vary everything in a reproducible way, without needing to modify the core code.
+- Flexibility: Anything that could potentially be changed by the user is explicitly designed to be variable (for a quantitative model parameter) or exchangeable (for a qualitative modelling choice). This means that users can easily vary everything in a reproducible way, without needing to modify the core code.
 
-- Performance: Computationally intensive operations are optimised by employing C extensions with OpenMP threading. Without this performance, the aforementioned flexibility is moot; only by coupling flexibility with the performance to utilise it can we explore large parameter spaces in a reasonable time.
+- Performance: Computationally intensive operations are optimised by employing C extensions with OpenMP threading. Without this performance, the aforementioned flexibility is moot; only by coupling flexibility with the performance to utilise it can we explore large, high-dimensional parameter spaces in a reasonable time.
 
 - Modularity: Synthesizer is object-oriented, with a focus on decoupled classes that can be specialised and then swapped out at will. This modularity, in conjunction with a reliance on templating and dependency injection (see Emission Models below), is what enables Synthesizer's flexibility, as well as its application to a diverse range of astrophysical problems in both forward and inverse modelling
 
@@ -123,8 +121,8 @@ Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthes
 
 # Acknowledgements
 
-We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/).
+We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/) [@openmp].
 
-WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. ...
+WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. SB is supported by the Melbourne Research Scholarship and N D Goldsworthy Scholarship. …
 
 # References
