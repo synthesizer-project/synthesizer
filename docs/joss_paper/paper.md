@@ -95,7 +95,7 @@ However, existing forward modelling tools often lack the flexibility to explore 
 
 Synthesizer addresses these shortcomings by offering:
 
-- Flexibility: Anything that could potentially be changed by the user is explicitly designed to be variable (for a quantitative model parameter) or exchangeable (for a qualitative modelling choice). This means that users can easily vary everything in a reproducible way, without needing to modify the core code.
+- Flexibility: Anything that could be changed by the user is explicitly designed to be variable (for a quantitative model parameter) or exchangeable (for a qualitative modelling choice). This means that users can easily vary everything in a reproducible way, without needing to modify the core code.
 
 - Performance: Computationally intensive operations are optimised by employing C extensions with OpenMP threading. Without this performance, the aforementioned flexibility is moot; only by coupling flexibility with the performance to utilise it can we explore large, high-dimensional parameter spaces in a reasonable time.
 
