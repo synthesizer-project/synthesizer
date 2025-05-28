@@ -39,8 +39,8 @@ In the following example we introduce the ``Sed`` class, and some simple functio
 
    spectra/sed_example
 
-Generating spectra
-==================
+Generating Emisssions 
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Synthesizer currently supports the generation of spectra for both stellar populations and AGN.
 Generation of spectra for each `component <../components/components>`_ in a galaxy requires an `emission model <../emission_models/emission_models>`_ defining the different spectra to be generated.
@@ -48,7 +48,7 @@ With a model in hand, all that needs to be done is pass that model to the ``get_
 This will generate ``Sed`` objects (see `here <../sed/sed>`_ for an overview) and attach them to the component / galaxy.
 
 Integrated vs Particle
-^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 
 Synthesizer enables the generation of both integrated spectra (a single spectra per component / galaxy) or "per--particle" spectra (a spectra for each individual particle).
 The latter of these is (unsurprisingly) only applicable for particle components (`particle.Stars` and `particle.BlackHoles`), while the former can be generated for both parametric and particle components.
