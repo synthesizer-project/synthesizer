@@ -33,9 +33,10 @@ This binning can be represented along different dimensions representing various 
 An example of this is the star formation history; a parametric galaxy would describe this history by dividing the mass formed into bins of age.
 
 Whilst both of these approaches may appear to be superficially similar, there are some important distinctions under the hood within Synthesizer.
-In most use cases Synthesizer will be smart enough to know what kind of data you are providing, and create the appropriate objects and call the appropriate methods itsself.
+In most use cases Synthesizer will be smart enough to know what kind of data you are providing, and create the appropriate objects and call the appropriate methods itself.
 However, it is worth understanding this distinction, particularly when debugging any issues.
 We provide examples for various tasks in synthesizer using both particle and parametric approaches where applicable.
+
 
 
 The Synthesizer Toolbox
@@ -46,7 +47,7 @@ Synthesizer is structured around a set of core abstractions, here we give a brie
 Emission Grids
 ***************
 
-``Grids`` are one of the fundamental inputs in Synthesizer. A `Grid` object holds an N-dimensional array of spectra and emission lines indexed by some parameters. The exact parameters depend on the type of grid (e.g. grids of emission from stellar populations, AGN line regions, dust emission), but they can effectively be anything. 
+``Grids`` are one of the fundamental inputs in Synthesizer. A ``Grid`` object holds an N-dimensional array of spectra and emission lines indexed by some parameters. The exact parameters depend on the type of grid (e.g. grids of emission from stellar populations, AGN line regions, dust emission), but they can effectively be anything. 
 For stars, these are typically the age and metallicity of a stellar population, indexing emissions derived with a stellar population synthesis (SPS) model (see `Conroy 2013 <https://arxiv.org/abs/1301.7095>`_ for a review).
 Alternatively, a more complex set of axes could include a changing ionisation parameter used in a photoionisation code. 
 Different grids can also be swapped in and out to assess the impact of different modelling choices; for example, one might wish to understand the impact of different SPS models on the integrated stellar emission.
@@ -60,46 +61,46 @@ Components & Galaxies
 Components 
 ~~~~~~~~~~~~~ 
 
-Components are containers for your "emitters". They include `Stars`, `Gas`, and `BlackHoles` objects, which are each used to represent the stellar, gaseous, and black hole components of a galaxy respectively. These Components can be parametric models, Semi-Analytic Model outputs or hydrodynamical simulation outputs.  Each of these objects defines methods for calculating properties (e.g. star formation histories, integrated quantities, bolometric luminosities etc.), setting up a model (e.g. calculating line of sight optical depths, dust screens optical depths, dust to metal ratios etc.), and generating observables (e.g. spectra, emission lines, images, and spectral data cubes), along with a number of helper methods for working with the resulting emissions and observables (e.g. analysing and plotting).
+Components are containers for your "emitters". They include ``Stars``, ``Gas``, and ``BlackHoles`` objects, which are each used to represent the stellar, gaseous, and black hole components of a galaxy respectively. These Components can be parametric models, Semi-Analytic Model outputs or hydrodynamical simulation outputs.  Each of these objects defines methods for calculating properties (e.g. star formation histories, integrated quantities, bolometric luminosities etc.), setting up a model (e.g. calculating line of sight optical depths, dust screens optical depths, dust to metal ratios etc.), and generating observables (e.g. spectra, emission lines, images, and spectral data cubes), along with a number of helper methods for working with the resulting emissions and observables (e.g. analysing and plotting).
 
 Galaxies 
 ~~~~~~~~~~
 
-While the user is free to work with components directly, a `Galaxy` object can be used to combine components and define galaxy wide properties such as redshift and galactic centre. Like the components, the Galaxy object provides methods for calculating properties, setting up a model, and generating observables. However, the `Galaxy` object also provides methods for utilising multiple components at once for more complex models.
+While the user is free to work with components directly, a ``Galaxy`` object can be used to combine components and define galaxy wide properties such as redshift and galactic centre. Like the components, the Galaxy object provides methods for calculating properties, setting up a model, and generating observables. However, the ``Galaxy`` object also provides methods for utilising multiple components at once for more complex models.
 
 Emission models
 ***************
 
-At the core of Synthesizer's flexibility and modularity are `EmissionModel` objects. These are templates defining every step in the process of translating components into emissions. Each individual `EmissionModel` can define one of 4 operations:
+At the core of Synthesizer's flexibility and modularity are ``EmissionModel`` objects. These are templates defining every step in the process of translating components into emissions. Each individual ``EmissionModel`` can define one of 4 operations:
 
-- Extraction: Extracting emissions from a `Grid`.
+- Extraction: Extracting emissions from a ``Grid``.
 - Generation: Generating emissions from a parametric model.
 - Transfomation: Transforming an emission into a new emission.
 - Combination: Combining multiple emissions together.
 
-However, combining each of theseCombining these different `EmissionModel` operations together results in a modular network, where each of the individual models can be swapped out for an alternative `EmissionModel` (or multiple models).
+However, combining each of theseCombining these different ``EmissionModel`` operations together results in a modular network, where each of the individual models can be swapped out for an alternative ``EmissionModel`` (or multiple models).
 Further details are provided in the `Emission Models <../emission_models/emission_models.rst>`_ section.
 
 Emissions
 ***********
 
-Applying an Emission Model to a `Galaxy` and its components, yields `Sed` objects, holding spectra, or a `LineCollection` objects, holding emission lines depending on the method called. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes. For instance, ``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break), while `LineCollection` objects provide methods for accessing the line fluxes, equivalent widths, and combining lines into composite lines (e.g. doublets, triplets, etc.).
+Applying an Emission Model to a ``Galaxy`` and its components, yields ``Sed`` objects, holding spectra, or a ``LineCollection`` objects, holding emission lines depending on the method called. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes. For instance, ``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break), while ``LineCollection`` objects provide methods for accessing the line fluxes, equivalent widths, and combining lines into composite lines (e.g. doublets, triplets, etc.).
 
-Emissions can be converted into observables by applying an `Instrument` or `InstrumentCollection` object to them.
+Emissions can be converted into observables by applying an ``Instrument`` or ``InstrumentCollection`` object to them.
 
 
 Observatories & Instruments
 ***************************
 
-To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the `Instrument` object, a flexible container designed to hold the properties of any type of observatory, including photometric imagers, spectrographs, and IFU instruments.
+To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the ``Instrument`` object, a flexible container designed to hold the properties of any type of observatory, including photometric imagers, spectrographs, and IFU instruments.
 
-While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager `Instrument` needs a description of the filter transmission curves. These are encapsulated by the `FilterCollection` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. More powerfully, however, Synthesizer provides an interface to the [Spanish Virtual Observatory (SVO) filter database](https://svo2.cab.inta-csic.es/theory/fps/), which allows users to easily use any filter from the database by simply passing a filter name to the `FilterCollection` at instantiation.
+While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager ``Instrument`` needs a description of the filter transmission curves. These are encapsulated by the ``FilterCollection`` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. More powerfully, however, Synthesizer provides an interface to the [Spanish Virtual Observatory (SVO) filter database](https://svo2.cab.inta-csic.es/theory/fps/), which allows users to easily use any filter from the database by simply passing a filter name to the ``FilterCollection`` at instantiation.
 
 
 Observables
 ***********
 
-By combining an emission object with an `Instrument` or `InstrumentCollection`, Synthesizer can translate the theoretical emission into a observable accounting for observational effects.
-Observables include spectra (accounting for resolving power and noise, again in a `Sed` objects), photometry (`PhotometryCollection` objects), images (`Image` and `ImageCollection` objects), and spectral data cubes (`SpectralDataCube` objects). Just like emissions, observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
+By combining an emission object with an ``Instrument`` or ``InstrumentCollection``, Synthesizer can translate the theoretical emission into a observable accounting for observational effects.
+Observables include spectra (accounting for resolving power and noise, again in a `Sed` objects), photometry (``PhotometryCollection`` objects), images (``Image`` and ``ImageCollection`` objects), and spectral data cubes (``SpectralDataCube`` objects). Just like emissions, observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
 
 
