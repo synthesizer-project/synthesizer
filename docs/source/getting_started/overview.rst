@@ -19,24 +19,23 @@ Instead, Synthesizer is intended to be much cheaper computationally, allowing an
 Particle vs Parametric
 **********************
 
-Synthesizer can be used to generate the multi-wavelength emission from a range of astrophysical models with a wide array of complexity and fidelity.
-At one end, simple toy models can be generated within synthesizer that describe a galaxy through analytic forms; at the other end, data from high resolution isolated galaxy simulations can be ingested into synthesizer, consisting of tens of thousands of discrete elements describing the galaxy properties.
+Synthesizer can be used to generate multi-wavelength emission from a range of astrophysical models with a wide array of complexity and fidelity.
+At one end, simple toy models can be generated within Synthesizer, describing a galaxy through analytic forms; at the other end, data from high resolution isolated galaxy simulations can be ingested into Synthesizer, consisting of tens of thousands of discrete elements sampling the matter of a galaxy. In between these two extremes are a myriad of other ways of describing a galaxy, from semi-analytic models (SAMs) to cosmological simulations with varying degrees of resolution and complexity. Synthesizer's goal is to provide a toolset that will work across this entire spectrum of complexity, allowing users to generate synthetic observations from a wide range of astrophysical models.
 
 Wherever your data source lies on this spectrum of complexity, it can typically be described as belonging to one of two types: **Particle** or **Parametric** data.
 
-Particle data represents an astrophysical object through discrete elements with individual properties.
-These can describe, for example, the spatial distribution of stellar mass, or the ages of individual star elements.
+**Particle** data represents an astrophysical object through discrete elements with individual properties.
+These can describe, for example, the spatial distribution of stellar mass, the extent of the discrete element, or the ages of individual star elements.
 We use the term 'particle' here in the most general form to describe a discrete resolution element; whether that's a particle element in a smoothed particle hydrodynamics simulation, or a grid element in an adaptive mesh refinement code.
 
-Conversely, Parametric data typically represents a galaxy through *binned attributes*.
+Conversely, **Parametric** data typically represents a galaxy through *binned attributes*.
 This binning can be represented along different dimensions representing various properties of the galaxy.
 An example of this is the star formation history; a parametric galaxy would describe this history by dividing the mass formed into bins of age.
 
-Whilst both of these approaches may appear to be superficially similar, there are some important distinctions under the hood within synthesizer.
-In most use cases synthesizer will be smart enough to know what kind of data you are providing, and create the appropriate objects as required.
+Whilst both of these approaches may appear to be superficially similar, there are some important distinctions under the hood within Synthesizer.
+In most use cases Synthesizer will be smart enough to know what kind of data you are providing, and create the appropriate objects and call the appropriate methods itsself.
 However, it is worth understanding this distinction, particularly when debugging any issues.
 We provide examples for various tasks in synthesizer using both particle and parametric approaches where applicable.
-
 
 
 The Synthesizer Toolbox
