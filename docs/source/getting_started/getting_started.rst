@@ -12,6 +12,7 @@ Once you're finished here, you can check out the more detailed documentation on 
    installation
    downloading_grids
    overview
+   my_first_synthesizer
 
 Getting Help
 ^^^^^^^^^^^^
