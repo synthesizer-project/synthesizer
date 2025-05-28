@@ -20,7 +20,7 @@ Contents
    observatories/observatories 
    observables/observables
    pipelines/pipeline_example
-   parallelism/openmp
+   performance/openmp
    advanced/advanced
    notebook_examples/cookbook
    auto_examples/index
