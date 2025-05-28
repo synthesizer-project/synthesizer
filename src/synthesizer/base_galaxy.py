@@ -1232,6 +1232,14 @@ class BaseGalaxy:
                 "Parametric Galaxies can only produce smoothed images."
             )
 
+        # Ensure we aren't trying to make an image for a particle galaxy
+        # without a per particle model
+        if self.galaxy_type == "Particle" and not emission_model.per_particle:
+            raise exceptions.InconsistentArguments(
+                "Particle Galaxies can only produce images from per particle "
+                "emission models."
+            )
+
         # If we haven't got an instrument create one
         # TODO: we need to eventually fully pivot to taking only an instrument
         # this will be done when we introduced some premade instruments
@@ -1423,6 +1431,14 @@ class BaseGalaxy:
         if self.galaxy_type == "Parametric" and img_type == "hist":
             raise exceptions.InconsistentArguments(
                 "Parametric Galaxies can only produce smoothed images."
+            )
+
+        # Ensure we aren't trying to make an image for a particle galaxy
+        # without a per particle model
+        if self.galaxy_type == "Particle" and not emission_model.per_particle:
+            raise exceptions.InconsistentArguments(
+                "Particle Galaxies can only produce images from per particle "
+                "emission models."
             )
 
         # If we haven't got an instrument create one
