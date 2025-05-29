@@ -39,7 +39,7 @@ In the following example we introduce the ``Sed`` class, and some simple functio
 
    spectra/sed_example
 
-Generating Emisssions 
+Generating Emissions 
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Synthesizer currently supports the generation of spectra for both stellar populations and AGN.
