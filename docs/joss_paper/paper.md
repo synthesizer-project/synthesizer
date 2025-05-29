@@ -17,15 +17,15 @@ authors:
     equal-contrib: true
     affiliation: 2
   - name: Aswin Vijayan
-    orcid: 0000-0000-0000-0000
+    orcid: 0000-0002-1905-4194
     equal-contrib: true
     affiliation: 1
   - name: Stephen Wilkins
-    orcid: 0000-0000-0000-0000
+    orcid: 0000-0003-3903-6935
     equal-contrib: true
     affiliation: 1
   - name: Hollis Akins
-    orcid: 0000-0000-0000-0000
+    orcid: 0000-0003-3596-8794
     affiliation: 3
   - name: Sabrina Berger
     orcid: 0000-0002-4064-7883
@@ -34,7 +34,7 @@ authors:
     orcid: 0000-0000-0000-0000
     affiliation: 5
   - name: Thomas Harvey
-    orcid: 0000-0000-0000-0000
+    orcid: 0000-0002-4130-636X
     affiliation: 6
   - name: Kartheik Iyer
     orcid: 0000-0001-9298-3523
@@ -46,10 +46,10 @@ authors:
     orcid: 0009-0001-3422-3048
     affiliation: 2
   - name: Ashley Perry
-    orcid: 0000-0000-0000-0000
+    orcid: 0009-0001-0739-6162
     affiliation: 1
   - name: Louise Seeyave
-    orcid: 0000-0000-0000-0000
+    orcid: 0000-0002-7020-3079
     affiliation: 1
   - name: Laura Sommovigo
     orcid: 0000-0002-2906-2200
@@ -123,6 +123,6 @@ Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthes
 
 We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/) [@openmp].
 
-WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. SB is supported by the Melbourne Research Scholarship and N D Goldsworthy Scholarship. …
+WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. SB is supported by the Melbourne Research Scholarship and N D Goldsworthy Scholarship. LS is supported by an STFC studentship.
 
 # References
