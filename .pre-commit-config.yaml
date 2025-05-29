@@ -28,6 +28,6 @@ repos:
         args:
           - --remove-empty-cells
           - --preserve-cell-metadata
-          - tags
+          - nbsphinx
           - -M
           - --
