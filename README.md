@@ -35,7 +35,7 @@ Various configuration options can also be set at installation (see [here](https:
 
 ## Getting Grids
 
-In most use cases you will need a grid of theoretical spectra. Premade grids can be downloaded from the [grids data server](https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&e=1&dl=0).
+In most use cases you will need a grid of theoretical spectra. Premade grids can be downloaded from the [grids data server](https://sussex.box.com/v/SynthesizerProductionGrids).
 
 Note that you can also create your own grids using (or adapting) the [`grid-generation` repo](https://github.com/synthesizer-project/grid-generation).
 

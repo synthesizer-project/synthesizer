@@ -1,6 +1,3 @@
-.. image:: img/synthesizer_text.png
-    :alt: Synthesizer
-
 Synthesizer is an open-source python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
 
 This documentation provides a broad overview of the various components in synthesizer and how they interact.
@@ -26,6 +23,7 @@ Contents
    lines/lines
    filters/filters
    instrumentation/instrument_example
+   instrumentation/premade_instruments
    photometry/photometry
    imaging/imaging
    pipelines/pipeline_example
@@ -33,6 +31,7 @@ Contents
    advanced/advanced
    notebook_examples/cookbook
    auto_examples/index
+   publications/publications
    API
 
 Citation & Acknowledgement

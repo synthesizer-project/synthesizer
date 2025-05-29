@@ -490,7 +490,7 @@ class Particles:
 
         # Strip dimensionless units since they are inconsequential
         if hasattr(attr, "units") and attr.units.is_dimensionless:
-            attr = attr.ndveiw
+            attr = attr.ndview
         if hasattr(thresh, "units") and thresh.units.is_dimensionless:
             thresh = thresh.ndview
 
