@@ -75,7 +75,7 @@ At the core of Synthesizer's flexibility and modularity are ``EmissionModel`` ob
 
 - Extraction: Extracting emissions from a ``Grid``.
 - Generation: Generating emissions from a parametric model.
-- Transfomation: Transforming an emission into a new emission.
+- Transformation: Transforming an emission into a new emission.
 - Combination: Combining multiple emissions together.
 
 Chaining together these 4 ``EmissionModel`` operations results in a modular network, where each of the individual models can be swapped out for an alternative ``EmissionModel`` (or multiple models).
