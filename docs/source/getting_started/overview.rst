@@ -1,7 +1,7 @@
 Overview
 ========
 
-Synthesizer is a C accelerated Python package for generating synthetic observations from theoretical models. In this section you will find a brief overview of the code, its philosophy, and the main tools that it uses.
+Synthesizer is a C-accelerated Python package for generating synthetic observations from theoretical models. In this section you will find a brief overview of the code, its philosophy, and the main tools that it uses.
 
 Philosophy
 ~~~~~~~~~~~
@@ -94,13 +94,13 @@ Observatories & Instruments
 
 To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the ``Instrument`` object, a flexible container designed to hold the properties of any type of observatory, including photometric imagers, spectrographs, and IFU instruments.
 
-While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager ``Instrument`` needs a description of the filter transmission curves. These are encapsulated by the ``FilterCollection`` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. More powerfully, however, Synthesizer provides an interface to the [Spanish Virtual Observatory (SVO) filter database](https://svo2.cab.inta-csic.es/theory/fps/), which allows users to easily use any filter from the database by simply passing a filter name to the ``FilterCollection`` at instantiation.
+While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager ``Instrument`` needs a description of the filter transmission curves. These are encapsulated by the ``FilterCollection`` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. More powerfully, however, Synthesizer provides an interface to the `Spanish Virtual Observatory (SVO) filter database <https://svo2.cab.inta-csic.es/theory/fps/>`_, which allows users to easily use any filter from the database by simply passing a filter name to the ``FilterCollection`` at instantiation.
 
 
 Observables
 ***********
 
-By combining an emission object with an ``Instrument`` or ``InstrumentCollection``, Synthesizer can translate the theoretical emission into a observable accounting for observational effects.
-Observables include spectra (accounting for resolving power and noise, again in a `Sed` objects), photometry (``PhotometryCollection`` objects), images (``Image`` and ``ImageCollection`` objects), and spectral data cubes (``SpectralDataCube`` objects). Just like emissions, observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
+By combining an emission object with an ``Instrument`` or ``InstrumentCollection``, Synthesizer can translate the theoretical emission into an observable accounting for observational effects.
+Observables include spectra (accounting for resolving power and noise, again in `Sed` objects), photometry (``PhotometryCollection`` objects), images (``Image`` and ``ImageCollection`` objects), and spectral data cubes (``SpectralDataCube`` objects). Just like emissions, observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
 
 
