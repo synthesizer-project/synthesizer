@@ -10,7 +10,7 @@ In this section we detail creating and working with these objects.
 .. toctree::
    :maxdepth: 1
 
-   intrument_example 
+   instrument_example 
    premade_instruments 
    filters
 
