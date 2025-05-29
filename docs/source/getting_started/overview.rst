@@ -78,7 +78,7 @@ At the core of Synthesizer's flexibility and modularity are ``EmissionModel`` ob
 - Transfomation: Transforming an emission into a new emission.
 - Combination: Combining multiple emissions together.
 
-However, combining each of theseCombining these different ``EmissionModel`` operations together results in a modular network, where each of the individual models can be swapped out for an alternative ``EmissionModel`` (or multiple models).
+Chaining together these 4 ``EmissionModel`` operations results in a modular network, where each of the individual models can be swapped out for an alternative ``EmissionModel`` (or multiple models).
 Further details are provided in the `Emission Models <../emission_models/emission_models.rst>`_ section.
 
 Emissions
