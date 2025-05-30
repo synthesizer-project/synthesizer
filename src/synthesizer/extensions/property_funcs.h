@@ -75,25 +75,6 @@ struct grid {
   npy_bool *lam_mask;
 };
 
-/* A struct to hold particle properties. */
-struct particles {
-
-  /* An array of pointers holding the properties along each axis. */
-  double **props;
-
-  /* The number of particles. */
-  int npart;
-
-  /* The particle mass array. */
-  double *mass;
-
-  /* Velocities for redshift */
-  double *velocities;
-
-  /* The mask array denoting which particles should be included. */
-  npy_bool *mask;
-};
-
 /**
  * @brief A class to hold particle related numpy arrays with getters and
  * setters.
@@ -158,7 +139,6 @@ double *extract_data_double(PyArrayObject *np_arr, const char *name);
 int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
-double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,
@@ -170,11 +150,6 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
                                    PyArrayObject *np_grid_lines,
                                    PyArrayObject *np_grid_continuum,
                                    const int ndim, const int nlam);
-struct particles *get_part_struct(PyObject *part_tuple,
-                                  PyArrayObject *np_part_mass,
-                                  PyArrayObject *np_velocities,
-                                  PyArrayObject *np_mask, const int npart,
-                                  const int ndim);
 
 /**
  * @brief Wraps a malloc’ed buffer into a NumPy array, taking ownership.

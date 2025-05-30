@@ -116,51 +116,6 @@ double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims) {
 }
 
 /**
- * @brief Extract the particle properties from a tuple of numpy arrays.
- *
- * @param part_tuple: A tuple of numpy arrays containing the particle
- * properties.
- * @param ndim: The number of dimensions in the grid.
- * @param npart: The number of particles.
- */
-double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
-
-  /* Allocate a single array for particle properties. */
-  double **part_props =
-      reinterpret_cast<double **>(malloc(npart * ndim * sizeof(double *)));
-  if (part_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for part_props.");
-    return NULL;
-  }
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_part_arr =
-        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
-    if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-    double *part_arr = reinterpret_cast<double *>(np_part_arr);
-    if (part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-
-    /* Assign this data to the property array. */
-    for (int ipart = 0; ipart < npart; ipart++) {
-      part_props[ipart * ndim + idim] = part_arr + ipart;
-    }
-  }
-
-  /* Success. */
-  return part_props;
-}
-
-/**
  * @brief Create the grid struct from the input numpy arrays.
  *
  * This method should be used for spectra grids.
@@ -333,75 +288,6 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
   }
 
   return grid;
-}
-/**
- * @brief Create the particles struct from the input numpy arrays.
- *
- * @param part_tuple: A tuple of numpy arrays containing the particle
- * properties.
- * @param np_part_mass: The particle masses.
- * @param np_velocities: The particle velocities.
- * @param np_mask: The particle mask.
- * @param npart: The number of particles.
- *
- * @return struct particles*: A pointer to the particles struct.
- */
-struct particles *get_part_struct(PyObject *part_tuple,
-                                  PyArrayObject *np_part_mass,
-                                  PyArrayObject *np_velocities,
-                                  PyArrayObject *np_mask, const int npart,
-                                  const int ndim) {
-
-  /* Initialise the particles struct. */
-  struct particles *particles =
-      reinterpret_cast<struct particles *>(malloc(sizeof(struct particles)));
-  bzero(particles, sizeof(struct particles));
-
-  /* Quick check to make sure our inputs are valid. */
-  if (npart == 0) {
-    PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
-    return NULL;
-  }
-
-  /* Attach the simple integers. */
-  particles->npart = npart;
-
-  /* Extract a pointer to the particle masses. */
-  if (np_part_mass != NULL) {
-    particles->mass = extract_data_double(np_part_mass, "part_mass");
-    if (particles->mass == NULL) {
-      return NULL;
-    }
-  }
-
-  /* Extract a pointer to the particle velocities. */
-  if (np_velocities != NULL) {
-    particles->velocities = extract_data_double(np_velocities, "part_vel");
-    if (particles->velocities == NULL) {
-      return NULL;
-    }
-  }
-
-  /* Extract the particle properties from the tuple of numpy arrays. */
-  if (part_tuple != NULL) {
-    particles->props = extract_part_props(part_tuple, ndim, npart);
-    if (particles->props == NULL) {
-      return NULL;
-    }
-  }
-
-  /* Extract a pointer to the particle mask, if this is Py_None then we will
-   * treat it as NULL. */
-  if (np_mask != NULL && reinterpret_cast<PyObject *>(np_mask) != Py_None) {
-    particles->mask = extract_data_bool(np_mask, "mask");
-    if (particles->mask == NULL) {
-      return NULL;
-    }
-  } else {
-    particles->mask = NULL;
-  }
-
-  return particles;
 }
 
 /**
