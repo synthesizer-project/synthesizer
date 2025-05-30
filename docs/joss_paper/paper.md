@@ -31,7 +31,7 @@ authors:
     orcid: 0000-0002-4064-7883
     affiliation: 4
   - name: Connor Sant Fournier
-    orcid: 0000-0000-0000-0000
+    orcid: 0009-0004-0771-4476
     affiliation: 5
   - name: Thomas Harvey
     orcid: 0000-0002-4130-636X
