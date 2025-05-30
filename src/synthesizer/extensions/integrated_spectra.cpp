@@ -230,12 +230,9 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
-  if (part_props == NULL) {
-    return NULL;
-  }
+  /* Create the object that holds the particle properties. */
+  Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
+                                        np_mask, part_tuple, npart);
 
   /* Allocate the grid weights. */
   double *grid_weights = NULL;

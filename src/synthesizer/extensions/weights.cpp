@@ -27,22 +27,16 @@
  * This is the serial version of the function.
  *
  * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
+ * @param parts: A class containing the particle properties.
  * @param out: The output array.
  */
-static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
+static void weight_loop_cic_serial(struct grid *grid, Particles *parts,
                                    void *out) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
   int ndim = grid->ndim;
   double **grid_props = grid->props;
-
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
 
   /* Set the sub cell constants we'll use below. */
   const int num_sub_cells = 1 << ndim; /* 2^ndim */
@@ -55,15 +49,15 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   double *out_arr = (double *)out;
 
   /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  for (int p = 0; p < parts->npart; p++) {
 
     /* Skip if this particle is masked. */
-    if (mask != NULL && !mask[p]) {
+    if (parts->part_is_masked(p)) {
       continue;
     }
 
-    /* Get this particle's mass. */
-    const double mass = part_masses[p];
+    /* Get this particle's weight. */
+    const double weight = parts->get_weight_at(p);
 
     /* Setup the index and mass fraction arrays. */
     int part_indices[ndim];
@@ -71,7 +65,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
 
     /* Get the grid indices and cell fractions for the particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                          part_props, p);
+                          parts, p);
 
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
@@ -106,7 +100,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
       int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
       /* Store the weight. */
-      out_arr[flat_ind] += frac * mass;
+      out_arr[flat_ind] += frac * weight;
     }
   }
 }
@@ -118,14 +112,14 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
  * This is the parallel version of the function.
  *
  * @param grid: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
+ * @param parts: A class containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated within
  *                  this function.)
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
+static void weight_loop_cic_omp(struct grid *grid, Particles *parts,
                                 int out_size, void *out, int nthreads) {
 
   /* Convert out. */
@@ -135,12 +129,6 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   int *dims = grid->dims;
   int ndim = grid->ndim;
   double **grid_props = grid->props;
-
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
 
   /* Set the sub cell constants we'll use below. */
   const int num_sub_cells = 1 << ndim; // 2^ndim
@@ -153,7 +141,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   {
 
     /* First lets slice up the particles between the threads. */
-    int npart_per_thread = (npart + nthreads - 1) / nthreads;
+    int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
 
     /* Get the thread id. */
     int tid = omp_get_thread_num();
@@ -161,13 +149,9 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
     /* Get the start and end particle indices for this thread. */
     int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
-    if (end >= npart) {
-      end = npart;
+    if (end >= parts->npart) {
+      end = parts->npart;
     }
-
-    /* Get local pointers to the particle properties. */
-    double *local_part_masses = part_masses + start;
-    npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
     double *local_out_arr =
@@ -181,12 +165,12 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
     for (int p = 0; p < end - start; p++) {
 
       /* Skip if this particle is masked. */
-      if (local_mask != NULL && !(int)local_mask[p]) {
+      if (parts->part_is_masked(p + start)) {
         continue;
       }
 
-      /* Get this particle's mass. */
-      const double mass = local_part_masses[p];
+      /* Get this particle's weight */
+      const double weight = parts->get_weight_at(p);
 
       /* Setup the index and mass fraction arrays. */
       int part_indices[ndim];
@@ -194,7 +178,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
       /* Get the grid indices and cell fractions for the particle. */
       get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                            part_props, p + start);
+                            parts, p);
 
       /* Now loop over this collection of cells collecting and setting their
        * weights. */
@@ -228,7 +212,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
         int flat_ind = get_flat_index(frac_ind, dims, ndim);
 
         /* Store the weight. */
-        local_out_arr[flat_ind] += frac * mass;
+        local_out_arr[flat_ind] += frac * weight;
       }
     }
 
@@ -260,7 +244,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
-void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
+void weight_loop_cic(struct grid *grid, Particles *parts, int out_size,
                      void *out, const int nthreads) {
 
   double start_time = tic();
@@ -299,7 +283,7 @@ void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
  * @param parts: A struct containing the particle properties.
  * @param out: The output array.
  */
-static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
+static void weight_loop_ngp_serial(struct grid *grid, Particles *parts,
                                    void *out) {
 
   /* Unpack the grid properties. */
@@ -307,37 +291,31 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
   int ndim = grid->ndim;
   double **grid_props = grid->props;
 
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
-
   /* Convert out. */
   double *out_arr = (double *)out;
 
   /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  for (int p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
-    if (mask != NULL && !mask[p]) {
+    if (parts->part_is_masked(p)) {
       continue;
     }
 
-    /* Get this particle's mass. */
-    const double mass = part_masses[p];
+    /* Get this particles weight */
+    const double weight = parts->get_weight_at(p);
 
     /* Setup the index array. */
     int part_indices[ndim];
 
     /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+    get_part_inds_ngp(part_indices, dims, ndim, grid_props, parts, p);
 
     /* Unravel the indices. */
     int flat_ind = get_flat_index(part_indices, dims, ndim);
 
     /* Store the weight. */
-    out_arr[flat_ind] += mass;
+    out_arr[flat_ind] += weight;
   }
 }
 
@@ -355,7 +333,7 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
+static void weight_loop_ngp_omp(struct grid *grid, Particles *parts,
                                 int out_size, void *out, int nthreads) {
   /* Convert out. */
   double *out_arr = (double *)out;
@@ -365,17 +343,11 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   int ndim = grid->ndim;
   double **grid_props = grid->props;
 
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  int npart = parts->npart;
-  npy_bool *mask = parts->mask;
-
 #pragma omp parallel num_threads(nthreads)
   {
 
     /* First lets slice up the particles between the threads. */
-    int npart_per_thread = (npart + nthreads - 1) / nthreads;
+    int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
 
     /* Get the thread id. */
     int tid = omp_get_thread_num();
@@ -383,13 +355,9 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
     /* Get the start and end particle indices for this thread. */
     int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
-    if (end >= npart) {
-      end = npart;
+    if (end >= parts->npart) {
+      end = parts->npart;
     }
-
-    /* Get local pointers to the particle properties. */
-    double *local_part_masses = part_masses + start;
-    npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
     double *local_out_arr =
@@ -403,23 +371,22 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
     for (int p = 0; p < end - start; p++) {
 
       /* Skip masked particles. */
-      if (local_mask != NULL && !local_mask[p]) {
+      if (parts->part_is_masked(p)) {
         continue;
       }
 
+      /* Get this particle's weight */
+      const double weight = parts->get_weight_at(p);
+
       /* Get the grid indices for the particle */
       int part_indices[ndim];
-      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props,
-                        p + start);
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, parts, p);
 
       /* Unravel the indices. */
       int flat_ind = get_flat_index(part_indices, dims, ndim);
 
-      /* Calculate this particles contribution to the grid cell. */
-      double contribution = local_part_masses[p];
-
       /* Update the shared output array atomically */
-      local_out_arr[flat_ind] += contribution;
+      local_out_arr[flat_ind] += weight;
     }
 
     /* Update the global output array */
@@ -450,7 +417,7 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
-void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
+void weight_loop_ngp(struct grid *grid, Particles *parts, int out_size,
                      void *out, const int nthreads) {
 
   double start_time = tic();
@@ -516,12 +483,10 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, NULL, npart, ndim);
-  if (part_props == NULL) {
-    return NULL;
-  }
+  /* Create the object that holds the particle properties. */
+  Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
+                                        /*np_mask*/ NULL, part_tuple, npart);
+
   /* Allocate the sfzh array to output. */
   double *grid_weights =
       reinterpret_cast<double *>(calloc(grid_props->size, sizeof(double)));

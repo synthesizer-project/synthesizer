@@ -67,7 +67,7 @@ static void spectra_loop_cic_serial(struct grid *grid, Particles *parts,
 
     /* Get the grid indices and cell fractions for the particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                          parts->get_all_props(ndim), p);
+                          parts, p);
 
     /* To combine fractions we will need an array of dimensions for the
      * subset. These are always two in size, one for the low and one for high
@@ -177,7 +177,7 @@ static void spectra_loop_cic_omp(struct grid *grid, Particles *parts,
 
     /* Get the grid indices and cell fractions for the particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                          parts->get_all_props(ndim), p);
+                          parts, p);
 
     /* To combine fractions we will need an array of dimensions for the
      * subset. These are always two in size, one for the low and one for high
@@ -318,8 +318,7 @@ static void spectra_loop_ngp_serial(struct grid *grid, Particles *parts,
     int part_indices[ndim];
 
     /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, dims, ndim, grid_props,
-                      parts->get_all_props(ndim), p);
+    get_part_inds_ngp(part_indices, dims, ndim, grid_props, parts, p);
 
     /* Get the weight's index. */
     const int grid_ind = get_flat_index(part_indices, dims, ndim);
@@ -384,8 +383,7 @@ static void spectra_loop_ngp_omp(struct grid *grid, Particles *parts,
     int part_indices[ndim];
 
     /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, dims, ndim, grid_props,
-                      parts->get_all_props(ndim), p);
+    get_part_inds_ngp(part_indices, dims, ndim, grid_props, parts, p);
 
     /* Get the weight's index. */
     const int grid_ind = get_flat_index(part_indices, dims, ndim);
@@ -631,7 +629,7 @@ static void shifted_spectra_loop_cic_serial(struct grid *grid, Particles *parts,
 
     /* Get the grid indices and cell fractions for the particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                          parts->get_all_props(ndim), p);
+                          parts, p);
 
     /* To combine fractions we will need an array of dimensions for the
      * subset. These are always two in size, one for the low and one for high
@@ -793,7 +791,7 @@ static void shifted_spectra_loop_cic_omp(struct grid *grid, Particles *parts,
 
       /* Get the grid indices and cell fractions for the particle. */
       get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
-                            parts->get_all_props(ndim), p);
+                            parts, p);
 
       /* To combine fractions we will need an array of dimensions for the
        * subset. These are always two in size, one for the low and one for
@@ -989,8 +987,7 @@ static void shifted_spectra_loop_ngp_serial(struct grid *grid, Particles *parts,
     int part_indices[ndim];
 
     /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, dims, ndim, grid_props,
-                      parts->get_all_props(ndim), p);
+    get_part_inds_ngp(part_indices, dims, ndim, grid_props, parts, p);
 
     /* Get the weight's index. */
     const int grid_ind = get_flat_index(part_indices, dims, ndim);
@@ -1108,8 +1105,7 @@ static void shifted_spectra_loop_ngp_omp(struct grid *grid, Particles *parts,
       int part_indices[ndim];
 
       /* Get the grid indices for the particle */
-      get_part_inds_ngp(part_indices, dims, ndim, grid_props,
-                        parts->get_all_props(ndim), p);
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, parts, p);
 
       /* Get the weight's index. */
       const int grid_ind = get_flat_index(part_indices, dims, ndim);

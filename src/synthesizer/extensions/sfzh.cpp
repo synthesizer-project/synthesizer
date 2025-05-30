@@ -62,12 +62,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
-  if (part_props == NULL) {
-    return NULL;
-  }
+  Particles *parts = new Particles(np_part_mass, /*np_velocities*/ NULL,
+                                   np_mask, part_tuple, npart);
 
   /* Allocate the sfzh array to output. */
   double *sfzh =
@@ -78,9 +74,9 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, grid_props->size, sfzh, nthreads);
+    weight_loop_cic(grid_props, parts, grid_props->size, sfzh, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, grid_props->size, sfzh, nthreads);
+    weight_loop_ngp(grid_props, parts, grid_props->size, sfzh, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
@@ -100,7 +96,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   PyArrayObject *out_sfzh = c_array_to_numpy(ndim, np_dims, NPY_FLOAT64, sfzh);
 
   /* Clean up memory! */
-  free(part_props);
+  free(parts);
   free(grid_props);
 
   toc("Computing SFZH", start_time);
