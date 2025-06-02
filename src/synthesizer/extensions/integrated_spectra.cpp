@@ -210,24 +210,20 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   /* Extract the grid struct. */
   GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
                                         /*np_lam*/ NULL, np_lam_mask, nlam);
-
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
   Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
                                         np_mask, part_tuple, npart);
-
   RETURN_IF_PYERR();
 
   /* Get existing grid weights or allocate new ones. */
   double *grid_weights = grid_props->get_grid_weights();
   RETURN_IF_PYERR();
 
-  toc("Extracting Python data", start_time);
-
   /* With everything set up we can compute the weights for each particle using
    * the requested method if we need to. */
-  if (!grid_props->has_grid_weights()) {
+  if (grid_props->need_grid_weights()) {
     if (strcmp(method, "cic") == 0) {
       weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
                       nthreads);
@@ -239,14 +235,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       return NULL;
     }
   }
-
   RETURN_IF_PYERR();
-
-  /* Check we got the weights successfully. (Any error messages will already be
-   * set) */
-  if (grid_weights == NULL) {
-    return NULL;
-  }
 
   /* Compute the integrated SED. */
   PyArrayObject *np_spectra = get_spectra(grid_props, nthreads);
@@ -254,18 +243,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_RuntimeError, "Could not compute integrated SED.");
     return NULL;
   }
-
   RETURN_IF_PYERR();
 
-  /* Construct the grid weights output numpy array. */
-  std::array<npy_intp, MAX_GRID_NDIM> np_dims_weights;
-  for (int i = 0; i < grid_props->ndim; i++) {
-    np_dims_weights[i] = grid_props->dims[i];
-  }
-  PyArrayObject *out_grid_weights = wrap_array_to_numpy<double>(
-      grid_props->ndim, np_dims_weights.data(), grid_weights);
-
-  RETURN_IF_PYERR();
+  /* Extract the output grid weights before we free the grid object. */
+  np_grid_weights = grid_props->get_np_grid_weights();
 
   /* Clean up memory! */
   delete grid_props;
@@ -273,7 +254,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   toc("Compute integrated SED", start_time);
 
-  return Py_BuildValue("NN", np_spectra, out_grid_weights);
+  return Py_BuildValue("NN", np_spectra, np_grid_weights);
 }
 
 static PyMethodDef SedMethods[] = {

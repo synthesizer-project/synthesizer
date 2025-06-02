@@ -457,16 +457,12 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Extract the grid struct. */
   GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
                                         /*np_lam*/ nullptr, np_lam_mask, nlam);
-
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
   Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
                                         np_mask, part_tuple, npart);
-
   RETURN_IF_PYERR();
-
-  toc("Extracting Python data", start_time);
 
   double out_tic = tic();
 
@@ -495,15 +491,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
                  method);
     return NULL;
   }
-
-  /* Check we got the spectra sucessfully. (Any error messages will already
-   * be set) */
-  if (spectra == NULL) {
-    return NULL;
-  }
-  if (part_spectra == NULL) {
-    return NULL;
-  }
+  RETURN_IF_PYERR();
 
   /* Clean up memory! */
   delete part_props;
