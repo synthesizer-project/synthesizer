@@ -3,19 +3,23 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
+#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* Python includes */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "cpp_to_python.h"
+#include "grid_props.h"
 #include "macros.h"
+#include "part_props.h"
 #include "property_funcs.h"
 #include "timers.h"
 #include "weights.h"
@@ -55,19 +59,19 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Extract the grid struct. */
-  struct grid *grid_props =
-      get_spectra_grid_struct(grid_tuple, np_ndims, /*np_grid_spectra*/ NULL,
-                              /*np_lam*/ NULL, NULL, ndim, /*nlam*/ 1);
-  if (grid_props == NULL) {
-    return NULL;
-  }
+  GridProps *grid_props =
+      new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
+                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1);
+
+  RETURN_IF_PYERR();
 
   Particles *parts = new Particles(np_part_mass, /*np_velocities*/ NULL,
                                    np_mask, part_tuple, npart);
 
+  RETURN_IF_PYERR();
+
   /* Allocate the sfzh array to output. */
-  double *sfzh =
-      synth_malloc<double>(grid_props->size * sizeof(double), "sfzh");
+  double *sfzh = new double[grid_props->size]();
 
   toc("Extracting Python data", setup_start);
 
@@ -88,16 +92,16 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   }
 
   /* Reconstruct the python array to return. */
-  npy_intp np_dims[ndim];
-  for (int idim = 0; idim < ndim; idim++) {
+  std::array<npy_intp, MAX_GRID_NDIM> np_dims;
+  for (int idim = 0; idim < grid_props->ndim; idim++) {
     np_dims[idim] = grid_props->dims[idim];
   }
 
-  PyArrayObject *out_sfzh = c_array_to_numpy(ndim, np_dims, NPY_FLOAT64, sfzh);
+  PyArrayObject *out_sfzh = wrap_array_to_numpy(ndim, np_dims.data(), sfzh);
 
   /* Clean up memory! */
-  free(parts);
-  free(grid_props);
+  delete parts;
+  delete grid_props;
 
   toc("Computing SFZH", start_time);
 
@@ -125,6 +129,9 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_sfzh(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  import_array();
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return m;
 }

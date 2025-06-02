@@ -9,10 +9,10 @@
 #include <string.h>
 
 /* Python includes. */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "../../extensions/numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
 /* Local includes. */
 #include "../../extensions/property_funcs.h"
@@ -441,8 +441,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Allocate the image.. */
   const int npix = npix_x * npix_y * nimgs;
-  double *img = synth_malloc<double>(npix * sizeof(double), "image");
-  memset(img, 0, npix * sizeof(double));
+  double *img = new double[npix]();
 
   toc("Extracting Python data", setup_start);
 
@@ -481,6 +480,9 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_image(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  import_array();
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return m;
 }

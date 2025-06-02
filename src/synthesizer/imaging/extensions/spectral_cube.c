@@ -9,10 +9,10 @@
 #include <string.h>
 
 /* Python includes. */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "../../extensions/numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
 /* Local includes. */
 #include "../../extensions/property_funcs.h"
@@ -677,6 +677,9 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_spectral_cube(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  import_array();
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return m;
 }

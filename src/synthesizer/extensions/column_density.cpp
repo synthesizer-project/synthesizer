@@ -10,12 +10,13 @@
 #include <stdlib.h>
 
 /* Python headers. */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
 /* Local includes. */
+#include "cpp_to_python.h"
 #include "octree.h"
 #include "property_funcs.h"
 #include "timers.h"
@@ -547,8 +548,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
       extract_data_double(np_surf_den_val, "surf_den_val");
 
   /* Set up arrays to hold the surface densities themselves. */
-  double *surf_dens =
-      synth_malloc<double>(npart_i * sizeof(double), "surface densities");
+  double *surf_dens = new double[npart_i]();
 
   /* No point constructing cells if there isn't enough gas to construct a tree
    * below depth 0. (and loop if we've been told to) */
@@ -588,8 +588,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
   /* Reconstruct the python array to return. */
   npy_intp np_dims[1] = {npart_i};
-  PyArrayObject *out_surf_dens =
-      c_array_to_numpy(1, np_dims, NPY_FLOAT64, surf_dens);
+  PyArrayObject *out_surf_dens = wrap_array_to_numpy(1, np_dims, surf_dens);
 
   toc("Calculating surface densities (with cells)", start);
 
@@ -617,6 +616,9 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_column_density(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  import_array();
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return m;
 }

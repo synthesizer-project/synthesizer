@@ -8,19 +8,11 @@
 /* Standard includes */
 #include <stdlib.h>
 
-/* We need the below because numpy triggers warnings which are errors
- * when we compiled with RUTHLESS. */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-
 /* Python includes */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/arrayobject.h>
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
-
-#pragma GCC diagnostic pop
 
 /**
  * @brief Allocate an array.
@@ -41,97 +33,101 @@ template <typename T> T *synth_malloc(size_t n, const char *msg) {
   return ptr;
 }
 
-/* A struct to hold grid properties. */
-struct grid {
+/**
+ * @brief Get a double value at a specific index in a numpy array.
+ *
+ * This function assumes the numpy array is of type float64 and contiguous.
+ * If the array is not of type float64, it will raise a TypeError.
+ * If the index is out of bounds, it will raise an IndexError.
+ *
+ * @param np_arr: The numpy array to access.
+ * @param ind: The index to access.
+ * @return The double value at the specified index.
+ */
+static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
+  if (PyArray_TYPE(np_arr) != NPY_FLOAT64) {
+    PyErr_SetString(PyExc_TypeError, "Array must be of type float64.");
+    return 0.0;
+  }
 
-  /* An array of pointers holding the properties along each axis. */
-  double **props;
+  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
+    PyErr_SetString(PyExc_IndexError, "Index out of bounds.");
+    return 0.0;
+  }
 
-  /* The number of dimensions. */
-  int ndim;
-
-  /* The number of grid cells along each axis. */
-  int *dims;
-
-  /* The number of wavelength elements. */
-  int nlam;
-
-  /* The number of cells. */
-  int size;
-
-  /* The spectra array. */
-  double *spectra;
-
-  /* The lines array. */
-  double *lines;
-
-  /* The continuum array. */
-  double *continuum;
-
-  /* Wavelength */
-  double *lam;
-
-  /* The mask array denoting which wavelength elements should be included. */
-  npy_bool *lam_mask;
-};
+  if (PyArray_ISCONTIGUOUS(np_arr)) {
+    const double *data_ptr = static_cast<const double *>(PyArray_DATA(np_arr));
+    return data_ptr[ind];
+  } else {
+    PyErr_SetString(PyExc_ValueError,
+                    "Array must be contiguous to use get_double_at.");
+    return 0.0;
+  }
+}
 
 /**
- * @brief A class to hold particle related numpy arrays with getters and
- * setters.
+ * @brief Get an integer value at a specific index in a numpy array.
  *
- * This is used to hold the particle properties and mass.
+ * This function assumes the numpy array is of type int32 and contiguous.
+ * If the array is not of type int32, it will raise a TypeError.
+ * If the index is out of bounds, it will raise an IndexError.
+ *
+ * @param np_arr: The numpy array to access.
+ * @param ind: The index to access.
+ * @return The integer value at the specified index.
  */
-class Particles {
-public:
-  /* The number of particles. */
-  int npart;
+static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
+  if (PyArray_TYPE(np_arr) != NPY_INT32) {
+    PyErr_SetString(PyExc_TypeError, "Array must be of type int32.");
+    return 0;
+  }
 
-  /* Constructor */
-  Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
-            PyArrayObject *np_mask, PyObject *part_tuple, int npart);
+  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
+    PyErr_SetString(PyExc_IndexError, "Index out of bounds.");
+    return 0;
+  }
 
-  /* Destructor */
-  ~Particles();
-
-  /* Prototypes for getters. */
-  double *get_weights() const;
-  double *get_velocities() const;
-  double **get_all_props(int ndim) const;
-  double *get_part_props(int idim) const;
-  double get_weight_at(int pind) const;
-  double get_vel_at(int pind) const;
-  npy_bool get_mask_at(int pind) const;
-  double get_part_prop_at(int idim, int pind) const;
-
-  /* Is a particle masked? */
-  bool part_is_masked(int pind) const;
-
-private:
-  /* The numpy array holding the particle weights (e.g. initial mass for
-   * SPS grid weighting). */
-  PyArrayObject *np_weights_;
-
-  /* The numpy array holding the particle velocities. */
-  PyArrayObject *np_velocities_;
-
-  /* The mask (can be Py_None). */
-  PyArrayObject *np_mask_;
-
-  /* The particle properties corresponding to the grid axes, this is a tuple
-   * of numpy arrays. */
-  PyObject *part_tuple_;
-};
-
-static inline double get_double_at(PyArrayObject *np_arr, int ind) {
-  return *reinterpret_cast<double *>(PyArray_GETPTR1(np_arr, ind));
+  if (PyArray_ISCONTIGUOUS(np_arr)) {
+    const int *data_ptr = static_cast<const int *>(PyArray_DATA(np_arr));
+    return data_ptr[ind];
+  } else {
+    PyErr_SetString(PyExc_ValueError,
+                    "Array must be contiguous to use get_int_at.");
+    return 0;
+  }
 }
 
-static inline int get_int_at(PyArrayObject *np_arr, int ind) {
-  return *reinterpret_cast<int *>(PyArray_GETPTR1(np_arr, ind));
-}
+/**
+ * @brief Get a boolean value at a specific index in a numpy array.
+ *
+ * This function assumes the numpy array is of type bool and contiguous.
+ * If the array is not of type bool, it will raise a TypeError.
+ * If the index is out of bounds, it will raise an IndexError.
+ *
+ * @param np_arr: The numpy array to access.
+ * @param ind: The index to access.
+ * @return The boolean value at the specified index.
+ */
+static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
+  if (PyArray_TYPE(np_arr) != NPY_BOOL) {
+    PyErr_SetString(PyExc_TypeError, "Array must be of type bool.");
+    return false;
+  }
 
-static inline npy_bool get_bool_at(PyArrayObject *np_arr, int ind) {
-  return *reinterpret_cast<npy_bool *>(PyArray_GETPTR1(np_arr, ind));
+  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
+    PyErr_SetString(PyExc_IndexError, "Index out of bounds.");
+    return false;
+  }
+
+  if (PyArray_ISCONTIGUOUS(np_arr)) {
+    const npy_bool *data_ptr =
+        static_cast<const npy_bool *>(PyArray_DATA(np_arr));
+    return data_ptr[ind];
+  } else {
+    PyErr_SetString(PyExc_ValueError,
+                    "Array must be contiguous to use get_bool_at.");
+    return false;
+  }
 }
 
 /* Prototypes */
@@ -139,57 +135,5 @@ double *extract_data_double(PyArrayObject *np_arr, const char *name);
 int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
-struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
-                                     PyArrayObject *np_ndims,
-                                     PyArrayObject *np_grid_spectra,
-                                     PyArrayObject *np_lam,
-                                     PyArrayObject *np_lam_mask, const int ndim,
-                                     const int nlam);
-struct grid *get_lines_grid_struct(PyObject *grid_tuple,
-                                   PyArrayObject *np_ndims,
-                                   PyArrayObject *np_grid_lines,
-                                   PyArrayObject *np_grid_continuum,
-                                   const int ndim, const int nlam);
-
-/**
- * @brief Wraps a malloc’ed buffer into a NumPy array, taking ownership.
- *
- * @param ndim     Number of dimensions
- * @param dims     Array of length ndim, giving each dimension size
- * @param typenum  NumPy typenum (e.g. NPY_FLOAT64)
- * @param out      Pointer returned by malloc() (must be at least
- *                 product(dims)*itemsize)
- *
- * @return A new reference to a PyArrayObject which owns 'out', or NULL on
- *         error (buffer is freed on error).
- */
-static PyArrayObject *c_array_to_numpy(int ndim, npy_intp *dims, int typenum,
-                                       void *out) {
-  PyArray_Descr *descr = NULL;
-  PyArrayObject *arr = NULL;
-
-  /* Build a dtype descriptor from the typenum */
-  descr = PyArray_DescrFromType(typenum);
-  if (!descr) {
-    free(out);
-    return NULL;
-  }
-
-  /* Create the numpy array:
-   *    - out: the malloc’d memory
-   *    - NPY_ARRAY_CARRAY: ensure C-contiguous, aligned, writeable
-   *    - NPY_ARRAY_OWNDATA: NumPy will call free(out) when the array dies
-   */
-  arr = (PyArrayObject *)PyArray_NewFromDescr(
-      &PyArray_Type, descr, ndim, dims, NULL, out,
-      NPY_ARRAY_CARRAY | NPY_ARRAY_OWNDATA, NULL);
-  if (!arr) {
-    /* On failure, descriptor was already DECREF’d */
-    free(out);
-    return NULL;
-  }
-
-  return arr;
-}
 
 #endif // PROPERTY_FUNCS_H_
