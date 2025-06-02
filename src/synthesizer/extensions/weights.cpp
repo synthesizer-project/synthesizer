@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 /* Python includes */
 #include <Python.h>
@@ -25,33 +26,37 @@
 
 /**
  * @brief This calculates the grid weights in each grid cell using a cloud
- *        in cell approach.
+ *        in cell (CIC) approach.
  *
- * This is the serial version of the function.
+ * This is the serial version of the function. Each particle distributes its
+ * weight across 2^ndim neighboring grid cells based on its fractional
+ * distance along each axis.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
- * @param out: The output array.
+ * @param out: The output array. Must have been allocated to grid size.
  */
 static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
                                    void *out) {
 
   /* Unpack the grid properties. */
-  std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
 
-  /* Set the sub cell constants we'll use below. */
-  const int num_sub_cells = 1 << ndim; /* 2^ndim */
+  /* The number of sub-cells to iterate over (2^ndim corner combinations). */
+  const int num_sub_cells = 1 << ndim;
+
+  /* Set sub_dims to [2, 2, ..., 2] for binary decoding of cell offsets. */
   std::array<int, MAX_GRID_NDIM> sub_dims;
-  for (int i = 0; i < ndim; i++) {
+  for (int i = 0; i < ndim; ++i) {
     sub_dims[i] = 2;
   }
 
-  /* Convert out. */
-  double *out_arr = (double *)out;
+  /* Cast the output buffer to a double array. */
+  double *out_arr = static_cast<double *>(out);
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
+  for (int p = 0; p < parts->npart; ++p) {
 
     /* Skip if this particle is masked. */
     if (parts->part_is_masked(p)) {
@@ -61,46 +66,38 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
     /* Get this particle's weight. */
     const double weight = parts->get_weight_at(p);
 
-    /* Setup the index and mass fraction arrays. */
+    /* Setup the base cell indices and axis fractions toward upper cells. */
     std::array<int, MAX_GRID_NDIM> part_indices;
     std::array<double, MAX_GRID_NDIM> axis_fracs;
 
-    /* Get the grid indices and cell fractions for the particle. */
+    /* Get the grid indices and cell fractions for this particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
-    /* Now loop over this collection of cells collecting and setting their
-     * weights. */
-    for (int icell = 0; icell < num_sub_cells; icell++) {
+    /* Loop over all 2^ndim surrounding grid cells. */
+    for (int icell = 0; icell < num_sub_cells; ++icell) {
 
-      /* Set up some index arrays we'll need. */
+      /* Decode icell into a multidimensional binary offset. */
       std::array<int, MAX_GRID_NDIM> subset_ind;
-      std::array<int, MAX_GRID_NDIM> frac_ind;
-
-      /* Get the multi-dimensional version of icell. */
       get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
 
-      /* Multiply all contributing fractions and get the fractions index
-       * in the grid. */
-      double frac = 1;
-      for (int idim = 0; idim < ndim; idim++) {
-        if (subset_ind[idim] == 0) {
-          frac *= (1 - axis_fracs[idim]);
-          frac_ind[idim] = part_indices[idim] - 1;
-        } else {
-          frac *= axis_fracs[idim];
-          frac_ind[idim] = part_indices[idim];
-        }
+      /* Compute the target grid cell index and the contribution fraction. */
+      double frac = 1.0;
+      std::array<int, MAX_GRID_NDIM> frac_ind;
+      for (int idim = 0; idim < ndim; ++idim) {
+        int offset = subset_ind[idim]; // 0 or 1
+        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] + offset;
       }
 
-      /* Nothing to do if fraction is 0. */
-      if (frac == 0) {
+      /* Skip if contribution is zero (can happen with boundary clamps). */
+      if (frac == 0.0) {
         continue;
       }
 
-      /* Unravel the indices. */
+      /* Convert multi-dimensional index to flat index. */
       int flat_ind = get_flat_index(frac_ind, dims.data(), ndim);
 
-      /* Store the weight. */
+      /* Accumulate the weighted contribution into the grid cell. */
       out_arr[flat_ind] += frac * weight;
     }
   }
@@ -111,6 +108,9 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
  *        in cell approach.
  *
  * This is the parallel version of the function.
+ *
+ * Each thread accumulates weights into a private local buffer, which is added
+ * into the global output array at the end of the thread’s execution.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
@@ -124,10 +124,10 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
                                 int out_size, void *out, int nthreads) {
 
   /* Convert out. */
-  double *out_arr = (double *)out;
+  double *out_arr = static_cast<double *>(out);
 
   /* Unpack the grid properties. */
-  std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
 
   /* Set the sub cell constants we'll use below. */
@@ -140,36 +140,32 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
 #pragma omp parallel num_threads(nthreads)
   {
 
-    /* First lets slice up the particles between the threads. */
-    int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
+    /* First let's slice up the particles between the threads. */
+    const int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
 
     /* Get the thread id. */
-    int tid = omp_get_thread_num();
+    const int tid = omp_get_thread_num();
 
     /* Get the start and end particle indices for this thread. */
-    int start = tid * npart_per_thread;
+    const int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
-    if (end >= parts->npart) {
+    if (end > parts->npart) {
       end = parts->npart;
     }
 
-    /* Allocate a local output array. */
-    double *local_out_arr =
-        reinterpret_cast<double *>(calloc(out_size, sizeof(double)));
-    if (local_out_arr == nullptr) {
-      PyErr_SetString(PyExc_MemoryError,
-                      "Failed to allocate memory for output.");
-    }
+    /* Allocate a local output array. This avoids race conditions and false
+     * sharing. */
+    std::vector<double> local_out_arr(out_size, 0.0);
 
-    /* Parallel loop with atomic updates. */
-    for (int p = 0; p < end - start; p++) {
+    /* Loop over the particles assigned to this thread. */
+    for (int p = start; p < end; p++) {
 
       /* Skip if this particle is masked. */
-      if (parts->part_is_masked(p + start)) {
+      if (parts->part_is_masked(p)) {
         continue;
       }
 
-      /* Get this particle's weight */
+      /* Get this particle's weight. */
       const double weight = parts->get_weight_at(p);
 
       /* Setup the index and mass fraction arrays. */
@@ -190,41 +186,35 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
         /* Get the multi-dimensional version of icell. */
         get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
 
-        /* Multiply all contributing fractions and get the fractions index
+        /* Multiply all contributing fractions and get the fraction index
          * in the grid. */
-        double frac = 1;
+        double frac = 1.0;
         for (int idim = 0; idim < ndim; idim++) {
-          if (subset_ind[idim] == 0) {
-            frac *= (1 - axis_fracs[idim]);
-            frac_ind[idim] = part_indices[idim] - 1;
-          } else {
-            frac *= axis_fracs[idim];
-            frac_ind[idim] = part_indices[idim];
-          }
+          int offset = subset_ind[idim]; // 0 or 1
+          frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
+          frac_ind[idim] = part_indices[idim] + offset;
         }
 
-        if (frac == 0) {
+        /* Nothing to do if fraction is 0. */
+        if (frac == 0.0) {
           continue;
         }
 
         /* Unravel the indices. */
-        int flat_ind = get_flat_index(frac_ind, dims.data(), ndim);
+        const int flat_ind = get_flat_index(frac_ind, dims.data(), ndim);
 
-        /* Store the weight. */
+        /* Store the weight in the thread-local output array. */
         local_out_arr[flat_ind] += frac * weight;
       }
     }
 
-    /* Update the global output array */
+    /* Update the global output array. This is the only critical section. */
 #pragma omp critical
     {
       for (int i = 0; i < out_size; i++) {
         out_arr[i] += local_out_arr[i];
       }
     }
-
-    /* Clean up. */
-    free(local_out_arr);
   }
 }
 #endif
@@ -274,7 +264,7 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
 
 /**
  * @brief This calculates the grid weights in each grid cell using a nearest
- *       grid point approach.
+ *        grid point approach.
  *
  * This is the serial version of the function.
  *
@@ -290,7 +280,7 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
   const int ndim = grid_props->ndim;
 
   /* Convert out. */
-  double *out_arr = (double *)out;
+  double *out_arr = static_cast<double *>(out);
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; p++) {
@@ -300,13 +290,13 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
       continue;
     }
 
-    /* Get this particles weight */
+    /* Get this particle's weight. */
     const double weight = parts->get_weight_at(p);
 
     /* Setup the index array. */
     std::array<int, MAX_GRID_NDIM> part_indices;
 
-    /* Get the grid indices for the particle */
+    /* Get the grid indices for the particle. */
     get_part_inds_ngp(part_indices, grid_props, parts, p);
 
     /* Unravel the indices. */
@@ -319,22 +309,26 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
 
 /**
  * @brief This calculates the grid weights in each grid cell using a nearest
- *       grid point approach.
+ *        grid point approach.
  *
- * This is the serial version of the function.
+ * This is the parallel version of the function.
+ *
+ * Each thread accumulates weights into a private local buffer, which is added
+ * into the global output array at the end of the thread’s execution.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated
- * within this function.)
+ *                  within this function.)
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
 static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
                                 int out_size, void *out, int nthreads) {
+
   /* Convert out. */
-  double *out_arr = (double *)out;
+  double *out_arr = static_cast<double *>(out);
 
   /* Unpack the grid properties. */
   std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -343,59 +337,54 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
 #pragma omp parallel num_threads(nthreads)
   {
 
-    /* First lets slice up the particles between the threads. */
-    int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
+    /* First let's slice up the particles between the threads. */
+    const int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
 
     /* Get the thread id. */
-    int tid = omp_get_thread_num();
+    const int tid = omp_get_thread_num();
 
     /* Get the start and end particle indices for this thread. */
-    int start = tid * npart_per_thread;
+    const int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
-    if (end >= parts->npart) {
+    if (end > parts->npart) {
       end = parts->npart;
     }
 
-    /* Allocate a local output array. */
-    double *local_out_arr =
-        reinterpret_cast<double *>(calloc(out_size, sizeof(double)));
-    if (local_out_arr == nullptr) {
-      PyErr_SetString(PyExc_MemoryError,
-                      "Failed to allocate memory for output.");
-    }
+    /* Allocate a local output array. This avoids race conditions and false
+     * sharing. */
+    std::vector<double> local_out_arr(out_size, 0.0);
 
-    /* Parallel loop with atomic updates. */
-    for (int p = 0; p < end - start; p++) {
+    /* Loop over the assigned particle range. */
+    for (int p = start; p < end; ++p) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
         continue;
       }
 
-      /* Get this particle's weight */
+      /* Get this particle's weight. */
       const double weight = parts->get_weight_at(p);
 
-      /* Get the grid indices for the particle */
+      /* Setup the index array. */
       std::array<int, MAX_GRID_NDIM> part_indices;
+
+      /* Get the grid indices for the particle. */
       get_part_inds_ngp(part_indices, grid_props, parts, p);
 
       /* Unravel the indices. */
       int flat_ind = get_flat_index(part_indices, dims.data(), ndim);
 
-      /* Update the shared output array atomically */
+      /* Store the weight in the thread-local output array. */
       local_out_arr[flat_ind] += weight;
     }
 
-    /* Update the global output array */
+    /* Update the global output array. This is the only critical section. */
 #pragma omp critical
     {
       for (int i = 0; i < out_size; i++) {
         out_arr[i] += local_out_arr[i];
       }
     }
-
-    /* Clean up. */
-    free(local_out_arr);
   }
 }
 #endif

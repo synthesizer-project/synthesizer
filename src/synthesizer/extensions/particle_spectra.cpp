@@ -40,8 +40,14 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
   const int ndim = grid_props->ndim;
   int nlam = grid_props->nlam;
 
-  /* Calculate the number of cell in a patch of the grid. */
+  /* Calculate the number of cell in a patch of the grid (2^ndim). */
   int ncells = 1 << ndim;
+
+  /* Set up fixed sub-dimensions array (always {2, 2, ..., 2}) */
+  std::array<int, MAX_GRID_NDIM> sub_dims;
+  for (int idim = 0; idim < ndim; idim++) {
+    sub_dims[idim] = 2;
+  }
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; p++) {
@@ -58,14 +64,6 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
     /* Get the grid indices and cell fractions for the particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
-    /* To combine fractions we will need an array of dimensions for the
-     * subset. These are always two in size, one for the low and one for high
-     * grid point. */
-    std::array<int, MAX_GRID_NDIM> sub_dims;
-    for (int idim = 0; idim < ndim; idim++) {
-      sub_dims[idim] = 2;
-    }
-
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
     for (int icell = 0; icell < ncells; icell++) {
@@ -81,13 +79,9 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
        * in the grid. */
       double frac = 1;
       for (int idim = 0; idim < ndim; idim++) {
-        if (subset_ind[idim] == 0) {
-          frac *= (1 - axis_fracs[idim]);
-          frac_ind[idim] = part_indices[idim] - 1;
-        } else {
-          frac *= axis_fracs[idim];
-          frac_ind[idim] = part_indices[idim];
-        }
+        int offset = subset_ind[idim]; // 0 or 1
+        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] + offset;
       }
 
       /* Nothing to do if fraction is 0. */
@@ -183,13 +177,9 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
        * in the grid. */
       double frac = 1;
       for (int idim = 0; idim < ndim; idim++) {
-        if (subset_ind[idim] == 0) {
-          frac *= (1 - axis_fracs[idim]);
-          frac_ind[idim] = part_indices[idim] - 1;
-        } else {
-          frac *= axis_fracs[idim];
-          frac_ind[idim] = part_indices[idim];
-        }
+        int offset = subset_ind[idim]; // 0 or 1
+        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] + offset;
       }
 
       /* Nothing to do if fraction is 0. */
