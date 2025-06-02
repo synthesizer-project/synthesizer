@@ -41,7 +41,6 @@
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   double start_time = tic();
-  double setup_start = tic();
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -62,18 +61,15 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   GridProps *grid_props =
       new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
                     /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1);
-
   RETURN_IF_PYERR();
 
   Particles *parts = new Particles(np_part_mass, /*np_velocities*/ NULL,
                                    np_mask, part_tuple, npart);
-
   RETURN_IF_PYERR();
 
-  /* Allocate the sfzh array to output. */
-  double *sfzh = new double[grid_props->size]();
-
-  toc("Extracting Python data", setup_start);
+  /* Get the grid weights we'll work on. */
+  double *sfzh = grid_props->get_grid_weights();
+  RETURN_IF_PYERR();
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
@@ -85,19 +81,10 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
+  RETURN_IF_PYERR();
 
-  /* Check we got the output. (Any error messages will already be set) */
-  if (sfzh == NULL) {
-    return NULL;
-  }
-
-  /* Reconstruct the python array to return. */
-  std::array<npy_intp, MAX_GRID_NDIM> np_dims;
-  for (int idim = 0; idim < grid_props->ndim; idim++) {
-    np_dims[idim] = grid_props->dims[idim];
-  }
-
-  PyArrayObject *out_sfzh = wrap_array_to_numpy(ndim, np_dims.data(), sfzh);
+  /* Extract the grid weights we'll write out. */
+  PyArrayObject *np_sfzh = grid_props->get_np_grid_weights();
 
   /* Clean up memory! */
   delete parts;
@@ -105,7 +92,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   toc("Computing SFZH", start_time);
 
-  return Py_BuildValue("N", out_sfzh);
+  return Py_BuildValue("N", np_sfzh);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
