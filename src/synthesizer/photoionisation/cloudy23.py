@@ -433,7 +433,7 @@ def create_cloudy_input(
         # For some horrible reason the above is ignored in favour of a
         # built in temperature stop (4000K) unless that is turned off.
         cinput.append("stop temperature off\n")
-    
+
     if params["nend"] is not None:
         cinput.append(f"set nend {params['nend']}\n")
 

@@ -705,7 +705,7 @@ class Grid:
                 self._reprocessed = old_grids or new_grid
 
         return self._reprocessed
-    
+
     @property
     def lines_available(self):
         """Flag for whether line emission exists.
@@ -851,8 +851,8 @@ class Grid:
     @property
     def axes_values(self):
         """Returns the grid axes values."""
-        return self._axes_values    
-    
+        return self._axes_values
+
     @property
     def shape(self):
         """Return the shape of the grid."""
