@@ -207,6 +207,71 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
 }
 #endif /* WITH_OPENMP */
 
+#ifdef WITH_OPENMP
+static void spectra_loop_cic_gpu(GridProps *grid_props, Particles *parts,
+                                 double *spectra, double *part_spectra) {
+
+  const int ndim = grid_props->ndim;
+  const int nlam = grid_props->nlam;
+  const int ncells = 1 << ndim;
+  const int npart = parts->npart;
+
+  int sub_dims[MAX_GRID_NDIM];
+  for (int i = 0; i < ndim; i++) {
+    sub_dims[i] = 2;
+  }
+
+#pragma omp target teams distribute parallel for map(to : sub_dims[0 : ndim])  \
+    map(to : *grid_props, *parts)                                              \
+    map(tofrom : spectra[0 : nlam], part_spectra[0 : npart * nlam])
+  for (int p = 0; p < npart; p++) {
+
+    if (parts->part_is_masked(p)) {
+      continue;
+    }
+
+    int part_indices[MAX_GRID_NDIM];
+    double axis_fracs[MAX_GRID_NDIM];
+    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+
+    for (int icell = 0; icell < ncells; icell++) {
+
+      int subset_ind[MAX_GRID_NDIM];
+      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+      int frac_ind[MAX_GRID_NDIM];
+      double frac = 1.0;
+      for (int idim = 0; idim < ndim; idim++) {
+        int offset = subset_ind[idim];
+        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] + offset;
+      }
+
+      if (frac == 0.0) {
+        continue;
+      }
+
+      double weight = frac * parts->get_weight_at(p);
+      int grid_ind = grid_props->ravel_grid_index(frac_ind);
+
+      for (int ilam = 0; ilam < nlam; ilam++) {
+        if (grid_props->lam_is_masked(ilam)) {
+          continue;
+        }
+
+        double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+
+#pragma omp atomic update
+        part_spectra[p * nlam + ilam] += spec_val * weight;
+
+#pragma omp atomic update
+        spectra[ilam] += spec_val * weight;
+      }
+    }
+  }
+}
+#endif
+
 /**
  * @brief This calculates particle spectra using a cloud in cell approach.
  *
