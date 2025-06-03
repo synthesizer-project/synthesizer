@@ -13,21 +13,14 @@ Contents
    :maxdepth: 2
    
    getting_started/getting_started
-   grids/grids
-   galaxy/galaxy
-   components/components
-   sed/sed
+   emission_grids/grids
+   galaxy_components/galaxy
+   emissions/emissions
    emission_models/emission_models
-   attenuation/attenuation
-   spectra/spectra
-   lines/lines
-   filters/filters
-   instrumentation/instrument_example
-   instrumentation/premade_instruments
-   photometry/photometry
-   imaging/imaging
+   observatories/observatories 
+   observables/observables
    pipelines/pipeline_example
-   parallelism/openmp
+   performance/openmp
    advanced/advanced
    notebook_examples/cookbook
    auto_examples/index

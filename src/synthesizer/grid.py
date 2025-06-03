@@ -849,6 +849,11 @@ class Grid:
         return formatter.get_table("Grid")
 
     @property
+    def axes_values(self):
+        """Returns the grid axes values."""
+        return self._axes_values
+
+    @property
     def shape(self):
         """Return the shape of the grid."""
         return self.spectra[self.available_spectra[0]].shape
