@@ -402,7 +402,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
     std::array<int, MAX_GRID_NDIM> part_indices;
 
     /* Get the grid indices and cell fractions for the particle. */
-    get_part_ind_frac_ngp(part_indices, grid_props, parts, p);
+    get_part_inds_ngp(part_indices, grid_props, parts, p);
 
     /* Define the weight. */
     double weight = parts->get_weight_at(p);
@@ -503,7 +503,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
 
     /* Get the grid indices and cell fractions for the particle. */
     std::array<int, MAX_GRID_NDIM> part_indices;
-    get_part_ind_frac_ngp(part_indices, grid_props, parts, p);
+    get_part_inds_ngp(part_indices, grid_props, parts, p);
 
     /* Define the weighted contribution from this cell. */
     const double weight = parts->get_weight_at(p);
