@@ -167,7 +167,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 
     /* Get local pointers to the particle properties. */
     double *local_part_masses = part_masses + start;
-    int *local_mask = (mask == NULL) ? mask : mask + start;
+    npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
     double *local_out_arr = calloc(out_size, sizeof(double));
@@ -180,7 +180,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
     for (int p = 0; p < end - start; p++) {
 
       /* Skip if this particle is masked. */
-      if (local_mask != NULL && !local_mask[p]) {
+      if (local_mask != NULL && !(int)local_mask[p]) {
         continue;
       }
 
