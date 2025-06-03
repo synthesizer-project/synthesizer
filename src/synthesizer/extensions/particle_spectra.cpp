@@ -107,9 +107,9 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
         double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
 
         /* Add the contribution to this wavelength. */
-        part_spectra[p * nlam + ilam] +=
+        part_spectra[p * nlam + ilam] =
             std::fma(spec_val, weight, part_spectra[p * nlam + ilam]);
-        spectra[ilam] += std::fma(spec_val, weight, spectra[ilam]);
+        spectra[ilam] = std::fma(spec_val, weight, spectra[ilam]);
       }
     }
   }
