@@ -369,17 +369,18 @@ extensions = [
         links=link_args,
         include_dirs=include_dirs,
     ),
-    # create_extension(
-    #     "synthesizer.imaging.extensions.circular_aperture",
-    #     [
-    #         "src/synthesizer/imaging/extensions/circular_aperture.cpp",
-    #         "src/synthesizer/extensions/property_funcs.cpp",
-    #         "src/synthesizer/extensions/timers.cpp",
-    #     ],
-    #     compile_flags=compile_flags,
-    #     links=link_args,
-    #     include_dirs=include_dirs,
-    # ),
+    create_extension(
+        "synthesizer.imaging.extensions.circular_aperture",
+        [
+            "src/synthesizer/imaging/extensions/circular_aperture.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
 ]
 
 # Setup configuration

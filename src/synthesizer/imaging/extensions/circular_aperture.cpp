@@ -19,7 +19,7 @@
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <../../extensions/numpy_init.h>
+#include "../../extensions/numpy_init.h"
 #include <Python.h>
 
 /* Local includes */
