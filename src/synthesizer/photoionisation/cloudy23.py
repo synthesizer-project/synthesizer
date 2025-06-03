@@ -153,6 +153,9 @@ def create_cloudy_input(
         "stop_efrac": None,
         # log10(N_H/cm^2), if not provided the command is not used
         "stop_column_density": None,
+        # sets the default limit to the number of zones
+        # that will be computed, default is 1400
+        "nend": None,
         # K, if not provided the command is not used
         "T_floor": None,
         # Hydrogen density
@@ -430,6 +433,9 @@ def create_cloudy_input(
         # For some horrible reason the above is ignored in favour of a
         # built in temperature stop (4000K) unless that is turned off.
         cinput.append("stop temperature off\n")
+
+    if params["nend"] is not None:
+        cinput.append(f"set nend {params['nend']}\n")
 
     # --- output commands
 
