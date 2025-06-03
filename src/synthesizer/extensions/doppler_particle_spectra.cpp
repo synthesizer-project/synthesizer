@@ -55,8 +55,14 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
   int nlam = grid_props->nlam;
   double *wavelength = grid_props->get_lam();
 
-  /* Calculate the number of cell in a patch of the grid. */
+  /* Calculate the number of cell in a patch of the grid (2^ndim). */
   int ncells = 1 << ndim;
+
+  /* Set up fixed sub-dimensions array (always {2, 2, ..., 2}) */
+  std::array<int, MAX_GRID_NDIM> sub_dims;
+  for (int idim = 0; idim < ndim; idim++) {
+    sub_dims[idim] = 2;
+  }
 
   /* Allocate the shifted wavelengths array and the mapped indices array. */
   double *shifted_wavelengths = new double[nlam];
@@ -91,14 +97,6 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
     /* Get the grid indices and cell fractions for the particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
-    /* To combine fractions we will need an array of dimensions for the
-     * subset. These are always two in size, one for the low and one for high
-     * grid point. */
-    std::array<int, MAX_GRID_NDIM> sub_dims;
-    for (int idim = 0; idim < ndim; idim++) {
-      sub_dims[idim] = 2;
-    }
-
     /* Now loop over this collection of cells collecting and setting their
      * weights. */
     for (int icell = 0; icell < ncells; icell++) {
@@ -114,13 +112,9 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
        * in the grid. */
       double frac = 1;
       for (int idim = 0; idim < ndim; idim++) {
-        if (subset_ind[idim] == 0) {
-          frac *= (1 - axis_fracs[idim]);
-          frac_ind[idim] = part_indices[idim] - 1;
-        } else {
-          frac *= axis_fracs[idim];
-          frac_ind[idim] = part_indices[idim];
-        }
+        int offset = subset_ind[idim]; // 0 or 1
+        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] + offset;
       }
 
       /* Nothing to do if fraction is 0. */
@@ -198,134 +192,119 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  int nlam = grid_props->nlam;
+  const int nlam = grid_props->nlam;
   double *wavelength = grid_props->get_lam();
 
-  /* Calculate the number of cell in a patch of the grid. */
-  int ncells = 1 << ndim;
-#pragma omp parallel num_threads(nthreads)
-  {
+  /* Calculate the number of cells in a patch of the grid. */
+  const int ncells = 1 << ndim;
 
-    /* Allocate the shifted wavelengths array and the mapped indices array. */
-    double *shifted_wavelengths = new double[nlam];
-    int *mapped_indices = new int[nlam];
+  /* Subset dimensions are always 2 (low and high side). */
+  std::array<int, MAX_GRID_NDIM> sub_dims;
+  for (int i = 0; i < ndim; i++) {
+    sub_dims[i] = 2;
+  }
 
-    /* Loop over particles. */
-#pragma omp for schedule(static)
-    for (int p = 0; p < parts->npart; p++) {
+  /* Allocate the shifted wavelengths array and the mapped indices array. */
+  double *shifted_wavelengths = new double[nlam];
+  int *mapped_indices = new int[nlam];
 
-      /* Skip masked particles. */
-      if (parts->part_is_masked(p)) {
+#pragma omp parallel for schedule(static)                                      \
+    num_threads(nthreads) private(shifted_wavelengths, mapped_indices)
+  for (int p = 0; p < parts->npart; p++) {
+
+    /* Skip masked particles. */
+    if (parts->part_is_masked(p)) {
+      continue;
+    }
+
+    /* Get the particle velocity and red/blue shift factor. */
+    double vel = parts->get_vel_at(p);
+    double shift_factor = 1.0 + vel / c;
+
+    /* Shift the wavelengths and get the mapping for each wavelength bin. We
+     * do this for each element because there is no guarantee the input
+     * wavelengths will be evenly spaced but we also don't want to repeat
+     * the nearest bin search too many times. */
+    for (int ilam = 0; ilam < nlam; ilam++) {
+      shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+      mapped_indices[ilam] =
+          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+    }
+
+    /* Get the grid indices and cell fractions for the particle. */
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    std::array<double, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+
+    /* Loop over sub-cells collecting their weighted contributions. */
+    for (int icell = 0; icell < ncells; icell++) {
+
+      /* Get the multi-dimensional version of icell. */
+      std::array<int, MAX_GRID_NDIM> subset_ind;
+      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+      /* Compute the contribution from this sub-cell. */
+      std::array<int, MAX_GRID_NDIM> frac_ind;
+      double frac = 1.0;
+      for (int idim = 0; idim < ndim; idim++) {
+        const int offset = subset_ind[idim]; // 0 or 1
+        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] + offset;
+      }
+
+      /* Nothing to do if fraction is 0. */
+      if (frac == 0.0) {
         continue;
       }
 
-      /* Get the particle velocity and red/blue shift factor. */
-      double vel = parts->get_vel_at(p);
-      double shift_factor = 1.0 + vel / c;
+      /* Define the weighted contribution from this cell. */
+      const double weight = frac * parts->get_weight_at(p);
 
-      /* Shift the wavelengths and get the mapping for each wavelength bin. We
-       * do this for each element because there is no guarantee the input
-       * wavelengths will be evenly spaced but we also don't want to repeat
-       * the nearest bin search too many times. */
+      /* Get the index of the grid cell. */
+      const int grid_ind = grid_props->ravel_grid_index(frac_ind);
+
+      /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
-        shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
-        mapped_indices[ilam] =
-            get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
-      }
 
-      /* Setup the index and mass fraction arrays. */
-      std::array<int, MAX_GRID_NDIM> part_indices;
-      std::array<double, MAX_GRID_NDIM> axis_fracs;
+        /* Get the shifted wavelength and index. */
+        int ilam_shifted = mapped_indices[ilam];
+        double shifted_lambda = shifted_wavelengths[ilam];
 
-      /* Get the grid indices and cell fractions for the particle. */
-      get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
-
-      /* To combine fractions we will need an array of dimensions for the
-       * subset. These are always two in size, one for the low and one for
-       * high grid point. */
-      std::array<int, MAX_GRID_NDIM> sub_dims;
-      for (int idim = 0; idim < ndim; idim++) {
-        sub_dims[idim] = 2;
-      }
-
-      /* Now loop over this collection of cells collecting and setting their
-       * weights. */
-      for (int icell = 0; icell < ncells; icell++) {
-
-        /* Set up some index arrays we'll need. */
-        std::array<int, MAX_GRID_NDIM> subset_ind;
-        std::array<int, MAX_GRID_NDIM> frac_ind;
-
-        /* Get the multi-dimensional version of icell. */
-        get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-        /* Multiply all contributing fractions and get the fractions index
-         * in the grid. */
-        double frac = 1;
-        for (int idim = 0; idim < ndim; idim++) {
-          if (subset_ind[idim] == 0) {
-            frac *= (1 - axis_fracs[idim]);
-            frac_ind[idim] = part_indices[idim] - 1;
-          } else {
-            frac *= axis_fracs[idim];
-            frac_ind[idim] = part_indices[idim];
-          }
-        }
-
-        if (frac == 0) {
+        /* Skip if this wavelength is masked. */
+        if (grid_props->lam_is_masked(ilam_shifted)) {
           continue;
         }
 
-        /* Define the weight. */
-        double weight = frac * parts->get_weight_at(p);
-
-        /* Get the weight's index. */
-        const int grid_ind = grid_props->ravel_grid_index(frac_ind);
-
-        /* Add this grid cell's contribution to the spectra */
-        for (int ilam = 0; ilam < nlam; ilam++) {
-
-          /* Get the shifted wavelength and index. */
-          int ilam_shifted = mapped_indices[ilam];
-          double shifted_lambda = shifted_wavelengths[ilam];
-
-          /* Skip if this wavelength is masked. */
-          if (grid_props->lam_is_masked(ilam_shifted)) {
-            continue;
-          }
-
-          /* Compute the fraction of the shifted wavelength between the two
-           * closest wavelength elements. */
-          double frac_shifted = 0.0;
-          if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
-            frac_shifted =
-                (shifted_lambda - wavelength[ilam_shifted - 1]) /
-                (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
-          } else {
-            /* Out of bounds, skip this wavelength */
-            continue;
-          }
-
-          /* Get the grid spectra value for this wavelength. */
-          double grid_spectra_value =
-              grid_props->get_spectra_at(grid_ind, ilam) * weight;
-
-          /* Add the contribution to the corresponding wavelength element. */
-          part_spectra[p * nlam + ilam_shifted - 1] +=
-              (1.0 - frac_shifted) * grid_spectra_value;
-          part_spectra[p * nlam + ilam_shifted] +=
-              frac_shifted * grid_spectra_value;
-          spectra[ilam_shifted - 1] +=
-              (1.0 - frac_shifted) * grid_spectra_value;
-          spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
+        /* Compute the fraction of the shifted wavelength between the two
+         * closest wavelength elements. */
+        double frac_shifted = 0.0;
+        if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+          frac_shifted =
+              (shifted_lambda - wavelength[ilam_shifted - 1]) /
+              (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
+        } else {
+          /* Out of bounds, skip this wavelength */
+          continue;
         }
+
+        /* Get the grid spectra value for this wavelength. */
+        double grid_spectra_value =
+            grid_props->get_spectra_at(grid_ind, ilam) * weight;
+
+        /* Add the contribution to the corresponding wavelength element. */
+        part_spectra[p * nlam + ilam_shifted - 1] +=
+            (1.0 - frac_shifted) * grid_spectra_value;
+        part_spectra[p * nlam + ilam_shifted] +=
+            frac_shifted * grid_spectra_value;
+        spectra[ilam_shifted - 1] += (1.0 - frac_shifted) * grid_spectra_value;
+        spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
       }
     }
-
-    /* Free the allocated arrays. */
-    delete[] shifted_wavelengths;
-    delete[] mapped_indices;
   }
+
+  /* Free the allocated arrays. */
+  delete[] shifted_wavelengths;
+  delete[] mapped_indices;
 }
 #endif
 
@@ -389,6 +368,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
                                             const double c) {
 
   /* Unpack the grid properties. */
+  const int ndim = grid_props->ndim;
   int nlam = grid_props->nlam;
   double *wavelength = grid_props->get_lam();
 
@@ -418,17 +398,17 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
           get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
     }
 
-    /* Setup the index array. */
+    /* Setup the index and mass fraction arrays. */
     std::array<int, MAX_GRID_NDIM> part_indices;
 
-    /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, grid_props, parts, p);
+    /* Get the grid indices and cell fractions for the particle. */
+    get_part_ind_frac_ngp(part_indices, grid_props, parts, p);
+
+    /* Define the weight. */
+    double weight = parts->get_weight_at(p);
 
     /* Get the weight's index. */
     const int grid_ind = grid_props->ravel_grid_index(part_indices);
-
-    /* Get the weight of this particle. */
-    const double weight = parts->get_weight_at(p);
 
     /* Add this grid cell's contribution to the spectra */
     for (int ilam = 0; ilam < nlam; ilam++) {
@@ -490,92 +470,88 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
                                          const double c) {
 
   /* Unpack the grid properties. */
-  int nlam = grid_props->nlam;
+  const int ndim = grid_props->ndim;
+  const int nlam = grid_props->nlam;
   double *wavelength = grid_props->get_lam();
 
-#pragma omp parallel num_threads(nthreads)
-  {
+  /* Allocate the shifted wavelengths array and the mapped indices array. */
+  double *shifted_wavelengths = new double[nlam];
+  int *mapped_indices = new int[nlam];
 
-    /* Allocate the shifted wavelengths array and the mapped indices array. */
-    double *shifted_wavelengths = new double[nlam];
-    int *mapped_indices = new int[nlam];
+#pragma omp parallel for schedule(static)                                      \
+    num_threads(nthreads) private(shifted_wavelengths, mapped_indices)
+  for (int p = 0; p < parts->npart; p++) {
 
-#pragma omp for schedule(static)
-    /* Loop over particles. */
-    for (int p = 0; p < parts->npart; p++) {
+    /* Skip masked particles. */
+    if (parts->part_is_masked(p)) {
+      continue;
+    }
 
-      /* Skip masked particles. */
-      if (parts->part_is_masked(p)) {
+    /* Get the particle velocity and red/blue shift factor. */
+    double vel = parts->get_vel_at(p);
+    double shift_factor = 1.0 + vel / c;
+
+    /* Shift the wavelengths and get the mapping for each wavelength bin. We
+     * do this for each element because there is no guarantee the input
+     * wavelengths will be evenly spaced but we also don't want to repeat
+     * the nearest bin search too many times. */
+    for (int ilam = 0; ilam < nlam; ilam++) {
+      shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
+      mapped_indices[ilam] =
+          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+    }
+
+    /* Get the grid indices and cell fractions for the particle. */
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    get_part_ind_frac_ngp(part_indices, grid_props, parts, p);
+
+    /* Define the weighted contribution from this cell. */
+    const double weight = parts->get_weight_at(p);
+
+    /* Get the index of the grid cell. */
+    const int grid_ind = grid_props->ravel_grid_index(part_indices);
+
+    /* Add this grid cell's contribution to the spectra */
+    for (int ilam = 0; ilam < nlam; ilam++) {
+
+      /* Get the shifted wavelength and index. */
+      int ilam_shifted = mapped_indices[ilam];
+      double shifted_lambda = shifted_wavelengths[ilam];
+
+      /* Skip if this wavelength is masked. */
+      if (grid_props->lam_is_masked(ilam_shifted)) {
         continue;
       }
 
-      /* Get the particle velocity and red/blue shift factor. */
-      double vel = parts->get_vel_at(p);
-      double shift_factor = 1.0 + vel / c;
-
-      /* Shift the wavelengths and get the mapping for each wavelength bin. We
-       * do this for each element because there is no guarantee the input
-       * wavelengths will be evenly spaced but we also don't want to repeat
-       * the nearest bin search too many times. */
-      for (int ilam = 0; ilam < nlam; ilam++) {
-        shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
-        mapped_indices[ilam] =
-            get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+      /* Compute the fraction of the shifted wavelength between the two
+       * closest wavelength elements. */
+      double frac_shifted = 0.0;
+      if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+        frac_shifted =
+            (shifted_lambda - wavelength[ilam_shifted - 1]) /
+            (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
+      } else {
+        /* Out of bounds, skip this wavelength */
+        continue;
       }
 
-      /* Setup the index array. */
-      std::array<int, MAX_GRID_NDIM> part_indices;
+      /* Get the grid spectra value for this wavelength. */
+      double grid_spectra_value =
+          grid_props->get_spectra_at(grid_ind, ilam) * weight;
 
-      /* Get the grid indices for the particle */
-      get_part_inds_ngp(part_indices, grid_props, parts, p);
-
-      /* Get the weight's index. */
-      const int grid_ind = grid_props->ravel_grid_index(part_indices);
-
-      /* Get the weight of this particle. */
-      const double weight = parts->get_weight_at(p);
-
-      /* Add this grid cell's contribution to the spectra */
-      for (int ilam = 0; ilam < nlam; ilam++) {
-
-        /* Get the shifted wavelength and index. */
-        int ilam_shifted = mapped_indices[ilam];
-        double shifted_lambda = shifted_wavelengths[ilam];
-
-        /* Skip if this wavelength is masked. */
-        if (grid_props->lam_is_masked(ilam_shifted)) {
-          continue;
-        }
-
-        /* Compute the fraction of the shifted wavelength between the two
-         * closest wavelength elements. */
-        double frac_shifted = 0.0;
-        if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
-          frac_shifted =
-              (shifted_lambda - wavelength[ilam_shifted - 1]) /
-              (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
-        } else {
-          /* Out of bounds, skip this wavelength */
-          continue;
-        }
-
-        /* Get the grid spectra value for this wavelength. */
-        double grid_spectra_value =
-            grid_props->get_spectra_at(grid_ind, ilam) * weight;
-
-        /* Add the contribution to the corresponding wavelength element. */
-        part_spectra[p * nlam + ilam_shifted - 1] +=
-            (1.0 - frac_shifted) * grid_spectra_value;
-        part_spectra[p * nlam + ilam_shifted] +=
-            frac_shifted * grid_spectra_value;
-        spectra[ilam_shifted - 1] += (1.0 - frac_shifted) * grid_spectra_value;
-        spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
-      }
+      /* Add the contribution to the corresponding wavelength element. */
+      part_spectra[p * nlam + ilam_shifted - 1] +=
+          (1.0 - frac_shifted) * grid_spectra_value;
+      part_spectra[p * nlam + ilam_shifted] +=
+          frac_shifted * grid_spectra_value;
+      spectra[ilam_shifted - 1] += (1.0 - frac_shifted) * grid_spectra_value;
+      spectra[ilam_shifted] += frac_shifted * grid_spectra_value;
     }
-    /* Free the allocated arrays. */
-    delete[] shifted_wavelengths;
-    delete[] mapped_indices;
   }
+
+  /* Free the allocated arrays. */
+  delete[] shifted_wavelengths;
+  delete[] mapped_indices;
 }
 #endif
 
