@@ -15,6 +15,7 @@
 #include <Python.h>
 
 /* Local includes. */
+#include "../../extensions/cpp_to_python.h"
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
 
@@ -73,8 +74,7 @@ void populate_smoothed_data_cube_serial(
     const int kernel_cdim = 2 * delta_pix + 1;
 
     /* Create an empty kernel for this particle. */
-    double *part_kernel = synth_malloc<double>(
-        kernel_cdim * kernel_cdim * sizeof(double), "part_kernel");
+    double *part_kernel = new double[kernel_cdim * kernel_cdim]();
 
     /* Track the kernel sum for normalisation. */
     double kernel_sum = 0;
@@ -160,8 +160,7 @@ void populate_smoothed_data_cube_serial(
         }
       }
     }
-
-    free(part_kernel);
+    delete[] part_kernel;
   }
 }
 
@@ -210,9 +209,7 @@ void populate_smoothed_data_cube_parallel(
   }
 
   /* Loop over positions including the sed */
-#pragma omp parallel for num_threads(nthreads)                                 \
-    shared(data_cube, sed_values, smoothing_lengths, xs, ys, kernel, res,      \
-               npix_x, npix_y, npart, nlam, threshold, kdim)
+#pragma omp parallel for num_threads(nthreads)
   for (int ind = 0; ind < npart; ind++) {
 
     /* Get this particles smoothing length and position */
@@ -231,8 +228,7 @@ void populate_smoothed_data_cube_parallel(
     const int kernel_cdim = 2 * delta_pix + 1;
 
     /* Create an empty kernel for this particle. */
-    double *part_kernel = synth_malloc<double>(
-        kernel_cdim * kernel_cdim * sizeof(double), "part_kernel");
+    double *part_kernel = new double[kernel_cdim * kernel_cdim]();
 
     /* Track the kernel sum for normalisation. */
     double kernel_sum = 0;
@@ -320,8 +316,7 @@ void populate_smoothed_data_cube_parallel(
         omp_unset_lock(&locks[jj + npix_y * ii]);
       }
     }
-
-    free(part_kernel);
+    delete[] part_kernel;
   }
 }
 #endif
@@ -568,21 +563,17 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
   const double *xs = extract_data_double(np_xs, "xs");
   const double *ys = extract_data_double(np_ys, "ys");
 
-  /* Allocate the data cube. */
-  const int npix = npix_x * npix_y;
-  double *data_cube =
-      synth_malloc<double>(npix * nlam * sizeof(double), "data_cube");
+  /* Create the zeroed output data cube numpy array. */
+  npy_intp np_dc_dims[3] = {npix_x, npix_y, nlam};
+  PyArrayObject *np_data_cube =
+      (PyArrayObject *)PyArray_ZEROS(3, np_dc_dims, NPY_FLOAT64, 0);
+  double *data_cube = (double *)PyArray_DATA(np_data_cube);
 
   /* Populate the data cube. */
   populate_hist_data_cube(sed_values, xs, ys, res, npix_x, npix_y, npart, nlam,
                           data_cube, nthreads);
 
-  /* Construct a numpy python array to return the DATA_CUBE. */
-  npy_intp dims[3] = {npix_x, npix_y, nlam};
-  PyArrayObject *out_data_cube = (PyArrayObject *)PyArray_SimpleNewFromData(
-      3, dims, NPY_FLOAT64, data_cube);
-
-  return Py_BuildValue("N", out_data_cube);
+  return Py_BuildValue("N", np_data_cube);
 }
 
 /**
@@ -636,22 +627,18 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
   const double *ys = extract_data_double(np_ys, "ys");
   const double *kernel = extract_data_double(np_kernel, "kernel");
 
-  /* Allocate DATA_CUBE. */
-  const int npix = npix_x * npix_y;
-  double *data_cube =
-      synth_malloc<double>(npix * nlam * sizeof(double), "data_cube");
+  /* Create the zeroed output data cube numpy array. */
+  npy_intp np_dc_dims[3] = {npix_x, npix_y, nlam};
+  PyArrayObject *np_data_cube =
+      (PyArrayObject *)PyArray_ZEROS(3, np_dc_dims, NPY_FLOAT64, 0);
+  double *data_cube = (double *)PyArray_DATA(np_data_cube);
 
   /* Populate the DATA_CUBE. */
   populate_smoothed_data_cube(sed_values, smoothing_lengths, xs, ys, kernel,
                               res, npix_x, npix_y, npart, nlam, threshold, kdim,
                               data_cube, nthreads);
 
-  /* Construct a numpy python array to return the DATA_CUBE. */
-  npy_intp dims[3] = {npix_x, npix_y, nlam};
-  PyArrayObject *out_data_cube =
-      c_array_to_numpy(3, dims, NPY_FLOAT64, data_cube);
-
-  return Py_BuildValue("N", out_data_cube);
+  return Py_BuildValue("N", np_data_cube);
 }
 
 static PyMethodDef ImageMethods[] = {
