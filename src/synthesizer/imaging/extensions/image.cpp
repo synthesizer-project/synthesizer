@@ -446,13 +446,14 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   /* Create the zeroed image numpy array. */
   npy_intp np_img_dims[3] = {nimgs, npix_x, npix_y};
   PyArrayObject *np_img =
-      (PyArrayObject *)PyArray_ZEROS(nimgs, np_img_dims, NPY_DOUBLE, 0);
+      (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
   double *img = (double *)PyArray_DATA(np_img);
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, smoothing_lengths, pos, kernel, res,
                           npix_x, npix_y, npart, threshold, kdim, img, nimgs,
                           nthreads);
+  printf("Populated image");
 
   toc("Computing smoothed image", start_time);
 
