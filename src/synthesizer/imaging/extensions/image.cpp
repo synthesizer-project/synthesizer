@@ -69,8 +69,7 @@ void populate_smoothed_image_serial(const double *pix_values,
   }
 
   /* Allocate the particle kernel. */
-  double *part_kernel = synth_malloc<double>(
-      max_kernel_cdim * max_kernel_cdim * sizeof(double), "part_kernel");
+  double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
 
   /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
@@ -175,7 +174,7 @@ void populate_smoothed_image_serial(const double *pix_values,
       }
     }
   }
-  free(part_kernel);
+  delete[] part_kernel;
 }
 
 /**
@@ -226,8 +225,7 @@ void populate_smoothed_image_parallel(
   {
 
     /* Allocate the per thread particle kernel. */
-    double *part_kernel = synth_malloc<double>(
-        max_kernel_cdim * max_kernel_cdim * sizeof(double), "part_kernel");
+    double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
 
     /* Loop over positions including the sed */
 #pragma omp for schedule(dynamic)
@@ -334,7 +332,7 @@ void populate_smoothed_image_parallel(
         }
       }
     }
-    free(part_kernel);
+    delete[] part_kernel;
   }
 }
 #endif

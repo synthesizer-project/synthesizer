@@ -15,25 +15,6 @@
 #include <Python.h>
 
 /**
- * @brief Allocate an array.
- *
- * Just a wrapper around malloc with a check for NULL.
- *
- * @param n: The number of pointers to allocate.
- */
-template <typename T> T *synth_malloc(size_t n, const char *msg) {
-  T *ptr = reinterpret_cast<T *>(malloc(n));
-  if (ptr == NULL) {
-    char error_msg[100];
-    snprintf(error_msg, sizeof(error_msg), "Failed to allocate memory for %s.",
-             msg);
-    PyErr_SetString(PyExc_MemoryError, error_msg);
-  }
-  bzero(ptr, n);
-  return ptr;
-}
-
-/**
  * @brief Get a double value at a specific index in a numpy array.
  *
  * This function assumes the numpy array is of type float64 and contiguous.
@@ -46,12 +27,18 @@ template <typename T> T *synth_malloc(size_t n, const char *msg) {
  */
 static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
   if (PyArray_TYPE(np_arr) != NPY_FLOAT64) {
-    PyErr_SetString(PyExc_TypeError, "Array must be of type float64.");
+    PyErr_SetString(PyExc_TypeError,
+                    "[get_double_at]: Array must be of type float64.");
     return 0.0;
   }
 
   if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
-    PyErr_SetString(PyExc_IndexError, "Index out of bounds.");
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_double_at]: Index (%ld) out of bounds. Valid range is [0, "
+             "%ld).",
+             ind, PyArray_SIZE(np_arr));
+    PyErr_SetString(PyExc_IndexError, error_msg);
     return 0.0;
   }
 
@@ -59,8 +46,9 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
     const double *data_ptr = static_cast<const double *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
-    PyErr_SetString(PyExc_ValueError,
-                    "Array must be contiguous to use get_double_at.");
+    PyErr_SetString(
+        PyExc_ValueError,
+        "[get_double_at]: Array must be contiguous to use get_double_at.");
     return 0.0;
   }
 }
@@ -78,12 +66,18 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
  */
 static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
   if (PyArray_TYPE(np_arr) != NPY_INT32) {
-    PyErr_SetString(PyExc_TypeError, "Array must be of type int32.");
+    PyErr_SetString(PyExc_TypeError,
+                    "[get_int_at]: Array must be of type int32.");
     return 0;
   }
 
   if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
-    PyErr_SetString(PyExc_IndexError, "Index out of bounds.");
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_int_at]: Index (%ld) out of bounds. Valid range is [0, "
+             "%ld).",
+             ind, PyArray_SIZE(np_arr));
+    PyErr_SetString(PyExc_IndexError, error_msg);
     return 0;
   }
 
@@ -91,8 +85,9 @@ static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
     const int *data_ptr = static_cast<const int *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
-    PyErr_SetString(PyExc_ValueError,
-                    "Array must be contiguous to use get_int_at.");
+    PyErr_SetString(
+        PyExc_ValueError,
+        "[get_int_at]: Array must be contiguous to use get_int_at.");
     return 0;
   }
 }
@@ -110,12 +105,18 @@ static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
  */
 static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
   if (PyArray_TYPE(np_arr) != NPY_BOOL) {
-    PyErr_SetString(PyExc_TypeError, "Array must be of type bool.");
+    PyErr_SetString(PyExc_TypeError,
+                    "[get_bool_at]: Array must be of type bool.");
     return false;
   }
 
   if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
-    PyErr_SetString(PyExc_IndexError, "Index out of bounds.");
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_bool_at]: Index (%ld) out of bounds. Valid range is [0, "
+             "%ld).",
+             ind, PyArray_SIZE(np_arr));
+    PyErr_SetString(PyExc_IndexError, error_msg);
     return false;
   }
 
@@ -124,8 +125,9 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
         static_cast<const npy_bool *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
-    PyErr_SetString(PyExc_ValueError,
-                    "Array must be contiguous to use get_bool_at.");
+    PyErr_SetString(
+        PyExc_ValueError,
+        "[get_bool_at]: Array must be contiguous to use get_bool_at.");
     return false;
   }
 }

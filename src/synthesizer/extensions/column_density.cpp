@@ -135,8 +135,7 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
 
     /* Get this threads chunk of the results array to write to. We get a chunk
      * here to avoid cache locality issues. */
-    double *surf_dens_thread = synth_malloc<double>(
-        (end - start) * sizeof(double), "surface densities thread");
+    double *surf_dens_thread = new double[end - start]();
 
     /* Loop over particle postions. */
     for (int i = start; i < end; i++) {
@@ -419,8 +418,7 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
 
     /* Get this threads chunk of the results array to write to. We get a chunk
      * here to avoid cache locality issues. */
-    double *surf_dens_thread = synth_malloc<double>(
-        (end - start) * sizeof(double), "surface densities thread");
+    double *surf_dens_thread = new double[end - start]();
 
     /* Loop over the particles we are calculating the surface density for. */
     for (int i = start; i < end; i++) {
@@ -573,8 +571,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   /* Allocate cells array. The first cell will be the root and then we will
    * dynamically nibble off cells for the progeny. */
   int ncells = 1;
-  struct cell *root =
-      synth_malloc<struct cell>(sizeof(struct cell), "root cell");
+  struct cell *root = new struct cell;
 
   /* Consturct the cell tree. */
   construct_cell_tree(pos_j, smls, surf_den_val, npart_j, root, ncells,
