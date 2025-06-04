@@ -10,6 +10,7 @@ from unyt import (
     Myr,
     angstrom,
     cm,
+    dimensionless,
     erg,
     km,
     kpc,
@@ -122,6 +123,7 @@ def bimodal_pacman_emission_model(test_grid):
         grid=test_grid,
         dust_curve_ism=PowerLaw(slope=-0.7),
         dust_curve_birth=PowerLaw(slope=-1.3),
+        age_pivot=6.7 * dimensionless,
     )
 
 
