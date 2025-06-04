@@ -372,12 +372,17 @@ double GridProps::get_grid_weight_at(int ind) const {
  * @return The wavelength mask array.
  */
 bool GridProps::lam_is_masked(int ind) const {
-  if (np_lam_mask_ == NULL ||
-      reinterpret_cast<PyObject *>(np_lam_mask_) == Py_None) {
-    return false; // No mask, so not masked.
+  /* If we don't have a wavelength mask, then the wavelength is not masked. */
+  if (np_lam_mask_ == NULL) {
+    return false;
   }
 
-  return get_bool_at(np_lam_mask_, ind);
+  /* If the mask is None, then the wavelength is not masked. */
+  if (reinterpret_cast<PyObject *>(np_lam_mask_) == Py_None) {
+    return false;
+  }
+
+  return !get_bool_at(np_lam_mask_, ind);
 }
 
 /**
