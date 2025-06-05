@@ -370,6 +370,7 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     if np.sum(ok2) > 0:  # equation 2
         k_lam[ok2] = -1.857 + (1.040 / _lam.value[ok2])
     if np.sum(ok3) > 0:
+        # This will never be none
         if func is None:
             raise exceptions.InconsistentArguments("No data in the UV-optical")
         # Extrapolating the 0.12um<=lam<0.63um regime
