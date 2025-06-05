@@ -93,7 +93,7 @@ More details on this are provided in the `grids_example <grids_example>` noteboo
 Grid list
 =========
 
-Below is an incomplete list of the pre-computed grids available in the `dropbox <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_.
+Below is an incomplete list of the pre-computed grids available in the `Box <https://sussex.app.box.com/v/SynthesizerProductionGrids>`_.
 
 .. collapse:: Bruzual & Charlot (2003, BC03)
 
