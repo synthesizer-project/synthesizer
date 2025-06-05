@@ -48,8 +48,7 @@ double *Particles::get_velocities() const {
  */
 double **Particles::get_all_props(int ndim) const {
   /* Allocate a single array for particle properties. */
-  double **part_props =
-      reinterpret_cast<double **>(malloc(ndim * sizeof(double *)));
+  double **part_props = new double *[ndim];
   if (part_props == NULL) {
     PyErr_SetString(PyExc_MemoryError,
                     "Failed to allocate memory for part_props.");
