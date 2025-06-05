@@ -45,7 +45,7 @@ e.g. ::
 
     bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c17.03 
 
-specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v17.03 of the `cloudy <https://trac.nublado.org>`_ photoionisation code assuming our default assumptions.
+specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v17.03 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our default assumptions.
 
 
 Initial Mass Function
@@ -70,7 +70,7 @@ If an IMF you need is missing, please let us know by raising a feature request t
 
 Photoionisation modelling
 -------------------------
-All the photoionisation modelling in synthesizer currently uses the `cloudy <https://trac.nublado.org>`_ photoionisation code. Our default assumptions are:
+All the photoionisation modelling in synthesizer currently uses the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code. Our default assumptions are:
 
 * `log10(U)=-2`
 
