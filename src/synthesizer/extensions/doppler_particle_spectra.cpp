@@ -671,7 +671,8 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
     shifted_spectra_loop_ngp(grid_props, part_props, spectra, part_spectra,
                              nthreads, c);
   } else {
-    PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).", method);
+    PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
+                 method);
     return NULL;
   }
 
