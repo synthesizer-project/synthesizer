@@ -44,6 +44,7 @@ int *extract_data_int(PyArrayObject *np_arr, const char *name) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
     PyErr_SetString(PyExc_ValueError, error_msg);
+    return NULL;
   }
   /* Success. */
   return data;
