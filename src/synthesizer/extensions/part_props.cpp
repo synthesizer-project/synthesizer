@@ -149,7 +149,7 @@ double Particles::get_part_prop_at(int idim, int pind) const {
       (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
   if (np_part_arr == NULL) {
     PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-    return -1.0;
+    return std::numeric_limits<double>::quiet_NaN();
   }
 
   /* If we have a size 1 array then we have a fixed scalar value. In this case
