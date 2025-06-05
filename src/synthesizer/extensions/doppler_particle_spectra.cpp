@@ -211,8 +211,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     double *shifted_wavelengths = new double[nlam];
     int *mapped_indices = new int[nlam];
 
-#pragma omp for schedule(static)                                               \
-    num_threads(nthreads) private(shifted_wavelengths, mapped_indices)
+#pragma omp for schedule(static) private(shifted_wavelengths, mapped_indices)
     for (int p = 0; p < parts->npart; p++) {
 
       /* Skip masked particles. */
@@ -486,8 +485,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
     double *shifted_wavelengths = new double[nlam];
     int *mapped_indices = new int[nlam];
 
-#pragma omp for schedule(static)                                               \
-    num_threads(nthreads) private(shifted_wavelengths, mapped_indices)
+#pragma omp for schedule(static) private(shifted_wavelengths, mapped_indices)
     for (int p = 0; p < parts->npart; p++) {
 
       /* Skip masked particles. */
