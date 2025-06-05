@@ -104,13 +104,13 @@ Below are examples of the pre-computed grids available in the `Box <https://suss
 
     * The BaSel variant
         - Chabrier (2003) IMF
-            + bc03-2016-BaSeL_chabrier-0.1,100
-            + bc03-2016-BaSeL_chabrier-0.1,100_cloudy-c23.01-sps
+            + bc03-2016-BaSeL_chabrier03-0.1,100
+            + bc03-2016-BaSeL_chabrier03-0.1,100_cloudy-c23.01-sps
     
     * The Miles variant
         - Chabrier (2003) IMF
             + bc03-2016-Miles_chabrier03-0.1,100 
-            + bc03-2016-Miles_chabrier-0.1,100_cloudy-c23.01-sps
+            + bc03-2016-Miles_chabrier03-0.1,100_cloudy-c23.01-sps
     
     * The Stelib variant
         - Chabrier (2003) IMF
