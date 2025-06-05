@@ -24,17 +24,6 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
 }
 
 /**
- * @brief Destructor for the particles class.
- */
-Particles::~Particles() {
-  /* Deallocate the numpy arrays. */
-  // Py_XDECREF(np_weights_);
-  // Py_XDECREF(np_velocities_);
-  // Py_XDECREF(np_mask_);
-  // Py_XDECREF(part_tuple_);
-}
-
-/**
  * @brief Get the weights of the particles.
  *
  * @return The weights of the particles.
