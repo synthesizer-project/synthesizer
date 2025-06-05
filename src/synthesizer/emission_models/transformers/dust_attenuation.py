@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dust_extinction.grain_models import WD01
 from scipy import interpolate
-from unyt import angstrom, um
+from unyt import angstrom
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
@@ -314,7 +314,7 @@ class PowerLaw(AttenuationLaw):
         )
 
 
-@accepts(lam=um, cent_lam=um, gamma=um)
+@accepts(lam=angstrom, cent_lam=angstrom, gamma=angstrom)
 def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """Generate the transmission curve for the Noll+2009 attenuation curve.
 
@@ -332,38 +332,44 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
         slope (float):
             The slope of the attenuation curve.
         cent_lam (float):
-            The central wavelength of the UV bump, expected in microns.
+            The central wavelength of the UV bump, expected in AA.
         ampl (float):
             The amplitude of the UV-bump.
         gamma (float):
-            The width (FWHM) of the UV bump, in microns.
+            The width (FWHM) of the UV bump, in AA.
 
     Returns:
         np.ndarray of float: V-band normalised optical depth for
             given wavelength
     """
-    lam_v = 0.55
+    # Performing some unit conversions to match the
+    # Calzetti curve units which are in um
+    _lam = lam.to("um")
+    _cent_lam = cent_lam.to("um")
+    _gamma = gamma.to("um")
+    lam_v = 0.55  # in um
+
     k_lam = np.zeros_like(lam.value)
 
     # Masking for different regimes in the Calzetti curve
-    ok1 = (lam >= 0.12) * (lam < 0.63)  # 0.12um<=lam<0.63um
-    ok2 = (lam >= 0.63) * (lam < 31.0)  # 0.63um<=lam<=31um
-    ok3 = lam < 0.12  # lam<0.12um
+    ok1 = (_lam >= 0.12) * (_lam < 0.63)  # 0.12um<=lam<0.63um
+    ok2 = (_lam >= 0.63) * (_lam < 31.0)  # 0.63um<=lam<=31um
+    ok3 = _lam < 0.12  # lam<0.12um
     if np.sum(ok1) > 0:  # equation 1
         k_lam[ok1] = (
             -2.156
-            + (1.509 / lam.value[ok1])
-            - (0.198 / lam.value[ok1] ** 2)
-            + (0.011 / lam.value[ok1] ** 3)
+            + (1.509 / _lam.value[ok1])
+            - (0.198 / _lam.value[ok1] ** 2)
+            + (0.011 / _lam.value[ok1] ** 3)
         )
         func = interpolate.interp1d(
-            lam.value[ok1], k_lam[ok1], fill_value="extrapolate"
+            _lam.value[ok1], k_lam[ok1], fill_value="extrapolate"
         )
     if np.sum(ok2) > 0:  # equation 2
-        k_lam[ok2] = -1.857 + (1.040 / lam.value[ok2])
+        k_lam[ok2] = -1.857 + (1.040 / _lam.value[ok2])
     if np.sum(ok3) > 0:
         # Extrapolating the 0.12um<=lam<0.63um regime
-        k_lam[ok3] = func(lam.value[ok3])
+        k_lam[ok3] = func(_lam.value[ok3])
 
     # Using the Calzetti attenuation curve normalised
     # to Av=4.05
@@ -375,15 +381,15 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # UV bump feature expression from Noll+2009
     D_lam = (
         ampl
-        * ((lam * gamma) ** 2)
-        / ((lam**2 - cent_lam**2) ** 2 + (lam * gamma) ** 2)
+        * ((_lam * _gamma) ** 2)
+        / ((_lam**2 - _cent_lam**2) ** 2 + (_lam * _gamma) ** 2)
     )
 
     # Normalising with the value at 0.55um, to obtain
     # normalised optical depth
     tau_x_v = (k_lam + D_lam) / k_v
 
-    return tau_x_v * (lam / lam_v) ** slope
+    return tau_x_v * (_lam / lam_v) ** slope
 
 
 class Calzetti2000(AttenuationLaw):
@@ -397,23 +403,23 @@ class Calzetti2000(AttenuationLaw):
             The slope of the attenuation curve.
 
         cent_lam (float):
-            The central wavelength of the UV bump, expected in microns.
+            The central wavelength of the UV bump, expected in AA.
 
         ampl (float):
             The amplitude of the UV-bump.
 
         gamma (float):
-            The width (FWHM) of the UV bump, in microns.
+            The width (FWHM) of the UV bump, in AA.
 
     """
 
-    @accepts(cent_lam=um, gamma=um)
+    @accepts(cent_lam=angstrom, gamma=angstrom)
     def __init__(
         self,
         slope=0,
-        cent_lam=0.2175 * um,
+        cent_lam=2175 * angstrom,
         ampl=0,
-        gamma=0.035 * um,
+        gamma=350 * angstrom,
     ):
         """Initialise the dust curve.
 
@@ -422,13 +428,13 @@ class Calzetti2000(AttenuationLaw):
                 The slope of the attenuation curve.
 
             cent_lam (float):
-                The central wavelength of the UV bump, expected in microns.
+                The central wavelength of the UV bump, expected in AA.
 
             ampl (float):
                 The amplitude of the UV-bump.
 
             gamma (float):
-                The width (FWHM) of the UV bump, in microns.
+                The width (FWHM) of the UV bump, in AA.
         """
         description = (
             "Calzetti attenuation curve; with option"
@@ -490,7 +496,7 @@ class Calzetti2000(AttenuationLaw):
         )
 
         # V-band wavelength in micron
-        # Since the N09Tau funciton uses micron
+        # Since N09Tau uses micron for calculations
         lam_v = 0.55
 
         k_v = 4.05 + 2.659 * (
@@ -686,13 +692,13 @@ class GrainsWD01(AttenuationLaw):
         return out
 
 
-@accepts(lam=um)
+@accepts(lam=angstrom)
 def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     """Drude-like parametric expression for the attenuation curve from Li+08.
 
     Args:
         lam (np.ndarray of float):
-            The wavelengths (microns units) at which to calculate transmission.
+            The wavelengths (AA units) at which to calculate transmission.
         UV_slope (float):
             Dimensionless parameter describing the UV-FUV slope
         OPT_NIR_slope (float):
@@ -720,10 +726,13 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     if model == "LMC":
         UV_slope, OPT_NIR_slope, FUV_slope, bump = 4.47, 2.39, -0.988, 0.0221
 
+    # Converting lam from AA to um for ease
+    _lam = lam.to("um")
+
     # Attenuation curve (normalized to Av)
     term1 = UV_slope / (
-        (lam.value / 0.08) ** OPT_NIR_slope
-        + (lam.value / 0.08) ** -OPT_NIR_slope
+        (_lam.value / 0.08) ** OPT_NIR_slope
+        + (_lam.value / 0.08) ** -OPT_NIR_slope
         + FUV_slope
     )
     term2 = (
@@ -734,9 +743,9 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
             / (6.88**OPT_NIR_slope + 0.145**OPT_NIR_slope + FUV_slope)
             - bump / 4.6
         )
-    ) / ((lam.value / 0.046) ** 2.0 + (lam.value / 0.046) ** -2.0 + 90.0)
+    ) / ((_lam.value / 0.046) ** 2.0 + (_lam.value / 0.046) ** -2.0 + 90.0)
     term3 = bump / (
-        (lam.value / 0.2175) ** 2.0 + (lam.value / 0.2175) ** -2.0 - 1.95
+        (_lam.value / 0.2175) ** 2.0 + (_lam.value / 0.2175) ** -2.0 - 1.95
     )
 
     AlamAV = term1 + term2 + term3
