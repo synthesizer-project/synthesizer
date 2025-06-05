@@ -45,7 +45,7 @@ e.g. ::
 
     bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c17.03 
 
-specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v17.03 of the `cloudy <https://trac.nublado.org>`_ photoionisation code assuming our default assumptions.
+specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v17.03 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our default assumptions.
 
 
 Initial Mass Function
@@ -70,7 +70,7 @@ If an IMF you need is missing, please let us know by raising a feature request t
 
 Photoionisation modelling
 -------------------------
-All the photoionisation modelling in synthesizer currently uses the `cloudy <https://trac.nublado.org>`_ photoionisation code. Our default assumptions are:
+All the photoionisation modelling in synthesizer currently uses the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code. Our default assumptions are:
 
 * `log10(U)=-2`
 
@@ -93,136 +93,93 @@ More details on this are provided in the `grids_example <grids_example>` noteboo
 Grid list
 =========
 
-Below is an incomplete list of the pre-computed grids available in the `dropbox <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_.
+Below are examples of the pre-computed grids available in the `Box <https://sussex.app.box.com/v/SynthesizerProductionGrids>`_.
 
 .. collapse:: Bruzual & Charlot (2003, BC03)
 
     * Chabrier (2003) IMF
-        - bc03_chabrier03-0.1,100 
-        - bc03_chabrier03-0.1,100_cloudy-c17.03 
-        - bc03_chabrier03-0.1,100_cloudy-c17.03_resolution:0.1 
-
+        - bc03-2003-padova00_chabrier03-0.1,100
 
 .. collapse:: 2016 update of Bruzual & Charlot (2003)
 
     * The BaSel variant
         - Chabrier (2003) IMF
-            + bc03-2016-BaSeL_chabrier03-0.1,100 
-            + bc03-2016-BaSeL_chabrier03-0.1,100_cloudy-c17.03 
-            + bc03-2016-BaSeL_chabrier03-0.1,100_cloudy-c17.03_resolution:0.1 
+            + bc03-2016-BaSeL_chabrier03-0.1,100
+            + bc03-2016-BaSeL_chabrier03-0.1,100_cloudy-c23.01-sps
     
     * The Miles variant
         - Chabrier (2003) IMF
             + bc03-2016-Miles_chabrier03-0.1,100 
-            + bc03-2016-Miles_chabrier03-0.1,100_cloudy-c17.03 
-            + bc03-2016-Miles_chabrier03-0.1,100_cloudy-c17.03_resolution:0.1 
+            + bc03-2016-Miles_chabrier03-0.1,100_cloudy-c23.01-sps
     
     * The Stelib variant
         - Chabrier (2003) IMF
-            + bc03-2016-Stelib_chabrier03-0.1,100 
-            + bc03-2016-Stelib_chabrier03-0.1,100_cloudy-c17.03 
-            + bc03-2016-Stelib_chabrier03-0.1,100_cloudy-c17.03_resolution:0.1 
+            + bc03-2016-Stelib_chabrier03-0.1,100
+            + bc03-2016-Stelib_chabrier03-0.1,100_cloudy-c23.01-sps
 
 .. collapse:: Binary Population and Spectral Synthesis (BPASS) v2.2.1
 
     `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ 
 
     * Binary variant
-        - Broken power-law IMF
-            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.0 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.0_cloudy-c17.03 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.35 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.35_cloudy-c17.03 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.7 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.7_cloudy-c17.03 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.0 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.0_cloudy-c17.03 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.0_cloudy-c17.03_resolution:0.1 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.35 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.35_cloudy-c17.03 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.35_cloudy-c17.03_resolution:0.1 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.7 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.7_cloudy-c17.03 
-            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.7_cloudy-c17.03_resolution:0.1 
+        - Broken power-law IMF 
+            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.35
+            + bpass-2.2.1-bin_bpl-0.1,1.0,100.0-1.3,2.0_cloudy-c23.01-sps
+            + bpass-2.2.1-bin_bpl-0.1,1.0,300.0-1.3,2.35_cloudy-c23.01-sps
+            
         - Chabrier (2003) IMF
-            + bpass-2.2.1-bin_chabrier03-0.1,100.0 
-            + bpass-2.2.1-bin_chabrier03-0.1,100.0_cloudy-c17.03 
-            + bpass-2.2.1-bin_chabrier03-0.1,100.0_cloudy-c17.03_resolution:0.1 
-            + bpass-2.2.1-bin_chabrier03-0.1,300.0 
-            + bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c17.03 
-            + bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c17.03_resolution:0.1 
+            + bpass-2.2.1-bin_chabrier03-0.1,100.0_cloudy-c23.01-sps
+            + bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps
+            + bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps-fixed_ionisation_parameter
     
     * Single star variant variant
         - Broken power-law IMF
-            + bpass-2.2.1-sin_bpl-0.1,1.0,100.0-1.3,2.0 
-            + bpass-2.2.1-sin_bpl-0.1,1.0,100.0-1.3,2.35 
-            + pass-2.2.1-sin_bpl-0.1,1.0,100.0-1.3,2.7 
-            + bpass-2.2.1-sin_bpl-0.1,1.0,300.0-1.3,2.0 
-            + bpass-2.2.1-sin_bpl-0.1,1.0,300.0-1.3,2.35 
-            + bpass-2.2.1-sin_bpl-0.1,1.0,300.0-1.3,2.7 
+            + bpass-2.2.1-sin_bpl-0.1,1.0,300.0-1.3,2.7
+            + bpass-2.2.1-sin_bpl-0.1,1.0,300.0-1.3,2.0_cloudy-c23.01-sps
+            + bpass-2.2.1-sin_bpl-0.1,1.0,300.0-1.3,2.35_cloudy-c23.01-sps
+            
         - Chabrier (2003) IMF
-            + bpass-2.2.1-sin_chabrier03-0.1,100.0 
-            + bpass-2.2.1-sin_chabrier03-0.1,300.0 
+            + bpass-2.2.1-sin_chabrier03-0.1,100.0
+            + bpass-2.2.1-sin_chabrier03-0.1,100.0_cloudy-c23.01-sps
+            + bpass-2.2.1-sin_chabrier03-0.1,300.0_cloudy-c23.01-sps
+
+
 
 .. collapse:: Binary Population and Spectral Synthesis (BPASS) v2.3
 
     `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ 
     
     * Binary variant
-        - Chabrier (2003) IMF
-            + bpass-2.3-bin_chabrier03-0.1,300.0 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha-0.2 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha-0.2_cloudy-c17.03_resolution:0.1 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.0 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.2 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.2_cloudy-c17.03_resolution:0.1 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.4 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.4_cloudy-c17.03_resolution:0.1 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.6 
-            + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.6_cloudy-c17.03_resolution:0.1 
+        - Broken power-law IMF
+            + bpass-2.3-bin_bpl-0.1,1.0,300.0-1.3,2.35
+            + bpass-2.3-bin_bpl-0.1,1.0,300.0-1.3,2.35_alpha0.0_cloudy-c23.01-sps
+            + bpass-2.3-bin_bpl-0.1,1.0,300.0-1.3,2.35_alpha0.4_cloudy-c23.01-sps
+            + bpass-2.3-bin_bpl-0.1,1.0,300.0-1.3,2.35_alpha0.6_cloudy-c23.01-sps
+
 
 
 .. collapse:: Flexible Stellar Population Synthesis (FSPS) v3.2
     
-    * Broken power-law IMF - Note: several of these are currently missing.
-        - fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.3 
-        - fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.3_cloudy-c17.03 
-        - fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.8 
-        - fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.8_cloudy-c17.03 
-        - fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.9 
-        - fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,3.0 
+    * Broken power-law IMF 
+        - fsps-3.2-mistmiles_bpl-0.08,0.5,1,120-1.3,2.3,2.1_cloudy-c23.01-sps
+        - fsps-3.2-mistmiles_bpl-0.08,0.5,1,120-1.3,2.3,3.0_cloudy-c23.01-sps
+        - fsps-3.2-mistmiles_bpl-0.08,0.5,1,120-1.3,2.3,2.7_cloudy-c23.01-sps
     
     * Chabrier (2003) IMF
-        - fsps-3.2_chabrier03-0.08,1 
-        - fsps-3.2_chabrier03-0.08,10 
-        - fsps-3.2_chabrier03-0.08,100 
-        - fsps-3.2_chabrier03-0.08,100_cloudy-c17.03 
-        - fsps-3.2_chabrier03-0.08,120 
-        - fsps-3.2_chabrier03-0.08,120_cloudy-c17.03 
-        - fsps-3.2_chabrier03-0.08,120_cloudy-c17.03_resolution:0.1 
-        - fsps-3.2_chabrier03-0.08,2 
-        - fsps-3.2_chabrier03-0.08,20 
-        - fsps-3.2_chabrier03-0.08,5 
-        - fsps-3.2_chabrier03-0.08,50 
-        - fsps-3.2_chabrier03-0.08,50_cloudy-c17.03 
-        - fsps-3.2_chabrier03-0.5,120 
-        - fsps-3.2_chabrier03-0.5,120_cloudy-c17.03 
-        - fsps-3.2_chabrier03-1,120 
-        - fsps-3.2_chabrier03-1,120_cloudy-c17.03 
-        - fsps-3.2_chabrier03-10,120 
-        - fsps-3.2_chabrier03-10,120_cloudy-c17.03 
-        - fsps-3.2_chabrier03-2,120 
-        - fsps-3.2_chabrier03-2,120_cloudy-c17.03 
-        - fsps-3.2_chabrier03-20,120 
-        - fsps-3.2_chabrier03-20,120_cloudy-c17.03 
-        - fsps-3.2_chabrier03-5,120 
-        - fsps-3.2_chabrier03-50,120 
-        - fsps-3.2_chabrier03-50,120_cloudy-c17.03 
+        - fsps-3.2-mistmiles_chabrier03-50,120
+        - fsps-3.2-mistmiles_chabrier03-0.08,100_cloudy-c23.01-sps
+        - fsps-3.2-mistmiles_chabrier03-0.08,5_cloudy-c23.01-sps
 
 .. collapse:: Maraston models
     
     * Broken power-law IMF  
-        - maraston-rhb_bpl-0.1,100-2.35 
+        - maraston05-rhb_bpl-0.1,100-2.35
+        - maraston05-rhb_bpl-0.1,100-2.35_cloudy-c23.01-sps
+    
+    * Kroupa IMF 
+        - maraston13_kroupa-0.1,100
+        - maraston24-Tenc_0.00_kroupa-0.1,100
+        - maraston24-Tenc40_kroupa-0.1,100_cloudy-c23.01-sps
 
 
 Exploring Grids
