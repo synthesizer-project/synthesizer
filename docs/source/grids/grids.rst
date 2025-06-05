@@ -114,8 +114,8 @@ Below are examples of the pre-computed grids available in the `Box <https://suss
     
     * The Stelib variant
         - Chabrier (2003) IMF
-            + bc03-2016-Stelib_chabrier-0.1,100
-            + bc03-2016-Stelib_chabrier-0.1,100_cloudy-c23.01-sps
+            + bc03-2016-Stelib_chabrier03-0.1,100
+            + bc03-2016-Stelib_chabrier03-0.1,100_cloudy-c23.01-sps
 
 .. collapse:: Binary Population and Spectral Synthesis (BPASS) v2.2.1
 
