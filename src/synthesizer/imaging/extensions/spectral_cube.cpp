@@ -202,8 +202,7 @@ void populate_smoothed_data_cube_parallel(
     const int kdim, double *data_cube, const int nthreads) {
 
   /* Set up an array of locks. */
-  omp_lock_t *locks =
-      (omp_lock_t *)malloc(npix_x * npix_y * sizeof(omp_lock_t));
+  omp_lock_t *locks = new omp_lock_t[npix_x * npix_y];
   for (int i = 0; i < npix_x * npix_y; i++) {
     omp_init_lock(&locks[i]);
   }
@@ -318,6 +317,7 @@ void populate_smoothed_data_cube_parallel(
     }
     delete[] part_kernel;
   }
+  delete[] locks;
 }
 #endif
 
@@ -452,8 +452,7 @@ void populate_hist_data_cube_parallel(const double *sed_values,
                                       const int nthreads) {
 
   /* Set up an array of locks. */
-  omp_lock_t *locks =
-      (omp_lock_t *)malloc(npix_x * npix_y * sizeof(omp_lock_t));
+  omp_lock_t *locks = new omp_lock_t[npix_x * npix_y];
   for (int i = 0; i < npix_x * npix_y; i++) {
     omp_init_lock(&locks[i]);
   }
@@ -484,6 +483,8 @@ void populate_hist_data_cube_parallel(const double *sed_values,
     }
     omp_unset_lock(&locks[j + npix_y * i]);
   }
+
+  delete[] locks;
 }
 #endif
 
