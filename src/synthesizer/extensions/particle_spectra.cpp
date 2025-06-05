@@ -324,7 +324,7 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   const int nlam = grid_props->nlam;
 
   /* Loop over particles. */
-#pragma omp parallel for schedule(static) num_threads(nthreads)
+#pragma omp parallel for schedule(static) num_threads(nthreads) reduction(+:spectra[:nlam])
   for (int p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
