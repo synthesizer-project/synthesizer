@@ -24,6 +24,24 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
 }
 
 /**
+ * @brief Destructor for the particles class.
+ */
+Particles::~Particles() {
+  /* We don't own the numpy arrays, so we don't need to free them. */
+  np_weights_ = NULL;
+  np_velocities_ = NULL;
+  np_mask_ = NULL;
+
+  /* The part_tuple is a tuple of numpy arrays, we don't own it either. */
+  part_tuple_ = NULL;
+
+  /* We don't need to do anything else here, the numpy arrays will be freed
+   * automatically when the Python objects are destroyed. */
+  /* Note: If we had allocated any memory in this class, we would free it here,
+   * but we don't own the numpy arrays, so we don't need to do anything. */
+}
+
+/**
  * @brief Get the weights of the particles.
  *
  * @return The weights of the particles.

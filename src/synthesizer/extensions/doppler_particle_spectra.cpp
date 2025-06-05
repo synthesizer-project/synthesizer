@@ -644,13 +644,11 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* Extract the grid struct. */
   GridProps *grid_props =
       new GridProps(np_grid_spectra, grid_tuple, np_lam, np_lam_mask, nlam);
-
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
   Particles *part_props =
       new Particles(np_part_mass, np_velocities, np_mask, part_tuple, npart);
-
   RETURN_IF_PYERR();
 
   /* Allocate the spectra. */
