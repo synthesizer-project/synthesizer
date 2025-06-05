@@ -57,14 +57,9 @@ get_indices_from_flat(int flat_ind, int ndim,
 static inline int
 get_flat_index(const std::array<int, MAX_GRID_NDIM> multi_index,
                const int *dims, const int ndim) {
+
   int index = 0, stride = 1;
   for (int i = ndim - 1; i >= 0; i--) {
-    // … rest of loop body …
-  }
-  // … rest of function …
-}
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
     index += stride * multi_index[i];
     stride *= dims[i];
   }
@@ -87,8 +82,6 @@ get_flat_index(const std::array<int, MAX_GRID_NDIM + 1> multi_index,
                const int *dims, const int ndim) {
   int index = 0, stride = 1;
   for (int i = ndim - 1; i >= 0; i--) {
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
     index += stride * multi_index[i];
     stride *= dims[i];
   }
