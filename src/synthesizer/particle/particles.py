@@ -512,6 +512,11 @@ class Particles:
                 f"but threshold has ({thresh})."
             )
 
+        # If we only have a scalar attribute we need to expand it to a
+        # nparticle array
+        if attr.size == 1:
+            attr = np.full(self.nparticles, attr.value, dtype=np.float64)
+
         # Apply the operator
         if op == ">":
             new_mask = attr > thresh

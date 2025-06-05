@@ -164,6 +164,12 @@ double Particles::get_part_prop_at(int idim, int pind) const {
     return -1.0;
   }
 
+  /* If we have a size 1 array then we have a fixed scalar value. In this case
+   * we return the first element. */
+  if (PyArray_SIZE(np_part_arr) == 1) {
+    return get_double_at(np_part_arr, 0);
+  }
+
   return get_double_at(np_part_arr, pind);
 }
 
