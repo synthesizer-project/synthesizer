@@ -178,7 +178,7 @@ Below are examples of the pre-computed grids available in the `Box <https://suss
     
     * Kroupa IMF 
         - maraston13_kroupa-0.1,100
-        - maraston24-Tenc_0.00_salpeter-0.1,100
+        - maraston24-Tenc_0.00_kroupa-0.1,100
         - maraston24-Tenc40_kroupa-0.1,100_cloudy-c23.01-sps
 
 
