@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dust_extinction.grain_models import WD01
 from scipy import interpolate
-from unyt import angstrom
+from unyt import angstrom, um
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
@@ -344,12 +344,12 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
     # Performing some unit conversions to match the
     # Calzetti curve units which are in um
-    _lam = lam.to("um")
+    _lam = np.linspace(0.08, 1, 10000) * um
     _cent_lam = cent_lam.to("um")
     _gamma = gamma.to("um")
     lam_v = 0.55  # in um
 
-    k_lam = np.zeros_like(lam.value)
+    k_lam = np.zeros_like(_lam.value)
 
     # Masking for different regimes in the Calzetti curve
     ok1 = (_lam >= 0.12) * (_lam < 0.63)  # 0.12um<=lam<0.63um
@@ -393,7 +393,11 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # normalised optical depth
     tau_x_v = (k_lam + D_lam) / k_v
 
-    return tau_x_v * (_lam / lam_v) ** slope
+    func = interpolate.interp1d(
+        _lam, tau_x_v * (_lam / lam_v) ** slope, fill_value="extrapolate"
+    )
+
+    return func(lam.to("um"))
 
 
 class Calzetti2000(AttenuationLaw):
