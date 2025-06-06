@@ -3,19 +3,23 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
+#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* Python includes */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "cpp_to_python.h"
+#include "grid_props.h"
 #include "macros.h"
+#include "part_props.h"
 #include "property_funcs.h"
 #include "timers.h"
 #include "weights.h"
@@ -24,26 +28,24 @@
  * @brief Compute the integrated spectra from the grid weights.
  *
  * @param grid_props: The grid properties.
- * @param grid_weights: The grid weights computed from the particles.
  *
  * @return The integrated spectra.
  */
-static double *get_spectra_serial(struct grid *grid_props,
-                                  double *grid_weights) {
+static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
 
-  /* Set up array to hold the SED itself. */
-  double *spectra = (double *)malloc(grid_props->nlam * sizeof(double));
-  if (spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
-    return NULL;
-  }
-  bzero(spectra, grid_props->nlam * sizeof(double));
+  /* Define the output dimensions. */
+  npy_intp np_int_dims[1] = {grid_props->nlam};
+
+  /* Allocate the output spectra. */
+  PyArrayObject *np_spectra =
+      (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_DOUBLE, 0);
+  double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
 
   /* Loop over wavelengths */
   for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
 
     /* Skip if this wavelength is masked. */
-    if (grid_props->lam_mask != NULL && !grid_props->lam_mask[ilam]) {
+    if (grid_props->lam_is_masked(ilam)) {
       continue;
     }
 
@@ -51,50 +53,41 @@ static double *get_spectra_serial(struct grid *grid_props,
     for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
       /* Get the weight. */
-      const double weight = grid_weights[grid_ind];
+      const double weight = grid_props->get_grid_weight_at(grid_ind);
 
       /* Skip zero weight cells. */
       if (weight <= 0)
         continue;
 
-      /* Get the spectra ind. */
-      int unraveled_ind[grid_props->ndim + 1];
-      get_indices_from_flat(grid_ind, grid_props->ndim, grid_props->dims,
-                            unraveled_ind);
-      unraveled_ind[grid_props->ndim] = 0;
-      int spectra_ind =
-          get_flat_index(unraveled_ind, grid_props->dims, grid_props->ndim + 1);
+      /* Get the grid spectra value at this index and wavelength. */
+      double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
 
       /* Add the contribution to this wavelength. */
-      spectra[ilam] += grid_props->spectra[spectra_ind + ilam] * weight;
+      spectra[ilam] += spec_val * weight;
     }
   }
 
-  return spectra;
+  return np_spectra;
 }
 
 /**
  * @brief Compute the integrated spectra from the grid weights.
  *
  * @param grid_props: The grid properties.
- * @param grid_weights: The grid weights computed from the particles.
  * @param nthreads: The number of threads to use.
  *
  * @return The integrated spectra.
  */
 #ifdef WITH_OPENMP
-static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
-                               int nthreads) {
+static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
 
-  double *spectra = NULL;
-  int err =
-      posix_memalign((void **)&spectra, 64, grid_props->nlam * sizeof(double));
-  if (err != 0 || spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Failed to allocate aligned memory for spectra.");
-    return NULL;
-  }
-  bzero(spectra, grid_props->nlam * sizeof(double));
+  /* Define the output dimensions. */
+  npy_intp np_int_dims[1] = {grid_props->nlam};
+
+  /* Allocate the output spectra. */
+  PyArrayObject *np_spectra =
+      (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_DOUBLE, 0);
+  double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -117,7 +110,7 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
     for (int ilam = 0; ilam < end - start; ilam++) {
 
       /* Skip if this wavelength is masked. */
-      if (grid_props->lam_mask != NULL && !grid_props->lam_mask[start + ilam]) {
+      if (grid_props->lam_is_masked(start + ilam)) {
         continue;
       }
 
@@ -128,30 +121,24 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
       for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
         /* Get the weight. */
-        const double weight = grid_weights[grid_ind];
+        const double weight = grid_props->get_grid_weight_at(grid_ind);
 
         /* Skip zero weight cells. */
         if (weight <= 0)
           continue;
 
-        /* Get the spectra ind. */
-        int unraveled_ind[grid_props->ndim + 1];
-        get_indices_from_flat(grid_ind, grid_props->ndim, grid_props->dims,
-                              unraveled_ind);
-        unraveled_ind[grid_props->ndim] = 0;
-        int spectra_ind = get_flat_index(unraveled_ind, grid_props->dims,
-                                         grid_props->ndim + 1);
+        /* Get the grid spectra value at this index and wavelength. */
+        double spec_val = grid_props->get_spectra_at(grid_ind, start + ilam);
 
         /* Add the contribution to this wavelength. */
-        this_element +=
-            grid_props->spectra[spectra_ind + start + ilam] * weight;
+        this_element += spec_val * weight;
       }
 
       spectra[start + ilam] = this_element;
     }
   }
 
-  return spectra;
+  return np_spectra;
 }
 #endif
 
@@ -164,26 +151,25 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
  *
  * @return The integrated spectra.
  */
-static double *get_spectra(struct grid *grid_props, double *grid_weights,
-                           int nthreads) {
+static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
 
   double reduction_start = tic();
 #ifdef WITH_OPENMP
   /* Do we have multiple threads to do the reduction on to the spectra? */
-  double *spectra;
+  PyArrayObject *np_spectra;
   if (nthreads > 1) {
-    spectra = get_spectra_omp(grid_props, grid_weights, nthreads);
+    np_spectra = get_spectra_omp(grid_props, nthreads);
   } else {
-    spectra = get_spectra_serial(grid_props, grid_weights);
+    np_spectra = get_spectra_serial(grid_props);
   }
 #else
   /* We can't do the reduction in parallel without OpenMP. */
-  double *spectra = get_spectra_serial(grid_props, grid_weights);
+  PyArrayObject *np_spectra = get_spectra_serial(grid_props);
 #endif
 
   toc("Compute integrated spectra from weights", reduction_start);
 
-  return spectra;
+  return np_spectra;
 }
 
 /**
@@ -203,7 +189,6 @@ static double *get_spectra(struct grid *grid_props, double *grid_weights,
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   double start_time = tic();
-  double setup_start = tic();
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -223,38 +208,22 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Extract the grid struct. */
-  struct grid *grid_props =
-      get_spectra_grid_struct(grid_tuple, np_ndims, np_grid_spectra,
-                              /*np_lam*/ NULL, np_lam_mask, ndim, nlam);
-  if (grid_props == NULL) {
-    return NULL;
-  }
+  GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
+                                        /*np_lam*/ NULL, np_lam_mask, nlam);
+  RETURN_IF_PYERR();
 
-  /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
-  if (part_props == NULL) {
-    return NULL;
-  }
+  /* Create the object that holds the particle properties. */
+  Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
+                                        np_mask, part_tuple, npart);
+  RETURN_IF_PYERR();
 
-  /* Allocate the grid weights. */
-  double *grid_weights = NULL;
-  if (np_grid_weights == Py_None) {
-    grid_weights = calloc(grid_props->size, sizeof(double));
-    if (grid_weights == NULL) {
-      PyErr_SetString(PyExc_MemoryError,
-                      "Could not allocate memory for grid weights.");
-      return NULL;
-    }
-  } else {
-    grid_weights = (double *)PyArray_DATA(np_grid_weights);
-  }
-
-  toc("Extracting Python data", setup_start);
+  /* Get existing grid weights or allocate new ones. */
+  double *grid_weights = grid_props->get_grid_weights();
+  RETURN_IF_PYERR();
 
   /* With everything set up we can compute the weights for each particle using
-   * the requested method. */
-  if (np_grid_weights == Py_None) {
+   * the requested method if we need to. */
+  if (grid_props->need_grid_weights()) {
     if (strcmp(method, "cic") == 0) {
       weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
                       nthreads);
@@ -266,40 +235,26 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       return NULL;
     }
   }
-
-  /* Check we got the weights sucessfully. (Any error messages will already be
-   * set) */
-  if (grid_weights == NULL) {
-    return NULL;
-  }
+  RETURN_IF_PYERR();
 
   /* Compute the integrated SED. */
-  double *spectra = get_spectra(grid_props, grid_weights, nthreads);
-  if (spectra == NULL) {
+  PyArrayObject *np_spectra = get_spectra(grid_props, nthreads);
+  if (np_spectra == NULL) {
     PyErr_SetString(PyExc_RuntimeError, "Could not compute integrated SED.");
     return NULL;
   }
+  RETURN_IF_PYERR();
 
-  /* Reconstruct the python array to return. */
-  npy_intp np_dims[1] = {nlam};
-  PyArrayObject *out_spectra =
-      c_array_to_numpy(1, np_dims, NPY_FLOAT64, spectra);
-
-  /* Construct the grid weights output numpy array. */
-  npy_intp np_dims_weights[grid_props->ndim];
-  for (int i = 0; i < grid_props->ndim; i++) {
-    np_dims_weights[i] = grid_props->dims[i];
-  }
-  PyArrayObject *out_grid_weights = c_array_to_numpy(
-      grid_props->ndim, np_dims_weights, NPY_FLOAT64, grid_weights);
+  /* Extract the output grid weights before we free the grid object. */
+  np_grid_weights = grid_props->get_np_grid_weights();
 
   /* Clean up memory! */
-  free(part_props);
-  free(grid_props);
+  delete grid_props;
+  delete part_props;
 
   toc("Compute integrated SED", start_time);
 
-  return Py_BuildValue("NN", out_spectra, out_grid_weights);
+  return Py_BuildValue("NN", np_spectra, np_grid_weights);
 }
 
 static PyMethodDef SedMethods[] = {
@@ -322,6 +277,9 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_integrated_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  import_array();
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return m;
 }

@@ -3,19 +3,23 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
+#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* Python includes */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "cpp_to_python.h"
+#include "grid_props.h"
 #include "macros.h"
+#include "part_props.h"
 #include "property_funcs.h"
 #include "timers.h"
 #include "weights.h"
@@ -37,7 +41,6 @@
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   double start_time = tic();
-  double setup_start = tic();
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -55,60 +58,41 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Extract the grid struct. */
-  struct grid *grid_props =
-      get_spectra_grid_struct(grid_tuple, np_ndims, /*np_grid_spectra*/ NULL,
-                              /*np_lam*/ NULL, NULL, ndim, /*nlam*/ 1);
-  if (grid_props == NULL) {
-    return NULL;
-  }
+  GridProps *grid_props =
+      new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
+                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1);
+  RETURN_IF_PYERR();
 
-  /* Extract the particle struct. */
-  struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
-  if (part_props == NULL) {
-    return NULL;
-  }
+  Particles *parts = new Particles(np_part_mass, /*np_velocities*/ NULL,
+                                   np_mask, part_tuple, npart);
+  RETURN_IF_PYERR();
 
-  /* Allocate the sfzh array to output. */
-  double *sfzh = calloc(grid_props->size, sizeof(double));
-  if (sfzh == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
-    return NULL;
-  }
-
-  toc("Extracting Python data", setup_start);
+  /* Get the grid weights we'll work on. */
+  double *sfzh = grid_props->get_grid_weights();
+  RETURN_IF_PYERR();
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, grid_props->size, sfzh, nthreads);
+    weight_loop_cic(grid_props, parts, grid_props->size, sfzh, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, grid_props->size, sfzh, nthreads);
+    weight_loop_ngp(grid_props, parts, grid_props->size, sfzh, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
+  RETURN_IF_PYERR();
 
-  /* Check we got the output. (Any error messages will already be set) */
-  if (sfzh == NULL) {
-    return NULL;
-  }
-
-  /* Reconstruct the python array to return. */
-  npy_intp np_dims[ndim];
-  for (int idim = 0; idim < ndim; idim++) {
-    np_dims[idim] = grid_props->dims[idim];
-  }
-
-  PyArrayObject *out_sfzh = c_array_to_numpy(ndim, np_dims, NPY_FLOAT64, sfzh);
+  /* Extract the grid weights we'll write out. */
+  PyArrayObject *np_sfzh = grid_props->get_np_grid_weights();
 
   /* Clean up memory! */
-  free(part_props);
-  free(grid_props);
+  delete parts;
+  delete grid_props;
 
   toc("Computing SFZH", start_time);
 
-  return Py_BuildValue("N", out_sfzh);
+  return Py_BuildValue("N", np_sfzh);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
@@ -132,6 +116,9 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_sfzh(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  import_array();
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return m;
 }

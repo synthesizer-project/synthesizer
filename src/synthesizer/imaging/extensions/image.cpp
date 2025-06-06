@@ -9,12 +9,13 @@
 #include <string.h>
 
 /* Python includes. */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "../../extensions/numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
 /* Local includes. */
+#include "../../extensions/cpp_to_python.h"
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
 
@@ -68,8 +69,7 @@ void populate_smoothed_image_serial(const double *pix_values,
   }
 
   /* Allocate the particle kernel. */
-  double *part_kernel = synth_malloc(
-      max_kernel_cdim * max_kernel_cdim * sizeof(double), "part_kernel");
+  double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
 
   /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
@@ -174,7 +174,7 @@ void populate_smoothed_image_serial(const double *pix_values,
       }
     }
   }
-  free(part_kernel);
+  delete[] part_kernel;
 }
 
 /**
@@ -225,8 +225,7 @@ void populate_smoothed_image_parallel(
   {
 
     /* Allocate the per thread particle kernel. */
-    double *part_kernel = synth_malloc(
-        max_kernel_cdim * max_kernel_cdim * sizeof(double), "part_kernel");
+    double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
 
     /* Loop over positions including the sed */
 #pragma omp for schedule(dynamic)
@@ -333,7 +332,7 @@ void populate_smoothed_image_parallel(
         }
       }
     }
-    free(part_kernel);
+    delete[] part_kernel;
   }
 }
 #endif
@@ -415,7 +414,6 @@ void populate_smoothed_image(const double *pix_values,
 PyObject *make_img(PyObject *self, PyObject *args) {
 
   double start_time = tic();
-  double setup_start = tic();
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -439,25 +437,25 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   const double *pos = extract_data_double(np_pos, "pos");
   const double *kernel = extract_data_double(np_kernel, "kernel");
 
-  /* Allocate the image.. */
-  const int npix = npix_x * npix_y * nimgs;
-  double *img = synth_malloc(npix * sizeof(double), "image");
-  memset(img, 0, npix * sizeof(double));
+  toc("Extracting Python data", start_time);
 
-  toc("Extracting Python data", setup_start);
+  double out_start = tic();
+
+  /* Create the zeroed image numpy array. */
+  npy_intp np_img_dims[3] = {nimgs, npix_x, npix_y};
+  PyArrayObject *np_img =
+      (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
+  double *img = (double *)PyArray_DATA(np_img);
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, smoothing_lengths, pos, kernel, res,
                           npix_x, npix_y, npart, threshold, kdim, img, nimgs,
                           nthreads);
-
-  /* Construct a numpy python array to return the IFU. */
-  npy_intp dims[3] = {nimgs, npix_x, npix_y};
-  PyArrayObject *out_img = c_array_to_numpy(3, dims, NPY_DOUBLE, img);
+  printf("Populated image");
 
   toc("Computing smoothed image", start_time);
 
-  return Py_BuildValue("N", out_img);
+  return Py_BuildValue("N", np_img);
 }
 
 static PyMethodDef ImageMethods[] = {
@@ -481,6 +479,9 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_image(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  import_array();
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return m;
 }

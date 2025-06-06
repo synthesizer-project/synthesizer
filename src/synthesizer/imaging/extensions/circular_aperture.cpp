@@ -17,9 +17,10 @@
 #endif
 
 /* Python includes */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "../../extensions/numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/arrayobject.h>
 
 /* Local includes */
 #include "../../extensions/property_funcs.h"
@@ -417,6 +418,9 @@ static struct PyModuleDef circularoverlapmodule = {
 
 /* Define the initialisation function */
 PyMODINIT_FUNC PyInit_circular_aperture(void) {
-  import_array(); // Initialize numpy API
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return PyModule_Create(&circularoverlapmodule);
 }

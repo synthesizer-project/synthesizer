@@ -1,16 +1,19 @@
 /******************************************************************************
  * A C module containing helper functions for integration.
  *****************************************************************************/
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/arrayobject.h>
 
 #ifdef WITH_OPENMP
 #include <omp.h>
 #endif
 
 /* Local includes. */
+#include "cpp_to_python.h"
 #include "property_funcs.h"
+#include "timers.h"
 
 /**
  * @brief Serial trapezoidal integration.
@@ -109,10 +112,17 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   for (npy_intp i = 0; i < ndim - 1; ++i) {
     result_shape[i] = shape[i];
   }
-  PyObject *result =
-      (PyObject *)c_array_to_numpy(ndim - 1, result_shape, NPY_DOUBLE, integral);
+  PyArrayObject *result =
+      wrap_array_to_numpy<double>(ndim - 1, result_shape, integral);
 
-  return result; /* Return the computed integral */
+  /* Create the output object. */
+  if (result == NULL) {
+    free(integral); /* Free the allocated memory on error */
+    return NULL;    /* Return NULL in case of error */
+  }
+  PyObject *output = (PyObject *)result;
+
+  return output;
 }
 
 /**
@@ -231,10 +241,17 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   for (npy_intp i = 0; i < ndim - 1; ++i) {
     result_shape[i] = shape[i];
   }
-  PyObject *result =
-      (PyObject *)c_array_to_numpy(ndim - 1, result_shape, NPY_DOUBLE, integral);
+  PyArrayObject *result =
+      wrap_array_to_numpy<double>(ndim - 1, result_shape, integral);
 
-  return result; /* Return the computed integral */
+  /* Create the output object. */
+  if (result == NULL) {
+    free(integral); /* Free the allocated memory on error */
+    return NULL;    /* Return NULL in case of error */
+  }
+  PyObject *output = (PyObject *)result;
+
+  return output;
 }
 
 static PyMethodDef IntegrationMethods[] = {
@@ -256,6 +273,9 @@ static struct PyModuleDef integrationmodule = {
     NULL};
 
 PyMODINIT_FUNC PyInit_integration(void) {
-  import_array(); /* Initialize the NumPy C-API */
+  if (numpy_import() < 0) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    return NULL;
+  }
   return PyModule_Create(&integrationmodule);
 }

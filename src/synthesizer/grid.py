@@ -642,6 +642,25 @@ class Grid:
                     lum_units,
                 )
 
+            # Ensure the line luminosities and continuums are contiguous
+            for spectra in self.available_spectra:
+                lum_units = self.line_lums[spectra].units
+                cont_units = self.line_conts[spectra].units
+                self.line_lums[spectra] = (
+                    np.ascontiguousarray(
+                        self.line_lums[spectra],
+                        dtype=np.float64,
+                    )
+                    * lum_units
+                )
+                self.line_conts[spectra] = (
+                    np.ascontiguousarray(
+                        self.line_conts[spectra],
+                        dtype=np.float64,
+                    )
+                    * cont_units
+                )
+
     def _prepare_lam_axis(
         self,
         new_lam,
