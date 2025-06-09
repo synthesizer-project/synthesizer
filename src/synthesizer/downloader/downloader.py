@@ -26,9 +26,6 @@ from synthesizer import DATA_DIR, exceptions
 from synthesizer.instruments import AVAILABLE_INSTRUMENTS
 from synthesizer.synth_warnings import warn
 
-# Define the location of this file
-THIS_DIR = "/".join(os.path.abspath(__file__).split("/")[:-1])
-
 
 def load_database_yaml():
     """Load the database yaml file."""
@@ -124,6 +121,13 @@ def _download(
 
     # Unpack the url
     url = file_details["direct_link"]
+
+    # Ensure the save directory exists
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Be verbose about the save directory
+        print(f"{save_dir} does not exist. Creating it...")
 
     # Define the save path
     save_path = f"{save_dir}/{savename}"

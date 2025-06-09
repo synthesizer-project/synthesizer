@@ -26,13 +26,21 @@ from synthesizer.instruments import filters
 from synthesizer.utils import art, integrate, plt, stats, util_funcs
 
 # Define the data directory where we expect to find the data files
-DATA_DIR = Path(user_data_dir("synthesizer")) / "data"
+DATA_DIR = Path(user_data_dir("Synthesizer")) / "data"
 
 # If the data directory does not exist, create it and copy some files
 if not DATA_DIR.exists():
-    # Create the subdirectories we expect to exist
-    for sub in ("instrument_cache", "test_data", "grids", "database"):
-        (DATA_DIR / sub).mkdir(parents=True, exist_ok=True)
+    # Be verbose about what we are doing
+    print(f"Creating synthesizer data directory at {DATA_DIR}...")
+
+    # Create the subdirectories we expect to exist (and be clear about it)
+    (DATA_DIR / "grids").mkdir(parents=True, exist_ok=True)
+    print(f"Created the default Grid directory: {DATA_DIR / 'grids'}")
+    (DATA_DIR / "instrument_cache").mkdir(parents=True, exist_ok=True)
+    print(
+        "Created a directory for cached Instrument "
+        f"objects: {DATA_DIR / 'instrument_cache'}"
+    )
 
     # Copy the default units file to the data directory so that it is readily
     # editable by the user
@@ -40,6 +48,10 @@ if not DATA_DIR.exists():
         DATA_DIR / "default_units.yml", "wb"
     ) as dst:
         dst.write(src.read())
+    print(
+        f"Copied the default unit system to {DATA_DIR / 'default_units.yml'}, "
+        "this can be editted to modify the unit system used by Synthesizer"
+    )
 
     # Copy the downloaders ids database yaml file to the data directory
     with resources.open_binary(
