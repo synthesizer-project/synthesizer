@@ -90,6 +90,7 @@ dependencies = [
   "pathos",
   "statsmodels",
   "pympler",
+  "platformdirs",
 ]
 
 # Optional dependencies for specific use cases
