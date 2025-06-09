@@ -22,7 +22,7 @@ import requests
 import yaml
 from tqdm import tqdm
 
-from synthesizer import exceptions
+from synthesizer import DATA_DIR, exceptions
 from synthesizer.instruments import AVAILABLE_INSTRUMENTS
 from synthesizer.synth_warnings import warn
 
@@ -30,28 +30,27 @@ from synthesizer.synth_warnings import warn
 THIS_DIR = "/".join(os.path.abspath(__file__).split("/")[:-1])
 
 
-def load_test_data_links():
-    """Load the test data links from the yaml file."""
-    with open(f"{THIS_DIR}/_data_ids.yml", "r") as f:
+def load_database_yaml():
+    """Load the database yaml file."""
+    with open(f"{DATA_DIR}/downloader_database.yml", "r") as f:
         data = yaml.safe_load(f)
 
-    return data["TestData"]
+    return data
+
+
+def load_test_data_links():
+    """Load the test data links from the yaml file."""
+    return load_database_yaml()["TestData"]
 
 
 def load_dust_data_links():
     """Load the dust data links from the yaml file."""
-    with open(f"{THIS_DIR}/_data_ids.yml", "r") as f:
-        data = yaml.safe_load(f)
-
-    return data["DustData"]
+    return load_database_yaml()["DustData"]
 
 
 def load_instrument_data_links():
     """Load the instrument data links from the yaml file."""
-    with open(f"{THIS_DIR}/_data_ids.yml", "r") as f:
-        data = yaml.safe_load(f)
-
-    return data["InstrumentData"]
+    return load_database_yaml()["InstrumentData"]
 
 
 # Get the dicts contain the locations of the test and dust data
@@ -64,28 +63,18 @@ AVAILABLE_FILES = {**TEST_FILES, **DUST_FILES, **INSTRUMENT_FILES}
 
 # Define the instruments destination (this is always fixed to the cache dir)
 INSTRUMENT_CACHE_DIR = os.path.join(
-    THIS_DIR,
-    "..",
-    "instruments",
+    DATA_DIR,
     "instrument_cache",
 )
 
 # Define the path to the test data
 TEST_DATA_DIR = os.path.join(
-    THIS_DIR,
-    "..",
-    "..",
-    "..",
-    "tests",
-    "data",
+    DATA_DIR,
+    "test_data",
 )
 TEST_GRID_DIR = os.path.join(
-    THIS_DIR,
-    "..",
-    "..",
-    "..",
-    "tests",
-    "test_grid",
+    DATA_DIR,
+    "grids",
 )
 
 # Define a translation between instrument file names and their class names
