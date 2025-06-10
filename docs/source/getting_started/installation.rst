@@ -107,3 +107,25 @@ Multiple optional dependency groups can be installed in one command. For instanc
 .. code-block:: bash
 
     pip install cosmos-synthesizer[test,docs]
+
+Initialising Synthesizer
+************************
+
+Synthesizer has a small number of data files and directories it needs to function correctly. 
+In most circumstances you don't need to worry about these and everything will be default with automatically.
+The first time you import Synthesizer it will automatically create this directory and tell you where it is and what files have been placed there. 
+
+However, this can be invoked manually using the ``synthesizer-init`` command. Similarly, these directories can be removed using the ``synthesizer-clear`` command. 
+
+Environment Variables 
+##################### 
+
+If you want to customise any of these locations you can define a set of environment varaibles to do so. 
+
+The environment variables are:
+- ``SYNTHESIZER_DIR``: The base directory for Synthesizer files. 
+- ``SYNTHESIZER_DATA_DIR``: The directory for Synthesizer data files. 
+- ``SYNTHESIZER_INSTRUMENT_CACHE``: The directory for Synthesizer's premade instrument files.
+- ``SYNTHESIZER_TEST_DATA_DIR``: The directory for Synthesizer's test data files.
+
+Setting any of these environment variables will result in their creation and population the next time you run ``synthesizer-init`` or import Synthesizer.

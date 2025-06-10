@@ -9,23 +9,6 @@ Grids can also represent the emission from other sources, e.g. active galactic n
 
 There is a low-resolution test grid available via the ``synthesizer-download`` command line tool, but for actual projects you will need to download one or more full production grids `from Box <https://sussex.box.com/v/SynthesizerProductionGrids>`_. See details below on where on your system to download these grids and how to load them. 
 
-The Grid Directory
-------------------
-
-All synthesizer grids should be stored in a separate directory somewhere on your system. For example, we can create a folder:
-
-.. code-block:: bash
-
-    mkdir /our/synthesizer/data_directory/synthesizer_data/
-
-Within this we will additionally create another directory to hold our grids:
-
-.. code-block:: bash
-
-    mkdir /our/synthesizer/data_directory/synthesizer_data/grids
-
-If you wish, you can set this grid directory as an environment variable.
-
 Pre-Computed Grids
 ==================
 
