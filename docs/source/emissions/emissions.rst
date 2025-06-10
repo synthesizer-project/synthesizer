@@ -1,7 +1,7 @@
 Emissions 
 =================
 
-Emissions are the theoretical outputs from combining a ``Galaxy`` and/or its ``Components`` with an ``EmissionModel`` (though they can also be extracted from `a `Grid<../emission_grids/grids.rst>`_ or created explicitly with a user input). In this section, we will cover generating and working with these objects.
+Emissions are the theoretical outputs from combining a ``Galaxy`` and/or its ``Components`` with an ``EmissionModel`` (though they can also be extracted from a `Grid<../emission_grids/grids.rst>`_ or created explicitly with a user input). In this section, we will cover generating and working with these objects.
 
 Emission Lines
 ~~~~~~~~~~~~~~~
