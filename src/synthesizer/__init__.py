@@ -1,8 +1,27 @@
-from importlib import resources
+import os
 from pathlib import Path
 
 import yaml
 from platformdirs import user_data_dir
+
+from synthesizer.data.initialise import (
+    get_data_dir,
+    get_grids_dir,
+    get_instrument_dir,
+    get_test_data_dir,
+    synth_initialise,
+)
+
+# Intilialize Synthesizer, this will only be run if the data directory and
+# subdirectories do not exist, i.e. when the package is first imported or after
+# any of the envionment variables have been changed.
+synth_initialise()
+
+# Define all the directory paths
+DATA_DIR = get_data_dir()
+GRID_DIR = get_grids_dir()
+TEST_DATA_DIR = get_test_data_dir()
+INSTRUMENT_DIR = get_instrument_dir()
 
 # Make a version available at the top level
 from synthesizer._version import __version__
@@ -25,51 +44,22 @@ from synthesizer.instruments import filters
 # at the top level
 from synthesizer.utils import art, integrate, plt, stats, util_funcs
 
-# Define the data directory where we expect to find the data files
-DATA_DIR = Path(user_data_dir("Synthesizer")) / "data"
-
-# If the data directory does not exist, create it and copy some files
-if not DATA_DIR.exists():
-    # Be verbose about what we are doing
-    print(f"Creating synthesizer data directory at {DATA_DIR}...")
-
-    # Create the subdirectories we expect to exist (and be clear about it)
-    (DATA_DIR / "grids").mkdir(parents=True, exist_ok=True)
-    print(f"Created the default Grid directory: {DATA_DIR / 'grids'}")
-    (DATA_DIR / "instrument_cache").mkdir(parents=True, exist_ok=True)
-    print(
-        "Created a directory for cached Instrument "
-        f"objects: {DATA_DIR / 'instrument_cache'}"
-    )
-
-    # Copy the default units file to the data directory so that it is readily
-    # editable by the user
-    with resources.open_binary(__name__, "default_units.yml") as src, open(
-        DATA_DIR / "default_units.yml", "wb"
-    ) as dst:
-        dst.write(src.read())
-    print(
-        f"Copied the default unit system to {DATA_DIR / 'default_units.yml'}, "
-        "this can be editted to modify the unit system used by Synthesizer"
-    )
-
-    # Copy the downloaders ids database yaml file to the data directory
-    with resources.open_binary(
-        f"{__name__}.downloader", "_data_ids.yml"
-    ) as src, open(DATA_DIR / "downloader_database.yml", "wb") as dst:
-        dst.write(src.read())
-
-
+# Define the __all__ variable to control what is imported with
+# 'from synthesizer import *'
 __all__ = [
-    art,
-    integrate,
-    plt,
-    stats,
-    util_funcs,
-    Grid,
-    galaxy,
-    Galaxy,
-    check_openmp,
-    filters,
-    DATA_DIR,
+    "art",
+    "integrate",
+    "plt",
+    "stats",
+    "util_funcs",
+    "Grid",
+    "galaxy",
+    "Galaxy",
+    "check_openmp",
+    "filters",
+    "__version__",
+    "DATA_DIR",
+    "GRID_DIR",
+    "TEST_DATA_DIR",
+    "INSTRUMENT_DIR",
 ]
