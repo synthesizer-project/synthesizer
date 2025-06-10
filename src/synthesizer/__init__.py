@@ -14,7 +14,7 @@ from synthesizer.data.initialise import (
     synth_initialise,
 )
 
-# Intilialize Synthesizer, this will only be run if the data directory and
+# Initialize Synthesizer, this will only be run if the data directory and
 # subdirectories do not exist, i.e. when the package is first imported or after
 # any of the envionment variables have been changed.
 synth_initialise()
