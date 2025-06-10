@@ -24,7 +24,6 @@ from synthesizer.data.initialise import (
     instrument_cache_exists,
     synth_clear_data,
     synth_initialise,
-    testdata_dir_exists,
 )
 
 
@@ -137,6 +136,13 @@ class TestEnvAndPaths:
         monkeypatch.setattr(
             init_mod, "get_database_dir", lambda: tmp_path / "db"
         )
+
+        # Import here to avoid the testdata directory exists function from
+        # being treated a test
+        from synthesizer.data.initialise import (
+            testdata_dir_exists,
+        )
+
         # none exist initially
         assert not base_dir_exists()
         assert not data_dir_exists()
