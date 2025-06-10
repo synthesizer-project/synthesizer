@@ -24,7 +24,7 @@ from synthesizer.data.initialise import (
     instrument_cache_exists,
     synth_clear_data,
     synth_initialise,
-    test_data_dir_exists,
+    testdata_dir_exists,
 )
 
 
@@ -141,7 +141,7 @@ class TestEnvAndPaths:
         assert not base_dir_exists()
         assert not data_dir_exists()
         assert not grids_dir_exists()
-        assert not test_data_dir_exists()
+        assert not testdata_dir_exists()
         assert not instrument_cache_exists()
         assert not database_dir_exists()
         # create them
@@ -150,7 +150,7 @@ class TestEnvAndPaths:
         assert base_dir_exists()
         assert data_dir_exists()
         assert grids_dir_exists()
-        assert test_data_dir_exists()
+        assert testdata_dir_exists()
         assert instrument_cache_exists()
         assert database_dir_exists()
 

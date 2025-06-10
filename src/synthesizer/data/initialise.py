@@ -121,7 +121,7 @@ def get_test_data_dir() -> Path:
     return get_data_dir() / "test_data"
 
 
-def test_data_dir_exists() -> bool:
+def testdata_dir_exists() -> bool:
     """Check if the Synthesizer test data directory exists.
 
     This function checks if the Synthesizer test data directory, as defined by
@@ -424,7 +424,7 @@ def synth_initialise() -> None:
     all_exist = (
         data_dir_exists()
         and grids_dir_exists()
-        and test_data_dir_exists()
+        and testdata_dir_exists()
         and instrument_cache_exists()
         and database_dir_exists()
     )
