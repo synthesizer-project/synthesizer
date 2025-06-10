@@ -5,6 +5,7 @@ import yaml
 from platformdirs import user_data_dir
 
 from synthesizer.data.initialise import (
+    get_base_dir,
     get_data_dir,
     get_grids_dir,
     get_instrument_dir,
@@ -18,6 +19,7 @@ from synthesizer.data.initialise import (
 synth_initialise()
 
 # Define all the directory paths
+BASE_DIR = get_base_dir()
 DATA_DIR = get_data_dir()
 GRID_DIR = get_grids_dir()
 TEST_DATA_DIR = get_test_data_dir()
@@ -58,6 +60,7 @@ __all__ = [
     "check_openmp",
     "filters",
     "__version__",
+    "BASE_DIR",
     "DATA_DIR",
     "GRID_DIR",
     "TEST_DATA_DIR",

@@ -37,14 +37,11 @@ from unyt import (
 )
 from unyt.exceptions import UnitConversionError
 
-from synthesizer import DATA_DIR, exceptions
+from synthesizer import BASE_DIR, exceptions
 from synthesizer.synth_warnings import warn
 
 # Define the path to your YAML file
-FILE_PATH = os.path.join(
-    os.environ.get("SYNTHESIZER_DATA_DIR", DATA_DIR),
-    "default_units.yml",
-)
+FILE_PATH = os.path.join(BASE_DIR, "default_units.yml")
 
 
 def _load_and_convert_unit_categories() -> dict:

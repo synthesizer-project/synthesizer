@@ -291,7 +291,7 @@ class SynthesizerInitializer:
         self._copy_resource(
             "synthesizer",
             "default_units.yml",
-            self.data_dir / "default_units.yml",
+            self.base_dir / "default_units.yml",
             "units_file",
         )
         self._copy_resource(
@@ -332,7 +332,7 @@ class SynthesizerInitializer:
             (
                 "units_file",
                 "Default units file:",
-                self.data_dir / "default_units.yml",
+                self.base_dir / "default_units.yml",
             ),
             (
                 "ids_file",
@@ -415,7 +415,7 @@ def synth_initialise() -> None:
 
     # Have the files already been copied?
     if all_exist:
-        default_units_file = get_data_dir() / "default_units.yml"
+        default_units_file = get_base_dir() / "default_units.yml"
         ids_file = get_data_dir() / "database" / "downloader_database.yml"
         all_exist = default_units_file.exists() and ids_file.exists()
 
