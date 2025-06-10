@@ -4,7 +4,7 @@ Spectral Data Cubes
 Overview
 --------
 
-Synthesizer can be used to make spectral data cubes (similar to the integral field uint instruments on telescopes)
+Synthesizer can be used to make spectral data cubes (similar to the integral field unit instruments on telescopes)
 
 - `SpectralCube` objects, a container for a spaxel data cube. These provide functionality to create, manipulate and visualise spectral data cubes
 
