@@ -198,7 +198,7 @@ def load_Simba(
         if galaxy.sf_gas_mass > 0:
             galaxy.sf_gas_metallicity = (
                 np.sum(h2_masses * g_metals[g_start:g_end])
-                / galaxy.sf_gas_mass
+                / galaxy.sf_gas_mass.to(Msun).value
             )
         else:
             galaxy.sf_gas_metallicity = 0.0
