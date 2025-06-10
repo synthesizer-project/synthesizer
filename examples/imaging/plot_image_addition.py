@@ -27,7 +27,7 @@ if __name__ == "__main__":
     # Define the grid
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+    grid = Grid(grid_name)
 
     # Define an arbitrary morphology to feed the imaging
     morph = Sersic2D(

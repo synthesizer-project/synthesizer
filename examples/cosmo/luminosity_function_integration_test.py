@@ -37,7 +37,7 @@ def calc_df(x, volume, binLimits):
 h = 0.6711
 grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"
-grid = Grid(grid_name, grid_dir=grid_dir)
+grid = Grid(grid_name)
 incident = IncidentEmission(grid)
 
 filter_codes = [f"SLOAN/SDSS.{f}" for f in ["g"]]

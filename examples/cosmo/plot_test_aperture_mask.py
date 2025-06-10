@@ -16,7 +16,7 @@ from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 
 grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"
-grid = Grid(grid_name, grid_dir=grid_dir)
+grid = Grid(grid_name)
 
 gals = load_CAMELS_IllustrisTNG(
     "../../tests/data/",

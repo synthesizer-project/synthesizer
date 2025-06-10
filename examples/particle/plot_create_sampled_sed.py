@@ -21,7 +21,7 @@ from synthesizer.particle.stars import sample_sfzh
 # Define the grid
 grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
-grid = Grid(grid_name, grid_dir=grid_dir)
+grid = Grid(grid_name)
 
 # Define the emission model
 model = IncidentEmission(grid)

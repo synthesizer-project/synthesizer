@@ -84,7 +84,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     """
     # Define the parameters of the star formation and metal
     # enrichment histories.
-    grid = Grid(grids, grid_dir=grid_dir)
+    grid = Grid(grids)
     Z = grid.metallicity
     stellar_mass = 1e8 * Msun
 
