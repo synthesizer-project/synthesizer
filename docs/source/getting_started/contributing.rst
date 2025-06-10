@@ -129,7 +129,7 @@ To add Jupyter notebooks to the documentation:
              pytest --nbmake docs/source/your_new_directory/*.ipynb
 
 Example toctree:
-
+```rst
     .. toctree::
        :maxdepth: 2
        :caption: Contents
@@ -141,6 +141,7 @@ Example toctree:
        imaging/imaging
        filters
        grid_generation
+```
 
 Adding example scripts
 ~~~~~~~~~~~~~~~~~~~~~~~
