@@ -152,3 +152,4 @@ examples/cloudy/data/*
 
 # Ignore memray outputs 
 **/memray-results/**
+welcome_back.ipynb
