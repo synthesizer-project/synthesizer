@@ -68,5 +68,5 @@ __all__ = [
     "DATABASE_FILE",
     "GRID_DIR",
     "TEST_DATA_DIR",
-    "INSTRUMENT_DIR",
+    "INSTRUMENT_CACHE_DIR",
 ]
