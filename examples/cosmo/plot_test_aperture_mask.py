@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import kpc
 
+from synthesizer import TEST_DATA_DIR
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
@@ -18,10 +19,10 @@ grid_name = "test_grid"
 grid = Grid(grid_name)
 
 gals = load_CAMELS_IllustrisTNG(
-    "../../tests/data/",
+    TEST_DATA_DIR,
     snap_name="camels_snap.hdf5",
     group_name="camels_subhalo.hdf5",
-    group_dir="../../tests/data/",
+    group_dir=TEST_DATA_DIR,
 )
 
 # Define an emission model

@@ -8,6 +8,7 @@ Load SC-SAM example data into a list of galaxy objects.
 import matplotlib.pyplot as plt
 import numpy as np
 
+from synthesizer import TEST_DATA_DIR
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid
@@ -16,7 +17,6 @@ from synthesizer.load_data.load_scsam import load_SCSAM
 if __name__ == "__main__":
     # Define the grid
     grid_name = "test_grid.hdf5"
-
     grid = Grid(grid_name)
 
     # Define the emission model
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     )
 
     # Load example SC-SAM SF history (just contains 10 galaxies)
-    test_data = "../../tests/data/sc-sam_sfhist.dat"
+    test_data = f"{TEST_DATA_DIR}/sc-sam_sfhist.dat"
     # Obtain galaxy objects using different methods:
     # Particle method
     particle_galaxies, _, _ = load_SCSAM(test_data, "particle")

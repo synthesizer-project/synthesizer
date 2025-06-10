@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import km, rad, s
 
+from synthesizer import TEST_DATA_DIR
 from synthesizer.emission_models import NebularEmission
 from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
@@ -34,7 +35,7 @@ model = NebularEmission(grid, vel_shift=True)
 
 # Create galaxy object
 galaxy = load_CAMELS_IllustrisTNG(
-    "../../tests/data/",
+    TEST_DATA_DIR,
     snap_name="camels_snap.hdf5",
     group_name="camels_subhalo.hdf5",
     physical=True,

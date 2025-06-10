@@ -15,6 +15,7 @@ connection is required).
 import matplotlib.pyplot as plt
 import numpy as np
 
+from synthesizer import TEST_DATA_DIR
 from synthesizer.conversions import lnu_to_absolute_mag
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.filters import FilterCollection
@@ -43,7 +44,7 @@ filter_codes = [f"SLOAN/SDSS.{f}" for f in ["g"]]
 fc = FilterCollection(filter_codes=filter_codes, new_lam=grid.lam)
 
 gals = load_CAMELS_IllustrisTNG(
-    "../../tests/data/",
+    TEST_DATA_DIR,
     snap_name="CV_0_snap_086.hdf5",
     group_name="CV_0_fof_subhalo_tab_086.hdf5",
 )
