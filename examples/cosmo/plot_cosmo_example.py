@@ -27,7 +27,6 @@ from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 
 # Get the grid
-grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"
 grid = Grid(grid_name)
 

@@ -36,7 +36,7 @@ start = time.time()
 
 # Define the grid
 grid_name = "test_grid"
-grid_dir = "../../tests/test_grid/"
+
 grid = Grid(grid_name)
 
 # Define the grid (normally this would be defined by an SPS grid)

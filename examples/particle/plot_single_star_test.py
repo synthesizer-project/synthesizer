@@ -19,7 +19,7 @@ from synthesizer.particle import Stars as ParticleStars
 
 # Define the grid
 grid_name = "test_grid"
-grid_dir = "../../tests/test_grid/"
+
 grid = Grid(grid_name)
 
 # Define the emission model

@@ -27,7 +27,7 @@ from synthesizer.parametric.galaxy import Galaxy
 if __name__ == "__main__":
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "../../tests/test_grid/"
+
     grid = Grid(grid_name)
 
     # Define the parameters of the star formation and metal enrichment

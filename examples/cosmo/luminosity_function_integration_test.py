@@ -35,7 +35,6 @@ def calc_df(x, volume, binLimits):
 
 
 h = 0.6711
-grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"
 grid = Grid(grid_name)
 incident = IncidentEmission(grid)

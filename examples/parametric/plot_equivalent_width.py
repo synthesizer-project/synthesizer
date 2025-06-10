@@ -210,7 +210,6 @@ def measure_equivalent_width(
 
 if __name__ == "__main__":
     grid_name = "test_grid"
-    grid_dir = "../../tests/test_grid/"
 
     (
         index,

@@ -16,7 +16,7 @@ from synthesizer.load_data.load_scsam import load_SCSAM
 if __name__ == "__main__":
     # Define the grid
     grid_name = "test_grid.hdf5"
-    grid_dir = "../../tests/test_grid/"
+
     grid = Grid(grid_name)
 
     # Define the emission model

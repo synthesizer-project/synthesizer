@@ -105,9 +105,7 @@ def UVJ_metallicity(grid):
 
 
 if __name__ == "__main__":
-    grid_dir = "../../tests/test_grid"
     grid_name = "test_grid"
-
     grid = Grid(grid_name)
 
     simple_UVJ(grid)

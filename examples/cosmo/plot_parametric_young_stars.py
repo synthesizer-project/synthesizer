@@ -18,7 +18,6 @@ from synthesizer.parametric import SFH, Stars
 from synthesizer.parametric.galaxy import Galaxy
 
 if __name__ == "__main__":
-    grid_dir = "../../tests/test_grid"
     grid_name = "test_grid"
     grid = Grid(grid_name)
 
