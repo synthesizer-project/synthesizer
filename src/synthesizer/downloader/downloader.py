@@ -22,14 +22,20 @@ import requests
 import yaml
 from tqdm import tqdm
 
-from synthesizer import DATA_DIR, exceptions
+from synthesizer import (
+    DATABASE_FILE,
+    GRID_DIR,
+    INSTRUMENT_CACHE_DIR,
+    TEST_DATA_DIR,
+    exceptions,
+)
 from synthesizer.instruments import AVAILABLE_INSTRUMENTS
 from synthesizer.synth_warnings import warn
 
 
 def load_database_yaml():
     """Load the database yaml file."""
-    with open(f"{DATA_DIR}/downloader_database.yml", "r") as f:
+    with open(DATABASE_FILE, "r") as f:
         data = yaml.safe_load(f)
 
     return data
@@ -57,22 +63,6 @@ INSTRUMENT_FILES = load_instrument_data_links()
 
 # Combine everything into a nice single dict
 AVAILABLE_FILES = {**TEST_FILES, **DUST_FILES, **INSTRUMENT_FILES}
-
-# Define the instruments destination (this is always fixed to the cache dir)
-INSTRUMENT_CACHE_DIR = os.path.join(
-    DATA_DIR,
-    "instrument_cache",
-)
-
-# Define the path to the test data
-TEST_DATA_DIR = os.path.join(
-    DATA_DIR,
-    "test_data",
-)
-TEST_GRID_DIR = os.path.join(
-    DATA_DIR,
-    "grids",
-)
 
 # Define a translation between instrument file names and their class names
 # (remove the .hdf5 extension and remove underscores)
@@ -301,7 +291,10 @@ def download():
         "--instruments",
         nargs="+",
         type=str,
-        help="Download the specified instruments",
+        help=(
+            "Download the specified instruments (these are stored in the "
+            f"cache directory {INSTRUMENT_CACHE_DIR}). "
+        ),
         choices=AVAILABLE_INSTRUMENTS,
         default=[],
     )
@@ -327,7 +320,11 @@ def download():
         "--destination",
         "-d",
         type=str,
-        help="The path to the destination directory",
+        help=(
+            "The path to the destination directory by default this is"
+            f" stored in {GRID_DIR} for test data and {TEST_DATA_DIR} for"
+            " camels and sc-sam data. This argument overrides these defaults."
+        ),
         default=None,
     )
 
@@ -364,8 +361,8 @@ def download():
 
     # Are we just getting everything?
     if everything:
-        download_test_grids(dest if dest is not None else TEST_GRID_DIR)
-        download_dust_grid(dest if dest is not None else TEST_GRID_DIR)
+        download_test_grids(dest if dest is not None else GRID_DIR)
+        download_dust_grid(dest if dest is not None else GRID_DIR)
         download_camels_data(dest if dest is not None else TEST_DATA_DIR)
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
         download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
@@ -373,16 +370,12 @@ def download():
 
     # Test data?
     if test:
-        download_test_grids(dest if dest is not None else TEST_GRID_DIR)
+        download_test_grids(dest if dest is not None else GRID_DIR)
     else:
         if stellar:
-            download_stellar_test_grids(
-                dest if dest is not None else TEST_GRID_DIR
-            )
+            download_stellar_test_grids(dest if dest is not None else GRID_DIR)
         if agn:
-            download_agn_test_grids(
-                dest if dest is not None else TEST_GRID_DIR
-            )
+            download_agn_test_grids(dest if dest is not None else GRID_DIR)
 
     # Instruments?
     if len(instruments) > 0:
@@ -394,7 +387,7 @@ def download():
 
     # Dust data?
     if dust:
-        download_dust_grid(dest if dest is not None else TEST_GRID_DIR)
+        download_dust_grid(dest if dest is not None else GRID_DIR)
 
     # Camels data?
     if camels:

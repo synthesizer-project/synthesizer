@@ -153,6 +153,24 @@ def instrument_cache_exists() -> bool:
     return get_instrument_dir().exists()
 
 
+def get_database_dir() -> Path:
+    """Get the Synthesizer database directory path.
+
+    This function returns the path to the Synthesizer database directory,
+    which is a subdirectory of the Synthesizer data directory.
+    """
+    return get_data_dir() / "database"
+
+
+def database_dir_exists() -> bool:
+    """Check if the Synthesizer database directory exists.
+
+    This function checks if the Synthesizer database directory, as defined by
+    get_database_dir(), exists on the filesystem.
+    """
+    return get_database_dir().exists()
+
+
 class SynthesizerInitializer:
     """Encapsulates the initialisation of the Sythesizer data directory.
 
@@ -181,7 +199,7 @@ class SynthesizerInitializer:
         self.grids_dir = get_grids_dir()
         self.test_data_dir = get_test_data_dir()
         self.instrument_cache_dir = get_instrument_dir()
-        self.database_dir = self.data_dir / "database"
+        self.database_dir = get_database_dir()
 
         # Initialize status dictionary for each step
         keys = [
@@ -337,7 +355,7 @@ class SynthesizerInitializer:
             (
                 "ids_file",
                 "Downloaders IDs DB:",
-                self.data_dir / "downloader_database.yml",
+                self.database_dir / "downloader_database.yml",
             ),
         ]
 
@@ -411,12 +429,13 @@ def synth_initialise() -> None:
         and grids_dir_exists()
         and test_data_dir_exists()
         and instrument_cache_exists()
+        and database_dir_exists()
     )
 
     # Have the files already been copied?
     if all_exist:
         default_units_file = get_base_dir() / "default_units.yml"
-        ids_file = get_data_dir() / "database" / "downloader_database.yml"
+        ids_file = get_database_dir() / "downloader_database.yml"
         all_exist = default_units_file.exists() and ids_file.exists()
 
     # Just exit if the data directory already exists
