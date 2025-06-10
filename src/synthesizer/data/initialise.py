@@ -172,7 +172,7 @@ def database_dir_exists() -> bool:
 
 
 class SynthesizerInitializer:
-    """Encapsulates the initialisation of the Sythesizer data directory.
+    """Encapsulates the initialisation of the Synthesizer data directory.
 
     This class handles the creation of the Synthesizer data directory and its
     subdirectories, and copies default resource files into the data directory.
