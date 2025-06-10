@@ -302,7 +302,7 @@ class SynthesizerInitializer:
         )
 
     def report(self) -> None:
-        """Print a report of the initialization status."""
+        """Print a report of the initialisation."""
         # ANSI escape codes for styling
         yellow = "\033[93m"
         green = "\033[92m"
@@ -311,136 +311,90 @@ class SynthesizerInitializer:
         reset = "\033[0m"
 
         def sym(key: str) -> str:
-            """Return the symbol representing status[key]."""
             return self._SYMBOLS.get(self.status.get(key, "failed"), "✖")
 
-        # Header + ASCI art display
+        # Prepare the directory output
+        sections = [
+            ("base_dir", "Base directory:", self.base_dir),
+            ("data_dir", "Data directory:", self.data_dir),
+            ("grids", "Grids directory:", self.grids_dir),
+            (
+                "instrument_cache",
+                "Instrument cache directory:",
+                self.instrument_cache_dir,
+            ),
+            ("test_data", "Test data directory:", self.test_data_dir),
+            ("database", "Downloader database directory:", self.database_dir),
+        ]
+
+        # Prepare the file output
+        files = [
+            (
+                "units_file",
+                "Default units file:",
+                self.data_dir / "default_units.yml",
+            ),
+            (
+                "ids_file",
+                "Downloaders IDs DB:",
+                self.data_dir / "downloader_database.yml",
+            ),
+        ]
+
+        # Prepare the environment variables output
+        env_vars = [
+            ("SYNTHESIZER_DIR", self.base_dir),
+            ("SYNTHESIZER_DATA_DIR", self.data_dir),
+            ("SYNTHESIZER_GRID_DIR", self.grids_dir),
+            ("SYNTHESIZER_INSTRUMENT_CACHE", self.instrument_cache_dir),
+            ("SYNTHESIZER_TEST_DATA_DIR", self.test_data_dir),
+        ]
+
+        # Figure out the longest label so we can pad
+        all_labels = [label for _, label, _ in sections + files]
+        max_label_len = max(len(label) for label in all_labels)
+
+        # Center the galaxy art in an arbitrary width
+        galaxy_lines = galaxy.splitlines()
+        centered = "\n".join(line.center(100) for line in galaxy_lines)
+
+        # Print the initialisation header with centered galaxy art
         print(
             f"{yellow}Synthesizer initialising...{reset}\n\n"
-            f"{cyan}{galaxy}{reset}\n"
+            f"{cyan}{centered}{reset}\n"
         )
 
+        # Print the status of directories and files
         print("  Initialised Synthesizer directories:")
-
-        # Base directory outcome
-        print(
-            f"  {sym('base_dir')} {yellow}Base directory:{reset} "
-            f"{cyan}{self.base_dir}{reset}"
-        )
-
-        # Data directory outcome
-        print(
-            f"  {sym('data_dir')} {yellow}Data directory:{reset} "
-            f"{cyan}{self.data_dir}{reset}"
-        )
-
-        # Grids directory outcome
-        print(
-            f"  {sym('grids')} {yellow}Grids directory:{reset} "
-            f"{cyan}{self.grids_dir}{reset}"
-        )
-
-        # Instrument cache directory outcome
-        print(
-            f"  {sym('instrument_cache')} "
-            f"{yellow}Instrument cache directory:{reset} "
-            f"{cyan}{self.instrument_cache_dir}{reset}"
-        )
-
-        # Test data directory outcome
-        print(
-            f"  {sym('test_data')} {yellow}Test data directory:{reset} "
-            f"{cyan}{self.test_data_dir}{reset}"
-        )
-
-        # Database directory outcome
-        print(
-            f"  {sym('database')} "
-            f"{yellow}Downloader database directory:{reset} "
-            f"{cyan}{self.database_dir}{reset}"
-        )
-
+        for key, label, val in sections:
+            padded = label.ljust(max_label_len)
+            print(f"  {sym(key)} {yellow}{padded}{reset}  {cyan}{val}{reset}")
         print()
 
-        # Files outcomes
-        print(
-            f"  {sym('units_file')} {yellow}Default units file:{reset} "
-            f"{cyan}{self.data_dir / 'default_units.yml'}{reset}"
-        )
-        print(
-            f"  {sym('ids_file')} {yellow}Downloaders IDs DB:{reset} "
-            f"{cyan}{self.data_dir / 'downloader_database.yml'}{reset}"
-        )
-
+        print("  Initialised Synthesizer files:")
+        for key, label, val in files:
+            padded = label.ljust(max_label_len)
+            print(f"  {sym(key)} {yellow}{padded}{reset}  {cyan}{val}{reset}")
         print()
 
-        # Also report the environment variables that are set, or if not set
-        # give the user a copy and pasteable command to set them
-        print(
-            f"  {yellow}🔧 Environment variables (setting these will "
-            f"overide all defaults):{reset}"
-        )
-        if "SYNTHESIZER_DIR" in os.environ:
-            print(
-                f"  {yellow}Found SYNTHESIZER_DIR ={reset} "
-                f"{cyan}{os.environ['SYNTHESIZER_DIR']}{reset}"
-            )
-        else:
-            print(
-                f"  {yellow}To set SYNTHESIZER_DIR add this (or a custom"
-                f" path) to your shell config:{reset}\n"
-                f"    {magenta}export SYNTHESIZER_DIR="
-                f"'{self.base_dir}'{reset} "
-            )
-        if "SYNTHESIZER_DATA_DIR" in os.environ:
-            print(
-                f"  {yellow}Found SYNTHESIZER_DATA_DIR ={reset} "
-                f"{cyan}{os.environ['SYNTHESIZER_DATA_DIR']}{reset}"
-            )
-        else:
-            print(
-                f"  {yellow}To set SYNTHESIZER_DATA_DIR add this (or a custom"
-                f" path) to your shell config:{reset}\n"
-                f"    {magenta}export SYNTHESIZER_DATA_DIR="
-                f"'{self.data_dir}'{reset} "
-            )
-        if "SYNTHESIZER_GRID_DIR" in os.environ:
-            print(
-                f"  {yellow}Found SYNTHESIZER_GRID_DIR ={reset} "
-                f"{cyan}{os.environ['SYNTHESIZER_GRID_DIR']}{reset}"
-            )
-        else:
-            print(
-                f"  {yellow}To set SYNTHESIZER_GRID_DIR add this (or a custom"
-                f" path) to your shell config:{reset}\n"
-                f"    {magenta}export SYNTHESIZER_GRID_DIR="
-                f"'{self.grids_dir}'{reset} "
-            )
-        if "SYNTHESIZER_INSTRUMENT_CACHE" in os.environ:
-            print(
-                f"  {yellow}Found SYNTHESIZER_INSTRUMENT_CACHE ={reset} "
-                f"{cyan}{os.environ['SYNTHESIZER_INSTRUMENT_CACHE']}{reset}"
-            )
-        else:
-            print(
-                f"  {yellow}To set SYNTHESIZER_INSTRUMENT_CACHE add "
-                f"this (or a custom path) to your shell config:{reset}\n"
-                f"    {magenta}export SYNTHESIZER_INSTRUMENT_CACHE="
-                f"'{self.instrument_cache_dir}'{reset} "
-            )
-        if "SYNTHESIZER_TEST_DATA_DIR" in os.environ:
-            print(
-                f"  {yellow}Found SYNTHESIZER_TEST_DATA_DIR ={reset} "
-                f"{cyan}{os.environ['SYNTHESIZER_TEST_DATA_DIR']}{reset}"
-            )
-        else:
-            print(
-                f"  {yellow}To set SYNTHESIZER_TEST_DATA_DIR add "
-                f" this (or a custom path) to your shell config:{reset}\n"
-                f"    {magenta}export SYNTHESIZER_TEST_DATA_DIR="
-                f"'{self.test_data_dir}'{reset} "
-            )
+        # Environment variables
+        print("  🔧 Environment variables (override all defaults):")
+        for var, default in env_vars:
+            if var in os.environ:
+                padded = f"Found {var} =".ljust(
+                    max_label_len + 5
+                )  # +5 to line up with other lines
+                print(
+                    f"  {yellow}{padded}{reset} {cyan}{os.environ[var]}{reset}"
+                )
+            else:
+                padded = f"To set {var}, add this to your shell config:".ljust(
+                    max_label_len + 5
+                )
+                print(f"  {yellow}{padded}{reset}")
+                print(f"    {magenta}export {var}='{default}'{reset}")
         print()
+
         print(f"{green}Synthesizer initialisation complete!{reset}\n")
 
 
