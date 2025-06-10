@@ -377,10 +377,7 @@ class SynthesizerInitializer:
         centered = "\n".join(line.center(100) for line in galaxy_lines)
 
         # Print the initialisation header with centered galaxy art
-        print(
-            f"{yellow}Synthesizer initialising...{reset}\n\n"
-            f"{cyan}{centered}{reset}\n"
-        )
+        print(f"{yellow}Synthesizer initialising...{reset}\n\n{centered}\n")
 
         # Print the status of directories and files
         print("  Initialised Synthesizer directories:")
