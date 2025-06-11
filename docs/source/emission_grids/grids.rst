@@ -20,15 +20,15 @@ With this in mind, we have generated a variety of grids for different SPS models
 Grid naming
 -----------
 
-The naming of grids currently follows this specification::
+The naming of grids broadly follows this specification::
 
     {sps_model}-{sps_version}-{sps_variant}_{imf_type}-{mass_boundaries}-{slopes}_{photoionisation_code}-{photoionisation_code_version}-{photoionisation_parameters} 
 
-e.g. ::
+Though some of these (such as ``slopes`` and ``photoionisation_parameters``) are situation specific. For example::
 
     bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c17.03 
 
-specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v17.03 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our default assumptions.
+specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v17.03 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our default assumptions. In addition to the naming, all grid files contain a complete summary of their model and photoionisation properties in attributes.
 
 
 Initial Mass Function
