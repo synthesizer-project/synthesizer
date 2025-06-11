@@ -1,7 +1,7 @@
 Filters
 =======
 
-Photometric filters in `synthesizer` are defined using two dedicated objects:
+Photometric filters in Synthesizer are defined using two dedicated objects:
 
 - A ``Filter`` object: individual filters defining a filters wavelength coverage and transmission, with related methods and attributes.
 
