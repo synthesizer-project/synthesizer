@@ -39,7 +39,7 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
-from synthesizer.synth_warnings import deprecated, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis
@@ -651,13 +651,10 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
-    @deprecated(
-        message=(
-            "Deprecated in favour of bolometric_luminosity propery method"
-        )
-    )
     def measure_bolometric_luminosity(
-        self, integration_method="trapz", nthreads=1
+        self,
+        integration_method="trapz",
+        nthreads=1,
     ):
         """Calculate the bolometric luminosity of the SED.
 
