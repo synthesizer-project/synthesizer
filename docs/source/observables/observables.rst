@@ -9,5 +9,6 @@ Observables are theoretical emissions that have been translated into the observe
 
    imaging/imaging
    photometry/photometry
+   spectral_data_cubes/spectral_data_cubes
 
    
