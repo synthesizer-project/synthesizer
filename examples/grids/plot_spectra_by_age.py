@@ -108,10 +108,6 @@ if __name__ == "__main__":
     # script, however we just want to directory
     # script_path = os.path.abspath(os.path.dirname(__file__))
 
-    # Define the path to the test grid
-    # test_grid_dir = script_path + "/../../tests/test_grid/"
-    test_grid_dir = "../../tests/test_grid/"
-
     parser = argparse.ArgumentParser(
         description=(
             "Create a plot of all spectra for a given metallicity in \
@@ -126,15 +122,6 @@ if __name__ == "__main__":
         type=str,
         required=False,
         default="test_grid",
-    )
-
-    # The path to the grid directory. Defaults to the test grid directory.
-    parser.add_argument(
-        "-grid_dir",
-        "--grid_dir",
-        type=str,
-        required=False,
-        default=test_grid_dir,
     )
 
     # The target metallicity. The code function will find the closest
@@ -184,7 +171,7 @@ if __name__ == "__main__":
         print(grid_name)
 
         # Initialise grid
-        grid = Grid(grid_name, grid_dir=args.grid_dir)
+        grid = Grid(grid_name)
 
         # Create figure
         fig, ax = plot_spectra_age(grid, args.Z)

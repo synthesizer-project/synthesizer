@@ -40,10 +40,8 @@ jobs:
           sudo apt install pandoc
       - name: Download test data
         run: |
-          # Download test grid data
-          synthesizer-download --test-grids --dust-grid -d tests/test_grid/
-          synthesizer-download --all-sim-data -d tests/data/
-          synthesizer-download --instruments EuclidNISP
+          # Download the data we need
+          synthesizer-download --test-grids --dust-grid --all-sim-data --instruments EuclidNISP
       - name: Sphinx Build
         run: |
           cd docs

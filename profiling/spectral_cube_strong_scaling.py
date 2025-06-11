@@ -45,8 +45,8 @@ def cube_strong_scaling(
     """Profile the cpu time usage of the data cube calculation."""
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir, lam_lims=(1000, 100000))
+
+    grid = Grid(grid_name, lam_lims=(1000, 100000))
 
     # Define the width of the data cube
     width = 30 * kpc

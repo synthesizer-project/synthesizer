@@ -60,7 +60,7 @@ import os
 import h5py
 from unyt import arcsecond
 
-from synthesizer import exceptions
+from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
 from synthesizer.instruments import Instrument
 from synthesizer.instruments.filters import FilterCollection
 
@@ -85,14 +85,6 @@ __all__ = [
     "EuclidNISP",
     "EuclidVIS",
 ]
-
-
-# We need the relative path to the instruments_cache directory
-# to store and retrieve the instrument files
-INSTRUMENT_CACHE_DIR = os.path.join(
-    os.path.dirname(__file__),
-    "instrument_cache",
-)
 
 
 class PremadeInstrument(Instrument):
