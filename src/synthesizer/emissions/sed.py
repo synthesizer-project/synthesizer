@@ -1346,6 +1346,7 @@ class Sed:
                     self._obslam,
                     self._fnu,
                     fill=0.0,
+                    verbose=False,
                 )
                 * self.fnu.units
             )

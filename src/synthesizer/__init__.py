@@ -1,9 +1,7 @@
-import os
-from pathlib import Path
+"""The main module for the synthesizer package."""
 
-import yaml
-from platformdirs import user_data_dir
-
+# Get the initialisation and data directory stuff we need before importing
+# the rest of the package.
 from synthesizer.data.initialise import (
     get_base_dir,
     get_data_dir,
@@ -14,12 +12,12 @@ from synthesizer.data.initialise import (
     synth_initialise,
 )
 
-# Initialize Synthesizer, this will only be run if the data directory and
+# Initialize Synthesizer. This will only be run if the data directory and
 # subdirectories do not exist, i.e. when the package is first imported or after
 # any of the envionment variables have been changed.
 synth_initialise()
 
-# Define all the directory paths
+# Define all the directory paths we need throughout the package.
 BASE_DIR = get_base_dir()
 DATA_DIR = get_data_dir()
 DATABASE_FILE = get_database_dir() / "downloader_database.yml"
@@ -31,22 +29,13 @@ INSTRUMENT_CACHE_DIR = get_instrument_dir()
 # Make a version available at the top level
 from synthesizer._version import __version__
 
-# Make the openmp check available at the top level
+# Import things we want at the top level
+from synthesizer.emissions.sed import Sed
 from synthesizer.extensions.openmp_check import check_openmp
-
-# Import an alias for the galaxy factory function
 from synthesizer.galaxy import galaxy
-from synthesizer.galaxy import galaxy as Galaxy
-
-# Import the main classes to make them available at the top level
+from synthesizer.galaxy import galaxy as Galaxy  # add a convenient alias
 from synthesizer.grid import Grid
-
-# Import the filters module to the top level to maintain old API
-# before the filters module was moved to the instruments module
 from synthesizer.instruments import filters
-
-# Import the various utils submodules to make them available
-# at the top level
 from synthesizer.utils import art, integrate, plt, stats, util_funcs
 
 # Define the __all__ variable to control what is imported with
@@ -58,6 +47,7 @@ __all__ = [
     "stats",
     "util_funcs",
     "Grid",
+    "Sed",
     "galaxy",
     "Galaxy",
     "check_openmp",
