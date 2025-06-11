@@ -12,7 +12,7 @@ There is a low-resolution test grid available via the ``synthesizer-download`` c
 Pre-Computed Grids
 ==================
 
-A goal of synthesizer is to be **flexible**.
+Synthesizer was built on the ethos of being **flexible**.
 With this in mind, we have generated a variety of grids for different SPS models, initial mass functions (IMFs), and photoionisation modelling assumptions.
 
 .. _grid-naming:
@@ -24,11 +24,12 @@ The naming of grids broadly follows this specification::
 
     {sps_model}-{sps_version}-{sps_variant}_{imf_type}-{mass_boundaries}-{slopes}_{photoionisation_code}-{photoionisation_code_version}-{photoionisation_parameters} 
 
-Though some of these (such as ``slopes`` and ``photoionisation_parameters``) are situation specific. For example::
+Though some of these (such as ``stellar_library``, ``slopes``, ``photoionisation_parameters``) are situation specific. For example::
 
-    bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c17.03 
+    bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01 
 
-specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v17.03 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our default assumptions. In addition to the naming, all grid files contain a complete summary of their model and photoionisation properties in attributes.
+specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v23.01 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our `default assumptions <https://github.com/synthesizer-project/grid-generation/blob/main/src/synthesizer_grids/cloudy/params/c23.01-sps.yaml>`. Certain SPS models also use multiple stellar spectral libraries, which we bring under sps_variant as well.
+In addition to the naming, all grid files contain a complete summary of their model and photoionisation properties in attributes.
 
 
 Initial Mass Function
@@ -42,7 +43,7 @@ If you're interested in exploring the systematic impact of changing the IMF, bro
 
 e.g. for a Salpeter (1955) IMF (slope=2.35) between 0.1 and 100 Msol we would have ::
 
-    bpl-0.1,100-2.35
+    salpeter-0.1,100-2.35
 
 A more complex IMF, for example with two power-laws (2.0, 2.35) separated at 1 Msol, would have ::
 
@@ -53,16 +54,16 @@ If an IMF you need is missing, please let us know by raising a feature request t
 
 Photoionisation modelling
 -------------------------
-All the photoionisation modelling in synthesizer currently uses the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code. Our default assumptions are:
+All the photoionisation modelling in synthesizer currently uses the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code. It can simulate a range of ISM and ionisation conditions. Our default stellar grids make certain choices to restrict the range of assumptions. In the default stellar grids, we follow the choice in `Wilkins et al. (2020) <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.6079W/abstract>`_ and choose a reference ionisation paramter, anchored at a stellar age and metallicity of 1 Myr and 0.01, respectively (see Section 2.2.1 in `Wilkins et al. 2020 <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.6079W/abstract>`_ ). We also choose the hydrogen density of the nebula as 1000cm\ :sup:`-3` . And we assume the nebula is ioinsation bound and hence case-B recombination holds.
 
-* `log10(U)=-2`
-
+* `reference_ionisation_parameter: 0.01`
+* `hydrogen_density: 1.0e+3`
 
 Common variants
 ---------------
 
 * `resolution:0.1` outputs the spectra at 10x higher resolution than the `cloudy` default. Useful for looking at various absorption line indices. 
-* `log10U:X` assumes a different ionisation parameter.
+* `ionisation_parameter:X` assumes a fixed ionisation parameter `X` for the incident spectra.
 
 
 Higher-dimensionality grids
