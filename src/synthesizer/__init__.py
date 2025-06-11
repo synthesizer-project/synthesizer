@@ -30,6 +30,7 @@ INSTRUMENT_CACHE_DIR = get_instrument_dir()
 from synthesizer._version import __version__
 
 # Import things we want at the top level
+from synthesizer.emissions.line import LineCollection
 from synthesizer.emissions.sed import Sed
 from synthesizer.extensions.openmp_check import check_openmp
 from synthesizer.galaxy import galaxy

@@ -14,11 +14,6 @@ There are two containers for emissions in Synthesizer: the ``Sed`` and the ``Lin
    emission_objects/sed_example 
    emission_objects/lines_example
 
-Emission Lines
-~~~~~~~~~~~~~~~
-
-Emission lines are encapsulated by the ``LineCollection`` object. This object holds an arbitrary collection of emission lines, with each luminosity, continuum, line ID, and wavelength stored in an array. However, as well as providing an interface to these arrays, the ``LineCollection`` can also be treated as a dictionary. We demonstrate this below.
-
 Note that the line IDs follow the same convention as in Cloudy, whereby a line is usually represented as ``{atomic or molecular notation} {ionisation state} {wavelength}``. The ionisation state is in the usual astronomical notation, e.g. H 1 for atomic hydrogen, but different for molecules, with the state denoted by '+' or '-' (e.g. HCO+).
 
 In the following examples we show how to interact with a ``LineCollection``, how to compute line ratios, and demonstrate how to generate lines from both a ``Grid`` and a ``Galaxy``.
