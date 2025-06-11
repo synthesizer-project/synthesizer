@@ -879,7 +879,10 @@ class Sed:
         )
 
     def measure_d4000(
-        self, definition="Bruzual83", nthreads=1, integration_method="trapz"
+        self,
+        definition="Bruzual83",
+        nthreads=1,
+        integration_method="trapz",
     ):
         """Measure the D4000 index.
 
@@ -1883,7 +1886,6 @@ def plot_spectra(
 
         # Don't draw a legend if not label given
         if label is None and draw_legend:
-            warn("No label given, we will not draw a legend")
             draw_legend = False
 
     # If we don't already have a figure, make one
