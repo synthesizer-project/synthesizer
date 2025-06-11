@@ -24,7 +24,7 @@ The naming of grids broadly follows this specification::
 
     {sps_model}-{sps_version}-{sps_variant}_{imf_type}-{mass_boundaries}-{slopes}_{photoionisation_code}-{photoionisation_code_version}-{photoionisation_parameters} 
 
-Though some of these (such as ``slopes`` and (``photoionisation_parameters``) are situation specific. For example::
+Though some of these (such as ``slopes`` and ``photoionisation_parameters``) are situation specific. For example::
 
     bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c17.03 
 
