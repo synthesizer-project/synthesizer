@@ -1553,7 +1553,7 @@ class Grid:
         cax.set_yticks([])
 
         # Set custom tick marks
-        ax.set_yticks(y, self.metallicity)
+        ax.set_yticks(y, self.metallicity.to_value())
         ax.minorticks_off()
 
         # Set labels
