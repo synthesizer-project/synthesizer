@@ -14,18 +14,6 @@ There are two containers for emissions in Synthesizer: the ``Sed`` and the ``Lin
    emission_objects/sed_example 
    emission_objects/lines_example
 
-Note that the line IDs follow the same convention as in Cloudy, whereby a line is usually represented as ``{atomic or molecular notation} {ionisation state} {wavelength}``. The ionisation state is in the usual astronomical notation, e.g. H 1 for atomic hydrogen, but different for molecules, with the state denoted by '+' or '-' (e.g. HCO+).
-
-In the following examples we show how to interact with a ``LineCollection``, how to compute line ratios, and demonstrate how to generate lines from both a ``Grid`` and a ``Galaxy``.
-
-
-.. toctree::
-   :maxdepth: 1
-
-   lines/lines_example
-   lines/line_ratios
-   lines/grid_lines
-
 
 Generating Emissions 
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,6 +37,7 @@ In the linked docs we demonstrate how, using ``EmissionModels`` in conjunction w
 .. toctree::
    :maxdepth: 1
 
+   lines/grid_lines
    lines/galaxy_lines
    spectra/stars
    spectra/blackholes
