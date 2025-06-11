@@ -3,7 +3,7 @@ Installation
 
 This guide will walk you through creating an isolated environment and installing the package.
 
-If you instead want to set up a new installation for development see the installation instructions in the `contributing guidelines <../../CONTRIBUTING.md>'_.
+If you instead want to set up a new installation for development see the installation instructions in the `contributing guidelines <../../CONTRIBUTING.md>`_.
 
 **Note**: We do not currently support Windows, to use Synthesizer on Windows please install the Windows Subsystem for Linux (WSL).
 
