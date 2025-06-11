@@ -53,6 +53,7 @@ __all__ = [
     "Galaxy",
     "check_openmp",
     "filters",
+    "LineCollection",
     "__version__",
     "BASE_DIR",
     "DATA_DIR",

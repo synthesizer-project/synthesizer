@@ -8,7 +8,7 @@ Emission Objects
 
 There are two containers for emissions in Synthesizer: the ``Sed`` and the ``LineCollection``, for spectra and emission lines respectively. These objects are used to store the results of emission calculations, and provide methods for manipulating and analysing the emissions. A summary of each of these objects can be found in the following sections. 
 
-... toctree::
+.. toctree::
    :maxdepth: 1
 
    emission_objects/sed_example 
