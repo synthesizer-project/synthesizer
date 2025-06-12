@@ -52,9 +52,9 @@ Galaxy level emissions are always, by definition, integrated.
 It is worth noting that integrated emissions are always generated regardless of whether a particular call to ``get_spectra`` or ``get_lines`` is generating per-particle emissions or not. This is because the integrated calculation is sufficiently cheap in terms of memory and time that it is worth doing regardless. In practice this means that running a per-particle model through ``get_spectra`` or ``get_lines`` will populate ``partile_spectra`` and ``particle_lines`` as well as the ``spectra`` and ``lines`` attributes of the component or galaxy.
 
 Example Emission Generation 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------
 
-In the examples below, we demonstrate this process for individual components and galaxies. Since there is a lot of degeneracy between the different components (its the same process for each), we only show the process for each component for spectra.  
+In the examples below, we demonstrate this process for individual components and galaxies. Since there is a lot of degeneracy between the different components (its the same process for each), we only show the process for each component for spectra, and only demonstrate line generation for a whole galaxy.  
 
 .. toctree::
    :maxdepth: 1
@@ -63,7 +63,6 @@ In the examples below, we demonstrate this process for individual components and
    spectra/blackholes
    spectra/galaxy
    lines/galaxy_lines
-   lines/grid_lines
 
 
 
