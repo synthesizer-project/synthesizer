@@ -33,9 +33,6 @@ The Galaxy Object
 A ``Galaxy`` is essentially a container object for different components, and provides methods for interacting with and combining these components.
 Importantly, this includes methods for producing emissions and observables from the galaxy as a whole and from the individual components.
 
-Global galaxy properties
-^^^^^^^^^^^^^^^^^^^^^^^^
-
 In addition to the component attributes, a galaxy can also hold galaxy level attributes. 
 These include a ``name`` for the galaxy, and more importantly the redshift of the galaxy, an attribute required to calculate the observer frame emission of the galaxy, and the spatial centre of the galaxy (a property required for imaging).
 Beyond the redshift, and like any other container object in Synthesizer, the user can provide additional kwargs to the galaxy object, which will be stored as galaxy level attributes.
