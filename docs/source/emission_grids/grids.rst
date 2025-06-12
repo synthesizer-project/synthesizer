@@ -4,10 +4,10 @@ Grids
 Introduction
 ============
 
-Most of the functionality of synthesizer is reliant on *grid files*. These are typically precomputed multi-dimensional arrays of spectra (and lines) from Stellar Population Synthesis (SPS) models for a range of ages and metallicities, and potentially other parameters (see below).
+Most of the functionality of Synthesizer is reliant on *grid files*. These are typically precomputed multi-dimensional arrays of spectra (and lines) from Stellar Population Synthesis (SPS) models for a range of ages and metallicities, and potentially other parameters (see below).
 Grids can also represent the emission from other sources, e.g. active galactic nuclei.
 
-There is a low-resolution test grid available via the ``synthesizer-download`` command line tool, but for actual projects you will need to download one or more full production grids `from Box <https://sussex.box.com/v/SynthesizerProductionGrids>`_. See details below on where on your system to download these grids and how to load them. 
+There is a low-resolution test grid available via the ``synthesizer-download`` command line tool, but for actual projects you will need to download one or more full production grids from `Box <https://sussex.box.com/v/SynthesizerProductionGrids>`_. See details below on where on your system to download these grids and how to load them. 
 
 Pre-Computed Grids
 ==================
@@ -28,7 +28,7 @@ Though some of these (such as ``stellar_library``, ``slopes``, ``photoionisation
 
     bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01 
 
-specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v23.01 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our `default assumptions <https://github.com/synthesizer-project/grid-generation/blob/main/src/synthesizer_grids/cloudy/params/c23.01-sps.yaml>`. Certain SPS models also use multiple stellar spectral libraries, which we bring under sps_variant as well.
+specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v23.01 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our `default assumptions <https://github.com/synthesizer-project/grid-generation/blob/main/src/synthesizer_grids/cloudy/params/c23.01-sps.yaml>`_. Certain SPS models also use multiple stellar spectral libraries, which we bring under sps_variant as well.
 In addition to the naming, all grid files contain a complete summary of their model and photoionisation properties in attributes.
 
 
@@ -72,7 +72,7 @@ Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `
 
 By default, certain models (e.g., parametric stars) aren't set up to handle higher dimensionality, though this may change in a future version. 
 For now, we provide the functionality to handle these grids by "collapsing" over the additional axes. 
-More details on this are provided in the `grids_example <grids_example>` notebook.
+More details on this are provided in the `grids_example <grids_example>`_ notebook.
 
 Grid list
 =========
@@ -180,8 +180,8 @@ Once you've downloaded a grid you can get started here:
 Creating your own grids
 =======================
 
-For advanced users, synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY.
+For advanced users, Synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY.
 We provide scripts for doing this in the `grid-generation` repository.
 Details are provided `here <../advanced/creating_grids>`_.
-You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. `CLOUDY`, `python-FSPS`).
+You will need a working installation of Synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. `CLOUDY`, `python-FSPS`).
 Please reach out to us if you have questions about the pre-computed grids or grid creation.
