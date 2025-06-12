@@ -23,7 +23,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Mpc, Msun, Myr, dimensionless, km, s, yr
+from unyt import Mpc, Msun, Myr, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
@@ -191,6 +191,9 @@ class Stars(Particles, StarsComponent):
             **kwargs (dict):
                 Additional keyword arguments to be set as attributes.
         """
+        # Before we do anything else, apply the metallicity floor
+        metallicities[metallicities < metallicity_floor] = metallicity_floor
+
         # Instantiate parents
         Particles.__init__(
             self,
@@ -325,16 +328,6 @@ class Stars(Particles, StarsComponent):
         total_mass += np.sum(self.masses)
 
         return total_mass
-
-    @property
-    def log10ages(self):
-        """Return stellar particle ages in log (base 10).
-
-        Returns:
-            log10ages (np.ndarray):
-                log10 stellar ages
-        """
-        return np.log10(self.ages, dtype=np.float64) * dimensionless
 
     def _check_star_args(self):
         """Sanitizes inputs ensuring all arguments agree and are compatible.
