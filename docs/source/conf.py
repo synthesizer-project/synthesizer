@@ -93,8 +93,7 @@ html_static_path = []
 
 html_logo = "img/synthesizer_logo.png"
 
-# html_theme = 'sphinx_rtd_theme'
-html_theme = "furo"
+html_theme = "pydata_sphinx_theme"
 html_theme_options = {
     "sidebar_hide_name": True,
 }
