@@ -66,7 +66,7 @@ Components are containers for your "emitters". They include ``Stars``, ``Gas``, 
 Galaxies 
 ********
 
-While the user is free to work with components directly, a ``Galaxy`` object can be used to combine components and define galaxy-wide properties such as redshift and galactic centre. Like the components, the Galaxy object provides methods for calculating properties, setting up a model, and generating observables. However, the ``Galaxy`` object also provides methods for utilising multiple components at once for more complex models.
+While the user is free to work with components directly, a ``Galaxy`` object can be used to combine components and define galaxy-wide properties such as redshift and galactic centre. Like the components, the ``Galaxy`` object provides methods for calculating properties, setting up a model, and generating observables. However, the ``Galaxy`` object also provides methods for utilising multiple components at once for more complex models.
 
 Emission models
 ***************

@@ -3,7 +3,7 @@ Installation
 
 This guide will walk you through creating an isolated environment and installing the package.
 
-If you instead want to set up a new installation for development see the installation instructions in the `contributing guidelines <../../CONTRIBUTING.md>`_.
+If you instead want to set up a new installation for development see the installation instructions in the `contributing guidelines <contributing.rst>`_.
 
 **Note**: We do not currently support Windows, to use Synthesizer on Windows please install the Windows Subsystem for Linux (WSL).
 
@@ -53,7 +53,7 @@ Installing with OpenMP support
 
 DISCLAIMER: This section is only important if you want to make use of shared memory parallelism for large calculations.
 
-To make use of synthesizer's `shared memory parallelism <../parallelism/openmp.rst>`_ you must first have OpenMP installed on your system.
+To make use of synthesizer's `shared memory parallelism <../performance/openmp.rst>`_ you must first have OpenMP installed on your system.
 Most compilers come with OpenMP baked in with a few exceptions. 
 This means installation with OpenMP is as simple as setting a flag at installation:
 
