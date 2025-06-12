@@ -19,7 +19,7 @@ Contents
    emission_models/emission_models
    observatories/observatories 
    observables/observables
-   pipelines/pipeline_example
+   pipeline/pipeline_example
    performance/openmp
    advanced/advanced
    notebook_examples/cookbook

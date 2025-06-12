@@ -13,7 +13,7 @@ To download the test grid run the ``synthesizer-download`` helper as follows:
 .. code-block:: bash
 
     cd synthesizer
-    synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
+    synthesizer-download --test-grids --dust-grid
 
 Here we have assumed you have cloned the synthesizer repository and are in the top level directory. The examples will expect the grids to be stored at ``tests/test_grid/`` within the Synthesizer top level directory. 
 
@@ -23,6 +23,6 @@ You'll also want to download some test data if you want to run any particle base
 
 .. code-block:: bash
 
-    synthesizer-download --camels-data -d tests/data/
+    synthesizer-download --camels-data
 
 This will download the data to the ``tests/data/`` directory, the same caveat described above for the test grid applies here when installing via pip. 
