@@ -22,8 +22,6 @@ Example usage:
     print(grid.spectra)
 """
 
-import os
-
 import cmasher as cmr
 import h5py
 import matplotlib as mpl
@@ -37,13 +35,12 @@ from spectres import spectres
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
-
-from . import __file__ as filepath
 
 
 class Grid:
@@ -197,7 +194,7 @@ class Grid:
         # If we haven't been given a grid directory, assume the grid is in
         # the package's "data/grids" directory.
         if grid_dir is None:
-            grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
+            grid_dir = get_grids_dir()
 
         # Store the grid directory
         self.grid_dir = grid_dir
@@ -642,6 +639,25 @@ class Grid:
                     lum_units,
                 )
 
+            # Ensure the line luminosities and continuums are contiguous
+            for spectra in self.available_spectra:
+                lum_units = self.line_lums[spectra].units
+                cont_units = self.line_conts[spectra].units
+                self.line_lums[spectra] = (
+                    np.ascontiguousarray(
+                        self.line_lums[spectra],
+                        dtype=np.float64,
+                    )
+                    * lum_units
+                )
+                self.line_conts[spectra] = (
+                    np.ascontiguousarray(
+                        self.line_conts[spectra],
+                        dtype=np.float64,
+                    )
+                    * cont_units
+                )
+
     def _prepare_lam_axis(
         self,
         new_lam,
@@ -847,6 +863,11 @@ class Grid:
         formatter = TableFormatter(self)
 
         return formatter.get_table("Grid")
+
+    @property
+    def axes_values(self):
+        """Returns the grid axes values."""
+        return self._axes_values
 
     @property
     def shape(self):
@@ -1532,7 +1553,7 @@ class Grid:
         cax.set_yticks([])
 
         # Set custom tick marks
-        ax.set_yticks(y, self.metallicity)
+        ax.set_yticks(y, self.metallicity.to_value())
         ax.minorticks_off()
 
         # Set labels

@@ -1,6 +1,3 @@
-.. image:: img/synthesizer_text.png
-    :alt: Synthesizer
-
 Synthesizer is an open-source python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
 
 This documentation provides a broad overview of the various components in synthesizer and how they interact.
@@ -16,23 +13,18 @@ Contents
    :maxdepth: 2
    
    getting_started/getting_started
-   grids/grids
-   galaxy/galaxy
-   components/components
-   sed/sed
+   emission_grids/grids
+   galaxy_components/galaxy
+   emissions/emissions
    emission_models/emission_models
-   attenuation/attenuation
-   spectra/spectra
-   lines/lines
-   filters/filters
-   instrumentation/instrument_example
-   photometry/photometry
-   imaging/imaging
-   pipelines/pipeline_example
-   parallelism/openmp
+   observatories/observatories 
+   observables/observables
+   pipeline/pipeline_example
+   performance/openmp
    advanced/advanced
    notebook_examples/cookbook
    auto_examples/index
+   publications/publications
    API
 
 Citation & Acknowledgement
