@@ -37,4 +37,3 @@ In the sections linked below we detail the basic functionality of an ``EmissionM
    custom_models
    attenuation/attenuation
    combined_models
-   emission_names

@@ -196,6 +196,9 @@ class Grid:
         if grid_dir is None:
             grid_dir = get_grids_dir()
 
+        # Ensure the grid directory is a string
+        grid_dir = str(grid_dir)
+
         # Store the grid directory
         self.grid_dir = grid_dir
 
