@@ -49,9 +49,9 @@ Integrated Spectra Scaling
 
 .. code-block:: bash 
 
-    python strong_scaling_int_spectra.py --basename docs --nstars 1000000 --max_threads=32 --average_over 2 --low_thresh 0.01
+    python strong_scaling_int_spectra.py --basename docs --nstars 1000000 --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/docs_int_spectra_cic_totThreads32_nstars100000.png
+.. image:: plots/docs_int_spectra_cic_totThreads32_nstars1000000.png
     :width: 75%
     :align: center 
 
@@ -60,7 +60,7 @@ Particle Spectra Scaling
 
 .. code-block:: bash
 
-    python strong_scaling_part_spectra.py --basename docs --nstars 100000 --max_threads=32 --average_over 2 --low_thresh 0.01
+    python strong_scaling_part_spectra.py --basename docs --nstars 100000 --max_threads=32 --average_over 10 --low_thresh 0.01
 
 .. image:: plots/docs_part_spectra_cic_totThreads32_nstars100000.png
    :width: 75%
@@ -72,7 +72,7 @@ Line-Of-Sight (LOS) Column Density Scaling
 
 .. code-block:: bash 
 
-    python strong_scaling_los_col_den.py --basename docs --nstars 1000000 --ngas 1000000 --max_threads=32 --average_over 2 --low_thresh 0.01
+    python strong_scaling_los_col_den.py --basename docs --nstars 1000000 --ngas 1000000 --max_threads=32 --average_over 10 --low_thresh 0.01
 
 
 .. image:: plots/docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
