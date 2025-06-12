@@ -166,10 +166,10 @@ Below are examples of the pre-computed grids available in the `Box <https://suss
         - maraston24-Tenc40_kroupa-0.1,100_cloudy-c23.01-sps
 
 
-Exploring Grids
-===============
+Exploring A Grid
+================
 
-Once you've downloaded a grid you can get started here:
+In the example below we demonstate how to load a ``Grid`` object, and how to explore the spectra and lines it stores.
 
 .. toctree::
    :maxdepth: 1

@@ -38,4 +38,3 @@ In the sections linked below we detail the basic functionality of an ``EmissionM
    attenuation/attenuation
    dust_emission
    combined_models
-   emission_names
