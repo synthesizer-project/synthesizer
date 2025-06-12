@@ -14,7 +14,7 @@ Contents
    
    getting_started/getting_started
    emission_grids/grids
-   galaxy_components/galaxy
+   galaxy_components/galaxy_components
    emissions/emissions
    emission_models/emission_models
    observatories/observatories 
