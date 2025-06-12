@@ -91,7 +91,8 @@ Some specific examples of common style issues:
 
 - Inheritance should use ``Parent.__init__`` instansiation of the parent class over ``super()`` for clarity. While this is against the usual guidelines, we feel this is clearer for new users and developers, and is therefore worth the exception.
 
-## Development documentation 
+Development documentation 
+-------------------------
 
 The `published documentation <https://synthesizer-project.github.io/synthesizer/>`_ reflects the current distribution available on PyPI. If you would like to see the current development version in your branch or the main branch, you will have to build the documentation locally. To do so, navigate to the ``docs`` directory and run:
 
@@ -104,7 +105,7 @@ This will build a local copy of the documentation representative of the currentl
 Contributing to the Documentation
 ---------------------------------
 
-The synthesizer documentation is written in a combination of reStructuredText, Jupyter notebooks and Python scripts.
+The Synthesizer documentation is written in a combination of reStructuredText, Jupyter notebooks and Python scripts.
 Adding content should be relatively simple if you follow the instructions below.
 
 Adding notebooks
@@ -157,7 +158,7 @@ The ``examples/`` top level directory contains a number of self-contained exampl
 
 **Important**: If an example is named ``plot_*.py``, then ``sphinx-gallery`` will attempt to run the script and use any images generated in the gallery thumbnail. Images should be generated using ``plt.show()`` and not saved to disk. If examples are not preceded with ``plot_``, then they will **not** be run when compiling the documentation, and no errors will be caught.
 
-Each script (``.py``) should have a top-level docstring written in reST, with a header. Examples that do not will fail the automated build process. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
+Each script (``.py``) should have a top-level docstring written in reST, with a header. Examples that do not will fail the automated build process. Further details are provided `here <https://sphinx-gallery.github.io/stable/syntax.html>`_. For example:
 
 .. code-block:: python 
 
@@ -173,7 +174,7 @@ Subfolders of examples should contain a ``README.rst`` with a section heading (p
 Debugging C development
 -----------------------
 
-If you are writing C extensions for synthesizer you ran include debugging checks and optionally activate them using the ``WITH_DEBUGGING_CHECKS`` preprocessor directive. To use this wrap the debugging code in an ifdef:
+If you are writing C extensions for Synthesizer you ran include debugging checks and optionally activate them using the ``WITH_DEBUGGING_CHECKS`` preprocessor directive. To use this wrap the debugging code in an ifdef:
 
 .. code-block:: c
 
