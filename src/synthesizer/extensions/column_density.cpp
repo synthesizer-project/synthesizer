@@ -278,7 +278,7 @@ static double calculate_los_recursive(struct cell *c, const double x,
                                       const double *kernel) {
 
   /* Early exit if the cell is entirely behind the position. */
-  if (c->loc[2] + c->width > z) {
+  if (c->loc[2] > z) {
     return 0;
   }
 
