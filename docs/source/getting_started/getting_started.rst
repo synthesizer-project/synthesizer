@@ -14,4 +14,3 @@ Once you're finished here, you can check out the more detailed documentation on 
    downloading_grids
    contributing
 
-
