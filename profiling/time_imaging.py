@@ -161,4 +161,4 @@ ax.loglog(
 
 ax.legend()
 
-plt.show()
+fig.savefig("time_imaging.png", dpi=300, bbox_inches="tight")

@@ -111,4 +111,4 @@ for key, val in runtimes.items():
 ax.axhline(param_time, color="k", linestyle="--", label="parametric")
 ax.legend()
 
-plt.show()
+fig.savefig("time_imaging.png", dpi=300, bbox_inches="tight")
