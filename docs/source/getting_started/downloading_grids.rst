@@ -6,7 +6,7 @@ Synthesizer relies on pre-computed grids of spectra from stellar population synt
 Downloading the test grid
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Synthesizer contains a simple command line helper tool for downloading the test grid. This test grid should not be used for production runs (please see `here <../emission_grids/grids>`_ for details) but is sufficient for running the `examples <auto_examples/index>`_ and understanding the code. It is based on the BPASS stellar population synthesis model, and contains the stellar emission in the UV--optical on an age--metallicity grid.
+Synthesizer contains a simple command line helper tool for downloading the test grid. This test grid should not be used for production runs (please see `here <../emission_grids/grids.rst>`_ for details) but is sufficient for running the `examples <../auto_examples/index.html>`_ and understanding the code. It is based on the BPASS stellar population synthesis model, and contains the stellar emission in the UV--optical on an age--metallicity grid.
 
 To download the test grid run the ``synthesizer-download`` helper as follows:
 
