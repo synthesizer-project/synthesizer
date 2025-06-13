@@ -252,8 +252,6 @@ class Stars(Particles, StarsComponent):
 
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
-        self.ages = ages
-        self.metallicities = metallicities
 
         # Set the optional keyword arguments
 
@@ -573,6 +571,8 @@ class Stars(Particles, StarsComponent):
         self.initial_masses = self.initial_masses[~pmask]
         self.ages = self.ages[~pmask]
         self.metallicities = self.metallicities[~pmask]
+        self.log10ages = self.log10ages[~pmask]
+        self.log10metallicities = self.log10metallicities[~pmask]
         if self.masses is not None:
             self.masses = self.masses[~pmask]
         if self.coordinates is not None:
