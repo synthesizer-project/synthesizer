@@ -38,18 +38,35 @@
  */
 static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
                                    void *out) {
-
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
-
-  /* The number of sub-cells to iterate over (2^ndim corner combinations). */
   const int num_sub_cells = 1 << ndim;
 
-  /* Set sub_dims to [2, 2, ..., 2] for binary decoding of cell offsets. */
+  /* Build sub_dims = [2,2,...,2] once */
   std::array<int, MAX_GRID_NDIM> sub_dims;
   for (int i = 0; i < ndim; ++i) {
     sub_dims[i] = 2;
+  }
+
+  /* Precompute for each sub-cell:
+   *  - the per-dim offsets (0 or 1)
+   *  - the linear offset = sum(offsets[d] * stride[d])
+   */
+  struct SubCell {
+    std::array<int, MAX_GRID_NDIM> offs;
+    int linoff;
+  };
+  std::vector<SubCell> subcells(num_sub_cells);
+  {
+    std::array<int, MAX_GRID_NDIM> tmp;
+    for (int ic = 0; ic < num_sub_cells; ++ic) {
+      get_indices_from_flat(ic, ndim, sub_dims, tmp);
+      subcells[ic].offs = tmp;
+      /* by passing tmp (0/1) into get_flat_index we get
+         exactly ∑ tmp[d] * stride[d] */
+      subcells[ic].linoff = get_flat_index(tmp, dims.data(), ndim);
+    }
   }
 
   /* Cast the output buffer to a double array. */
@@ -57,47 +74,36 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; ++p) {
-
     /* Skip if this particle is masked. */
     if (parts->part_is_masked(p)) {
       continue;
     }
 
-    /* Get this particle's weight. */
+    /* Get this particle's weight and base cell info. */
     const double weight = parts->get_weight_at(p);
 
-    /* Setup the base cell indices and axis fractions toward upper cells. */
-    std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<double, MAX_GRID_NDIM> axis_fracs;
+    std::array<int, MAX_GRID_NDIM> part_idx;
+    std::array<double, MAX_GRID_NDIM> axis_frac;
+    get_part_ind_frac_cic(part_idx, axis_frac, grid_props, parts, p);
 
-    /* Get the grid indices and cell fractions for this particle. */
-    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+    /* Compute linear index of the “low” corner once */
+    const int base_lin = get_flat_index(part_idx, dims.data(), ndim);
 
-    /* Loop over all 2^ndim surrounding grid cells. */
-    for (int icell = 0; icell < num_sub_cells; ++icell) {
+    /* Now distribute into each of the 2^ndim subcells. */
+    for (int ic = 0; ic < num_sub_cells; ++ic) {
+      const auto &sc = subcells[ic];
 
-      /* Decode icell into a multidimensional binary offset. */
-      std::array<int, MAX_GRID_NDIM> subset_ind;
-      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-      /* Compute the target grid cell index and the contribution fraction. */
+      /* Compute the CIC fraction for this corner */
       double frac = 1.0;
-      std::array<int, MAX_GRID_NDIM> frac_ind;
-      for (int idim = 0; idim < ndim; ++idim) {
-        int offset = subset_ind[idim]; // 0 or 1
-        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
-        frac_ind[idim] = part_indices[idim] + offset;
+      for (int d = 0; d < ndim; ++d) {
+        frac *= sc.offs[d] ? axis_frac[d] : (1.0 - axis_frac[d]);
       }
-
-      /* Skip if contribution is zero (can happen with boundary clamps). */
       if (frac == 0.0) {
         continue;
       }
 
-      /* Convert multi-dimensional index to flat index. */
-      int flat_ind = get_flat_index(frac_ind, dims.data(), ndim);
-
-      /* Accumulate the weighted contribution into the grid cell. */
+      /* Final flat index = base + precomputed offset */
+      const int flat_ind = base_lin + sc.linoff;
       out_arr[flat_ind] += frac * weight;
     }
   }
@@ -137,24 +143,32 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
     sub_dims[i] = 2;
   }
 
+  /* Precompute sub-cell offsets and linear offsets once */
+  struct SubCell {
+    std::array<int, MAX_GRID_NDIM> offs;
+    int linoff;
+  };
+  std::vector<SubCell> subcells(num_sub_cells);
+  {
+    std::array<int, MAX_GRID_NDIM> tmp;
+    for (int ic = 0; ic < num_sub_cells; ic++) {
+      get_indices_from_flat(ic, ndim, sub_dims, tmp);
+      subcells[ic].offs = tmp;
+      subcells[ic].linoff = get_flat_index(tmp, dims.data(), ndim);
+    }
+  }
+
 #pragma omp parallel num_threads(nthreads)
   {
-
-    /* First let's slice up the particles between the threads. */
+    /* Slice up the particles between threads. */
     const int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
-
-    /* Get the thread id. */
     const int tid = omp_get_thread_num();
-
-    /* Get the start and end particle indices for this thread. */
     const int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
-    if (end > parts->npart) {
+    if (end > parts->npart)
       end = parts->npart;
-    }
 
-    /* Allocate a local output array. This avoids race conditions and false
-     * sharing. */
+    /* Allocate a local output array to avoid races. */
     std::vector<double> local_out_arr(out_size, 0.0);
 
     /* Loop over the particles assigned to this thread. */
@@ -168,47 +182,34 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
       /* Get this particle's weight. */
       const double weight = parts->get_weight_at(p);
 
-      /* Setup the index and mass fraction arrays. */
+      /* Setup the base cell indices and axis fractions. */
       std::array<int, MAX_GRID_NDIM> part_indices;
       std::array<double, MAX_GRID_NDIM> axis_fracs;
-
-      /* Get the grid indices and cell fractions for the particle. */
       get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
-      /* Now loop over this collection of cells collecting and setting their
-       * weights. */
-      for (int icell = 0; icell < num_sub_cells; icell++) {
+      /* Compute base linear index for the “low” corner once */
+      const int base_lin = get_flat_index(part_indices, dims.data(), ndim);
 
-        /* Set up some index arrays we'll need. */
-        std::array<int, MAX_GRID_NDIM> subset_ind;
-        std::array<int, MAX_GRID_NDIM> frac_ind;
+      /* Now loop over each of the 2^ndim sub-cells. */
+      for (int ic = 0; ic < num_sub_cells; ic++) {
+        const auto &sc = subcells[ic];
 
-        /* Get the multi-dimensional version of icell. */
-        get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-        /* Multiply all contributing fractions and get the fraction index
-         * in the grid. */
+        /* Compute the CIC fraction for this corner */
         double frac = 1.0;
-        for (int idim = 0; idim < ndim; idim++) {
-          int offset = subset_ind[idim]; // 0 or 1
-          frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
-          frac_ind[idim] = part_indices[idim] + offset;
+        for (int d = 0; d < ndim; d++) {
+          frac *= sc.offs[d] ? axis_fracs[d] : (1.0 - axis_fracs[d]);
         }
-
-        /* Nothing to do if fraction is 0. */
         if (frac == 0.0) {
           continue;
         }
 
-        /* Unravel the indices. */
-        const int flat_ind = get_flat_index(frac_ind, dims.data(), ndim);
-
-        /* Store the weight in the thread-local output array. */
+        /* Accumulate into the thread-local buffer using precomputed offset */
+        const int flat_ind = base_lin + sc.linoff;
         local_out_arr[flat_ind] += frac * weight;
       }
     }
 
-    /* Update the global output array. This is the only critical section. */
+    /* Merge local buffer into global array */
 #pragma omp critical
     {
       for (int i = 0; i < out_size; i++) {
@@ -217,7 +218,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
     }
   }
 }
-#endif
+#endif /* WITH_OPENMP */
 
 /**
  * @brief This calculates the grid weights in each grid cell using a cloud

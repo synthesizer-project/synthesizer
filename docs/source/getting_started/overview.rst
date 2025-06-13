@@ -13,7 +13,7 @@ Each of these steps is encapsulated in an object, which can be swapped out, spec
 
 While this workflow was designed with this forward modelling framework in mind, each of the tools can be used independently to fit into whatever workflow or use case the user has in mind. The framework's flexibility means it can be used for a number of other tasks, including inverse modelling.
 
-It is also worth noting that Synthesizer is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
+**Synthesizer is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques** (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
 Instead, Synthesizer is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
 
 Particle vs Parametric
