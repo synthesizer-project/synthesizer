@@ -138,8 +138,7 @@ There are various other related packages which either perform similar tasks as S
 - **Monte Carlo radiative transfer**
 
   - **SKIRT** [@SKIRT]: 3D dust radiative-transfer engine supporting arbitrary geometries, multi-wavelength photon packets, and variance-reduction techniques for high-fidelity galaxy and torus models.
-  - **Hyperion** [@hyperion]: An open-source, parallelized 3D dust-continuum Monte Carlo code, driven via Python scripts with MPI support for large-scale simulations.
-  - **Powderday** [@powderday]: Integrates FSPS, Hyperion, and yt to perform Monte Carlo RT directly on hydrodynamic simulation outputs, automating grid preparation and execution.
+  - **Powderday** [@powderday]: Integrates FSPS, Hyperion [@hyperion], and yt to perform Monte Carlo RT directly on hydrodynamic simulation outputs, automating grid preparation and execution.
 
 - **Point spread function & instrument models**
 
@@ -148,8 +147,8 @@ There are various other related packages which either perform similar tasks as S
 
 - **Pre- and post-processing utilities**
 
-  - **Astroquery** [@astroquery]: Python interfaces to VO services and mission archives (e.g., MAST, SIMBAD), enabling scripted retrieval of catalogs, images, and spectra.
   - **Astropy** [@astropy]: Foundational library for astronomy, providing FITS I/O, WCS transformations, units system, coordinate conversions, and utility functions for photometry and statistics.
+  - **Astroquery** [@astroquery]: Python interfaces to VO services and mission archives (e.g., MAST, SIMBAD), enabling scripted retrieval of catalogs, images, and spectra.
   - **Dense Basis** [@dense_basis]: A library for generating and manipulating dense basis functions tailored to SED fitting and SFHs, useful for efficient representation of complex SFHs.
 
 - **Inverse modelling & SED fitting**
@@ -157,8 +156,6 @@ There are various other related packages which either perform similar tasks as S
   - **EAZY** [@EAZY]: Fast photometric redshift and SED-fitting code using template-optimization and Bayesian priors for parameter inference.
   - **BAGPIPES** [@BAGPIPES]: Flexible Bayesian SED-fitting tool with support for complex star-formation histories, nebular emission, and dust attenuation curves.
   - **PROSPECTOR** [@PROSPECTOR]: Advanced inference framework combining MCMC and nested sampling for robust posterior estimation of stellar and dust parameters.
-
-By leveraging these companion packages, users can assemble end-to-end workflows, all the way from grid creation to PSF convolution, noise injection, and inverse modelling.
 
 # Acknowledgements
 
