@@ -12,6 +12,7 @@ import numpy as np
 from astropy.cosmology import Planck18 as cosmo
 from unyt import Myr, dimensionless
 
+from synthesizer import TEST_DATA_DIR
 from synthesizer.emission_models import (
     AttenuatedEmission,
     CharlotFall2000,
@@ -27,9 +28,8 @@ from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 
 # Get the grid
-grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"
-grid = Grid(grid_name, grid_dir=grid_dir)
+grid = Grid(grid_name)
 
 
 # We then need to load our galaxy data. There are custom data loading
@@ -39,7 +39,7 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 # If your simulation does not have its own front end, please use the
 # templates in `synthesizer/load_data.py` to create your own.
 gals = load_CAMELS_IllustrisTNG(
-    "../../tests/data/",
+    TEST_DATA_DIR,
     snap_name="camels_snap.hdf5",
     group_name="camels_subhalo.hdf5",
 )

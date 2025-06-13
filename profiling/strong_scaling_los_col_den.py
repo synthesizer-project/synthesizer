@@ -41,8 +41,8 @@ def los_surface_density_strong_scaling(
     """Profile the cpu time usage of the LOS surface density calculation."""
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+
+    grid = Grid(grid_name)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun

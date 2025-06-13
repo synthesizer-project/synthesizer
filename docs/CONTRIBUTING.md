@@ -91,7 +91,7 @@ x = y
 z = x * 2  # this is an inline comment
 ```
 
-- Inheritance should use `Parent.__init__` instansiation of the parent class over `super()` for clarity.
+- Inheritance should use `Parent.__init__` instantiation of the parent class over `super()` for clarity.
 
 ## Development documentation 
 

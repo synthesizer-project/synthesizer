@@ -29,8 +29,8 @@ def profile_mem_part_spectra(n):
 
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+
+    grid = Grid(grid_name)
 
     # Define the grid (normally this would be defined by an SPS grid)
     log10ages = np.arange(6.0, 10.5, 0.1)

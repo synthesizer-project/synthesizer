@@ -1,4 +1,17 @@
-"""A submodule containing the Extractor class."""
+"""A submodule containing the Extractor class.
+
+An Extractor dictates the process of extracting emissions (spectra and lines)
+from a grid for a given emitter (Component). It provides the framework
+for extracting emitter attributes corresponding to grid axes and running
+the extraction code to compute the emission from the grid. This functionality
+enables extraction from complete arbitrary grids and emitters, as long as
+the emitter contains the necessary attributes.
+
+The main interface is the `generate_lnu` and `generate_line` methods, which
+extract the spectra and line luminosities respectively. Any new Extractor
+must define these methods, which will be called by the emission model
+to extract the emissions.
+"""
 
 import os
 from abc import ABC, abstractmethod
@@ -9,9 +22,11 @@ from unyt import Hz, c, erg, s, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
 from synthesizer.emissions import LineCollection, Sed
+from synthesizer.extensions.doppler_particle_spectra import (
+    compute_part_seds_with_vel_shift,
+)
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.particle_spectra import (
-    compute_part_seds_with_vel_shift,
     compute_particle_seds,
 )
 from synthesizer.extensions.timers import tic, toc

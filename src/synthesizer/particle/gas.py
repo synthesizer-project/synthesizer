@@ -145,6 +145,9 @@ class Gas(Particles):
             **kwargs (dict):
                 Extra optional properties to set on the gas object.
         """
+        # Apply the metallicity floor
+        metallicities[metallicities < metallicity_floor] = metallicity_floor
+
         # Instantiate parent
         Particles.__init__(
             self,
@@ -162,6 +165,7 @@ class Gas(Particles):
 
         # Set the metallicites and log10 equivalent
         self.metallicities = metallicities
+        self.log10metallicities = np.log10(self.metallicities)
 
         # Set the star forming boolean mask array
         self.star_forming = star_forming

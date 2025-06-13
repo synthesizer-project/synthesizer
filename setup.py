@@ -32,7 +32,7 @@ from datetime import datetime
 from distutils.ccompiler import new_compiler
 
 import numpy as np
-from setuptools import Extension, setup
+from setuptools import Extension, find_packages, setup
 from setuptools.errors import CompileError
 
 
@@ -94,8 +94,9 @@ def create_extension(
         name,
         sources=sources,
         include_dirs=[np.get_include()] + include_dirs,
-        extra_compile_args=compile_flags,
+        extra_compile_args=compile_flags + ["-std=c++17"],
         extra_link_args=links,
+        language="c++",
     )
 
 
@@ -155,7 +156,6 @@ compiler = new_compiler()
 # Determine the platform-specific default compiler and linker flags
 if sys.platform == "darwin":  # macOS
     default_compile_flags = [
-        "-std=gnu99",
         "-Wall",
         "-O3",
         "-ffast-math",
@@ -165,7 +165,6 @@ if sys.platform == "darwin":  # macOS
     include_dirs = ["/usr/local/include"]
 elif sys.platform == "win32":  # windows
     default_compile_flags = [
-        "/std:c99",
         "/Ox",
         "/fp:fast",
     ]
@@ -173,7 +172,6 @@ elif sys.platform == "win32":  # windows
     include_dirs = []
 else:  # Unix-like systems (Linux)
     default_compile_flags = [
-        "-std=gnu99",
         "-Wall",
         "-O3",
         "-ffast-math",
@@ -243,14 +241,14 @@ logger.info(f"### Using include directories: {include_dirs}")
 extensions = [
     create_extension(
         "synthesizer.extensions.timers",
-        ["src/synthesizer/extensions/timers.c"],
+        ["src/synthesizer/extensions/timers.cpp"],
         compile_flags=compile_flags,
         links=link_args,
         include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.extensions.openmp_check",
-        ["src/synthesizer/extensions/openmp_check.c"],
+        ["src/synthesizer/extensions/openmp_check.cpp"],
         compile_flags=compile_flags,
         links=link_args,
         include_dirs=include_dirs,
@@ -258,10 +256,14 @@ extensions = [
     create_extension(
         "synthesizer.extensions.integrated_spectra",
         [
-            "src/synthesizer/extensions/integrated_spectra.c",
-            "src/synthesizer/extensions/weights.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/extensions/integrated_spectra.cpp",
+            "src/synthesizer/extensions/weights.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/part_props.cpp",
+            "src/synthesizer/extensions/grid_props.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -270,10 +272,30 @@ extensions = [
     create_extension(
         "synthesizer.extensions.particle_spectra",
         [
-            "src/synthesizer/extensions/particle_spectra.c",
-            "src/synthesizer/extensions/weights.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/extensions/particle_spectra.cpp",
+            "src/synthesizer/extensions/weights.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/part_props.cpp",
+            "src/synthesizer/extensions/grid_props.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
+        "synthesizer.extensions.doppler_particle_spectra",
+        [
+            "src/synthesizer/extensions/doppler_particle_spectra.cpp",
+            "src/synthesizer/extensions/weights.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/part_props.cpp",
+            "src/synthesizer/extensions/grid_props.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -282,9 +304,11 @@ extensions = [
     create_extension(
         "synthesizer.imaging.extensions.spectral_cube",
         [
-            "src/synthesizer/imaging/extensions/spectral_cube.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/imaging/extensions/spectral_cube.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -293,10 +317,12 @@ extensions = [
     create_extension(
         "synthesizer.imaging.extensions.image",
         [
-            "src/synthesizer/imaging/extensions/image.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/octree.c",
-            "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/imaging/extensions/image.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/octree.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -305,10 +331,14 @@ extensions = [
     create_extension(
         "synthesizer.extensions.sfzh",
         [
-            "src/synthesizer/extensions/sfzh.c",
-            "src/synthesizer/extensions/weights.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/extensions/sfzh.cpp",
+            "src/synthesizer/extensions/weights.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/part_props.cpp",
+            "src/synthesizer/extensions/grid_props.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -317,34 +347,13 @@ extensions = [
     create_extension(
         "synthesizer.extensions.column_density",
         [
-            "src/synthesizer/extensions/column_density.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
-            "src/synthesizer/extensions/octree.c",
-        ],
-        compile_flags=compile_flags,
-        links=link_args,
-        include_dirs=include_dirs,
-    ),
-    create_extension(
-        "synthesizer.extensions.integrated_line",
-        [
-            "src/synthesizer/extensions/integrated_line.c",
-            "src/synthesizer/extensions/weights.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
-        ],
-        compile_flags=compile_flags,
-        links=link_args,
-        include_dirs=include_dirs,
-    ),
-    create_extension(
-        "synthesizer.extensions.particle_line",
-        [
-            "src/synthesizer/extensions/particle_line.c",
-            "src/synthesizer/extensions/weights.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/extensions/column_density.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/octree.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/part_props.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -353,8 +362,12 @@ extensions = [
     create_extension(
         "synthesizer.extensions.integration",
         [
-            "src/synthesizer/extensions/integration.c",
-            "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/integration.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/part_props.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -363,9 +376,10 @@ extensions = [
     create_extension(
         "synthesizer.imaging.extensions.circular_aperture",
         [
-            "src/synthesizer/imaging/extensions/circular_aperture.c",
-            "src/synthesizer/extensions/property_funcs.c",
-            "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/imaging/extensions/circular_aperture.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -376,4 +390,16 @@ extensions = [
 # Setup configuration
 setup(
     ext_modules=extensions,
+    # --- add these lines ---
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    include_package_data=True,
+    package_data={
+        "synthesizer": ["default_units.yml"],
+        "synthesizer.downloader": ["_data_ids.yml"],
+    },
+    install_requires=[
+        "platformdirs>=2.0",
+        "PyYAML>=5.1",
+    ],
 )

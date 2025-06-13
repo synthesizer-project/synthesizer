@@ -137,7 +137,10 @@ class LineCollection:
         self.description = description
 
         # Set the line line IDs (these include the element, the ionisation
-        # state, and the vacuum wavelength)
+        # state, and the vacuum wavelength). Handle if we have a single line
+        # passed as a string or a list of lines.
+        if isinstance(line_ids, str):
+            line_ids = [line_ids]
         self.line_ids = np.array(line_ids, dtype=str)
 
         # How many lines do we have?

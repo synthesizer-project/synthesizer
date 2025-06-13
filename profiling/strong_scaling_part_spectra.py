@@ -37,8 +37,8 @@ def part_spectra_strong_scaling(
     """Profile the cpu time usage of the particle spectra calculation."""
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+
+    grid = Grid(grid_name)
 
     # Get the emission model
     model = IncidentEmission(grid)

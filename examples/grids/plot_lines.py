@@ -24,10 +24,9 @@ if __name__ == "__main__":
 
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "../../tests/test_grid/"
 
     # initialise grid
-    grid = Grid(grid_name, grid_dir=grid_dir, read_lines=True)
+    grid = Grid(grid_name, read_lines=True)
 
     # get list of lines
     print(grid.available_lines)

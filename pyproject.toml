@@ -90,6 +90,7 @@ dependencies = [
   "pathos",
   "statsmodels",
   "pympler",
+  "platformdirs",
 ]
 
 # Optional dependencies for specific use cases
@@ -139,6 +140,8 @@ eagle = [
 
 # Entry points
 [project.scripts]
+synthesizer-init = "synthesizer.data.initialise:synth_initialise"
+synthesizer-clear = "synthesizer.data.initialise:synth_clear_data"
 synthesizer-download="synthesizer.downloader.downloader:download"
 
 # Package data

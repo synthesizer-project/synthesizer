@@ -1,2 +1,5 @@
-include synthesizer/data/LAFcoeff.txt
-include synthesizer/data/DLAcoeff.txt
+include src/synthesizer/data/LAFcoeff.txt
+include src/synthesizer/data/DLAcoeff.txt
+include src/synthesizer/data/MW_N18.npz
+include src/synthesizer/default_units.yml
+

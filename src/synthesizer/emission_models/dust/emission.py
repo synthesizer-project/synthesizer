@@ -279,12 +279,18 @@ class Greybody(EmissionBase):
             Option for adding heating by CMB
         temperature_z (unyt_quantity):
             The temperature of the dust at redshift z.
+        optically_thin (bool):
+            If dust is optically thin
+        lam_0 (float):
+            Wavelength (in um) where the dust optical depth is unity
     """
 
     temperature: unyt_quantity
     emissivity: float
     cmb_heating: bool
     redshift: float
+    optically_thin: bool
+    lam_0: float
 
     @accepts(temperature=K)
     def __init__(
@@ -293,6 +299,8 @@ class Greybody(EmissionBase):
         emissivity: float,
         cmb_heating: bool = False,
         redshift: float = 0,
+        optically_thin: bool = True,
+        lam_0: float = 100.0 * um,
     ) -> None:
         """Initialise the dust emission model.
 
@@ -305,6 +313,10 @@ class Greybody(EmissionBase):
                 Option for adding heating by CMB
             redshift (float):
                 Redshift of the galaxy
+            optically_thin (bool):
+                If dust is optically thin
+            lam_0 (float):
+                Wavelength (in um) where the dust optical depth is unity
         """
         EmissionBase.__init__(self, temperature)
 
@@ -317,6 +329,8 @@ class Greybody(EmissionBase):
             self.temperature_z = temperature
 
         self.emissivity = emissivity
+        self.optically_thin = optically_thin
+        self.lam_0 = lam_0
 
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array) -> unyt_array:
@@ -332,7 +346,14 @@ class Greybody(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
-        return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
+        if self.optically_thin:
+            return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
+        else:
+            _nu_0 = self.lam_0 / c
+            optically_thick_factor = 1 - np.exp(
+                -((nu / _nu_0) ** self.emissivity)
+            )
+            return optically_thick_factor * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
@@ -384,7 +405,7 @@ class Casey12(EmissionBase):
             temperature (unyt_array):
                 The temperature of the dust.
             emissivity (float):
-                The emissivity (dimensionless) [good value = 1.6].
+                The emissivity (dimensionless) [good value = 2.0].
             alpha (float):
                 The power-law slope (dimensionless)  [good value = 2.0].
             N_bb (float):

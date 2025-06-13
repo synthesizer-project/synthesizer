@@ -192,22 +192,6 @@ class Particles:
             )
         return self.coordinates - self.centre
 
-    @property
-    def log10metallicities(self):
-        """Return particle metallicities in log (base 10).
-
-        Zero valued metallicities are set to `metallicity_floor`,
-        which is set on initialisation of this particle object.
-
-        Returns:
-            log10metallicities (np.ndarray):
-                log10 particle metallicities.
-        """
-        mets = self.metallicities
-        mets[mets == 0.0] = self.metallicity_floor
-
-        return np.log10(mets, dtype=np.float64)
-
     def get_projected_angular_coordinates(
         self,
         cosmo=None,
@@ -511,6 +495,11 @@ class Particles:
                 f"Masking attribute ({attr_str}) does not have units "
                 f"but threshold has ({thresh})."
             )
+
+        # If we only have a scalar attribute we need to expand it to a
+        # nparticle array
+        if attr.size == 1:
+            attr = np.full(self.nparticles, attr.value, dtype=np.float64)
 
         # Apply the operator
         if op == ">":

@@ -6,7 +6,7 @@ common between them. StarsComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Myr
+from unyt import Myr, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -72,6 +72,11 @@ class StarsComponent(Component):
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
         self.metallicities = metallicities
+        self.log10metallicities = np.log10(
+            self.metallicities,
+            dtype=np.float64,
+        )
+        self.log10ages = np.log10(self.ages.to(yr), dtype=np.float64)
 
         # The type of stars object (parametric or particle). This is useful for
         # determining the type of stars object without relying on isinstance
@@ -82,26 +87,6 @@ class StarsComponent(Component):
         self.fesc_ly_alpha = (
             fesc_ly_alpha if fesc_ly_alpha is not None else 1.0
         )
-
-    @property
-    def log10ages(self):
-        """Return stellar particle ages in log (base 10).
-
-        Returns:
-            log10ages (np.ndarray):
-                log10 stellar ages
-        """
-        return np.log10(self._ages, dtype=np.float64)
-
-    @property
-    def log10metallicities(self):
-        """Return stellar particle metallicities in log (base 10).
-
-        Returns:
-            log10metallicities (np.ndarray):
-                log10 stellar metallicities
-        """
-        return np.log10(self.metallicities, dtype=np.float64)
 
     def __str__(self):
         """Return a string representation of the stars object.

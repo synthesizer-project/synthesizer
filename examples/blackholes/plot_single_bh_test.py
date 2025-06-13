@@ -42,8 +42,8 @@ part_bh = BlackHoles(
 )
 
 # Define the emission model
-nlr_grid = Grid("test_grid_agn-nlr", grid_dir="../../tests/test_grid")
-blr_grid = Grid("test_grid_agn-blr", grid_dir="../../tests/test_grid")
+nlr_grid = Grid("test_grid_agn-nlr")
+blr_grid = Grid("test_grid_agn-blr")
 model = UnifiedAGN(
     nlr_grid,
     blr_grid,

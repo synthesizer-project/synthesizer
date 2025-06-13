@@ -10,7 +10,6 @@ from unyt import (
     angstrom,
     c,
     cm,
-    dimensionless,
     erg,
     eV,
     h,
@@ -724,9 +723,6 @@ class TestLineCollectionGenerationMethods:
         particle_stars_B.tau_v = 0.1
         particle_stars_B.tau_v_birth = 0.3
         particle_stars_B.tau_v_ism = 0.1
-
-        # Set the age pivot for the B stars
-        bimodal_pacman_emission_model.age_pivot = 6.7 * dimensionless
 
         # Generate the PACMAN lines
         pacman_lines = particle_stars_B.get_lines(

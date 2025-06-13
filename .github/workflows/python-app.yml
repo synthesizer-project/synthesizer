@@ -49,9 +49,8 @@ jobs:
           args: "format --check --diff"
       - name: Download test data
         run: |
-          # Download test grid data
-          synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
-          synthesizer-download -d tests/data --all-sim-data
+          # Download the data we need
+          synthesizer-download --test-grids --dust-grid --all-sim-data --instruments EuclidNISP
       - name: Test with pytest
         run: |
           pytest -n auto
