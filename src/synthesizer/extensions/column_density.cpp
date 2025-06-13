@@ -545,8 +545,11 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   const double *surf_den_val =
       extract_data_double(np_surf_den_val, "surf_den_val");
 
-  /* Set up arrays to hold the surface densities themselves. */
-  double *surf_dens = new double[npart_i]();
+  /* Create the output array. */
+  npy_intp np_dims[1] = {npart_i};
+  PyArrayObject *np_surf_dens =
+      (PyArrayObject *)PyArray_ZEROS(1, np_dims, NPY_DOUBLE, 0);
+  double *surf_dens = static_cast<double *>(PyArray_DATA(np_surf_dens));
 
   /* No point constructing cells if there isn't enough gas to construct a tree
    * below depth 0. (and loop if we've been told to) */
@@ -565,7 +568,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
     toc("Calculating surface densities (with a loop)", start);
 
-    return Py_BuildValue("N", out_surf_dens);
+    return Py_BuildValue("N", np_surf_dens);
   }
 
   /* Allocate cells array. The first cell will be the root and then we will
@@ -589,7 +592,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
   toc("Calculating surface densities (with cells)", start);
 
-  return Py_BuildValue("N", out_surf_dens);
+  return Py_BuildValue("N", np_surf_dens);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
