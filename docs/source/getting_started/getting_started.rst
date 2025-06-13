@@ -15,4 +15,3 @@ Once you're finished here, you can check out the more detailed documentation on 
    contributing
    getting_help
 
-

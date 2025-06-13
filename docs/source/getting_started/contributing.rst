@@ -1,5 +1,15 @@
+Getting Help & Contributing
+===========================
+
+Help
+~~~~
+
+For updates and general help with synthesizer we have a dedicated Slack page. Please email <chris dot lovell dot astro at gmail dot com> for a sign up link.
+
+If you wish to report an issue with synthesizer, please `raise an issue <https://github.com/synthesizer-project/synthesizer/issues>`_ on Github.
+
 Contributing
-============
+~~~~~~~~~~~~
 
 Please feel free to submit issues and pull requests to this repository.
 The GitHub workflow will automatically run `Ruff <https://github.com/astral-sh/ruff>`_ on any contributions; builds that fail these tests will not be accepted. Further notes on code style are detailed below.
