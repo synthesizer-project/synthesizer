@@ -13,7 +13,7 @@ Each of these steps is encapsulated in an object, which can be swapped out, spec
 
 While this workflow was designed with this framework in mind, each of the tools can be used independently to fit into whatever workflow or use case the user has in mind. It's also worth pointing out at this point that the framework's flexibility means it can be used for a number of tasks, not necessarily limited to generating observables from cosmological simulations.
 
-It is also worth noting that Synthesizer is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
+**Synthesizer is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques** (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
 Instead, Synthesizer is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
 
 Particle vs Parametric
@@ -52,21 +52,21 @@ For stars, these are typically the age and metallicity of a stellar population, 
 Alternatively, a more complex set of axes could include a changing ionisation parameter used in a photoionisation code. 
 Different grids can also be swapped in and out to assess the impact of different modelling choices; for example, one might wish to understand the impact of different SPS models on the integrated stellar emission.
 
-Synthesizer provides a suite of `pre-computed grids <../emission_grids/grids.rst>`_ from models including `BC03 <https://ui.adsabs.harvard.edu/abs/2003MNRAS.344.1000B>`_, `BPASS <https://ui.adsabs.harvard.edu/abs/2018MNRAS.479...75S>`_, `FSPS <https://ui.adsabs.harvard.edu/abs/2009ApJ...699..486C>`_, `Maraston <https://ui.adsabs.harvard.edu/abs/2025arXiv250103133N>`_, and a series of AGN models derived from `AGNSED <https://ui.adsabs.harvard.edu/abs/2018MNRAS.480.1247K/abstract>`_, all of which have been reprocessed using Cloudy for a number of different photoionisation prescriptions and axes sets. Users can also generate custom grids via the accompanying `grid-generation package<https://github.com/synthesizer-project/grid-generation>`_ (see `here <../advanced/creating_grids.rst>`_), specifying variations in IMF, ionisation parameter, density, and geometry.
+Synthesizer provides a suite of `pre-computed grids <../emission_grids/grids.rst>`_ from models including `BC03 <https://ui.adsabs.harvard.edu/abs/2003MNRAS.344.1000B>`_, `BPASS <https://ui.adsabs.harvard.edu/abs/2018MNRAS.479...75S>`_, `FSPS <https://ui.adsabs.harvard.edu/abs/2009ApJ...699..486C>`_, `Maraston <https://ui.adsabs.harvard.edu/abs/2025arXiv250103133N>`_, and a series of AGN models derived from `AGNSED <https://ui.adsabs.harvard.edu/abs/2018MNRAS.480.1247K/abstract>`_, all of which have been reprocessed using Cloudy for a number of different photoionisation prescriptions and axes sets. Users can also generate custom grids via the accompanying `grid-generation package <https://github.com/synthesizer-project/grid-generation>`_ (see `here <../advanced/creating_grids.rst>`_), specifying variations in IMF, ionisation parameter, density, and geometry.
 
 
 Components & Galaxies
-*********************
+~~~~~~~~~~~~~~~~~~~~~
 
 Components 
-~~~~~~~~~~
+**********
 
 Components are containers for your "emitters". They include ``Stars``, ``Gas``, and ``BlackHoles`` objects, which are each used to represent the stellar, gaseous, and black hole components of a galaxy respectively. These Components can be parametric models, Semi-Analytic Model outputs or hydrodynamical simulation outputs.  Each of these objects defines methods for calculating properties (e.g. star formation histories, integrated quantities, bolometric luminosities etc.), setting up a model (e.g. calculating line of sight optical depths, dust screens optical depths, dust to metal ratios etc.), and generating observables (e.g. spectra, emission lines, images, and spectral data cubes), along with a number of helper methods for working with the resulting emissions and observables (e.g. analysing and plotting).
 
 Galaxies 
-~~~~~~~~
+********
 
-While the user is free to work with components directly, a ``Galaxy`` object can be used to combine components and define galaxy-wide properties such as redshift and galactic centre. Like the components, the Galaxy object provides methods for calculating properties, setting up a model, and generating observables. However, the ``Galaxy`` object also provides methods for utilising multiple components at once for more complex models.
+While the user is free to work with components directly, a ``Galaxy`` object can be used to combine components and define galaxy-wide properties such as redshift and galactic centre. Like the components, the ``Galaxy`` object provides methods for calculating properties, setting up a model, and generating observables. However, the ``Galaxy`` object also provides methods for utilising multiple components at once for more complex models.
 
 Emission models
 ***************

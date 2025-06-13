@@ -32,7 +32,7 @@ from datetime import datetime
 from distutils.ccompiler import new_compiler
 
 import numpy as np
-from setuptools import Extension, setup
+from setuptools import Extension, find_packages, setup
 from setuptools.errors import CompileError
 
 
@@ -390,4 +390,16 @@ extensions = [
 # Setup configuration
 setup(
     ext_modules=extensions,
+    # --- add these lines ---
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    include_package_data=True,
+    package_data={
+        "synthesizer": ["default_units.yml"],
+        "synthesizer.downloader": ["_data_ids.yml"],
+    },
+    install_requires=[
+        "platformdirs>=2.0",
+        "PyYAML>=5.1",
+    ],
 )

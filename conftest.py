@@ -47,7 +47,7 @@ from synthesizer.pipeline import Pipeline
 @pytest.fixture
 def test_grid():
     """Return a Grid object."""
-    return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+    return Grid("test_grid.hdf5")
 
 
 @pytest.fixture

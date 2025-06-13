@@ -1,4 +1,17 @@
-"""A submodule containing the Extractor class."""
+"""A submodule containing the Extractor class.
+
+An Extractor dictates the process of extracting emissions (spectra and lines)
+from a grid for a given emitter (Component). It provides the framework
+for extracting emitter attributes corresponding to grid axes and running
+the extraction code to compute the emission from the grid. This functionality
+enables extraction from complete arbitrary grids and emitters, as long as
+the emitter contains the necessary attributes.
+
+The main interface is the `generate_lnu` and `generate_line` methods, which
+extract the spectra and line luminosities respectively. Any new Extractor
+must define these methods, which will be called by the emission model
+to extract the emissions.
+"""
 
 import os
 from abc import ABC, abstractmethod

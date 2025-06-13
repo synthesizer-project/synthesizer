@@ -14,13 +14,13 @@ Contents
    
    getting_started/getting_started
    emission_grids/grids
-   galaxy_components/galaxy
+   galaxy_components/galaxy_components
    emissions/emissions
    emission_models/emission_models
    observatories/observatories 
    observables/observables
-   pipelines/pipeline_example
-   performance/openmp
+   pipeline/pipeline_example
+   performance/performance
    advanced/advanced
    notebook_examples/cookbook
    auto_examples/index

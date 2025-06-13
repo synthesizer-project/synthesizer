@@ -22,8 +22,6 @@ Example usage:
     print(grid.spectra)
 """
 
-import os
-
 import cmasher as cmr
 import h5py
 import matplotlib as mpl
@@ -37,13 +35,12 @@ from spectres import spectres
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
-
-from . import __file__ as filepath
 
 
 class Grid:
@@ -197,7 +194,10 @@ class Grid:
         # If we haven't been given a grid directory, assume the grid is in
         # the package's "data/grids" directory.
         if grid_dir is None:
-            grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
+            grid_dir = get_grids_dir()
+
+        # Ensure the grid directory is a string
+        grid_dir = str(grid_dir)
 
         # Store the grid directory
         self.grid_dir = grid_dir
@@ -1556,7 +1556,7 @@ class Grid:
         cax.set_yticks([])
 
         # Set custom tick marks
-        ax.set_yticks(y, self.metallicity)
+        ax.set_yticks(y, self.metallicity.to_value())
         ax.minorticks_off()
 
         # Set labels

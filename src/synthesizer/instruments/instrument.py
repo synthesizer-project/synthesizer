@@ -1,7 +1,7 @@
 """A module defining a class for observational instruments.
 
 This module contains the `Instrument` class, which is used to define
-observational instruments for use in the `synthesizer` package. The
+observational instruments for use in the Synthesizer package. The
 `Instrument` class contains everything needed to define a telescope or
 spectrograph, including the filters, resolution, wavelength array, depth,
 depth aperture radius, signal-to-noise ratios, PSFs and noise_maps.
