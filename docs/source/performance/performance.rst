@@ -21,7 +21,7 @@ Profiling
 
 To ensure the code remains performant, we have a bespoke profilling suite we maintain (and plan to expand) to test the performance of the codebase. 
 This can be found in the ``profiling`` direcotory of the repository. 
-In the following sections we show some performance benchmarks to give an idea of the performance of the codebase. All these tests were run on the Cosma8 HPC at Durham University. The output of the ``lscpu`` command is shown below, which gives an idea of the hardware used for these tests.
+In the following sections we show some performance benchmarks to give an idea of the performance of the codebase. All these tests were run on the Cosma8 HPC at Durham University. The output of the ``lscpu`` and ``numactl --hardware`` commands are shown below to give an idea of the hardware used for these tests.
 
 .. code-block:: none
 
@@ -38,6 +38,28 @@ In the following sections we show some performance benchmarks to give an idea of
         Thread(s) per core:   2
         Core(s) per socket:   32
         Socket(s):            2
+
+    Caches (sum of all):
+      L1d:                    2 MiB (64 instances)
+      L1i:                    2 MiB (64 instances)
+      L2:                     32 MiB (64 instances)
+      L3:                     256 MiB (16 instances)
+
+.. code-block:: none 
+
+available: 2 nodes (0-1)
+node 0 cpus: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95
+node 0 size: 1019611 MB
+node 0 free: 519591 MB
+node 1 cpus: 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127
+node 1 size: 1032127 MB
+node 1 free: 130805 MB
+node distances:
+node     0    1
+   0:   10   32
+   1:   32   10
+
+
 
 Scaling Performance
 ^^^^^^^^^^^^^^^^^^^
