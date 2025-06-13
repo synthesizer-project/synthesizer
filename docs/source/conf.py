@@ -9,11 +9,15 @@ https://www.sphinx-doc.org/en/master/usage/configuration.html#project-informatio
 
 import os
 import sys
+from datetime import datetime
 
 from synthesizer._version import __version__
 
 project = "synthesizer"
-copyright = "2024, Chris Lovell, Will Roper, Aswin Vijayan, Stephen Wilkins"
+copyright = (
+    f"{datetime.now().year}, Chris Lovell, Will Roper,"
+    " Aswin Vijayan, Stephen Wilkins"
+)
 author = "Chris Lovell, Will Roper, Aswin Vijayan, Stephen Wilkins"
 release = __version__
 
@@ -43,6 +47,7 @@ extensions = [
     "sphinx_gallery.gen_gallery",
     "sphinx_toolbox.collapse",
     "sphinx_copybutton",  # Add a copy button to code blocks
+    "sphinx_search.extension",  # Search as you type
 ]
 
 sphinx_gallery_conf = {
@@ -93,7 +98,6 @@ html_static_path = []
 
 html_logo = "img/synthesizer_logo.png"
 
-# html_theme = 'sphinx_rtd_theme'
 html_theme = "furo"
 html_theme_options = {
     "sidebar_hide_name": True,
