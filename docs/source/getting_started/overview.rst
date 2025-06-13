@@ -81,7 +81,7 @@ Further details are provided in the `Emission Models <../emission_models/emissio
 Emissions
 *********
 
-Applying an Emission Model to a ``Galaxy`` and/or its components yields ``Sed`` or ``LineCXollection`` objects, depending on the method called. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes. For instance, ``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break), while ``LineCollection`` objects provide methods for accessing the line fluxes, equivalent widths, and combining lines into composite lines (e.g. doublets, triplets, etc.).
+Applying an Emission Model to a ``Galaxy`` and/or its components yields ``Sed`` or ``LineCollection`` objects, depending on the method called. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes. For instance, ``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break), while ``LineCollection`` objects provide methods for accessing the line fluxes, equivalent widths, and combining lines into composite lines (e.g. doublets, triplets, etc.).
 
 Emissions can be converted into observables by applying an ``Instrument`` or ``InstrumentCollection`` object to them.
 
