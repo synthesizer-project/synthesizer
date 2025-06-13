@@ -132,8 +132,8 @@ There are various other related packages which either perform similar tasks as S
   - **FSPS** [@fsps1; @fsps2]: Stellar population synthesis code offering flexible isochrone-based spectral generation for a variety of IMFs and metallicities.
   - **BPASS** [@bpass]: Models binary stellar populations with detailed spectral outputs, crucial for UV and nebular emission studies.
   - **Maraston** [@maraston05]: Provides high-resolution SEDs with alternative stellar evolution prescriptions, particularly useful for post-starburst galaxies.
-  - **Cloudy** [@cloudy]: Photoionization and spectral synthesis code for computing emission-line and continuum processes in gas under various physical conditions.
-  - **MAPPINGS** [@MAPPINGS]: An alternative photoionization code for computing emission-line spectra from ionized gas, particularly useful for AGN and star-forming regions.
+  - **Cloudy** [@cloudy]: Photoionisation and spectral synthesis code for computing emission-line and continuum processes in gas under various physical conditions.
+  - **MAPPINGS** [@MAPPINGS]: An alternative photoionisation code for computing emission-line spectra from ionised gas, particularly useful for AGN and star-forming regions.
 
 - **Monte Carlo radiative transfer**
 
@@ -142,19 +142,19 @@ There are various other related packages which either perform similar tasks as S
 
 - **Point spread function & instrument models**
 
-  - **STPSF** [@stpsf]: Physical-optics simulator for JWST, Roman, and HST, modeling pupil masks, wavefront errors, and instrument-specific aberrations to generate realistic PSFs.
+  - **STPSF** [@stpsf]: Physical-optics simulator for JWST, Roman, and HST, modelling pupil masks, wavefront errors, and instrument-specific aberrations to generate realistic PSFs.
   - **GalSim** [@galsim]: Versatile image-simulation toolkit offering analytic and empirical PSF models, shear and magnification operators, detector effects (e.g., charge diffusion), and realistic noise injection.
 
 - **Pre- and post-processing utilities**
 
   - **Astropy** [@astropy]: Foundational library for astronomy, providing FITS I/O, WCS transformations, units system, coordinate conversions, and utility functions for photometry and statistics.
-  - **Astroquery** [@astroquery]: Python interfaces to VO services and mission archives (e.g., MAST, SIMBAD), enabling scripted retrieval of catalogs, images, and spectra.
-  - **Dense Basis** [@dense_basis]: A library for generating and manipulating dense basis functions tailored to SED fitting and SFHs, useful for efficient representation of complex SFHs.
+  - **Astroquery** [@astroquery]: Python interfaces to VO services and mission archives (e.g., MAST, SIMBAD), enabling scripted retrieval of catalogues, images, and spectra.
+  - **Dense Basis** [@dense_basis]: A library for generating and manipulating dense basis functions tailored to SED fitting and SFHs, useful for efficiently representing complex SFHs.
 
 - **Inverse modelling & SED fitting**
 
-  - **EAZY** [@EAZY]: Fast photometric redshift and SED-fitting code using template-optimization and Bayesian priors for parameter inference.
-  - **BAGPIPES** [@BAGPIPES]: Flexible Bayesian SED-fitting tool with support for complex star-formation histories, nebular emission, and dust attenuation curves.
+  - **EAZY** [@EAZY]: Fast photometric redshift and SED-fitting code using template-optimisation and Bayesian priors for parameter inference.
+  - **BAGPIPES** [@BAGPIPES]: Flexible Bayesian SED-fitting tool supporting complex star-formation histories, nebular emission, and dust attenuation curves.
   - **PROSPECTOR** [@PROSPECTOR]: Advanced inference framework combining MCMC and nested sampling for robust posterior estimation of stellar and dust parameters.
 
 # Acknowledgements
