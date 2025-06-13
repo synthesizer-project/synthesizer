@@ -1,5 +1,5 @@
 Spectral Data Cubes
-###############
+####################
 
 Overview
 --------

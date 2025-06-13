@@ -13,5 +13,5 @@ Once you're finished here, you can check out the more detailed documentation on 
    overview
    downloading_grids
    contributing
-
+   getting_help
 
