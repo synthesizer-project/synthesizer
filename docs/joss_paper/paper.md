@@ -126,7 +126,7 @@ Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthes
 
 There are various other related packages which either perform similar tasks as Synthesizer or can be used in harmony with Synthesizer to create end-to-end workflows. We highlight a handful of these packages below.
 
-- **Stellar population synthesis & Photoinosation**
+- **Stellar population synthesis & Photoionsation**
 
   - **BC03** [@bc03]: Classic stellar population synthesis code providing spectral energy distributions (SEDs) for single stellar populations with various initial mass functions (IMFs) and metallicities.
   - **FSPS** [@fsps1; @fsps2]: Stellar population synthesis code offering flexible isochrone-based spectral generation for a variety of IMFs and metallicities.
