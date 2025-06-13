@@ -42,10 +42,26 @@ In the following sections we show some performance benchmarks to give an idea of
 Scaling Performance
 ^^^^^^^^^^^^^^^^^^^
 
-The performance of the code will scale with the number of threads used, up to the number of physical cores on your machine. 
+The performance of the code will scale with the number of threads used, up to the number of physical cores on your machine. In this section, we show some scaling tests focused on performance intensive tasks in Synthesizer. 
+
+Each of these plots shows the time to solution vs the number of threads in the top panel, and the speedup vs the number of threads in the bottom panel. Each line shows a timed operations in the codebase (i.e. a code block or function surrounded by a ``tic`` and a ``toc``). For further details on each line you can grep through the codebase for the legend key to see the code block that was timed.
 
 Integrated Spectra Scaling 
 -------------------------- 
+
+Here we calculate the integrated spectra for a galaxy with 1 million star particles sampled from a constant Star Formation History and normally distributed metallicities. 
+
+.. code-block:: python 
+
+   param_stars = ParametricStars(
+        grid.log10ages,
+        grid.metallicities,
+        sf_hist=SFH.Constant(100 * Myr),
+        metal_dist=ZDist.Normal(0.005, 0.01),
+        initial_mass=10**10 * Msun,
+    ) 
+
+This scaling test was run with the following command.
 
 .. code-block:: bash 
 
@@ -55,8 +71,25 @@ Integrated Spectra Scaling
     :width: 75%
     :align: center 
 
+Here we can see a reasonable scaling until thread we reach a certain number and the performance starts to plateau. This is due to the overhead in managing the threads and reduction onto the final spectra array. Further improvements to the codebase may improve this scaling further, but its worth nothing the diminishing returns and designing partitioning schemes around this.
+
 Particle Spectra Scaling 
 ------------------------
+
+Here we calculate the particle spectra for a galaxy with 100,000 star particles sampled from a constant Star Formation Hisotry and normally distributed metallicities. 
+
+.. code-block:: python 
+
+   param_stars = ParametricStars(
+        grid.log10ages,
+        grid.metallicities,
+        sf_hist=SFH.Constant(100 * Myr),
+        metal_dist=ZDist.Normal(0.005, 0.01),
+        initial_mass=10**10 * Msun,
+    )
+
+This scaling test was run with the following command.
+
 
 .. code-block:: bash
 
@@ -66,9 +99,13 @@ Particle Spectra Scaling
    :width: 75%
    :align: center
 
+Unlike the integrated spectra scaling, the particle spectra falls foul of cache misses and memory bandwidth limitations. The point of dimishing returns is much smaller here (<16 threads) but we further improvements are absolutely possible and in the works. 
+
 
 Line-Of-Sight (LOS) Column Density Scaling 
 ------------------------------------------
+
+Here we calculate the LOS column density of gas metallicity for each star particle in a galaxy with 1 million star particles and 1 million gas particles. This scaling test was run with the following command.
 
 .. code-block:: bash 
 
@@ -78,6 +115,8 @@ Line-Of-Sight (LOS) Column Density Scaling
 .. image:: plots/docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
    :width: 75%
    :align: center 
+   
+The LOS column density scaling shows a much better scaling with only minimal diminishing returns as thread based overheads and reduction operations start to take their toll. Note that this scaling behaviour is also preserved for much smaller particle counts.
 
 
 
