@@ -202,6 +202,9 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
         surf_dens[i] = surf_dens_thread[i - start];
       }
     }
+
+    /* Clean up the thread's chunk of the results array. */
+    delete[] surf_dens_thread;
   }
 }
 #endif
