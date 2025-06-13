@@ -122,6 +122,44 @@ Synthesizer is structured around a set of core abstractions. Here we give a brie
 
 Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthesizer) and is available on [PyPI](https://pypi.org/project/cosmos-synthesizer/). The documentation is available through [GitHub Pages](https://synthesizer-project.github.io/synthesizer/).
 
+## Related packages
+
+There are various other related packages which either perform similar tasks as Synthesizer or can be used in harmony with Synthesizer to create end-to-end workflows. We highlight a handful of these packages below.
+
+- **Stellar population synthesis & Photoinosation**
+
+  - **BC03** [@bc03]: Classic stellar population synthesis code providing spectral energy distributions (SEDs) for single stellar populations with various initial mass functions (IMFs) and metallicities.
+  - **FSPS** [@fsps1; @fsps2]: Stellar population synthesis code offering flexible isochrone-based spectral generation for a variety of IMFs and metallicities.
+  - **BPASS** [@bpass]: Models binary stellar populations with detailed spectral outputs, crucial for UV and nebular emission studies.
+  - **Maraston** [@maraston05]: Provides high-resolution SEDs with alternative stellar evolution prescriptions, particularly useful for post-starburst galaxies.
+  - **Cloudy** [@cloudy]: Photoionization and spectral synthesis code for computing emission-line and continuum processes in gas under various physical conditions.
+  - **MAPPINGS** [@MAPPINGS]: An alternative photoionization code for computing emission-line spectra from ionized gas, particularly useful for AGN and star-forming regions.
+
+- **Monte Carlo radiative transfer**
+
+  - **SKIRT** [@SKIRT]: 3D dust radiative-transfer engine supporting arbitrary geometries, multi-wavelength photon packets, and variance-reduction techniques for high-fidelity galaxy and torus models.
+  - **Hyperion** [@hyperion]: An open-source, parallelized 3D dust-continuum Monte Carlo code, driven via Python scripts with MPI support for large-scale simulations.
+  - **Powderday** [@powderday]: Integrates FSPS, Hyperion, and yt to perform Monte Carlo RT directly on hydrodynamic simulation outputs, automating grid preparation and execution.
+
+- **Point spread function & instrument models**
+
+  - **STPSF** [@stpsf]: Physical-optics simulator for JWST, Roman, and HST, modeling pupil masks, wavefront errors, and instrument-specific aberrations to generate realistic PSFs.
+  - **GalSim** [@galsim]: Versatile image-simulation toolkit offering analytic and empirical PSF models, shear and magnification operators, detector effects (e.g., charge diffusion), and realistic noise injection.
+
+- **Pre- and post-processing utilities**
+
+  - **Astroquery** [@astroquery]: Python interfaces to VO services and mission archives (e.g., MAST, SIMBAD), enabling scripted retrieval of catalogs, images, and spectra.
+  - **Astropy** [@astropy]: Foundational library for astronomy, providing FITS I/O, WCS transformations, units system, coordinate conversions, and utility functions for photometry and statistics.
+  - **Dense Basis** [@dense_basis]: A library for generating and manipulating dense basis functions tailored to SED fitting and SFHs, useful for efficient representation of complex SFHs.
+
+- **Inverse modelling & SED fitting**
+
+  - **EAZY** [@EAZY]: Fast photometric redshift and SED-fitting code using template-optimization and Bayesian priors for parameter inference.
+  - **BAGPIPES** [@BAGPIPES]: Flexible Bayesian SED-fitting tool with support for complex star-formation histories, nebular emission, and dust attenuation curves.
+  - **PROSPECTOR** [@PROSPECTOR]: Advanced inference framework combining MCMC and nested sampling for robust posterior estimation of stellar and dust parameters.
+
+By leveraging these companion packages, users can assemble end-to-end workflows, all the way from grid creation to PSF convolution, noise injection, and inverse modelling.
+
 # Acknowledgements
 
 We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/) [@openmp].
