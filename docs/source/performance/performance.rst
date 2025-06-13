@@ -23,7 +23,7 @@ To ensure the code remains performant, we have a bespoke profilling suite we mai
 This can be found in the ``profiling`` direcotory of the repository. 
 In the following sections we show some performance benchmarks to give an idea of the performance of the codebase. All these tests were run on the Cosma8 HPC at Durham University. The output of the ``lscpu`` command is shown below, which gives an idea of the hardware used for these tests.
 
-.. code-block:: 
+.. code-block:: none
 
     Architecture:             x86_64
       CPU op-mode(s):         32-bit, 64-bit
