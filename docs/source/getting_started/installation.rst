@@ -109,7 +109,7 @@ Multiple optional dependency groups can be installed in one command. For instanc
     pip install cosmos-synthesizer[test,docs]
 
 Initialising Synthesizer
-************************
+########################
 
 Synthesizer has a small number of data files and directories it needs to function correctly. 
 In most circumstances you don't need to worry about these and everything will be default with automatically.
