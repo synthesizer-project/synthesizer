@@ -126,7 +126,7 @@ Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthes
 
 There are various other related packages which either perform similar tasks as Synthesizer or can be used in harmony with Synthesizer to create end-to-end workflows. We highlight a handful of these packages below.
 
-- **Stellar population synthesis & Photoionsation**
+- **Stellar population synthesis & Photoionisation**
 
   - **BC03** [@bc03]: Classic stellar population synthesis code providing spectral energy distributions (SEDs) for single stellar populations with various initial mass functions (IMFs) and metallicities.
   - **FSPS** [@fsps1; @fsps2]: Stellar population synthesis code offering flexible isochrone-based spectral generation for a variety of IMFs and metallicities.
@@ -161,6 +161,6 @@ There are various other related packages which either perform similar tasks as S
 
 We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/) [@openmp].
 
-WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. SB is supported by the Melbourne Research Scholarship and N D Goldsworthy Scholarship. LS is supported by an STFC studentship.
+WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. SB is supported by the Melbourne Research Scholarship and N D Goldsworthy Scholarship. LS and SN is supported by an STFC studentship.
 
 # References
