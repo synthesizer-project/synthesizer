@@ -62,8 +62,7 @@ Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `
 
 By default, certain models (e.g., parametric stars) aren't set up to handle higher dimensionality, though this may change in a future version. 
 For now, we provide the functionality to handle these grids by "collapsing" over the additional axes. 
-More details on this are provided in the `grids_example <grids_example>`_ notebook.
-
+More details on this are provided in the `grids_modify <grids_modify>`_ notebook.
 Grid list
 ~~~~~~~~~
 
