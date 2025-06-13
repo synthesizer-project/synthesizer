@@ -1,7 +1,7 @@
 """A module defining a class for observational instruments.
 
 This module contains the `Instrument` class, which is used to define
-observational instruments for use in the `synthesizer` package. The
+observational instruments for use in the Synthesizer package. The
 `Instrument` class contains everything needed to define a telescope or
 spectrograph, including the filters, resolution, wavelength array, depth,
 depth aperture radius, signal-to-noise ratios, PSFs and noise_maps.
@@ -161,6 +161,30 @@ class Instrument:
         # resolved spectroscopy)
         self.noise_maps = noise_maps
 
+        self._validate()
+
+    def _validate(self):
+        """Validate the Instrument object."""
+        # If we have a depth make sure we have a SNR
+        if self.depth is not None and self.snrs is None:
+            raise exceptions.MissingArgument(
+                "If you set a depth you must also set the SNRs"
+            )
+
+        # If we have a SNR make sure we have a depth
+        if self.snrs is not None and self.depth is None:
+            raise exceptions.MissingArgument(
+                "If you set a SNR you must also set the depth"
+            )
+
+        # Make sure we don't have both a SNR and a noise map (only one
+        # can be used at a time)
+        if self.snrs is not None and self.noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as "
+                " noise maps"
+            )
+
     @property
     def _resolution(self):
         """Return the resolution of the Instrument without the units.
@@ -304,12 +328,15 @@ class Instrument:
         return self.can_do_resolved_spectroscopy and have_noise
 
     @classmethod
-    def _from_hdf5(cls, group):
+    def _from_hdf5(cls, group, **kwargs):
         """Create an Instrument from an HDF5 group.
 
         Args:
             group (h5py.Group):
                 The group containing the Instrument attributes.
+            **kwargs:
+                Keyword arguments to override the attributes stored in the
+                HDF5 file.
 
         Returns:
             Instrument:
@@ -408,18 +435,42 @@ class Instrument:
         else:
             noise_maps = None
 
-        # Create the Instrument
-        return cls(
-            label=group.attrs["label"],
-            filters=filters,
-            resolution=resolution,
-            lam=lam,
-            depth=depth,
-            depth_app_radius=depth_app_radius,
-            snrs=snrs,
-            psfs=psfs,
-            noise_maps=noise_maps,
-        )
+        # Overrise any of the attributes with the kwargs if they are present
+        # in the kwargs
+        if "filters" in kwargs:
+            filters = kwargs["filters"]
+        if "resolution" in kwargs:
+            resolution = kwargs["resolution"]
+        if "lam" in kwargs:
+            lam = kwargs["lam"]
+        if "depth" in kwargs:
+            depth = kwargs["depth"]
+        if "depth_app_radius" in kwargs:
+            depth_app_radius = kwargs["depth_app_radius"]
+        if "snrs" in kwargs:
+            snrs = kwargs["snrs"]
+        if "psfs" in kwargs:
+            psfs = kwargs["psfs"]
+        if "noise_maps" in kwargs:
+            noise_maps = kwargs["noise_maps"]
+
+        # Create a new instance of the Instrument class
+        instance = cls.__new__(cls)
+
+        # Set the label of the Instrument
+        instance.label = group.attrs["label"]
+        instance.filters = filters
+        instance.resolution = resolution
+        instance.lam = lam
+        instance.depth = depth
+        instance.depth_app_radius = depth_app_radius
+        instance.snrs = snrs
+        instance.psfs = psfs
+        instance.noise_maps = noise_maps
+
+        instance._validate()
+
+        return instance
 
     def to_hdf5(self, group):
         """Save the Instrument to an HDF5 group.
