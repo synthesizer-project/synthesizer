@@ -85,11 +85,14 @@ def load_Simba(
         gas_particle_indices = glist_all
     else:
         galaxy_indices = np.array(object_indexes)
-        
+
         # Validate indices
-        if np.any(galaxy_indices < 0) or np.any(galaxy_indices >= len(slist_start_all)):
+        if np.any(galaxy_indices < 0) or np.any(
+            galaxy_indices >= len(slist_start_all)
+        ):
             raise ValueError(
-                f"Invalid object indices. Must be in range [0, {len(slist_start_all) - 1}]"
+                "Invalid object indices. Must be in range "
+                "[0, {len(slist_start_all) - 1}]"
             )
         star_particle_indices = np.concatenate(
             [
@@ -103,7 +106,7 @@ def load_Simba(
                 for i in galaxy_indices
             ]
         )
-    
+
     centres = centres_all[galaxy_indices]
 
     with h5py.File(f"{directory}/{snap_name}", "r") as hf:
