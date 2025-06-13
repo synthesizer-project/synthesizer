@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -49,6 +50,31 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
     sub_dims[idim] = 2;
   }
 
+  /* Precompute sub-cell offsets and linear offsets once */
+  struct SubCell {
+    std::array<int, MAX_GRID_NDIM> offs;
+    int linoff;
+  };
+  std::vector<SubCell> subcells(ncells);
+  {
+    std::array<int, MAX_GRID_NDIM> subset_ind;
+    for (int ic = 0; ic < ncells; ic++) {
+      get_indices_from_flat(ic, ndim, sub_dims, subset_ind);
+      subcells[ic].offs = subset_ind;
+      /* ravel_grid_index on the offset gives the linear offset */
+      subcells[ic].linoff = grid_props->ravel_grid_index(subset_ind);
+    }
+  }
+
+  /* Precompute unmasked wavelengths */
+  std::vector<int> good_lams;
+  good_lams.reserve(nlam);
+  for (int ilam = 0; ilam < nlam; ilam++) {
+    if (!grid_props->lam_is_masked(ilam)) {
+      good_lams.push_back(ilam);
+    }
+  }
+
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; p++) {
 
@@ -57,58 +83,48 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
       continue;
     }
 
-    /* Setup the index and mass fraction arrays. */
+    /* Get the grid indices and cell fractions for the particle. */
     std::array<int, MAX_GRID_NDIM> part_indices;
     std::array<double, MAX_GRID_NDIM> axis_fracs;
-
-    /* Get the grid indices and cell fractions for the particle. */
     get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
-    /* Now loop over this collection of cells collecting and setting their
-     * weights. */
+    /* Compute base linear index for this particle */
+    const int base_linidx = grid_props->ravel_grid_index(part_indices);
+
+    /* Cache particle weight once */
+    const double w_p = parts->get_weight_at(p);
+
+    /* Loop over sub-cells collecting their weighted contributions. */
     for (int icell = 0; icell < ncells; icell++) {
+      const auto &sc = subcells[icell];
 
-      /* Set up some index arrays we'll need. */
-      std::array<int, MAX_GRID_NDIM> subset_ind;
-      std::array<int, MAX_GRID_NDIM> frac_ind;
-
-      /* Get the multi-dimensional version of icell. */
-      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-      /* Multiply all contributing fractions and get the fractions index
-       * in the grid. */
-      double frac = 1;
+      /* Compute the CIC fraction */
+      double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
-        int offset = subset_ind[idim]; // 0 or 1
-        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
-        frac_ind[idim] = part_indices[idim] + offset;
+        if (sc.offs[idim]) {
+          frac *= axis_fracs[idim];
+        } else {
+          frac *= (1.0 - axis_fracs[idim]);
+        }
       }
-
-      /* Nothing to do if fraction is 0. */
-      if (frac == 0) {
+      if (frac == 0.0) {
         continue;
       }
 
-      /* Define the weight. */
-      double weight = frac * parts->get_weight_at(p);
+      /* Define the weighted contribution from this cell. */
+      const double weight = frac * w_p;
 
-      /* Get the weight's index. */
-      const int grid_ind = grid_props->ravel_grid_index(frac_ind);
+      /* Compute grid cell index via base + precomputed offset */
+      const int grid_ind = base_linidx + sc.linoff;
 
-      /* Add this grid cell's contribution to the spectra */
-      for (int ilam = 0; ilam < nlam; ilam++) {
+      /* Add this grid cell's contribution to the spectra. */
+      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+        const int ilam = good_lams[jl];
+        const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+        const int idx = p * nlam + ilam;
 
-        /* Skip if this wavelength is masked. */
-        if (grid_props->lam_is_masked(ilam)) {
-          continue;
-        }
-
-        /* Get the spectra value at this index and wavelength. */
-        double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
-
-        /* Add the contribution to this wavelength. */
-        part_spectra[p * nlam + ilam] =
-            std::fma(spec_val, weight, part_spectra[p * nlam + ilam]);
+        /* Fused multiply-add for precision */
+        part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
         spectra[ilam] = std::fma(spec_val, weight, spectra[ilam]);
       }
     }
@@ -135,8 +151,6 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
   const int nlam = grid_props->nlam;
-
-  /* Calculate the number of cells in a patch of the grid. */
   const int ncells = 1 << ndim;
 
   /* Subset dimensions are always 2 (low and high side). */
@@ -145,7 +159,33 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     sub_dims[i] = 2;
   }
 
-#pragma omp parallel for schedule(static) num_threads(nthreads)
+  /* Precompute sub-cell offsets and linear offsets once */
+  struct SubCell {
+    std::array<int, MAX_GRID_NDIM> offs;
+    int linoff;
+  };
+  std::vector<SubCell> subcells(ncells);
+  {
+    std::array<int, MAX_GRID_NDIM> subset_ind;
+    for (int ic = 0; ic < ncells; ic++) {
+      get_indices_from_flat(ic, ndim, sub_dims, subset_ind);
+      subcells[ic].offs = subset_ind;
+      /* ravel_grid_index on the offset gives the linear offset */
+      subcells[ic].linoff = grid_props->ravel_grid_index(subset_ind);
+    }
+  }
+
+  /* Precompute unmasked wavelengths */
+  std::vector<int> good_lams;
+  good_lams.reserve(nlam);
+  for (int ilam = 0; ilam < nlam; ilam++) {
+    if (!grid_props->lam_is_masked(ilam)) {
+      good_lams.push_back(ilam);
+    }
+  }
+
+#pragma omp parallel for schedule(static) num_threads(nthreads)                \
+    reduction(+ : spectra[ : nlam])
   for (int p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
@@ -158,48 +198,43 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     std::array<double, MAX_GRID_NDIM> axis_fracs;
     get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
+    /* Compute base linear index for this particle */
+    const int base_linidx = grid_props->ravel_grid_index(part_indices);
+
+    /* Cache particle weight once */
+    const double w_p = parts->get_weight_at(p);
+
     /* Loop over sub-cells collecting their weighted contributions. */
     for (int icell = 0; icell < ncells; icell++) {
+      const auto &sc = subcells[icell];
 
-      /* Get the multi-dimensional version of icell. */
-      std::array<int, MAX_GRID_NDIM> subset_ind;
-      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-      /* Compute the contribution from this sub-cell. */
-      std::array<int, MAX_GRID_NDIM> frac_ind;
+      /* Compute the CIC fraction */
       double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
-        const int offset = subset_ind[idim]; // 0 or 1
-        frac *= offset ? axis_fracs[idim] : (1.0 - axis_fracs[idim]);
-        frac_ind[idim] = part_indices[idim] + offset;
+        if (sc.offs[idim]) {
+          frac *= axis_fracs[idim];
+        } else {
+          frac *= (1.0 - axis_fracs[idim]);
+        }
       }
-
-      /* Nothing to do if fraction is 0. */
       if (frac == 0.0) {
         continue;
       }
 
       /* Define the weighted contribution from this cell. */
-      const double weight = frac * parts->get_weight_at(p);
+      const double weight = frac * w_p;
 
-      /* Get the index of the grid cell. */
-      const int grid_ind = grid_props->ravel_grid_index(frac_ind);
+      /* Compute grid cell index via base + precomputed offset */
+      const int grid_ind = base_linidx + sc.linoff;
 
       /* Add this grid cell's contribution to the spectra. */
-      for (int ilam = 0; ilam < nlam; ilam++) {
-
-        /* Skip if this wavelength is masked. */
-        if (grid_props->lam_is_masked(ilam)) {
-          continue;
-        }
-
-        /* Get the spectra value at this index and wavelength. */
+      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+        const int ilam = good_lams[jl];
         const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+        const int idx = p * nlam + ilam;
 
-        /* Use fused multiply-add to accumulate with better precision.
-         * Equivalent to: += spec_val * weight, but with a single rounding. */
-        part_spectra[p * nlam + ilam] =
-            std::fma(spec_val, weight, part_spectra[p * nlam + ilam]);
+        /* Fused multiply-add for precision */
+        part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
         spectra[ilam] = std::fma(spec_val, weight, spectra[ilam]);
       }
     }
@@ -324,7 +359,8 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   const int nlam = grid_props->nlam;
 
   /* Loop over particles. */
-#pragma omp parallel for schedule(static) num_threads(nthreads) reduction(+:spectra[:nlam])
+#pragma omp parallel for schedule(static) num_threads(nthreads)                \
+    reduction(+ : spectra[ : nlam])
   for (int p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
