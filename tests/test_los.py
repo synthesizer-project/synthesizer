@@ -74,10 +74,12 @@ class TestLOSColumnDensity:
             force_loop=1,
             min_count=10,
         )
-        # For one gas: surf_density = dust_masses/(sml^2)*kernel[0]
-        # dust_masses = mass*metallicity*dust_to_metal_ratio = 1e6
-        # sml=1 -> surf_density=1e6
-        # tau = kappa * surf_density / (1e6)^2 = 2.0 * 1e6 / 1e12 = 2e-6
+        # For one gas: surf_density = dust_masses/(sml**2) * kernel[0]
+        # dust_masses = mass * metallicity * dust_to_metal_ratio
+        #            = 1e6 Msun * 0.01 * 1.0 = 1e4
+        # sml = 1 Mpc → surf_density = 1e4
+        # τ = kappa * surf_density / (1e6)**2
+        #   = 2.0 * 1e4 / 1e12 = 2e-8
         expected = np.array([2e-8])
         assert np.allclose(tau, expected), (
             f"Expected tau {expected}, got {tau}"
