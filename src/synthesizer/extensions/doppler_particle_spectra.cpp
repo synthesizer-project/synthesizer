@@ -210,7 +210,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     std::vector<double> shifted_wavelengths(nlam);
     std::vector<int> mapped_indices(nlam);
 
-#pragma omp for schedule(static)
+#pragma omp for schedule(static) reduction(+ : spectra[ : nlam])
     for (int p = 0; p < parts->npart; ++p) {
 
       /* Skip masked particles. */
