@@ -83,8 +83,8 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
       /* Find fraction of smoothing length. */
       double q = b / sml;
 
-      /* Get the value of the kernel at q. */
-      int index = kdim * q;
+      /* Get the value of the kernel at q (ensuring we handle q -> 1) */
+      int index = std::min(kdim - 1, (int)(q * kdim));
       double kvalue = kernel[index];
 
       /* Finally, compute the dust surface density itself. */
@@ -177,8 +177,8 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
         /* Find fraction of smoothing length. */
         double q = b / sml;
 
-        /* Get the value of the kernel at q. */
-        int index = kdim * q;
+        /* Get the value of the kernel at q (ensuring we handle q -> 1) */
+        int index = std::min(kdim - 1, (int)(q * kdim));
         double kvalue = kernel[index];
 
         /* Finally, compute the dust surface density itself. */
@@ -332,8 +332,8 @@ static double calculate_los_recursive(struct cell *c, const double x,
       /* Find fraction of smoothing length. */
       double q = b / part->sml;
 
-      /* Get the value of the kernel at q. */
-      int index = kdim * q;
+      /* Get the value of the kernel at q (ensuring we handle q -> 1) */
+      int index = std::min(kdim - 1, (int)(q * kdim));
       double kvalue = kernel[index];
 
       /* Finally, compute the surface density itself. */
