@@ -29,10 +29,14 @@
  * particles and the gas particles. This will be used when the number of gas
  * particles is small enough that making a tree is pointless.
  *
- * @param pos_i The positions of the star particles.
- * @param pos_j The positions of the gas particles.
- * @param smls The smoothing lengths of the gas particles.
- * @param surf_den_vals The surface density values of the gas particles.
+ * @param pos_i The positions of the particles to compute the surface
+ *             densities for (e.g. star particles).
+ * @param pos_j The positions of the particles to compute the surface
+ *             densities from (e.g. gas particles).
+ * @param smls The smoothing lengths of the particles to compute the
+ *            surface densities from.
+ * @param surf_den_vals The surface density values of the particles to compute
+ *            the surface densities from.
  * @param kernel The kernel to use for the calculation.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
@@ -53,6 +57,7 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
     double y = pos_i[i * 3 + 1];
     double z = pos_i[i * 3 + 2];
 
+    /* Loop over other particle postions. */
     for (int j = 0; j < npart_j; j++) {
 
       /* Get gas particle data. */
@@ -64,7 +69,7 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
 
       /* Skip straight away if the surface density particle is behind the z
        * position. */
-      if (zj < z) {
+      if (zj > z) {
         continue;
       }
 
@@ -101,10 +106,14 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
  * particles and the gas particles. This will be used when the number of gas
  * particles is small enough that making a tree is pointless.
  *
- * @param pos_i The positions of the star particles.
- * @param pos_j The positions of the gas particles.
- * @param smls The smoothing lengths of the gas particles.
- * @param surf_den_vals The surface density values of the gas particles.
+ * @param pos_i The positions of the particles to compute the surface
+ *             densities for (e.g. star particles).
+ * @param pos_j The positions of the particles to compute the surface
+ *             densities from (e.g. gas particles).
+ * @param smls The smoothing lengths of the particles to compute the
+ *            surface densities from.
+ * @param surf_den_vals The surface density values of the particles to compute
+ *            the surface densities from.
  * @param kernel The kernel to use for the calculation.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
@@ -158,7 +167,7 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
 
         /* Skip straight away if the surface density particle is behind the z
          * position. */
-        if (zj < z) {
+        if (zj > z) {
           continue;
         }
 
@@ -269,7 +278,7 @@ static double calculate_los_recursive(struct cell *c, const double x,
                                       const double *kernel) {
 
   /* Early exit if the cell is entirely behind the position. */
-  if (c->loc[2] + c->width < z) {
+  if (c->loc[2] + c->width > z) {
     return 0;
   }
 
@@ -312,7 +321,7 @@ static double calculate_los_recursive(struct cell *c, const double x,
       struct particle *part = &parts[j];
 
       /* Skip straight away if the gas particle is behind the star. */
-      if (part->pos[2] < z) {
+      if (part->pos[2] > z) {
         continue;
       }
 
@@ -559,13 +568,6 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
     los_loop(pos_i, pos_j, smls, surf_den_val, kernel, surf_dens, npart_i,
              npart_j, kdim, threshold, nthreads);
 
-    /* Reconstruct the python array to return. */
-    npy_intp np_dims[1] = {
-        npart_i,
-    };
-    PyArrayObject *out_surf_dens = (PyArrayObject *)PyArray_SimpleNewFromData(
-        1, np_dims, NPY_FLOAT64, surf_dens);
-
     toc("Calculating surface densities (with a loop)", start);
 
     return Py_BuildValue("N", np_surf_dens);
@@ -585,10 +587,6 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
   /* Clean up. */
   cleanup_cell_tree(root);
-
-  /* Reconstruct the python array to return. */
-  npy_intp np_dims[1] = {npart_i};
-  PyArrayObject *out_surf_dens = wrap_array_to_numpy(1, np_dims, surf_dens);
 
   toc("Calculating surface densities (with cells)", start);
 
