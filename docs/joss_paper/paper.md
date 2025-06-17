@@ -90,7 +90,7 @@ Synthesizer is a fast, flexible, modular, and extensible Python package that emp
 
 # Statement of need
 
-Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches, both translating theoretical models into the observer space (a technique known as forward modelling). The first uses computationally expensive dust radiative transfer codes [e.g. @SUNRISE; @SKIRT; @POWDERDAY]; these codes are typically computationally expensive, prioritising fidelity. The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets [e.g. @SYNTHOBS; @FLARESII; @FLARESIV; @Fortuni2023; @Marshall2025].
+Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches, both translating theoretical models into the observer space (a technique known as forward modelling). The first uses computationally expensive dust radiative transfer codes [e.g. @SKIRT; @SUNRISE; @POWDERDAY]; these codes are typically computationally expensive, prioritising fidelity. The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets [e.g. @Fortuni2023; @SYNTHOBS; @FLARESII; @FLARESIV; @Marshall2025].
 
 Simplified inverse modelling approaches, such as SED fitting [e.g. @EAZY; @BAGPIPES; @PROSPECTOR] work in the opposite direction, translating observables into intrinsic physical quantities. However, these methods can introduce biases and uncertainties from both observational effects and model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right, necessitating a simplified parameter space to ensure convergence in a reasonable time. Forward modelling is therefore becoming increasingly important not only for probing the validity of theoretical models, but also for quantifying the uncertainties in the modelling assumptions themselves.
 
@@ -138,7 +138,7 @@ There are various other related packages which either perform similar tasks as S
 - **Monte Carlo radiative transfer**
 
   - **SKIRT** [@SKIRT]: 3D dust radiative-transfer engine supporting arbitrary geometries, multi-wavelength photon packets, and variance-reduction techniques for high-fidelity galaxy and torus models.
-  - **Powderday** [@powderday]: Integrates FSPS, Hyperion [@hyperion], and yt to perform Monte Carlo RT directly on hydrodynamic simulation outputs, automating grid preparation and execution.
+  - **Powderday** [@POWDERDAY]: Integrates FSPS, Hyperion [@hyperion], and yt [@YT] to perform Monte Carlo RT directly on hydrodynamic simulation outputs, automating grid preparation and execution.
 
 - **Point spread function & instrument models**
 
@@ -148,6 +148,7 @@ There are various other related packages which either perform similar tasks as S
 - **Pre- and post-processing utilities**
 
   - **Astropy** [@astropy]: Foundational library for astronomy, providing FITS I/O, WCS transformations, units system, coordinate conversions, and utility functions for photometry and statistics.
+  - **YT** [@YT]: Analysis and visualisation toolkit for astrophysical simulations, supporting adaptive mesh refinement (AMR) data, particle data, and structured grids, with a focus on large-scale cosmological simulations.
   - **Astroquery** [@astroquery]: Python interfaces to VO services and mission archives (e.g., MAST, SIMBAD), enabling scripted retrieval of catalogues, images, and spectra.
   - **Dense Basis** [@dense_basis]: A library for generating and manipulating dense basis functions tailored to SED fitting and SFHs, useful for efficiently representing complex SFHs.
 
