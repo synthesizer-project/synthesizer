@@ -1,10 +1,17 @@
-"""Process bib file for publications page in docs."""
+"""Process bib file for publications page in docs.
+
+Example usage:
+    python bib_to_rst.py publications.bib publications.rst
+"""
 
 import argparse
 
-import bibtexparser
-from bibtexparser.bparser import BibTexParser
-from bibtexparser.customization import convert_to_unicode
+try:
+    import bibtexparser
+    from bibtexparser.bparser import BibTexParser
+    from bibtexparser.customization import convert_to_unicode
+except ImportError:
+    raise ImportError("Please install bibtexparser: pip install bibtexparser")
 
 
 def format_entry(entry):
