@@ -757,7 +757,7 @@ class Sersic2DAnnuli(Sersic2D):
         self.radii = np.append(self.radii, np.inf * radii.units)
 
         # How many annuli are there?
-        self.n_annuli = len(radii)
+        self.n_annuli = len(self.radii) - 1
 
     @accepts(x=(kpc, mas), y=(kpc, mas))
     def compute_density_grid(self, x, y, annulus):
