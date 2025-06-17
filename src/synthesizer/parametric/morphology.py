@@ -26,6 +26,7 @@ from unyt import kpc, mas, unyt_array
 from unyt.dimensions import angle, length
 
 from synthesizer import exceptions
+from synthesizer.units import accepts, unit_is_compatible
 
 
 class MorphologyBase(ABC):
@@ -123,6 +124,7 @@ class PointSource(MorphologyBase):
             image in kpc.
     """
 
+    @accepts(offset=(kpc, mas))
     def __init__(
         self,
         offset=np.array([0.0, 0.0]) * kpc,
@@ -176,7 +178,8 @@ class PointSource(MorphologyBase):
             else:
                 self.offset_kpc = self.offset_mas * kpc_proper_per_mas
 
-    def compute_density_grid(self, xx, yy, units=kpc):
+    @accepts(xx=(kpc, mas), yy=(kpc, mas))
+    def compute_density_grid(self, xx, yy):
         """Compute the density grid.
 
         This acts as a wrapper to astropy functionality (defined above) which
@@ -187,8 +190,6 @@ class PointSource(MorphologyBase):
                 x values on a 2D grid.
             yy: array-like (float):
                 y values on a 2D grid.
-            units : unyt.unit
-                The units in which the coordinate grids are defined.
 
         Returns:
             density_grid : np.ndarray
@@ -196,6 +197,13 @@ class PointSource(MorphologyBase):
         """
         # Create empty density grid
         image = np.zeros((len(xx), len(yy)))
+
+        # Get the units of the coordinate grids
+        units = xx.units
+        if not unit_is_compatible(yy, units):
+            raise exceptions.InconsistentUnits(
+                f" xx and yy in incompatible units: {xx.units} and {yy.units}"
+            )
 
         if units == kpc:
             # find the pixel corresponding to the supplied offset
@@ -238,6 +246,12 @@ class Gaussian2D(MorphologyBase):
             The population correlation coefficient between x and y.
     """
 
+    @accepts(
+        x_mean=(kpc, mas),
+        y_mean=(kpc, mas),
+        stddev_x=(kpc, mas),
+        stddev_y=(kpc, mas),
+    )
     def __init__(self, x_mean, y_mean, stddev_x, stddev_y, rho=0):
         """Initialise the morphology.
 
@@ -259,7 +273,8 @@ class Gaussian2D(MorphologyBase):
         self.stddev_y = stddev_y
         self.rho = rho
 
-    def compute_density_grid(self, x, y, units=None):
+    @accepts(x=(kpc, mas), y=(kpc, mas))
+    def compute_density_grid(self, x, y):
         """Compute density grid.
 
         Args:
@@ -267,9 +282,6 @@ class Gaussian2D(MorphologyBase):
                 x values on a 2D grid.
             y (unyt_array of float):
                 y values on a 2D grid.
-            units (unyt.unit):
-                The units in which the coordinate grids are defined.
-                If None, defaults to kpc.
 
         Returns:
             g_2d_mat: np.ndarray:
@@ -280,13 +292,6 @@ class Gaussian2D(MorphologyBase):
             ValueError:
                 If either x or y is None.
         """
-        if units is None:
-            units = kpc
-
-        # Error for x, y = None
-        if x is None or y is None:
-            raise ValueError("x and y grids must be provided.")
-
         # Define covariance matrix
         cov_mat = np.array(
             [
@@ -294,6 +299,18 @@ class Gaussian2D(MorphologyBase):
                 [(self.rho * self.stddev_x * self.stddev_y), self.stddev_y**2],
             ]
         )
+
+        # Ensure x and y are in compatiable units with x_mean and y_mean
+        if not unit_is_compatible(x, self.x_mean.units):
+            raise exceptions.InconsistentUnits(
+                f"x units ({x.units}) must be compatible with "
+                f"x_mean units ({self.x_mean.units})"
+            )
+        if not unit_is_compatible(y, self.y_mean.units):
+            raise exceptions.InconsistentUnits(
+                f"y units ({y.units}) must be compatible with "
+                f"y_mean units ({self.y_mean.units})"
+            )
 
         # Invert covariant matrix
         inv_cov = np.linalg.inv(cov_mat)
@@ -320,10 +337,22 @@ class Gaussian2DAnnuli(Gaussian2D):
     """A subclass of Gaussian2D that supports masking of concentric annuli.
 
     Attributes:
+        x_mean: (float): The mean of the Gaussian along the x-axis.
+        y_mean: (float): The mean of the Gaussian along the y-axis.
+        stddev_x: (float): The standard deviation along the x-axis.
+        stddev_y: (float): The standard deviation along the y-axis.
+        rho: (float): The population correlation coefficient between x and y.
         radii (list of float): The radii defining the annuli.
         annulus_index (int): Index of the annulus to be used.
     """
 
+    @accepts(
+        x_mean=(kpc, mas),
+        y_mean=(kpc, mas),
+        stddev_x=(kpc, mas),
+        stddev_y=(kpc, mas),
+        radii=(kpc, mas),
+    )
     def __init__(
         self,
         x_mean,
@@ -347,21 +376,19 @@ class Gaussian2DAnnuli(Gaussian2D):
             radii (unyt_array of float): The radii defining the annuli.
             rho (float): The correlation coefficient between x and y.
         """
-        super().__init__(x_mean, y_mean, stddev_x, stddev_y, rho)
+        # Initialise the parent class
+        Gaussian2D.__init__(self, x_mean, y_mean, stddev_x, stddev_y, rho)
 
-        # Convert radii to the same units as x_mean and y_mean
-        if isinstance(radii, unyt_array):
-            if radii.units.dimensions == length:
-                radii = radii.to("kpc").value
-            elif radii.units.dimensions == angle:
-                radii = radii.to("mas").value
-            else:
-                raise exceptions.IncorrectUnits(
-                    "The units of radii must have length or angle dimensions"
-                )
-        else:
-            raise exceptions.MissingAttribute(
-                "The radii must be provided as a unyt_array with units"
+        # Ensure x_mean and y_mean are in compatible units with radii
+        if not unit_is_compatible(radii, self.x_mean.units):
+            raise exceptions.InconsistentUnits(
+                f"radii units ({radii.units}) must be compatible with "
+                f"x_mean units ({self.x_mean.units})"
+            )
+        if not unit_is_compatible(radii, self.y_mean.units):
+            raise exceptions.InconsistentUnits(
+                f"radii units ({radii.units}) must be compatible with "
+                f"y_mean units ({self.y_mean.units})"
             )
 
         # Attach the radii for annuli
@@ -375,14 +402,14 @@ class Gaussian2DAnnuli(Gaussian2D):
         # How many annuli are there?
         self.n_annuli = len(radii)
 
-    def compute_density_grid(self, x, y, annulus, units=kpc):
+    @accepts(x=(kpc, mas), y=(kpc, mas))
+    def compute_density_grid(self, x, y, annulus):
         """Compute the Gaussian density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
             y (array-like): y values on a 2D grid.
             annulus (int): Index of the annulus to be used.
-            units (unyt.unit): Units of the coordinate grids.
 
         Returns:
             np.ndarray: The masked Gaussian density grid.
@@ -395,7 +422,7 @@ class Gaussian2DAnnuli(Gaussian2D):
             )
 
         # Get the whole density grid first
-        density_grid = super().compute_density_grid(x, y, units)
+        density_grid = super().compute_density_grid(x, y)
 
         # Compute elliptical radius from (x, y)
         dx = x - self.x_mean
@@ -428,6 +455,11 @@ class Sersic2D(MorphologyBase):
         model_mas : The 2D Sersic model in milliarcseconds.
     """
 
+    @accepts(
+        r_eff=(kpc, mas),
+        x_0=(kpc, mas),
+        y_0=(kpc, mas),
+    )
     def __init__(
         self,
         r_eff,
@@ -467,21 +499,29 @@ class Sersic2D(MorphologyBase):
         self.r_eff_kpc = None
 
         # Check units of r_eff and convert if necessary.
-        if isinstance(r_eff, unyt_array):
-            if r_eff.units.dimensions == length:
-                self.r_eff_kpc = r_eff.to("kpc").value
-            elif r_eff.units.dimensions == angle:
-                self.r_eff_mas = r_eff.to("mas").value
-            else:
-                raise exceptions.IncorrectUnits(
-                    "The units of r_eff must have length or angle dimensions"
-                )
-            self.r_eff = r_eff
+        if r_eff.units.dimensions == length:
+            self.r_eff_kpc = r_eff.to("kpc").value
+        elif r_eff.units.dimensions == angle:
+            self.r_eff_mas = r_eff.to("mas").value
         else:
-            raise exceptions.MissingAttribute(
-                "The effective radius must be provided"
+            raise exceptions.IncorrectUnits(
+                "The units of r_eff must have length or angle dimensions"
+            )
+        self.r_eff = r_eff
+
+        # Ensure r_eff and x_0, y_0 are in compatible units
+        if not unit_is_compatible(x_0, self.r_eff.units):
+            raise exceptions.InconsistentUnits(
+                f"x_0 units ({x_0.units}) must be compatible with "
+                f"r_eff units ({self.r_eff.units})"
+            )
+        if not unit_is_compatible(y_0, self.r_eff.units):
+            raise exceptions.InconsistentUnits(
+                f"y_0 units ({y_0.units}) must be compatible with "
+                f"r_eff units ({self.r_eff.units})"
             )
 
+        # Set the other parameters
         self.amplitude = amplitude
         self.r_eff = r_eff
         self.sersic_index = sersic_index
@@ -528,7 +568,8 @@ class Sersic2D(MorphologyBase):
                 "comoslogical calculations."
             )
 
-    def compute_density_grid(self, x, y, units=kpc):
+    @accepts(x=(kpc, mas), y=(kpc, mas))
+    def compute_density_grid(self, x, y):
         """Compute the density grid.
 
         Args:
@@ -536,17 +577,23 @@ class Sersic2D(MorphologyBase):
                 x values on a 2D grid.
             y: array-like (float):
                 y values on a 2D grid.
-            units : unyt.unit
-                The units in which the coordinate grids are defined.
 
         Returns:
             density_grid : np.ndarray
                 The density grid produced from either
                 the kpc or mas Sersic profile.
         """
-        # Error for x, y = None
-        if x is None or y is None:
-            raise ValueError("x and y grids must be provided.")
+        # Ensure x and y are in compatible units with x_0 and y_0
+        if not unit_is_compatible(x, self.x_0.units):
+            raise exceptions.InconsistentUnits(
+                f"x units ({x.units}) must be compatible with "
+                f"x_0 units ({self.x_0.units})"
+            )
+        if not unit_is_compatible(y, self.y_0.units):
+            raise exceptions.InconsistentUnits(
+                f"y units ({y.units}) must be compatible with "
+                f"y_0 units ({self.y_0.units})"
+            )
 
         # Compute coordinate offset from x, y axes
         a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
@@ -579,18 +626,8 @@ class Sersic2D(MorphologyBase):
         else:
             self.model_mas = None
 
-        if units == kpc and self.model_kpc is None:
-            raise exceptions.InconsistentArguments(
-                "Morphology has not been initialised with a kpc method. "
-                "Reinitialise the model or use milliarcseconds."
-            )
-        elif units == mas and self.model_mas is None:
-            raise exceptions.InconsistentArguments(
-                "Morphology has not been initialised with a milliarcsecond "
-                "method. Reinitialise the model or use kpc."
-            )
-
         # Call the appropriate model function
+        units = x.units
         if units == kpc:
             return self.model_kpc
         elif units == mas:
@@ -606,10 +643,25 @@ class Sersic2DAnnuli(Sersic2D):
     """A subclass of Sersic2D that supports masking of concentric annuli.
 
     Attributes:
+        r_eff_kpc (float): The effective radius in kpc.
+        r_eff_mas (float): The effective radius in milliarcseconds.
+        sersic_index (float): The Sersic index.
+        ellipticity (float): The ellipticity.
+        theta (float): The rotation angle.
+        cosmo (astropy.cosmology): The cosmology object.
+        redshift (float): The redshift.
+        model_kpc : The 2D Sersic model in kpc.
+        model_mas : The 2D Sersic model in milliarcseconds.
         radii (list of float): The radii defining the annuli.
         annulus_index (int): Index of the annulus to be used.
     """
 
+    @accepts(
+        r_eff=(kpc, mas),
+        radii=(kpc, mas),
+        x_0=(kpc, mas),
+        y_0=(kpc, mas),
+    )
     def __init__(
         self,
         r_eff,
@@ -637,7 +689,8 @@ class Sersic2DAnnuli(Sersic2D):
             cosmo (astropy.cosmology.Cosmology): astropy cosmology object.
             redshift (float): Redshift.
         """
-        super().__init__(
+        Sersic2D.__init__(
+            self,
             r_eff,
             amplitude,
             sersic_index,
@@ -648,18 +701,6 @@ class Sersic2DAnnuli(Sersic2D):
             cosmo,
             redshift,
         )
-
-        # Convert radii to the same units as r_eff
-        if isinstance(radii, unyt_array):
-            radii = (
-                radii.to("kpc").value
-                if radii.units.dimensions == length
-                else radii.to("mas").value
-            )
-        else:
-            raise exceptions.MissingAttribute(
-                "The radii must be provided as a unyt_array with units"
-            )
 
         # Attach the radii for annuli
         self.radii = radii
@@ -672,14 +713,14 @@ class Sersic2DAnnuli(Sersic2D):
         # How many annuli are there?
         self.n_annuli = len(radii)
 
-    def compute_density_grid(self, x, y, annulus, units="kpc"):
+    @accepts(x=(kpc, mas), y=(kpc, mas))
+    def compute_density_grid(self, x, y, annulus):
         """Compute the density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
             y (array-like): y values on a 2D grid.
             annulus (int): Index of the annulus to be used.
-            units (str): 'kpc' or 'mas', specifying the unit of computation.
 
         Returns:
             np.ndarray: The computed density grid, optionally masked by annuli.
@@ -692,7 +733,7 @@ class Sersic2DAnnuli(Sersic2D):
             )
 
         # Get the density grid for the whole profile
-        density_grid = super().compute_density_grid(x, y, units)
+        density_grid = super().compute_density_grid(x, y)
 
         # Compute the radius of each grid cell in the full profile.
         a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
