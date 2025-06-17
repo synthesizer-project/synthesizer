@@ -335,54 +335,85 @@ class Gaussian2DRings(Gaussian2D):
         y_mean,
         stddev_x,
         stddev_y,
+        radii,
         rho=0,
-        radii=None,
-        annulus_index=None,
     ):
         """Initialise the Gaussian morphology with optional annulus masking.
 
         Args:
-            x_mean (float): The mean of the Gaussian along the x-axis.
-            y_mean (float): The mean of the Gaussian along the y-axis.
-            stddev_x (float): The standard deviation along the x-axis.
-            stddev_y (float): The standard deviation along the y-axis.
+            x_mean (unyt_quantity of float): The mean of the Gaussian along
+                the x-axis.
+            y_mean (unyt_quantity of float): The mean of the Gaussian along
+                the y-axis.
+            stddev_x (unyt_quantity of float): The standard deviation along
+                the x-axis.
+            stddev_y (unyt_quantity of float): The standard deviation along
+                the y-axis.
+            radii (unyt_array of float): The radii defining the annuli.
             rho (float): The correlation coefficient between x and y.
-            radii (list of float, optional): The radii defining the annuli.
-            annulus_index (int, optional): The index of the annulus to use.
         """
         super().__init__(x_mean, y_mean, stddev_x, stddev_y, rho)
-        self.radii = radii
-        self.annulus_index = annulus_index
 
-    def compute_density_grid(self, x, y, units=kpc):
+        # Convert radii to the same units as x_mean and y_mean
+        if isinstance(radii, unyt_array):
+            if radii.units.dimensions == length:
+                radii = radii.to("kpc").value
+            elif radii.units.dimensions == angle:
+                radii = radii.to("mas").value
+            else:
+                raise exceptions.IncorrectUnits(
+                    "The units of radii must have length or angle dimensions"
+                )
+        else:
+            raise exceptions.MissingAttribute(
+                "The radii must be provided as a unyt_array with units"
+            )
+
+        # Attach the radii for annuli
+        self.radii = radii
+
+        # Add an infinite outer radius for the last annulus (this is safe
+        # if the user has already defined the last radius as infinity, we
+        # will just never touch this new entry)
+        self.radii.append(np.inf)
+
+        # How many annuli are there?
+        self.n_annuli = len(radii)
+
+    def compute_density_grid(self, x, y, annulus, units=kpc):
         """Compute the Gaussian density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
             y (array-like): y values on a 2D grid.
+            annulus (int): Index of the annulus to be used.
             units (unyt.unit): Units of the coordinate grids.
 
         Returns:
             np.ndarray: The masked Gaussian density grid.
         """
+        # Ensure the annulus index is valid
+        if annulus < 0 or annulus >= self.n_annuli - 1:
+            raise ValueError(
+                f"Invalid annulus index: {annulus}. "
+                f"Must be between 0 and {self.n_annuli - 2}."
+            )
+
+        # Get the whole density grid first
         density_grid = super().compute_density_grid(x, y, units)
 
-        if self.annulus_index is not None:
-            if self.radii is None or not (
-                0 <= self.annulus_index < len(self.radii) - 1
-            ):
-                raise ValueError("Invalid annulus index.")
+        # Compute elliptical radius from (x, y)
+        dx = x - self.x_mean
+        dy = y - self.y_mean
+        radius = np.sqrt(dx**2 + dy**2)
 
-            # Compute elliptical radius from (x, y)
-            dx = x - self.x_mean
-            dy = y - self.y_mean
-            radius = np.sqrt(dx**2 + dy**2)  # If you want circular rings
+        # Get the inner and outer radii for the annulus
+        inner_radius = self.radii[annulus]
+        outer_radius = self.radii[annulus + 1]
 
-            inner_radius = self.radii[self.annulus_index]
-            outer_radius = self.radii[self.annulus_index + 1]
-
-            mask = (radius >= inner_radius) & (radius < outer_radius)
-            density_grid = np.where(mask, density_grid, 0)
+        # Create a mask for the annulus
+        mask = (radius >= inner_radius) & (radius < outer_radius)
+        density_grid = np.where(mask, density_grid, 0)
 
         return density_grid
 
@@ -587,6 +618,7 @@ class Sersic2DRings(Sersic2D):
     def __init__(
         self,
         r_eff,
+        radii,
         amplitude=1,
         sersic_index=1,
         x_0=0,
@@ -595,13 +627,12 @@ class Sersic2DRings(Sersic2D):
         ellipticity=0,
         cosmo=None,
         redshift=None,
-        radii=None,
-        annulus_index=None,
     ):
         """Initialise the morphology with optional annulus masking.
 
         Args:
             r_eff (unyt_array of float): Effective radius.
+            radii (unyt_array of float): The radii defining the annuli.
             amplitude (float): Surface brightness at r_eff.
             sersic_index (float): Sersic index.
             x_0 (unyt_quantity of float): x centre of the Sersic profile.
@@ -610,8 +641,6 @@ class Sersic2DRings(Sersic2D):
             ellipticity (float): Ellipticity.
             cosmo (astropy.cosmology.Cosmology): astropy cosmology object.
             redshift (float): Redshift.
-            radii (list of float, optional): The radii defining the annuli.
-            annulus_index (int, optional): The index of the annulus to use.
         """
         super().__init__(
             r_eff,
@@ -625,43 +654,66 @@ class Sersic2DRings(Sersic2D):
             redshift,
         )
 
-        self.radii = radii
-        self.annulus_index = annulus_index
+        # Convert radii to the same units as r_eff
+        if isinstance(radii, unyt_array):
+            radii = (
+                radii.to("kpc").value
+                if radii.units.dimensions == length
+                else radii.to("mas").value
+            )
+        else:
+            raise exceptions.MissingAttribute(
+                "The radii must be provided as a unyt_array with units"
+            )
 
-    def compute_density_grid(self, x, y, units="kpc"):
+        # Attach the radii for annuli
+        self.radii = radii
+
+        # Add an infinite outer radius for the last annulus (this is safe
+        # if the user has already defined the last radius as infinity, we
+        # will just never touch this new entry)
+        self.radii.append(np.inf)
+
+        # How many annuli are there?
+        self.n_annuli = len(radii)
+
+    def compute_density_grid(self, x, y, annulus, units="kpc"):
         """Compute the density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
             y (array-like): y values on a 2D grid.
+            annulus (int): Index of the annulus to be used.
             units (str): 'kpc' or 'mas', specifying the unit of computation.
 
         Returns:
             np.ndarray: The computed density grid, optionally masked by annuli.
         """
+        # Ensure the annulus index is valid
+        if annulus < 0 or annulus >= self.n_annuli - 1:
+            raise ValueError(
+                f"Invalid annulus index: {annulus}. "
+                f"Must be between 0 and {self.n_annuli - 2}."
+            )
+
+        # Get the density grid for the whole profile
         density_grid = super().compute_density_grid(x, y, units)
 
-        if self.annulus_index is not None:
-            if self.radii is None or not (
-                0 <= self.annulus_index < len(self.radii) - 1
-            ):
-                raise ValueError("Invalid annulus index.")
+        # Compute the radius of each grid cell in the full profile.
+        a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
+            self.theta
+        )
+        b = -(x - self.x_0) * np.sin(self.theta) + (y - self.y_0) * np.cos(
+            self.theta
+        )
+        radius = np.sqrt(a**2 + (b / (1 - self.ellipticity)) ** 2)
 
-            # Compute radius from (x, y)
-            a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
-                self.theta
-            )
-            b = -(x - self.x_0) * np.sin(self.theta) + (y - self.y_0) * np.cos(
-                self.theta
-            )
-            radius = np.sqrt(a**2 + (b / (1 - self.ellipticity)) ** 2)
+        # Define the inner and outer radius of the annulus
+        inner_radius = self.radii[annulus]
+        outer_radius = self.radii[annulus + 1]
 
-            # Define the inner and outer radius of the annulus
-            inner_radius = self.radii[self.annulus_index]
-            outer_radius = self.radii[self.annulus_index + 1]
-
-            # Apply annulus mask
-            mask = (radius >= inner_radius) & (radius < outer_radius)
-            density_grid = np.where(mask, density_grid, 0)
+        # Apply annulus mask
+        mask = (radius >= inner_radius) & (radius < outer_radius)
+        density_grid = np.where(mask, density_grid, 0)
 
         return density_grid
