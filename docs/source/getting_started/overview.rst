@@ -6,12 +6,12 @@ Synthesizer is a C-accelerated Python package for generating synthetic observati
 Philosophy
 ~~~~~~~~~~
 
-Synthesizer is intended to be modular, flexible and fast.
+Synthesizer is intended to be modular, flexible, fast and extensible.
 
 To enable this, Synthesizer is designed around a simple workflow into which the user can plug in their own models, data, and parameters. This workflow takes theoretical **inputs** (i.e. a stellar population synthesis library, an AGN model, etc.) and theoretical **emitters** (i.e. particle distributions from a cosmological simulation, or parametric models), combines them with an **emission model** that defines the method for translating the inputs into an emission, and then (optionally) applies **instrument** properties to convert theoretical emission into synthetic **observables** (i.e. photometry, spectra, images, etc.). 
 Each of these steps is encapsulated in an object, which can be swapped out, specialised, or extended to suit the user's needs. 
 
-While this workflow was designed with this framework in mind, each of the tools can be used independently to fit into whatever workflow or use case the user has in mind. It's also worth pointing out at this point that the framework's flexibility means it can be used for a number of tasks, not necessarily limited to generating observables from cosmological simulations.
+While this workflow was designed with this forward modelling framework in mind, each of the tools can be used independently to fit into whatever workflow or use case the user has in mind. The framework's flexibility means it can be used for a number of other tasks, including inverse modelling.
 
 **Synthesizer is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques** (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
 Instead, Synthesizer is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
@@ -20,12 +20,12 @@ Particle vs Parametric
 **********************
 
 Synthesizer can be used to generate multi-wavelength emission from a range of astrophysical models with a wide array of complexity and fidelity.
-At one end, simple toy models can be generated within Synthesizer, describing a galaxy through analytic forms; at the other end, data from high resolution isolated galaxy simulations can be ingested into Synthesizer, consisting of tens of thousands of discrete elements sampling the matter of a galaxy. In between these two extremes are a myriad of other ways of describing a galaxy, from semi-analytic models (SAMs) to cosmological simulations with varying degrees of resolution and complexity. Synthesizer's goal is to provide a toolset that will work across this entire spectrum of complexity, allowing users to generate synthetic observations from a wide range of astrophysical models.
+At one end, simple toy models can be generated within Synthesizer, describing a galaxy through analytic forms; at the other end, data from high resolution isolated galaxy simulations can be ingested into Synthesizer, consisting of tens of thousands of discrete elements describing the matter distribution in a galaxy. In between these two extremes are a myriad of other ways of describing a galaxy, from semi-analytic models (SAMs) to cosmological simulations with varying degrees of resolution and complexity. Synthesizer's goal is to provide a toolset that will work across this entire spectrum of complexity, allowing users to generate synthetic observations from a wide range of astrophysical models.
 
 Wherever your data source lies on this spectrum of complexity, it can typically be described as belonging to one of two types: **Particle** or **Parametric** data.
 
 **Particle** data represents an astrophysical object through discrete elements with individual properties.
-These can describe, for example, the spatial distribution of stellar mass, the extent of the discrete element, or the ages of individual star elements.
+These properties can describe, for example, the mass of the element, its extent, or other species dependent properties, such as stellar age.
 We use the term 'particle' here in the most general form to describe a discrete resolution element; whether that's a particle element in a smoothed particle hydrodynamics simulation, or a grid element in an adaptive mesh refinement code.
 
 Conversely, **Parametric** data typically represents a galaxy through *binned attributes*.
@@ -42,7 +42,7 @@ We provide examples for various tasks in synthesizer using both particle and par
 The Synthesizer Toolbox
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Synthesizer is structured around a set of core abstractions, here we give a brief outline of these abstractions and their purpose to explain the design ethos underpinning Synthesizer.
+Synthesizer is structured around a set of core abstractions; here we give a brief outline of these abstractions and their purpose to explain the design ethos underpinning Synthesizer.
 
 Emission Grids
 **************
@@ -54,9 +54,6 @@ Different grids can also be swapped in and out to assess the impact of different
 
 Synthesizer provides a suite of `pre-computed grids <../emission_grids/grids.rst>`_ from models including `BC03 <https://ui.adsabs.harvard.edu/abs/2003MNRAS.344.1000B>`_, `BPASS <https://ui.adsabs.harvard.edu/abs/2018MNRAS.479...75S>`_, `FSPS <https://ui.adsabs.harvard.edu/abs/2009ApJ...699..486C>`_, `Maraston <https://ui.adsabs.harvard.edu/abs/2025arXiv250103133N>`_, and a series of AGN models derived from `AGNSED <https://ui.adsabs.harvard.edu/abs/2018MNRAS.480.1247K/abstract>`_, all of which have been reprocessed using Cloudy for a number of different photoionisation prescriptions and axes sets. Users can also generate custom grids via the accompanying `grid-generation package <https://github.com/synthesizer-project/grid-generation>`_ (see `here <../advanced/creating_grids.rst>`_), specifying variations in IMF, ionisation parameter, density, and geometry.
 
-
-Components & Galaxies
-~~~~~~~~~~~~~~~~~~~~~
 
 Components 
 **********
@@ -84,7 +81,7 @@ Further details are provided in the `Emission Models <../emission_models/emissio
 Emissions
 *********
 
-Applying an Emission Model to a ``Galaxy`` and its components, yields ``Sed`` objects, holding spectra, or a ``LineCollection`` objects, holding emission lines depending on the method called. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes. For instance, ``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break), while ``LineCollection`` objects provide methods for accessing the line fluxes, equivalent widths, and combining lines into composite lines (e.g. doublets, triplets, etc.).
+Applying an Emission Model to a ``Galaxy`` and/or its components yields ``Sed`` or ``LineCollection`` objects, depending on the method called. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes. For instance, ``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break), while ``LineCollection`` objects provide methods for accessing the line fluxes, equivalent widths, and combining lines into composite lines (e.g. doublets, triplets, etc.).
 
 Emissions can be converted into observables by applying an ``Instrument`` or ``InstrumentCollection`` object to them.
 
@@ -94,7 +91,7 @@ Observatories & Instruments
 
 To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the ``Instrument`` object, a flexible container designed to hold the properties of any type of observatory, including photometric imagers, spectrographs, and IFU instruments.
 
-While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager ``Instrument`` needs a description of the filter transmission curves. These are encapsulated by the ``FilterCollection`` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. More powerfully, however, Synthesizer provides an interface to the `Spanish Virtual Observatory (SVO) filter database <https://svo2.cab.inta-csic.es/theory/fps/>`_, which allows users to easily use any filter from the database by simply passing a filter name to the ``FilterCollection`` at instantiation.
+While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager ``Instrument`` needs a description of the filter transmission curves. These are encapsulated by the ``FilterCollection`` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. Synthesizer also provides an interface to the `Spanish Virtual Observatory (SVO) filter database <https://svo2.cab.inta-csic.es/theory/fps/>`_, which allows users to easily use any filter from the database by simply passing a filter name to the ``FilterCollection`` at instantiation.
 
 
 Observables

@@ -121,6 +121,7 @@ docs = [
     "sphinx-toolbox",
     "nbsphinx",
     "sphinx-copybutton",
+    "readthedocs-sphinx-search",
 ]
 
 # Simulation specifc loader dependancies
