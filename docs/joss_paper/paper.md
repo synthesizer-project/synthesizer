@@ -86,7 +86,7 @@ bibliography: synthesizer.bib
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible Python package that empowers astronomers to turn theoretical galaxy models into realistic synthetic observations - including spectra, photometry, images, and spectral cubes - with a focus on interchangeable modelling assumptions. By offloading computationally intensive tasks to threaded C extensions, Synthesizer delivers both simplicity and speed, enabling rapid forward-modelling workflows without requiring users to manage low-level data processing and computational details.
+Synthesizer is a fast, flexible, modular, and extensible Python package that empowers astronomers to turn theoretical galaxy models into realistic synthetic observations - including spectra, photometry, images, and spectral cubes - with a focus on interchangeable modelling assumptions. By offloading computationally intensive tasks to threaded C++ extensions, Synthesizer delivers both simplicity and speed, enabling rapid forward-modelling workflows without requiring users to manage low-level data processing and computational details.
 
 # Statement of need
 
