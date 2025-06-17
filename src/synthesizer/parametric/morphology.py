@@ -659,12 +659,21 @@ class Sersic2D(MorphologyBase):
 
         # Compute and return the Sersic profile based on the radius
         if radius.units == kpc and self.r_eff_kpc is not None:
+            # Correct Sersic law: I(R) = I_e exp[-b_n * ((R/R_e)^(1/n) - 1)]
             grid = self.amplitude * np.exp(
-                -b_n * (radius / self.r_eff_kpc) ** (1 / self.sersic_index) - 1
+                -b_n
+                * (
+                    (radius / self.r_eff_kpc) ** (1.0 / self.sersic_index)
+                    - 1.0
+                )
             )
         elif radius.units == mas and self.r_eff_mas is not None:
             grid = self.amplitude * np.exp(
-                -b_n * (radius / self.r_eff_mas) ** (1 / self.sersic_index) - 1
+                -b_n
+                * (
+                    (radius / self.r_eff_mas) ** (1.0 / self.sersic_index)
+                    - 1.0
+                )
             )
         elif radius.units == kpc and self.r_eff_kpc is None:
             raise exceptions.InconsistentArguments(
