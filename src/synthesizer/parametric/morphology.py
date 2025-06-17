@@ -104,10 +104,10 @@ class MorphologyBase(ABC):
         xx, yy = np.meshgrid(xbin_centres, ybin_centres) * resolution.units
 
         # Extract the density grid from the morphology function
-        density_grid = self.compute_density_grid(xx, yy, **kwargs)
+        density_grid, norm = self.compute_density_grid(xx, yy, **kwargs)
 
         # And normalise it...
-        return density_grid / np.sum(density_grid)
+        return density_grid / norm
 
     def __str__(self):
         """Return a summary of the morphology.
@@ -206,8 +206,10 @@ class PointSource(MorphologyBase):
                 y values on a 2D grid.
 
         Returns:
-            density_grid : np.ndarray
+            np.ndarray:
                 The density grid produced
+            float:
+                The normalisation factor for the density grid.
         """
         # Create empty density grid
         image = np.zeros((len(xx), len(yy)))
@@ -225,7 +227,7 @@ class PointSource(MorphologyBase):
             j = np.argmin(np.fabs(yy[:, 0] - self.offset_kpc[1]))
             # set the pixel value to 1.0
             image[i, j] = 1.0
-            return image
+            return image, 1.0
         elif units == kpc and self.offset_kpc is None:
             raise exceptions.InconsistentArguments(
                 "A kpc offset must be provided to the PointSource "
@@ -238,7 +240,7 @@ class PointSource(MorphologyBase):
             j = np.argmin(np.fabs(yy[:, 0] - self.offset_mas[1]))
             # set the pixel value to 1.0
             image[i, j] = 1.0
-            return image
+            return image, 1.0
         elif units == mas and self.offset_mas is None:
             raise exceptions.InconsistentArguments(
                 "A mas offset must be provided to the PointSource "
@@ -309,9 +311,11 @@ class Gaussian2D(MorphologyBase):
                 y values on a 2D grid.
 
         Returns:
-            g_2d_mat: np.ndarray:
+            np.ndarray:
                 A 2D array representing the Gaussian density values at each
                 (x, y) point.
+            float:
+                The normalisation factor for the Gaussian density grid.
 
         Raises:
             ValueError:
@@ -366,7 +370,7 @@ class Gaussian2D(MorphologyBase):
         # Calc Gaussian vals
         g_2d_mat = coeff * np.exp(-0.5 * exp)
 
-        return g_2d_mat.value
+        return g_2d_mat.value, np.sum(g_2d_mat.value)
 
 
 class Gaussian2DAnnuli(Gaussian2D):
@@ -449,16 +453,17 @@ class Gaussian2DAnnuli(Gaussian2D):
 
         Returns:
             np.ndarray: The masked Gaussian density grid.
+            float: The normalisation factor for the density grid.
         """
         # Ensure the annulus index is valid
-        if annulus < 0 or annulus >= self.n_annuli - 1:
-            raise ValueError(
+        if annulus < 0 or annulus >= self.n_annuli:
+            raise exceptions.InconsistentArguments(
                 f"Invalid annulus index: {annulus}. "
                 f"Must be between 0 and {self.n_annuli - 2}."
             )
 
         # Get the whole density grid first
-        density_grid = super().compute_density_grid(x, y)
+        density_grid, norm = super().compute_density_grid(x, y)
 
         # Compute elliptical radius from (x, y)
         dx = x - self.x_mean
@@ -473,7 +478,7 @@ class Gaussian2DAnnuli(Gaussian2D):
         mask = (radius >= inner_radius) & (radius < outer_radius)
         density_grid = np.where(mask, density_grid, 0)
 
-        return density_grid
+        return density_grid, norm
 
 
 class Sersic2D(MorphologyBase):
@@ -598,7 +603,7 @@ class Sersic2D(MorphologyBase):
         if self.r_eff_kpc is None and self.r_eff_mas is None:
             raise exceptions.InconsistentArguments(
                 "An effective radius must be defined in either kpc (r_eff_kpc)"
-                "or milliarcseconds (mas)"
+                " or milliarcseconds (mas)"
             )
 
         # Ensure cosmo has been provided if redshift has been passed
@@ -619,9 +624,11 @@ class Sersic2D(MorphologyBase):
                 y values on a 2D grid.
 
         Returns:
-            density_grid : np.ndarray
+            np.ndarray:
                 The density grid produced from either
                 the kpc or mas Sersic profile.
+            float:
+                The normalisation factor for the density grid.
         """
         # Ensure x and y are in compatible units with x_0 and y_0
         if not unit_is_compatible(x, self.x_0.units):
@@ -652,11 +659,11 @@ class Sersic2D(MorphologyBase):
 
         # Compute and return the Sersic profile based on the radius
         if radius.units == kpc and self.r_eff_kpc is not None:
-            return self.amplitude * np.exp(
+            grid = self.amplitude * np.exp(
                 -b_n * (radius / self.r_eff_kpc) ** (1 / self.sersic_index) - 1
             )
         elif radius.units == mas and self.r_eff_mas is not None:
-            return self.amplitude * np.exp(
+            grid = self.amplitude * np.exp(
                 -b_n * (radius / self.r_eff_mas) ** (1 / self.sersic_index) - 1
             )
         elif radius.units == kpc and self.r_eff_kpc is None:
@@ -674,6 +681,8 @@ class Sersic2D(MorphologyBase):
             raise exceptions.InconsistentArguments(
                 f"Unrecognised units for radius: {radius.units}."
             )
+
+        return grid, np.sum(grid)
 
 
 class Sersic2DAnnuli(Sersic2D):
@@ -761,16 +770,17 @@ class Sersic2DAnnuli(Sersic2D):
 
         Returns:
             np.ndarray: The computed density grid, optionally masked by annuli.
+            float: The normalisation factor for the density grid.
         """
         # Ensure the annulus index is valid
         if annulus < 0 or annulus >= self.n_annuli:
-            raise ValueError(
+            raise exceptions.InconsistentArguments(
                 f"Invalid annulus index: {annulus}. "
                 f"Must be between 0 and {self.n_annuli - 2}."
             )
 
         # Get the density grid for the whole profile
-        density_grid = super().compute_density_grid(x, y)
+        density_grid, norm = super().compute_density_grid(x, y)
 
         # Compute the radius of each grid cell in the full profile.
         a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
@@ -789,4 +799,4 @@ class Sersic2DAnnuli(Sersic2D):
         mask = (radius >= inner_radius) & (radius < outer_radius)
         density_grid = np.where(mask, density_grid, 0)
 
-        return density_grid
+        return density_grid, norm
