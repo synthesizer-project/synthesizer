@@ -242,14 +242,14 @@ class Gaussian2D(MorphologyBase):
         """Initialise the morphology.
 
         Args:
-            x_mean: (float):
-                The mean of the Gaussian along the x-axis.
-            y_mean: (float):
-                The mean of the Gaussian along the y-axis.
-            stddev_x: (float):
-                The standard deviation along the x-axis.
-            stddev_y: (float):
-                The standard deviation along the y-axis.
+            x_mean (unyt_quantity of float): The mean of the Gaussian along
+                the x-axis.
+            y_mean (unyt_quantity of float): The mean of the Gaussian along
+                the y-axis.
+            stddev_x (unyt_quantity of float): The standard deviation along
+                the x-axis.
+            stddev_y (unyt_quantity of float): The standard deviation along
+                the y-axis.
             rho: (float):
                 The population correlation coefficient between x and y.
         """
@@ -282,11 +282,6 @@ class Gaussian2D(MorphologyBase):
         """
         if units is None:
             units = kpc
-
-        self.x_mean = unyt_array(self.x_mean, units)
-        self.y_mean = unyt_array(self.y_mean, units)
-        self.stddev_x = unyt_array(self.stddev_x, units)
-        self.stddev_y = unyt_array(self.stddev_y, units)
 
         # Error for x, y = None
         if x is None or y is None:
