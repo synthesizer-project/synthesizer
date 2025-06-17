@@ -90,7 +90,7 @@ Synthesizer is a fast, flexible, modular, and extensible Python package that emp
 
 # Statement of need
 
-Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches, both translating theoretical models into the observer space (a technique known as forward modelling). The first uses computationally expensive dust radiative transfer codes [e.g. @sunrise; @SKIRT; @powderday]; these codes are typically computationally expensive, prioritising fidelity. The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets [e.g. @Fortuni2023; @Marshall2025].
+Comparing theoretical models of galaxy formation with observations traditionally relies on two main approaches, both translating theoretical models into the observer space (a technique known as forward modelling). The first uses computationally expensive dust radiative transfer codes [e.g. @sunrise; @SKIRT; @powderday]; these codes are typically computationally expensive, prioritising fidelity. The second uses simpler, bespoke pipelines that sacrifice some physical fidelity to generate observables rapidly from large datasets [e.g. @synthobs; @FLARESII; @FLARESIV; @Fortuni2023; @Marshall2025].
 
 Simplified inverse modelling approaches, such as SED fitting [e.g. @EAZY; @BAGPIPES; @PROSPECTOR] work in the opposite direction, translating observables into intrinsic physical quantities. However, these methods can introduce biases and uncertainties from both observational effects and model assumptions. Compounding these uncertainties is the fact that converged inverse modelling techniques are costly in their own right, necessitating a simplified parameter space to ensure convergence in a reasonable time. Forward modelling is therefore becoming increasingly important not only for probing the validity of theoretical models, but also for quantifying the uncertainties in the modelling assumptions themselves.
 
@@ -106,7 +106,7 @@ Synthesizer addresses these shortcomings by offering:
 
 - Extensibility: Extensive documentation and a clear API enable users to extend the package with their own calculations, parameterisations and subclasses. From the beginning, Synthesizer has been designed to be expanded to fit the needs of all users, even as astronomy and astrophysics evolve.
 
-Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations, permits exhaustive tests of the impact of parameter choices, enables the forward modelling of large datasets previously considered impractical, and promotes open and reproducible science.
+Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations [e.g. @@FLARESXVIII], permits exhaustive tests of the impact of parameter choices [e.g. @ltu-ili], enables the forward modelling of large datasets previously considered impractical [e.g. @ltu-lovell], and promotes open and reproducible science.
 
 # Implementation overview
 
