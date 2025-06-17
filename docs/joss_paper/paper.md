@@ -79,7 +79,7 @@ affiliations:
   - name: Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA
     index: 9
 
-date: 15 May 2025
+date: 17 June 2025
 license: GPL-3.0
 bibliography: synthesizer.bib
 ---
