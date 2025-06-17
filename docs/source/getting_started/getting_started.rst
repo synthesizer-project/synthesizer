@@ -10,8 +10,8 @@ Once you're finished here, you can check out the more detailed documentation on 
    :maxdepth: 1
    
    installation
-   downloading_grids
    overview
+   downloading_grids
    contributing
-
+   getting_help
 

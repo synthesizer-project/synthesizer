@@ -192,22 +192,6 @@ class Particles:
             )
         return self.coordinates - self.centre
 
-    @property
-    def log10metallicities(self):
-        """Return particle metallicities in log (base 10).
-
-        Zero valued metallicities are set to `metallicity_floor`,
-        which is set on initialisation of this particle object.
-
-        Returns:
-            log10metallicities (np.ndarray):
-                log10 particle metallicities.
-        """
-        mets = self.metallicities
-        mets[mets == 0.0] = self.metallicity_floor
-
-        return np.log10(mets, dtype=np.float64)
-
     def get_projected_angular_coordinates(
         self,
         cosmo=None,
