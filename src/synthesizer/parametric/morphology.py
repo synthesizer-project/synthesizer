@@ -321,7 +321,7 @@ class Gaussian2D(MorphologyBase):
         return g_2d_mat
 
 
-class Gaussian2DRings(Gaussian2D):
+class Gaussian2DAnnuli(Gaussian2D):
     """A subclass of Gaussian2D that supports masking of concentric annuli.
 
     Attributes:
@@ -607,7 +607,7 @@ class Sersic2D(MorphologyBase):
             )
 
 
-class Sersic2DRings(Sersic2D):
+class Sersic2DAnnuli(Sersic2D):
     """A subclass of Sersic2D that supports masking of concentric annuli.
 
     Attributes:
