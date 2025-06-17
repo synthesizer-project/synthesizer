@@ -1,107 +1,126 @@
 """
-Generate parametric morphology profile
-======================================
+Generate parametric morphology profiles
+=======================================
 
-Examples for generating morphology profiles for parametric galaxies.
-This example demonstrates:
+This script demonstrates:
+
 - Defining a resolution and grid for storing binned luminosity values.
-- Calculating a density grid for a 2 dimensional Gaussian profile.
-- Calculating a density grid for a point source.
-- Calculating a density grid for a 2 dimensional Sersic profile.
+- Generating and visualizing:
+    * A 2D Gaussian profile.
+    * A single annulus of a 2D Gaussian.
+    * A point source.
+    * A 2D Sersic profile.
+    * A single annulus of a 2D Sersic profile.
 
-Each resulting density distribution is visualised using matplotlib.
-
+Each resulting density distribution is visualised with matplotlib.
 """
 
-# Import necessary modules
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
 from unyt import kpc, unyt_array
 
-from synthesizer.parametric.morphology import (
+from synthesizer.parametric import (
     Gaussian2D,
+    Gaussian2DAnnuli,
     PointSource,
     Sersic2D,
+    Sersic2DAnnuli,
 )
 
-# Define resolution and npix for density grid
-resolution = 0.1 * kpc
-npix = (100, 100)
+# Common settings
+resolution = 0.05 * kpc
+npix = (500, 500)
+x = unyt_array(np.linspace(-10, 10, npix[0]), "kpc")
+y = unyt_array(np.linspace(-10, 10, npix[1]), "kpc")
+xx, yy = np.meshgrid(x.value, y.value) * kpc
 
-
-# Define arrays for 2D grid
-x_dat = unyt_array(np.linspace(-5, 5, 100), "kpc")
-y_dat = unyt_array(np.linspace(-5, 5, 100), "kpc")
-
-xx, yy = np.meshgrid(x_dat, y_dat)
-
-
-# Define cosmology and redshift
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
-redshift = 0.5
+z = 0.5
 
-
-# 2D Gaussian example usage
-
-# Define gaussian values with units
-gaussian = Gaussian2D(
+# 2D Gaussian
+gauss = Gaussian2D(
     x_mean=0 * kpc,
     y_mean=0 * kpc,
     stddev_x=1 * kpc,
-    stddev_y=1 * kpc,
-    rho=0.5,
+    stddev_y=2 * kpc,
+    rho=0.3,
 )
+print(gauss)
+gauss_grid = gauss.get_density_grid(resolution, npix)
 
+# Gaussian annulus
+radii = unyt_array([1.0, 3.0, 5.0, 7.0, np.inf], "kpc")
+gauss_ann = Gaussian2DAnnuli(
+    x_mean=0 * kpc,
+    y_mean=0 * kpc,
+    stddev_x=1 * kpc,
+    stddev_y=2 * kpc,
+    radii=radii,
+    rho=0.3,
+)
+print(gauss_ann)
+gauss_ann_grid = gauss_ann.get_density_grid(resolution, npix, annulus=1)
 
-# Define Gaussian plot density grid
-gaussian_density_grid = gaussian.get_density_grid(resolution, npix)
-
-
-# Plot figure from
-plt.contourf(xx, yy, gaussian_density_grid, levels=50)
-plt.colorbar(label="Density")
-plt.xlabel("X Axis (kpc)")
-plt.ylabel("Y Axis (kpc)")
-plt.title(("Example 2D Gaussian Distribution"))
-plt.show()
-
-
-# PointSource example usage
-
-# Define offset and create density grid
-offset = unyt_array([2.0, 2.0], units=kpc)
-point_source = PointSource(offset=offset, cosmo=cosmo, redshift=redshift)
-
-pt_density_grid = point_source.get_density_grid(resolution, npix)
-
-# Plot figure
-plt.imshow(pt_density_grid)
-plt.xlabel("X Axis (kpc)")
-plt.ylabel("Y Axis (kpc)")
-plt.title("Example Point Source")
-plt.show()
-
-
-# 2D Sersic example usage
-
-# Define Sersic profile and density grid
-sersic = Sersic2D(
-    r_eff=5 * kpc,
-    theta=45,
-    ellipticity=0.2,
+# Point source at (2,2) kpc
+ps = PointSource(
+    offset=unyt_array([2.0, 2.0], "kpc"),
     cosmo=cosmo,
-    redshift=redshift,
-    sersic_index=1,
+    redshift=z,
 )
+print(ps)
+ps_grid = ps.get_density_grid(resolution, npix)
 
-sersic_density_grid = sersic.get_density_grid(resolution, npix)
+# 2D Sersic (n=2, e=0.4, θ=30°)
+sersic = Sersic2D(
+    r_eff=4 * kpc,
+    amplitude=1.0,
+    sersic_index=2.0,
+    x_0=0 * kpc,
+    y_0=0 * kpc,
+    theta=np.deg2rad(30),
+    ellipticity=0.4,
+    cosmo=cosmo,
+    redshift=z,
+)
+print(sersic)
+sersic_grid = sersic.get_density_grid(resolution, npix)
 
+# Sersic annulus (note that infinity is always added as the last radius)
+s_radii = unyt_array([2.0, 4.0, 6.0, 8.0], "kpc")
+sersic_ann = Sersic2DAnnuli(
+    r_eff=4 * kpc,
+    radii=s_radii,
+    amplitude=1.0,
+    sersic_index=2.0,
+    x_0=0 * kpc,
+    y_0=0 * kpc,
+    theta=np.deg2rad(30),
+    ellipticity=0.4,
+    cosmo=cosmo,
+    redshift=z,
+)
+print(sersic_ann)
+sersic_ann_grid = sersic_ann.get_density_grid(resolution, npix, annulus=1)
 
-# Plot figure
-plt.contourf(xx, yy, sersic_density_grid, levels=50)
-plt.colorbar(label="Luminosity Density")
-plt.title("Example Sersic Profile")
-plt.xlabel("X Axis (kpc)")
-plt.ylabel("Y Axis (kpc)")
+# Plot everything in a 2×3 grid
+fig, axes = plt.subplots(2, 3, figsize=(12, 8))
+plots = [
+    (gauss_grid, "Gaussian2D"),
+    (gauss_ann_grid, "Gaussian2DAnnuli (outer shell)"),
+    (ps_grid, "PointSource"),
+    (sersic_grid, "Sersic2D (n=2)"),
+    (sersic_ann_grid, "Sersic2DAnnuli (outer shell)"),
+]
+for ax, (grid, title) in zip(axes.flat, plots):
+    im = ax.contourf(xx, yy, grid, levels=50)
+    ax.set_title(title)
+    ax.set_xlabel("X (kpc)")
+    ax.set_ylabel("Y (kpc)")
+    fig.colorbar(im, ax=ax, label="Density")
+
+# hide the empty subplot
+axes.flat[-1].axis("off")
+
+plt.tight_layout()
 plt.show()

@@ -27,6 +27,7 @@ from unyt.dimensions import angle, length
 
 from synthesizer import exceptions
 from synthesizer.units import accepts, unit_is_compatible
+from synthesizer.utils import TableFormatter
 
 
 class MorphologyBase(ABC):
@@ -40,7 +41,7 @@ class MorphologyBase(ABC):
         theta (float): The rotation angle.
         cosmo (astropy.cosmology): The cosmology object.
         redshift (float): The redshift.
-        model_kpc (astropy.modeling.models.Sersic2D): The Sersic2D model in
+        grid (astropy.modeling.models.Sersic2D): The Sersic2D model in
             kpc.
         model_mas (astropy.modeling.models.Sersic2D): The Sersic2D model in
     """
@@ -78,7 +79,8 @@ class MorphologyBase(ABC):
         """
         pass
 
-    def get_density_grid(self, resolution, npix):
+    @accepts(resolution=(kpc, mas))
+    def get_density_grid(self, resolution, npix, **kwargs):
         """Get the density grid based on resolution and npix.
 
         Args:
@@ -86,27 +88,37 @@ class MorphologyBase(ABC):
                 The resolution of the grid.
             npix (tuple, int):
                 The number of pixels in each dimension.
+            **kwargs:
+                Additional keyword arguments to pass to the
+                compute_density_grid method.
         """
         # Define 1D bin centres of each pixel
-        if resolution.units.dimensions == angle:
-            res = resolution.to("mas")
-        else:
-            res = resolution.to("kpc")
-        xbin_centres = res.value * np.linspace(
+        xbin_centres = resolution.value * np.linspace(
             -npix[0] / 2, npix[0] / 2, npix[0]
         )
-        ybin_centres = res.value * np.linspace(
+        ybin_centres = resolution.value * np.linspace(
             -npix[1] / 2, npix[1] / 2, npix[1]
         )
 
         # Convert the 1D grid into 2D grids coordinate grids
-        xx, yy = np.meshgrid(xbin_centres, ybin_centres)
+        xx, yy = np.meshgrid(xbin_centres, ybin_centres) * resolution.units
 
         # Extract the density grid from the morphology function
-        density_grid = self.compute_density_grid(xx, yy, units=res.units)
+        density_grid = self.compute_density_grid(xx, yy, **kwargs)
 
         # And normalise it...
         return density_grid / np.sum(density_grid)
+
+    def __str__(self):
+        """Return a summary of the morphology.
+
+        Returns:
+            str: A string representation of the morphology.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table(self.__class__.__name__)
 
 
 class PointSource(MorphologyBase):
@@ -133,31 +145,31 @@ class PointSource(MorphologyBase):
     ):
         """Initialise the morphology.
 
+        If a cosmology and redshift are provided, the offset will be
+        converted to both kpc and milliarcseconds (mas) for use in the
+        compute_density_grid method. If only one is provided then the
+        inputs to compute_density_grid must match the units of the
+
         Args:
             offset (unyt_array/float):
                 The [x,y] offset in angular or physical units from the centre
                 of the image. The default (0,0) places the source in the centre
                 of the image.
             cosmo (astropy.cosmology.Cosmology):
-                astropy cosmology object.
+                The cosmology object. Only required for conversions that make
+                both kpc and mas models available.
             redshift (float):
-                Redshift.
+                The redshift of the source. Only required for conversions that
+                make both kpc and mas models available.
 
         """
-        # Check units of r_eff and convert if necessary
-        if isinstance(offset, unyt_array):
-            if offset.units.dimensions == length:
-                self.offset_kpc = offset.to("kpc").value
-            elif offset.units.dimensions == angle:
-                self.offset_mas = offset.to("mas").value
-            else:
-                raise exceptions.IncorrectUnits(
-                    "The units of offset must have length or angle dimensions"
-                )
-        else:
-            raise exceptions.MissingUnits(
-                "The offset must be provided with units"
-            )
+        # Store offset in kpc or mas
+        self.offset_kpc = None
+        self.offset_mas = None
+        if offset.units.dimensions == length:
+            self.offset_kpc = offset
+        elif offset.units.dimensions == angle:
+            self.offset_mas = offset
 
         # Associate the cosmology and redshift to this object
         self.cosmo = cosmo
@@ -169,6 +181,8 @@ class PointSource(MorphologyBase):
             # Compute conversion
             kpc_proper_per_mas = (
                 self.cosmo.kpc_proper_per_arcmin(redshift).to("kpc/mas").value
+                * kpc
+                / mas
             )
 
             # Calculate one offset from the other depending on what
@@ -186,9 +200,9 @@ class PointSource(MorphologyBase):
         only work in units of kpc or milliarcseconds (mas)
 
         Args:
-            xx: array-like (float):
+            xx: array-like (unyt_array of float):
                 x values on a 2D grid.
-            yy: array-like (float):
+            yy: array-like (unyt_array of float):
                 y values on a 2D grid.
 
         Returns:
@@ -205,21 +219,32 @@ class PointSource(MorphologyBase):
                 f" xx and yy in incompatible units: {xx.units} and {yy.units}"
             )
 
-        if units == kpc:
+        if units == kpc and self.offset_kpc is not None:
             # find the pixel corresponding to the supplied offset
             i = np.argmin(np.fabs(xx[0] - self.offset_kpc[0]))
             j = np.argmin(np.fabs(yy[:, 0] - self.offset_kpc[1]))
             # set the pixel value to 1.0
             image[i, j] = 1.0
             return image
+        elif units == kpc and self.offset_kpc is None:
+            raise exceptions.InconsistentArguments(
+                "A kpc offset must be provided to the PointSource "
+                "morphology if the coordinate grids are in kpc units."
+            )
 
-        elif units == mas:
+        elif units == mas and self.offset_mas is not None:
             # find the pixel corresponding to the supplied offset
             i = np.argmin(np.fabs(xx[0] - self.offset_mas[0]))
             j = np.argmin(np.fabs(yy[:, 0] - self.offset_mas[1]))
             # set the pixel value to 1.0
             image[i, j] = 1.0
             return image
+        elif units == mas and self.offset_mas is None:
+            raise exceptions.InconsistentArguments(
+                "A mas offset must be provided to the PointSource "
+                "morphology if the coordinate grids are in mas units."
+            )
+
         else:
             raise exceptions.InconsistentArguments(
                 "Only kpc and milliarcsecond (mas) units are supported "
@@ -293,11 +318,12 @@ class Gaussian2D(MorphologyBase):
                 If either x or y is None.
         """
         # Define covariance matrix
-        cov_mat = np.array(
+        cov_mat = unyt_array(
             [
                 [self.stddev_x**2, (self.rho * self.stddev_x * self.stddev_y)],
                 [(self.rho * self.stddev_x * self.stddev_y), self.stddev_y**2],
-            ]
+            ],
+            self.stddev_x.units,
         )
 
         # Ensure x and y are in compatiable units with x_mean and y_mean
@@ -318,19 +344,29 @@ class Gaussian2D(MorphologyBase):
         # Determinant of covariance matrix
         det_cov = np.linalg.det(cov_mat)
 
+        # Get the relative position of each pixel in the grid
+        dx = x - self.x_mean
+        dy = y - self.y_mean
+
         # Stack position deviation along third axis
-        stack = np.dstack((x - self.x_mean, y - self.y_mean))
+        stack = np.dstack((dx, dy))
 
         # Define coefficient of Gaussian
         coeff = 1 / (2 * np.pi * (np.sqrt(det_cov)))
 
-        # Define exponent of Gaussian
-        exp = np.einsum("...k, kl, ...l->...", stack, inv_cov, stack)
+        # Define exponent of Gaussian (need to remove units to avoid incorrect
+        # error!)
+        exp = np.einsum(
+            "...k, kl, ...l->...",
+            stack.value,
+            inv_cov.value,
+            stack.value,
+        )
 
         # Calc Gaussian vals
         g_2d_mat = coeff * np.exp(-0.5 * exp)
 
-        return g_2d_mat
+        return g_2d_mat.value
 
 
 class Gaussian2DAnnuli(Gaussian2D):
@@ -397,7 +433,7 @@ class Gaussian2DAnnuli(Gaussian2D):
         # Add an infinite outer radius for the last annulus (this is safe
         # if the user has already defined the last radius as infinity, we
         # will just never touch this new entry)
-        self.radii.append(np.inf)
+        self.radii = np.append(self.radii, np.inf * radii.units)
 
         # How many annuli are there?
         self.n_annuli = len(radii)
@@ -451,7 +487,7 @@ class Sersic2D(MorphologyBase):
         theta (float): The rotation angle.
         cosmo (astropy.cosmology): The cosmology object.
         redshift (float): The redshift.
-        model_kpc : The 2D Sersic model in kpc.
+        grid : The 2D Sersic model in kpc.
         model_mas : The 2D Sersic model in milliarcseconds.
     """
 
@@ -474,6 +510,12 @@ class Sersic2D(MorphologyBase):
     ):
         """Initialise the morphology.
 
+        If a cosmology and redshift are provided, the effective radius
+        will be converted to both kpc and milliarcseconds (mas) for use in the
+        compute_density_grid method. If only one is provided then the
+        inputs to compute_density_grid must match the units of the
+        effective radius.
+
         Args:
             r_eff (unyt_array of float):
                 Effective radius. This is converted as required.
@@ -490,7 +532,8 @@ class Sersic2D(MorphologyBase):
             theta (float):
                 Theta, the rotation angle.
             cosmo (astro.cosmology.Cosmology):
-                astropy cosmology object.
+                Cosmology object for conversions between kpc and mas.
+                Only required if both kpc and mas models are needed.
             redshift (float):
                 Redshift.
 
@@ -500,13 +543,9 @@ class Sersic2D(MorphologyBase):
 
         # Check units of r_eff and convert if necessary.
         if r_eff.units.dimensions == length:
-            self.r_eff_kpc = r_eff.to("kpc").value
+            self.r_eff_kpc = r_eff
         elif r_eff.units.dimensions == angle:
-            self.r_eff_mas = r_eff.to("mas").value
-        else:
-            raise exceptions.IncorrectUnits(
-                "The units of r_eff must have length or angle dimensions"
-            )
+            self.r_eff_mas = r_eff
         self.r_eff = r_eff
 
         # Ensure r_eff and x_0, y_0 are in compatible units
@@ -523,7 +562,6 @@ class Sersic2D(MorphologyBase):
 
         # Set the other parameters
         self.amplitude = amplitude
-        self.r_eff = r_eff
         self.sersic_index = sersic_index
         self.x_0 = x_0
         self.y_0 = y_0
@@ -543,6 +581,8 @@ class Sersic2D(MorphologyBase):
             # Compute conversion
             kpc_proper_per_mas = (
                 self.cosmo.kpc_proper_per_arcmin(redshift).to("kpc/mas").value
+                * kpc
+                / mas
             )
 
             # Calculate one effective radius from the other depending on what
@@ -610,32 +650,29 @@ class Sersic2D(MorphologyBase):
         # Define coefficient of Sersic profile from Sersic index
         b_n = scipy.special.gammaincinv(2 * self.sersic_index, 0.5)
 
-        # Compute kpc model
-        if self.r_eff_kpc is not None:
-            self.model_kpc = self.amplitude * np.exp(
+        # Compute and return the Sersic profile based on the radius
+        if radius.units == kpc and self.r_eff_kpc is not None:
+            return self.amplitude * np.exp(
                 -b_n * (radius / self.r_eff_kpc) ** (1 / self.sersic_index) - 1
             )
-        else:
-            self.model_kpc = None
-
-        # Compute mas model
-        if self.r_eff_mas is not None:
-            self.model_mas = self.amplitude * np.exp(
+        elif radius.units == mas and self.r_eff_mas is not None:
+            return self.amplitude * np.exp(
                 -b_n * (radius / self.r_eff_mas) ** (1 / self.sersic_index) - 1
             )
-        else:
-            self.model_mas = None
-
-        # Call the appropriate model function
-        units = x.units
-        if units == kpc:
-            return self.model_kpc
-        elif units == mas:
-            return self.model_mas
-        else:
+        elif radius.units == kpc and self.r_eff_kpc is None:
             raise exceptions.InconsistentArguments(
-                "Only kpc and milliarcsecond (mas) units are supported "
-                "for morphologies."
+                "A kpc effective radius must be provided to the Sersic2D "
+                "morphology if the coordinate grids are in kpc units."
+            )
+        elif radius.units == mas and self.r_eff_mas is None:
+            raise exceptions.InconsistentArguments(
+                "A mas effective radius must be provided to the Sersic2D "
+                "morphology if the coordinate grids are in mas units."
+            )
+        else:
+            # Accepts means we will never get here, but just in case
+            raise exceptions.InconsistentArguments(
+                f"Unrecognised units for radius: {radius.units}."
             )
 
 
@@ -650,7 +687,7 @@ class Sersic2DAnnuli(Sersic2D):
         theta (float): The rotation angle.
         cosmo (astropy.cosmology): The cosmology object.
         redshift (float): The redshift.
-        model_kpc : The 2D Sersic model in kpc.
+        grid : The 2D Sersic model in kpc.
         model_mas : The 2D Sersic model in milliarcseconds.
         radii (list of float): The radii defining the annuli.
         annulus_index (int): Index of the annulus to be used.
@@ -708,7 +745,7 @@ class Sersic2DAnnuli(Sersic2D):
         # Add an infinite outer radius for the last annulus (this is safe
         # if the user has already defined the last radius as infinity, we
         # will just never touch this new entry)
-        self.radii.append(np.inf)
+        self.radii = np.append(self.radii, np.inf * radii.units)
 
         # How many annuli are there?
         self.n_annuli = len(radii)
@@ -726,7 +763,7 @@ class Sersic2DAnnuli(Sersic2D):
             np.ndarray: The computed density grid, optionally masked by annuli.
         """
         # Ensure the annulus index is valid
-        if annulus < 0 or annulus >= self.n_annuli - 1:
+        if annulus < 0 or annulus >= self.n_annuli:
             raise ValueError(
                 f"Invalid annulus index: {annulus}. "
                 f"Must be between 0 and {self.n_annuli - 2}."
