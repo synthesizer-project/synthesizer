@@ -46,7 +46,7 @@ authors:
     orcid: 0009-0001-3422-3048
     affiliation: 2
   - name: Borja Pautasso
-    orchid: 0009-0003-1839-591X
+    orcid: 0009-0003-1839-591X
     affiliation: 1
   - name: Ashley Perry
     orcid: 0009-0001-0739-6162
