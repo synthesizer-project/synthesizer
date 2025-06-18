@@ -1,0 +1,26 @@
+name: Draft Paper
+on:
+  push:
+    paths:
+      - docs/joss_paper/**
+      - .github/workflows/paper-tex.yml
+
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    name: Paper Draft
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: TeX and PDF
+        uses: docker://openjournals/paperdraft:latest
+        with:
+          args: "-k docs/joss_paper/paper.md"
+        env:
+          GIT_SHA: $GITHUB_SHA
+          JOURNAL: joss
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper
+          path: docs/joss_paper/
