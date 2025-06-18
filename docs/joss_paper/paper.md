@@ -108,7 +108,7 @@ Synthesizer addresses these shortcomings by offering:
 
 Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations [e.g. @FLARESXVIII], permits exhaustive tests of the impact of parameter choices [e.g. @LTU-ILI], enables the forward modelling of large datasets previously considered impractical [e.g. @LTU-LOVELL], and promotes open and reproducible science.
 
-# Implementation overview
+# Package overview
 
 Synthesizer is structured around a set of core abstractions. Here we give a brief outline of these abstractions and a link to the documentation for each.
 
@@ -124,43 +124,17 @@ Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthes
 
 ## Related packages
 
-There are various other related packages which either perform similar tasks as Synthesizer or can be used in harmony with Synthesizer to create end-to-end workflows. We highlight a handful of these packages below.
+Several packages either overlap with Synthesizer’s functionality or complement it in end-to-end workflows:
 
-- **Stellar population synthesis & Photoionisation**
-
-  - **BC03** [@bc03]: Classic stellar population synthesis code providing spectral energy distributions (SEDs) for single stellar populations with various initial mass functions (IMFs) and metallicities.
-  - **FSPS** [@fsps1; @fsps2]: Stellar population synthesis code offering flexible isochrone-based spectral generation for a variety of IMFs and metallicities.
-  - **BPASS** [@bpass]: Models binary stellar populations with detailed spectral outputs, crucial for UV and nebular emission studies.
-  - **Maraston** [@maraston05]: Provides high-resolution SEDs with alternative stellar evolution prescriptions, particularly useful for post-starburst galaxies.
-  - **Cloudy** [@cloudy]: Photoionisation and spectral synthesis code for computing emission-line and continuum processes in gas under various physical conditions.
-  - **MAPPINGS** [@MAPPINGS]: An alternative photoionisation code for computing emission-line spectra from ionised gas, particularly useful for AGN and star-forming regions.
-
-- **Monte Carlo radiative transfer**
-
-  - **SKIRT** [@SKIRT]: 3D dust radiative-transfer engine supporting arbitrary geometries, multi-wavelength photon packets, and variance-reduction techniques for high-fidelity galaxy and torus models.
-  - **Powderday** [@POWDERDAY]: Integrates FSPS, Hyperion [@hyperion], and yt [@YT] to perform Monte Carlo RT directly on hydrodynamic simulation outputs, automating grid preparation and execution.
-
-- **Point spread function & instrument models**
-
-  - **STPSF** [@stpsf]: Physical-optics simulator for JWST, Roman, and HST, modelling pupil masks, wavefront errors, and instrument-specific aberrations to generate realistic PSFs.
-  - **GalSim** [@galsim]: Versatile image-simulation toolkit offering analytic and empirical PSF models, shear and magnification operators, detector effects (e.g., charge diffusion), and realistic noise injection.
-
-- **Pre- and post-processing utilities**
-
-  - **Astropy** [@astropy]: Foundational library for astronomy, providing FITS I/O, WCS transformations, units system, coordinate conversions, and utility functions for photometry and statistics.
-  - **YT** [@YT]: Analysis and visualisation toolkit for astrophysical simulations, supporting adaptive mesh refinement (AMR) data, particle data, and structured grids, with a focus on large-scale cosmological simulations.
-  - **Astroquery** [@astroquery]: Python interfaces to VO services and mission archives (e.g., MAST, SIMBAD), enabling scripted retrieval of catalogues, images, and spectra.
-  - **Dense Basis** [@dense_basis]: A library for generating and manipulating dense basis functions tailored to SED fitting and SFHs, useful for efficiently representing complex SFHs.
-
-- **Inverse modelling & SED fitting**
-
-  - **EAZY** [@EAZY]: Fast photometric redshift and SED-fitting code using template-optimisation and Bayesian priors for parameter inference.
-  - **BAGPIPES** [@BAGPIPES]: Flexible Bayesian SED-fitting tool supporting complex star-formation histories, nebular emission, and dust attenuation curves.
-  - **PROSPECTOR** [@PROSPECTOR]: Advanced inference framework combining MCMC and nested sampling for robust posterior estimation of stellar and dust parameters.
+- **SPS & photoionisation**: Libraries for stellar spectra—**BC03** [@bc03], **FSPS** [@fsps1; @fsps2], **BPASS** [@bpass], **Maraston** [@maraston05]—paired with dust/nebular models, plus **Cloudy** [@cloudy] or **MAPPINGS** [@MAPPINGS] for reprocessing.
+- **Monte Carlo RT**: Photon–dust/gas simulators like **SKIRT** [@SKIRT], **Powderday** [@POWDERDAY], **Hyperion** [@hyperion]. These robust forward-modelling codes produce SEDs and images ingestible by Synthesizer.
+- **PSF & instrument tools**: **STPSF** [@stpsf] (JWST, Roman, HST) and **GalSim** [@galsim] model telescope optics, detector effects, and noise.
+- **Pre/post-processing**: **YT** [@YT] for volumetric data analysis and visualization of simulation outputs; **Astroquery** [@astroquery] for automated querying of astronomical archives and catalogs; **Dense Basis** [@dense_basis] offers SED-/SFH-tailored basis functions.
+- **Inverse modeling & SED fitting**: **EAZY** [@EAZY], **BAGPIPES** [@BAGPIPES], **PROSPECTOR** [@PROSPECTOR] extract galaxy properties from SEDs.
 
 # Acknowledgements
 
-We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/) [@openmp].
+We acknowledge the use of the following software packages in this work: [Astropy](https://www.astropy.org/) [@astropy], [unyt](https://unyt.readthedocs.io/en/stable/index.html) [@unyt], [Matplotlib](https://matplotlib.org/) [@matplotlib], [NumPy](https://numpy.org/) [@numpy], [SciPy](https://www.scipy.org/) [@scipy], and [OpenMP](https://www.openmp.org/) [@openmp].
 
 WJR, APV, and SMW acknowledge support from the Sussex Astronomy Centre STFC Consolidated Grant (ST/X001040/1). CCL acknowledges support from a Dennis Sciama fellowship funded by the University of Portsmouth for the Institute of Cosmology and Gravitation. APV acknowledges support from the Carlsberg Foundation (grant no CF20-0534). SB is supported by the Melbourne Research Scholarship and N D Goldsworthy Scholarship. LS and SN are supported by an STFC studentship. This work was supported by the Simons Collaboration on “Learning the Universe”.
 
