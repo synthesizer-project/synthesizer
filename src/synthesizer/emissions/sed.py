@@ -496,6 +496,16 @@ class Sed:
         return self.nu * self.lnu / self.lam
 
     @property
+    def flam(self):
+        """Get the spectral flux density per Angstrom.
+
+        Returns:
+            flux (unyt_array):
+                The spectral flux density per Angstrom array.
+        """
+        return self.obsnu * self.fnu / self.obslam
+
+    @property
     def luminosity_nu(self):
         """Alias to lnu.
 
