@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Msun, Myr, angstrom
 
-from synthesizer.emission_models import IncidentEmission, ReprocessedEmission
+from synthesizer.emission_models import ReprocessedEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -170,8 +170,7 @@ def measure_equivalent_width(
         ValueError: If mode is invalid.
     """
     # Get the emission model
-    incident_model = IncidentEmission(grid)
-    model = ReprocessedEmission(grid, related_models=[incident_model])
+    model = ReprocessedEmission(grid)
 
     stellar_mass = smass
 

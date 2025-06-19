@@ -214,6 +214,7 @@ class PacmanEmission(StellarEmissionModel):
             grid=self._grid,
             label="transmitted",
             fesc=self._fesc,
+            incident=self.incident,
             **kwargs,
         )
 
@@ -335,9 +336,9 @@ class PacmanEmission(StellarEmissionModel):
                 **kwargs,
             )
         else:
-            # OK, total = emergent so we need to handle whether
+            # Ok, total = emergent so we need to handle whether
             # emergent = attenuated + escaped or just attenuated
-            # Define the related models
+            # define the related models
             related_models = [
                 self.incident,
                 self.transmitted,
@@ -347,19 +348,29 @@ class PacmanEmission(StellarEmissionModel):
                 self.attenuated,
             ]
 
-            # Remove any None models
+            # Remove any none models
             related_models = [m for m in related_models if m is not None]
 
-            StellarEmissionModel.__init__(
-                self,
-                grid=self._grid,
-                label="emergent" if label is None else label,
-                dust_curve=self._dust_curve,
-                apply_to=self.intrinsic,
-                tau_v=self._tau_v,
-                related_models=related_models,
-                **kwargs,
-            )
+            if self._fesc == 0.0:
+                StellarEmissionModel.__init__(
+                    self,
+                    grid=self._grid,
+                    label="attenuated" if label is None else label,
+                    dust_curve=self._dust_curve,
+                    apply_to=self.reprocessed,
+                    tau_v=self._tau_v,
+                    related_models=related_models,
+                    **kwargs,
+                )
+            else:
+                StellarEmissionModel.__init__(
+                    self,
+                    grid=self._grid,
+                    label="emergent" if label is None else label,
+                    combine=(self.attenuated, self.escaped),
+                    related_models=related_models,
+                    **kwargs,
+                )
 
 
 class BimodalPacmanEmission(StellarEmissionModel):
@@ -688,14 +699,14 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
         young_escaped = StellarEmissionModel(
             label="young_escaped",
-            apply_to=full_young_transmitted,
+            apply_to=self.young_incident,
             transformer=EscapedFraction(),
             fesc=self._fesc,
             **kwargs,
         )
         old_escaped = StellarEmissionModel(
             label="old_escaped",
-            apply_to=full_old_transmitted,
+            apply_to=self.old_incident,
             transformer=EscapedFraction(),
             fesc=self._fesc,
             **kwargs,

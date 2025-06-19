@@ -121,7 +121,10 @@ def test_combination_spectra(
     # emission models
     model = StellarEmissionModel(
         label="combined",
-        combine=(incident_emission_model, transmitted_emission_model),
+        combine=(
+            transmitted_emission_model["incident"],
+            transmitted_emission_model,
+        ),
     )
 
     # Get the spectra
