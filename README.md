@@ -9,7 +9,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![PyPI version](https://img.shields.io/pypi/v/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
-
+[![status](https://joss.theoj.org/papers/cc4f37b2d2fec7d1bd48af22c01d78a7/status.svg)](https://joss.theoj.org/papers/cc4f37b2d2fec7d1bd48af22c01d78a7)
 <!--
 This will also display the number of downloads but lets hide for now...
 [![Downloads](https://img.shields.io/pypi/dm/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)

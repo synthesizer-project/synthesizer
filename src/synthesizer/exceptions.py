@@ -748,3 +748,28 @@ class MissingInstrumentFile(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Instrument file is missing."
+
+
+class InconsistentUnits(Exception):
+    """Exception class for when units are inconsistent."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Units are inconsistent."
