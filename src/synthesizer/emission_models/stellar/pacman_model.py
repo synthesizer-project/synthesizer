@@ -214,6 +214,7 @@ class PacmanEmission(StellarEmissionModel):
             grid=self._grid,
             label="transmitted",
             fesc=self._fesc,
+            incident=self.incident,
             **kwargs,
         )
 

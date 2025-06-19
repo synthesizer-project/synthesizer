@@ -167,6 +167,7 @@ class TransmittedEmission(StellarEmissionModel):
         label="transmitted",
         fesc="fesc",
         related_models=(),
+        incident=None,
         **kwargs,
     ):
         """Initialise the TransmittedEmission object.
@@ -178,6 +179,9 @@ class TransmittedEmission(StellarEmissionModel):
             related_models (list): A list of related models to combine with.
                 This is used to combine the escaped and transmitted emission
                 models.
+            incident (EmissionModel): An incident emission model to use, if
+                None then one will be created. This is only matters if
+                fesc > 0.0, otherwise the incident contribution is 0.0.
             **kwargs: Additional keyword arguments.
         """
         # Define the transmitted extraction model
@@ -188,11 +192,15 @@ class TransmittedEmission(StellarEmissionModel):
             **kwargs,
         )
 
+        # If we need to, create an incident emission model
+        if incident is None:
+            incident = IncidentEmission(grid=grid, label="incident", **kwargs)
+
         # Get the escaped emission
         escaped = StellarEmissionModel(
             label="escaped",
             grid=grid,
-            apply_to=full_transmitted,
+            apply_to=incident,
             transformer=EscapedFraction(),
             fesc=fesc,
             **kwargs,
