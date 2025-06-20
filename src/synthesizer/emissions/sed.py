@@ -1160,7 +1160,7 @@ class Sed:
         """
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
-            return ValueError(
+            raise ValueError(
                 (
                     "Fluxes not calculated, run `get_fnu` or "
                     "`get_fnu0` for observer frame or rest-frame "
