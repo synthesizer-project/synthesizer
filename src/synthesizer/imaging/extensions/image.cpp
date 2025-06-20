@@ -451,7 +451,6 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   populate_smoothed_image(pix_values, smoothing_lengths, pos, kernel, res,
                           npix_x, npix_y, npart, threshold, kdim, img, nimgs,
                           nthreads);
-  printf("Populated image");
 
   toc("Computing smoothed image", start_time);
 
