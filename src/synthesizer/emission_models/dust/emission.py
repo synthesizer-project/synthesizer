@@ -43,6 +43,7 @@ from unyt import (
 )
 
 from synthesizer import exceptions
+from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
@@ -50,8 +51,14 @@ from synthesizer.units import accepts
 from synthesizer.utils import planck
 
 
-class DustEmissionGenerator:
-    """Dust emission base class for holding common methods.
+class DustEmissionGenerator(Generator):
+    """Dust emission base class defining common attributes and methods.
+
+    Classes that inherit from this parent class should use energy balance to
+    scale a parametrically generated dust emission spectrum. The input
+    intrinsic and attenuated spectra can be passed explicitly to the
+    get_spectra method, or they can be extracted from an input emitter in
+    the generate_lnu and generate_lines used by an EmissionModel.
 
     Attributes:
         temperature (float):
@@ -61,14 +68,18 @@ class DustEmissionGenerator:
             CMB heating at high-redshift
     """
 
-    temperature: Optional[Union[unyt_quantity, float]]
+    temperature: unyt_quantity | None
     cmb_factor: float
+    dust_free_key: str | None
+    attenuated_key: str | None
 
     @accepts(temperature=K)
     def __init__(
         self,
-        temperature: Optional[Union[unyt_quantity, float]] = None,
+        temperature: unyt_quantity | None = None,
         cmb_factor: float = 1,
+        dust_free_key: str | None = None,
+        attenuated_key: str | None = None,
     ) -> None:
         """Initialise the base class for dust emission models.
 
@@ -76,12 +87,25 @@ class DustEmissionGenerator:
             temperature (float):
                 The temperature of the dust.
             cmb_factor (float):
-                The multiplicative factor to account for
-                CMB heating at high-redshift
+                The multiplicative factor to account for CMB heating at
+                high-redshift.
+            dust_free_key (str):
+                The key to use for the dust-free SED in the
+                EmissionModel's spectra dictionary. This is only used if
+                generate_lnu or generate_lines is called.
+            attenuated_key (str):
+                The key to use for the attenuated SED in the
+                EmissionModel's spectra dictionary. This is only used if
+                generate_lnu or generate_lines is called.
         """
         # Attach the common attributes
         self.temperature = temperature
         self.cmb_factor = cmb_factor
+
+        # Keys to use for the dust-free and attenuated SEDs used for the
+        # energy balance scaling
+        self.dust_free_key = dust_free_key
+        self.attenuated_key = attenuated_key
 
     def _lnu(
         self, *args: Optional[Union[unyt_array, NDArray[np.float64]]]

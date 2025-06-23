@@ -447,14 +447,6 @@ class Generation:
                 attenuated,
             )
 
-        elif this_model.lum_intrinsic_model is not None:
-            # otherwise we are scaling by a single spectra
-            sed = generator.get_spectra(
-                lam,
-                particle_spectra[this_model.lum_intrinsic_model.label]
-                if per_particle
-                else spectra[this_model.lum_intrinsic_model.label],
-            )
         elif isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model

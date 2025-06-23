@@ -496,8 +496,7 @@ class TorusEmission(BlackHoleEmissionModel):
             self,
             label=label,
             generator=torus_emission_model,
-            lum_intrinsic_model=disc_incident,
-            scale_by="torus_fraction",
+            scale_by=("torus_fraction", disc_incident),
             **kwargs,
         )
 
@@ -556,7 +555,7 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
             torus_emission_model=torus_emission_model,
             grid=nlr_grid,
             label="torus",
-            disc_incident=disc["disc_incident"],
+            scale_by=(disc["disc_incident"]),
             **kwargs,
         )
 

@@ -49,6 +49,7 @@ import numpy as np
 from unyt import arcsecond, kpc, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.emission_models.operations import (
     Combination,
     Extraction,
@@ -128,14 +129,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         dust_curve (emission_models.attenuation.*):
             The dust curve to apply.
         generator (EmissionModel):
-            The emission generation model. This must define a get_spectra
-            method.
-        lum_intrinsic_model (EmissionModel):
-            The intrinsic model to use deriving the dust luminosity when
-            computing dust emission.
-        lum_attenuated_model (EmissionModel):
-            The attenuated model to use deriving the dust luminosity when
-            computing dust emission.
+            The emission generation model. This must define a generate_lnu and
+            a generate_lines method.
         mask_attr (str):
             The component attribute to mask on.
         mask_thresh (unyt_quantity):
@@ -145,7 +140,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         lam_mask (ndarray):
             The mask to apply to the wavelength array.
         scale_by (list):
-            A list of attributes to scale the spectra by.
+            A list of attributes or emission models to scale the output
+            emission by. If an element is a string, it should be the name of
+            an emitter attribute, this will be extracted from the emitter and
+            the output emission will be multiplied by this value. If an element
+            is an EmissionModel, the bolometric luminosity of that model's
+            output spectra will be used to multiply the output emission.
         post_processing (list):
             A list of post processing functions to apply to the emission after
             it has been generated. Each function must take a dict containing
@@ -180,8 +180,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         igm=None,
         generator=None,
         transformer=None,
-        lum_intrinsic_model=None,
-        lum_attenuated_model=None,
         mask_attr=None,
         mask_thresh=None,
         mask_op=None,
@@ -235,12 +233,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The transform to apply. This is also an alternative (but
                 less obvious) argument for passing a dust curve or IGM model
                 (both are transformers).
-            lum_intrinsic_model (EmissionModel):
-                The intrinsic model to use deriving the dust luminosity when
-                computing dust emission.
-            lum_attenuated_model (EmissionModel):
-                The attenuated model to use deriving the dust luminosity when
-                computing dust emission.
             mask_attr (str):
                 The component attribute to mask on.
             mask_thresh (unyt_quantity):
@@ -337,8 +329,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             transformer=transformer,
             apply_to=apply_to,
             generator=generator,
-            lum_intrinsic_model=lum_intrinsic_model,
-            lum_attenuated_model=lum_attenuated_model,
         )
 
         # Initilaise the corresponding operation (also checks we have a
@@ -357,8 +347,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 else igm
             ),
             generator=generator,
-            lum_intrinsic_model=lum_intrinsic_model,
-            lum_attenuated_model=lum_attenuated_model,
             vel_shift=vel_shift,
         )
 
@@ -414,8 +402,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         apply_to,
         transformer,
         generator,
-        lum_intrinsic_model,
-        lum_attenuated_model,
         vel_shift,
     ):
         """Initialise the correct parent operation.
@@ -435,12 +421,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
-            lum_intrinsic_model (EmissionModel):
-                The intrinsic model to use deriving the dust
-                luminosity when computing dust emission.
-            lum_attenuated_model (EmissionModel):
-                The attenuated model to use deriving the dust
-                luminosity when computing dust emission.
             vel_shift (bool):
                 A flag for whether the emission produced by this model should
                 take into account the velocity shift due to peculiar
@@ -453,12 +433,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             Combination.__init__(self, combine)
         elif self._is_transforming:
             Transformation.__init__(self, transformer, apply_to)
-        elif self._is_dust_emitting:
-            Generation.__init__(
-                self, generator, lum_intrinsic_model, lum_attenuated_model
-            )
         elif self._is_generating:
-            Generation.__init__(self, generator, lum_intrinsic_model, None)
+            Generation.__init__(self, generator)
         else:
             raise exceptions.InconsistentArguments(
                 "No valid operation found from the arguments given "
@@ -469,13 +445,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 f" extract={extract})\n"
                 "\tFor combination: "
                 f"(combine={combine})\n"
-                "\tFor dust attenuation: "
+                "\tFor transformation: "
                 f"(transformer={transformer}, "
                 f"apply_to={apply_to})\n"
                 "\tFor generation "
                 f"(generator={generator}, "
-                f"lum_intrinsic_model={lum_intrinsic_model}, "
-                f"lum_attenuated_model={lum_attenuated_model})"
             )
 
         # Double check we have been asked for only one operation
@@ -485,7 +459,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     self._is_extracting,
                     self._is_combining,
                     self._is_transforming,
-                    self._is_dust_emitting,
                     self._is_generating,
                 ]
             )
@@ -497,7 +470,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 f"extract: {self._is_extracting}, "
                 f"combine: {self._is_combining}, "
                 f"transform: {self._is_transforming}, "
-                f"dust_emission: {self._is_dust_emitting})\n"
+                f"generate: {self._is_generating}). "
                 "Currently have:\n"
                 "\tFor extraction: grid=("
                 f"{grid.grid_name if grid is not None else None}"
@@ -508,8 +481,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 f"apply_to={apply_to})\n"
                 "\tFor generation "
                 f"(generator={generator}, "
-                f"lum_intrinsic_model={lum_intrinsic_model}, "
-                f"lum_attenuated_model={lum_attenuated_model})"
             )
 
         # Ensure we have what we need for all operations
@@ -576,8 +547,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             return self._combine_summary()
         elif self._is_transforming:
             return self._transform_summary()
-        elif self._is_dust_emitting:
-            return self._generate_summary()
         elif self._is_generating:
             return self._generate_summary()
         else:
@@ -695,14 +664,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             or igm is not None
             or transformer is not None
         ) and apply_to is not None
-        self._is_dust_emitting = (
-            generator is not None
-            and lum_attenuated_model is not None
-            and lum_intrinsic_model is not None
-        )
-        self._is_generating = (
-            generator is not None and not self._is_dust_emitting
-        )
+        self._is_generating = isinstance(generator, Generator)
 
     def _unpack_model_recursively(self, model):
         """Traverse the model tree and collect what we will need to do.
@@ -736,14 +698,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             model.apply_to._parents.add(model)
 
         # If we are applying a dust emission model, store the key
-        if model._is_generating or model._is_dust_emitting:
+        if model._is_generating:
             self._generator_models[model.label] = model.generator
-            if model._lum_attenuated_model is not None:
-                model._children.add(model._lum_attenuated_model)
-                model._lum_attenuated_model._parents.add(model)
-            if model._lum_intrinsic_model is not None:
-                model._children.add(model._lum_intrinsic_model)
-                model._lum_intrinsic_model._parents.add(model)
 
         # If we are masking, store the key
         if model._is_masked:
@@ -984,7 +940,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return getattr(self, "_generator", None)
 
     def set_generator(self, generator):
-        """Set the dust emission model on this model.
+        """Set the generator on this model.
 
         Args:
             generator (EmissionModel):
@@ -994,12 +950,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 None, sets the dust emission model on this model.
         """
         # Ensure model is a emission generation model and change the model
-        if self._models._is_dust_emitting or self._models._is_generating:
+        if self._models._is_generating:
             self._set_attr("generator", generator)
         else:
             raise exceptions.InconsistentArguments(
-                "Cannot set a dust emission model on a model that is not "
-                "dust emitting."
+                "Cannot set a generator on a model that is not generating."
             )
 
         # Unpack the model now we're done
@@ -1086,54 +1041,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         else:
             for model in self._models.values():
                 model.set_vel_shift(vel_shift)
-
-    @property
-    def lum_intrinsic_model(self):
-        """Get the intrinsic model for computing dust luminosity."""
-        return getattr(self, "_lum_intrinsic_model", None)
-
-    def set_lum_intrinsic_model(self, lum_intrinsic_model):
-        """Set the intrinsic model for computing dust luminosity.
-
-        Args:
-            lum_intrinsic_model (EmissionModel):
-                The intrinsic model to set.
-        """
-        # Ensure model is a emission generation model and change the model
-        if self._models._is_dust_emitting:
-            self._set_attr("lum_intrinsic_model", lum_intrinsic_model)
-        else:
-            raise exceptions.InconsistentArguments(
-                "Cannot set an intrinsic model on a model that is not "
-                "dust emitting."
-            )
-
-        # Unpack the model now we're done
-        self.unpack_model()
-
-    @property
-    def lum_attenuated_model(self):
-        """Get the attenuated model for computing dust luminosity."""
-        return getattr(self, "_lum_attenuated_model", None)
-
-    def set_lum_attenuated_model(self, lum_attenuated_model):
-        """Set the attenuated model for computing dust luminosity.
-
-        Args:
-            lum_attenuated_model (EmissionModel):
-                The attenuated model to set.
-        """
-        # Ensure model is a emission generation model and change the model
-        if self._models._is_dust_emitting:
-            self._set_attr("lum_attenuated_model", lum_attenuated_model)
-        else:
-            raise exceptions.InconsistentArguments(
-                "Cannot set an attenuated model on a model that is not "
-                "dust emitting."
-            )
-
-        # Unpack the model now we're done
-        self.unpack_model()
 
     @property
     def combine(self):
@@ -1512,8 +1419,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             self.combine_to_hdf5(group)
         elif self._is_transforming:
             self.transformation_to_hdf5(group)
-        elif self._is_dust_emitting:
-            self.generate_to_hdf5(group)
         elif self._is_generating:
             self.generate_to_hdf5(group)
 
@@ -1622,18 +1527,18 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 links.setdefault(label, []).extend(
                     [(child.label, "-") for child in model._combine]
                 )
-            if model._is_dust_emitting or model._is_generating:
+            if model._is_generating:
                 links.setdefault(label, []).extend(
                     [
                         (
-                            model._lum_intrinsic_model.label
-                            if model._lum_intrinsic_model is not None
+                            model.generator.intrinsic_key
+                            if hasattr(model.generator, "intrinsic_key")
                             else None,
                             "dotted",
                         ),
                         (
-                            model._lum_attenuated_model.label
-                            if model._lum_attenuated_model is not None
+                            model.generator.attenuated_key
+                            if hasattr(model.generator, "attenuated_key")
                             else None,
                             "dotted",
                         ),
@@ -2496,7 +2401,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
 
-            elif this_model._is_dust_emitting or this_model._is_generating:
+            elif this_model._is_generating:
                 try:
                     spectra, particle_spectra = self._generate_spectra(
                         this_model,
@@ -2517,8 +2422,38 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
+                # Skip if we don't have a scaler
                 if scaler is None:
                     continue
+
+                # If the scaler is another model, we need to scale by the
+                # bolometric luminosity of that spectra
+                elif isinstance(scaler, EmissionModel):
+                    if scaler.label not in emitter.spectra:
+                        raise exceptions.InconsistentArguments(
+                            f"Can't scale spectra by model {scaler.label} "
+                            "when we have not generated it yet."
+                        )
+
+                    # Compute the scaling
+                    if this_model.per_particle:
+                        bol_lum = emitter.particle_spectra[
+                            scaler.label
+                        ].bolometric_luminosity
+                    else:
+                        bol_lum = emitter.spectra[
+                            scaler.label
+                        ].bolometric_luminosity
+
+                    # Scale the lines accordingly
+                    if this_model.per_particle:
+                        particle_spectra[label] *= bol_lum
+                        spectra[label].spectra = particle_spectra[label].sum()
+                    else:
+                        spectra[label] *= bol_lum
+
+                # If the scaler is a string, we need to scale by the
+                # emitter's attribute stored at that string
                 if hasattr(emitter, scaler):
                     # Ok, the emitter has this scaler, get it
                     scaler_arr = getattr(emitter, f"_{scaler}", None)
@@ -2847,7 +2782,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
 
-            elif this_model._is_dust_emitting or this_model._is_generating:
+            elif this_model._is_generating:
                 try:
                     lines, particle_lines = self._generate_lines(
                         this_model,
@@ -2865,10 +2800,48 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
 
-            # Are we scaling the spectra?
+            # Are we scaling the lines? Note that this requires the
+            # spectra to have been generated first if we are scaling
+            # by another model's bolometric luminosity
             for scaler in this_model.scale_by:
+                # Skip if we don't have a scaler
                 if scaler is None:
                     continue
+
+                # If the scaler is another model, we need to scale by the
+                # bolometric luminosity of that spectra
+                elif isinstance(scaler, EmissionModel):
+                    if scaler.label not in emitter.spectra:
+                        raise exceptions.InconsistentArguments(
+                            f"Can't scale lines by model {scaler.label} "
+                            f"as the emitter doesn't have the {scaler.label} "
+                            "spectra."
+                        )
+
+                    # Compute the scaling
+                    if this_model.per_particle:
+                        bol_lum = emitter.particle_spectra[
+                            scaler.label
+                        ].bolometric_luminosity
+                    else:
+                        bol_lum = emitter.spectra[
+                            scaler.label
+                        ].bolometric_luminosity
+
+                    # Scale the lines accordingly
+                    if this_model.per_particle:
+                        particle_lines[label] *= bol_lum
+                        lines[label].luminosity = np.sum(
+                            particle_lines[label]._luminosity, axis=0
+                        )
+                        lines[label].continuum = np.sum(
+                            particle_lines[label]._continuum, axis=0
+                        )
+                    else:
+                        lines[label] *= bol_lum
+
+                # If the scaler is a string, we need to scale by the
+                # emitter's attribute stored at that string
                 elif hasattr(emitter, scaler):
                     for line_id in line_ids:
                         if this_model.per_particle:
