@@ -50,7 +50,7 @@ from synthesizer.units import accepts
 from synthesizer.utils import planck
 
 
-class EmissionBase:
+class DustEmissionGenerator:
     """Dust emission base class for holding common methods.
 
     Attributes:
@@ -88,7 +88,7 @@ class EmissionBase:
     ) -> Optional[Union[unyt_array, NDArray[np.float64]]]:
         """Generate the unnormalised spectrum."""
         raise exceptions.UnimplementedFunctionality(
-            "EmissionBase should not be instantiated directly!"
+            "DustEmissionGenerator should not be instantiated directly!"
             " Instead use one to child models (Blackbody, Greybody, Casey12)."
         )
 
@@ -208,7 +208,7 @@ class EmissionBase:
         self.temperature_z = _temperature
 
 
-class Blackbody(EmissionBase):
+class Blackbody(DustEmissionGenerator):
     """A class to generate a blackbody emission spectrum.
 
     Attributes:
@@ -239,7 +239,7 @@ class Blackbody(EmissionBase):
             redshift (float):
                 Redshift of the galaxy
         """
-        EmissionBase.__init__(self, temperature)
+        DustEmissionGenerator.__init__(self, temperature)
 
         # Emmissivity of true blackbody is 1
         emissivity = 1.0
@@ -268,7 +268,7 @@ class Blackbody(EmissionBase):
         return planck(nu, self.temperature)
 
 
-class Greybody(EmissionBase):
+class Greybody(DustEmissionGenerator):
     """A class to generate a greybody emission spectrum.
 
     Attributes:
@@ -317,7 +317,7 @@ class Greybody(EmissionBase):
             lam_0 (float):
                 Wavelength (in um) where the dust optical depth is unity
         """
-        EmissionBase.__init__(self, temperature)
+        DustEmissionGenerator.__init__(self, temperature)
 
         # Are we adding heating by the CMB?
         if cmb_heating:
@@ -355,7 +355,7 @@ class Greybody(EmissionBase):
             return optically_thick_factor * planck(nu, self.temperature)
 
 
-class Casey12(EmissionBase):
+class Casey12(DustEmissionGenerator):
     """A class to generate dust emission spectra using the Casey (2012) model.
 
     https://ui.adsabs.harvard.edu/abs/2012MNRAS.425.3094C/abstract
@@ -416,7 +416,7 @@ class Casey12(EmissionBase):
             redshift (float):
                 Redshift of the galaxy
         """
-        EmissionBase.__init__(self, temperature)
+        DustEmissionGenerator.__init__(self, temperature)
 
         # Are we adding heating by the CMB?
         if cmb_heating:
