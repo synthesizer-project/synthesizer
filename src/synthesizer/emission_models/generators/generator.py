@@ -12,7 +12,7 @@ set up with a `Generator`.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Tuple
+from typing import Any, Sequence
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -25,7 +25,7 @@ from synthesizer.emissions import LineCollection, Sed
 class Generator(ABC):
     """An abstract base class for emission generators."""
 
-    def __init__(self, required_params: Tuple = ()) -> None:
+    def __init__(self, required_params: Sequence[str] = ()) -> None:
         """Initialize the Generator.
 
         Args:
@@ -83,7 +83,7 @@ class Generator(ABC):
         return params
 
     @abstractmethod
-    def generate_lnu(self, *args, **kwargs):
+    def generate_lnu(self, *args, **kwargs) -> Sed:
         """Generate the rest frame spectrum.
 
         This method should be implemented by subclasses to generate the
@@ -92,7 +92,7 @@ class Generator(ABC):
         pass
 
     @abstractmethod
-    def generate_lines(self, *args, **kwargs):
+    def generate_lines(self, *args, **kwargs) -> LineCollection:
         """Generate the rest frame line luminosity and continuum.
 
         This method should be implemented by subclasses to generate the
