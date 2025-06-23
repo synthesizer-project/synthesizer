@@ -92,8 +92,7 @@ class EmissionBase:
             " Instead use one to child models (Blackbody, Greybody, Casey12)."
         )
 
-    accepts(lam=angstrom)
-
+    @accepts(lam=angstrom)
     def get_spectra(
         self,
         lam,
