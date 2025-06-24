@@ -13,7 +13,7 @@ from unyt import Mpc, Msun, km, pc, rad, s
 
 from synthesizer import exceptions
 from synthesizer.particle.utils import rotate
-from synthesizer.synth_warnings import deprecation
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
@@ -615,21 +615,27 @@ class Particles:
             radius (float):
                 The radius of the particle distribution.
         """
-        # Handle special cases
-        if frac == 0:
-            return 0 * self.radii.units
-        elif frac == 1:
-            return np.max(self.radii.value) * self.radii.units
-        elif self.nparticles == 0:
-            return 0 * self.radii.units
-        elif self.nparticles == 1:
-            return self.radii[0].value * frac * self.radii.units
-        elif np.sum(weights) == 0:
-            return 0 * self.radii.units
+        # If we have no particles then return 0 with a warning
+        if self.nparticles == 0:
+            warn(
+                f"Trying to calculate radius for {self.__class__.__name__}"
+                " with no particles. Returning 0."
+            )
+            return 0 * self.coordinates.units
 
         # Get the radii if not already set
         if self.radii is None:
             self.get_radii()
+
+        # Handle special cases
+        if frac == 0:
+            return 0 * self.radii.units
+        elif frac == 1:
+            return np.max(self.radii.value) * self.coordinates.units
+        elif self.nparticles == 1:
+            return self.radii[0].value * frac * self.coordinates.units
+        elif np.sum(weights) == 0:
+            return 0 * self.coordinates.units
 
         # Strip units off the weights if they have them
         if hasattr(weights, "units"):
