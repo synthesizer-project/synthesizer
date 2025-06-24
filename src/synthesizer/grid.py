@@ -527,6 +527,11 @@ class Grid:
                 [id.decode("utf-8") for id in hf["lines"]["id"][:]]
             )
 
+            # Read the line wavelengths
+            lams = hf["lines"]["wavelength"][...]
+            lam_units = hf["lines"]["wavelength"].attrs.get("Units")
+            self.line_lams = unyt_array(lams, lam_units).to(angstrom)
+
             # Get the units, we only do this once since all the
             # luminosities and continuums will have the same units
             lum_units = hf["lines"]["luminosity"].attrs.get("Units")
@@ -639,24 +644,24 @@ class Grid:
                         lum_units,
                     )
 
-                # Ensure the line luminosities and continuums are contiguous
-                for spectra in self.available_spectra:
-                    lum_units = self.line_lums[spectra].units
-                    cont_units = self.line_conts[spectra].units
-                    self.line_lums[spectra] = (
-                        np.ascontiguousarray(
-                            self.line_lums[spectra],
-                            dtype=np.float64,
-                        )
-                        * lum_units
+            # Ensure the line luminosities and continuums are contiguous
+            for spectra in self.line_lums.keys():
+                lum_units = self.line_lums[spectra].units
+                cont_units = self.line_conts[spectra].units
+                self.line_lums[spectra] = (
+                    np.ascontiguousarray(
+                        self.line_lums[spectra],
+                        dtype=np.float64,
                     )
-                    self.line_conts[spectra] = (
-                        np.ascontiguousarray(
-                            self.line_conts[spectra],
-                            dtype=np.float64,
-                        )
-                        * cont_units
+                    * lum_units
+                )
+                self.line_conts[spectra] = (
+                    np.ascontiguousarray(
+                        self.line_conts[spectra],
+                        dtype=np.float64,
                     )
+                    * cont_units
+                )
 
     def _prepare_lam_axis(
         self,
