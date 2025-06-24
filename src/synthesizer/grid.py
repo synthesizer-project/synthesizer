@@ -477,13 +477,12 @@ class Grid:
                     "containing a subset of spectra to read."
                 )
 
-            if spectra_to_read is not None:
-                # Read the wavelengths
-                self.lam = hf["spectra/wavelength"][:]
+            # Read the wavelengths
+            self.lam = hf["spectra/wavelength"][:]
 
-                # Get all our spectra
-                for spectra_id in self.available_spectra:
-                    self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+            # Get all our spectra
+            for spectra_id in self.available_spectra:
+                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
