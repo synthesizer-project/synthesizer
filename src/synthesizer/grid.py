@@ -486,7 +486,7 @@ class Grid:
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
-        if (self.reprocessed is True) and (spectra_to_read is not None):
+        if self.reprocessed is True:
             # The total emission (ignoring any dust reprocessing) is just
             # the transmitted plus the nebular
             self.spectra["total"] = (
