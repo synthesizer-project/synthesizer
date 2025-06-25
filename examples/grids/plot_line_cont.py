@@ -16,7 +16,7 @@ from synthesizer.grid import Grid
 # define grid
 grid_name = "test_grid"
 
-grid = Grid(grid_name, read_lines=True)
+grid = Grid(grid_name)
 
 # define grid point
 grid_point = grid.get_grid_point(log10ages=6.5, metallicity=0.01)
