@@ -122,12 +122,12 @@ class Grid:
             grid_dir (str):
                 The file path to the directory containing the grid file.
             ignore_spectra (bool):
-                Should we ignore spectra?
+                Should we ignore spectra (i.e. not load them into the Grid)?
             spectra_to_read (list):
                 A list of spectra to read in. If None then all available
                 spectra will be read. Default is None.
             ignore_lines (bool):
-                Should we ignore lines?
+                Should we ignore lines  (i.e. not load them into the Grid)?
             new_lam (np.ndarray of float):
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
@@ -186,7 +186,7 @@ class Grid:
             self._prepare_lam_axis(new_lam, lam_lims)
 
         # Read in lines but only if the grid has been reprocessed
-        if (not ignore_lines) and (self.reprocessed):
+        if not ignore_lines and self.reprocessed:
             self._get_lines_grid()
 
     def _parse_grid_path(self, grid_dir, grid_name):
