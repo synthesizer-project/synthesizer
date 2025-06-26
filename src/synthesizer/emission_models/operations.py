@@ -53,10 +53,11 @@ class Extraction:
         self._extract = extract
 
         # Ensure the grid has the right key
-        if extract not in grid.spectra and extract not in grid.lines:
+        if extract not in grid.spectra and extract not in grid.line_lums:
             raise exceptions.MissingSpectraType(
                 f"The Grid does not contain the key '{extract}' "
-                f"(available types are {grid.available_spectra}."
+                f"(available types for spectra are {grid.available_spectra}"
+                f"and for lines: {grid.line_lums.keys()})"
             )
 
         # Should the emission take into account the velocity shift due to
