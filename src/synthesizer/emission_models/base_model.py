@@ -526,11 +526,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "Must specify where to apply the dust curve."
             )
 
-        # # Ensure the grid contains any keys we want to extract
-        # if self._is_extracting and extract not in grid.spectra.keys():
-        #     raise exceptions.InconsistentArguments(
-        #         f"Grid does not contain key: {extract}"
-        #     )
+        # Ensure the grid contains any keys we want to extract
+        if self._is_extracting and extract not in grid.spectra.keys():
+            raise exceptions.InconsistentArguments(
+                f"Grid does not contain key: {extract}"
+            )
 
     def _init_masks(self, mask_attr, mask_thresh, mask_op):
         """Initialise the mask operation.
