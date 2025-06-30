@@ -181,13 +181,13 @@ class Grid:
         if not ignore_spectra:
             self._get_spectra_grid(spectra_to_read)
 
+            # Save the spectra keys as available emissions
+            self.available_spectra_emissions = list(self.spectra.keys())
+
             # Prepare the wavelength axis (if new_lam and lam_lims are
             # all None, this will do nothing, leaving the grid's wavelength
             # array as it is in the HDF5 file)
             self._prepare_lam_axis(new_lam, lam_lims)
-
-            # Save the spectra keys as available emissions
-            self.available_spectra_emissions = list(self.spectra.keys())
 
         # Read in lines but only if the grid has been reprocessed
         if not ignore_lines and self.reprocessed:
