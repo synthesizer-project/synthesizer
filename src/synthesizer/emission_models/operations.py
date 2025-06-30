@@ -59,7 +59,7 @@ class Extraction:
                 f"Available types for spectra:"
                 f"{grid.available_spectra_emissions}"
                 f"Available types for lines: "
-                f"{grid.available_spectra_emissions}"
+                f"{grid.available_line_emissions}"
             )
 
         # Should the emission take into account the velocity shift due to
