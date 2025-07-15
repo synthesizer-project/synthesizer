@@ -25,10 +25,22 @@ from synthesizer.emissions import LineCollection, Sed
 class Generator(ABC):
     """An abstract base class for emission generators."""
 
-    def __init__(self, required_params: Sequence[str] = ()) -> None:
+    def __init__(
+        self,
+        is_normalised: bool,
+        is_energy_balance: bool,
+        required_params: Sequence[str] = (),
+    ) -> None:
         """Initialize the Generator.
 
         Args:
+            is_normalised (bool):
+                Whether the generator normalises the output spectrum. If so
+                then the generator must also be scaled.
+            is_energy_balance (bool):
+                Whether the generator is using energy balance to scale the
+                output spectrum. If so then the child must also take arguments
+                for or extract two spectra to use for the energy balance.
             required_params (tuple, optional):
                 The name of any required parameters needed by the generator
                 when generating emissions. These should either be available
@@ -36,6 +48,10 @@ class Generator(ABC):
                 be overridden in the EmissionModel itself. If they are
                 missing an exception will be raised.
         """
+        # Attach the flags to the generator
+        self.is_normalised = is_normalised
+        self.is_energy_balance = is_energy_balance
+
         # Store the parameters this generator will need
         self._required_params = required_params
 
