@@ -12,7 +12,7 @@ import os
 
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
-
+import numpy as np
 
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     """Integrate the last axis of an N-dimensional array.
@@ -55,6 +55,8 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     # We need to make a copy of xs and ys to avoid modifying in place
     _xs = xs.copy()
     _ys = ys.copy()
+    _ys = np.nan_to_num(_ys, nan=0.0, posinf=0.0, neginf=0.0)
+    _xs = np.nan_to_num(_xs, nan=0.0, posinf=0.0, neginf=0.0)
 
     # Scale the integrand and xs to avoid numerical issues
     xscale = _xs.max()
