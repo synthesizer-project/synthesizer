@@ -635,13 +635,17 @@ class Grid:
                     )
 
                     # Set the line luminosities to 0 as long as they haven't
-                    # already been set
-                    self.line_lums[spectra] = unyt_array(
-                        np.zeros(
-                            (*self.spectra[spectra].shape[:-1], self.nlines)
-                        ),
-                        lum_units,
-                    )
+                    # already been set. Special case: 'total' should have the
+                    # same line luminosities as 'nebular'
+                    if spectra == "total":
+                        self.line_lums[spectra] = self.line_lums["nebular"]
+                    else:
+                        self.line_lums[spectra] = unyt_array(
+                            np.zeros(
+                                (*self.spectra[spectra].shape[:-1], self.nlines)
+                            ),
+                            lum_units,
+                        )
 
             # Ensure the line luminosities and continuums are contiguous
             for spectra in self.line_lums.keys():
