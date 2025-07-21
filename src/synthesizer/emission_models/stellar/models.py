@@ -115,7 +115,7 @@ class NebularLineEmission(StellarEmissionModel):
             extract="linecont",
             grid=grid,
             save=False,
-            **{key: val for key, val in kwargs.items() if key != 'save'},
+            **{key: val for key, val in kwargs.items() if key not in 'save'},
         )
 
         # We can't define fesc and fesc_ly_alpha in the same model if
