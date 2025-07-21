@@ -207,9 +207,14 @@ class Extraction:
         # passed are split into their constituent parts
         passed_line_ids = line_ids
         line_ids = []
-        for lid in passed_line_ids:
-            for ljd in lid.split(","):
-                line_ids.append(ljd.strip())
+        
+        # If line_ids is None, use all available lines from the grid
+        if passed_line_ids is None:
+            line_ids = list(this_model.grid.available_lines)
+        else:
+            for lid in passed_line_ids:
+                for ljd in lid.split(","):
+                    line_ids.append(ljd.strip())
 
         # Remove any duplicated lines, will give the user exactly what they
         # asked for, but there's not point doing extra work!
