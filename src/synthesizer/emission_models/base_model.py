@@ -527,7 +527,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
         # Ensure the grid contains any keys we want to extract
-        if self._is_extracting and extract not in grid.spectra.keys():
+        if self._is_extracting and extract not in grid.available_emissions:
             raise exceptions.InconsistentArguments(
                 f"Grid does not contain key: {extract}"
             )
