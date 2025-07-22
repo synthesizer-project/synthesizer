@@ -924,10 +924,10 @@ class Stars(StarsComponent):
             )
 
         # Get the attribute and the weights
-        attr = getattr(self, attr)
         if "age" in attr:
             weight = self.sf_hist
         else:
             weight = self.metal_dist
+        attr = getattr(self, attr)
 
         return weighted_mean(attr, weight)
