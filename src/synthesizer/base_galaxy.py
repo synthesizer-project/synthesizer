@@ -112,7 +112,7 @@ class BaseGalaxy:
                 self.gas.centre = self.centre
             if self.black_holes is not None:
                 self.black_holes.centre = self.centre
-        
+
         # if not set already, assign redshift to each component
         if self.stars is not None:
             if self.stars.redshift is None:
@@ -1260,7 +1260,7 @@ class BaseGalaxy:
                     "If instrument not provided, a resolution and fov must "
                     "be specified."
                 )
-            
+
             # Get the filters from the emitters
             if len(self.photo_lnu) > 0:
                 filters = self.photo_lnu[emission_model.label].filters
@@ -1464,7 +1464,8 @@ class BaseGalaxy:
         if instrument is None:
             if resolution is None:
                 raise ValueError(
-                    "If instrument not provided, a resolution must be specified."
+                    "If instrument not provided, a resolution must be"
+                    " specified."
                 )
 
             # Get the filters from the emitters
