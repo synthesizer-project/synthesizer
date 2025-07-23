@@ -110,7 +110,9 @@ class Extractor(ABC):
         self._weight_var = grid._weight_var
 
         # Attach the spectra and line grids to the Extractor object
-        self._spectra_grid = grid.spectra[extract]
+
+        if extract in grid.available_spectra_emissions:
+            self._spectra_grid = grid.spectra[extract]
         if grid.lines_available:
             self._line_lum_grid = grid.line_lums[extract]
             self._line_cont_grid = grid.line_conts[extract]
@@ -123,7 +125,8 @@ class Extractor(ABC):
         # Attach the grid dimensions that we will need
         self._grid_dims = np.array(grid.shape, dtype=np.int32)
         self._grid_naxes = grid.naxes
-        self._grid_nlam = grid.nlam
+        if extract in grid.available_spectra_emissions:
+            self._grid_nlam = grid.nlam
 
         # Record whether we need to log the emitter data
         self._log_emitter_attr = tuple(
