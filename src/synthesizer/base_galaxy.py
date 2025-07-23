@@ -113,6 +113,17 @@ class BaseGalaxy:
             if self.black_holes is not None:
                 self.black_holes.centre = self.centre
 
+        # if not set already, assign redshift to each component
+        if self.stars is not None:
+            if getattr(self.stars, "redshift", None) is None:
+                self.stars.redshift = redshift
+        if self.gas is not None:
+            if getattr(self.gas, "redshift", None) is None:
+                self.gas.redshift = redshift
+        if self.black_holes is not None:
+            if getattr(self.black_holes, "redshift", None) is None:
+                self.black_holes.redshift = redshift
+
     @property
     def photo_fluxes(self):
         """Get the photometry fluxes.
@@ -1152,15 +1163,15 @@ class BaseGalaxy:
 
     def get_images_luminosity(
         self,
-        resolution,
-        fov,
         emission_model,
         img_type="smoothed",
+        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
-        instrument=None,
+        resolution=None,
+        fov=None,
         cosmo=None,
     ):
         """Make an ImageCollection from luminosities.
@@ -1244,6 +1255,12 @@ class BaseGalaxy:
         # TODO: we need to eventually fully pivot to taking only an instrument
         # this will be done when we introduced some premade instruments
         if instrument is None:
+            if resolution is None or fov is None:
+                raise ValueError(
+                    "If instrument not provided, a resolution and fov must "
+                    "be specified."
+                )
+
             # Get the filters from the emitters
             if len(self.photo_lnu) > 0:
                 filters = self.photo_lnu[emission_model.label].filters
@@ -1358,15 +1375,15 @@ class BaseGalaxy:
 
     def get_images_flux(
         self,
-        resolution,
         fov,
         emission_model,
         img_type="smoothed",
+        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
-        instrument=None,
+        resolution=None,
         cosmo=None,
     ):
         """Make an ImageCollection from fluxes.
@@ -1445,6 +1462,12 @@ class BaseGalaxy:
         # TODO: we need to eventually fully pivot to taking only an instrument
         # this will be done when we introduced some premade instruments
         if instrument is None:
+            if resolution is None:
+                raise ValueError(
+                    "If instrument not provided, a resolution must be "
+                    "specified."
+                )
+
             # Get the filters from the emitters
             if len(self.photo_fnu) > 0:
                 filters = self.photo_fnu[emission_model.label].filters
