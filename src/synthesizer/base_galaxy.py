@@ -115,13 +115,13 @@ class BaseGalaxy:
 
         # if not set already, assign redshift to each component
         if self.stars is not None:
-            if self.stars.redshift is None:
+            if getattr(self.stars, "redshift", None) is None:
                 self.stars.redshift = redshift
         if self.gas is not None:
-            if self.gas.redshift is None:
+            if getattr(self.gas, "redshift", None) is None:
                 self.gas.redshift = redshift
         if self.black_holes is not None:
-            if self.black_holes.redshift is None:
+            if getattr(self.black_holes, "redshift", None) is None:
                 self.black_holes.redshift = redshift
 
     @property
