@@ -1255,7 +1255,7 @@ class BaseGalaxy:
         # TODO: we need to eventually fully pivot to taking only an instrument
         # this will be done when we introduced some premade instruments
         if instrument is None:
-            if resolution is None | fov is None:
+            if resolution is None or fov is None:
                 raise ValueError(
                     "If instrument not provided, a resolution and fov must "
                     "be specified."

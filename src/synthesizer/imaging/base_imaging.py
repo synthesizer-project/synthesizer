@@ -86,8 +86,8 @@ class ImagingBase(ABC):
         if not unit_is_compatible(resolution, fov.units):
             raise exceptions.InconsistentArguments(
                 "The resolution and FOV must be in compatible units. "
-                f"Found resolution={self.resolution.units}, "
-                f"and fov={self.fov.units}."
+                f"Found resolution={resolution.units}, "
+                f"and fov={fov.units}."
             )
 
         # Ensure the fov has an entry for each axis if it doesn't already
