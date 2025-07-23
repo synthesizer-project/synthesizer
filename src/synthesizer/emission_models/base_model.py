@@ -310,11 +310,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Are we making per particle emission?
         self._per_particle = per_particle
 
-        # Define the container which will hold mask information
-        self.masks = []
-
-        # If we have been given a mask, add it
-        self._init_masks(mask_attr, mask_thresh, mask_op)
+        # Save the mask info and initialise
+        self.mask_attr = mask_attr
+        self.mask_thresh = mask_thresh
+        self.mask_op = mask_op
+        self._init_masks()
 
         # Initialise the lam mask
         self._lam_mask = lam_mask
@@ -532,40 +532,41 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 f"Grid does not contain key: {extract}"
             )
 
-    def _init_masks(self, mask_attr, mask_thresh, mask_op):
+    def _init_masks(self):
         """Initialise the mask operation.
-
-        Args:
-            mask_attr (str):
-                The component attribute to mask on.
-            mask_thresh (unyt_quantity):
-                The threshold for the mask.
-            mask_op (str):
-                The operation to apply. Can be "<", ">", "<=", ">=", "==",
-                or "!=".
+        
+        mask_attr (str):
+            The component attribute to mask on.
+        mask_thresh (unyt_quantity):
+            The threshold for the mask.
+        mask_op (str):
+            The operation to apply. Can be "<", ">", "<=", ">=", "==",
+            or "!=".
         """
+        self.masks = []
+
         # If we have been given a mask, add it
         if (
-            mask_attr is not None
-            and mask_thresh is not None
-            and mask_op is not None
+            self.mask_attr is not None
+            and self.mask_thresh is not None
+            and self.mask_op is not None
         ):
             # Ensure mask_thresh comes with units
-            if not isinstance(mask_thresh, unyt_quantity):
+            if not isinstance(self.mask_thresh, unyt_quantity):
                 raise exceptions.MissingUnits(
                     "Mask threshold must be given with units."
                 )
             self.masks.append(
-                {"attr": mask_attr, "thresh": mask_thresh, "op": mask_op}
+                {"attr": self.mask_attr, "thresh": self.mask_thresh, "op": self.mask_op}
             )
         else:
             # Ensure we haven't been given incomplete mask arguments
             if any(
-                arg is not None for arg in [mask_attr, mask_thresh, mask_op]
+                arg is not None for arg in [self.mask_attr, self.mask_thresh, self.mask_op]
             ):
                 raise exceptions.InconsistentArguments(
                     "For a mask mask_attr, mask_thresh, and mask_op "
-                    "must be passed."
+                    "must be passed at initialisation."
                 )
 
     def _summary(self):
@@ -718,9 +719,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # The model is already in the tree so nothing to do
             pass
         else:
-            raise exceptions.InconsistentArguments(
-                f"Label {model.label} is already in use."
-            )
+            # Ensure model has a unique name
+            if self.mask_attr is not None:
+                model.label += f' ({mast_attr} {mask_op} {mask_thresh})'
+            else:
+                model.label += '_B'
+
+            self._models[model.label] = model
+            # raise exceptions.InconsistentArguments(
+            #     f"Label {model.label} is already in use."
+            # )
 
         # If we are extracting an emission, store the key
         if model._is_extracting:
