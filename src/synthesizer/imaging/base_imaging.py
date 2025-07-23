@@ -81,6 +81,15 @@ class ImagingBase(ABC):
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
         """
+        # Ensure that the resolution and fov are compatible (i.e. both
+        # are angular or both are Cartesian)
+        if not unit_is_compatible(resolution, fov.units):
+            raise exceptions.InconsistentArguments(
+                "The resolution and FOV must be in compatible units. "
+                f"Found resolution={resolution.units}, "
+                f"and fov={fov.units}."
+            )
+
         # Ensure the fov has an entry for each axis if it doesn't already
         # (e.g. if it is a single value)
         if fov.size == 1:
@@ -100,15 +109,6 @@ class ImagingBase(ABC):
         else:
             self.cart_fov = None
             self.ang_fov = fov
-
-        # Ensure that the resolution and fov are compatible (i.e. both
-        # are angular or both are Cartesian)
-        if not unit_is_compatible(self.resolution, self.fov.units):
-            raise exceptions.InconsistentArguments(
-                "The resolution and FOV must be in compatible units. "
-                f"Found resolution={self.resolution.units}, "
-                f"and fov={self.fov.units}."
-            )
 
         # Compute the number of pixels in the FOV
         self._compute_npix()
