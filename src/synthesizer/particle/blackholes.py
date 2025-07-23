@@ -367,8 +367,8 @@ class BlackHoles(Particles, BlackholesComponent):
     )
     def get_particle_lines(
         self,
-        line_ids,
         emission_model,
+        line_ids=None,
         dust_curves=None,
         tau_v=None,
         covering_fraction=None,
@@ -379,11 +379,13 @@ class BlackHoles(Particles, BlackholesComponent):
         """Generate stellar lines as described by the emission model.
 
         Args:
-            line_ids (list):
-                A list of line_ids. Doublets can be specified as a nested list
-                or using a comma (e.g. 'OIII4363,OIII4959').
             emission_model (EmissionModel):
                 The emission model to use.
+            line_ids (list, optional):
+                A list of line_ids. Doublets can be specified as a nested list
+                or using a comma (e.g. 'OIII4363,OIII4959').
+                If None, all available lines from the emission model grid
+                will be returned.
             dust_curves (dict):
                 An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
