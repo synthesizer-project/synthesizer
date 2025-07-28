@@ -720,13 +720,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         else:
             # Ensure model has a unique name
             if len(model.masks) > 0:
-                model.label += (
-                    f"_{self.masks['mask_attr']}_"
-                    f"{self.masks['mask_op']}_"
-                    f"{self.masks['mask_thresh']}"
-                )
+                for _m in model.masks:
+                    model.label += (
+                        f"_{_m['mask_attr']}_"
+                        f"{_m['mask_op']}_"
+                        f"{_m['mask_thresh']}"
+                    )
             else:
-                model.label += "_B"
+                raise exceptions.InconsistentArguments(
+                    f"Label {model.label} is already in use."
+                )
 
             self._models[model.label] = model
 
