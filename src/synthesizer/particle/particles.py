@@ -12,7 +12,7 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, pc, rad, s
 
 from synthesizer import exceptions
-from synthesizer.particle.utils import rotate
+from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
@@ -564,6 +564,17 @@ class Particles:
         com /= total_mass
 
         self.center = com
+
+    def calculate_smoothing_lengths(self, **kwargs):
+        """Calculate smoothing lengths of particles and assign.
+
+        Calls utility function directly, see
+        `synthesizer.particle.utils.calculate_smoothing_lengths`
+        for a full list of accepted arguments.
+        """
+        self.smoothing_lengths = calculate_smoothing_lengths(
+            coordinates=self.coordinates, **kwargs
+        )
 
     def get_radii(self):
         """Calculate the radii of the particles.
