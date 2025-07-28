@@ -9,7 +9,7 @@ the [Simba](http://simba.roe.ac.uk/) simulation
 import h5py
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
-from unyt import Msun, kpc, yr, km, s
+from unyt import Msun, kpc, yr, km, s, Mpc
 
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
 
@@ -68,6 +68,8 @@ def load_Simba(
 
     # Open the Caesar file to get particle lists for each galaxy
     with h5py.File(f"{caesar_directory}/{caesar_name}", "r") as hf:
+        scale_factor = hf["simulation_attributes/parameters"].attrs["Time"]
+
         slist_all = hf[f"{obj_str}/lists/slist"][:]
         slist_start_all = hf[f"{obj_str}/slist_start"][:]
         slist_end_all = hf[f"{obj_str}/slist_end"][:]
@@ -76,7 +78,7 @@ def load_Simba(
         glist_start_all = hf[f"{obj_str}/glist_start"][:]
         glist_end_all = hf[f"{obj_str}/glist_end"][:]
 
-        centres_all = hf[f"{obj_str}/pos"][:]
+        centres_all = hf[f"{obj_str}/pos"][:] * scale_factor
 
     # Get the particle indices for the selected galaxies
     if object_indexes is False:
@@ -180,7 +182,7 @@ def load_Simba(
     g_offsets = np.concatenate([[0], np.cumsum(g_particle_counts)[:-1]])
 
     for i, gal_idx in enumerate(galaxy_indices):
-        galaxy = Galaxy()
+        galaxy = Galaxy(centre=centres[i] * kpc)
         galaxy.redshift = redshift
 
         s_start, s_end = s_offsets[i], s_offsets[i] + s_particle_counts[i]
@@ -213,11 +215,11 @@ def load_Simba(
             metallicities=g_metals[g_start:g_end],
             smoothing_lengths=g_hsml[g_start:g_end] * kpc,
             dust_masses=g_dustmass[g_start:g_end] * Msun,
+            centre=centres[i] * kpc,
         )
         galaxies.append(galaxy)
 
     return galaxies
-
 
 def load_Simba_slab(
     directory=".",
@@ -242,7 +244,7 @@ def load_Simba_slab(
             Snapshot filename.
         bounds (array-like):
             Cuboid bounds as [[xmin, xmax], [ymin, ymax], [zmin, zmax]] 
-            in comoving Mpc/h units.
+            in physical Mpc units.
         load_stars (bool):
             If True, loads stellar particles (PartType4).
         load_gas (bool):
@@ -269,6 +271,8 @@ def load_Simba_slab(
     if bounds.shape != (3, 2):
         raise ValueError("bounds must have shape (3, 2) for [[xmin, xmax], [ymin, ymax], [zmin, zmax]]")
     
+    bounds = (bounds * Mpc).to("kpc").value
+
     with h5py.File(f"{directory}/{snap_name}", "r") as hf:
         scale_factor = hf["Header"].attrs["Time"]
         Om0 = hf["Header"].attrs["Omega0"]
@@ -282,7 +286,7 @@ def load_Simba_slab(
         # Load stellar particles if requested
         if load_stars:
             star_coords_raw = hf["PartType4/Coordinates"][:]
-            star_coords = star_coords_raw * scale_factor / h  # Convert to physical Mpc
+            star_coords = star_coords_raw * scale_factor / h  # Convert to physical kpc
             
             # Select star particles within bounds
             star_mask = (
@@ -416,6 +420,7 @@ def load_Simba_slab(
             metallicities=g_metals,
             smoothing_lengths=g_hsml * kpc,
             dust_masses=g_dustmass * Msun,
+            centre=center * kpc, 
         )
     else:
         galaxy.sf_gas_mass = 0.0 * Msun
