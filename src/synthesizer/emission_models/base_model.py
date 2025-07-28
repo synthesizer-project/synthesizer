@@ -719,7 +719,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             pass
         else:
             # Ensure model has a unique name
-            if len(self.masks) > 0:
+            if len(model.masks) > 0:
                 model.label += (
                     f"_{self.masks['mask_attr']}_"
                     f"{self.masks['mask_op']}_"
