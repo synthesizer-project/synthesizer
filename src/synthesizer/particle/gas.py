@@ -18,7 +18,6 @@ from unyt import Mpc, Msun, km, s
 
 from synthesizer import exceptions
 from synthesizer.particle.particles import Particles
-from synthesizer.particle.utils import calculate_smoothing_lengths
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
@@ -232,17 +231,6 @@ class Gas(Particles):
         """Calculate dust mass from a given dust-to-metals ratio."""
         self.dust_masses = (
             self.masses * self.metallicities * self.dust_to_metal_ratio
-        )
-
-    def calculate_smoothing_lengths(self, **kwargs):
-        """Calculate smoothing lengths of gas particles and assign.
-
-        Calls utility function directly, see
-        `synthesizer.particle.utils.calculate_smoothing_lengths`
-        for a full list of accepated arguments.
-        """
-        self.smoothing_lengths = calculate_smoothing_lengths(
-            coordinates=self.coordinates, **kwargs
         )
 
     def __str__(self):

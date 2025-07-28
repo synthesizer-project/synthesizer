@@ -30,7 +30,6 @@ from synthesizer.components.stellar import StarsComponent
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
-from synthesizer.particle.utils import calculate_smoothing_lengths
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
@@ -1613,17 +1612,6 @@ class Stars(Particles, StarsComponent):
         )
         emission_model.set_per_particle(previous_per_part)
         return lines
-
-    def calculate_smoothing_lengths(self, **kwargs):
-        """Calculate smoothing lengths of gas particles and assign.
-
-        Calls utility function directly, see
-        `synthesizer.particle.utils.calculate_smoothing_lengths`
-        for a full list of accepated arguments.
-        """
-        self.smoothing_lengths = calculate_smoothing_lengths(
-            coordinates=self.coordinates, **kwargs
-        )
 
 
 @accepts(initial_mass=Msun.in_base("galactic"))
