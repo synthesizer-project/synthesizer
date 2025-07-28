@@ -718,9 +718,20 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # The model is already in the tree so nothing to do
             pass
         else:
-            raise exceptions.InconsistentArguments(
-                f"Label {model.label} is already in use."
-            )
+            # Ensure model has a unique name
+            if len(model.masks) > 0:
+                for _m in model.masks:
+                    model.label += (
+                        f"_{_m['mask_attr']}_"
+                        f"{_m['mask_op']}_"
+                        f"{_m['mask_thresh']}"
+                    )
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Label {model.label} is already in use."
+                )
+
+            self._models[model.label] = model
 
         # If we are extracting an emission, store the key
         if model._is_extracting:
