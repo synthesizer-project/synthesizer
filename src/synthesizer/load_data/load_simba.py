@@ -12,6 +12,7 @@ from astropy.cosmology import FlatLambdaCDM
 from unyt import Mpc, Msun, km, kpc, s, yr
 
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
+from synthesizer.synth_warnings import warn
 
 from ..particle.galaxy import Galaxy
 from ..particle.particles import Particles
@@ -307,7 +308,7 @@ def load_Simba_slab(
             )
 
             if np.sum(star_mask) == 0:
-                print("Warning: No star particles found in specified region")
+                warn("No star particles found in specified region")
 
             # Load star data for selected particles
             form_time = hf["PartType4/StellarFormationTime"][:][star_mask]
@@ -321,7 +322,7 @@ def load_Simba_slab(
             gas_coords_raw = hf["PartType0/Coordinates"][:]
             gas_coords = (
                 gas_coords_raw * scale_factor / h
-            )  # Convert to physical Mpc
+            )  # Convert to physical kpc
 
             # Select gas particles within bounds
             gas_mask = (
@@ -334,7 +335,7 @@ def load_Simba_slab(
             )
 
             if np.sum(gas_mask) == 0:
-                print("Warning: No gas particles found in specified region")
+                warn("No gas particles found in specified region")
 
             # Load gas data for selected particles
             g_masses = hf["PartType0/Masses"][:][gas_mask]
@@ -352,7 +353,7 @@ def load_Simba_slab(
             dm_coords_raw = hf["PartType1/Coordinates"][:]
             dm_coords = (
                 dm_coords_raw * scale_factor / h
-            )  # Convert to physical Mpc
+            )  # Convert to physical kpc
 
             # Select dark matter particles within bounds
             dm_mask = (
@@ -365,10 +366,7 @@ def load_Simba_slab(
             )
 
             if np.sum(dm_mask) == 0:
-                print(
-                    "Warning: No dark matter particles found in "
-                    "specified region"
-                )
+                warn("No dark matter particles found in specified region")
 
             # Load dark matter data for selected particles
             dm_masses = hf["PartType1/Masses"][:][dm_mask]
