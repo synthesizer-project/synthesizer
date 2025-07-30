@@ -344,7 +344,7 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
     # Performing some unit conversions to match the
     # Calzetti curve units which are in um
-    _lam = np.linspace(0.01, 3., 10000, endpoint=True) * um
+    _lam = np.linspace(0.01, 3.0, 10000, endpoint=True) * um
     _cent_lam = cent_lam.to("um")
     _gamma = gamma.to("um")
     lam_v = 0.55  # in um
@@ -395,11 +395,9 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     tau_x_v = (k_lam + D_lam) / k_v
     tau_x = tau_x_v * (_lam.value / lam_v) ** slope
 
-    func = interpolate.interp1d(
-        _lam, tau_x, fill_value="extrapolate"
-    )
+    func = interpolate.interp1d(_lam, tau_x, fill_value="extrapolate")
     out = np.zeros(len(lam))
-    ok = (lam.to("um")<3.1*um)
+    ok = lam.to("um") < 3.1 * um
     out[ok] = func(lam[ok].to("um"))
     out[~ok] = tau_x[-1]
 
@@ -478,7 +476,6 @@ class Calzetti2000(AttenuationLaw):
             float/array-like, float:
                 The V-band noramlised optical depth.
         """
-
         return N09Tau(
             lam=lam,
             slope=self.slope,
