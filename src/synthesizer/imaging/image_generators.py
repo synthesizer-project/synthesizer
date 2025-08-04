@@ -311,7 +311,7 @@ def _generate_image_particle_smoothed(
 
     toc("Setting up smoothed image inputs", start)
 
-    # Get the (npix_x, npix_y) image
+    # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signal),
         ensure_array_c_compatible_double(_smoothing_lengths),
@@ -325,10 +325,10 @@ def _generate_image_particle_smoothed(
         kernel.size,
         1,
         nthreads,
-    ).T
+    )
 
     # Store the image array into the image object
-    img.arr = imgs_arr[0, :, :]
+    img.arr = imgs_arr[:, :, 0]
     img.units = (
         signal.units
         if isinstance(signal, (unyt_quantity, unyt_array))
@@ -507,16 +507,16 @@ def _generate_images_particle_smoothed(
         kernel.size,
         signals.shape[0],
         nthreads,
-    ).T
+    )
 
     # Store the image arrays on the image collection (this will
     # automatically convert them to Image objects)
     unpack_start = tic()
     for ind, key in enumerate(labels):
         if isinstance(signals, (unyt_quantity, unyt_array)):
-            imgs[key] = imgs_arr[ind, :, :] * signals.units
+            imgs[key] = imgs_arr[:, :, ind] * signals.units
         else:
-            imgs[key] = imgs_arr[ind, :, :]
+            imgs[key] = imgs_arr[:, :, ind]
     toc("Unpacking smoothed images", unpack_start)
 
     # Apply normalisation if needed

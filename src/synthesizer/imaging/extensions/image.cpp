@@ -31,75 +31,6 @@
 #endif
 
 /**
- * @brief Compute the kernel sum (unnormalized) for each particle.
- *
- * This is used to verify that particle kernels are normalized correctly.
- *
- * @param smoothing_lengths The stellar particle smoothing lengths.
- * @param pos The coordinates of the particles.
- * @param kernel The kernel lookup table.
- * @param res The pixel resolution.
- * @param npix_x The number of pixels along the x axis.
- * @param npix_y The number of pixels along the y axis.
- * @param npart The number of particles.
- * @param threshold The threshold of the SPH kernel.
- * @param kdim The number of elements in the kernel lookup table.
- * @param kernel_sums Output array of length `npart` to store the kernel sum per
- * particle.
- */
-void compute_particle_kernel_sums(const double *smoothing_lengths,
-                                  const double *pos, const double *kernel,
-                                  const double res, const int npix_x,
-                                  const int npix_y, const int npart,
-                                  const double threshold, const int kdim,
-                                  double *kernel_sums) {
-  for (int ind = 0; ind < npart; ind++) {
-
-    /* Get this particle’s smoothing length and position. */
-    const double smooth_length = smoothing_lengths[ind];
-    const double x = pos[ind * 3 + 0];
-    const double y = pos[ind * 3 + 1];
-
-    /* Calculate the pixel coordinates of this particle. */
-    const int i = x / res;
-    const int j = y / res;
-
-    /* How many pixels are in the smoothing length? */
-    const int delta_pix = ceil(smooth_length / res) + 1;
-    const int kernel_cdim = 2 * delta_pix + 1;
-
-    /* Define pixel bounds to loop over. */
-    const int ii_min = std::max(0, i - delta_pix);
-    const int ii_max = std::min(npix_x - 1, i + delta_pix);
-    const int jj_min = std::max(0, j - delta_pix);
-    const int jj_max = std::min(npix_y - 1, j + delta_pix);
-
-    const double thresh2 =
-        threshold * threshold * smooth_length * smooth_length;
-
-    double kernel_sum = 0.0;
-
-    for (int ii = ii_min; ii <= ii_max; ii++) {
-      const double x_dist = res * (ii + 0.5) - x;
-
-      for (int jj = jj_min; jj <= jj_max; jj++) {
-        const double y_dist = res * (jj + 0.5) - y;
-        const double rsqu = x_dist * x_dist + y_dist * y_dist;
-
-        if (rsqu > thresh2)
-          continue;
-
-        const double q = sqrt(rsqu) / smooth_length;
-        const int index = std::min(kdim - 1, static_cast<int>(q * kdim));
-        kernel_sum += kernel[index];
-      }
-    }
-
-    kernel_sums[ind] = kernel_sum;
-  }
-}
-
-/**
  * @brief Recursively populate a pixel.
  *
  * This will recurse to the leaves of the cell tree, any cells further than the
@@ -121,8 +52,8 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
                                      const double pix_y, double threshold,
                                      int kdim, const double *kernel, int npart,
                                      double *out, int nimgs,
-                                     const double *pix_values, const double res,
-                                     double *kernel_sums) {
+                                     const double *pix_values,
+                                     const double res) {
 
   /* Early exit if the projected distance between cells is more than the
    * maximum smoothing length in the cell. */
@@ -145,7 +76,7 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
 
       /* Recurse... */
       populate_pixel_recursive(cp, pix_x, pix_y, threshold, kdim, kernel, npart,
-                               out, nimgs, pix_values, res, kernel_sums);
+                               out, nimgs, pix_values, res);
     }
 
   } else {
@@ -182,7 +113,7 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
       /* Finally, compute the pixel value itself across all images. */
       for (int nimg = 0; nimg < nimgs; nimg++) {
         out[nimg] += kvalue * pix_values[nimg * npart + part->index] /
-                     kernel_sums[part->index];
+                     (part->sml * part->sml) * res * res;
       }
     }
   }
@@ -217,7 +148,7 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
                              const int npix_y, const int npart,
                              const double threshold, const int kdim,
                              double *img, const int nimgs, struct cell *root,
-                             const int nthreads, double *kernel_sums) {
+                             const int nthreads) {
 
   double start = tic();
 
@@ -244,7 +175,7 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
 
       /* Populate the pixel recursively. */
       populate_pixel_recursive(root, pix_x, pix_y, threshold, kdim, kernel,
-                               npart, out, nimgs, pix_values, res, kernel_sums);
+                               npart, out, nimgs, pix_values, res);
     }
   }
 
@@ -300,16 +231,6 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   toc("Extracting Python data", start_time);
 
-  double kernel_sum_start = tic();
-
-  /* Compute the kernel sums for each particle. This is used to verify that
-   * the particle kernels are normalized correctly. */
-  double *kernel_sums = new double[npart];
-  compute_particle_kernel_sums(smoothing_lengths, pos, kernel, res, npix_x,
-                               npix_y, npart, threshold, kdim, kernel_sums);
-
-  toc("Computing particle kernel sums", kernel_sum_start);
-
   double tree_start = tic();
 
   /* Allocate cells array. The first cell will be the root and then we
@@ -333,8 +254,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
-                          threshold, kdim, img, nimgs, root, nthreads,
-                          kernel_sums);
+                          threshold, kdim, img, nimgs, root, nthreads);
 
   /* Cleanup the cell tree. */
   cleanup_cell_tree(root);
