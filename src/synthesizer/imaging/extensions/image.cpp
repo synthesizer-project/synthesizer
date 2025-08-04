@@ -3,10 +3,16 @@
  *****************************************************************************/
 
 /* C includes. */
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <iostream>
 #include <math.h>
+#include <numeric>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 /* Python includes. */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -209,130 +215,111 @@ void populate_smoothed_image_parallel(
     const int npix_y, const int npart, const double threshold, const int kdim,
     double *img, const int nimgs, const int nthreads) {
 
-  /* Find the maximum kernel_cdim we'll need. We need this to preallocate the
-   * kernel we will populate for each particle. */
+  /* Find the maximum kernel_cdim we'll need */
   int max_kernel_cdim = 0;
   for (int ind = 0; ind < npart; ind++) {
     const double smooth_length = smoothing_lengths[ind];
-    const int delta_pix = ceil(smooth_length / res) + 1;
+    const int delta_pix = static_cast<int>(std::ceil(smooth_length / res)) + 1;
     const int kernel_cdim_temp = 2 * delta_pix + 1;
     if (kernel_cdim_temp > max_kernel_cdim) {
       max_kernel_cdim = kernel_cdim_temp;
     }
   }
 
+  const size_t total_pix = static_cast<size_t>(nimgs) * npix_x * npix_y;
+
+  /* Allocate per-thread image arrays */
+  std::vector<std::vector<double>> thread_images(nthreads);
+  for (int t = 0; t < nthreads; ++t)
+    thread_images[t].resize(total_pix, 0.0);
+
 #pragma omp parallel num_threads(nthreads)
   {
+    const int tid = omp_get_thread_num();
+    double *thread_img = thread_images[tid].data();
 
-    /* Allocate the per thread particle kernel. */
-    double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
+    /* Allocate per-thread particle kernel buffer */
+    std::vector<double> part_kernel(max_kernel_cdim * max_kernel_cdim, 0.0);
 
-    /* Loop over positions including the sed */
 #pragma omp for schedule(dynamic)
     for (int ind = 0; ind < npart; ind++) {
 
-      /* Get this particles smoothing length and position */
       const double smooth_length = smoothing_lengths[ind];
       const double x = pos[ind * 3 + 0];
       const double y = pos[ind * 3 + 1];
 
-      /* Calculate the pixel coordinates of this particle. */
-      const int i = x / res;
-      const int j = y / res;
+      const int i = static_cast<int>(x / res);
+      const int j = static_cast<int>(y / res);
 
-      /* How many pixels are in the smoothing length? Add some buffer. */
-      const int delta_pix = ceil(smooth_length / res) + 1;
-
-      /* How many pixels along kernel axis? */
+      const int delta_pix =
+          static_cast<int>(std::ceil(smooth_length / res)) + 1;
       const int kernel_cdim = 2 * delta_pix + 1;
 
-      /* Zero the part of the kernel we will use. */
-      memset(part_kernel, 0, kernel_cdim * kernel_cdim * sizeof(double));
+      std::fill(part_kernel.begin(), part_kernel.end(), 0.0);
+      double kernel_sum = 0.0;
 
-      /* Track the kernel sum for normalisation. */
-      double kernel_sum = 0;
+      const int ii_min = std::max(i - delta_pix, 0);
+      const int ii_max = std::min(i + delta_pix, npix_x - 1);
+      const int jj_min = std::max(j - delta_pix, 0);
+      const int jj_max = std::min(j + delta_pix, npix_y - 1);
 
-      /* Compute the pixel indices for the kernel. */
-      int ii_min = (i - delta_pix) < 0 ? 0 : (i - delta_pix);
-      int ii_max = (i + delta_pix) >= npix_x ? npix_x - 1 : (i + delta_pix);
-      int jj_min = (j - delta_pix) < 0 ? 0 : (j - delta_pix);
-      int jj_max = (j + delta_pix) >= npix_y ? npix_y - 1 : (j + delta_pix);
+      const double thresh2 =
+          smooth_length * smooth_length * threshold * threshold;
 
-      /* Calculate the threshold for the kernel. */
-      double thresh2 = smooth_length * smooth_length * threshold * threshold;
-
-      /* Loop over a square aperture around this particle */
       for (int ii = ii_min; ii <= ii_max; ii++) {
-
-        /* Compute the x separation */
         const double x_dist = res * (ii + 0.5) - x;
 
+#pragma omp simd
         for (int jj = jj_min; jj <= jj_max; jj++) {
-
-          /* Compute the y separation */
           const double y_dist = res * (jj + 0.5) - y;
+          const double rsqu = x_dist * x_dist + y_dist * y_dist;
 
-          /* Compute the distance between the centre of this pixel
-           * and the particle. */
-          const double rsqu = (x_dist * x_dist) + (y_dist * y_dist);
-
-          /* Skip particles outside the kernel. */
           if (rsqu > thresh2)
             continue;
 
-          /* Get the pixel coordinates in the kernel */
           const int iii = ii - (i - delta_pix);
           const int jjj = jj - (j - delta_pix);
 
-          /* Calculate the impact parameter. */
-          const double q = sqrt(rsqu) / smooth_length;
-
-          /* Get the value of the kernel at q. */
-          const int index = kdim * q;
+          const double q = std::sqrt(rsqu) / smooth_length;
+          const int index = std::min(static_cast<int>(kdim * q), kdim - 1);
           const double kvalue = kernel[index];
 
-          /* Set the value in the kernel. */
           part_kernel[iii * kernel_cdim + jjj] = kvalue;
           kernel_sum += kvalue;
         }
       }
 
-      /* If the kernel is empty, skip it. */
-      if (kernel_sum == 0) {
+      if (kernel_sum == 0.0)
         continue;
-      }
 
-      /* Now add the kernel to the image. */
       for (int ii = ii_min; ii <= ii_max; ii++) {
 
+#pragma omp simd
         for (int jj = jj_min; jj <= jj_max; jj++) {
 
-          /* Get the pixel coordinates in the kernel */
           const int iii = ii - (i - delta_pix);
           const int jjj = jj - (j - delta_pix);
-
-          /* Get the kernel value. */
           const double kvalue =
               part_kernel[iii * kernel_cdim + jjj] / kernel_sum;
 
-          /* Skip empty pixels. */
-          if (kvalue == 0)
+          if (kvalue == 0.0)
             continue;
 
-          /* Add the pixel value to each of the images. */
           for (int nimg = 0; nimg < nimgs; nimg++) {
-
-            /* Get the pixel index in the image. */
-            const int pix_ind = nimg * npix_x * npix_y + npix_y * ii + jj;
-
-            /* Add the pixel value to this image. */
-#pragma omp atomic
-            img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
+            const size_t pix_ind = static_cast<size_t>(nimg) * npix_x * npix_y +
+                                   static_cast<size_t>(ii) * npix_y + jj;
+            thread_img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
           }
         }
       }
-    }
-    delete[] part_kernel;
+    } // end omp for
+  } // end omp parallel
+
+  /* Final reduction into global image */
+  for (int t = 0; t < nthreads; ++t) {
+    const double *thread_img = thread_images[t].data();
+    for (size_t i = 0; i < total_pix; ++i)
+      img[i] += thread_img[i];
   }
 }
 #endif
