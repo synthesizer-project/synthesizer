@@ -22,6 +22,7 @@
 
 /* Local includes. */
 #include "../../extensions/cpp_to_python.h"
+#include "../../extensions/octree.h"
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
 
@@ -30,57 +31,31 @@
 #endif
 
 /**
- * @brief Function to populate an image in serial.
+ * @brief Compute the kernel sum (unnormalized) for each particle.
  *
- * The SPH kernel of a particle (integrated along the z axis) is used to
- * calculate the pixel weight for all pixels within a stellar particles kernel.
- * Once the kernel value is found at a pixels position the pixel value is added
- * multiplied by the kernels weight.
+ * This is used to verify that particle kernels are normalized correctly.
  *
- * NOTE: the implementation uses the exact position of a particle, thus
- * accounting for sub pixel positioning.
- *
- * @param pix_values: The particle data to be sorted into pixels
- *                    (luminosity/flux/mass etc.).
- * @param smoothing_lengths: The stellar particle smoothing lengths.
- * @param pos: The coordinates of the particles.
- * @param kernel: The kernel data (integrated along the z axis and softed by
- *               impact parameter).
- * @param res: The pixel resolution.
- * @param npix_x: The number of pixels along the x axis.
- * @param npix_y: The number of pixels along the y axis.
- * @param npart: The number of particles.
- * @param threshold: The threshold of the SPH kernel.
- * @param kdim: The number of elements in the kernel.
- * @param img: The image to be populated.
+ * @param smoothing_lengths The stellar particle smoothing lengths.
+ * @param pos The coordinates of the particles.
+ * @param kernel The kernel lookup table.
+ * @param res The pixel resolution.
+ * @param npix_x The number of pixels along the x axis.
+ * @param npix_y The number of pixels along the y axis.
+ * @param npart The number of particles.
+ * @param threshold The threshold of the SPH kernel.
+ * @param kdim The number of elements in the kernel lookup table.
+ * @param kernel_sums Output array of length `npart` to store the kernel sum per
+ * particle.
  */
-void populate_smoothed_image_serial(const double *pix_values,
-                                    const double *smoothing_lengths,
-                                    const double *pos, const double *kernel,
-                                    const double res, const int npix_x,
-                                    const int npix_y, const int npart,
-                                    const double threshold, const int kdim,
-                                    double *img, const int nimgs) {
-
-  /* Find the maximum kernel_cdim we'll need. We need this to preallocate the
-   * kernel we will populate for each particle. */
-  int max_kernel_cdim = 0;
-  for (int ind = 0; ind < npart; ind++) {
-    const double smooth_length = smoothing_lengths[ind];
-    const int delta_pix = ceil(smooth_length / res) + 1;
-    const int kernel_cdim_temp = 2 * delta_pix + 1;
-    if (kernel_cdim_temp > max_kernel_cdim) {
-      max_kernel_cdim = kernel_cdim_temp;
-    }
-  }
-
-  /* Allocate the particle kernel. */
-  double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
-
-  /* Loop over positions including the sed */
+void compute_particle_kernel_sums(const double *smoothing_lengths,
+                                  const double *pos, const double *kernel,
+                                  const double res, const int npix_x,
+                                  const int npix_y, const int npart,
+                                  const double threshold, const int kdim,
+                                  double *kernel_sums) {
   for (int ind = 0; ind < npart; ind++) {
 
-    /* Get this particles smoothing length and position */
+    /* Get this particle’s smoothing length and position. */
     const double smooth_length = smoothing_lengths[ind];
     const double x = pos[ind * 3 + 0];
     const double y = pos[ind * 3 + 1];
@@ -89,111 +64,138 @@ void populate_smoothed_image_serial(const double *pix_values,
     const int i = x / res;
     const int j = y / res;
 
-    /* How many pixels are in the smoothing length? Add some buffer. */
+    /* How many pixels are in the smoothing length? */
     const int delta_pix = ceil(smooth_length / res) + 1;
-
-    /* How many pixels along kernel axis? */
     const int kernel_cdim = 2 * delta_pix + 1;
 
-    /* Zero the part of the kernel we will use. */
-    memset(part_kernel, 0, kernel_cdim * kernel_cdim * sizeof(double));
+    /* Define pixel bounds to loop over. */
+    const int ii_min = std::max(0, i - delta_pix);
+    const int ii_max = std::min(npix_x - 1, i + delta_pix);
+    const int jj_min = std::max(0, j - delta_pix);
+    const int jj_max = std::min(npix_y - 1, j + delta_pix);
 
-    /* Track the kernel sum for normalisation. */
-    double kernel_sum = 0;
+    const double thresh2 =
+        threshold * threshold * smooth_length * smooth_length;
 
-    /* Compute the pixel indices for the kernel. */
-    int ii_min = (i - delta_pix) < 0 ? 0 : (i - delta_pix);
-    int ii_max = (i + delta_pix) >= npix_x ? npix_x - 1 : (i + delta_pix);
-    int jj_min = (j - delta_pix) < 0 ? 0 : (j - delta_pix);
-    int jj_max = (j + delta_pix) >= npix_y ? npix_y - 1 : (j + delta_pix);
+    double kernel_sum = 0.0;
 
-    /* Calculate the threshold for the kernel. */
-    double thresh2 = smooth_length * smooth_length * threshold * threshold;
-
-    /* Loop over a square aperture around this particle */
     for (int ii = ii_min; ii <= ii_max; ii++) {
-
-      /* Compute the x separation */
       const double x_dist = res * (ii + 0.5) - x;
 
       for (int jj = jj_min; jj <= jj_max; jj++) {
-
-        /* Compute the y separation */
         const double y_dist = res * (jj + 0.5) - y;
+        const double rsqu = x_dist * x_dist + y_dist * y_dist;
 
-        /* Compute the distance between the centre of this pixel
-         * and the particle. */
-        const double rsqu = (x_dist * x_dist) + (y_dist * y_dist);
-
-        /* Skip particles outside the kernel. */
         if (rsqu > thresh2)
           continue;
 
-        /* Get the pixel coordinates in the kernel */
-        const int iii = ii - (i - delta_pix);
-        const int jjj = jj - (j - delta_pix);
-
-        /* Calculate the impact parameter. */
         const double q = sqrt(rsqu) / smooth_length;
-
-        /* Get the value of the kernel at q. */
-        const int index = kdim * q;
-        const double kvalue = kernel[index];
-
-        /* Set the value in the kernel. */
-        part_kernel[iii * kernel_cdim + jjj] = kvalue;
-        kernel_sum += kvalue;
+        const int index = std::min(kdim - 1, static_cast<int>(q * kdim));
+        kernel_sum += kernel[index];
       }
     }
 
-    /* If the kernel is empty, skip it. */
-    if (kernel_sum == 0) {
-      continue;
-    }
-
-    /* Now add the kernel to the image. */
-    for (int ii = ii_min; ii <= ii_max; ii++) {
-
-      for (int jj = jj_min; jj <= jj_max; jj++) {
-
-        /* Get the pixel coordinates in the kernel */
-        const int iii = ii - (i - delta_pix);
-        const int jjj = jj - (j - delta_pix);
-
-        /* Get the kernel value. */
-        const double kvalue = part_kernel[iii * kernel_cdim + jjj] / kernel_sum;
-
-        /* Skip empty pixels. */
-        if (kvalue == 0)
-          continue;
-
-        /* Add the pixel value to each of the images. */
-        for (int nimg = 0; nimg < nimgs; nimg++) {
-
-          /* Get the pixel index in the image (nimg, i, j). */
-          const int pix_ind = nimg * npix_x * npix_y + npix_y * ii + jj;
-
-          /* Add the pixel value to this image, pixel values are (Nimg, Npart)
-           * in shape. */
-          img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
-        }
-      }
-    }
+    kernel_sums[ind] = kernel_sum;
   }
-  delete[] part_kernel;
 }
 
 /**
- * @brief Function to populate an image in parallel.
+ * @brief Recursively populate a pixel.
+ *
+ * This will recurse to the leaves of the cell tree, any cells further than the
+ * maximum smoothing length from the position will be skipped. Once in the
+ * leaves the particles themselves will be checked to see if their SPH kernel
+ * overlaps with the line of sight of the star particle.
+ *
+ * @param c The cell to calculate the surface densities for.
+ * @param pix_x The x position of the pixel.
+ * @param pix_y The y position of the pixel.
+ * @param threshold The threshold for the kernel.
+ * @param kdim The dimension of the kernel.
+ * @param kernel The kernel to use for the calculation.
+ * @param out The output array to populate with the pixel values.
+ * @param nimgs The number of images to populate.
+ * @param pix_values The pixel values to use for each image.
+ */
+static void populate_pixel_recursive(const struct cell *c, const double pix_x,
+                                     const double pix_y, double threshold,
+                                     int kdim, const double *kernel, int npart,
+                                     double *out, int nimgs,
+                                     const double *pix_values, const double res,
+                                     double *kernel_sums) {
+
+  /* Early exit if the projected distance between cells is more than the
+   * maximum smoothing length in the cell. */
+  if (c->max_sml_squ <
+      min_projected_dist2(const_cast<struct cell *>(c), pix_x, pix_y)) {
+    return;
+  }
+
+  /* Is the cell split? */
+  if (c->split) {
+
+    /* Ok, so we recurse... */
+    for (int ip = 0; ip < 8; ip++) {
+      struct cell *cp = &c->progeny[ip];
+
+      /* Skip empty progeny. */
+      if (cp->part_count == 0) {
+        continue;
+      }
+
+      /* Recurse... */
+      populate_pixel_recursive(cp, pix_x, pix_y, threshold, kdim, kernel, npart,
+                               out, nimgs, pix_values, res, kernel_sums);
+    }
+
+  } else {
+
+    /* We're in a leaf if we get here, unpack the particles. */
+    int npart = c->part_count;
+    struct particle *parts = c->particles;
+
+    /* Loop over the particles adding their contribution to the pixel value. */
+    for (int j = 0; j < npart; j++) {
+
+      /* Get the particle. */
+      struct particle *part = &parts[j];
+
+      /* Calculate the x and y separations. */
+      double dx = part->pos[0] - pix_x;
+      double dy = part->pos[1] - pix_y;
+
+      /* Calculate the impact parameter. */
+      double b = sqrt(dx * dx + dy * dy);
+
+      /* Skip if the pixel is outside the kernel. */
+      if (b > (threshold * part->sml)) {
+        continue;
+      }
+
+      /* Find fraction of the smoothing length at this pixel. */
+      double q = b / part->sml;
+
+      /* Get the value of the kernel at q (handling q =1). */
+      int index = std::min(kdim - 1, static_cast<int>(q * kdim));
+      double kvalue = kernel[index];
+
+      /* Finally, compute the pixel value itself across all images. */
+      for (int nimg = 0; nimg < nimgs; nimg++) {
+        out[nimg] += kvalue * pix_values[nimg * npart + part->index] /
+                     kernel_sums[part->index];
+      }
+    }
+  }
+}
+
+/**
+ * @brief Function to populate an image.
  *
  * The SPH kernel of a particle (integrated along the z axis) is used to
  * calculate the pixel weight for all pixels within a stellar particles kernel.
  * Once the kernel value is found at a pixels position the pixel value is added
  * multiplied by the kernels weight.
  *
- * NOTE: the implementation uses the exact position of a particle, thus
- * accounting for sub pixel positioning.
- *
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
  * @param smoothing_lengths: The stellar particle smoothing lengths.
@@ -207,170 +209,45 @@ void populate_smoothed_image_serial(const double *pix_values,
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  * @param img: The image to be populated.
+ * @param nimgs: The number of images to populate.
+ * @param root: The root of the tree.
  */
-#ifdef WITH_OPENMP
-void populate_smoothed_image_parallel(
-    const double *pix_values, const double *smoothing_lengths,
-    const double *pos, const double *kernel, const double res, const int npix_x,
-    const int npix_y, const int npart, const double threshold, const int kdim,
-    double *img, const int nimgs, const int nthreads) {
-
-  /* Find the maximum kernel_cdim we'll need */
-  int max_kernel_cdim = 0;
-  for (int ind = 0; ind < npart; ind++) {
-    const double smooth_length = smoothing_lengths[ind];
-    const int delta_pix = static_cast<int>(std::ceil(smooth_length / res)) + 1;
-    const int kernel_cdim_temp = 2 * delta_pix + 1;
-    if (kernel_cdim_temp > max_kernel_cdim) {
-      max_kernel_cdim = kernel_cdim_temp;
-    }
-  }
-
-  const size_t total_pix = static_cast<size_t>(nimgs) * npix_x * npix_y;
-
-  /* Allocate per-thread image arrays */
-  std::vector<std::vector<double>> thread_images(nthreads);
-  for (int t = 0; t < nthreads; ++t)
-    thread_images[t].resize(total_pix, 0.0);
-
-#pragma omp parallel num_threads(nthreads)
-  {
-    const int tid = omp_get_thread_num();
-    double *thread_img = thread_images[tid].data();
-
-    /* Allocate per-thread particle kernel buffer */
-    std::vector<double> part_kernel(max_kernel_cdim * max_kernel_cdim, 0.0);
-
-#pragma omp for schedule(dynamic)
-    for (int ind = 0; ind < npart; ind++) {
-
-      const double smooth_length = smoothing_lengths[ind];
-      const double x = pos[ind * 3 + 0];
-      const double y = pos[ind * 3 + 1];
-
-      const int i = static_cast<int>(x / res);
-      const int j = static_cast<int>(y / res);
-
-      const int delta_pix =
-          static_cast<int>(std::ceil(smooth_length / res)) + 1;
-      const int kernel_cdim = 2 * delta_pix + 1;
-
-      std::fill(part_kernel.begin(), part_kernel.end(), 0.0);
-      double kernel_sum = 0.0;
-
-      const int ii_min = std::max(i - delta_pix, 0);
-      const int ii_max = std::min(i + delta_pix, npix_x - 1);
-      const int jj_min = std::max(j - delta_pix, 0);
-      const int jj_max = std::min(j + delta_pix, npix_y - 1);
-
-      const double thresh2 =
-          smooth_length * smooth_length * threshold * threshold;
-
-      for (int ii = ii_min; ii <= ii_max; ii++) {
-        const double x_dist = res * (ii + 0.5) - x;
-
-#pragma omp simd
-        for (int jj = jj_min; jj <= jj_max; jj++) {
-          const double y_dist = res * (jj + 0.5) - y;
-          const double rsqu = x_dist * x_dist + y_dist * y_dist;
-
-          if (rsqu > thresh2)
-            continue;
-
-          const int iii = ii - (i - delta_pix);
-          const int jjj = jj - (j - delta_pix);
-
-          const double q = std::sqrt(rsqu) / smooth_length;
-          const int index = std::min(static_cast<int>(kdim * q), kdim - 1);
-          const double kvalue = kernel[index];
-
-          part_kernel[iii * kernel_cdim + jjj] = kvalue;
-          kernel_sum += kvalue;
-        }
-      }
-
-      if (kernel_sum == 0.0)
-        continue;
-
-      for (int ii = ii_min; ii <= ii_max; ii++) {
-
-#pragma omp simd
-        for (int jj = jj_min; jj <= jj_max; jj++) {
-
-          const int iii = ii - (i - delta_pix);
-          const int jjj = jj - (j - delta_pix);
-          const double kvalue =
-              part_kernel[iii * kernel_cdim + jjj] / kernel_sum;
-
-          if (kvalue == 0.0)
-            continue;
-
-          for (int nimg = 0; nimg < nimgs; nimg++) {
-            const size_t pix_ind = static_cast<size_t>(nimg) * npix_x * npix_y +
-                                   static_cast<size_t>(ii) * npix_y + jj;
-            thread_img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
-          }
-        }
-      }
-    } // end omp for
-  } // end omp parallel
-
-  /* Final reduction into global image */
-  for (int t = 0; t < nthreads; ++t) {
-    const double *thread_img = thread_images[t].data();
-    for (size_t i = 0; i < total_pix; ++i)
-      img[i] += thread_img[i];
-  }
-}
-#endif
-
-/**
- * @brief Function to populate an image from particle data and a kernel.
- *
- * This is a wrapper function that calls the serial or parallel version of the
- * function depending on the number of threads requested or whether OpenMP is
- * available.
- *
- * @param pix_values: The particle data to be sorted into pixels
- *                    (luminosity/flux/mass etc.).
- * @param smoothing_lengths: The stellar particle smoothing lengths.
- * @param pos: The coordinates of the particles.
- * @param kernel: The kernel data (integrated along the z axis and softed by
- *               impact parameter).
- * @param res: The pixel resolution.
- * @param npix_x: The number of pixels along the x axis.
- * @param npix_y: The number of pixels along the y axis.
- * @param npart: The number of particles.
- * @param threshold: The threshold of the SPH kernel.
- * @param kdim: The number of elements in the kernel.
- * @param img: The image to be populated.
- * @param nthreads: The number of threads to use.
- */
-void populate_smoothed_image(const double *pix_values,
-                             const double *smoothing_lengths, const double *pos,
-                             const double *kernel, const double res,
-                             const int npix_x, const int npix_y,
-                             const int npart, const double threshold,
-                             const int kdim, double *img, const int nimgs,
-                             const int nthreads) {
+void populate_smoothed_image(const double *pix_values, const double *kernel,
+                             const double res, const int npix_x,
+                             const int npix_y, const int npart,
+                             const double threshold, const int kdim,
+                             double *img, const int nimgs, struct cell *root,
+                             const int nthreads, double *kernel_sums) {
 
   double start = tic();
 
 #ifdef WITH_OPENMP
+  /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    populate_smoothed_image_parallel(pix_values, smoothing_lengths, pos, kernel,
-                                     res, npix_x, npix_y, npart, threshold,
-                                     kdim, img, nimgs, nthreads);
+    omp_set_num_threads(nthreads);
   } else {
-    populate_smoothed_image_serial(pix_values, smoothing_lengths, pos, kernel,
-                                   res, npix_x, npix_y, npart, threshold, kdim,
-                                   img, nimgs);
+    omp_set_num_threads(1);
   }
-#else
-  populate_smoothed_image_serial(pix_values, smoothing_lengths, pos, kernel,
-                                 res, npix_x, npix_y, npart, threshold, kdim,
-                                 img, nimgs);
+
+#pragma omp parallel for collapse(2) schedule(dynamic)
 #endif
+  /* Loop over the pixels in the image. */
+  for (int i = 0; i < npix_x; i++) {
+    for (int j = 0; j < npix_y; j++) {
+
+      /* Calculate the pixel position. */
+      const double pix_x = res * (i + 0.5);
+      const double pix_y = res * (j + 0.5);
+
+      /* Get the pixel array for each image. */
+      double *out = &img[nimgs * (i * npix_y + j)];
+
+      /* Populate the pixel recursively. */
+      populate_pixel_recursive(root, pix_x, pix_y, threshold, kdim, kernel,
+                               npart, out, nimgs, pix_values, res, kernel_sums);
+    }
+  }
+
   toc("Populating smoothed image", start);
 }
 
@@ -379,18 +256,15 @@ void populate_smoothed_image(const double *pix_values,
  *
  * The SPH kernel of a particle (integrated along the z axis) is used to
  * calculate the pixel weight for all pixels within a stellar particles
- * kernel. Once the kernel value is found at a pixels position the pixel value
- * is added multiplied by the kernels weight.
- *
- * NOTE: the implementation uses the exact position of a particle, thus
- * accounting for sub pixel positioning.
+ * kernel. Once the kernel value is found at a pixels position the pixel
+ * value is added multiplied by the kernels weight.
  *
  * @param np_pix_values: The particle data to be sorted into pixels
  *                       (luminosity/flux/mass etc.).
  * @param np_smoothing_lengths: The stellar particle smoothing lengths.
  * @param np_pos: The coordinates of the particles.
- * @param np_kernel: The kernel data (integrated along the z axis and softed
- * by impact parameter).
+ * @param np_kernel: The kernel data (integrated along the z axis and
+ * softed by impact parameter).
  * @param res: The pixel resolution.
  * @param npix: The number of pixels along an axis.
  * @param npart: The number of particles.
@@ -402,8 +276,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   double start_time = tic();
 
-  /* We don't need the self argument but it has to be there. Tell the compiler
-   * we don't care. */
+  /* We don't need the self argument but it has to be there. Tell the
+   * compiler we don't care. */
   (void)self;
 
   double res, threshold;
@@ -426,18 +300,44 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   toc("Extracting Python data", start_time);
 
+  double kernel_sum_start = tic();
+
+  /* Compute the kernel sums for each particle. This is used to verify that
+   * the particle kernels are normalized correctly. */
+  double *kernel_sums = new double[npart];
+  compute_particle_kernel_sums(smoothing_lengths, pos, kernel, res, npix_x,
+                               npix_y, npart, threshold, kdim, kernel_sums);
+
+  toc("Computing particle kernel sums", kernel_sum_start);
+
+  double tree_start = tic();
+
+  /* Allocate cells array. The first cell will be the root and then we
+   * will dynamically nibble off cells for the progeny. */
+  int ncells = 1;
+  struct cell *root = new struct cell;
+
+  /* Consturct the cell tree. */
+  construct_cell_tree(pos, smoothing_lengths, smoothing_lengths, npart, root,
+                      ncells, MAX_DEPTH, 100);
+
+  toc("Constructing cell tree", tree_start);
+
   double out_start = tic();
 
   /* Create the zeroed image numpy array. */
-  npy_intp np_img_dims[3] = {nimgs, npix_x, npix_y};
+  npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
   PyArrayObject *np_img =
       (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
   double *img = (double *)PyArray_DATA(np_img);
 
   /* Populate the image. */
-  populate_smoothed_image(pix_values, smoothing_lengths, pos, kernel, res,
-                          npix_x, npix_y, npart, threshold, kdim, img, nimgs,
-                          nthreads);
+  populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
+                          threshold, kdim, img, nimgs, root, nthreads,
+                          kernel_sums);
+
+  /* Cleanup the cell tree. */
+  cleanup_cell_tree(root);
 
   toc("Computing smoothed image", start_time);
 

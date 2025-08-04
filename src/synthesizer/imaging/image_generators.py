@@ -325,7 +325,7 @@ def _generate_image_particle_smoothed(
         kernel.size,
         1,
         nthreads,
-    )
+    ).T
 
     # Store the image array into the image object
     img.arr = imgs_arr[0, :, :]
@@ -507,7 +507,7 @@ def _generate_images_particle_smoothed(
         kernel.size,
         signals.shape[0],
         nthreads,
-    )
+    ).T
 
     # Store the image arrays on the image collection (this will
     # automatically convert them to Image objects)
@@ -863,7 +863,7 @@ def _generate_ifu_particle_hist(
         kernel.size,
         sed.nlam,
         nthreads,
-    ).T
+    )
 
     return ifu
 
@@ -1003,7 +1003,7 @@ def _generate_ifu_particle_smoothed(
         kernel.size,
         sed.nlam,
         nthreads,
-    ).T
+    )
 
     return ifu
 
