@@ -236,7 +236,7 @@ def plot_speed_up_plot(
     threads,
     linestyles,
     outpath,
-    paper_style=True,
+    paper_style,
 ):
     """Plot a strong scaling test, optionally in paper style.
 
@@ -407,6 +407,7 @@ def run_scaling_test(
     kwargs,
     total_msg,
     low_thresh,
+    paper_style=True,
 ):
     """Run a scaling test for the Synthesizer package.
 
@@ -422,6 +423,8 @@ def run_scaling_test(
         kwargs (dict): The keyword arguments to pass to the function.
         total_msg (str): The message to print for the total time.
         low_thresh (float): The threshold for low runtimes.
+        paper_style (bool): If True, produces a figure sized 3.5" x 8" with
+            the main legend placed below the speedup plot's x-axis.
     """
     # Run the scaling test itself
     output, threads = _run_averaged_scaling_test(
@@ -448,4 +451,5 @@ def run_scaling_test(
         threads,
         linestyles,
         plot_outpath,
+        paper_style,
     )
