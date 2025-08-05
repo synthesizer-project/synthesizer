@@ -364,7 +364,7 @@ def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
             threads,
             atomic_runtimes[key],
             "s" if key == "Total" else "o",
-            label=_wrap_label(key, max_length=25),
+            label=_wrap_label(key, max_length=30),
             linestyle=linestyles[key],
             linewidth=3 if key == "Total" else 1,
         )
