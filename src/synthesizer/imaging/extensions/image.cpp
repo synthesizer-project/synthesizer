@@ -85,40 +85,33 @@ void populate_smoothed_image_serial(const double *pix_values,
     /* How many pixels are in the smoothing length? Add some buffer. */
     const int delta_pix = ceil(smooth_length / res) + 1;
 
-    /* How many pixels along kernel axis? */
-    const int kernel_cdim = 2 * delta_pix + 1;
-
-    /* Compute the pixel indices for the kernel. */
-    int ii_min = (i - delta_pix) < 0 ? 0 : (i - delta_pix);
-    int ii_max = (i + delta_pix) >= npix_x ? npix_x - 1 : (i + delta_pix);
-    int jj_min = (j - delta_pix) < 0 ? 0 : (j - delta_pix);
-    int jj_max = (j + delta_pix) >= npix_y ? npix_y - 1 : (j + delta_pix);
-
     /* Calculate the threshold for the kernel. */
     double thresh2 = smooth_length * smooth_length * threshold * threshold;
 
     /* Loop over a square aperture around this particle */
-    for (int ii = ii_min; ii <= ii_max; ii++) {
+    for (int ii = (i - delta_pix); ii <= (i + delta_pix); ii++) {
 
       /* Compute the x separation */
       const double x_dist = res * (ii + 0.5) - x;
+      const double x_dist2 = x_dist * x_dist;
 
       /* Early exit if the x distance is too large. */
-      if (x_dist * x_dist > thresh2)
+      if (x_dist2 > thresh2)
         continue;
 
-      for (int jj = jj_min; jj <= jj_max; jj++) {
+      for (int jj = (j - delta_pix); jj <= (j + delta_pix); jj++) {
 
         /* Compute the y separation */
         const double y_dist = res * (jj + 0.5) - y;
+        const double y_dist2 = y_dist * y_dist;
 
         /* Early exit if the y distance is too large. */
-        if (y_dist * y_dist > thresh2)
+        if (y_dist2 > thresh2)
           continue;
 
         /* Compute the distance between the centre of this pixel
          * and the particle. */
-        const double rsqu = (x_dist * x_dist) + (y_dist * y_dist);
+        const double rsqu = x_dist2 + y_dist2;
 
         /* Skip particles outside the kernel. */
         if (rsqu > thresh2)
@@ -179,17 +172,21 @@ void populate_smoothed_image_parallel(
     const int npix_y, const int npart, const double threshold, const int kdim,
     double *img, const int nimgs, const int nthreads) {
 
+  /* Get the array of pointers for thread local images. */
+  double **timg_ptrs = new double *[nthreads];
+
 #pragma omp parallel num_threads(nthreads)
   {
 
-    /* Allocate a thread local image for each thread. */
-    double *timg = new double[nimgs * npix_x * npix_y];
+    /* Get the thread number. */
+    const int tid = omp_get_thread_num();
 
-    /* Zero the thread local image. */
-    memset(timg, 0, nimgs * npix_x * npix_y * sizeof(double));
+    /* Allocate the thread local image. */
+    timg_ptrs[tid] = new double[nimgs * npix_x * npix_y]();
+    double *timg = timg_ptrs[tid];
 
     /* Loop over positions including the sed */
-#pragma omp for schedule(dynamic)
+#pragma omp parallel for schedule(guided, 1)
     for (int ind = 0; ind < npart; ind++) {
 
       /* Get this particles smoothing length and position */
@@ -218,40 +215,33 @@ void populate_smoothed_image_parallel(
       /* How many pixels are in the smoothing length? Add some buffer. */
       const int delta_pix = ceil(smooth_length / res) + 1;
 
-      /* How many pixels along kernel axis? */
-      const int kernel_cdim = 2 * delta_pix + 1;
-
-      /* Compute the pixel indices for the kernel. */
-      int ii_min = (i - delta_pix) < 0 ? 0 : (i - delta_pix);
-      int ii_max = (i + delta_pix) >= npix_x ? npix_x - 1 : (i + delta_pix);
-      int jj_min = (j - delta_pix) < 0 ? 0 : (j - delta_pix);
-      int jj_max = (j + delta_pix) >= npix_y ? npix_y - 1 : (j + delta_pix);
-
       /* Calculate the threshold for the kernel. */
       double thresh2 = smooth_length * smooth_length * threshold * threshold;
 
       /* Loop over a square aperture around this particle */
-      for (int ii = ii_min; ii <= ii_max; ii++) {
+      for (int ii = (i - delta_pix); ii <= (i + delta_pix); ii++) {
 
         /* Compute the x separation */
         const double x_dist = res * (ii + 0.5) - x;
+        const double x_dist2 = x_dist * x_dist;
 
         /* Early exit if the x distance is too large. */
-        if (x_dist * x_dist > thresh2)
+        if (x_dist2 > thresh2)
           continue;
 
-        for (int jj = jj_min; jj <= jj_max; jj++) {
+        for (int jj = (j - delta_pix); jj <= (j + delta_pix); jj++) {
 
           /* Compute the y separation */
           const double y_dist = res * (jj + 0.5) - y;
+          const double y_dist2 = y_dist * y_dist;
 
           /* Early exit if the y distance is too large. */
-          if (y_dist * y_dist > thresh2)
+          if (y_dist2 > thresh2)
             continue;
 
           /* Compute the distance between the centre of this pixel
            * and the particle. */
-          const double rsqu = (x_dist * x_dist) + (y_dist * y_dist);
+          const double rsqu = x_dist2 + y_dist2;
 
           /* Skip particles outside the kernel. */
           if (rsqu > thresh2)
@@ -273,32 +263,36 @@ void populate_smoothed_image_parallel(
 
             /* Add the pixel value to this image, pixel values are (Nimg, Npart)
              * in shape. */
-            timg[pix_ind] += kvalue * pix_values[nimg * npart + ind];
+            img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
           }
         }
       }
     }
-
-    /* Now we have the thread local image, we need to add it to the global
-     * image. */
-#pragma omp critical
-    {
-      for (int nimg = 0; nimg < nimgs; nimg++) {
-        for (int i = 0; i < npix_x; i++) {
-          for (int j = 0; j < npix_y; j++) {
-            /* Get the pixel index in the image (nimg, i, j). */
-            const int pix_ind = nimg * npix_x * npix_y + npix_y * i + j;
-
-            /* Add the thread local image to the global image. */
-            img[pix_ind] += timg[pix_ind];
-          }
-        }
-      }
-    }
-
-    /* Free the thread local image. */
-    delete[] timg;
   }
+
+/* Now we have the thread local image, we need to add it to the global image.
+ */
+#pragma omp parallel for schedule(static) collapse(3) num_threads(nthreads)
+  for (int ipix = 0; ipix < npix_x; ipix++) {
+    for (int jpix = 0; jpix < npix_y; jpix++) {
+      for (int nimg = 0; nimg < nimgs; nimg++) {
+        int pix_ind = nimg * npix_x * npix_y + npix_y * ipix + jpix;
+
+        double sum = 0.0;
+        for (int tid = 0; tid < nthreads; tid++) {
+          sum += timg_ptrs[tid][pix_ind];
+        }
+
+        img[pix_ind] += sum;
+      }
+    }
+  }
+
+  /* Cleanup the thread local images. */
+  for (int i = 0; i < nthreads; i++) {
+    delete[] timg_ptrs[i];
+  }
+  delete[] timg_ptrs;
 }
 #endif
 
