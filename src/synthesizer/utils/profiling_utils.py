@@ -18,6 +18,11 @@ from matplotlib.lines import Line2D
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
+plt.rcParams["axes.labelsize"] = 8
+plt.rcParams["axes.titlesize"] = 8
+plt.rcParams["xtick.labelsize"] = 8
+plt.rcParams["ytick.labelsize"] = 8
+plt.rcParams["legend.fontsize"] = 7
 
 # Set the seed
 np.random.seed(42)
@@ -401,7 +406,6 @@ def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
         labels,
         loc="upper center",
         ncol=1,
-        fontsize=9,
     )
 
     # Inline style legend on speedup axis
@@ -413,7 +417,7 @@ def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
         ),
     ]
     ax_speedup.add_artist(
-        ax_speedup.legend(handles=style_handles, loc="upper left", fontsize=9)
+        ax_speedup.legend(handles=style_handles, loc="upper left")
     )
 
     fig.savefig(outpath, dpi=300, bbox_inches="tight")
