@@ -55,9 +55,11 @@ class Extraction:
         # Ensure the grid has the right key
         if extract not in grid.spectra and extract not in grid.line_lums:
             raise exceptions.MissingSpectraType(
-                f"The Grid does not contain the key '{extract}' "
-                f"(available types for spectra are {grid.available_spectra}"
-                f"and for lines: {grid.line_lums.keys()})"
+                f"The Grid does not contain the key '{extract}'."
+                f"Available types for spectra:"
+                f"{grid.available_spectra_emissions}"
+                f"Available types for lines: "
+                f"{grid.available_line_emissions}"
             )
 
         # Should the emission take into account the velocity shift due to
@@ -207,9 +209,14 @@ class Extraction:
         # passed are split into their constituent parts
         passed_line_ids = line_ids
         line_ids = []
-        for lid in passed_line_ids:
-            for ljd in lid.split(","):
-                line_ids.append(ljd.strip())
+
+        # If line_ids is None, use all available lines from the grid
+        if passed_line_ids is None:
+            line_ids = list(this_model.grid.available_lines)
+        else:
+            for lid in passed_line_ids:
+                for ljd in lid.split(","):
+                    line_ids.append(ljd.strip())
 
         # Remove any duplicated lines, will give the user exactly what they
         # asked for, but there's not point doing extra work!

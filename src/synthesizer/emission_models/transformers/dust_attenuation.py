@@ -344,7 +344,7 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
     # Performing some unit conversions to match the
     # Calzetti curve units which are in um
-    _lam = np.linspace(0.08, 1, 10000) * um
+    _lam = np.linspace(0.01, 3.0, 10000, endpoint=True) * um
     _cent_lam = cent_lam.to("um")
     _gamma = gamma.to("um")
     lam_v = 0.55  # in um
@@ -353,7 +353,7 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
 
     # Masking for different regimes in the Calzetti curve
     ok1 = (_lam >= 0.12) * (_lam < 0.63)  # 0.12um<=lam<0.63um
-    ok2 = (_lam >= 0.63) * (_lam < 31.0)  # 0.63um<=lam<=31um
+    ok2 = (_lam >= 0.63) * (_lam < 3.1)  # 0.63um<=lam<=3.10um
     ok3 = _lam < 0.12  # lam<0.12um
     if np.sum(ok1) > 0:  # equation 1
         k_lam[ok1] = (
@@ -393,12 +393,15 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # Normalising with the value at 0.55um, to obtain
     # normalised optical depth
     tau_x_v = (k_lam + D_lam) / k_v
+    tau_x = tau_x_v * (_lam.value / lam_v) ** slope
 
-    func = interpolate.interp1d(
-        _lam, tau_x_v * (_lam / lam_v) ** slope, fill_value="extrapolate"
-    )
+    func = interpolate.interp1d(_lam, tau_x, fill_value="extrapolate")
+    out = np.zeros(len(lam))
+    ok = lam.to("um") < 3.1 * um
+    out[ok] = func(lam[ok].to("um"))
+    out[~ok] = tau_x[-1]
 
-    return func(lam.to("um"))
+    return out
 
 
 class Calzetti2000(AttenuationLaw):

@@ -503,7 +503,17 @@ class Sed:
             flux (unyt_array):
                 The spectral flux density per Angstrom array.
         """
-        return self.obsnu * self.fnu / self.obslam
+        return (self.obsnu * self.fnu / self.obslam).to("erg/s/cm**2/angstrom")
+
+    @property
+    def _flam(self):
+        """Get the unitless spectral flux density per Angstrom.
+
+        Returns:
+            flux (np.ndarray):
+                The unitless spectral flux density per Angstrom array.
+        """
+        return self.flam.value
 
     @property
     def luminosity_nu(self):
