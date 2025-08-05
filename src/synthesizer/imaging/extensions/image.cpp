@@ -207,7 +207,7 @@ void populate_smoothed_image_parallel(
 
           /* Add the pixel value to this image, pixel values are (Nimg, Npart)
            * in shape. */
-          img[pix_ind] += pix_values[nimg * npart + ind];
+          timg[pix_ind] += pix_values[nimg * npart + ind];
         }
         continue;
       }
@@ -263,15 +263,14 @@ void populate_smoothed_image_parallel(
 
             /* Add the pixel value to this image, pixel values are (Nimg, Npart)
              * in shape. */
-            img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
+            timg[pix_ind] += kvalue * pix_values[nimg * npart + ind];
           }
         }
       }
     }
   }
 
-/* Now we have the thread local image, we need to add it to the global image.
- */
+/* Now we have the thread local image, we need to add it to the global image. */
 #pragma omp parallel for schedule(static) collapse(3) num_threads(nthreads)
   for (int ipix = 0; ipix < npix_x; ipix++) {
     for (int jpix = 0; jpix < npix_y; jpix++) {
