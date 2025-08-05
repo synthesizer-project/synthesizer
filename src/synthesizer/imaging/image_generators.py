@@ -106,6 +106,7 @@ def _generate_image_particle_hist(
     # Include normalisation in the original signal if we have one
     # (we'll divide by it later)
     if normalisation is not None:
+        print("Applying normalisation to signal for histogram image.")
         # Make sure we are working on a copy of the signal so as not to
         # modify the original
         signal = signal.copy()

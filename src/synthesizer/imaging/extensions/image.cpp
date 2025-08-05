@@ -57,7 +57,7 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
 
   /* Early exit if the projected distance between cells is more than the
    * maximum smoothing length in the cell. */
-  if (c->max_sml_squ <
+  if (c->max_sml_squ + 2 * res <
       min_projected_dist2(const_cast<struct cell *>(c), pix_x, pix_y)) {
     return;
   }
@@ -92,8 +92,8 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
       struct particle *part = &parts[j];
 
       /* Calculate the x and y separations. */
-      double dx = part->pos[0] - pix_x;
-      double dy = part->pos[1] - pix_y;
+      double dx = part->pos[0] - pix_x - res;
+      double dy = part->pos[1] - pix_y - res;
 
       /* Calculate the impact parameter. */
       double b = sqrt(dx * dx + dy * dy);
@@ -170,12 +170,13 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
       const double pix_x = res * (i + 0.5);
       const double pix_y = res * (j + 0.5);
 
-      /* Get the pixel array for each image. */
-      double *out = &img[nimgs * (i * npix_y + j)];
+      /* Get the pixel index. */
+      int pix_index = i * npix_y + j;
 
       /* Populate the pixel recursively. */
       populate_pixel_recursive(root, pix_x, pix_y, threshold, kdim, kernel,
-                               npart, out, nimgs, pix_values, res);
+                               npart, &img[pix_index * nimgs], nimgs,
+                               pix_values, res);
     }
   }
 
@@ -251,6 +252,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   PyArrayObject *np_img =
       (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
   double *img = (double *)PyArray_DATA(np_img);
+
+  toc("Creating output image", out_start);
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
