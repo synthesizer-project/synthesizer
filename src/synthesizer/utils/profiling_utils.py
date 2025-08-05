@@ -17,7 +17,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 
 plt.rcParams["font.family"] = "DeJavu Serif"
-plt.rcParams["font.serif"] = ["Times New Roman"]
+plt.rcParams["font.serif"] = ["DeJavu Sans"]
 plt.rcParams["axes.labelsize"] = 8
 plt.rcParams["axes.titlesize"] = 8
 plt.rcParams["xtick.labelsize"] = 8
