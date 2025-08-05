@@ -259,6 +259,28 @@ def plot_speed_up_plot(
         _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath)
 
 
+def _wrap_label(label, max_length=20):
+    """Add new lines to a label if it exceeds a maximum length.
+
+    The added new line will follow the word containing max_length characters.
+
+    Args:
+        label (str): The label to wrap.
+        max_length (int): The maximum length of a line before wrapping.
+    """
+    if len(label) <= max_length:
+        return label
+
+    # Find the last space before the max length
+    split_index = label.rfind(" ", 0, max_length)
+    if split_index == -1:  # No space found, just split at max_length
+        split_index = max_length
+
+    # Wrap the label
+    wrapped_label = label[:split_index] + "\n" + label[split_index:].strip()
+    return wrapped_label
+
+
 def _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath):
     # Default full-size layout
     fig = plt.figure(figsize=(12, 10))
@@ -337,7 +359,7 @@ def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
             threads,
             atomic_runtimes[key],
             "s" if key == "Total" else "o",
-            label=key,
+            label=_wrap_label(key, max_length=25),
             linestyle=linestyles[key],
             linewidth=3 if key == "Total" else 1,
         )
