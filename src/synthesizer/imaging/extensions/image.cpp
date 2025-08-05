@@ -56,21 +56,6 @@ void populate_smoothed_image_serial(const double *pix_values,
                                     const double threshold, const int kdim,
                                     double *img, const int nimgs) {
 
-  /* Find the maximum kernel_cdim we'll need. We need this to preallocate the
-   * kernel we will populate for each particle. */
-  int max_kernel_cdim = 0;
-  for (int ind = 0; ind < npart; ind++) {
-    const double smooth_length = smoothing_lengths[ind];
-    const int delta_pix = ceil(smooth_length / res) + 1;
-    const int kernel_cdim_temp = 2 * delta_pix + 1;
-    if (kernel_cdim_temp > max_kernel_cdim) {
-      max_kernel_cdim = kernel_cdim_temp;
-    }
-  }
-
-  /* Allocate the particle kernel. */
-  double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
-
   /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
 
@@ -83,17 +68,25 @@ void populate_smoothed_image_serial(const double *pix_values,
     const int i = x / res;
     const int j = y / res;
 
+    /* If the smoothing length is less than the resolution just add the
+     * pixel value to the image. */
+    if (smooth_length <= res) {
+      for (int nimg = 0; nimg < nimgs; nimg++) {
+        /* Get the pixel index in the image (nimg, i, j). */
+        const int pix_ind = nimg * npix_x * npix_y + npix_y * i + j;
+
+        /* Add the pixel value to this image, pixel values are (Nimg, Npart)
+         * in shape. */
+        img[pix_ind] += pix_values[nimg * npart + ind];
+      }
+      continue;
+    }
+
     /* How many pixels are in the smoothing length? Add some buffer. */
     const int delta_pix = ceil(smooth_length / res) + 1;
 
     /* How many pixels along kernel axis? */
     const int kernel_cdim = 2 * delta_pix + 1;
-
-    /* Zero the part of the kernel we will use. */
-    memset(part_kernel, 0, kernel_cdim * kernel_cdim * sizeof(double));
-
-    /* Track the kernel sum for normalisation. */
-    double kernel_sum = 0;
 
     /* Compute the pixel indices for the kernel. */
     int ii_min = (i - delta_pix) < 0 ? 0 : (i - delta_pix);
@@ -110,10 +103,18 @@ void populate_smoothed_image_serial(const double *pix_values,
       /* Compute the x separation */
       const double x_dist = res * (ii + 0.5) - x;
 
+      /* Early exit if the x distance is too large. */
+      if (x_dist * x_dist > thresh2)
+        continue;
+
       for (int jj = jj_min; jj <= jj_max; jj++) {
 
         /* Compute the y separation */
         const double y_dist = res * (jj + 0.5) - y;
+
+        /* Early exit if the y distance is too large. */
+        if (y_dist * y_dist > thresh2)
+          continue;
 
         /* Compute the distance between the centre of this pixel
          * and the particle. */
@@ -123,45 +124,15 @@ void populate_smoothed_image_serial(const double *pix_values,
         if (rsqu > thresh2)
           continue;
 
-        /* Get the pixel coordinates in the kernel */
-        const int iii = ii - (i - delta_pix);
-        const int jjj = jj - (j - delta_pix);
-
         /* Calculate the impact parameter. */
         const double q = sqrt(rsqu) / smooth_length;
 
         /* Get the value of the kernel at q. */
         const int index = kdim * q;
-        const double kvalue = kernel[index];
+        const double kvalue =
+            kernel[index] / (smooth_length * smooth_length) * res * res;
 
-        /* Set the value in the kernel. */
-        part_kernel[iii * kernel_cdim + jjj] = kvalue;
-        kernel_sum += kvalue;
-      }
-    }
-
-    /* If the kernel is empty, skip it. */
-    if (kernel_sum == 0) {
-      continue;
-    }
-
-    /* Now add the kernel to the image. */
-    for (int ii = ii_min; ii <= ii_max; ii++) {
-
-      for (int jj = jj_min; jj <= jj_max; jj++) {
-
-        /* Get the pixel coordinates in the kernel */
-        const int iii = ii - (i - delta_pix);
-        const int jjj = jj - (j - delta_pix);
-
-        /* Get the kernel value. */
-        const double kvalue = part_kernel[iii * kernel_cdim + jjj] / kernel_sum;
-
-        /* Skip empty pixels. */
-        if (kvalue == 0)
-          continue;
-
-        /* Add the pixel value to each of the images. */
+        /* Popualte the images. */
         for (int nimg = 0; nimg < nimgs; nimg++) {
 
           /* Get the pixel index in the image (nimg, i, j). */
@@ -174,7 +145,6 @@ void populate_smoothed_image_serial(const double *pix_values,
       }
     }
   }
-  delete[] part_kernel;
 }
 
 /**
@@ -209,23 +179,14 @@ void populate_smoothed_image_parallel(
     const int npix_y, const int npart, const double threshold, const int kdim,
     double *img, const int nimgs, const int nthreads) {
 
-  /* Find the maximum kernel_cdim we'll need. We need this to preallocate the
-   * kernel we will populate for each particle. */
-  int max_kernel_cdim = 0;
-  for (int ind = 0; ind < npart; ind++) {
-    const double smooth_length = smoothing_lengths[ind];
-    const int delta_pix = ceil(smooth_length / res) + 1;
-    const int kernel_cdim_temp = 2 * delta_pix + 1;
-    if (kernel_cdim_temp > max_kernel_cdim) {
-      max_kernel_cdim = kernel_cdim_temp;
-    }
-  }
-
 #pragma omp parallel num_threads(nthreads)
   {
 
-    /* Allocate the per thread particle kernel. */
-    double *part_kernel = new double[max_kernel_cdim * max_kernel_cdim];
+    /* Allocate a thread local image for each thread. */
+    double *timg = new double[nimgs * npix_x * npix_y];
+
+    /* Zero the thread local image. */
+    memset(timg, 0, nimgs * npix_x * npix_y * sizeof(double));
 
     /* Loop over positions including the sed */
 #pragma omp for schedule(dynamic)
@@ -240,17 +201,25 @@ void populate_smoothed_image_parallel(
       const int i = x / res;
       const int j = y / res;
 
+      /* If the smoothing length is less than the resolution just add the
+       * pixel value to the image. */
+      if (smooth_length <= res) {
+        for (int nimg = 0; nimg < nimgs; nimg++) {
+          /* Get the pixel index in the image (nimg, i, j). */
+          const int pix_ind = nimg * npix_x * npix_y + npix_y * i + j;
+
+          /* Add the pixel value to this image, pixel values are (Nimg, Npart)
+           * in shape. */
+          img[pix_ind] += pix_values[nimg * npart + ind];
+        }
+        continue;
+      }
+
       /* How many pixels are in the smoothing length? Add some buffer. */
       const int delta_pix = ceil(smooth_length / res) + 1;
 
       /* How many pixels along kernel axis? */
       const int kernel_cdim = 2 * delta_pix + 1;
-
-      /* Zero the part of the kernel we will use. */
-      memset(part_kernel, 0, kernel_cdim * kernel_cdim * sizeof(double));
-
-      /* Track the kernel sum for normalisation. */
-      double kernel_sum = 0;
 
       /* Compute the pixel indices for the kernel. */
       int ii_min = (i - delta_pix) < 0 ? 0 : (i - delta_pix);
@@ -267,10 +236,18 @@ void populate_smoothed_image_parallel(
         /* Compute the x separation */
         const double x_dist = res * (ii + 0.5) - x;
 
+        /* Early exit if the x distance is too large. */
+        if (x_dist * x_dist > thresh2)
+          continue;
+
         for (int jj = jj_min; jj <= jj_max; jj++) {
 
           /* Compute the y separation */
           const double y_dist = res * (jj + 0.5) - y;
+
+          /* Early exit if the y distance is too large. */
+          if (y_dist * y_dist > thresh2)
+            continue;
 
           /* Compute the distance between the centre of this pixel
            * and the particle. */
@@ -280,59 +257,47 @@ void populate_smoothed_image_parallel(
           if (rsqu > thresh2)
             continue;
 
-          /* Get the pixel coordinates in the kernel */
-          const int iii = ii - (i - delta_pix);
-          const int jjj = jj - (j - delta_pix);
-
           /* Calculate the impact parameter. */
           const double q = sqrt(rsqu) / smooth_length;
 
           /* Get the value of the kernel at q. */
           const int index = kdim * q;
-          const double kvalue = kernel[index];
-
-          /* Set the value in the kernel. */
-          part_kernel[iii * kernel_cdim + jjj] = kvalue;
-          kernel_sum += kvalue;
-        }
-      }
-
-      /* If the kernel is empty, skip it. */
-      if (kernel_sum == 0) {
-        continue;
-      }
-
-      /* Now add the kernel to the image. */
-      for (int ii = ii_min; ii <= ii_max; ii++) {
-
-        for (int jj = jj_min; jj <= jj_max; jj++) {
-
-          /* Get the pixel coordinates in the kernel */
-          const int iii = ii - (i - delta_pix);
-          const int jjj = jj - (j - delta_pix);
-
-          /* Get the kernel value. */
           const double kvalue =
-              part_kernel[iii * kernel_cdim + jjj] / kernel_sum;
+              kernel[index] / (smooth_length * smooth_length) * res * res;
 
-          /* Skip empty pixels. */
-          if (kvalue == 0)
-            continue;
-
-          /* Add the pixel value to each of the images. */
+          /* Popualte the images. */
           for (int nimg = 0; nimg < nimgs; nimg++) {
 
-            /* Get the pixel index in the image. */
+            /* Get the pixel index in the image (nimg, i, j). */
             const int pix_ind = nimg * npix_x * npix_y + npix_y * ii + jj;
 
-            /* Add the pixel value to this image. */
-#pragma omp atomic
-            img[pix_ind] += kvalue * pix_values[nimg * npart + ind];
+            /* Add the pixel value to this image, pixel values are (Nimg, Npart)
+             * in shape. */
+            timg[pix_ind] += kvalue * pix_values[nimg * npart + ind];
           }
         }
       }
     }
-    delete[] part_kernel;
+
+    /* Now we have the thread local image, we need to add it to the global
+     * image. */
+#pragma omp critical
+    {
+      for (int nimg = 0; nimg < nimgs; nimg++) {
+        for (int i = 0; i < npix_x; i++) {
+          for (int j = 0; j < npix_y; j++) {
+            /* Get the pixel index in the image (nimg, i, j). */
+            const int pix_ind = nimg * npix_x * npix_y + npix_y * i + j;
+
+            /* Add the thread local image to the global image. */
+            img[pix_ind] += timg[pix_ind];
+          }
+        }
+      }
+    }
+
+    /* Free the thread local image. */
+    delete[] timg;
   }
 }
 #endif
