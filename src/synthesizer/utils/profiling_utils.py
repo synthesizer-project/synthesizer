@@ -327,9 +327,9 @@ def _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath):
 
 def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
     # Compact paper-style layout
-    fig = plt.figure(figsize=(3.5, 9))
-    gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 0.5], hspace=0.0)
-    gs1 = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 0.5], hspace=0.75)
+    fig = plt.figure(figsize=(3.5, 7))
+    gs = gridspec.GridSpec(3, 1, height_ratios=[2, 1.1, 1], hspace=0.0)
+    gs1 = gridspec.GridSpec(3, 1, height_ratios=[2, 1.1, 1], hspace=0.75)
 
     ax_main = fig.add_subplot(gs[0])
     for key in atomic_runtimes:
