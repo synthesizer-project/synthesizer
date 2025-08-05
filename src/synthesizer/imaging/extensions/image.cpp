@@ -171,12 +171,11 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
       const double pix_y = res * (j + 0.5);
 
       /* Get the pixel index. */
-      int pix_index = i * npix_y + j;
+      int pix_index = i * (npix_y * nimgs) + j * nimgs;
 
       /* Populate the pixel recursively. */
       populate_pixel_recursive(root, pix_x, pix_y, threshold, kdim, kernel,
-                               npart, &img[pix_index * nimgs], nimgs,
-                               pix_values, res);
+                               npart, &img[pix_index], nimgs, pix_values, res);
     }
   }
 
