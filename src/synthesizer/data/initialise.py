@@ -414,7 +414,7 @@ class SynthesizerInitializer:
         print(f"{green}Synthesizer initialisation complete!{reset}\n")
 
 
-def synth_initialise() -> None:
+def synth_initialise(ignore_cmd_args=False) -> None:
     """Run the Synthesizer initialization process.
 
     This function runs the initialisation process. It creates the necessary
@@ -435,20 +435,19 @@ def synth_initialise() -> None:
         "--print",
         "-p",
         action="store_true",
-        help="Print the initialisation report without creating "
-        "directories or copying files.",
+        help="Print a report showing the paths and file locations.",
     )
     args = parser.parse_args()
 
     # If we are just printing, print the report and exit
-    if args.print:
+    if args.print and not ignore_cmd_args:
         initializer = SynthesizerInitializer()
         initializer.report()
         return
 
     # If we are forcing the initialisation, clear the data directory
     # and all subdirectories
-    if args.force:
+    if args.force and ignore_cmd_args:
         synth_clear_data()
 
     # Do all the directories already exist?

@@ -15,7 +15,7 @@ from synthesizer.data.initialise import (
 # Initialize Synthesizer. This will only be run if the data directory and
 # subdirectories do not exist, i.e. when the package is first imported or after
 # any of the envionment variables have been changed.
-synth_initialise()
+synth_initialise(ignore_cmd_args=True)
 
 # Define all the directory paths we need throughout the package.
 BASE_DIR = get_base_dir()
