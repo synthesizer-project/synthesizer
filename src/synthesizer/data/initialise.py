@@ -10,6 +10,7 @@ NOTE: This module only uses standard library and importlib.resources; it must
 not import other Synthesizer modules to avoid circular dependencies.
 """
 
+import argparse
 import os
 from importlib import resources
 from pathlib import Path
@@ -420,6 +421,30 @@ def synth_initialise() -> None:
     directories, copies default files, sets environment variables,
     and prints a report.
     """
+    # Setup the optional print argument parser
+    parser = argparse.ArgumentParser(
+        description="Initialise the Synthesizer data directory."
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-initialisation even if directories already exist.",
+    )
+    parser.add_argument(
+        "--print",
+        "-p",
+        action="store_true",
+        help="Print the initialisation report without creating "
+        "directories or copying files.",
+    )
+    args = parser.parse_args()
+
+    # If we are just printing, print the report and exit
+    if args.print:
+        initializer = SynthesizerInitializer()
+        initializer.report()
+        return
+
     # Do all the directories already exist?
     all_exist = (
         data_dir_exists()
@@ -436,7 +461,7 @@ def synth_initialise() -> None:
         all_exist = default_units_file.exists() and ids_file.exists()
 
     # Just exit if the data directory already exists
-    if all_exist:
+    if all_exist and not args.force:
         return
 
     # Otherwise, create the initializer and run it, this will only make or copy
