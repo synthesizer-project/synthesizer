@@ -395,13 +395,13 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     tau_x_v = (k_lam + D_lam) / k_v
     tau_x = tau_x_v * (_lam.value / lam_v) ** slope
 
-    func = interpolate.interp1d(_lam, tau_x, fill_value="extrapolate")
-    out = np.zeros(len(lam))
-    ok = lam.to("um") < 3.1 * um
-    out[ok] = func(lam[ok].to("um"))
-    out[~ok] = tau_x[-1]
+    func = interpolate.interp1d(_lam, tau_x, bounds_error=False, fill_value=(tau_x[0], tau_x[-1]))
+    # out = np.zeros(len(lam))
+    # ok = lam.to("um") < 3.1 * um
+    # out[ok] = func(lam[ok].to("um"))
+    # out[~ok] = tau_x[-1]
 
-    return out
+    return func(lam.to("um"))
 
 
 class Calzetti2000(AttenuationLaw):
@@ -773,14 +773,14 @@ class ParametricLi08(AttenuationLaw):
 
     Attributes:
         UV_slope (float):
-            Dimensionless parameter describing the UV-FUV slope
+            Dimensionless parameter describing the UV-FUV slope (0, 50) 
         OPT_NIR_slope (float):
-            Dimensionless parameter describing the optical/NIR slope
+            Dimensionless parameter describing the optical/NIR slope (0, 10) 
         FUV_slope (float):
-            Dimensionless parameter describing the FUV slope
+            Dimensionless parameter describing the FUV slope (-1, 75)
         bump (float):
             Dimensionless parameter describing the UV bump
-            strength (0< bump <1)
+            strength (-0.005< bump <0.06)
         model (str):
             Fixing attenuation/extinction curve to one of the known
             templates: MW, SMC, LMC, Calzetti
@@ -789,24 +789,24 @@ class ParametricLi08(AttenuationLaw):
 
     def __init__(
         self,
-        UV_slope=1.0,
-        OPT_NIR_slope=1.0,
-        FUV_slope=1.0,
+        UV_slope=44.9,
+        OPT_NIR_slope=7.56,
+        FUV_slope=61.2,
         bump=0.0,
-        model=None,
+        model='Calzetti',
     ):
         """Initialise the dust curve.
 
         Args:
             UV_slope (float):
-                Dimensionless parameter describing the UV-FUV slope
+                Dimensionless parameter describing the UV-FUV slope (0, 50) 
             OPT_NIR_slope (float):
-                Dimensionless parameter describing the optical/NIR slope
+                Dimensionless parameter describing the optical/NIR slope (0, 10) 
             FUV_slope (float):
-                Dimensionless parameter describing the FUV slope
+                Dimensionless parameter describing the FUV slope (-1, 75)
             bump (float):
                 Dimensionless parameter describing the UV bump
-                strength (0< bump <1)
+                strength (-0.005< bump <0.06)
             model (str):
                 Fixing attenuation/extinction curve to one of the known
                 templates: MW, SMC, LMC, Calzetti
