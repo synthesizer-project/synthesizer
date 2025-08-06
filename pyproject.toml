@@ -82,7 +82,7 @@ dependencies = [
   "scipy",
   "unyt",
   "cmasher",
-  "dust_extinction",
+  "dust_extinction @ git+https://github.com/WillJRoper/dust_extinction.git@master#egg=dust_extinction",
   "matplotlib",
   "spectres",
   "tqdm",
