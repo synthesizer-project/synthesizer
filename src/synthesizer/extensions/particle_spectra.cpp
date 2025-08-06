@@ -384,9 +384,9 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
         for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
           const int ilam = good_lams[jl];
           const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
-          const int idx = (p - start_idx) * nlam + ilam)
+          const int idx = (p - start_idx) * nlam + ilam;
 
-          /* Write into the local spectra array for this thread. */ 
+          /* Write into the local spectra array for this thread. */
           local_part_spectra[idx] =
               std::fma(spec_val, weight, local_part_spectra[idx]);
         }
