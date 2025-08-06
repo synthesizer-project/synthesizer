@@ -339,7 +339,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
-    std::vector<double> local_part_spectra(end_idx - start_idx);
+    double *local_part_spectra = part_spectra + start_idx * nlam;
 
     for (int p = start_idx; p < end_idx; p++) {
 
@@ -387,22 +387,10 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
           const int idx = (p - start_idx) * nlam + ilam;
 
           /* Write into the local spectra array for this thread. */
-          local_part_spectra[idx] =
-              std::fma(spec_val, weight, local_part_spectra[idx]);
+          local_part_spectra[idx] = spec_val * weight + local_part_spectra[idx];
         }
       }
     }
-
-    // /* Now we need to accumulate the local spectra into the global array. */
-    // #pragma omp critical
-    //     {
-    //       for (int p = start_idx; p < end_idx; p++) {
-    //         for (int ilam = 0; ilam < nlam; ilam++) {
-    //           const int idx = (p - start_idx) * nlam + ilam;
-    //           part_spectra[p * nlam + ilam] += local_part_spectra[idx];
-    //         }
-    //       }
-    //     }
   }
 }
 #endif /* WITH_OPENMP */
