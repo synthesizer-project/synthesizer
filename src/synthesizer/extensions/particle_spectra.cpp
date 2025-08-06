@@ -22,6 +22,7 @@
 #include "macros.h"
 #include "part_props.h"
 #include "property_funcs.h"
+#include "reductions.h"
 #include "timers.h"
 #include "weights.h"
 
@@ -35,7 +36,7 @@
  * @param spectra: The output array.
  */
 static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
-                                    double *spectra, double *part_spectra) {
+                                    double *part_spectra) {
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
@@ -125,7 +126,6 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
 
         /* Fused multiply-add for precision */
         part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
-        spectra[ilam] = std::fma(spec_val, weight, spectra[ilam]);
       }
     }
   }
@@ -145,8 +145,7 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
  */
 #ifdef WITH_OPENMP
 static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
-                                 double *spectra, double *part_spectra,
-                                 int nthreads) {
+                                 double *part_spectra, int nthreads) {
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
@@ -184,8 +183,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     }
   }
 
-#pragma omp parallel for schedule(static) num_threads(nthreads)                \
-    reduction(+ : spectra[ : nlam])
+#pragma omp parallel for schedule(static) num_threads(nthreads)
   for (int p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
@@ -235,7 +233,6 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
 
         /* Fused multiply-add for precision */
         part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
-        spectra[ilam] = std::fma(spec_val, weight, spectra[ilam]);
       }
     }
   }
@@ -253,7 +250,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
  * @param spectra: The output array.
  * @param nthreads: The number of threads to use.
  */
-void spectra_loop_cic(GridProps *grid_props, Particles *parts, double *spectra,
+void spectra_loop_cic(GridProps *grid_props, Particles *parts,
                       double *part_spectra, const int nthreads) {
 
   double start_time = tic();
@@ -264,11 +261,11 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts, double *spectra,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_cic_omp(grid_props, parts, spectra, part_spectra, nthreads);
+    spectra_loop_cic_omp(grid_props, parts, part_spectra, nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_cic_serial(grid_props, parts, spectra, part_spectra);
+    spectra_loop_cic_serial(grid_props, parts, part_spectra);
   }
 
 #else
@@ -276,7 +273,7 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts, double *spectra,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_cic_serial(grid_props, parts, spectra, part_spectra);
+  spectra_loop_cic_serial(grid_props, parts, part_spectra);
 
 #endif
   toc("Cloud in Cell particle spectra loop", start_time);
@@ -294,7 +291,7 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts, double *spectra,
  * @param part_spectra: The per-particle output array.
  */
 static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
-                                    double *spectra, double *part_spectra) {
+                                    double *part_spectra) {
 
   /* Unpack the grid properties. */
   const int nlam = grid_props->nlam;
@@ -334,7 +331,6 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
        * Equivalent to: += spec_val * weight, but with a single rounding. */
       part_spectra[p * nlam + ilam] =
           std::fma(spec_val, weight, part_spectra[p * nlam + ilam]);
-      spectra[ilam] = std::fma(spec_val, weight, spectra[ilam]);
     }
   }
 }
@@ -352,15 +348,13 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
  */
 #ifdef WITH_OPENMP
 static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
-                                 double *spectra, double *part_spectra,
-                                 int nthreads) {
+                                 double *part_spectra, int nthreads) {
 
   /* Unpack the grid properties. */
   const int nlam = grid_props->nlam;
 
   /* Loop over particles. */
-#pragma omp parallel for schedule(static) num_threads(nthreads)                \
-    reduction(+ : spectra[ : nlam])
+#pragma omp parallel for schedule(static) num_threads(nthreads)
   for (int p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
@@ -395,7 +389,6 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
        * Equivalent to: += spec_val * weight, but with a single rounding. */
       part_spectra[p * nlam + ilam] =
           std::fma(spec_val, weight, part_spectra[p * nlam + ilam]);
-      spectra[ilam] = std::fma(spec_val, weight, spectra[ilam]);
     }
   }
 }
@@ -413,7 +406,7 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  * @param spectra: The output array.
  * @param nthreads: The number of threads to use.
  */
-void spectra_loop_ngp(GridProps *grid_props, Particles *parts, double *spectra,
+void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
                       double *part_spectra, const int nthreads) {
 
   double start_time = tic();
@@ -424,11 +417,11 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts, double *spectra,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_ngp_omp(grid_props, parts, spectra, part_spectra, nthreads);
+    spectra_loop_ngp_omp(grid_props, parts, part_spectra, nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_ngp_serial(grid_props, parts, spectra, part_spectra);
+    spectra_loop_ngp_serial(grid_props, parts, part_spectra);
   }
 
 #else
@@ -436,7 +429,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts, double *spectra,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_ngp_serial(grid_props, parts, spectra, part_spectra);
+  spectra_loop_ngp_serial(grid_props, parts, part_spectra);
 
 #endif
   toc("Nearest Grid Point particle spectra loop", start_time);
@@ -509,15 +502,18 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   if (strcmp(method, "cic") == 0) {
-    spectra_loop_cic(grid_props, part_props, spectra, part_spectra, nthreads);
+    spectra_loop_cic(grid_props, part_props, part_spectra, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    spectra_loop_ngp(grid_props, part_props, spectra, part_spectra, nthreads);
+    spectra_loop_ngp(grid_props, part_props, part_spectra, nthreads);
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);
     return NULL;
   }
   RETURN_IF_PYERR();
+
+  /* Reduce the per-particle spectra to the integrated spectra. */
+  reduce_spectra(spectra, part_spectra, nlam, npart, nthreads);
 
   /* Clean up memory! */
   delete part_props;
