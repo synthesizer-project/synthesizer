@@ -457,9 +457,8 @@ def synth_initialise(ignore_cmd_args=False) -> None:
 
     # If we are forcing the initialisation, clear the data directory
     # and all subdirectories
-    if args.force and ignore_cmd_args:
+    if args.force and not ignore_cmd_args:
         synth_clear_data()
-
     # Do all the directories already exist?
     all_exist = (
         data_dir_exists()
