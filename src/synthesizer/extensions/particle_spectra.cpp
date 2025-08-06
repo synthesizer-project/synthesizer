@@ -27,6 +27,138 @@
 #include "weights.h"
 
 /**
+ * @brief Get the grid indices and fractions for a particle using CIC.
+ *
+ * This function computes the indices of the grid cells that a particle
+ * occupies, along with the fractions of the particle's mass in each cell.
+ *
+ * This is the serial version of the function.
+ *
+ * @param GridProps: The properties of the grid.
+ * @param parts: The particle properties.
+ */
+static void get_particle_indices_and_fracs_serial(GridProps *grid_props,
+                                                  Particles *parts) {
+
+  /* Unpack the grid properties. */
+  const int ndim = grid_props->ndim;
+  int nlam = grid_props->nlam;
+
+  // Pre-allocate exactly npart slots to avoid resizing
+  parts->grid_indices.resize(parts->npart);
+  parts->grid_fracs.resize(parts->npart * ndim);
+
+  /* Loop over particles. */
+  for (int p = 0; p < parts->npart; p++) {
+
+    /* Skip masked particles. */
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      for (int idim = 0; idim < ndim; idim++) {
+        parts->grid_fracs[p * ndim + idim] = 0.0;
+      }
+      continue;
+    }
+
+    /* Get the grid indices and cell fractions for the particle. */
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    std::array<double, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+
+    /* Compute base linear index for this particle */
+    const int grid_ind = grid_props->ravel_grid_index(part_indices);
+
+    /* Store the grid indices and fractions in the particle class. */
+    parts->grid_indices[p] = grid_ind;
+
+    /* Store the per‐dimension fraction in the particle class. */
+    for (int idim = 0; idim < ndim; idim++) {
+      parts->grid_fracs[p * ndim + idim] = axis_fracs[idim];
+    }
+  }
+}
+
+/**
+ * @brief Get the grid indices and fractions for a particle using CIC.
+ *
+ * This function computes the indices of the grid cells that a particle
+ * occupies, along with the fractions of the particle's mass in each cell.
+ *
+ * This is the parallel version of the function.
+ *
+ * @param grid_props: The properties of the grid.
+ * @param parts: The particle properties.
+ * @param nthreads: The number of threads to use for parallel processing.
+ */
+static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
+                                                    Particles *parts,
+                                                    int nthreads) {
+  const int ndim = grid_props->ndim;
+  const int npart = parts->npart;
+
+  // Pre-allocate exactly npart slots so we can write into slices on
+  // each thread without resizing.
+  parts->grid_indices.resize(npart);
+  parts->grid_fracs.resize(npart * ndim);
+
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  // Loop over particles in parallel
+  for (int p = 0; p < npart; p++) {
+
+    // Skip masked particles
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      for (int d = 0; d < ndim; d++) {
+        parts->grid_fracs[p * ndim + d] = 0.0;
+      }
+      continue;
+    }
+
+    // Get the grid indices and cell fractions for the particle.
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    std::array<double, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+
+    // Compute base linear index for this particle
+    int grid_ind = grid_props->ravel_grid_index(part_indices);
+    parts->grid_indices[p] = grid_ind;
+
+    // Store the per‐dimension fractions
+    for (int d = 0; d < ndim; d++) {
+      parts->grid_fracs[p * ndim + d] = axis_fracs[d];
+    }
+  }
+}
+
+/**
+ * @brief Calculate the grid indices and fractions for all particles.
+ *
+ * This is a wrapper function that calls the correct version based on
+ * the number of threads requested or whether OpenMP is available.
+ *
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param nthreads: The number of threads to use.
+ */
+void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
+                                    int nthreads) {
+
+  double start = tic();
+
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    get_particle_indices_and_fracs_parallel(grid_props, parts, nthreads);
+  } else {
+    get_particle_indices_and_fracs_serial(grid_props, parts);
+  }
+#else
+  get_particle_indices_and_fracs_serial(grid_props, parts);
+#endif /* WITH_OPENMP */
+
+  toc("Finding particle grid indices and fractions", start);
+}
+
+/**
  * @brief This calculates particle spectra using a cloud in cell approach.
  *
  * This is the serial version of the function.
@@ -37,7 +169,6 @@
  */
 static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
                                     double *part_spectra) {
-
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
   int nlam = grid_props->nlam;
@@ -84,13 +215,8 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
       continue;
     }
 
-    /* Get the grid indices and cell fractions for the particle. */
-    std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<double, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
-
     /* Compute base linear index for this particle */
-    const int base_linidx = grid_props->ravel_grid_index(part_indices);
+    const int base_linidx = parts->grid_indices[p];
 
     /* Cache particle weight once */
     const double w_p = parts->get_weight_at(p);
@@ -103,9 +229,9 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
       double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
         if (sc.offs[idim]) {
-          frac *= axis_fracs[idim];
+          frac *= parts->grid_fracs[p * ndim + idim];
         } else {
-          frac *= (1.0 - axis_fracs[idim]);
+          frac *= (1.0 - parts->grid_fracs[p * ndim + idim]);
         }
       }
       if (frac == 0.0) {
@@ -146,7 +272,6 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
 #ifdef WITH_OPENMP
 static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
                                  double *part_spectra, int nthreads) {
-
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
   const int nlam = grid_props->nlam;
@@ -191,13 +316,8 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
       continue;
     }
 
-    /* Get the grid indices and cell fractions for the particle. */
-    std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<double, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
-
     /* Compute base linear index for this particle */
-    const int base_linidx = grid_props->ravel_grid_index(part_indices);
+    const int base_linidx = parts->grid_indices[p];
 
     /* Cache particle weight once */
     const double w_p = parts->get_weight_at(p);
@@ -210,9 +330,9 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
       double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
         if (sc.offs[idim]) {
-          frac *= axis_fracs[idim];
+          frac *= parts->grid_fracs[p * ndim + idim];
         } else {
-          frac *= (1.0 - axis_fracs[idim]);
+          frac *= (1.0 - parts->grid_fracs[p * ndim + idim]);
         }
       }
       if (frac == 0.0) {
@@ -253,6 +373,9 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
 void spectra_loop_cic(GridProps *grid_props, Particles *parts,
                       double *part_spectra, const int nthreads) {
 
+  /* First get the grid indices and fractions for all particles. */
+  get_particle_indices_and_fracs(grid_props, parts, nthreads);
+
   double start_time = tic();
 
   /* Call the correct function for the configuration/number of threads. */
@@ -292,7 +415,6 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
  */
 static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
                                     double *part_spectra) {
-
   /* Unpack the grid properties. */
   const int nlam = grid_props->nlam;
 
@@ -349,7 +471,6 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
 #ifdef WITH_OPENMP
 static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
                                  double *part_spectra, int nthreads) {
-
   /* Unpack the grid properties. */
   const int nlam = grid_props->nlam;
 
@@ -408,7 +529,6 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  */
 void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
                       double *part_spectra, const int nthreads) {
-
   double start_time = tic();
 
   /* Call the correct function for the configuration/number of threads. */
@@ -453,7 +573,6 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  * @param c: speed of light
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
-
   double start_time = tic();
 
   /* We don't need the self argument but it has to be there. Tell the
