@@ -280,6 +280,7 @@ extensions = [
             "src/synthesizer/extensions/part_props.cpp",
             "src/synthesizer/extensions/grid_props.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/reductions.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
