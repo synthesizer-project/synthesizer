@@ -115,7 +115,11 @@ Synthesizer has a small number of data files and directories it needs to functio
 In most circumstances you don't need to worry about these and everything will be default with automatically.
 The first time you import Synthesizer it will automatically create this directory and tell you where it is and what files have been placed there. 
 
-However, this can be invoked manually using the ``synthesizer-init`` command. Similarly, these directories can be removed using the ``synthesizer-clear`` command. 
+However, this can be invoked manually using the ``synthesizer-init`` command. 
+
+If you want to see where Synthesizer will place its data files, you can run the ``synthesizer-report`` command. 
+
+To clear out all Synthesizer data files and directories, you can run the ``synthesizer-clear`` command.
 
 Environment Variables 
 ##################### 
