@@ -425,12 +425,6 @@ def synth_initialise(ignore_cmd_args=False) -> None:
         ignore_cmd_args (bool, optional): If True, command-line arguments
             will be ignored. Defaults to False.
     """
-    """Run the Synthesizer initialization process.
-
-    This function runs the initialisation process. It creates the necessary
-    directories, copies default files, sets environment variables,
-    and prints a report.
-    """
     # Setup the optional print argument parser
     parser = argparse.ArgumentParser(
         description="Initialise the Synthesizer data directory."
@@ -459,6 +453,7 @@ def synth_initialise(ignore_cmd_args=False) -> None:
     # and all subdirectories
     if args.force and not ignore_cmd_args:
         synth_clear_data()
+
     # Do all the directories already exist?
     all_exist = (
         data_dir_exists()
