@@ -252,7 +252,7 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
         const int idx = p * nlam + ilam;
 
         /* Fused multiply-add for precision */
-        // part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
+        part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
       }
     }
   }
@@ -370,7 +370,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
         const int idx = p * nlam + ilam;
 
         /* Fused multiply-add for precision */
-        part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
+        // part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
       }
     }
   }
