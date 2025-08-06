@@ -3,6 +3,7 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
+#include <algorithm>
 #include <array>
 #include <math.h>
 #include <stdio.h>
@@ -308,8 +309,25 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     }
   }
 
+  /* Get indices which would sort the particles by their grid indices.
+   * This is used to ensure that particles with the same grid index are
+   * processed together, which can improve cache locality. */
+  double sort_start = tic();
+  std::vector<int> sorted_indices(parts->npart);
+  for (int i = 0; i < parts->npart; i++) {
+    sorted_indices[i] = i;
+  }
+  std::sort(sorted_indices.begin(), sorted_indices.end(),
+            [&parts](int a, int b) {
+              return parts->grid_indices[a] < parts->grid_indices[b];
+            });
+  toc("Sorting particle indices by grid index", sort_start);
+
 #pragma omp parallel for schedule(dynamic, 10) num_threads(nthreads)
-  for (int p = 0; p < parts->npart; p++) {
+  for (int i = 0; i < parts->npart; i++) {
+
+    /* Get the particle index from the sorted list. */
+    int p = sorted_indices[i];
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
