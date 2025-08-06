@@ -271,10 +271,8 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void spectra_loop_cic_omp(GridProps *__restrict grid_props,
-                                 Particles *__restrict parts,
-                                 double *__restrict part_spectra,
-                                 int nthreads) {
+static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
+                                 double *part_spectra, int nthreads) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
   const int nlam = grid_props->nlam;
@@ -297,6 +295,7 @@ static void spectra_loop_cic_omp(GridProps *__restrict grid_props,
     for (int ic = 0; ic < ncells; ic++) {
       get_indices_from_flat(ic, ndim, sub_dims, subset_ind);
       subcells[ic].offs = subset_ind;
+      /* ravel_grid_index on the offset gives the linear offset */
       subcells[ic].linoff = grid_props->ravel_grid_index(subset_ind);
     }
   }
@@ -304,68 +303,92 @@ static void spectra_loop_cic_omp(GridProps *__restrict grid_props,
   /* Precompute unmasked wavelengths */
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
-  for (int il = 0; il < nlam; il++) {
-    if (!grid_props->lam_is_masked(il)) {
-      good_lams.push_back(il);
+  for (int ilam = 0; ilam < nlam; ilam++) {
+    if (!grid_props->lam_is_masked(ilam)) {
+      good_lams.push_back(ilam);
     }
   }
-  const int J = static_cast<int>(good_lams.size());
+
+  // /* Get indices which would sort the particles by their grid indices.
+  //  * This is used to ensure that particles with the same grid index are
+  //  * processed together, which can improve cache locality. */
+  // double sort_start = tic();
+  // std::vector<int> sorted_indices(parts->npart);
+  // for (int i = 0; i < parts->npart; i++) {
+  //   sorted_indices[i] = i;
+  // }
+  // std::sort(sorted_indices.begin(), sorted_indices.end(),
+  //           [&parts](int a, int b) {
+  //             return parts->grid_indices[a] < parts->grid_indices[b];
+  //           });
+  // toc("Sorting particle indices by grid index", sort_start);
 
 #pragma omp parallel num_threads(nthreads)
   {
-    /* Split the work evenly across threads */
-    int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
+
+    /* Split the work evenly across threads (no single particle is more
+     * expensive than another). */
+    int nparts_per_thread = (parts->npart) / nthreads;
+
+    /* What thread is this? */
     int tid = omp_get_thread_num();
-    int start_idx = tid * npart_per_thread;
+
+    /* Get the start and end indices for this thread. */
+    int start_idx = tid * nparts_per_thread;
     int end_idx =
-        (tid == nthreads - 1) ? parts->npart : start_idx + npart_per_thread;
+        (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
-    /* Get this thread’s part of the output array */
-    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
-
-    /* Per-thread buffers for subcell weights and grid indices */
-    double sc_weight[1 << MAX_GRID_NDIM];
-    int sc_gridind[1 << MAX_GRID_NDIM];
+    /* Get this threads part of the output array. */
+    double *local_part_spectra = part_spectra + start_idx * nlam;
 
     for (int p = start_idx; p < end_idx; p++) {
-      int local_p = p - start_idx;
 
-      /* Skip masked particles: zero their spectrum */
+      // /* Get the particle index from the sorted list. */
+      // int p = sorted_indices[i];
+
+      /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
-        std::fill_n(local_part_spectra + local_p * nlam, nlam, 0.0);
         continue;
       }
+
+      /* Compute base linear index for this particle */
+      const int base_linidx = parts->grid_indices[p];
 
       /* Cache particle weight once */
       const double w_p = parts->get_weight_at(p);
 
-      /* Build subcell weights and grid indices */
-      const int base_ind = parts->grid_indices[p];
-      for (int ic = 0; ic < ncells; ic++) {
-        const auto &sc = subcells[ic];
+      /* Loop over sub-cells collecting their weighted contributions. */
+      for (int icell = 0; icell < ncells; icell++) {
+        const auto &sc = subcells[icell];
+
+        /* Compute the CIC fraction */
         double frac = 1.0;
-        for (int d = 0; d < ndim; d++) {
-          if (sc.offs[d]) {
-            frac *= parts->grid_fracs[p * ndim + d];
+        for (int idim = 0; idim < ndim; idim++) {
+          if (sc.offs[idim]) {
+            frac *= parts->grid_fracs[p * ndim + idim];
           } else {
-            frac *= (1.0 - parts->grid_fracs[p * ndim + d]);
+            frac *= (1.0 - parts->grid_fracs[p * ndim + idim]);
           }
         }
-        sc_weight[ic] = frac * w_p;
-        sc_gridind[ic] = base_ind + sc.linoff;
-      }
-
-      /* One SIMD-friendly loop over wavelengths */
-      double *__restrict row = local_part_spectra + local_p * nlam;
-#pragma omp simd
-      for (int jj = 0; jj < J; jj++) {
-        int ilam = good_lams[jj];
-        double acc = 0.0;
-        for (int ic = 0; ic < ncells; ic++) {
-          acc +=
-              grid_props->get_spectra_at(sc_gridind[ic], ilam) * sc_weight[ic];
+        if (frac == 0.0) {
+          continue;
         }
-        row[ilam] = acc;
+
+        /* Define the weighted contribution from this cell. */
+        const double weight = frac * w_p;
+
+        /* Compute grid cell index via base + precomputed offset */
+        const int grid_ind = base_linidx + sc.linoff;
+
+        /* Add this grid cell's contribution to the spectra. */
+        for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+          const int ilam = good_lams[jl];
+          const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+          const int idx = (p - start_idx) * nlam + ilam;
+
+          /* Write into the local spectra array for this thread. */
+          local_part_spectra[idx] = spec_val * weight + local_part_spectra[idx];
+        }
       }
     }
   }
