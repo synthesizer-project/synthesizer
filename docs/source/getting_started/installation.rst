@@ -115,24 +115,11 @@ Synthesizer has a small number of data files and directories it needs to functio
 In most circumstances you don't need to worry about these and everything will be default with automatically.
 The first time you import Synthesizer it will automatically create this directory and tell you where it is and what files have been placed there. 
 
-However, this can be invoked manually using the ``synthesizer-init`` command. This command includes some extra options, here is the output of ``synthesizer-init --help``:
+However, this can be invoked manually using the ``synthesizer-init`` command. 
 
-.. code-block:: bash
+If you want to see where Synthesizer will place its data files, you can run the ``synthesizer-report`` command. 
 
-    usage: synthesizer-init [-h] [--force] [--print]
-
-    Initialise the Synthesizer data directory.
-
-    options:
-      -h, --help   show this help message and exit
-      --force, -f  Force re-initialisation even if directories already exist.
-      --print, -p  Print a report showing the paths and file locations.
-
-Invoking ``synthesizer-init`` alone will run the initialisation process or exit silently if the directories already exist. To see a report of the paths and file locations, you can use the ``--print`` or ``-p`` option.
-
-To clear out the Synthesizer data directory and re-initialise it, you can use the ``--force`` or ``-f`` option. This will remove any existing directories and files before re-initialising. 
-
-To simply clear the Synthesizer data directory without re-initialising, you can run the ``synthesizer-clear`` command. This command takes no arguments.
+To clear out all Synthesizer data files and directories, you can run the ``synthesizer-clear`` command.
 
 Environment Variables 
 ##################### 
