@@ -427,6 +427,7 @@ def synth_initialise() -> None:
     )
     parser.add_argument(
         "--force",
+        "-f",
         action="store_true",
         help="Force re-initialisation even if directories already exist.",
     )
@@ -445,6 +446,11 @@ def synth_initialise() -> None:
         initializer.report()
         return
 
+    # If we are forcing the initialisation, clear the data directory
+    # and all subdirectories
+    if args.force:
+        synth_clear_data()
+
     # Do all the directories already exist?
     all_exist = (
         data_dir_exists()
@@ -461,7 +467,7 @@ def synth_initialise() -> None:
         all_exist = default_units_file.exists() and ids_file.exists()
 
     # Just exit if the data directory already exists
-    if all_exist and not args.force:
+    if all_exist:
         return
 
     # Otherwise, create the initializer and run it, this will only make or copy
