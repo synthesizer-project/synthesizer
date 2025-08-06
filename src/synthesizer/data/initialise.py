@@ -420,6 +420,16 @@ def synth_initialise(ignore_cmd_args=False) -> None:
     This function runs the initialisation process. It creates the necessary
     directories, copies default files, sets environment variables,
     and prints a report.
+
+    Args:
+        ignore_cmd_args (bool, optional): If True, command-line arguments
+            will be ignored. Defaults to False.
+    """
+    """Run the Synthesizer initialization process.
+
+    This function runs the initialisation process. It creates the necessary
+    directories, copies default files, sets environment variables,
+    and prints a report.
     """
     # Setup the optional print argument parser
     parser = argparse.ArgumentParser(
