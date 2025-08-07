@@ -128,7 +128,9 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
       /* Flattened grid index */
       const int grid_i = base_lin + sc.linoff;
 
-      /* Loop over wavelengths */
+      /* Loop over wavelengths (we can't prepare the unmasked wavelengths
+       * like we can in the non-shifted case, since the shifted wavelengths
+       * are particle-dependent) */
       for (int il = 0; il < nlam; ++il) {
         const int ils = mapped_indices[il];
         /* Skip out-of-bounds or masked */
@@ -206,8 +208,26 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     std::vector<double> shifted_wavelengths(nlam);
     std::vector<int> mapped_indices(nlam);
 
-#pragma omp for schedule(static)
-    for (int p = 0; p < parts->npart; ++p) {
+    /* Split the work evenly across threads (no single particle is more
+     * expensive than another). */
+    int nparts_per_thread = parts->npart / nthreads;
+
+    /* What thread is this? */
+    int tid = omp_get_thread_num();
+
+    /* Get the start and end indices for this thread. */
+    int start_idx = tid * nparts_per_thread;
+    int end_idx =
+        (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
+
+    /* Get this threads part of the output array. */
+    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
+
+    /* Get an array that we'll put each particle's spectra into. */
+    std::vector<double> this_part_spectra(nlam, 0.0);
+
+    /* Loop over particles in this thread's range. */
+    for (int p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -246,7 +266,9 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         const double weight = frac * w_p;
         const int grid_i = base_lin + sc.linoff;
 
-        /* Loop over wavelengths, using our precomputed mappings */
+        /* Loop over wavelengths (we can't prepare the unmasked wavelengths
+         * like we can in the non-shifted case, since the shifted wavelengths
+         * are particle-dependent) */
         for (int il = 0; il < nlam; ++il) {
           const int ils = mapped_indices[il];
           /* Skip out-of-bounds or masked bins */
@@ -263,11 +285,19 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
           const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
           const int base_idx = p * nlam;
 
-          /* Deposit into particle & global arrays */
-          part_spectra[base_idx + ils - 1] += (1.0 - frac_s) * gs;
-          part_spectra[base_idx + ils] += frac_s * gs;
+          /* Deposit into the thread's part spectra */
+          this_part_spectra[ils - 1] =
+              std::fma((1.0 - frac_s), gs, this_part_spectra[ils - 1]);
+          this_part_spectra[ils] = std::fma(frac_s, gs, this_part_spectra[ils]);
         }
       }
+
+      /* Copy the entire spectrum at once  into the output array. */
+      memcpy(local_part_spectra + (p - start_idx) * nlam,
+             this_part_spectra.data(), nlam * sizeof(double));
+
+      /* Reset the local spectra for this particle. */
+      std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
     }
   }
 }
@@ -339,8 +369,8 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
   double *wavelength = grid_props->get_lam();
 
   /* Allocate the shifted wavelengths array and the mapped indices array. */
-  double *shifted_wavelengths = new double[nlam];
-  int *mapped_indices = new int[nlam];
+  std::vector<double> shifted_wavelengths(nlam);
+  std::vector<int> mapped_indices(nlam);
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; p++) {
@@ -354,14 +384,11 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
     double vel = parts->get_vel_at(p);
     double shift_factor = 1.0 + vel / c;
 
-    /* Shift the wavelengths and get the mapping for each wavelength bin. We
-     * do this for each element because there is no guarantee the input
-     * wavelengths will be evenly spaced but we also don't want to repeat
-     * the nearest bin search too many times. */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
-      mapped_indices[ilam] =
-          get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+    /* Shift wavelengths & map to bins once per particle. */
+    for (int il = 0; il < nlam; ++il) {
+      const double lam_s = wavelength[il] * shift_factor;
+      shifted_wavelengths[il] = lam_s;
+      mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
     }
 
     /* Define the weight. */
@@ -370,7 +397,9 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
     /* Get the weight's index. */
     const int grid_ind = parts->grid_indices[p];
 
-    /* Add this grid cell's contribution to the spectra */
+    /* Loop over wavelengths (we can't prepare the unmasked wavelengths
+     * like we can in the non-shifted case, since the shifted wavelengths
+     * are particle-dependent) */
     for (int ilam = 0; ilam < nlam; ilam++) {
 
       /* Get the shifted wavelength and index. */
@@ -405,10 +434,6 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
           frac_shifted * grid_spectra_value;
     }
   }
-
-  /* Free the allocated arrays. */
-  delete[] shifted_wavelengths;
-  delete[] mapped_indices;
 }
 
 /**
@@ -435,11 +460,29 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
   {
 
     /* Allocate the shifted wavelengths array and the mapped indices array. */
-    double *shifted_wavelengths = new double[nlam];
-    int *mapped_indices = new int[nlam];
+    std::vector<double> shifted_wavelengths(nlam);
+    std::vector<int> mapped_indices(nlam);
 
-#pragma omp for schedule(static) private(shifted_wavelengths, mapped_indices)
-    for (int p = 0; p < parts->npart; p++) {
+    /* Split the work evenly across threads (no single particle is more
+     * expensive than another). */
+    int nparts_per_thread = parts->npart / nthreads;
+
+    /* What thread is this? */
+    int tid = omp_get_thread_num();
+
+    /* Get the start and end indices for this thread. */
+    int start_idx = tid * nparts_per_thread;
+    int end_idx =
+        (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
+
+    /* Get this threads part of the output array. */
+    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
+
+    /* Get an array that we'll put each particle's spectra into. */
+    std::vector<double> this_part_spectra(nlam, 0.0);
+
+    /* Loop over particles in this thread's range. */
+    for (int p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -450,14 +493,11 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
       double vel = parts->get_vel_at(p);
       double shift_factor = 1.0 + vel / c;
 
-      /* Shift the wavelengths and get the mapping for each wavelength bin. We
-       * do this for each element because there is no guarantee the input
-       * wavelengths will be evenly spaced but we also don't want to repeat
-       * the nearest bin search too many times. */
-      for (int ilam = 0; ilam < nlam; ilam++) {
-        shifted_wavelengths[ilam] = wavelength[ilam] * shift_factor;
-        mapped_indices[ilam] =
-            get_upper_lam_bin(shifted_wavelengths[ilam], wavelength, nlam);
+      /* Shift wavelengths & map to bins once per particle. */
+      for (int il = 0; il < nlam; ++il) {
+        const double lam_s = wavelength[il] * shift_factor;
+        shifted_wavelengths[il] = lam_s;
+        mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
       }
 
       /* Define the weighted contribution from this cell. */
@@ -466,7 +506,9 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
       /* Get the index of the grid cell. */
       const int grid_ind = parts->grid_indices[p];
 
-      /* Add this grid cell's contribution to the spectra */
+      /* Loop over wavelengths (we can't prepare the unmasked wavelengths
+       * like we can in the non-shifted case, since the shifted wavelengths
+       * are particle-dependent) */
       for (int ilam = 0; ilam < nlam; ilam++) {
 
         /* Get the shifted wavelength and index. */
@@ -494,17 +536,21 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
         double grid_spectra_value =
             grid_props->get_spectra_at(grid_ind, ilam) * weight;
 
-        /* Add the contribution to the corresponding wavelength element. */
-        part_spectra[p * nlam + ilam_shifted - 1] +=
-            (1.0 - frac_shifted) * grid_spectra_value;
-        part_spectra[p * nlam + ilam_shifted] +=
-            frac_shifted * grid_spectra_value;
+        /* Deposit into the thread's part spectra */
+        this_part_spectra[ils - 1] =
+            std::fma((1.0 - frac_shifted), grid_spectra_value,
+                     this_part_spectra[ils - 1]);
+        this_part_spectra[ils] =
+            std::fma(frac_shifted, grid_spectra_value, this_part_spectra[ils]);
       }
     }
 
-    /* Free the allocated arrays. */
-    delete[] shifted_wavelengths;
-    delete[] mapped_indices;
+    /* Copy the entire spectrum at once  into the output array. */
+    memcpy(local_part_spectra + (p - start_idx) * nlam,
+           this_part_spectra.data(), nlam * sizeof(double));
+
+    /* Reset the local spectra for this particle. */
+    std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
   }
 }
 #endif
