@@ -537,20 +537,20 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
             grid_props->get_spectra_at(grid_ind, ilam) * weight;
 
         /* Deposit into the thread's part spectra */
-        this_part_spectra[ils - 1] =
+        this_part_spectra[ilam_shifted - 1] =
             std::fma((1.0 - frac_shifted), grid_spectra_value,
-                     this_part_spectra[ils - 1]);
-        this_part_spectra[ils] =
-            std::fma(frac_shifted, grid_spectra_value, this_part_spectra[ils]);
+                     this_part_spectra[ilam_shifted - 1]);
+        this_part_spectra[ilam_shifted] = std::fma(
+            frac_shifted, grid_spectra_value, this_part_spectra[ilam_shifted]);
       }
+
+      /* Copy the entire spectrum at once  into the output array. */
+      memcpy(local_part_spectra + (p - start_idx) * nlam,
+             this_part_spectra.data(), nlam * sizeof(double));
+
+      /* Reset the local spectra for this particle. */
+      std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
     }
-
-    /* Copy the entire spectrum at once  into the output array. */
-    memcpy(local_part_spectra + (p - start_idx) * nlam,
-           this_part_spectra.data(), nlam * sizeof(double));
-
-    /* Reset the local spectra for this particle. */
-    std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
   }
 }
 #endif
