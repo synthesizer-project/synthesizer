@@ -9,7 +9,7 @@ import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr
+from unyt import Msun, Myr, km, s
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
@@ -33,6 +33,7 @@ def part_spectra_strong_scaling(
     average_over,
     gam,
     low_thresh,
+    doppler,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     # Define the grid
@@ -41,8 +42,7 @@ def part_spectra_strong_scaling(
     grid = Grid(grid_name)
 
     # Get the emission model
-    model = IncidentEmission(grid)
-    model.set_per_particle(True)
+    model = IncidentEmission(grid, vel_shift=doppler, per_particle=True)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
@@ -61,6 +61,7 @@ def part_spectra_strong_scaling(
         param_stars.log10metallicities,
         nstars,
         redshift=1,
+        velocities=np.random.normal(0, 100 * 1e3, size=(nstars, 3)) * km / s,
     )
 
     # Get spectra in serial first to get over any overhead due to linking
@@ -70,14 +71,24 @@ def part_spectra_strong_scaling(
     print()
 
     # Define the log and plot output paths
-    log_outpath = (
-        f"{out_dir}/{basename}_part_spectra_{gam}_"
-        f"totThreads{max_threads}_nstars{nstars}.log"
-    )
-    plot_outpath = (
-        f"{out_dir}/{basename}_part_spectra_{gam}_"
-        f"totThreads{max_threads}_nstars{nstars}.png"
-    )
+    if doppler:
+        log_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}_doppler.log"
+        )
+        plot_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}_doppler.png"
+        )
+    else:
+        log_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}.log"
+        )
+        plot_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}.png"
+        )
 
     # Run the scaling test
     run_scaling_test(
@@ -150,6 +161,12 @@ if __name__ == "__main__":
         "be included in the scaling test plot.",
     )
 
+    args.add_argument(
+        "--doppler",
+        action="store_true",
+        help="Whether to apply velocity shifts to the spectra calculation.",
+    )
+
     args = args.parse_args()
 
     part_spectra_strong_scaling(
@@ -160,4 +177,5 @@ if __name__ == "__main__":
         args.average_over,
         args.grid_assign,
         args.low_thresh,
+        args.doppler,
     )
