@@ -1,6 +1,18 @@
+// Standard includes
+#include <array>
+#include <limits>
+#include <vector>
 
+#ifdef WITH_OPENMP
+#include <omp.h>
+#endif
+
+// Local includes
 #include "part_props.h"
 #include "timers.h"
+
+// Declare the GridProps class to avoid circular dependency.
+class GridProps;
 
 /**
  * @brief Constructor for the particles class.
@@ -198,4 +210,241 @@ bool Particles::part_is_masked(int pind) const {
 
   /* Otherwise, is this element masked? */
   return !get_bool_at(np_mask_, pind);
+}
+
+/**
+ * @brief Get the grid indices and fractions for a particle using CIC.
+ *
+ * This function computes the indices of the grid cells that a particle
+ * occupies, along with the fractions of the particle's mass in each cell.
+ *
+ * This is the serial version of the function.
+ *
+ * @param GridProps: The properties of the grid.
+ * @param parts: The particle properties.
+ */
+static void get_particle_indices_and_fracs_serial(GridProps *grid_props,
+                                                  Particles *parts) {
+
+  /* Unpack the grid properties. */
+  const int ndim = grid_props->ndim;
+  int nlam = grid_props->nlam;
+
+  // Pre-allocate exactly npart slots to avoid resizing
+  parts->grid_indices.resize(parts->npart);
+  parts->grid_fracs.resize(parts->npart * ndim);
+
+  /* Loop over particles. */
+  for (int p = 0; p < parts->npart; p++) {
+
+    /* Skip masked particles. */
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      for (int idim = 0; idim < ndim; idim++) {
+        parts->grid_fracs[p * ndim + idim] = 0.0;
+      }
+      continue;
+    }
+
+    /* Get the grid indices and cell fractions for the particle. */
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    std::array<double, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+
+    /* Compute base linear index for this particle */
+    const int grid_ind = grid_props->ravel_grid_index(part_indices);
+
+    /* Store the grid indices and fractions in the particle class. */
+    parts->grid_indices[p] = grid_ind;
+
+    /* Store the per‐dimension fraction in the particle class. */
+    for (int idim = 0; idim < ndim; idim++) {
+      parts->grid_fracs[p * ndim + idim] = axis_fracs[idim];
+    }
+  }
+}
+
+/**
+ * @brief Get the grid indices and fractions for a particle using CIC.
+ *
+ * This function computes the indices of the grid cells that a particle
+ * occupies, along with the fractions of the particle's mass in each cell.
+ *
+ * This is the parallel version of the function.
+ *
+ * @param grid_props: The properties of the grid.
+ * @param parts: The particle properties.
+ * @param nthreads: The number of threads to use for parallel processing.
+ */
+static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
+                                                    Particles *parts,
+                                                    int nthreads) {
+
+  // Unpack the grid properties.
+  const int ndim = grid_props->ndim;
+  const int npart = parts->npart;
+
+  // Pre-allocate exactly npart slots so we can write into slices on
+  // each thread without resizing.
+  parts->grid_indices.resize(npart);
+  parts->grid_fracs.resize(npart * ndim);
+
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  // Loop over particles in parallel
+  for (int p = 0; p < npart; p++) {
+
+    // Skip masked particles
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      for (int d = 0; d < ndim; d++) {
+        parts->grid_fracs[p * ndim + d] = 0.0;
+      }
+      continue;
+    }
+
+    // Get the grid indices and cell fractions for the particle.
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    std::array<double, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+
+    // Compute base linear index for this particle
+    int grid_ind = grid_props->ravel_grid_index(part_indices);
+    parts->grid_indices[p] = grid_ind;
+
+    // Store the per‐dimension fractions
+    for (int d = 0; d < ndim; d++) {
+      parts->grid_fracs[p * ndim + d] = axis_fracs[d];
+    }
+  }
+}
+
+/**
+ * @brief Calculate the grid indices and fractions for all particles.
+ *
+ * This is a wrapper function that calls the correct version based on
+ * the number of threads requested or whether OpenMP is available.
+ *
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param nthreads: The number of threads to use.
+ */
+void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
+                                    int nthreads) {
+
+  double start = tic();
+
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    get_particle_indices_and_fracs_parallel(grid_props, parts, nthreads);
+  } else {
+    get_particle_indices_and_fracs_serial(grid_props, parts);
+  }
+#else
+  get_particle_indices_and_fracs_serial(grid_props, parts);
+#endif /* WITH_OPENMP */
+
+  toc("Finding particle grid indices and fractions", start);
+}
+
+/**
+ * @brief Get the grid indices for a particle using Nearest Grid Point (NGP).
+ *
+ * This is the serial version of the function.
+ *
+ * @param GridProps: The properties of the grid.
+ * @param parts: The particle properties.
+ */
+static void get_particle_indices_serial(GridProps *grid_props,
+                                        Particles *parts) {
+
+  /* Unpack the grid properties. */
+  const int ndim = grid_props->ndim;
+  int nlam = grid_props->nlam;
+
+  // Pre-allocate exactly npart slots to avoid resizing
+  parts->grid_indices.resize(parts->npart);
+
+  /* Loop over particles. */
+  for (int p = 0; p < parts->npart; p++) {
+
+    /* Skip masked particles. */
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      continue;
+    }
+
+    /* Get the grid indices and cell fractions for the particle. */
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    get_part_inds_ngp(part_indices, grid_props, parts, p);
+
+    /* Compute the flattened grid index for this particle and store it. */
+    const int grid_ind = grid_props->ravel_grid_index(part_indices);
+    parts->grid_indices[p] = grid_ind;
+  }
+}
+
+/**
+ * @brief Get the grid indices for a particle using Nearest Grid Point (NGP).
+ *
+ * This is the parallel version of the function.
+ *
+ * @param grid_props: The properties of the grid.
+ * @param parts: The particle properties.
+ * @param nthreads: The number of threads to use for parallel processing.
+ */
+static void get_particle_indices_parallel(GridProps *grid_props,
+                                          Particles *parts, int nthreads) {
+  const int ndim = grid_props->ndim;
+  const int npart = parts->npart;
+
+  // Pre-allocate exactly npart slots so we can write into slices on
+  // each thread without resizing.
+  parts->grid_indices.resize(npart);
+
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  // Loop over particles in parallel
+  for (int p = 0; p < npart; p++) {
+
+    // Skip masked particles
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      continue;
+    }
+
+    // Get the grid indices for the particle.
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    get_part_inds_ngp(part_indices, grid_props, parts, p);
+
+    // Compute the flattened grid index for this particle and store it.
+    int grid_ind = grid_props->ravel_grid_index(part_indices);
+    parts->grid_indices[p] = grid_ind;
+  }
+}
+
+/**
+ * @brief Calculate the grid indices for all particles.
+ *
+ * This is a wrapper function that calls the correct version based on
+ * the number of threads requested or whether OpenMP is available.
+ *
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param nthreads: The number of threads to use.
+ */
+void get_particle_indices(GridProps *grid_props, Particles *parts,
+                          int nthreads) {
+
+  double start = tic();
+
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    get_particle_indices_parallel(grid_props, parts, nthreads);
+  } else {
+    get_particle_indices_serial(grid_props, parts);
+  }
+#else
+  get_particle_indices_serial(grid_props, parts);
+#endif /* WITH_OPENMP */
+
+  toc("Finding particle grid indices", start);
 }

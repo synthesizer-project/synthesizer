@@ -68,4 +68,10 @@ private:
   PyObject *part_tuple_;
 };
 
+// Prototypes for helper functions.
+void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
+                                    int nthreads = 1);
+void get_particle_indices(GridProps *grid_props, Particles *parts,
+                          int nthreads = 1);
+
 #endif // PART_PROPS_H_
