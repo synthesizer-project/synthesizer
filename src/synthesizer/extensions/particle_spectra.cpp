@@ -94,6 +94,8 @@ static void get_particle_indices_and_fracs_serial(GridProps *grid_props,
 static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
                                                     Particles *parts,
                                                     int nthreads) {
+
+  // Unpack the grid properties.
   const int ndim = grid_props->ndim;
   const int npart = parts->npart;
 
