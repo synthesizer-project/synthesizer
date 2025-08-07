@@ -224,7 +224,8 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
 
     /* Get an array that we'll put each particle's spectra into. */
-    std::vector<double> this_part_spectra(nlam, 0.0);
+    std::vector<double> this_part_spectra_upper(nlam, 0.0);
+    std::vector<double> this_part_spectra_lower(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
     for (int p = start_idx; p < end_idx; p++) {
@@ -266,9 +267,9 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         const double weight = frac * w_p;
         const int grid_i = base_lin + sc.linoff;
 
-        /* Loop over wavelengths (we can't prepare the unmasked wavelengths
-         * like we can in the non-shifted case, since the shifted wavelengths
-         * are particle-dependent) */
+        /* Loop over wavelengths (we can't prepare the unmasked wavelengths like
+         * we can in the non-shifted case, since the shifted wavelengths are
+         * particle-dependent) */
         for (int il = 0; il < nlam; ++il) {
           const int ils = mapped_indices[il];
           /* Skip out-of-bounds or masked bins */
@@ -286,18 +287,25 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
           const int base_idx = p * nlam;
 
           /* Deposit into the thread's part spectra */
-          this_part_spectra[ils - 1] =
-              std::fma((1.0 - frac_s), gs, this_part_spectra[ils - 1]);
-          this_part_spectra[ils] = std::fma(frac_s, gs, this_part_spectra[ils]);
+          this_part_spectra_lower[ils - 1] = (1.0 - frac_s) * gs;
+          this_part_spectra_upper[ils] = frac_s * gs;
         }
+      }
+
+      /* Add the upper contributions into the lower contributions. */
+      for (int il = 0; il < nlam; ++il) {
+        this_part_spectra_lower[il] += this_part_spectra_upper[il];
       }
 
       /* Copy the entire spectrum at once  into the output array. */
       memcpy(local_part_spectra + (p - start_idx) * nlam,
-             this_part_spectra.data(), nlam * sizeof(double));
+             this_part_spectra_lower.data(), nlam * sizeof(double));
 
       /* Reset the local spectra for this particle. */
-      std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
+      std::fill(this_part_spectra_lower.begin(), this_part_spectra_lower.end(),
+                0.0);
+      std::fill(this_part_spectra_upper.begin(), this_part_spectra_upper.end(),
+                0.0);
     }
   }
 }
