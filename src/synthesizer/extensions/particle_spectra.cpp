@@ -383,7 +383,12 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
         const int ilam = good_lams[jl];
         const int idx = (p - start_idx) * nlam + ilam;
 
+        /* Assign the local spectra for this particle to the
+         * global output array. */
         local_part_spectra[idx] = this_part_spectra[ilam];
+
+        /* Reset the local spectra for this particle. */
+        this_part_spectra[ilam] = 0.0;
       }
     }
   }
