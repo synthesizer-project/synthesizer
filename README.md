@@ -45,7 +45,7 @@ Please see [here](docs/CONTRIBUTING.md) for contribution guidelines.
 
 ## Citation & Acknowledgement
 
-Please cite **both** of the following papers (Lovell et al. 2025, Roper et al. 2025) if you use Synthesizer in your research:
+Please cite **both** of the following papers ([Lovell et al. 2025](https://ui.adsabs.harvard.edu/abs/2025arXiv250803888L/abstract), [Roper et al. 2025](https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract)) if you use Synthesizer in your research:
 
     @ARTICLE{2025arXiv250803888L,
            author = {{Lovell}, Christopher C. and {Roper}, William J. and {Vijayan}, Aswin P. and {Wilkins}, Stephen M. and {Newman}, Sophie and {Seeyave}, Louise},
