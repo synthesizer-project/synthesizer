@@ -314,7 +314,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = (parts->npart) / nthreads;
+    int nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
@@ -377,19 +377,12 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
         }
       }
 
-      /* Now write the local spectra for this particle into the
-       * global output array. */
-      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
-        const int ilam = good_lams[jl];
-        const int idx = (p - start_idx) * nlam + ilam;
+      /* Copy the entire spectrum at once  into the output array. */
+      memcpy(local_part_spectra + (p - start_idx) * nlam,
+             this_part_spectra.data(), nlam * sizeof(double));
 
-        /* Assign the local spectra for this particle to the
-         * global output array. */
-        local_part_spectra[idx] = this_part_spectra[ilam];
-
-        /* Reset the local spectra for this particle. */
-        this_part_spectra[ilam] = 0.0;
-      }
+      /* Reset the local spectra for this particle. */
+      std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
     }
   }
 }
@@ -439,6 +432,109 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
 }
 
 /**
+ * @brief Get the grid indices for a particle using Nearest Grid Point (NGP).
+ *
+ * This is the serial version of the function.
+ *
+ * @param GridProps: The properties of the grid.
+ * @param parts: The particle properties.
+ */
+static void get_particle_indices_serial(GridProps *grid_props,
+                                        Particles *parts) {
+
+  /* Unpack the grid properties. */
+  const int ndim = grid_props->ndim;
+  int nlam = grid_props->nlam;
+
+  // Pre-allocate exactly npart slots to avoid resizing
+  parts->grid_indices.resize(parts->npart);
+
+  /* Loop over particles. */
+  for (int p = 0; p < parts->npart; p++) {
+
+    /* Skip masked particles. */
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      continue;
+    }
+
+    /* Get the grid indices and cell fractions for the particle. */
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    get_part_inds_ngp(part_indices, grid_props, parts, p);
+
+    /* Compute the flattened grid index for this particle and store it. */
+    const int grid_ind = grid_props->ravel_grid_index(part_indices);
+    parts->grid_indices[p] = grid_ind;
+  }
+}
+
+/**
+ * @brief Get the grid indices for a particle using Nearest Grid Point (NGP).
+ *
+ * This is the parallel version of the function.
+ *
+ * @param grid_props: The properties of the grid.
+ * @param parts: The particle properties.
+ * @param nthreads: The number of threads to use for parallel processing.
+ */
+static void get_particle_indices_parallel(GridProps *grid_props,
+                                          Particles *parts, int nthreads) {
+  const int ndim = grid_props->ndim;
+  const int npart = parts->npart;
+
+  // Pre-allocate exactly npart slots so we can write into slices on
+  // each thread without resizing.
+  parts->grid_indices.resize(npart);
+
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  // Loop over particles in parallel
+  for (int p = 0; p < npart; p++) {
+
+    // Skip masked particles
+    if (parts->part_is_masked(p)) {
+      parts->grid_indices[p] = -1;
+      continue;
+    }
+
+    // Get the grid indices for the particle.
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    get_part_inds_ngp(part_indices, grid_props, parts, p);
+
+    // Compute the flattened grid index for this particle and store it.
+    int grid_ind = grid_props->ravel_grid_index(part_indices);
+    parts->grid_indices[p] = grid_ind;
+  }
+}
+
+/**
+ * @brief Calculate the grid indices for all particles.
+ *
+ * This is a wrapper function that calls the correct version based on
+ * the number of threads requested or whether OpenMP is available.
+ *
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param nthreads: The number of threads to use.
+ */
+void get_particle_indices(GridProps *grid_props, Particles *parts,
+                          int nthreads) {
+
+  double start = tic();
+
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    get_particle_indices_parallel(grid_props, parts, nthreads);
+  } else {
+    get_particle_indices_serial(grid_props, parts);
+  }
+#else
+  get_particle_indices_serial(grid_props, parts);
+#endif /* WITH_OPENMP */
+
+  toc("Finding particle grid indices", start);
+}
+
+/**
  * @brief This calculates particle spectra using a nearest grid point
  *        approach.
  *
@@ -462,14 +558,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
       continue;
     }
 
-    /* Setup the index array. */
-    std::array<int, MAX_GRID_NDIM> part_indices;
-
-    /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, grid_props, parts, p);
-
     /* Get the weight's index. */
-    const int grid_ind = grid_props->ravel_grid_index(part_indices);
+    const int grid_ind = parts->grid_indices[p];
 
     /* Get the weight of this particle. */
     const double weight = parts->get_weight_at(p);
@@ -485,10 +575,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
       /* Get the spectra value at this index and wavelength. */
       const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
 
-      /* Use fused multiply-add to accumulate with better precision.
-       * Equivalent to: += spec_val * weight, but with a single rounding. */
-      part_spectra[p * nlam + ilam] =
-          std::fma(spec_val, weight, part_spectra[p * nlam + ilam]);
+      /* Assign to this particle's spectra array. */
+      part_spectra[p * nlam + ilam] = spec_val * weight;
     }
   }
 }
@@ -523,7 +611,7 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   {
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = (parts->npart) / nthreads;
+    int nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
@@ -566,20 +654,12 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
         this_part_spectra[ilam] = spec_val * weight;
       }
 
-      /* Now write the local spectra for this particle into the
-       * global output array. */
-      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+      /* Copy the entire spectrum at once into the output array. */
+      memcpy(local_part_spectra + (p - start_idx) * nlam,
+             this_part_spectra.data(), nlam * sizeof(double));
 
-        /* Get the wavelength index. */
-        const int ilam = good_lams[jl];
-
-        /* Get the index into the slice of the output array for this
-         * particle and wavelength. */
-        const int idx = (p - start_idx) * nlam + ilam;
-
-        /* Write to the local spectra array for this thread. */
-        local_part_spectra[idx] = this_part_spectra[ilam];
-      }
+      /* No reset needed as we overwrite the whole array each time and the
+       * wavelength mask never changes. */
     }
   }
 }
@@ -599,6 +679,10 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  */
 void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
                       double *part_spectra, const int nthreads) {
+
+  /* First get the grid indices for all particles. */
+  get_particle_indices(grid_props, parts, nthreads);
+
   double start_time = tic();
 
   /* Call the correct function for the configuration/number of threads. */
