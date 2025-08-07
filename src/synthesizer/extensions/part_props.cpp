@@ -8,8 +8,10 @@
 #endif
 
 // Local includes
+#include "grid_props.h"
 #include "part_props.h"
 #include "timers.h"
+#include "weights.h"
 
 // Declare the GridProps class to avoid circular dependency.
 class GridProps;
