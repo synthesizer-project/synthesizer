@@ -327,6 +327,9 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     /* Get this threads part of the output array. */
     double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
 
+    /* Get an array that we'll put each particle's spectra into. */
+    std::vector<double> this_part_spectra(nlam, 0.0);
+
     for (int p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
@@ -367,11 +370,20 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
         for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
           const int ilam = good_lams[jl];
           const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
-          const int idx = (p - start_idx) * nlam + ilam;
 
           /* Write into the local spectra array for this thread. */
-          local_part_spectra[idx] = spec_val * weight + local_part_spectra[idx];
+          this_part_spectra[ilam] =
+              std::fma(spec_val, weight, this_part_spectra[ilam]);
         }
+      }
+
+      /* Now write the local spectra for this particle into the
+       * global output array. */
+      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+        const int ilam = good_lams[jl];
+        const int idx = (p - start_idx) * nlam + ilam;
+
+        local_part_spectra[idx] = this_part_spectra[ilam];
       }
     }
   }
