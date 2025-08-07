@@ -198,6 +198,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     /* Get an array that we'll put each particle's spectra into. */
     std::vector<double> this_part_spectra(nlam, 0.0);
 
+    /* Loop over particles in this thread's range. */
     for (int p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
