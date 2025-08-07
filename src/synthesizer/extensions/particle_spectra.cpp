@@ -510,42 +510,76 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   /* Unpack the grid properties. */
   const int nlam = grid_props->nlam;
 
-  /* Loop over particles. */
-#pragma omp parallel for schedule(dynamic, 10) num_threads(nthreads)
-  for (int p = 0; p < parts->npart; p++) {
-
-    /* Skip masked particles. */
-    if (parts->part_is_masked(p)) {
-      continue;
+  /* Precompute unmasked wavelengths */
+  std::vector<int> good_lams;
+  good_lams.reserve(nlam);
+  for (int ilam = 0; ilam < nlam; ilam++) {
+    if (!grid_props->lam_is_masked(ilam)) {
+      good_lams.push_back(ilam);
     }
+  }
 
-    /* Setup the index array. */
-    std::array<int, MAX_GRID_NDIM> part_indices;
+#pragma omp parallel num_threads(nthreads)
+  {
+    /* Split the work evenly across threads (no single particle is more
+     * expensive than another). */
+    int nparts_per_thread = (parts->npart) / nthreads;
 
-    /* Get the grid indices for the particle */
-    get_part_inds_ngp(part_indices, grid_props, parts, p);
+    /* What thread is this? */
+    int tid = omp_get_thread_num();
 
-    /* Get the weight's index. */
-    const int grid_ind = grid_props->ravel_grid_index(part_indices);
+    /* Get the start and end indices for this thread. */
+    int start_idx = tid * nparts_per_thread;
+    int end_idx =
+        (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
-    /* Get the weight of this particle. */
-    const double weight = parts->get_weight_at(p);
+    /* Get this threads part of the output array. */
+    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
 
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
+    /* Get an array that we'll put each particle's spectra into. */
+    std::vector<double> this_part_spectra(nlam, 0.0);
 
-      /* Skip if this wavelength is masked. */
-      if (grid_props->lam_is_masked(ilam)) {
+    /* Loop over particles. */
+    for (int p = start_idx; p < end_idx; p++) {
+
+      /* Skip masked particles. */
+      if (parts->part_is_masked(p)) {
         continue;
       }
 
-      /* Get the spectra value at this index and wavelength. */
-      const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+      /* Get the particle's grid index. */
+      const int grid_ind = parts->grid_indices[p];
 
-      /* Use fused multiply-add to accumulate with better precision.
-       * Equivalent to: += spec_val * weight, but with a single rounding. */
-      part_spectra[p * nlam + ilam] =
-          std::fma(spec_val, weight, part_spectra[p * nlam + ilam]);
+      /* Get the weight of this particle. */
+      const double weight = parts->get_weight_at(p);
+
+      /* Add this grid cell's contribution to the spectra */
+      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+
+        /* Get the wavelength index. */
+        const int ilam = good_lams[jl];
+
+        /* Get the spectra value at this index and wavelength. */
+        const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+
+        /* Assign to this particle's spectra array. */
+        this_part_spectra[ilam] = spec_val * weight;
+      }
+
+      /* Now write the local spectra for this particle into the
+       * global output array. */
+      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+
+        /* Get the wavelength index. */
+        const int ilam = good_lams[jl];
+
+        /* Get the index into the slice of the output array for this
+         * particle and wavelength. */
+        const int idx = (p - start_idx) * nlam + ilam;
+
+        /* Write to the local spectra array for this thread. */
+        local_part_spectra[idx] = this_part_spectra[ilam];
+      }
     }
   }
 }
