@@ -244,7 +244,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       for (int il = 0; il < nlam; ++il) {
         const double lam_s = wavelength[il] * shift_factor;
         shifted_wavelengths[il] = lam_s;
-        mapped_indices[il] = il;
+        mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
       }
 
       /* Compute base linear index and cached weight */
