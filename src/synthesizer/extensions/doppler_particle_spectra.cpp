@@ -3,7 +3,6 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
-#include <algorithm>
 #include <array>
 #include <math.h>
 #include <stdio.h>
@@ -209,23 +208,25 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     std::vector<double> shifted_wavelengths(nlam);
     std::vector<int> mapped_indices(nlam);
 
-    /* Split the work evenly across threads */
+    /* Split the work evenly across threads (no single particle is more
+     * expensive than another). */
     int nparts_per_thread = parts->npart / nthreads;
+
+    /* What thread is this? */
     int tid = omp_get_thread_num();
+
+    /* Get the start and end indices for this thread. */
     int start_idx = tid * nparts_per_thread;
     int end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
-    /* Thread-local accumulation buffer */
-    std::vector<double> this_part_spectra(nlam, 0.0);
+    /* Get this threads part of the output array. */
+    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
 
-    /* Sparse accumulation structure for small Doppler shifts */
-    struct SparseWrite {
-      int index;
-      double value;
-    };
-    std::vector<SparseWrite> sparse_writes;
-    sparse_writes.reserve(nlam * 2); // Max 2 writes per wavelength
+    /* Get an array that we'll put each particle's spectra into. */
+    std::vector<double> this_part_spectra_upper(nlam, 0.0);
+    std::vector<double> this_part_spectra_lower(nlam, 0.0);
+    std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
     for (int p = start_idx; p < end_idx; p++) {
@@ -243,15 +244,12 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       for (int il = 0; il < nlam; ++il) {
         const double lam_s = wavelength[il] * shift_factor;
         shifted_wavelengths[il] = lam_s;
-        mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
+        mapped_indices[il] = il;
       }
 
       /* Compute base linear index and cached weight */
       const int base_lin = parts->grid_indices[p];
       const double w_p = parts->get_weight_at(p);
-
-      /* Clear sparse writes for this particle */
-      sparse_writes.clear();
 
       /* Loop over all 2^ndim sub-cells */
       for (int ic = 0; ic < ncells; ++ic) {
@@ -270,7 +268,9 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         const double weight = frac * w_p;
         const int grid_i = base_lin + sc.linoff;
 
-        /* Loop over wavelengths */
+        /* Loop over wavelengths (we can't prepare the unmasked wavelengths like
+         * we can in the non-shifted case, since the shifted wavelengths are
+         * particle-dependent) */
         for (int il = 0; il < nlam; ++il) {
           const int ils = mapped_indices[il];
           /* Skip out-of-bounds or masked bins */
@@ -285,26 +285,23 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
           /* Base spectra contribution */
           const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
+          const int base_idx = p * nlam;
 
-          /* Store sparse writes */
-          sparse_writes.push_back({ils - 1, (1.0 - frac_s) * gs});
-          sparse_writes.push_back({ils, frac_s * gs});
+          /* Deposit into the thread's part spectra */
+          this_part_spectra_lower[ils - 1] = (1.0 - frac_s) * gs;
+          this_part_spectra_upper[ils] = frac_s * gs;
         }
       }
 
-      /* Apply sparse writes directly to output array with good locality */
-      double *local_part_spectra = part_spectra + p * nlam;
-
-      /* Sort by index for better cache behavior */
-      std::sort(sparse_writes.begin(), sparse_writes.end(),
-                [](const SparseWrite &a, const SparseWrite &b) {
-                  return a.index < b.index;
-                });
-
-      /* Apply writes with potential combining of duplicate indices */
-      for (const auto &write : sparse_writes) {
-        local_part_spectra[write.index] += write.value;
+      /* Add the upper contributions into the lower contributions. */
+      for (int il = 0; il < nlam; ++il) {
+        this_part_spectra[il] =
+            this_part_spectra_lower[il] + this_part_spectra_upper[il];
       }
+
+      /* Copy the entire spectrum at once  into the output array. */
+      memcpy(local_part_spectra + (p - start_idx) * nlam,
+             this_part_spectra.data(), nlam * sizeof(double));
     }
   }
 }
