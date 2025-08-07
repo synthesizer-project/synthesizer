@@ -224,8 +224,6 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
 
     /* Get an array that we'll put each particle's spectra into. */
-    std::vector<double> this_part_spectra_upper(nlam, 0.0);
-    std::vector<double> this_part_spectra_lower(nlam, 0.0);
     std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
@@ -288,20 +286,17 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
           const int base_idx = p * nlam;
 
           /* Deposit into the thread's part spectra */
-          this_part_spectra_lower[ils - 1] = (1.0 - frac_s) * gs;
-          this_part_spectra_upper[ils] = frac_s * gs;
+          this_part_spectra[ils - 1] =
+              std::fma((1.0 - frac_s), gs, this_part_spectra[ils - 1]);
+          this_part_spectra[ils] = std::fma(frac_s, gs, this_part_spectra[ils]);
         }
       }
 
-      /* Add the upper contributions into the lower contributions. */
+      /* Copy the entire spectrum at once  into the output array. */
       for (int il = 0; il < nlam; ++il) {
-        this_part_spectra[il] =
+        local_part_spectra[(p - start_idx) * nlam + il] =
             this_part_spectra_lower[il] + this_part_spectra_upper[il];
       }
-
-      /* Copy the entire spectrum at once  into the output array. */
-      memcpy(local_part_spectra + (p - start_idx) * nlam,
-             this_part_spectra.data(), nlam * sizeof(double));
     }
   }
 }
