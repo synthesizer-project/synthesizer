@@ -82,7 +82,7 @@ dependencies = [
   "scipy",
   "unyt",
   "cmasher",
-  "dust_extinction",
+  "dust_extinction>=1.6",
   "matplotlib",
   "spectres",
   "tqdm",
