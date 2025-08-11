@@ -214,6 +214,57 @@ class Image(ImagingBase):
                 f"{other_img.units if other_img.units is not None else s})."
             )
 
+    def __sub__(self, other_img):
+        """Subtract 2 Images.
+
+        Args:
+            other_img (Image):
+                The other image to be subtracted.
+
+        Returns:
+            Image:
+                The new image containing the subtracted arrays.
+
+        Raises:
+            InconsistentArguments:
+                If the images have different resolutions or fovs, or if the
+                combination of units is incompatible an error is raised.
+        """
+        # Ensure the images have the same resolution
+        if not np.isclose(self.resolution, other_img.resolution):
+            raise exceptions.InconsistentAddition(
+                "The images must have the same resolution to be subtracted "
+                f"({self.resolution}, {other_img.resolution})."
+            )
+
+        # Ensure the images have the same fov
+        if np.any(self.fov != other_img.fov):
+            raise exceptions.InconsistentAddition(
+                "The images must have the same fov to be subtracted "
+                f"({self.fov}, {other_img.fov})."
+            )
+
+        # Hanlde if units are involved or not
+        if self.units is None and other_img.units is None:
+            return Image(
+                self.resolution,
+                self.fov,
+                img=self.arr + other_img.arr,
+            )
+        elif self.units is not None and other_img.units is not None:
+            return Image(
+                self.resolution,
+                self.fov,
+                img=self.arr * self.units - other_img.arr * other_img.units,
+            )
+        else:
+            s = "dimensionless"
+            raise exceptions.InconsistentArguments(
+                "Cannot subtract inconsistent units "
+                f"({self.units if self.units is not None else s}, "
+                f"{other_img.units if other_img.units is not None else s})."
+            )
+
     def __str__(self):
         """Return a string representation of the Image object.
 
