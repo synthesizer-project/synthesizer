@@ -298,8 +298,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
       /* Copy the entire spectrum at once  into the output array. */
       for (int il = 0; il < nlam; ++il) {
-        local_part_spectra[(p - start_idx) * nlam + il] =
-            this_part_spectra_lower[il] + this_part_spectra_upper[il];
+        local_part_spectra[(p - start_idx) * nlam + il] = this_part_spectra[il];
       }
     }
   }
