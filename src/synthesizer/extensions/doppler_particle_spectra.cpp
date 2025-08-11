@@ -163,6 +163,10 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
  * every particle, and all sub‐cell index math is hoisted out of the particle
  * loop.
  *
+ * TODO: This currently scales poorly relative to the non-shifted case, since
+ * the memory access pattern is not as cache-friendly due to the scattered
+ * accesses to the shifted wavelengths and their mapped indices.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param spectra: The output array.
