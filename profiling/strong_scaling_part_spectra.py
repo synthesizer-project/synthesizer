@@ -62,7 +62,7 @@ def part_spectra_strong_scaling(
         param_stars.log10metallicities,
         nstars,
         redshift=1,
-        velocities=np.random.normal(0, 100 * 1e3, size=(nstars, 3)) * km / s,
+        velocities=np.random.normal(0.0, 100.0, size=(nstars, 3)) * km / s,
     )
 
     # Get spectra in serial first to get over any overhead due to linking
