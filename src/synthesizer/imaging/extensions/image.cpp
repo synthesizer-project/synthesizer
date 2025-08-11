@@ -31,6 +31,66 @@
 #endif
 
 /**
+ * @brief Updated recursive function using exact overlap areas.
+ */
+double populate_subpixels_recursive(const double part_x, const double part_y,
+                                    const double part_sml, const double pix_x,
+                                    const double pix_y, const double res,
+                                    const double *kernel, const int kdim,
+                                    const double threshold,
+                                    const int max_depth = 8,
+                                    const int current_depth = 0) {
+
+  double dx = part_x - pix_x;
+  double dy = part_y - pix_y;
+  double center_dist = sqrt(dx * dx + dy * dy);
+  double kernel_radius = threshold * part_sml;
+  double pixel_diagonal = 0.5 * sqrt(2) * res;
+
+  // Early exit if no overlap possible
+  if (center_dist - pixel_diagonal >= kernel_radius) {
+    return 0.0;
+  }
+
+  // If pixel is completely inside kernel amd small enough that sampling
+  // doesn't matter, return the kernel without recursion further
+  if (center_dist + pixel_diagonal <= kernel_radius && res < 0.1 * part_sml) {
+    double q = center_dist / part_sml;
+    int index = std::min(kdim - 1, static_cast<int>(q * kdim));
+    index = std::max(index, 0);
+    return kernel[index] * res * res;
+  }
+
+  // If we've reached max depth, calculate exact overlap
+  if (current_depth >= max_depth) {
+    double q = center_dist / part_sml;
+    if (q <= threshold) {
+      int index = std::min(kdim - 1, static_cast<int>(q * kdim));
+      index = std::max(index, 0);
+      return kernel[index] * res * res;
+    }
+    return 0.0;
+  }
+
+  // Recursive subdivision
+  double sub_res = res / 2.0;
+  double total_value = 0.0;
+
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      double sub_pix_x = pix_x + (i - 0.5) * sub_res;
+      double sub_pix_y = pix_y + (j - 0.5) * sub_res;
+
+      total_value += populate_subpixels_recursive(
+          part_x, part_y, part_sml, sub_pix_x, sub_pix_y, sub_res, kernel, kdim,
+          threshold, max_depth, current_depth + 1);
+    }
+  }
+
+  return total_value;
+}
+
+/**
  * @brief Recursively populate a pixel.
  *
  * This will recurse to the leaves of the cell tree, any cells further than the
@@ -57,7 +117,7 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
 
   /* Early exit if the projected distance between cells is more than the
    * maximum smoothing length in the cell. */
-  if (c->max_sml_squ + 2 * res <
+  if (c->max_sml_squ + (2 * sqrt(2) * res) <
       min_projected_dist2(const_cast<struct cell *>(c), pix_x, pix_y)) {
     return;
   }
@@ -91,29 +151,16 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
       /* Get the particle. */
       struct particle *part = &parts[j];
 
-      /* Calculate the x and y separations. */
-      double dx = part->pos[0] - pix_x - res;
-      double dy = part->pos[1] - pix_y - res;
-
-      /* Calculate the impact parameter. */
-      double b = sqrt(dx * dx + dy * dy);
-
-      /* Skip if the pixel is outside the kernel. */
-      if (b > (threshold * part->sml)) {
-        continue;
-      }
-
-      /* Find fraction of the smoothing length at this pixel. */
-      double q = b / part->sml;
-
-      /* Get the value of the kernel at q (handling q =1). */
-      int index = std::min(kdim - 1, static_cast<int>(q * kdim));
-      double kvalue = kernel[index];
+      /* Recurse through subpixels to get a more accurate value
+       * of the kernel in this pixel. */
+      double kvalue = populate_subpixels_recursive(part->pos[0], part->pos[1],
+                                                   part->sml, pix_x, pix_y, res,
+                                                   kernel, kdim, threshold);
 
       /* Finally, compute the pixel value itself across all images. */
       for (int nimg = 0; nimg < nimgs; nimg++) {
         out[nimg] += kvalue * pix_values[nimg * npart + part->index] /
-                     (part->sml * part->sml) * res * res;
+                     (part->sml * part->sml);
       }
     }
   }
