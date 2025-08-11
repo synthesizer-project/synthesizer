@@ -33,9 +33,25 @@ Contents
 Citation & Acknowledgement
 --------------------------
 
-Please cite the following papers if you use Synthesizer in your research (Lovell et al. 2025 will be available shortly)
+Please cite **both** of the following papers (`Lovell et al. 2025 <https://ui.adsabs.harvard.edu/abs/2025arXiv250803888L/abstract>`_, `Roper et al. 2025 <https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract>`_) if you use Synthesizer in your research:
 
 .. code-block:: bibtex
+
+      @ARTICLE{2025arXiv250803888L,
+             author = {{Lovell}, Christopher C. and {Roper}, William J. and {Vijayan}, Aswin P. and {Wilkins}, Stephen M. and {Newman}, Sophie and {Seeyave}, Louise},
+              title = "{Synthesizer: a Software Package for Synthetic Astronomical Observables}",
+            journal = {arXiv e-prints},
+           keywords = {Instrumentation and Methods for Astrophysics, Cosmology and Nongalactic Astrophysics, Astrophysics of Galaxies},
+               year = 2025,
+              month = aug,
+                eid = {arXiv:2508.03888},
+              pages = {arXiv:2508.03888},
+      archivePrefix = {arXiv},
+             eprint = {2508.03888},
+       primaryClass = {astro-ph.IM},
+             adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250803888L},
+            adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+      }
 
       @ARTICLE{2025arXiv250615811R,
          author = {{Roper}, Will J. and {Lovell}, Christopher and {Vijayan}, Aswin and {Wilkins}, Stephen and {Akins}, Hollis and {Berger}, Sabrina and {Sant Fournier}, Connor and {Harvey}, Thomas and {Iyer}, Kartheik and {Leonardi}, Marco and {Newman}, Sophie and {Pautasso}, Borja and {Perry}, Ashley and {Seeyave}, Louise and {Sommovigo}, Laura},

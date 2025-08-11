@@ -82,7 +82,7 @@ dependencies = [
   "scipy",
   "unyt",
   "cmasher",
-  "dust_extinction @ git+https://github.com/WillJRoper/dust_extinction.git@master#egg=dust_extinction",
+  "dust_extinction>=1.6",
   "matplotlib",
   "spectres",
   "tqdm",
@@ -144,6 +144,7 @@ eagle = [
 synthesizer-init = "synthesizer.data.initialise:synth_initialise"
 synthesizer-clear = "synthesizer.data.initialise:synth_clear_data"
 synthesizer-download="synthesizer.downloader.downloader:download"
+synthesizer-report = "synthesizer.data.initialise:synth_report_config"
 
 # Package data
 [tool.setuptools.package-data]

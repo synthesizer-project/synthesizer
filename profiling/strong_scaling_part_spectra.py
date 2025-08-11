@@ -34,6 +34,7 @@ def part_spectra_strong_scaling(
     gam,
     low_thresh,
     doppler,
+    paper_style,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     # Define the grid
@@ -103,6 +104,7 @@ def part_spectra_strong_scaling(
         },
         total_msg="Generating spectra",
         low_thresh=low_thresh,
+        paper_style=paper_style,
     )
 
 
@@ -160,6 +162,12 @@ if __name__ == "__main__":
         help="the lower threshold on time for an operation to "
         "be included in the scaling test plot.",
     )
+    args.add_argument(
+        "--paper_style",
+        action="store_true",
+        help="Use the paper style for the plot (legend below the plot and "
+        "smaller proportions).",
+    )
 
     args.add_argument(
         "--doppler",
@@ -178,4 +186,5 @@ if __name__ == "__main__":
         args.grid_assign,
         args.low_thresh,
         args.doppler,
+        args.paper_style,
     )
