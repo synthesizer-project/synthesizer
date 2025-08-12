@@ -805,7 +805,7 @@ def _generate_ifu_particle_hist(
 
     # Strip off and store the units on the spectra for later
     ifu.units = spectra.units
-    spectra = spectra.ndveiw
+    spectra = spectra.ndview
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:
