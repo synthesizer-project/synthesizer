@@ -724,8 +724,6 @@ def _generate_image_collection_generic(
             coords = emitter.centered_coordinates
             smls = emitter.smoothing_lengths
 
-        print(photometry.photometry.shape)
-
         return _generate_images_particle_smoothed(
             imgs=imgs,
             signals=photometry.photometry,
