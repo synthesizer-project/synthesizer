@@ -164,6 +164,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
 
   return work_list;
 }
+
 /**
  * @brief Recursively populate a pixel.
  *
@@ -207,12 +208,53 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
 
   } else {
 
-    /* We're in a leaf if we get here, unpack the particles. */
-    int npart = c->part_count;
+    /* We're in a leaf if we get here. To avoid memory contention between
+     * threads, we'll allocate a local image buffer for just the region
+     * this leaf cell affects, process all particles into that buffer,
+     * then copy the results back to the global image at the end. */
+
+    /* Calculate the maximum kernel radius for particles in this cell. */
+    double max_sml = sqrt(c->max_sml_squ);
+    double max_kernel_radius = max_sml * threshold;
+
+    /* Add a buffer around the cell to account for kernel overlap. We need
+     * to include the maximum kernel radius plus an extra pixel buffer to
+     * ensure we capture all affected pixels. */
+    double buffer = max_kernel_radius + res;
+
+    /* Calculate the world coordinate bounds of the region this cell affects. */
+    double x_min_world = c->loc[0] - buffer;
+    double x_max_world = c->loc[0] + c->width + buffer;
+    double y_min_world = c->loc[1] - buffer;
+    double y_max_world = c->loc[1] + c->width + buffer;
+
+    /* Convert world coordinates to pixel indices, clamping to image bounds. */
+    int i_min = std::max(0, (int)floor(x_min_world / res));
+    int i_max = std::min(npix_x, (int)ceil(x_max_world / res));
+    int j_min = std::max(0, (int)floor(y_min_world / res));
+    int j_max = std::min(npix_y, (int)ceil(y_max_world / res));
+
+    /* Calculate the dimensions of our local image buffer. */
+    int local_width = i_max - i_min;
+    int local_height = j_max - j_min;
+
+    /* Safety check: ensure we have valid dimensions. */
+    if (local_width <= 0 || local_height <= 0) {
+      PyErr_SetString(PyExc_ValueError,
+                      "Invalid local image dimensions calculated.");
+      return;
+    }
+
+    /* Allocate and zero-initialize the local image buffer. This will store
+     * contributions from all particles in this cell before we copy them
+     * back to the global image. */
+    std::vector<double> local_img(local_width * local_height * nimgs, 0.0);
+
+    /* Unpack the particles from this leaf cell. */
     struct particle *parts = c->particles;
 
-    /* Loop over the particles adding their contribution to the pixel value. */
-    for (int p = 0; p < npart; p++) {
+    /* Loop over the particles adding their contribution to the local buffer. */
+    for (int p = 0; p < c->part_count; p++) {
 
       /* Get the particle. */
       struct particle *part = &parts[p];
@@ -222,30 +264,49 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
       int j = (int)floor(part->pos[1] / res);
 
       /* If the smoothing length is less than half the resolution just add it
-       * to the nearest pixel. */
+       * to the nearest pixel in our local buffer. */
       if (part->sml < res / 2.0) {
-        int img_index = 0;
-        for (int nimg = 0; nimg < nimgs; nimg++) {
-          img_index = i * npix_y * nimgs + j * nimgs + nimg;
-          out[img_index] += pix_values[part->index + nimg * npart];
+
+        /* Check if this pixel falls within our local region. */
+        if (i >= i_min && i < i_max && j >= j_min && j < j_max) {
+
+          /* Convert global pixel coordinates to local buffer coordinates. */
+          int local_i = i - i_min;
+          int local_j = j - j_min;
+
+          /* Safety check bounds. */
+          if (local_i >= 0 && local_i < local_width && local_j >= 0 &&
+              local_j < local_height) {
+
+            /* Add the particle's contribution to all images. */
+            for (int nimg = 0; nimg < nimgs; nimg++) {
+              int local_idx =
+                  local_i * local_height * nimgs + local_j * nimgs + nimg;
+              if (local_idx >= 0 && local_idx < local_img.size()) {
+                local_img[local_idx] += pix_values[part->index + nimg * npart];
+              }
+            }
+          }
         }
         continue;
       }
 
-      /* How many pixels do we need to walk out in the kernel?  (with a
+      /* How many pixels do we need to walk out in the kernel? (with a
        * buffer of 1 pixel to ensure we cover the kernel). */
-      int delta_pix = (int)ceil(part->sml / res) + 1;
+      int delta_pix = (int)ceil(part->sml * threshold / res) + 1;
 
       /* Loop over the pixels in the kernel. */
       for (int ii = -delta_pix; ii <= delta_pix; ii++) {
         for (int jj = -delta_pix; jj <= delta_pix; jj++) {
 
-          /* Get this pixels indices. */
+          /* Get this pixel's global indices. */
           int iii = i + ii;
           int jjj = j + jj;
 
-          /* Skip pixels that are out of bounds. */
-          if (iii < 0 || iii >= npix_x || jjj < 0 || jjj >= npix_y) {
+          /* Skip pixels that are outside our local region. This includes
+           * pixels that are out of bounds of the global image as well as
+           * pixels that fall outside the region this cell affects. */
+          if (iii < i_min || iii >= i_max || jjj < j_min || jjj >= j_max) {
             continue;
           }
 
@@ -269,15 +330,61 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
           }
 
           /* Get the kernel value at this pixel position. */
-          float kvalue_interpolated =
+          double kvalue_interpolated =
               interpolate_kernel(q, kernel, kdim, threshold);
-          float kvalue =
+          double kvalue =
               kvalue_interpolated / (part->sml * part->sml) * res * res;
 
-          /* Loop over images and add the contribution to each pixel. */
+          /* Convert global pixel coordinates to local buffer coordinates. */
+          int local_i = iii - i_min;
+          int local_j = jjj - j_min;
+
+          /* Safety check bounds. */
+          if (local_i >= 0 && local_i < local_width && local_j >= 0 &&
+              local_j < local_height) {
+
+            /* Loop over images and add the contribution to the local buffer. */
+            for (int nimg = 0; nimg < nimgs; nimg++) {
+              int local_idx =
+                  local_i * local_height * nimgs + local_j * nimgs + nimg;
+              if (local_idx >= 0 && local_idx < local_img.size()) {
+                local_img[local_idx] +=
+                    kvalue * pix_values[part->index + nimg * npart];
+              }
+            }
+          }
+        }
+      }
+    }
+
+    /* Now copy the local buffer contents back to the global image. We need
+     * to use atomic operations here because multiple threads may be writing
+     * to overlapping regions of the global image due to kernel overlap
+     * between neighboring cells. */
+    for (int local_i = 0; local_i < local_width; local_i++) {
+      for (int local_j = 0; local_j < local_height; local_j++) {
+
+        /* Convert local coordinates back to global pixel indices. */
+        int global_i = i_min + local_i;
+        int global_j = j_min + local_j;
+
+        /* Safety check global bounds. */
+        if (global_i >= 0 && global_i < npix_x && global_j >= 0 &&
+            global_j < npix_y) {
+
+          /* Copy contributions for all images. */
           for (int nimg = 0; nimg < nimgs; nimg++) {
-            int img_index = iii * npix_y * nimgs + jjj * nimgs + nimg;
-            out[img_index] += kvalue * pix_values[part->index + nimg * npart];
+            int local_idx =
+                local_i * local_height * nimgs + local_j * nimgs + nimg;
+            int global_idx =
+                global_i * npix_y * nimgs + global_j * nimgs + nimg;
+
+            /* Atomically add the local contribution to the global image to
+             * handle potential race conditions from overlapping kernels. */
+#ifdef WITH_OPENMP
+#pragma omp atomic
+#endif
+            out[global_idx] += local_img[local_idx];
           }
         }
       }
@@ -369,9 +476,20 @@ void populate_smoothed_image_serial(const double *pix_values,
                                     const int kdim, double *img,
                                     const int nimgs, struct cell *root) {
 
-  /* Populate the pixel recursively. */
-  populate_pixel_recursive(root, threshold, kdim, kernel, npart, img, nimgs,
-                           pix_values, res, npix_x, npix_y);
+  /* Build a balanced work list (this isn't really necessary in serial,
+   * but it keeps the code consistent with the parallel version and has
+   * negligible cost and does give cache benefits). */
+  std::vector<weighted_cell> work_list = build_balanced_work_list(root, 1);
+
+  /* Loop over the work list. */
+  for (int i = 0; i < work_list.size(); i++) {
+    const weighted_cell &wc = work_list[i];
+    struct cell *c = wc.cell_ptr;
+
+    /* Populate the pixel recursively. */
+    populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
+                             pix_values, res, npix_x, npix_y);
+  }
 }
 
 /**
