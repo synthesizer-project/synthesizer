@@ -31,23 +31,40 @@
 #endif
 
 /**
- * @brief Inline function for kernel interpolation
+ * @brief Inline function for kernel interpolation.
+ *
+ * This funciton interpolates the value of the kernel at a given distance
+ * from the center, `q`, it starts from the precomputed kernel look up table
+ * and refines this value using linear interpolation.
+ *
+ * @param q The distance from the center, normalized by the smoothing length.
+ * @param kernel The precomputed kernel look up table.
+ * @param kdim The dimension of the kernel (number of entries in the kernel
+ * array).
+ * @param threshold The threshold value for the kernel, above which the kernel
+ * value is zero.
+ *
+ * @return The interpolated kernel value at distance `q`.
  */
 inline double interpolate_kernel(double q, const double *kernel, int kdim,
                                  double threshold) {
+
+  /* Early exit if q is above the threshold */
   if (q >= threshold) {
     return 0.0;
   }
 
+  /* Convert q to a fraction of the kernel dimension */
   double q_scaled = q * kdim;
 
+  /* Return the maximum kernel value if q is beyond the last entry */
   if (q_scaled >= kdim - 1) {
     return kernel[kdim - 1];
   }
 
+  /* Linear interpolation between the two nearest kernel values */
   int kindex_low = static_cast<int>(q_scaled);
   double frac = q_scaled - kindex_low;
-
   return kernel[kindex_low] * (1.0 - frac) + kernel[kindex_low + 1] * frac;
 }
 
@@ -55,10 +72,21 @@ inline double interpolate_kernel(double q, const double *kernel, int kdim,
  * @brief Structure to hold cell with its computational cost
  */
 struct weighted_cell {
+
+  /*! Pointer to the cell */
   struct cell *cell_ptr;
+
+  /*! Cost of the cell, calculated as max_smoothing_length * particle_count */
   double cost;
+
+  /*! Whether the cell can be subdivided, i.e. if the cell is split */
   bool can_subdivide;
 
+  /**
+   * @brief Constructor to initialize a weighted cell
+   *
+   * @param c Pointer to the cell to be weighted
+   */
   weighted_cell(struct cell *c) : cell_ptr(c) {
     // Cost = max_smoothing_length * particle_count
     // This represents kernel area × work per kernel
@@ -69,16 +97,27 @@ struct weighted_cell {
 };
 
 /**
- * @brief Comparison function for finding most expensive cell
+ * @brief Comparison function for finding most expensive cell.
+ *
+ * This function compares two weighted cells based on their cost.
+ *
+ * It is used to sort the cells in descending order of cost,
+ * so that the most expensive cells are processed first.
+ *
+ * @param a First weighted cell to compare
+ * @param b Second weighted cell to compare
+ *
+ * @return True if the cost of cell `a` is greater than that of cell `b`,
+ *         false otherwise.
  */
-bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
+inline bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
   return a.cost > b.cost; // Descending order
 }
 
 /**
  * @brief Build balanced work list using adaptive subdivision
  */
-std::vector<weighted_cell>
+static std::vector<weighted_cell>
 build_balanced_work_list(struct cell *root, int nthreads,
                          double balance_tolerance = 2.0) {
 
