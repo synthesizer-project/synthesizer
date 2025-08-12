@@ -31,65 +31,295 @@
 #endif
 
 /**
- * @brief Updated recursive function using exact overlap areas.
+ * @brief Inline function for kernel interpolation
  */
-double populate_subpixels_recursive(const double part_x, const double part_y,
-                                    const double part_sml, const double pix_x,
-                                    const double pix_y, const double res,
-                                    const double *kernel, const int kdim,
-                                    const double threshold,
-                                    const int max_depth = 8,
-                                    const int current_depth = 0) {
-
-  double dx = part_x - pix_x;
-  double dy = part_y - pix_y;
-  double center_dist = sqrt(dx * dx + dy * dy);
-  double kernel_radius = threshold * part_sml;
-  double pixel_diagonal = 0.5 * sqrt(2) * res;
-
-  // Early exit if no overlap possible
-  if (center_dist - pixel_diagonal >= kernel_radius) {
+inline double interpolate_kernel(double q, const double *kernel, int kdim,
+                                 double threshold) {
+  if (q >= threshold) {
     return 0.0;
   }
 
-  // If pixel is completely inside kernel amd small enough that sampling
-  // doesn't matter, return the kernel without recursion further
-  if (center_dist + pixel_diagonal <= kernel_radius && res < 0.1 * part_sml) {
-    double q = center_dist / part_sml;
-    int index = std::min(kdim - 1, static_cast<int>(q * kdim));
-    index = std::max(index, 0);
-    return kernel[index] * res * res;
+  double q_scaled = q * kdim;
+
+  if (q_scaled >= kdim - 1) {
+    return kernel[kdim - 1];
   }
 
-  // If we've reached max depth, calculate exact overlap
-  if (current_depth >= max_depth) {
-    double q = center_dist / part_sml;
-    if (q <= threshold) {
-      int index = std::min(kdim - 1, static_cast<int>(q * kdim));
-      index = std::max(index, 0);
-      return kernel[index] * res * res;
-    }
-    return 0.0;
-  }
+  int kindex_low = static_cast<int>(q_scaled);
+  double frac = q_scaled - kindex_low;
 
-  // Recursive subdivision
-  double sub_res = res / 2.0;
-  double total_value = 0.0;
-
-  for (int i = 0; i < 2; i++) {
-    for (int j = 0; j < 2; j++) {
-      double sub_pix_x = pix_x + (i - 0.5) * sub_res;
-      double sub_pix_y = pix_y + (j - 0.5) * sub_res;
-
-      total_value += populate_subpixels_recursive(
-          part_x, part_y, part_sml, sub_pix_x, sub_pix_y, sub_res, kernel, kdim,
-          threshold, max_depth, current_depth + 1);
-    }
-  }
-
-  return total_value;
+  return kernel[kindex_low] * (1.0 - frac) + kernel[kindex_low + 1] * frac;
 }
 
+/**
+ * @brief Calculate the fraction of a square pixel that overlaps with a circular
+ * kernel
+ *
+ * @param particle_x Particle center x coordinate
+ * @param particle_y Particle center y coordinate
+ * @param kernel_radius Kernel radius (smoothing_length * threshold)
+ * @param pixel_x Pixel center x coordinate
+ * @param pixel_y Pixel center y coordinate
+ * @param pixel_size Pixel side length
+ * @return Fraction of pixel area inside kernel (0.0 to 1.0)
+ */
+inline double pixel_kernel_overlap_fraction(double particle_x,
+                                            double particle_y,
+                                            double kernel_radius,
+                                            double pixel_x, double pixel_y,
+                                            double pixel_size) {
+
+  // Distance from particle to pixel center
+  double dx = pixel_x - particle_x;
+  double dy = pixel_y - particle_y;
+  double center_dist = sqrt(dx * dx + dy * dy);
+
+  // Half diagonal distance from pixel center to corner
+  double half_diagonal = 0.5 * sqrt(2.0) * pixel_size;
+
+  // Quick exit: entirely outside kernel
+  if (center_dist - half_diagonal >= kernel_radius) {
+    return 0.0;
+  }
+
+  // Quick exit: entirely inside kernel
+  if (center_dist + half_diagonal <= kernel_radius) {
+    return 1.0;
+  }
+
+  // Partial overlap - need to calculate intersection area
+  double half_pixel = 0.5 * pixel_size;
+
+  // Pixel corners relative to particle center
+  double corners[4][2] = {
+      {dx - half_pixel, dy - half_pixel}, // Bottom-left
+      {dx + half_pixel, dy - half_pixel}, // Bottom-right
+      {dx - half_pixel, dy + half_pixel}, // Top-left
+      {dx + half_pixel, dy + half_pixel}  // Top-right
+  };
+
+  // Count corners inside the kernel
+  int corners_inside = 0;
+  for (int i = 0; i < 4; i++) {
+    double corner_dist_sq =
+        corners[i][0] * corners[i][0] + corners[i][1] * corners[i][1];
+    if (corner_dist_sq <= kernel_radius * kernel_radius) {
+      corners_inside++;
+    }
+  }
+
+  // Simple cases based on corner analysis
+  if (corners_inside == 0) {
+    // No corners inside - check if kernel center is inside pixel
+    if (fabs(dx) <= half_pixel && fabs(dy) <= half_pixel) {
+      // Kernel center is inside pixel - estimate using circle area
+      double circle_area = M_PI * kernel_radius * kernel_radius;
+      double pixel_area = pixel_size * pixel_size;
+      return std::min(1.0, circle_area / pixel_area);
+    }
+
+    // Complex intersection - use sampling approximation
+    const int samples_per_dim = 5;
+    int samples_inside = 0;
+    int total_samples = samples_per_dim * samples_per_dim;
+
+    double sample_step = pixel_size / samples_per_dim;
+    double start_x = dx - half_pixel + 0.5 * sample_step;
+    double start_y = dy - half_pixel + 0.5 * sample_step;
+
+    for (int i = 0; i < samples_per_dim; i++) {
+      for (int j = 0; j < samples_per_dim; j++) {
+        double sample_x = start_x + i * sample_step;
+        double sample_y = start_y + j * sample_step;
+        double sample_dist_sq = sample_x * sample_x + sample_y * sample_y;
+
+        if (sample_dist_sq <= kernel_radius * kernel_radius) {
+          samples_inside++;
+        }
+      }
+    }
+
+    return (double)samples_inside / total_samples;
+  }
+
+  if (corners_inside == 4) {
+    // All corners inside - should have been caught by quick exit, but safety
+    // check
+    return 1.0;
+  }
+
+  // 1, 2, or 3 corners inside - use analytical approximation
+  double base_fraction = (double)corners_inside / 4.0;
+
+  // Refine estimate using edge intersections
+  // This is a simplified approximation - for more accuracy, implement
+  // full circle-rectangle intersection geometry
+
+  if (corners_inside == 1 || corners_inside == 3) {
+    // Asymmetric case - use sampling for better accuracy
+    const int samples_per_dim = 7;
+    int samples_inside = 0;
+    int total_samples = samples_per_dim * samples_per_dim;
+
+    double sample_step = pixel_size / samples_per_dim;
+    double start_x = dx - half_pixel + 0.5 * sample_step;
+    double start_y = dy - half_pixel + 0.5 * sample_step;
+
+    for (int i = 0; i < samples_per_dim; i++) {
+      for (int j = 0; j < samples_per_dim; j++) {
+        double sample_x = start_x + i * sample_step;
+        double sample_y = start_y + j * sample_step;
+        double sample_dist_sq = sample_x * sample_x + sample_y * sample_y;
+
+        if (sample_dist_sq <= kernel_radius * kernel_radius) {
+          samples_inside++;
+        }
+      }
+    }
+
+    return (double)samples_inside / total_samples;
+  }
+
+  // 2 corners inside - likely diagonal intersection
+  // Use corner-based estimate with small correction
+  double edge_correction = 0.1; // Small adjustment for curved boundary
+
+  if (corners_inside == 2) {
+    // Check if corners are adjacent (edge intersection) or diagonal
+    bool adjacent = false;
+
+    // Check adjacency pattern
+    if ((corners[0][0] * corners[0][0] + corners[0][1] * corners[0][1] <=
+         kernel_radius * kernel_radius) &&
+        (corners[1][0] * corners[1][0] + corners[1][1] * corners[1][1] <=
+         kernel_radius * kernel_radius)) {
+      adjacent = (corners[0][1] == corners[1][1]); // Same y coordinate
+    }
+    // Add more adjacency checks for other corner pairs...
+
+    if (adjacent) {
+      return base_fraction + edge_correction;
+    } else {
+      return base_fraction; // Diagonal case
+    }
+  }
+
+  return base_fraction;
+}
+
+/**
+ * @brief Structure to hold cell with its computational cost
+ */
+struct weighted_cell {
+  struct cell *cell_ptr;
+  double cost;
+  bool can_subdivide;
+
+  weighted_cell(struct cell *c) : cell_ptr(c) {
+    // Cost = max_smoothing_length * particle_count
+    // This represents kernel area × work per kernel
+    double max_sml = sqrt(c->max_sml_squ);
+    cost = max_sml * c->part_count;
+    can_subdivide = c->split;
+  }
+};
+
+/**
+ * @brief Comparison function for finding most expensive cell
+ */
+bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
+  return a.cost > b.cost; // Descending order
+}
+
+/**
+ * @brief Build balanced work list using adaptive subdivision
+ */
+std::vector<weighted_cell>
+build_balanced_work_list(struct cell *root, int nthreads,
+                         double balance_tolerance = 2.0) {
+
+  double start_time = tic();
+
+  std::vector<weighted_cell> work_list;
+  work_list.emplace_back(root);
+
+  int target_cells =
+      std::max(2 * nthreads, 8); // At least 2x threads, minimum 8
+
+  while (true) {
+    // Calculate statistics
+    double total_cost = 0.0;
+    double max_cost = 0.0;
+    int subdividable_cells = 0;
+
+    for (const auto &wc : work_list) {
+      total_cost += wc.cost;
+      max_cost = std::max(max_cost, wc.cost);
+      if (wc.can_subdivide)
+        subdividable_cells++;
+    }
+
+    double avg_cost = total_cost / work_list.size();
+
+    // Check termination conditions
+    bool enough_cells = work_list.size() >= target_cells;
+    bool balanced = (max_cost / avg_cost) <= balance_tolerance;
+    bool can_continue = subdividable_cells > 0;
+
+    // Condition 1: Need more cells than threads (with reasonable minimum)
+    // Condition 2: Cells should be roughly balanced in cost
+    if ((enough_cells && balanced) || !can_continue) {
+      break;
+    }
+
+    // Find the most expensive cell that can be subdivided
+    auto most_expensive =
+        std::max_element(work_list.begin(), work_list.end(),
+                         [](const weighted_cell &a, const weighted_cell &b) {
+                           if (!a.can_subdivide && b.can_subdivide)
+                             return true;
+                           if (a.can_subdivide && !b.can_subdivide)
+                             return false;
+                           return a.cost < b.cost;
+                         });
+
+    if (!most_expensive->can_subdivide) {
+      printf("  No more cells can be subdivided\n");
+      break;
+    }
+
+    // Subdivide the most expensive cell
+    struct cell *expensive_cell = most_expensive->cell_ptr;
+
+    // Remove the expensive cell from the list
+    work_list.erase(most_expensive);
+
+    // Add its children
+    for (int ip = 0; ip < 8; ip++) {
+      struct cell *child = &expensive_cell->progeny[ip];
+      if (child->part_count > 0) {
+        work_list.emplace_back(child);
+      }
+    }
+  }
+
+  // Final statistics
+  double final_total_cost = 0.0;
+  double final_max_cost = 0.0;
+  double final_min_cost = 1e99;
+
+  for (const auto &wc : work_list) {
+    final_total_cost += wc.cost;
+    final_max_cost = std::max(final_max_cost, wc.cost);
+    final_min_cost = std::min(final_min_cost, wc.cost);
+  }
+
+  double final_avg_cost = final_total_cost / work_list.size();
+
+  toc("Splitting cell tree over threads", start_time);
+
+  return work_list;
+}
 /**
  * @brief Recursively populate a pixel.
  *
@@ -108,19 +338,11 @@ double populate_subpixels_recursive(const double part_x, const double part_y,
  * @param nimgs The number of images to populate.
  * @param pix_values The pixel values to use for each image.
  */
-static void populate_pixel_recursive(const struct cell *c, const double pix_x,
-                                     const double pix_y, double threshold,
+static void populate_pixel_recursive(const struct cell *c, double threshold,
                                      int kdim, const double *kernel, int npart,
                                      double *out, int nimgs,
-                                     const double *pix_values,
-                                     const double res) {
-
-  /* Early exit if the projected distance between cells is more than the
-   * maximum smoothing length in the cell. */
-  if (c->max_sml_squ + (2 * sqrt(2) * res) <
-      min_projected_dist2(const_cast<struct cell *>(c), pix_x, pix_y)) {
-    return;
-  }
+                                     const double *pix_values, const double res,
+                                     const int npix_x, const int npix_y) {
 
   /* Is the cell split? */
   if (c->split) {
@@ -135,8 +357,8 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
       }
 
       /* Recurse... */
-      populate_pixel_recursive(cp, pix_x, pix_y, threshold, kdim, kernel, npart,
-                               out, nimgs, pix_values, res);
+      populate_pixel_recursive(cp, threshold, kdim, kernel, npart, out, nimgs,
+                               pix_values, res, npix_x, npix_y);
     }
 
   } else {
@@ -146,33 +368,145 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
     struct particle *parts = c->particles;
 
     /* Loop over the particles adding their contribution to the pixel value. */
-    for (int j = 0; j < npart; j++) {
+    for (int p = 0; p < npart; p++) {
 
       /* Get the particle. */
-      struct particle *part = &parts[j];
+      struct particle *part = &parts[p];
 
-      /* Recurse through subpixels to get a more accurate value
-       * of the kernel in this pixel. */
-      double kvalue = populate_subpixels_recursive(part->pos[0], part->pos[1],
-                                                   part->sml, pix_x, pix_y, res,
-                                                   kernel, kdim, threshold);
+      /* Get the particle position in terms of pixels. */
+      int i = (int)floor(part->pos[0] / res);
+      int j = (int)floor(part->pos[1] / res);
 
-      /* Finally, compute the pixel value itself across all images. */
-      for (int nimg = 0; nimg < nimgs; nimg++) {
-        out[nimg] += kvalue * pix_values[nimg * npart + part->index] /
-                     (part->sml * part->sml);
+      /* If the smoothing length is less than half the resolution just add it
+       * to the nearest pixel. */
+      if (part->sml < res / 2.0) {
+        int img_index = 0;
+        for (int nimg = 0; nimg < nimgs; nimg++) {
+          img_index = i * npix_y * nimgs + j * nimgs + nimg;
+          out[img_index] += pix_values[part->index + nimg * npart];
+        }
+        continue;
+      }
+
+      /* How many pixels do we need to walk out in the kernel?  (with a
+       * buffer of 1 pixel to ensure we cover the kernel). */
+      int delta_pix = (int)ceil(part->sml / res) + 1;
+
+      /* Loop over the pixels in the kernel. */
+      for (int ii = -delta_pix; ii <= delta_pix; ii++) {
+        for (int jj = -delta_pix; jj <= delta_pix; jj++) {
+
+          /* Get this pixels indices. */
+          int iii = i + ii;
+          int jjj = j + jj;
+
+          /* Skip pixels that are out of bounds. */
+          if (iii < 0 || iii >= npix_x || jjj < 0 || jjj >= npix_y) {
+            continue;
+          }
+
+          /* Calculate the pixel position. */
+          double pix_x = iii * res;
+          double pix_y = jjj * res;
+
+          /* Calculate the x and y separations. */
+          double dx = pix_x - part->pos[0];
+          double dy = pix_y - part->pos[1];
+
+          /* Calculate the impact parameter. */
+          double b = sqrt(dx * dx + dy * dy);
+
+          /* Compute the impact parameter in terms of the smoothing length. */
+          double q = b / part->sml;
+
+          /* Early skip if the pixel is outside the kernel threshold. */
+          if (q > threshold) {
+            continue;
+          }
+
+          /* Get the kernel value at this pixel position. */
+          float kvalue_interpolated =
+              interpolate_kernel(q, kernel, kdim, threshold);
+          float kvalue =
+              kvalue_interpolated / (part->sml * part->sml) * res * res;
+
+          // /* Get the fraction of the pixel that overlaps with the kernel. */
+          // float pixel_overlap_fraction = pixel_kernel_overlap_fraction(
+          //     part->pos[0], part->pos[1], part->sml * threshold, pix_x,
+          //     pix_y, res);
+          // kvalue *= pixel_overlap_fraction;
+
+          /* Loop over images and add the contribution to each pixel. */
+          for (int nimg = 0; nimg < nimgs; nimg++) {
+            int img_index = iii * npix_y * nimgs + jjj * nimgs + nimg;
+            out[img_index] += kvalue * pix_values[part->index + nimg * npart];
+          }
+        }
       }
     }
   }
 }
 
 /**
- * @brief Function to populate an image.
+ * @brief Populate the image across all threads.
+ *
+ * This function will first divide the cell tree to optimally balance work
+ * across threads, and then it will populate the image by recursively
+ * processing each cell in the partitioned work list.
+ *
+ * @param pix_values: The particle data to be sorted into pixels
+ *                   (luminosity/flux/mass etc.).
+ * @param kernel: The kernel data (integrated along the z axis and softed by
+ *                impact parameter).
+ * @param res: The pixel resolution.
+ * @param npix_x: The number of pixels along the x axis.
+ * @param npix_y: The number of pixels along the y axis.
+ * @param npart: The number of particles.
+ * @param threshold: The threshold of the SPH kernel.
+ * @param kdim: The number of elements in the kernel.
+ * @param img: The image to be populated.
+ * @param nimgs: The number of images to populate.
+ * @param root: The root of the tree.
+ * @param nthreads: The number of threads to use.
+ * @return void
+ */
+#ifdef WITH_OPENMP
+void populate_smoothed_image_parallel(const double *pix_values,
+                                      const double *kernel, const double res,
+                                      const int npix_x, const int npix_y,
+                                      const int npart, const double threshold,
+                                      const int kdim, double *img,
+                                      const int nimgs, struct cell *root,
+                                      const int nthreads) {
+
+  /* Build a balanced work list. */
+  std::vector<weighted_cell> work_list =
+      build_balanced_work_list(root, nthreads);
+
+  /* Parallel loop over the work list. */
+#pragma omp parallel for num_threads(nthreads) schedule(dynamic, 1)
+  for (int i = 0; i < work_list.size(); i++) {
+    const weighted_cell &wc = work_list[i];
+    struct cell *c = wc.cell_ptr;
+
+    /* Populate the pixel recursively. */
+    populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
+                             pix_values, res, npix_x, npix_y);
+  }
+}
+#endif
+
+/**
+ * @brief Populate an image in serial using a tree structure.
  *
  * The SPH kernel of a particle (integrated along the z axis) is used to
- * calculate the pixel weight for all pixels within a stellar particles kernel.
- * Once the kernel value is found at a pixels position the pixel value is added
- * multiplied by the kernels weight.
+ * calculate the pixel weight for all pixels within a stellar particles
+ * kernel. Once the kernel value is found at a pixels position the pixel value
+ * is added multiplied by the kernels weight.
+ *
+ * This function will recurse through the cell tree and populate the
+ * image by calculating the contribution of each particle to the pixels
+ * in the image.
  *
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
@@ -190,41 +524,70 @@ static void populate_pixel_recursive(const struct cell *c, const double pix_x,
  * @param nimgs: The number of images to populate.
  * @param root: The root of the tree.
  */
+void populate_smoothed_image_serial(const double *pix_values,
+                                    const double *kernel, const double res,
+                                    const int npix_x, const int npix_y,
+                                    const int npart, const double threshold,
+                                    const int kdim, double *img,
+                                    const int nimgs, struct cell *root) {
+
+  /* Populate the pixel recursively. */
+  populate_pixel_recursive(root, threshold, kdim, kernel, npart, img, nimgs,
+                           pix_values, res, npix_x, npix_y);
+}
+
+/**
+ * @brief Populate the image.
+ *
+ * This is a wrapper which will call the correct version of the function to
+ * populate the image based on whether or not OpenMP is available and the
+ * number of threads to use.
+ *
+ * @param pix_values: The particle data to be sorted into pixels
+ *                    (luminosity/flux/mass etc.).
+ * @param kernel: The kernel data (integrated along the z axis and softed by
+ *                impact parameter).
+ * @param res: The pixel resolution.
+ * @param npix_x: The number of pixels along the x axis.
+ * @param npix_y: The number of pixels along the y axis.
+ * @param npart: The number of particles.
+ * @param threshold: The threshold of the SPH kernel.
+ * @param kdim: The number of elements in the kernel.
+ * @param img: The image to be populated.
+ * @param nimgs: The number of images to populate.
+ * @param root: The root of the tree.
+ * @param nthreads: The number of threads to use.
+ */
 void populate_smoothed_image(const double *pix_values, const double *kernel,
                              const double res, const int npix_x,
                              const int npix_y, const int npart,
                              const double threshold, const int kdim,
                              double *img, const int nimgs, struct cell *root,
                              const int nthreads) {
-
   double start = tic();
 
-#ifdef WITH_OPENMP
   /* If we have multiple threads and OpenMP we can parallelise. */
+#ifdef WITH_OPENMP
   if (nthreads > 1) {
-    omp_set_num_threads(nthreads);
+
+    /* Populate the image in parallel. */
+    populate_smoothed_image_parallel(pix_values, kernel, res, npix_x, npix_y,
+                                     npart, threshold, kdim, img, nimgs, root,
+                                     nthreads);
+
   } else {
-    omp_set_num_threads(1);
-  }
 
-#pragma omp parallel for collapse(2) schedule(dynamic)
+    /* If we don't have OpenMP call the serial version. */
+    populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y,
+                                   npart, threshold, kdim, img, nimgs, root);
+  }
+#else
+  (void)nthreads;
+
+  /* If we don't have OpenMP call the serial version. */
+  populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y, npart,
+                                 threshold, kdim, img, nimgs, root);
 #endif
-  /* Loop over the pixels in the image. */
-  for (int i = 0; i < npix_x; i++) {
-    for (int j = 0; j < npix_y; j++) {
-
-      /* Calculate the pixel position. */
-      const double pix_x = res * (i + 0.5);
-      const double pix_y = res * (j + 0.5);
-
-      /* Get the pixel index. */
-      int pix_index = i * (npix_y * nimgs) + j * nimgs;
-
-      /* Populate the pixel recursively. */
-      populate_pixel_recursive(root, pix_x, pix_y, threshold, kdim, kernel,
-                               npart, &img[pix_index], nimgs, pix_values, res);
-    }
-  }
 
   toc("Populating smoothed image", start);
 }
