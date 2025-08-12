@@ -25,18 +25,6 @@ public:
   int npart;
 
   /* Constructor */
-  /**
-   * @brief Constructor for Particles class.
-   * 
-   * @param np_weights NumPy array of particle weights (not owned)
-   * @param np_velocities NumPy array of particle velocities (not owned)
-   * @param np_mask NumPy array mask or Py_None (not owned)
-   * @param part_tuple Tuple of NumPy arrays for particle properties (not owned)
-   * @param npart Number of particles
-   * 
-   * @note This class does not take ownership of the NumPy arrays.
-   *       The caller must ensure they remain valid for the lifetime of this object.
-   */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
             PyArrayObject *np_mask, PyObject *part_tuple, int npart);
 
