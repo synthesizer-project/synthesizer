@@ -12,7 +12,7 @@ properties and methods.
 from abc import ABC, abstractmethod
 
 import numpy as np
-from unyt import arcsecond, kpc, unyt_array, unyt_quantity
+from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
@@ -63,7 +63,7 @@ class ImagingBase(ABC):
     cart_fov = Quantity("spatial")
     ang_fov = Quantity("angle")
 
-    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
+    @accepts(resolution=(kpc, arcsecond), fov=(kpc, degree))
     def __init__(
         self,
         resolution,
@@ -109,6 +109,7 @@ class ImagingBase(ABC):
         else:
             self.cart_fov = None
             self.ang_fov = fov
+            print(self.ang_fov, fov)
 
         # Compute the number of pixels in the FOV
         self._compute_npix()
@@ -126,7 +127,9 @@ class ImagingBase(ABC):
                 resolution and new npix. Defaults to True.
         """
         # Compute how many pixels fall in the FOV
-        self.npix = np.int32(self.fov / self.resolution)
+        self.npix = np.round(self.fov / self.resolution + 1e-10).astype(
+            np.int32
+        )
 
         # Ensure that the npix is an array of 2 values
         if self.npix.size == 1:
@@ -146,7 +149,12 @@ class ImagingBase(ABC):
         if self.has_cartesian_units:
             self.cart_fov = self.cart_resolution * self.npix
         else:
+            print("Computing angular FOV: ", self.ang_fov)
+            print(
+                self.ang_resolution, self.npix, self.ang_resolution * self.npix
+            )
             self.ang_fov = self.ang_resolution * self.npix
+            print("Computed angular FOV: ", self.ang_fov)
 
         # Redefine the npix based on the FOV if requested
         if compute_npix:
