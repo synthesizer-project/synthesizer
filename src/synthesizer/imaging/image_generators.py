@@ -492,6 +492,8 @@ def _generate_images_particle_smoothed(
         for ind, key in enumerate(labels):
             signals[ind, :] *= normalisations[key].value
 
+    # In the C++ extension we want to be dealing with (Npart, Nimg) signals
+    # to make the most of cache locality, so we transpose the signals
     signals = signals.T
 
     toc("Setting up smoothed image inputs", start)
@@ -803,7 +805,7 @@ def _generate_ifu_particle_hist(
 
     # Strip off and store the units on the spectra for later
     ifu.units = spectra.units
-    spectra = spectra.value.T
+    spectra = spectra.ndveiw
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:

@@ -283,7 +283,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
               int local_idx =
                   local_i * local_height * nimgs + local_j * nimgs + nimg;
               if (local_idx >= 0 && local_idx < local_img.size()) {
-                local_img[local_idx] += pix_values[part->index + nimg * npart];
+                local_img[local_idx] += pix_values[part->index * nimgs + nimg];
               }
             }
           }
@@ -349,7 +349,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
                   local_i * local_height * nimgs + local_j * nimgs + nimg;
               if (local_idx >= 0 && local_idx < local_img.size()) {
                 local_img[local_idx] +=
-                    kvalue * pix_values[part->index + nimg * npart];
+                    kvalue * pix_values[part->index * nimgs + nimg];
               }
             }
           }
@@ -429,7 +429,7 @@ void populate_smoothed_image_parallel(const double *pix_values,
       build_balanced_work_list(root, nthreads);
 
   /* Parallel loop over the work list. */
-#pragma omp parallel for num_threads(nthreads) schedule(dynamic, 1)
+#pragma omp parallel for num_threads(nthreads) schedule(dynamic)
   for (int i = 0; i < work_list.size(); i++) {
     const weighted_cell &wc = work_list[i];
     struct cell *c = wc.cell_ptr;
@@ -618,7 +618,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
       (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
   double *img = (double *)PyArray_DATA(np_img);
 
-  toc("Creating output image", out_start);
+  toc("Creating output image array", out_start);
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
