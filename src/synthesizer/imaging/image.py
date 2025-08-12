@@ -94,7 +94,7 @@ class Image(ImagingBase):
 
         # Attach an image if handed one
         if img is not None:
-            self.arr = img.value if isinstance(img, unyt_array) else img
+            self.arr = img.ndview if isinstance(img, unyt_array) else img
             self.units = img.units if isinstance(img, unyt_array) else None
 
         # Set up the noise array and weight map
