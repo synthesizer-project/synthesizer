@@ -80,6 +80,18 @@ Line-Of-Sight (LOS) Column Density Scaling
    :align: center 
 
 
+Smoothed Imaging Scaling
+------------------------
+
+.. code-block:: bash 
+
+    python strong_scaling_images.py --basename docs --nstars 1000r --max_threads=32 --average_over 10 --low_thresh 0.01
+
+.. image:: plots/test_images_totThreads32_nstars10000.png
+   :width: 75%
+   :align: center
+
+
 
 
 
