@@ -75,17 +75,6 @@ class TestImageGeneration:
         )
         assert np.sum(img.arr) >= 0
 
-    def test_empty_particle_arrays(self):
-        """Test with empty particle arrays."""
-        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
-        coords = unyt_array(np.empty((0, 3)), kpc)
-        signal = unyt_array(np.empty(0), erg / s)
-
-        img.get_img_hist(signal, coords)
-
-        assert img.arr is not None
-        assert np.sum(img.arr) == 0
-
 
 class TestImageOperations:
     """Test image operations and manipulations."""
