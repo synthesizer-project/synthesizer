@@ -9,6 +9,7 @@ from unyt import Mpc, arcsecond
 from synthesizer import exceptions
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.grid import Grid
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import accepts, unit_is_compatible
@@ -546,9 +547,27 @@ class BaseGalaxy:
                 nthreads=nthreads,
             )
 
-    def get_surviving_mass(self, grid):
-        """Calculate the surviving mass of stars."""
-        return self.stars.calculate_surviving_mass(grid)
+    def get_surviving_mass(self, grid: Grid, **kwargs):
+        """Calculate the surviving mass of the stellar population.
+
+        This is the total mass of stars that have survived to the present day
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving mass.
+                This is used to get the stellar fraction at each SFZH bin.
+            **kwargs (dict):
+                Additional keyword arguments to pass to the stars
+                calculate_surviving_mass method.
+                Only keyword used is 'grid_assignment_method',
+                which is only used for particle galaxies.
+
+        Returns:
+            unyt_quantity: The total surviving mass of the stellar
+            population in Msun.
+        """
+        return self.stars.calculate_surviving_mass(grid, **kwargs)
 
     @deprecated(
         "The `get_photo_fluxes` method is deprecated. Use "
