@@ -109,7 +109,6 @@ class ImagingBase(ABC):
         else:
             self.cart_fov = None
             self.ang_fov = fov
-            print(self.ang_fov, fov)
 
         # Compute the number of pixels in the FOV
         self._compute_npix()
@@ -149,12 +148,7 @@ class ImagingBase(ABC):
         if self.has_cartesian_units:
             self.cart_fov = self.cart_resolution * self.npix
         else:
-            print("Computing angular FOV: ", self.ang_fov)
-            print(
-                self.ang_resolution, self.npix, self.ang_resolution * self.npix
-            )
             self.ang_fov = self.ang_resolution * self.npix
-            print("Computed angular FOV: ", self.ang_fov)
 
         # Redefine the npix based on the FOV if requested
         if compute_npix:
