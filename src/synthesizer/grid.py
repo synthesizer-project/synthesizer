@@ -174,6 +174,9 @@ class Grid:
         self._model_metadata = {}
         self._get_grid_metadata()
 
+        # Set the internal flags
+        self._stellar_fraction = None
+
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
 
@@ -188,8 +191,6 @@ class Grid:
             # all None, this will do nothing, leaving the grid's wavelength
             # array as it is in the HDF5 file)
             self._prepare_lam_axis(new_lam, lam_lims)
-
-        self._get_stellar_fraction()
 
         # Read in lines but only if the grid has been reprocessed
         if not ignore_lines and self.reprocessed:
@@ -467,27 +468,34 @@ class Grid:
                         :
                     ]
 
-    def _get_stellar_fraction(self, key='star_fraction'):
+    @property
+    def stellar_fraction(self, key="star_fraction"):
         """Get the stellar fraction from the HDF5 file.
 
         This is a two-dimensional array with the first axis being age and
         the second axis being metallicity.
+
+        Args:
+            key (str): The key to use for retrieving the stellar fraction.
+
+        Returns:
+            np.ndarray of float:
+                The stellar fraction array from the grid.
+
+        Raises:
+            GridError: If the grid does not contain a stellar fraction
+                array with the specified key.
         """
-        with h5py.File(self.grid_filename, "r") as hf:
-            if key in hf.keys():
-                self.stellar_fraction = hf[key][:]
-            else:
-                self.stellar_fraction = np.ones(self.shape[:2])
-
-        assert self.stellar_fraction.ndim == 2, (
-            "The stellar fraction must be a two-dimensional array with the "
-            "first axis being age and the second axis being metallicity."
-        )
-
-        assert (self.stellar_fraction.shape == self.shape[:2]), (
-            "The stellar fraction must have the same shape as the first two "
-            "axes of the grid."
-        )
+        if self._stellar_fraction is None:
+            with h5py.File(self.grid_filename, "r") as hf:
+                if key in hf.keys():
+                    self._stellar_fraction = hf[key][:]
+                else:
+                    raise exceptions.GridError(
+                        f"Grid {self.grid_name} does not contain a stellar "
+                        f"fraction array with key '{key}'."
+                    )
+        return self._stellar_fraction
 
     def _get_spectra_grid(self, spectra_to_read):
         """Get the spectra grid from the HDF5 file.

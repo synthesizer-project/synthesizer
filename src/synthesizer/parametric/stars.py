@@ -948,7 +948,6 @@ class Stars(StarsComponent):
             unyt_quantity: The total surviving mass of the stellar
             population in Msun.
         """
-        stellar_fraction = grid.stellar_fraction
-        surviving_mass = np.sum(self.sfzh * stellar_fraction)
+        surviving_mass = np.sum(self.sfzh * grid.stellar_fraction)
 
         return surviving_mass * Msun
