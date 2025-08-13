@@ -831,3 +831,61 @@ class TotalEmissionNoEscape(StellarEmissionModel):
                 emitter="stellar",
                 **kwargs,
             )
+
+
+class TotalEmission:
+    """An emission model that defines the total emission.
+
+    This is a wrapper around the TotalEmissionWithEscape and
+    TotalEmissionNoEscape models. It will choose the appropriate model based on
+    the inputs.
+
+    This is a child of the EmissionModel class for a full description
+    of the parameters see the EmissionModel class .
+    """
+
+    def __new__(
+        self,
+        grid,
+        dust_curve,
+        dust_emission_model=None,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_ly_alpha",
+        label="total",
+        **kwargs,
+    ):
+        """Initialise and return the correct TotalEmission object.
+
+        Args:
+            grid(synthesizer.grid.Grid): The grid object to extract from .
+            dust_curve(AttenuationLaw): The dust curve to use.
+            dust_emission_model(synthesizer.dust.EmissionModel): The dust
+                emission model to use.
+            fesc(float): The escape fraction of the emission.
+            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
+            label(str): The label for this emission model.
+            **kwargs: Additional keyword arguments.
+        """
+        # If fesc is None or 0.0 then we only need the total emission without
+        # the escaped component.
+        if fesc is None or fesc == 0.0:
+            return TotalEmissionNoEscape(
+                grid=grid,
+                dust_curve=dust_curve,
+                dust_emission_model=dust_emission_model,
+                fesc_ly_alpha=fesc_ly_alpha,
+                label=label,
+                **kwargs,
+            )
+
+        # Otherwise we need the total emission with the escaped component
+        else:
+            return TotalEmissionWithEscape(
+                grid=grid,
+                dust_curve=dust_curve,
+                dust_emission_model=dust_emission_model,
+                fesc=fesc,
+                fesc_ly_alpha=fesc_ly_alpha,
+                label=label,
+                **kwargs,
+            )
