@@ -200,6 +200,7 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
             grid=grid,
             label="full_" + label,
             extract="transmitted",
+            save=False,
             **kwargs,
         )
 
@@ -208,7 +209,9 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
         if incident is None:
             warn(
                 "TransmittedEmission requires an incident emission model. "
-                f"We created one with the label '_{label}_incident'",
+                f"We'll create one with the label '_{label}_incident'."
+                " If you want to use a different incident model, please "
+                "pass your own to the incident argument.",
                 stacklevel=4,
             )
             incident = IncidentEmission(
@@ -346,7 +349,6 @@ class NebularEmission(StellarEmissionModel):
         grid,
         label="nebular",
         fesc_ly_alpha="fesc_ly_alpha",
-        fesc="fesc",
         nebular_line=None,
         nebular_continuum=None,
         **kwargs,
@@ -444,11 +446,15 @@ class ReprocessedEmission(StellarEmissionModel):
         if nebular is None:
             warn(
                 "ReprocessedEmission requires a nebular model. "
-                " We'll create one for you with the label '_nebular'.",
+                "We'll create one for you with the "
+                f"label '_{label}_nebular'. If you want to use a "
+                "different nebular model, please pass your own to the "
+                "nebular argument.",
                 stacklevel=4,
             )
             nebular = NebularEmission(
                 grid=grid,
+                label="_" + label + "_nebular",
                 fesc_ly_alpha=fesc_ly_alpha,
                 fesc=fesc,
                 **kwargs,
@@ -456,8 +462,17 @@ class ReprocessedEmission(StellarEmissionModel):
 
         # Make a transmitted model if we need one
         if transmitted is None:
+            warn(
+                "ReprocessedEmission requires a transmitted model. "
+                "We'll create one for you with the label"
+                f" '_{label}_transmitted'. If you want to use a "
+                "different transmitted model, please pass your own to the "
+                "transmitted argument.",
+                stacklevel=4,
+            )
             transmitted = TransmittedEmission(
                 grid=grid,
+                label="_" + label + "_transmitted",
                 fesc=fesc,
                 **kwargs,
             )
@@ -500,8 +515,17 @@ class IntrinsicEmission(StellarEmissionModel):
         """
         # Make a reprocessed model if we need one
         if reprocessed is None:
+            warn(
+                "IntrinsicEmission requires a reprocessed model. "
+                "We'll create one for you with the label"
+                f" '_{label}_reprocessed'. If you want to use a "
+                "different reprocessed model, please pass your own to the "
+                "reprocessed argument.",
+                stacklevel=4,
+            )
             reprocessed = ReprocessedEmission(
                 grid=grid,
+                label="_" + label + "_reprocessed",
                 fesc_ly_alpha=fesc_ly_alpha,
                 **kwargs,
             )
@@ -554,8 +578,17 @@ class EmergentEmission(StellarEmissionModel):
         """
         # If apply_to is None then we need to make a model to apply to
         if apply_to is None and attenuated is None:
+            warn(
+                "EmergentEmission requires an apply_to model. "
+                "We'll create one for you with the label "
+                f"'_{label}_reprocessed'. If you want to apply dust to a "
+                "different model, please pass your own to the "
+                "apply_to argument.",
+                stacklevel=4,
+            )
             apply_to = ReprocessedEmission(
                 grid=grid,
+                label="_" + label + "_reprocessed",
                 fesc=fesc,
                 feac_ly_alpha=fesc_ly_alpha,
                 **kwargs,
@@ -563,8 +596,17 @@ class EmergentEmission(StellarEmissionModel):
 
         # Make an attenuated model if we need one
         if attenuated is None:
+            warn(
+                "EmergentEmission requires an attenuated model. "
+                "We'll create one for you with the label "
+                f"'_{label}_attenuated'. If you want to use a "
+                "different attenuated model, please pass your own to the "
+                "attenuated argument.",
+                stacklevel=4,
+            )
             attenuated = AttenuatedEmission(
                 grid=grid,
+                label="_" + label + "_attenuated",
                 dust_curve=dust_curve,
                 apply_to=apply_to,
                 emitter="stellar",
@@ -573,6 +615,13 @@ class EmergentEmission(StellarEmissionModel):
 
         # Do we have an escaped model?
         if escaped is None:
+            warn(
+                "EmergentEmission requires an escaped model. "
+                "We'll try to extract one from the attenuated model. "
+                "If you want to use a different escaped model, please "
+                "pass your own to the escaped argument.",
+                stacklevel=4,
+            )
             escaped = attenuated["escaped"]
 
         StellarEmissionModel.__init__(
@@ -585,8 +634,8 @@ class EmergentEmission(StellarEmissionModel):
         )
 
 
-class TotalEmission(StellarEmissionModel):
-    """An emission model that defines the total emission.
+class TotalEmissionWithEscape(StellarEmissionModel):
+    """An emission model that defines total emission with an escape fraction.
 
     This defines the combination of the emergent and dust emission components
     to produce the total emission.
@@ -618,12 +667,22 @@ class TotalEmission(StellarEmissionModel):
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
         nebular = NebularEmission(
             grid=grid,
             fesc_ly_alpha=fesc_ly_alpha,
             **kwargs,
         )
-        transmitted = TransmittedEmission(grid=grid, fesc=fesc, **kwargs)
+        transmitted = TransmittedEmission(
+            grid=grid,
+            fesc=fesc,
+            incident=incident,
+            **kwargs,
+        )
         reprocessed = ReprocessedEmission(
             grid=grid,
             fesc=fesc,
@@ -674,5 +733,101 @@ class TotalEmission(StellarEmissionModel):
                 grid=grid,
                 label=label,
                 combine=(attenuated, escaped),
+                **kwargs,
+            )
+
+
+class TotalEmissionNoEscape(StellarEmissionModel):
+    """An emission model that defines total emission.
+
+    This defines the combination of the emergent and dust emission components
+    to produce the total emission.
+
+    This is a child of the EmissionModel class for a full description
+    of the parameters see the EmissionModel class .
+    """
+
+    def __init__(
+        self,
+        grid,
+        dust_curve,
+        dust_emission_model=None,
+        fesc_ly_alpha="fesc_ly_alpha",
+        label="total",
+        **kwargs,
+    ):
+        """Initialise the TotalEmission object.
+
+        Args:
+            grid(synthesizer.grid.Grid): The grid object to extract from .
+            dust_curve(AttenuationLaw): The dust curve to use.
+            dust_emission_model(synthesizer.dust.EmissionModel): The dust
+                emission model to use.
+            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
+            label(str): The label for this emission model.
+            **kwargs: Additional keyword arguments.
+        """
+        # Set up models we need to link
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            fesc_ly_alpha=fesc_ly_alpha,
+            fesc=0.0,
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(
+            grid=grid,
+            incident=incident,
+            fesc=0.0,
+            **kwargs,
+        )
+        reprocessed = ReprocessedEmission(
+            grid=grid,
+            nebular=nebular,
+            transmitted=transmitted,
+            **kwargs,
+        )
+
+        # If a dust emission model has been passed then we need combine
+        if dust_emission_model is not None:
+            attenuated = AttenuatedEmission(
+                grid=grid,
+                dust_curve=dust_curve,
+                apply_to=reprocessed,
+                emitter="stellar",
+                **kwargs,
+            )
+            dust_emission = DustEmission(
+                dust_emission_model=dust_emission_model,
+                dust_lum_intrinsic=reprocessed,
+                dust_lum_attenuated=attenuated,
+                emitter="stellar",
+                **kwargs,
+            )
+
+            # Make the total emission model
+            StellarEmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                combine=(
+                    attenuated,
+                    dust_emission,
+                ),
+                **kwargs,
+            )
+        else:
+            # Otherwise, total == attenuated
+            StellarEmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                dust_curve=dust_curve,
+                apply_to=reprocessed,
+                emitter="stellar",
                 **kwargs,
             )
