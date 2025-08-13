@@ -12,7 +12,7 @@ properties and methods.
 from abc import ABC, abstractmethod
 
 import numpy as np
-from unyt import arcsecond, kpc, unyt_array, unyt_quantity
+from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
@@ -63,7 +63,7 @@ class ImagingBase(ABC):
     cart_fov = Quantity("spatial")
     ang_fov = Quantity("angle")
 
-    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
+    @accepts(resolution=(kpc, arcsecond), fov=(kpc, degree))
     def __init__(
         self,
         resolution,
@@ -126,7 +126,9 @@ class ImagingBase(ABC):
                 resolution and new npix. Defaults to True.
         """
         # Compute how many pixels fall in the FOV
-        self.npix = np.int32(self.fov / self.resolution)
+        self.npix = np.round(self.fov / self.resolution + 1e-10).astype(
+            np.int32
+        )
 
         # Ensure that the npix is an array of 2 values
         if self.npix.size == 1:
