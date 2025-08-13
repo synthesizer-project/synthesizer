@@ -35,7 +35,7 @@ from synthesizer.synth_warnings import warn
 class IncidentEmission(StellarEmissionModel):
     """An emission model that extracts the incident radiation field.
 
-    This defines an extraction of key "incident" from a SPS grid.
+    This defines an extraction of key "incident" from SPS grid.
 
     This is a child of the EmissionModel class for a full description of the
     parameters see the EmissionModel class.
@@ -133,7 +133,7 @@ class NebularLineEmission(StellarEmissionModel):
 class TransmittedEmissionNoEscaped(StellarEmissionModel):
     """An emission model that extracts the transmitted radiation field.
 
-    This defines an extraction of the key "transmitted" from a SPS grid.
+    This defines an extraction of the key "transmitted" from. SPS grid.
 
     This is a child of the EmissionModel class for a full description of the
     parameters see the EmissionModel class.
@@ -160,7 +160,7 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
     """An emission model that extracts the transmitted radiation field.
 
     This defines 3 models:
-      - An extraction of the key "transmitted" from a SPS grid.
+      - An extraction of the key "transmitted" from SPS grid.
       - A transformed emission, for the transmitted radiation field accounting
         for the escape fraction.
       - A transformed emission, for the escaped radiation field accounting for
@@ -305,7 +305,7 @@ class TransmittedEmission:
 class NebularContinuumEmission(StellarEmissionModel):
     """An emission model that extracts the nebular continuum emission.
 
-    This defines an extraction of key "nebular_continuum" from a SPS grid.
+    This defines an extraction of key "nebular_continuum" from. SPS grid.
 
     This is a child of the EmissionModel class for a full description of the
     parameters see the EmissionModel class .
@@ -320,8 +320,8 @@ class NebularContinuumEmission(StellarEmissionModel):
         """Initialise the NebularContinuumEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            label(str): The label for this emission model.
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            label (str): The label for this emission model.
             **kwargs: Additional keyword arguments.
         """
         StellarEmissionModel.__init__(
@@ -355,14 +355,14 @@ class NebularEmission(StellarEmissionModel):
         """Initialise the NebularEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            label(str): The label for this emission model.
-            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
-            fesc(float): The escape fraction of the emission.
-            nebular_line(EmissionModel): The nebular line model to use, if
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            label (str): The label for this emission model.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            fesc (float): The escape fraction of the emission.
+            nebular_line (EmissionModel): The nebular line model to use, if
                 None then one will be created. Only used if
                 fesc_ly_alpha < 1.0.
-            nebular_continuum(EmissionModel): The nebular continuum model to
+            nebular_continuum (EmissionModel): The nebular continuum model to
                 use, if None then one will be created. Only used if
                 fesc_ly_alpha < 1.0.
             **kwargs: Additional keyword arguments.
@@ -429,13 +429,13 @@ class ReprocessedEmission(StellarEmissionModel):
         """Initialise the ReprocessedEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            label(str): The label for this emission model.
-            fesc(float): The escape fraction of the emission.
-            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
-            nebular(EmissionModel): The nebular model to use, if None then one
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            label (str): The label for this emission model.
+            fesc (float): The escape fraction of the emission.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            nebular (EmissionModel): The nebular model to use, if None then one
                 will be created.
-            transmitted(EmissionModel): The transmitted model to use, if None
+            transmitted (EmissionModel): The transmitted model to use, if None
                 then one will be created.
             **kwargs: Additional keyword arguments.
         """
@@ -505,13 +505,13 @@ class IntrinsicEmission:
         """Initialise the IntrinsicEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            label(str): The label for this emission model.
-            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
-            fesc(float): The escape fraction of the emission.
-            reprocessed(EmissionModel): The reprocessed model to use, if None
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            label (str): The label for this emission model.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            fesc (float): The escape fraction of the emission.
+            reprocessed (EmissionModel): The reprocessed model to use, if None
                 then one will be created.
-            escaped(EmissionModel): The escaped model to use, if None then one
+            escaped (EmissionModel): The escaped model to use, if None then one
                 will be created. This is only used if fesc > 0.0.
             **kwargs: Additional keyword arguments.
         """
@@ -600,15 +600,15 @@ class EmergentEmission(StellarEmissionModel):
         """Initialise the EmergentEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            dust_curve(AttenuationLaw): The dust curve to use.
-            apply_to(EmissionModel): The model to apply the dust to.
-            fesc(float): The escape fraction of the emission.
-            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
-            label(str): The label for this emission model.
-            attenuated(EmissionModel): The attenuated model to use, if None
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            dust_curve (AttenuationLaw): The dust curve to use.
+            apply_to (EmissionModel): The model to apply the dust to.
+            fesc (float): The escape fraction of the emission.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            label (str): The label for this emission model.
+            attenuated (EmissionModel): The attenuated model to use, if None
                 then one will be created.
-            escaped(EmissionModel): The escaped model to use, if None then one
+            escaped (EmissionModel): The escaped model to use, if None then one
                 will be created.
             **kwargs: Additional keyword arguments.
         """
@@ -695,13 +695,13 @@ class TotalEmissionWithEscape(StellarEmissionModel):
         """Initialise the TotalEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            dust_curve(AttenuationLaw): The dust curve to use.
-            dust_emission_model(synthesizer.dust.EmissionModel): The dust
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            dust_curve (AttenuationLaw): The dust curve to use.
+            dust_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use.
-            label(str): The label for this emission model.
-            fesc(float): The escape fraction of the emission.
-            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
+            label (str): The label for this emission model.
+            fesc (float): The escape fraction of the emission.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
@@ -795,12 +795,12 @@ class TotalEmissionNoEscape(StellarEmissionModel):
         """Initialise the TotalEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            dust_curve(AttenuationLaw): The dust curve to use.
-            dust_emission_model(synthesizer.dust.EmissionModel): The dust
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            dust_curve (AttenuationLaw): The dust curve to use.
+            dust_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use.
-            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
-            label(str): The label for this emission model.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            label (str): The label for this emission model.
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
@@ -888,13 +888,13 @@ class TotalEmission:
         """Initialise and return the correct TotalEmission object.
 
         Args:
-            grid(synthesizer.grid.Grid): The grid object to extract from .
-            dust_curve(AttenuationLaw): The dust curve to use.
-            dust_emission_model(synthesizer.dust.EmissionModel): The dust
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            dust_curve (AttenuationLaw): The dust curve to use.
+            dust_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use.
-            fesc(float): The escape fraction of the emission.
-            fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
-            label(str): The label for this emission model.
+            fesc (float): The escape fraction of the emission.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            label (str): The label for this emission model.
             **kwargs: Additional keyword arguments.
         """
         # If fesc is None or 0.0 then we only need the total emission without
