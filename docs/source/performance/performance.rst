@@ -60,9 +60,9 @@ Particle Spectra Scaling
 
 .. code-block:: bash
 
-    python strong_scaling_part_spectra.py --basename docs --nstars 100000 --max_threads=32 --average_over 10 --low_thresh 0.01
+    python strong_scaling_part_spectra.py --basename docs --nstars 10000 --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/docs_part_spectra_cic_totThreads32_nstars100000.png
+.. image:: plots/docs_part_spectra_cic_totThreads32_nstars10000.png
    :width: 75%
    :align: center
 
