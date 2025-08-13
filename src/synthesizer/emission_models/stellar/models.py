@@ -453,7 +453,6 @@ class ReprocessedEmission(StellarEmissionModel):
                 grid=grid,
                 label="_" + label + "_nebular",
                 fesc_ly_alpha=fesc_ly_alpha,
-                fesc=fesc,
                 **kwargs,
             )
 
