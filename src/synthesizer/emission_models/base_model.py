@@ -722,9 +722,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if len(model.masks) > 0:
                 for _m in model.masks:
                     model.label += (
-                        f"_{_m['mask_attr']}_"
-                        f"{_m['mask_op']}_"
-                        f"{_m['mask_thresh']}"
+                        f"_{_m['attr']}{_m['op']}{_m['thresh']}".replace(
+                            " ", "-"
+                        )
                     )
             else:
                 raise exceptions.InconsistentArguments(

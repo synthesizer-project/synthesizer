@@ -100,16 +100,16 @@ class PacmanEmissionNoEscapeNoDust(StellarEmissionModel):
         """Initialize the PacmanEmissionNoEscapeNoDust model.
 
         Args:
-            grid(synthesizer.grid.Grid):
+            grid (synthesizer.grid.Grid):
                 The grid object.
-            tau_v(float):
+            tau_v (float):
                 The V-band optical depth.
-            dust_curve(synthesizer.emission_models.Transformer):
+            dust_curve (synthesizer.emission_models.Transformer):
                 The assumed dust curve. Defaults to `PowerLaw`, with
                 default parameters.
-            fesc_ly_alpha(float):
+            fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
-            label(str):
+            label (str):
                 The label for the total emission model. If `None` this will
                 be set to "attenuated".
             **kwargs:
@@ -205,21 +205,21 @@ class PacmanEmissionNoEscapeWithDust(EmissionModel):
         """Initialize the PacmanEmissionNoEscapeWithDust model.
 
         Args:
-            grid(synthesizer.grid.Grid):
+            grid (synthesizer.grid.Grid):
                 The grid object.
-            tau_v(float):
+            tau_v (float):
                 The V-band optical depth.
-            dust_curve(synthesizer.emission_models.Transformer):
+            dust_curve (synthesizer.emission_models.Transformer):
                 The assumed dust curve. Defaults to `PowerLaw`, with
                 default parameters.
-            dust_emission(synthesizer.dust.EmissionModel): The dust
+            dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
-            fesc_ly_alpha(float):
+            fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
-            label(str):
+            label (str):
                 The label for the total emission model. If `None` this will
                 be set to "total" or "emergent" if dust_emission is `None`.
-            stellar_dust(bool):
+            stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
             **kwargs:
@@ -331,15 +331,15 @@ class PacmanEmissionWithEscapeNoDust(StellarEmissionModel):
         """Initialize the PacmanEmissionWithEscapeNoDust model.
 
         Args:
-            grid(synthesizer.grid.Grid):
+            grid (synthesizer.grid.Grid):
                 The grid object.
-            tau_v(float):
+            tau_v (float):
                 The V-band optical depth.
-            fesc(float):
+            fesc (float):
                 The escape fraction.
-            fesc_ly_alpha(float):
+            fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
-            label(str):
+            label (str):
                 The label for the total emission model. If `None` this will
                 be set to "attenuated".
             **kwargs:
@@ -412,6 +412,7 @@ class PacmanEmissionWithEscapeNoDust(StellarEmissionModel):
         )
         # Finally make the emergent model, this is attenuated + escaped
         StellarEmissionModel.__init__(
+            self,
             label="emergent",
             grid=grid,
             combine=(attenuated, escaped),
@@ -458,23 +459,23 @@ class PacmanEmissionWithEscapeWithDust(StellarEmissionModel):
         """Initialize the PacmanEmissionWithEscapeWithDust model.
 
         Args:
-            grid(synthesizer.grid.Grid):
+            grid (synthesizer.grid.Grid):
                 The grid object.
-            tau_v(float):
+            tau_v (float):
                 The V-band optical depth.
-            dust_curve(synthesizer.emission_models.Transformer):
+            dust_curve (synthesizer.emission_models.Transformer):
                 The assumed dust curve. Defaults to `PowerLaw`, with
                 default parameters.
-            dust_emission(synthesizer.dust.EmissionModel): The dust
+            dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
-            fesc(float):
+            fesc (float):
                 The escape fraction.
-            fesc_ly_alpha(float):
+            fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
-            label(str):
+            label (str):
                 The label for the total emission model. If `None` this will
                 be set to "total" or "emergent" if dust_emission is `None`.
-            stellar_dust(bool):
+            stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
             **kwargs:
@@ -617,23 +618,23 @@ class PacmanEmission:
         """Get a PacmanEmission model.
 
         Args:
-            grid(synthesizer.grid.Grid):
+            grid (synthesizer.grid.Grid):
                 The grid object.
-            tau_v(float):
+            tau_v (float):
                 The V-band optical depth.
-            dust_curve(synthesizer.emission_models.Transformer):
+            dust_curve (synthesizer.emission_models.Transformer):
                 The assumed dust curve. Defaults to `PowerLaw`, with
                 default parameters.
-            dust_emission(synthesizer.dust.EmissionModel): The dust
+            dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
-            fesc(float):
+            fesc (float):
                 The escape fraction.
-            fesc_ly_alpha(float):
+            fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
-            label(str):
+            label (str):
                 The label for the total emission model. If `None` this will
                 be set to "total" or "emergent" if dust_emission is `None`.
-            stellar_dust(bool):
+            stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
             **kwargs:
@@ -1541,6 +1542,7 @@ class BimodalPacmanEmissionWithEscapeNoDust(StellarEmissionModel):
             mask_op="<",
             fesc=fesc,
             incident=young_incident,
+            escaped_label="young_escaped",
             **kwargs,
         )
         old_transmitted = TransmittedEmission(
@@ -1551,6 +1553,7 @@ class BimodalPacmanEmissionWithEscapeNoDust(StellarEmissionModel):
             mask_op=">=",
             fesc=fesc,
             incident=old_incident,
+            escaped_label="old_escaped",
             **kwargs,
         )
         transmitted = StellarEmissionModel(
@@ -1560,8 +1563,8 @@ class BimodalPacmanEmissionWithEscapeNoDust(StellarEmissionModel):
         )
 
         # Extract escaped models
-        young_escaped = young_transmitted["escaped"]
-        old_escaped = old_transmitted["escaped"]
+        young_escaped = young_transmitted["young_escaped"]
+        old_escaped = old_transmitted["old_escaped"]
         escaped = StellarEmissionModel(
             label="escaped",
             combine=(young_escaped, old_escaped),
@@ -2520,21 +2523,21 @@ class ScreenEmission(PacmanEmission):
         """Initialize the ScreenEmission model.
 
         Args:
-            grid(synthesizer.grid.Grid):
+            grid (synthesizer.grid.Grid):
                 The grid object.
-            tau_v(float):
+            tau_v (float):
                 The V-band optical depth for the dust screen.
-            dust_curve(AttenuationLaw):
+            dust_curve (AttenuationLaw):
                 The assumed dust curve. Defaults to `Calzetti2000` with
                 default parameters.
-            dust_emission(synthesizer.dust.EmissionModel):
+            dust_emission (synthesizer.dust.EmissionModel):
                 The dust emission model.
-            label(str):
+            label (str):
                 The label for the total emission model. If None this will
                 be set to "total" or "emergent" if dust_emission is None.
-            fesc(float):
+            fesc (float):
                 The escape fraction. This is always zero for this model.
-            fesc_ly_alpha(float):
+            fesc_ly_alpha (float):
                 The Lyman alpha escape fraction. This is always zero for
                 this model.
             kwargs:
@@ -2543,10 +2546,10 @@ class ScreenEmission(PacmanEmission):
         # Call the parent constructor to intialise the model
         PacmanEmission.__init__(
             self,
-            grid,
-            tau_v,
-            dust_curve,
-            dust_emission,
+            grid=grid,
+            tau_v=tau_v,
+            dust_curve=dust_curve,
+            dust_emission=dust_emission,
             fesc=fesc,
             fesc_ly_alpha=fesc_ly_alpha,
             label=label,

@@ -179,6 +179,7 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
         fesc="fesc",
         related_models=(),
         incident=None,
+        escaped_label="escaped",
         **kwargs,
     ):
         """Initialise the TransmittedEmission object.
@@ -193,6 +194,7 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
             incident (EmissionModel): An incident emission model to use, if
                 None then one will be created. This is only matters if
                 fesc > 0.0, otherwise the incident contribution is 0.0.
+            escaped_label (str): The label for the escaped emission model.
             **kwargs: Additional keyword arguments.
         """
         # Define the transmitted extraction model
@@ -200,7 +202,6 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
             grid=grid,
             label="full_" + label,
             extract="transmitted",
-            save=False,
             **kwargs,
         )
 
@@ -221,7 +222,7 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
 
         # Get the escaped emission
         escaped = StellarEmissionModel(
-            label="escaped",
+            label=escaped_label,
             grid=grid,
             apply_to=incident,
             transformer=EscapedFraction(),
@@ -235,6 +236,7 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
         # Get the transmitted emission (accounting for fesc)
         StellarEmissionModel.__init__(
             self,
+            grid=grid,
             label=label,
             apply_to=full_transmitted,
             transformer=ProcessedFraction(),
@@ -292,7 +294,6 @@ class TransmittedEmission:
         # Otherwise we need the transmitted emission with the escaped emission
         else:
             return TransmittedEmissionWithEscaped(
-                self,
                 grid=grid,
                 label=label,
                 fesc=fesc,
@@ -550,11 +551,12 @@ class IntrinsicEmission:
             )
 
         # If we have no escaped emission then we need to make one
-        if escaped is None and "escaped" not in reprocessed:
+        if escaped is None and "escaped" not in reprocessed._models:
             raise exceptions.InconsistentArguments(
                 "IntrinsicEmission requires an escaped model. "
                 "Please pass your own to the escaped argument."
             )
+
         # If we have an escaped model then we can extract it from
         # the reprocessed
         elif escaped is None:
@@ -567,7 +569,6 @@ class IntrinsicEmission:
             escaped = reprocessed["escaped"]
 
         return StellarEmissionModel(
-            self,
             grid=grid,
             label=label,
             combine=(escaped, reprocessed),
@@ -648,7 +649,7 @@ class EmergentEmission(StellarEmissionModel):
             )
 
         # Do we have an escaped model?
-        if escaped is None and "escaped" not in attenuated:
+        if escaped is None and "escaped" not in attenuated._models:
             raise exceptions.InconsistentArguments(
                 "EmergentEmission requires an escaped model. "
                 "Please pass your own to the escaped argument."

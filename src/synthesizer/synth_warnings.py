@@ -157,42 +157,11 @@ def _is_user_code(filename):
     return True
 
 
-def _estimate_warning_prefix(stacklevel, category):
-    """Estimate the warning prefix that will be added by warnings.warn().
-
-    Args:
-        stacklevel (int): The stack level for the warning.
-        category (Warning): The warning category.
-
-    Returns:
-        str: Estimated prefix string.
-    """
-    frame = inspect.currentframe()
-    try:
-        # Navigate to the target frame
-        target_frame = frame
-        for _ in range(stacklevel + 1):  # +1 to account for this function
-            if target_frame.f_back is not None:
-                target_frame = target_frame.f_back
-
-        filename = target_frame.f_code.co_filename
-        lineno = target_frame.f_lineno
-
-        # Format: "filename:line: CategoryName: "
-        return f"{filename}:{lineno}: {category.__name__}: "
-
-    except (AttributeError, TypeError):
-        # Fallback estimate
-        return f"<file>:<line>: {category.__name__}: "
-    finally:
-        del frame
-
-
 def _wrap_with_prefix(message, stacklevel, category):
-    """Wrap text accounting for a prefix on the first line.
+    """Wrap text accounting for a warning.
 
-    This function properly wraps text when the first line has a prefix
-    (like warning headers) and subsequent lines should be indented.
+    This inserts a new line after the warning prefix to ensure the whole
+    message is wrapped correctly.
 
     Args:
         message (str): The message to wrap.
@@ -200,7 +169,7 @@ def _wrap_with_prefix(message, stacklevel, category):
         category (Warning): The warning category.
 
     Returns:
-        str: The wrapped message text (without the prefix).
+        str: The wrapped message text.
     """
     # Get terminal width
     try:
@@ -208,20 +177,19 @@ def _wrap_with_prefix(message, stacklevel, category):
     except (AttributeError, OSError):
         width = 80
 
-    # Calculate available width for the message
-    prefix_length = len(_estimate_warning_prefix(stacklevel, category))
-    available_width = max(40, width - prefix_length - 2)  # Leave small margin
+    # Subtract some padding for the warning
+    width -= 4
 
     # Wrap the message
     wrapped = textwrap.fill(
         str(message),
-        width=available_width,
+        width=width,
         break_long_words=False,
         break_on_hyphens=False,
         expand_tabs=False,
     )
 
-    return wrapped
+    return "\n" + wrapped
 
 
 def warn(message, category=RuntimeWarning, stacklevel=None):
