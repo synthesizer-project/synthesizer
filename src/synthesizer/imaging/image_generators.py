@@ -813,7 +813,7 @@ def _generate_ifu_particle_hist(
             "Spectra must be a 2D array for an IFU image"
             f" (got {spectra.ndim})."
         )
-    if spectra.shape[1] != cent_coords.shape[0]:
+    if spectra.shape[0] != cent_coords.shape[0]:
         raise exceptions.InconsistentArguments(
             "Spectra and coordinates must be the same size"
             f" for an IFU image (got {spectra.shape[0]} and "
