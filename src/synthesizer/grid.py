@@ -175,7 +175,7 @@ class Grid:
         self._get_grid_metadata()
 
         # Set the internal flags
-        self._stellar_fraction = None
+        self._stellar_frac = None
 
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
@@ -486,16 +486,16 @@ class Grid:
             GridError: If the grid does not contain a stellar fraction
                 array with the specified key.
         """
-        if self._stellar_fraction is None:
+        if self._stellar_frac is None:
             with h5py.File(self.grid_filename, "r") as hf:
                 if key in hf.keys():
-                    self._stellar_fraction = hf[key][:]
+                    self._stellar_frac = hf[key][:]
                 else:
                     raise exceptions.GridError(
                         f"Grid {self.grid_name} does not contain a stellar "
                         f"fraction array with key '{key}'."
                     )
-        return self._stellar_fraction
+        return self._stellar_frac
 
     def _get_spectra_grid(self, spectra_to_read):
         """Get the spectra grid from the HDF5 file.
