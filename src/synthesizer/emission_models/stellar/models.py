@@ -481,21 +481,25 @@ class ReprocessedEmission(StellarEmissionModel):
         )
 
 
-class IntrinsicEmission(StellarEmissionModel):
+class IntrinsicEmission:
     """An emission model that defines the intrinsic emission.
 
-    This defines a combination of the reprocessed and escaped emission.
+    This defines a combination of the reprocessed and escaped emission as
+    long as we have an escape fraction greater than 0.0. Otherwise, it
+    is identical to the reprocessed emission.
 
     This is a child of the EmissionModel class for a full description of the
     parameters see the EmissionModel class .
     """
 
-    def __init__(
+    def __new__(
         self,
         grid,
         label="intrinsic",
         fesc_ly_alpha="fesc_ly_alpha",
+        fesc="fesc",
         reprocessed=None,
+        escaped=None,
         **kwargs,
     ):
         """Initialise the IntrinsicEmission object.
@@ -504,10 +508,30 @@ class IntrinsicEmission(StellarEmissionModel):
             grid(synthesizer.grid.Grid): The grid object to extract from .
             label(str): The label for this emission model.
             fesc_ly_alpha(float): The escape fraction of Lyman-alpha.
+            fesc(float): The escape fraction of the emission.
             reprocessed(EmissionModel): The reprocessed model to use, if None
                 then one will be created.
+            escaped(EmissionModel): The escaped model to use, if None then one
+                will be created. This is only used if fesc > 0.0.
             **kwargs: Additional keyword arguments.
         """
+        # If we have no escaped emission and no fesc then
+        # intrinsic = reprocessed
+        if (
+            escaped is None
+            and reprocessed is None
+            and (fesc == 0.0 or fesc is None)
+        ):
+            return ReprocessedEmission(
+                grid=grid,
+                label=label,
+                fesc=fesc,
+                fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
+            )
+
+        # Ok, we must have an escape fraction in some way...
+
         # Make a reprocessed model if we need one
         if reprocessed is None:
             warn(
@@ -521,14 +545,32 @@ class IntrinsicEmission(StellarEmissionModel):
                 grid=grid,
                 label="_" + label + "_reprocessed",
                 fesc_ly_alpha=fesc_ly_alpha,
+                fesc=fesc,
                 **kwargs,
             )
 
-        StellarEmissionModel.__init__(
+        # If we have no escaped emission then we need to make one
+        if escaped is None and "escaped" not in reprocessed:
+            raise exceptions.InconsistentArguments(
+                "IntrinsicEmission requires an escaped model. "
+                "Please pass your own to the escaped argument."
+            )
+        # If we have an escaped model then we can extract it from
+        # the reprocessed
+        elif escaped is None:
+            warn(
+                "IntrinsicEmission requires an escaped model. "
+                "We'll try to extract one from the reprocessed model. "
+                "If you want to use a different escaped model, please "
+                "pass your own to the escaped argument.",
+            )
+            escaped = reprocessed["escaped"]
+
+        return StellarEmissionModel(
             self,
             grid=grid,
             label=label,
-            combine=(reprocessed["escaped"], reprocessed),
+            combine=(escaped, reprocessed),
             **kwargs,
         )
 
@@ -606,7 +648,12 @@ class EmergentEmission(StellarEmissionModel):
             )
 
         # Do we have an escaped model?
-        if escaped is None:
+        if escaped is None and "escaped" not in attenuated:
+            raise exceptions.InconsistentArguments(
+                "EmergentEmission requires an escaped model. "
+                "Please pass your own to the escaped argument."
+            )
+        elif escaped is None:
             warn(
                 "EmergentEmission requires an escaped model. "
                 "We'll try to extract one from the attenuated model. "
@@ -639,7 +686,7 @@ class TotalEmissionWithEscape(StellarEmissionModel):
         self,
         grid,
         dust_curve,
-        dust_emission_model=None,
+        dust_emission_model,
         label="total",
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
@@ -663,9 +710,19 @@ class TotalEmissionWithEscape(StellarEmissionModel):
             label="incident",
             **kwargs,
         )
-        nebular = NebularEmission(
+        nebular_line = NebularLineEmission(
             grid=grid,
             fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
             **kwargs,
         )
         transmitted = TransmittedEmission(
@@ -689,43 +746,31 @@ class TotalEmissionWithEscape(StellarEmissionModel):
             **kwargs,
         )
         escaped = transmitted["escaped"]
+        emergent = EmergentEmission(
+            grid=grid,
+            attenuated=attenuated,
+            escaped=escaped,
+            **kwargs,
+        )
+        dust_emission = DustEmission(
+            dust_emission_model=dust_emission_model,
+            dust_lum_intrinsic=reprocessed,
+            dust_lum_attenuated=attenuated,
+            emitter="stellar",
+            **kwargs,
+        )
 
-        # If a dust emission model has been passed then we need combine
-        if dust_emission_model is not None:
-            emergent = EmergentEmission(
-                grid=grid,
-                attenuated=attenuated,
-                escaped=escaped,
-                **kwargs,
-            )
-            dust_emission = DustEmission(
-                dust_emission_model=dust_emission_model,
-                dust_lum_intrinsic=reprocessed,
-                dust_lum_attenuated=attenuated,
-                emitter="stellar",
-                **kwargs,
-            )
-
-            # Make the total emission model
-            StellarEmissionModel.__init__(
-                self,
-                grid=grid,
-                label=label,
-                combine=(
-                    emergent,
-                    dust_emission,
-                ),
-                **kwargs,
-            )
-        else:
-            # Otherwise, total == emergent
-            StellarEmissionModel.__init__(
-                self,
-                grid=grid,
-                label=label,
-                combine=(attenuated, escaped),
-                **kwargs,
-            )
+        # Make the total emission model
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(
+                emergent,
+                dust_emission,
+            ),
+            **kwargs,
+        )
 
 
 class TotalEmissionNoEscape(StellarEmissionModel):
@@ -742,7 +787,7 @@ class TotalEmissionNoEscape(StellarEmissionModel):
         self,
         grid,
         dust_curve,
-        dust_emission_model=None,
+        dust_emission_model,
         fesc_ly_alpha="fesc_ly_alpha",
         label="total",
         **kwargs,
@@ -764,10 +809,19 @@ class TotalEmissionNoEscape(StellarEmissionModel):
             label="incident",
             **kwargs,
         )
-        nebular = NebularEmission(
+        nebular_line = NebularLineEmission(
             grid=grid,
             fesc_ly_alpha=fesc_ly_alpha,
-            fesc=0.0,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
             **kwargs,
         )
         transmitted = TransmittedEmission(
@@ -782,46 +836,32 @@ class TotalEmissionNoEscape(StellarEmissionModel):
             transmitted=transmitted,
             **kwargs,
         )
+        attenuated = AttenuatedEmission(
+            grid=grid,
+            dust_curve=dust_curve,
+            apply_to=reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        dust_emission = DustEmission(
+            dust_emission_model=dust_emission_model,
+            dust_lum_intrinsic=reprocessed,
+            dust_lum_attenuated=attenuated,
+            emitter="stellar",
+            **kwargs,
+        )
 
-        # If a dust emission model has been passed then we need combine
-        if dust_emission_model is not None:
-            attenuated = AttenuatedEmission(
-                grid=grid,
-                dust_curve=dust_curve,
-                apply_to=reprocessed,
-                emitter="stellar",
-                **kwargs,
-            )
-            dust_emission = DustEmission(
-                dust_emission_model=dust_emission_model,
-                dust_lum_intrinsic=reprocessed,
-                dust_lum_attenuated=attenuated,
-                emitter="stellar",
-                **kwargs,
-            )
-
-            # Make the total emission model
-            StellarEmissionModel.__init__(
-                self,
-                grid=grid,
-                label=label,
-                combine=(
-                    attenuated,
-                    dust_emission,
-                ),
-                **kwargs,
-            )
-        else:
-            # Otherwise, total == attenuated
-            StellarEmissionModel.__init__(
-                self,
-                grid=grid,
-                label=label,
-                dust_curve=dust_curve,
-                apply_to=reprocessed,
-                emitter="stellar",
-                **kwargs,
-            )
+        # Make the total emission model
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(
+                attenuated,
+                dust_emission,
+            ),
+            **kwargs,
+        )
 
 
 class TotalEmission:
@@ -860,23 +900,50 @@ class TotalEmission:
         # If fesc is None or 0.0 then we only need the total emission without
         # the escaped component.
         if fesc is None or fesc == 0.0:
-            return TotalEmissionNoEscape(
-                grid=grid,
-                dust_curve=dust_curve,
-                dust_emission_model=dust_emission_model,
-                fesc_ly_alpha=fesc_ly_alpha,
-                label=label,
-                **kwargs,
-            )
+            # If we have no dust emission then we can just return the
+            # attenuated emission
+            if dust_emission_model is None:
+                return AttenuatedEmission(
+                    grid=grid,
+                    dust_curve=dust_curve,
+                    apply_to=None,
+                    emitter="stellar",
+                    label=label,
+                    **kwargs,
+                )
+            else:
+                return TotalEmissionNoEscape(
+                    grid=grid,
+                    dust_curve=dust_curve,
+                    dust_emission_model=dust_emission_model,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    **kwargs,
+                )
 
         # Otherwise we need the total emission with the escaped component
         else:
-            return TotalEmissionWithEscape(
-                grid=grid,
-                dust_curve=dust_curve,
-                dust_emission_model=dust_emission_model,
-                fesc=fesc,
-                fesc_ly_alpha=fesc_ly_alpha,
-                label=label,
-                **kwargs,
-            )
+            # If we have no dust emission then we can just return the
+            # emergent emission
+            if dust_emission_model is None:
+                return EmergentEmission(
+                    grid=grid,
+                    dust_curve=dust_curve,
+                    apply_to=None,
+                    fesc=fesc,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    **kwargs,
+                )
+            else:
+                # Otherwise we return the total emission with the escaped
+                # component
+                return TotalEmissionWithEscape(
+                    grid=grid,
+                    dust_curve=dust_curve,
+                    dust_emission_model=dust_emission_model,
+                    fesc=fesc,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    **kwargs,
+                )
