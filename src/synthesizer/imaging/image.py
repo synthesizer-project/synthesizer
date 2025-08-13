@@ -249,7 +249,7 @@ class Image(ImagingBase):
             return Image(
                 self.resolution,
                 self.fov,
-                img=self.arr + other_img.arr,
+                img=self.arr - other_img.arr,
             )
         elif self.units is not None and other_img.units is not None:
             return Image(
