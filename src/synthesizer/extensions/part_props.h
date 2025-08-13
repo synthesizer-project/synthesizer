@@ -3,6 +3,7 @@
 
 /* Standard includes */
 #include <stdlib.h>
+#include <vector>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -23,6 +24,13 @@ class Particles {
 public:
   /* The number of particles. */
   int npart;
+
+  /* The grid index for each particle (for CIC this is the base index, i.e.
+   * the lower left corner of the cells). */
+  std::vector<int> grid_indices;
+
+  /* The fractions of the particle's mass in each grid cell (for CIC). */
+  std::vector<double> grid_fracs;
 
   /* Constructor */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
@@ -59,5 +67,11 @@ private:
    * of numpy arrays. */
   PyObject *part_tuple_;
 };
+
+// Prototypes for helper functions.
+void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
+                                    int nthreads = 1);
+void get_particle_indices(GridProps *grid_props, Particles *parts,
+                          int nthreads = 1);
 
 #endif // PART_PROPS_H_
