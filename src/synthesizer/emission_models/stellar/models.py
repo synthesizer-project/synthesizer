@@ -372,7 +372,9 @@ class NebularEmission(StellarEmissionModel):
         if nebular_line is None:
             warn(
                 "NebularEmission requires a nebular line model. "
-                f" We'll create one for you with the label '_{label}_line'.",
+                f"We'll create one for you with the label '_{label}_line'. "
+                "If you want to use a different nebular line model, please "
+                "pass your own to the nebular_line argument.",
                 stacklevel=4,
             )
             nebular_line = NebularLineEmission(
@@ -386,8 +388,10 @@ class NebularEmission(StellarEmissionModel):
         if nebular_continuum is None:
             warn(
                 "NebularEmission requires a nebular continuum model. "
-                " We'll create one for you with the label"
-                f" '_{label}_continuum'.",
+                "We'll create one for you with the label "
+                f"'_{label}_continuum'. If you want to use a "
+                "different nebular continuum model, please "
+                "pass your own to the nebular_continuum argument.",
                 stacklevel=4,
             )
             nebular_continuum = NebularContinuumEmission(
@@ -396,31 +400,12 @@ class NebularEmission(StellarEmissionModel):
                 **kwargs,
             )
 
-        # Handle the case where fesc is None or 0.0
-        if fesc is None or fesc == 0.0:
-            StellarEmissionModel.__init__(
-                self,
-                label=label,
-                combine=(nebular_line, nebular_continuum),
-                **kwargs,
-            )
-        else:
-            # Combined nebular emission
-            combined_nebular = StellarEmissionModel(
-                label=label + "_combined",
-                combine=(nebular_line, nebular_continuum),
-                save=False,
-                **kwargs,
-            )
-
-            StellarEmissionModel.__init__(
-                self,
-                label=label,
-                apply_to=combined_nebular,
-                transformer=ProcessedFraction(),
-                fesc=fesc,
-                **kwargs,
-            )
+        StellarEmissionModel.__init__(
+            self,
+            label=label,
+            combine=(nebular_line, nebular_continuum),
+            **kwargs,
+        )
 
 
 class ReprocessedEmission(StellarEmissionModel):
