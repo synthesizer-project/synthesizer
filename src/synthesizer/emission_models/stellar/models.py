@@ -212,7 +212,6 @@ class TransmittedEmissionWithEscaped(StellarEmissionModel):
                 f"We'll create one with the label '_{label}_incident'."
                 " If you want to use a different incident model, please "
                 "pass your own to the incident argument.",
-                stacklevel=4,
             )
             incident = IncidentEmission(
                 grid=grid,
@@ -377,7 +376,6 @@ class NebularEmission(StellarEmissionModel):
                 f"We'll create one for you with the label '_{label}_line'. "
                 "If you want to use a different nebular line model, please "
                 "pass your own to the nebular_line argument.",
-                stacklevel=4,
             )
             nebular_line = NebularLineEmission(
                 grid=grid,
@@ -394,7 +392,6 @@ class NebularEmission(StellarEmissionModel):
                 f"'_{label}_continuum'. If you want to use a "
                 "different nebular continuum model, please "
                 "pass your own to the nebular_continuum argument.",
-                stacklevel=4,
             )
             nebular_continuum = NebularContinuumEmission(
                 grid=grid,
@@ -450,7 +447,6 @@ class ReprocessedEmission(StellarEmissionModel):
                 f"label '_{label}_nebular'. If you want to use a "
                 "different nebular model, please pass your own to the "
                 "nebular argument.",
-                stacklevel=4,
             )
             nebular = NebularEmission(
                 grid=grid,
@@ -468,7 +464,6 @@ class ReprocessedEmission(StellarEmissionModel):
                 f" '_{label}_transmitted'. If you want to use a "
                 "different transmitted model, please pass your own to the "
                 "transmitted argument.",
-                stacklevel=4,
             )
             transmitted = TransmittedEmission(
                 grid=grid,
@@ -521,7 +516,6 @@ class IntrinsicEmission(StellarEmissionModel):
                 f" '_{label}_reprocessed'. If you want to use a "
                 "different reprocessed model, please pass your own to the "
                 "reprocessed argument.",
-                stacklevel=4,
             )
             reprocessed = ReprocessedEmission(
                 grid=grid,
@@ -584,7 +578,6 @@ class EmergentEmission(StellarEmissionModel):
                 f"'_{label}_reprocessed'. If you want to apply dust to a "
                 "different model, please pass your own to the "
                 "apply_to argument.",
-                stacklevel=4,
             )
             apply_to = ReprocessedEmission(
                 grid=grid,
@@ -602,7 +595,6 @@ class EmergentEmission(StellarEmissionModel):
                 f"'_{label}_attenuated'. If you want to use a "
                 "different attenuated model, please pass your own to the "
                 "attenuated argument.",
-                stacklevel=4,
             )
             attenuated = AttenuatedEmission(
                 grid=grid,
@@ -620,7 +612,6 @@ class EmergentEmission(StellarEmissionModel):
                 "We'll try to extract one from the attenuated model. "
                 "If you want to use a different escaped model, please "
                 "pass your own to the escaped argument.",
-                stacklevel=4,
             )
             escaped = attenuated["escaped"]
 
