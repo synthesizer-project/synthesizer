@@ -40,9 +40,9 @@ keywords =[
 
 # Synthesizer authors
 authors = [
+  {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
   {name = "C. S. Fournier", email = "connor.sant.17@um.edu.mt"},
   {name = "C. C. Lovell", email = "christopher.lovell@port.ac.uk" },
-  {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
   {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
   {name = "A. P. Vijayan", email = "apavi@space.dtu.dk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
