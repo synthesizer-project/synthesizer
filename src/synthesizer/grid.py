@@ -189,6 +189,8 @@ class Grid:
             # array as it is in the HDF5 file)
             self._prepare_lam_axis(new_lam, lam_lims)
 
+        self._get_stellar_fraction()
+
         # Read in lines but only if the grid has been reprocessed
         if not ignore_lines and self.reprocessed:
             self._get_lines_grid()
@@ -464,6 +466,28 @@ class Grid:
                     self.log10_specific_ionising_lum[ion] = hf["log10Q"][ion][
                         :
                     ]
+
+    def _get_stellar_fraction(self, key='star_fraction'):
+        """Get the stellar fraction from the HDF5 file.
+
+        This is a two-dimensional array with the first axis being age and
+        the second axis being metallicity.
+        """
+        with h5py.File(self.grid_filename, "r") as hf:
+            if key in hf.keys():
+                self.stellar_fraction = hf[key][:]
+            else:
+                self.stellar_fraction = np.ones(self.shape[:2])
+
+        assert self.stellar_fraction.ndim == 2, (
+            "The stellar fraction must be a two-dimensional array with the "
+            "first axis being age and the second axis being metallicity."
+        )
+
+        assert (self.stellar_fraction.shape == self.shape[:2]), (
+            "The stellar fraction must have the same shape as the first two "
+            "axes of the grid."
+        )
 
     def _get_spectra_grid(self, spectra_to_read):
         """Get the spectra grid from the HDF5 file.

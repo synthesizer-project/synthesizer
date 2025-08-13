@@ -546,6 +546,10 @@ class BaseGalaxy:
                 nthreads=nthreads,
             )
 
+    def get_surviving_mass(self, grid):
+        """Calculate the surviving mass of stars."""
+        return self.stars.calculate_surviving_mass(grid)
+
     @deprecated(
         "The `get_photo_fluxes` method is deprecated. Use "
         "`get_photo_fnu` instead. Will be removed in v1.0.0"
