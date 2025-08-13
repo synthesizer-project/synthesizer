@@ -20,6 +20,7 @@ from synthesizer import exceptions
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
+from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
@@ -459,14 +460,14 @@ def _generate_images_particle_smoothed(
             f"{imgs.resolution.units})."
         )
 
-    # # Ensure coordinates have been centred
-    # if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-    #     np.isclose(cent_coords, 0)
-    # ):
-    #     raise exceptions.InconsistentArguments(
-    #         "Coordinates must be centered for imaging"
-    #         f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-    #     )
+    # Ensure coordinates have been centred
+    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
+        np.isclose(cent_coords, 0)
+    ):
+        warn(
+            "Coordinates must be centered for imaging"
+            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
+        )
 
     # Get the spatial units we'll work with
     spatial_units = imgs.resolution.units
@@ -844,7 +845,7 @@ def _generate_ifu_particle_hist(
     if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
         np.isclose(cent_coords, 0)
     ):
-        raise exceptions.InconsistentArguments(
+        warn(
             "Coordinates must be centered for imaging"
             f" (got min={cent_coords.min()} and max={cent_coords.max()})."
         )
