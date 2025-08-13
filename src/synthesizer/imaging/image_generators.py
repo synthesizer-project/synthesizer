@@ -73,14 +73,14 @@ def _generate_image_particle_hist(
             f" (got {coordinates.units} and {img.resolution.units})."
         )
 
-    # # Ensure coordinates have been centred
-    # if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
-    #     np.isclose(coordinates, 0)
-    # ):
-    #     raise exceptions.InconsistentArguments(
-    #         "Coordinates must be centered for imaging"
-    #         f" (got min={coordinates.min()} and max={coordinates.max()})."
-    #     )
+    # Ensure coordinates have been centred
+    if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
+        np.isclose(coordinates, 0)
+    ):
+        warn(
+            "Coordinates must be centered for imaging"
+            f" (got min={coordinates.min()} and max={coordinates.max()})."
+        )
 
     # Strip off and store the units on the signal if they are present
     if isinstance(signal, (unyt_quantity, unyt_array)):
