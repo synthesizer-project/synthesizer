@@ -62,4 +62,8 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     _xs /= xscale
     _ys /= yscale
 
+    # If the maximum is zero, we return zero
+    if xscale == 0 or yscale == 0:
+        return _ys * 0.0
+
     return integration_function(_xs, _ys, nthreads) * xscale * yscale
