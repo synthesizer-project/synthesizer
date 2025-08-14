@@ -37,6 +37,7 @@ def images_strong_scaling(
     nstars,
     average_over,
     low_thresh,
+    paper_style,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     # Define the grid
@@ -59,7 +60,7 @@ def images_strong_scaling(
     )
 
     # Instatiate the instruments
-    webb_inst = Instrument("JWST", filters=webb_filters, resolution=0.1 * kpc)
+    webb_inst = Instrument("JWST", filters=webb_filters, resolution=0.05 * kpc)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
@@ -76,6 +77,7 @@ def images_strong_scaling(
         CoordinateGenerator.generate_3D_gaussian(
             nstars,
             mean=np.array([50, 50, 50]),
+            cov=np.array([[10, 0, 0], [0, 10, 0], [0, 0, 10]]),
         )
         * kpc
     )
@@ -149,6 +151,7 @@ def images_strong_scaling(
         },
         total_msg="Generating images",
         low_thresh=low_thresh,
+        paper_style=paper_style,
     )
 
 
@@ -199,6 +202,12 @@ if __name__ == "__main__":
         help="the lower threshold on time for an operation to "
         "be included in the scaling test plot.",
     )
+    args.add_argument(
+        "--paper_style",
+        action="store_true",
+        help="Use the paper style for the plot (legend below the plot and "
+        "smaller proportions).",
+    )
 
     args = args.parse_args()
 
@@ -209,4 +218,5 @@ if __name__ == "__main__":
         args.nstars,
         args.average_over,
         args.low_thresh,
+        args.paper_style,
     )

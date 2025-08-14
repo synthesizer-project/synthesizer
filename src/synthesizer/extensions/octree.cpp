@@ -229,6 +229,7 @@ static void construct_particles(struct particle *particles, const double *pos,
     particles[ip].pos[2] = pos[ip * 3 + 2];
     particles[ip].sml = sml[ip];
     particles[ip].surf_den_var = surf_den_vals[ip];
+    particles[ip].index = ip;
 
     /* Update the bounds. */
     for (int i = 0; i < 3; i++) {

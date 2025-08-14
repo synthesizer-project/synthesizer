@@ -164,6 +164,19 @@ class SpectralCube(ImagingBase):
         return self.arr * self.units
 
     @property
+    def cube(self):
+        """Return the data cube.
+
+        An alias for the data_cube property.
+
+        Returns:
+            array_like (float):
+                A 3D array containing the data cube. (npix[0], npix[1],
+                lam.size)
+        """
+        return self.data_cube
+
+    @property
     def shape(self):
         """Return the shape of the data cube.
 

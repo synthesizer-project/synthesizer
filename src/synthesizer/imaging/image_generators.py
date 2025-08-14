@@ -20,6 +20,7 @@ from synthesizer import exceptions
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
+from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
@@ -76,7 +77,7 @@ def _generate_image_particle_hist(
     if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
         np.isclose(coordinates, 0)
     ):
-        raise exceptions.InconsistentArguments(
+        warn(
             "Coordinates must be centered for imaging"
             f" (got min={coordinates.min()} and max={coordinates.max()})."
         )
@@ -311,7 +312,7 @@ def _generate_image_particle_smoothed(
 
     toc("Setting up smoothed image inputs", start)
 
-    # Get the (npix_x, npix_y) image
+    # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signal),
         ensure_array_c_compatible_double(_smoothing_lengths),
@@ -328,7 +329,7 @@ def _generate_image_particle_smoothed(
     )
 
     # Store the image array into the image object
-    img.arr = imgs_arr[0, :, :]
+    img.arr = imgs_arr[:, :, 0]
     img.units = (
         signal.units
         if isinstance(signal, (unyt_quantity, unyt_array))
@@ -462,7 +463,7 @@ def _generate_images_particle_smoothed(
     if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
         np.isclose(cent_coords, 0)
     ):
-        raise exceptions.InconsistentArguments(
+        warn(
             "Coordinates must be centered for imaging"
             f" (got min={cent_coords.min()} and max={cent_coords.max()})."
         )
@@ -491,6 +492,10 @@ def _generate_images_particle_smoothed(
         for ind, key in enumerate(labels):
             signals[ind, :] *= normalisations[key].value
 
+    # In the C++ extension we want to be dealing with (Npart, Nimg) signals
+    # to make the most of cache locality, so we transpose the signals
+    signals = signals.T
+
     toc("Setting up smoothed image inputs", start)
 
     # Get the (Nimg, npix_x, npix_y) array of images
@@ -505,18 +510,24 @@ def _generate_images_particle_smoothed(
         cent_coords.shape[0],
         kernel_threshold,
         kernel.size,
-        signals.shape[0],
+        signals.shape[1],
         nthreads,
     )
+
+    # Apply units if needs be
+    if isinstance(signals, (unyt_quantity, unyt_array)):
+        unit_start = tic()
+        imgs_arr = unyt_array(
+            imgs_arr,
+            units=signals.units,
+        )
+        toc("Applying units to smoothed images", unit_start)
 
     # Store the image arrays on the image collection (this will
     # automatically convert them to Image objects)
     unpack_start = tic()
     for ind, key in enumerate(labels):
-        if isinstance(signals, (unyt_quantity, unyt_array)):
-            imgs[key] = imgs_arr[ind, :, :] * signals.units
-        else:
-            imgs[key] = imgs_arr[ind, :, :]
+        imgs[key] = imgs_arr[:, :, ind]
     toc("Unpacking smoothed images", unpack_start)
 
     # Apply normalisation if needed
@@ -794,7 +805,7 @@ def _generate_ifu_particle_hist(
 
     # Strip off and store the units on the spectra for later
     ifu.units = spectra.units
-    spectra = spectra.value.T
+    spectra = spectra.ndview
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:
@@ -802,7 +813,7 @@ def _generate_ifu_particle_hist(
             "Spectra must be a 2D array for an IFU image"
             f" (got {spectra.ndim})."
         )
-    if spectra.shape[1] != cent_coords.shape[0]:
+    if spectra.shape[0] != cent_coords.shape[0]:
         raise exceptions.InconsistentArguments(
             "Spectra and coordinates must be the same size"
             f" for an IFU image (got {spectra.shape[0]} and "
@@ -833,7 +844,7 @@ def _generate_ifu_particle_hist(
     if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
         np.isclose(cent_coords, 0)
     ):
-        raise exceptions.InconsistentArguments(
+        warn(
             "Coordinates must be centered for imaging"
             f" (got min={cent_coords.min()} and max={cent_coords.max()})."
         )
@@ -863,7 +874,7 @@ def _generate_ifu_particle_hist(
         kernel.size,
         sed.nlam,
         nthreads,
-    ).T
+    )
 
     return ifu
 
@@ -1003,7 +1014,7 @@ def _generate_ifu_particle_smoothed(
         kernel.size,
         sed.nlam,
         nthreads,
-    ).T
+    )
 
     return ifu
 
