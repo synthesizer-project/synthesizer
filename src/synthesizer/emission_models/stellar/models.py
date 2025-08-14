@@ -361,11 +361,9 @@ class NebularEmission(StellarEmissionModel):
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
             fesc (float): The escape fraction of the emission.
             nebular_line (EmissionModel): The nebular line model to use, if
-                None then one will be created. Only used if
-                fesc_ly_alpha < 1.0.
+                None then one will be created.
             nebular_continuum (EmissionModel): The nebular continuum model to
-                use, if None then one will be created. Only used if
-                fesc_ly_alpha < 1.0.
+                use, if None then one will be created.
             **kwargs: Additional keyword arguments.
         """
         # If we have a Lyman-alpha escape fraction then calculate the
