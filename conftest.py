@@ -226,7 +226,7 @@ def unit_emission_stars():
 def random_part_stars():
     """Return a particle Stars object with velocities."""
     # Randomly generate the attribute we'll need for the stars
-    nstars = np.random.randint(5, 10)
+    nstars = np.random.randint(10, 100)
     initial_masses = np.random.uniform(0.1, 10, nstars) * 1e6 * Msun
     ages = np.random.uniform(4, 7, nstars) * Myr
     metallicities = np.random.uniform(0.01, 0.1, nstars)
@@ -234,8 +234,8 @@ def random_part_stars():
     tau_v = np.random.uniform(0.1, 0.9, nstars)
     coordinates = (
         np.random.normal(
-            0.1,
-            np.random.rand(1) * 100,
+            0.0,
+            np.random.rand(1) * 0.01,
             (nstars, 3),
         )
         * Mpc
@@ -249,7 +249,7 @@ def random_part_stars():
         * km
         / s
     )
-    smls = np.random.uniform(0.1, 1, nstars) * Mpc
+    smls = np.random.uniform(0.005, 0.001, nstars) * Mpc
 
     return Stars(
         initial_masses=initial_masses,

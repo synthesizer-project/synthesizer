@@ -14,9 +14,13 @@ import time
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 
-plt.rcParams["font.family"] = "DeJavu Serif"
-plt.rcParams["font.serif"] = ["Times New Roman"]
+plt.rcParams["axes.labelsize"] = 8
+plt.rcParams["axes.titlesize"] = 8
+plt.rcParams["xtick.labelsize"] = 8
+plt.rcParams["ytick.labelsize"] = 8
+plt.rcParams["legend.fontsize"] = 7
 
 # Set the seed
 np.random.seed(42)
@@ -235,8 +239,9 @@ def plot_speed_up_plot(
     threads,
     linestyles,
     outpath,
+    paper_style,
 ):
-    """Plot a strong scaling test.
+    """Plot a strong scaling test, optionally in paper style.
 
     Args:
         atomic_runtimes (dict):
@@ -247,17 +252,47 @@ def plot_speed_up_plot(
             A dictionary mapping keys to their respective linestyles.
         outpath (str):
             The path to save the plot.
-
+        paper_style (bool):
+            If True, produces a figure sized 3.5" x 8" with the main legend
+            placed below the speedup plot's x-axis.
     """
-    # Create the figure and gridspec layout
+    if paper_style:
+        _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath)
+    else:
+        _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath)
+
+
+def _wrap_label(label, max_length=20):
+    """Add new lines to a label if it exceeds a maximum length.
+
+    The added new line will follow the word containing max_length characters.
+
+    Args:
+        label (str): The label to wrap.
+        max_length (int): The maximum length of a line before wrapping.
+    """
+    if len(label) <= max_length:
+        return label
+
+    # Find the last space before the max length
+    split_index = label.rfind(" ", 0, max_length)
+    if split_index == -1:  # No space found, just split at max_length
+        split_index = max_length
+
+    # Wrap the label
+    wrapped_label = label[:split_index] + "\n" + label[split_index:].strip()
+    return wrapped_label
+
+
+def _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath):
+    # Default full-size layout
     fig = plt.figure(figsize=(12, 10))
     gs = gridspec.GridSpec(
         3, 2, width_ratios=[3, 1], height_ratios=[1, 1, 0.05], hspace=0.0
     )
 
-    # Main plot
     ax_main = fig.add_subplot(gs[0, 0])
-    for key in atomic_runtimes.keys():
+    for key in atomic_runtimes:
         ax_main.semilogy(
             threads,
             atomic_runtimes[key],
@@ -266,15 +301,13 @@ def plot_speed_up_plot(
             linestyle=linestyles[key],
             linewidth=3 if key == "Total" else 1,
         )
-
     ax_main.set_ylabel("Time (s)")
     ax_main.grid(True)
 
-    # Speedup plot
     ax_speedup = fig.add_subplot(gs[1, 0], sharex=ax_main)
-    for key in atomic_runtimes.keys():
-        initial_time = atomic_runtimes[key][0]
-        speedup = [initial_time / t for t in atomic_runtimes[key]]
+    for key in atomic_runtimes:
+        t0 = atomic_runtimes[key][0]
+        speedup = [t0 / t for t in atomic_runtimes[key]]
         ax_speedup.plot(
             threads,
             speedup,
@@ -283,8 +316,6 @@ def plot_speed_up_plot(
             linestyle=linestyles[key],
             linewidth=3 if key == "Total" else 1,
         )
-
-    # PLot a 1-1 line
     ax_speedup.plot(
         [threads[0], threads[-1]],
         [threads[0], threads[-1]],
@@ -293,41 +324,101 @@ def plot_speed_up_plot(
         label="Ideal",
         alpha=0.7,
     )
-
     ax_speedup.set_xlabel("Number of Threads")
     ax_speedup.set_ylabel("Speedup")
     ax_speedup.grid(True)
 
-    # Hide x-tick labels for the main plot
     plt.setp(ax_main.get_xticklabels(), visible=False)
 
-    # Sacrificial axis for the legend
     ax_legend = fig.add_subplot(gs[0:2, 1])
-    ax_legend.axis("off")  # Hide the sacrificial axis
-
-    # Create the legend
+    ax_legend.axis("off")
     handles, labels = ax_main.get_legend_handles_labels()
     ax_legend.legend(
         handles, labels, loc="center left", bbox_to_anchor=(-0.3, 0.5)
     )
 
-    # Add a second key for linestyle
-    handles = [
-        plt.Line2D(
-            [0], [0], color="black", linestyle="-", label="C Extension"
-        ),
-        plt.Line2D([0], [0], color="black", linestyle="--", label="Python"),
-        plt.Line2D(
+    style_handles = [
+        Line2D([0], [0], color="black", linestyle="-", label="C Extension"),
+        Line2D([0], [0], color="black", linestyle="--", label="Python"),
+        Line2D(
             [0], [0], color="black", linestyle="-.", label="Perfect Scaling"
         ),
     ]
-    ax_speedup.legend(handles=handles, loc="upper left")
+    ax_speedup.legend(handles=style_handles, loc="upper left")
 
-    fig.savefig(
-        outpath,
-        dpi=300,
-        bbox_inches="tight",
+    fig.savefig(outpath, dpi=300, bbox_inches="tight")
+    plt.show()
+
+
+def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
+    # Compact paper-style layout
+    fig = plt.figure(figsize=(3.5, 7))
+    gs = gridspec.GridSpec(3, 1, height_ratios=[2, 1.1, 1], hspace=0.0)
+    gs1 = gridspec.GridSpec(3, 1, height_ratios=[2, 1.1, 1], hspace=0.75)
+
+    ax_main = fig.add_subplot(gs[0])
+    for key in atomic_runtimes:
+        ax_main.semilogy(
+            threads,
+            atomic_runtimes[key],
+            "s" if key == "Total" else "o",
+            label=_wrap_label(key, max_length=30),
+            linestyle=linestyles[key],
+            linewidth=3 if key == "Total" else 1,
+        )
+    ax_main.set_ylabel("Time (s)")
+    ax_main.grid(True)
+
+    ax_speedup = fig.add_subplot(gs[1], sharex=ax_main)
+    for key in atomic_runtimes:
+        t0 = atomic_runtimes[key][0]
+        speedup = [t0 / t for t in atomic_runtimes[key]]
+        ax_speedup.plot(
+            threads,
+            speedup,
+            "s" if key == "Total" else "o",
+            label=key,
+            linestyle=linestyles[key],
+            linewidth=3 if key == "Total" else 1,
+        )
+    ax_speedup.plot(
+        [threads[0], threads[-1]],
+        [threads[0], threads[-1]],
+        "-.",
+        color="black",
+        label="Ideal",
+        alpha=0.7,
     )
+    ax_speedup.set_xlabel("Number of Threads")
+    ax_speedup.set_ylabel("Speedup")
+    ax_speedup.grid(True)
+
+    plt.setp(ax_main.get_xticklabels(), visible=False)
+
+    # Sacrificial axis for atomic key legend below speedup
+    ax_legend = fig.add_subplot(gs1[2])
+    ax_legend.axis("off")
+    handles, labels = ax_main.get_legend_handles_labels()
+    ax_legend.legend(
+        handles,
+        labels,
+        loc="upper center",
+        ncol=1,
+    )
+
+    # Inline style legend on speedup axis
+    style_handles = [
+        Line2D([0], [0], color="black", linestyle="-", label="C Extension"),
+        Line2D([0], [0], color="black", linestyle="--", label="Python"),
+        Line2D(
+            [0], [0], color="black", linestyle="-.", label="Perfect Scaling"
+        ),
+    ]
+    ax_speedup.add_artist(
+        ax_speedup.legend(handles=style_handles, loc="upper left")
+    )
+
+    fig.savefig(outpath, dpi=300, bbox_inches="tight")
     plt.show()
 
 
@@ -340,6 +431,7 @@ def run_scaling_test(
     kwargs,
     total_msg,
     low_thresh,
+    paper_style=True,
 ):
     """Run a scaling test for the Synthesizer package.
 
@@ -355,6 +447,8 @@ def run_scaling_test(
         kwargs (dict): The keyword arguments to pass to the function.
         total_msg (str): The message to print for the total time.
         low_thresh (float): The threshold for low runtimes.
+        paper_style (bool): If True, produces a figure sized 3.5" x 8" with
+            the main legend placed below the speedup plot's x-axis.
     """
     # Run the scaling test itself
     output, threads = _run_averaged_scaling_test(
@@ -381,4 +475,5 @@ def run_scaling_test(
         threads,
         linestyles,
         plot_outpath,
+        paper_style,
     )

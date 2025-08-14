@@ -26,7 +26,7 @@ if __name__ == "__main__":
     grid_name = "test_grid"
 
     # initialise grid
-    grid = Grid(grid_name, read_lines=True)
+    grid = Grid(grid_name)
 
     # get list of lines
     print(grid.available_lines)

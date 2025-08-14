@@ -40,21 +40,21 @@ keywords =[
 
 # Synthesizer authors
 authors = [
-  {name = "C. S. Fournier", email = "connor.sant.17@um.edu.mt"},
-  {name = "C. C. Lovell", email = "christopher.lovell@port.ac.uk" },
   {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
-  {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
-  {name = "A. P. Vijayan", email = "apavi@space.dtu.dk" },
+  {name = "C. C. Lovell", email = "chris.lovell.astro@gmail.com" },
+  {name = "A. P. Vijayan", email = "A.Payyoor-Vijayan@sussex.ac.uk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
-  {name = "K. Iyer", email = "kartheikiyer@gmail.com" },
   {name = "S. Newman", email = "sophie.newman@port.ac.uk" },
+  {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
+  {name = "K. Iyer", email = "kartheikiyer@gmail.com" },
+  {name = "C. S. Fournier", email = "connor.sant.17@um.edu.mt"},
 ]
 
 # Synthesizer maintainers
 maintainers = [
-  {name = "C. C. Lovell", email = "christopher.lovell@port.ac.uk" },
+  {name = "C. C. Lovell", email = "chris.lovell.astro@gmail.com" },
   {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
-  {name = "A. P. Vijayan", email = "apavi@space.dtu.dk" },
+  {name = "A. P. Vijayan", email = "A.Payyoor-Vijayan@sussex.ac.uk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
 ]
 
@@ -82,7 +82,7 @@ dependencies = [
   "scipy",
   "unyt",
   "cmasher",
-  "dust_extinction",
+  "dust_extinction>=1.6",
   "matplotlib",
   "spectres",
   "tqdm",
@@ -144,6 +144,7 @@ eagle = [
 synthesizer-init = "synthesizer.data.initialise:synth_initialise"
 synthesizer-clear = "synthesizer.data.initialise:synth_clear_data"
 synthesizer-download="synthesizer.downloader.downloader:download"
+synthesizer-report = "synthesizer.data.initialise:synth_report_config"
 
 # Package data
 [tool.setuptools.package-data]

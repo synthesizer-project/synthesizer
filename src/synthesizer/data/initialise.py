@@ -413,7 +413,7 @@ class SynthesizerInitializer:
         print(f"{green}Synthesizer initialisation complete!{reset}\n")
 
 
-def synth_initialise() -> None:
+def synth_initialise(verbose=True) -> None:
     """Run the Synthesizer initialization process.
 
     This function runs the initialisation process. It creates the necessary
@@ -437,12 +437,28 @@ def synth_initialise() -> None:
 
     # Just exit if the data directory already exists
     if all_exist:
+        if verbose:
+            print(
+                "  🟢 Synthesizer data directory already exists, "
+                "no need to re-initialize."
+            )
         return
 
     # Otherwise, create the initializer and run it, this will only make or copy
     # what is necessary
     initializer = SynthesizerInitializer()
     initializer.initialize()
+    initializer.report()
+
+
+def synth_report_config() -> None:
+    """Report the Synthesizer configuration.
+
+    This function prints the current Synthesizer configuration, including
+    the base directory, data directory, grids directory, instrument cache,
+    test data directory, and database directory.
+    """
+    initializer = SynthesizerInitializer()
     initializer.report()
 
 

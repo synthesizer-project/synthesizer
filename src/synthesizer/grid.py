@@ -104,8 +104,9 @@ class Grid:
         self,
         grid_name,
         grid_dir=None,
+        ignore_spectra=False,
         spectra_to_read=None,
-        read_lines=True,
+        ignore_lines=False,
         new_lam=None,
         lam_lims=(),
     ):
@@ -120,12 +121,13 @@ class Grid:
                 hdf5 is assumed).
             grid_dir (str):
                 The file path to the directory containing the grid file.
+            ignore_spectra (bool):
+                Should we ignore spectra (i.e. not load them into the Grid)?
             spectra_to_read (list):
                 A list of spectra to read in. If None then all available
                 spectra will be read. Default is None.
-            read_lines (bool):
-                Should we read lines? If a list then a subset of lines will be
-                read.
+            ignore_lines (bool):
+                Should we ignore lines  (i.e. not load them into the Grid)?
             new_lam (np.ndarray of float):
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
@@ -140,9 +142,11 @@ class Grid:
         self.grid_ext = "hdf5"  # can be updated if grid_name has an extension
         self._parse_grid_path(grid_dir, grid_name)
 
-        # Prepare lists of available lines and spectra
+        # Prepare lists of available lines, spectra, and emissions
         self.available_lines = []
-        self.available_spectra = []
+        self.available_spectra_emissions = []
+        self.available_line_emissions = []
+        self.available_emissions = []
 
         # Set up property flags. These will be set when their property methods
         # are first called to avoid reading the file too often.
@@ -151,6 +155,7 @@ class Grid:
 
         # Set up spectra and lines dictionaries (if we don't read them they'll
         # just stay as empty dicts)
+        self.lam = None
         self.spectra = {}
         self.line_lams = None
         self.line_lums = {}
@@ -172,22 +177,40 @@ class Grid:
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
 
-        # We always read spectra, but can read a subset if requested
-        self.lam = None
-        self.available_spectra = None
-        self._get_spectra_grid(spectra_to_read)
+        # Read in spectra
+        if not ignore_spectra:
+            self._get_spectra_grid(spectra_to_read)
 
-        # Prepare lines attributes
-        self.available_lines = []
+            # Save the spectra keys as available emissions
+            self.available_spectra_emissions = list(self.spectra.keys())
 
-        # Read in lines
-        if read_lines or isinstance(read_lines, list):
-            self._get_lines_grid(read_lines)
+            # Prepare the wavelength axis (if new_lam and lam_lims are
+            # all None, this will do nothing, leaving the grid's wavelength
+            # array as it is in the HDF5 file)
+            self._prepare_lam_axis(new_lam, lam_lims)
 
-        # Prepare the wavelength axis (if new_lam and lam_lims are
-        # all None, this will do nothing, leaving the grid's wavelength array
-        # as it is in the HDF5 file)
-        self._prepare_lam_axis(new_lam, lam_lims)
+        # Read in lines but only if the grid has been reprocessed
+        if not ignore_lines and self.reprocessed:
+            self._get_lines_grid()
+
+            # Save the line lums keys as available emissions
+            self.available_line_emissions = list(self.line_lums.keys())
+
+        # Combine the two emissions lists and remove repeats
+        self.available_emissions = list(
+            set(
+                self.available_line_emissions
+                + self.available_spectra_emissions
+            )
+        )
+
+    @property
+    def available_spectra(self):
+        """Return a list of available emission types.
+
+        For spectra, these are the available spectra.
+        """
+        return self.available_spectra_emissions
 
     def _parse_grid_path(self, grid_dir, grid_name):
         """Parse the grid path and set the grid directory and filename."""
@@ -458,10 +481,9 @@ class Grid:
         with h5py.File(self.grid_filename, "r") as hf:
             # Are we reading everything?
             if spectra_to_read is None:
-                self.available_spectra = self._get_spectra_ids_from_file()
+                spectra_to_read = self._get_spectra_ids_from_file()
             elif isinstance(spectra_to_read, list):
                 all_spectra = self._get_spectra_ids_from_file()
-                self.available_spectra = spectra_to_read
 
                 # Check the requested spectra are available
                 missing_spectra = set(spectra_to_read) - set(all_spectra)
@@ -481,34 +503,26 @@ class Grid:
             self.lam = hf["spectra/wavelength"][:]
 
             # Get all our spectra
-            for spectra_id in self.available_spectra:
+            for spectra_id in spectra_to_read:
                 self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
-        if self.reprocessed:
+        if self.reprocessed is True:
             # The total emission (ignoring any dust reprocessing) is just
             # the transmitted plus the nebular
             self.spectra["total"] = (
                 self.spectra["transmitted"] + self.spectra["nebular"]
             )
-            self.available_spectra.append("total")
 
             # The nebular continuum is the nebular emission with the line
             # contribution removed
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
-            self.available_spectra.append("nebular_continuum")
 
-    def _get_lines_grid(self, read_lines):
-        """Get the lines grid from the HDF5 file.
-
-        Args:
-            read_lines (bool/list):
-                Flag for whether to read all available lines or subset of
-                lines to read.
-        """
+    def _get_lines_grid(self):
+        """Get the lines grid from the HDF5 file."""
         # Double check we actually have lines to read
         if not self.lines_available:
             if not self.reprocessed:
@@ -536,25 +550,6 @@ class Grid:
             lams = hf["lines"]["wavelength"][...]
             lam_units = hf["lines"]["wavelength"].attrs.get("Units")
             self.line_lams = unyt_array(lams, lam_units).to(angstrom)
-
-            # Check the lines are within the wavelength range of the grid. Its
-            # not a big issue if any are outside the range but we should warn
-            # the user since it could lead to confusion.
-            lines_outside_lam = []
-            for ind, line in enumerate(self.available_lines):
-                if (
-                    self.line_lams[ind] < self.lam[0]
-                    or self.line_lams[ind] > self.lam[-1]
-                ):
-                    lines_outside_lam.append(line)
-
-            # If we have lines outside the wavelength range of the grid
-            # warn the user
-            if len(lines_outside_lam) > 0:
-                warn(
-                    "The following lines are outside the wavelength "
-                    f"range of the grid: {lines_outside_lam}"
-                )
 
             # Get the units, we only do this once since all the
             # luminosities and continuums will have the same units
@@ -605,45 +600,71 @@ class Grid:
             )
 
             # Now that we have read the line data itself we need to populate
-            # the other spectra entries. the line luminosities for all entries
-            # other than nebular are 0 but the continuums need to be sampled
-            # from the spectra.
-            for spectra in self.available_spectra:
-                # Define the extraction key
-                extract = spectra
+            # the other spectra entries, if any exist. the line luminosities
+            # for all entries other than nebular are 0 but the continuums
+            # need to be sampled from the spectra.
 
-                # Skip those we have already read
-                if extract in self.line_conts:
-                    continue
+            # Before doing this though, we need to check the lines are within
+            # the wavelength range of the grid. Its not a big issue if any are
+            # outside the range but we should warn the user since it could lead
+            # to confusion.
 
-                # Create an interpolation function for this spectra
-                interp_func = interp1d(
-                    self._lam,
-                    self.spectra[extract],
-                    axis=-1,
-                    kind="linear",
-                    fill_value=0.0,
-                    bounds_error=False,
-                )
+            if self.available_spectra_emissions:
+                lines_outside_lam = []
+                for ind, line in enumerate(self.available_lines):
+                    if (
+                        self.line_lams[ind] < self.lam[0]
+                        or self.line_lams[ind] > self.lam[-1]
+                    ):
+                        lines_outside_lam.append(line)
 
-                # Get the continuum luminosities by interpolating the to get
-                # the continuum at the line wavelengths (we use scipy here
-                # because spectres can't handle single value interpolation).
-                # The linecont continuum is explicitly 0 and set above.
-                self.line_conts[spectra] = unyt_array(
-                    interp_func(self.line_lams),
-                    cont_units,
-                )
+                # If we have lines outside the wavelength range of the grid
+                # warn the user
+                if len(lines_outside_lam) > 0:
+                    warn(
+                        "The following lines are outside the wavelength "
+                        f"range of the grid: {lines_outside_lam}"
+                    )
 
-                # Set the line luminosities to 0 as long as they haven't
-                # already been set
-                self.line_lums[spectra] = unyt_array(
-                    np.zeros((*self.spectra[spectra].shape[:-1], self.nlines)),
-                    lum_units,
-                )
+                for spectra in self.available_spectra_emissions:
+                    # Define the extraction key
+                    extract = spectra
+
+                    # Skip those we have already read
+                    if extract in self.line_conts:
+                        continue
+
+                    # Create an interpolation function for this spectra
+                    interp_func = interp1d(
+                        self._lam,
+                        self.spectra[extract],
+                        axis=-1,
+                        kind="linear",
+                        fill_value=0.0,
+                        bounds_error=False,
+                    )
+
+                    # Get the continuum luminosities by interpolating the to
+                    # get the continuum at the line wavelengths (we use scipy
+                    # here because spectres can't handle single value
+                    # interpolation). The linecont continuum is explicitly 0
+                    # and set above.
+                    self.line_conts[spectra] = unyt_array(
+                        interp_func(self.line_lams),
+                        cont_units,
+                    )
+
+                    # Set the line luminosities to 0 as long as they haven't
+                    # already been set
+                    self.line_lums[spectra] = unyt_array(
+                        np.zeros(
+                            (*self.spectra[spectra].shape[:-1], self.nlines)
+                        ),
+                        lum_units,
+                    )
 
             # Ensure the line luminosities and continuums are contiguous
-            for spectra in self.available_spectra:
+            for spectra in self.line_lums.keys():
                 lum_units = self.line_lums[spectra].units
                 cont_units = self.line_conts[spectra].units
                 self.line_lums[spectra] = (
@@ -824,7 +845,7 @@ class Grid:
                 intensive, but slower. Defaults to False.
         """
         # Loop over spectra to interpolate
-        for spectra_type in self.available_spectra:
+        for spectra_type in self.available_spectra_emissions:
             # Are we doing the look up in one go, or looping?
             if loop_grid:
                 new_spectra = [None] * len(self.spectra[spectra_type])
@@ -875,7 +896,17 @@ class Grid:
     @property
     def shape(self):
         """Return the shape of the grid."""
-        return self.spectra[self.available_spectra[0]].shape
+        # Check to see if there are spectra associated with the grid...
+        if self.available_spectra_emissions:
+            return self.spectra[self.available_spectra_emissions[0]].shape
+        # ... if not, check lines...
+        elif self.available_line_emissions:
+            return self.line_lums[self.available_line_emissions[0]].shape
+        # ...otherwise raise an exception.
+        else:
+            raise exceptions.UnrecognisedOption(
+                "The grid has neither spectra or lines associated with it."
+            )
 
     @property
     def ndim(self):
@@ -1009,7 +1040,7 @@ class Grid:
         # Get the index of the axis to collapse
         axis_index = self.axes.index(axis)
 
-        for spectra_id in self.available_spectra:
+        for spectra_id in self.available_spectra_emissions:
             # Marginalize over the entire axis
             self.spectra[spectra_id] = marginalize_function(
                 self.spectra[spectra_id], axis=axis_index
@@ -1061,7 +1092,7 @@ class Grid:
         # Adopt pre-interpolation function if provided
         pre_interp_function = pre_interp_function or (lambda x: x)
 
-        for spectra_id in self.available_spectra:
+        for spectra_id in self.available_spectra_emissions:
             # Interpolate the spectra
             i0 = np.argmax(axis_values[axis_values <= value])
             i1 = i0 + 1
@@ -1142,7 +1173,7 @@ class Grid:
                 f"Value {value} is outside the bounds of the axis {axis}."
             )
 
-        for spectra_id in self.available_spectra:
+        for spectra_id in self.available_spectra_emissions:
             # Extract the nearest value in the axis
             self.spectra[spectra_id] = np.take(
                 self.spectra[spectra_id],

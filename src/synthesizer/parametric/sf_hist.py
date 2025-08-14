@@ -36,7 +36,8 @@ parametrisations = (
     "Exponential",
     "TruncatedExponential",
     "DecliningExponential",
-    "DelayedExponentialLogNormal",
+    "DelayedExponential",
+    "LogNormal",
     "DoublePowerLaw",
     "DenseBasis",
 )
