@@ -23,10 +23,11 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Mpc, Msun, Myr, km, s, yr
+from unyt import Mpc, Msun, Myr, km, s, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
+from synthesizer.grid import Grid
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
@@ -1137,6 +1138,40 @@ class Stars(Particles, StarsComponent):
                 "The SFZH has not been calculated. Run get_sfzh() first."
             )
         return self.sfzh.plot_sfzh(show=show)
+
+    def calculate_surviving_mass(
+        self, grid: Grid, grid_assignment_method: str = "cic"
+    ) -> unyt_quantity:
+        """Calculate the surviving mass of the stellar population.
+
+        This is the total mass of stars that have survived to the present day
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving mass.
+                This is used to get the stellar fraction at each SFZH bin.
+            grid_assignment_method (str):
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp).
+
+        Returns:
+            unyt_quantity: The total surviving mass of the stellar
+            population in Msun.
+        """
+        if self.sfzh is None:
+            _stars = self.get_sfzh(
+                grid.log10ages,
+                grid.log10metallicities,
+                grid_assignment_method=grid_assignment_method,
+            )
+        else:
+            _stars = self.sfzh
+
+        surviving_mass = np.sum(_stars.sfzh * grid.stellar_fraction)
+
+        return surviving_mass * Msun
 
     def _prepare_sfh_args(
         self,

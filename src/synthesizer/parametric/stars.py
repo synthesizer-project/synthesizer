@@ -20,6 +20,7 @@ from unyt import Hz, Msun, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
+from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.units import Quantity, accepts
@@ -931,3 +932,22 @@ class Stars(StarsComponent):
         attr = getattr(self, attr)
 
         return weighted_mean(attr, weight)
+
+    def calculate_surviving_mass(self, grid: Grid):
+        """Calculate the surviving mass of the stellar population.
+
+        This is the total mass of stars that have survived to the present day
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving mass.
+                This is used to get the stellar fraction at each SFZH bin.
+
+        Returns:
+            unyt_quantity: The total surviving mass of the stellar
+            population in Msun.
+        """
+        surviving_mass = np.sum(self.sfzh * grid.stellar_fraction)
+
+        return surviving_mass * Msun
