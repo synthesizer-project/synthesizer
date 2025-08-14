@@ -341,7 +341,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 The Lyman alpha escape fraction.
             label (str):
                 The label for the total emission model. If `None` this will
-                be set to "attenuated".
+                be set to "emergent".
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -633,7 +633,10 @@ class PacmanEmission:
                 The Lyman alpha escape fraction.
             label (str):
                 The label for the total emission model. If `None` this will
-                be set to "total" or "emergent" if dust_emission is `None`.
+                be set to "total" (when dust emission is included),
+                "attenuated" (when dust emission and an escape fraction are
+                not included), and "emergent" (when dust emission is not
+                included and an escape fraction is included).
             stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
