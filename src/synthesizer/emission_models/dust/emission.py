@@ -347,15 +347,13 @@ class Greybody(EmissionBase):
 
         """
         if self.optically_thin:
-            lnu = (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
+            return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
         else:
             _nu_0 = self.lam_0 / c
             optically_thick_factor = 1 - np.exp(
                 -((nu / _nu_0) ** self.emissivity)
             )
-            lnu = optically_thick_factor * planck(nu, self.temperature)
-
-        return lnu
+            return optically_thick_factor * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
