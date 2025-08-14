@@ -1,4 +1,4 @@
-"""A suite of tests for testing emission models."""
+"""A suie of tests for testing emission models."""
 
 import numpy as np
 
@@ -19,8 +19,8 @@ def test_nebular_emissions(test_grid, particle_stars_A):
     # Check that the nebular spectra is the same as sum of the individual
     # line contribution and the continuum
     neb_spec = particle_stars_A.spectra["nebular"]._lnu
-    line_spec = particle_stars_A.spectra["nebular_line"]._lnu
-    neb_continuum = particle_stars_A.spectra["nebular_continuum"]._lnu
+    line_spec = particle_stars_A.spectra["_nebular_line"]._lnu
+    neb_continuum = particle_stars_A.spectra["_nebular_continuum"]._lnu
 
     assert np.allclose(neb_spec, line_spec + neb_continuum)
 
