@@ -499,7 +499,6 @@ class IntrinsicEmission:
         fesc_ly_alpha="fesc_ly_alpha",
         fesc="fesc",
         reprocessed=None,
-        escaped=None,
         **kwargs,
     ):
         """Initialise the IntrinsicEmission object.
@@ -515,23 +514,6 @@ class IntrinsicEmission:
                 will be created. This is only used if fesc > 0.0.
             **kwargs: Additional keyword arguments.
         """
-        # If we have no escaped emission and no fesc then
-        # intrinsic = reprocessed
-        if (
-            escaped is None
-            and reprocessed is None
-            and (fesc == 0.0 or fesc is None)
-        ):
-            return ReprocessedEmission(
-                grid=grid,
-                label=label,
-                fesc=fesc,
-                fesc_ly_alpha=fesc_ly_alpha,
-                **kwargs,
-            )
-
-        # Ok, we must have an escape fraction in some way...
-
         # Make a reprocessed model if we need one
         if reprocessed is None:
             warn(
@@ -549,23 +531,18 @@ class IntrinsicEmission:
                 **kwargs,
             )
 
-        # If we have no escaped emission then we need to make one
-        if escaped is None and "escaped" not in reprocessed._models:
-            raise exceptions.InconsistentArguments(
-                "IntrinsicEmission requires an escaped model. "
-                "Please pass your own to the escaped argument."
-            )
-
-        # If we have an escaped model then we can extract it from
-        # the reprocessed
-        elif escaped is None:
+        # If we have no escaped emission and no fesc then
+        # intrinsic = reprocessed
+        if fesc == 0.0 or fesc is None:
             warn(
-                "IntrinsicEmission requires an escaped model. "
-                "We'll try to extract one from the reprocessed model. "
-                "If you want to use a different escaped model, please "
-                "pass your own to the escaped argument.",
+                "IntrinsicEmission is identical to ReprocessedEmission when "
+                "fesc is 0.0 or None. We'll return the reprocessed model "
+                "instead of creating a new model.",
             )
-            escaped = reprocessed["escaped"]
+            return reprocessed
+
+        # Unpack the escaped emission from the reprocessed model
+        escaped = reprocessed["escaped"]
 
         return StellarEmissionModel(
             grid=grid,
