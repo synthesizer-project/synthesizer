@@ -10,9 +10,11 @@ Example:
 
 import os
 
+import numpy as np
+
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
-import numpy as np
+
 
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     """Integrate the last axis of an N-dimensional array.

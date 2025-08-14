@@ -20,6 +20,7 @@ from unyt import Hz, Msun, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
+from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.units import Quantity, accepts
@@ -939,7 +940,7 @@ class Stars(StarsComponent):
 
         return weighted_mean(attr, weight)
 
-    def get_average_sfr(self, t_range: tuple[float, float] = (0, 1e8)):
+    def calculate_average_sfr(self, t_range: tuple[float, float] = (0, 1e8)):
         """Calculate the average SFR over a given age range.
 
         This method assumes that stars form at discrete time points given by
@@ -974,23 +975,24 @@ class Stars(StarsComponent):
 
         # --- Construct Bins from Age Points ---
         if age_points.size == 1:
-            # For a single point, assume the bin is centered on it, 
+            # For a single point, assume the bin is centered on it,
             # starting from 0.
             age_edges = np.array([0, 2 * age_points[0]])
         else:
             # Bin edges are the midpoints between age points.
             internal_edges = (age_points[:-1] + age_points[1:]) / 2.0
             # Extrapolate the first and last edges to define the outer bounds.
-            first_edge = age_points[0] - (age_points[1] - age_points[0]) /2.0
-            last_edge = age_points[-1] + (age_points[-1] - age_points[-2]) /2.0
-            age_edges = np.concatenate(([first_edge],
-                                        internal_edges, [last_edge]))
+            first_edge = age_points[0] - (age_points[1] - age_points[0]) / 2.0
+            last_edge = (
+                age_points[-1] + (age_points[-1] - age_points[-2]) / 2.0
+            )
+            age_edges = np.concatenate(
+                ([first_edge], internal_edges, [last_edge])
+            )
 
         # Ensure the first edge isn't negative for lookback time.
         age_edges[0] = max(0, age_edges[0])
 
-        # --- Calculation ---
-        # The rest of the logic is now identical to the previous method.
         bin_starts = age_edges[:-1]
         bin_ends = age_edges[1:]
         bin_widths = bin_ends - bin_starts
@@ -999,7 +1001,7 @@ class Stars(StarsComponent):
             sfh_mass,
             bin_widths,
             out=np.zeros_like(sfh_mass, dtype=float),
-            where=(bin_widths > 0)
+            where=(bin_widths > 0),
         )
 
         overlap_starts = np.maximum(bin_starts, t_start)
@@ -1011,3 +1013,22 @@ class Stars(StarsComponent):
         average_sfr = total_mass_in_range / range_duration
 
         return average_sfr.to("Msun/yr")
+
+    def calculate_surviving_mass(self, grid: Grid):
+        """Calculate the surviving mass of the stellar population.
+
+        This is the total mass of stars that have survived to the present day
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving mass.
+                This is used to get the stellar fraction at each SFZH bin.
+
+        Returns:
+            unyt_quantity: The total surviving mass of the stellar
+            population in Msun.
+        """
+        surviving_mass = np.sum(self.sfzh * grid.stellar_fraction)
+
+        return surviving_mass * Msun
