@@ -177,8 +177,6 @@ class Grid:
         self._model_metadata = {}
         self._get_grid_metadata()
 
-        # Set the internal flags
-
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
 
