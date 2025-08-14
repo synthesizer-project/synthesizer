@@ -161,6 +161,9 @@ class Grid:
         self.line_lums = {}
         self.line_conts = {}
 
+        # Set up cache for stellar fraction
+        self._stellar_frac = None
+
         # Get the axes of the grid from the HDF5 file
         self.axes = []  # axes names
         self._axes_values = {}
@@ -175,7 +178,6 @@ class Grid:
         self._get_grid_metadata()
 
         # Set the internal flags
-        self._stellar_frac = None
 
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
@@ -469,7 +471,7 @@ class Grid:
                     ]
 
     @property
-    def stellar_fraction(self, key="star_fraction"):
+    def stellar_fraction(self):
         """Get the stellar fraction from the HDF5 file.
 
         This is a two-dimensional array with the first axis being age and
@@ -488,12 +490,12 @@ class Grid:
         """
         if self._stellar_frac is None:
             with h5py.File(self.grid_filename, "r") as hf:
-                if key in hf.keys():
-                    self._stellar_frac = hf[key][:]
+                if "star_fraction" in hf.keys():
+                    self._stellar_frac = hf["star_fraction"][:]
                 else:
                     raise exceptions.GridError(
                         f"Grid {self.grid_name} does not contain a stellar "
-                        f"fraction array with key '{key}'."
+                        f"fraction array with key 'star_fraction'."
                     )
         return self._stellar_frac
 
