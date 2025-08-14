@@ -71,7 +71,7 @@ from synthesizer.emission_models.stellar.models import (
 )
 
 
-class PacmanEmissionNoEscapeNoDust(StellarEmissionModel):
+class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
     """A class defining the Pacman model without escape fraction.
 
     This model defines both intrinsic and attenuated steller emission without
@@ -172,7 +172,7 @@ class PacmanEmissionNoEscapeNoDust(StellarEmissionModel):
         )
 
 
-class PacmanEmissionNoEscapeWithDust(EmissionModel):
+class PacmanEmissionNoEscapedWithDust(EmissionModel):
     """A class defining the Pacman model with escape fraction + dust emission.
 
     This model defines both intrinsic and attenuated steller emission with
@@ -298,7 +298,7 @@ class PacmanEmissionNoEscapeWithDust(EmissionModel):
         )
 
 
-class PacmanEmissionWithEscapeNoDust(StellarEmissionModel):
+class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
     """A class defining the Pacman model with fesc and no dust emission.
 
     This model defines both intrinsic and attenuated steller emission without
@@ -421,7 +421,7 @@ class PacmanEmissionWithEscapeNoDust(StellarEmissionModel):
         )
 
 
-class PacmanEmissionWithEscapeWithDust(StellarEmissionModel):
+class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
     """A class defining the Pacman model with fesc and dust emission.
 
     This model defines both intrinsic and attenuated steller emission with
@@ -646,7 +646,7 @@ class PacmanEmission:
             if dust_emission is None:
                 # No dust emission, no escape fraction, so we can use the
                 # PacmanEmissionNoEscapeNoDust model
-                return PacmanEmissionNoEscapeNoDust(
+                return PacmanEmissionNoEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
@@ -657,7 +657,7 @@ class PacmanEmission:
             else:
                 # We have dust emission, no escape fraction, so we can use the
                 # PacmanEmissionNoEscapeWithDust model
-                return PacmanEmissionNoEscapeWithDust(
+                return PacmanEmissionNoEscapedWithDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
@@ -673,7 +673,7 @@ class PacmanEmission:
             if dust_emission is None:
                 # No dust emission, so we can use the
                 # PacmanEmissionWithEscapeNoDust model
-                return PacmanEmissionWithEscapeNoDust(
+                return PacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
                     fesc=fesc,
@@ -684,7 +684,7 @@ class PacmanEmission:
             else:
                 # We have dust emission, so we can use the
                 # PacmanEmissionWithEscapeWithDust model
-                return PacmanEmissionWithEscapeWithDust(
+                return PacmanEmissionWithEscapedWithDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
@@ -697,7 +697,7 @@ class PacmanEmission:
                 )
 
 
-class BimodalPacmanEmissionNoEscapeNoDust(StellarEmissionModel):
+class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
     """A class defining the Bimodal Pacman model without fesc or dust emission.
 
     This model defines both intrinsic and attenuated stellar emission without
@@ -998,7 +998,7 @@ class BimodalPacmanEmissionNoEscapeNoDust(StellarEmissionModel):
         )
 
 
-class BimodalPacmanEmissionNoEscapeWithDust(EmissionModel):
+class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
     """A class defining the Bimodal Pacman model without fesc + dust emission.
 
     This model defines both intrinsic and attenuated stellar emission with
@@ -1394,7 +1394,7 @@ class BimodalPacmanEmissionNoEscapeWithDust(EmissionModel):
         )
 
 
-class BimodalPacmanEmissionWithEscapeNoDust(StellarEmissionModel):
+class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
     """A class defining the BimodalPacman model with fesc but no dust emission.
 
     This model defines both intrinsic and attenuated stellar emission without
@@ -1754,7 +1754,7 @@ class BimodalPacmanEmissionWithEscapeNoDust(StellarEmissionModel):
         )
 
 
-class BimodalPacmanEmissionWithEscapeWithDust(StellarEmissionModel):
+class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
     """A class defining the Bimodal Pacman model with fesc and dust emission.
 
     This model defines both intrinsic and attenuated stellar emission with
@@ -2334,7 +2334,7 @@ class BimodalPacmanEmission:
             if dust_emission_ism is None or dust_emission_birth is None:
                 # No dust emission, no escape fraction, so we can use the
                 # BimodalPacmanEmissionNoEscapeNoDust model
-                return BimodalPacmanEmissionNoEscapeNoDust(
+                return BimodalPacmanEmissionNoEscapedNoDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2348,7 +2348,7 @@ class BimodalPacmanEmission:
             else:
                 # We have dust emission, no escape fraction, so we can use the
                 # BimodalPacmanEmissionNoEscapeWithDust model
-                return BimodalPacmanEmissionNoEscapeWithDust(
+                return BimodalPacmanEmissionNoEscapedWithDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2368,7 +2368,7 @@ class BimodalPacmanEmission:
             if dust_emission_ism is None or dust_emission_birth is None:
                 # No dust emission, so we can use the
                 # BimodalPacmanEmissionWithEscapeNoDust model
-                return BimodalPacmanEmissionWithEscapeNoDust(
+                return BimodalPacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2383,7 +2383,7 @@ class BimodalPacmanEmission:
             else:
                 # We have dust emission, so we can use the
                 # BimodalPacmanEmissionWithEscapeWithDust model
-                return BimodalPacmanEmissionWithEscapeWithDust(
+                return BimodalPacmanEmissionWithEscapedWithDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
