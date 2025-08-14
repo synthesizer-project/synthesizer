@@ -604,7 +604,7 @@ class PacmanEmission:
     """
 
     def __new__(
-        self,
+        cls,
         grid,
         tau_v="tau_v",
         dust_curve=PowerLaw(),

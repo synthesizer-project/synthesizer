@@ -258,7 +258,7 @@ class TransmittedEmission:
     """
 
     def __new__(
-        self,
+        cls,
         grid,
         label="transmitted",
         fesc="fesc",
@@ -493,7 +493,7 @@ class IntrinsicEmission:
     """
 
     def __new__(
-        self,
+        cls,
         grid,
         label="intrinsic",
         fesc_ly_alpha="fesc_ly_alpha",
@@ -876,7 +876,7 @@ class TotalEmission:
     """
 
     def __new__(
-        self,
+        cls,
         grid,
         dust_curve,
         dust_emission_model=None,
