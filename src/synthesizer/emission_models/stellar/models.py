@@ -672,7 +672,7 @@ class EmergentEmission(StellarEmissionModel):
         )
 
 
-class TotalEmissionWithEscape(StellarEmissionModel):
+class TotalEmissionWithEscapeWithDust(StellarEmissionModel):
     """An emission model that defines total emission with an escape fraction.
 
     This defines the combination of the emergent and dust emission components
@@ -773,7 +773,7 @@ class TotalEmissionWithEscape(StellarEmissionModel):
         )
 
 
-class TotalEmissionNoEscape(StellarEmissionModel):
+class TotalEmissionNoEscapeWithDust(StellarEmissionModel):
     """An emission model that defines total emission.
 
     This defines the combination of the emergent and dust emission components
@@ -864,6 +864,158 @@ class TotalEmissionNoEscape(StellarEmissionModel):
         )
 
 
+class TotalEmissionNoEscapeNoDust:
+    """An emission model that defines total emission without dust emission.
+
+    When no escape fraction is applied and no dust emission is included
+    the total emission is simply the attenuated emission. This is just a
+    helpful wrapper around that case.
+
+    This is a child of the EmissionModel class for a full description
+    of the parameters see the EmissionModel class .
+    """
+
+    def __new__(
+        cls,
+        grid,
+        dust_curve,
+        label="attenuated",
+        fesc_ly_alpha="fesc_ly_alpha",
+        **kwargs,
+    ):
+        """Initialise the TotalEmissionNoEscapeNoDust object.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            dust_curve (AttenuationLaw): The dust curve to use.
+            label (str): The label for this emission model.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            **kwargs: Additional keyword arguments.
+        """
+        # Set up models we need to link
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
+        nebular_line = NebularLineEmission(
+            grid=grid,
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(
+            grid=grid,
+            incident=incident,
+            fesc=0.0,
+            **kwargs,
+        )
+        reprocessed = ReprocessedEmission(
+            grid=grid,
+            nebular=nebular,
+            transmitted=transmitted,
+            **kwargs,
+        )
+        attenuated = AttenuatedEmission(
+            grid=grid,
+            dust_curve=dust_curve,
+            apply_to=reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        return attenuated
+
+
+class TotalEmissionWithEscapeNoDust:
+    """An emission model that defines total emission with an escape fraction.
+
+    When there is an escape fraction applied but no dust emission is included
+    the total emission is simply the emergent emission. This is just a
+    helpful wrapper around that case.
+
+    This is a child of the EmissionModel class for a full description
+    of the parameters see the EmissionModel class .
+    """
+
+    def __new__(
+        cls,
+        grid,
+        dust_curve,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_ly_alpha",
+        label="total",
+        **kwargs,
+    ):
+        """Initialise the TotalEmissionWithEscapeNoDust object.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            dust_curve (AttenuationLaw): The dust curve to use.
+            fesc (float): The escape fraction of the emission.
+            fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
+            label (str): The label for this emission model.
+            **kwargs: Additional keyword arguments.
+        """
+        # Set up models we need to link
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
+        nebular_line = NebularLineEmission(
+            grid=grid,
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(
+            grid=grid,
+            fesc=fesc,
+            incident=incident,
+            **kwargs,
+        )
+        reprocessed = ReprocessedEmission(
+            grid=grid,
+            fesc=fesc,
+            nebular=nebular,
+            transmitted=transmitted,
+            **kwargs,
+        )
+        attenuated = AttenuatedEmission(
+            grid=grid,
+            dust_curve=dust_curve,
+            apply_to=reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        escaped = transmitted["escaped"]
+        emergent = EmergentEmission(
+            grid=grid,
+            attenuated=attenuated,
+            escaped=escaped,
+            **kwargs,
+        )
+        return emergent
+
+
 class TotalEmission:
     """An emission model that defines the total emission.
 
@@ -903,16 +1055,15 @@ class TotalEmission:
             # If we have no dust emission then we can just return the
             # attenuated emission
             if dust_emission_model is None:
-                return AttenuatedEmission(
+                return TotalEmissionNoEscapeNoDust(
                     grid=grid,
                     dust_curve=dust_curve,
-                    apply_to=None,
-                    emitter="stellar",
                     label=label,
+                    fesc_ly_alpha=fesc_ly_alpha,
                     **kwargs,
                 )
             else:
-                return TotalEmissionNoEscape(
+                return TotalEmissionNoEscapeWithDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     dust_emission_model=dust_emission_model,
@@ -926,10 +1077,9 @@ class TotalEmission:
             # If we have no dust emission then we can just return the
             # emergent emission
             if dust_emission_model is None:
-                return EmergentEmission(
+                return TotalEmissionWithEscapeNoDust(
                     grid=grid,
                     dust_curve=dust_curve,
-                    apply_to=None,
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
@@ -938,7 +1088,7 @@ class TotalEmission:
             else:
                 # Otherwise we return the total emission with the escaped
                 # component
-                return TotalEmissionWithEscape(
+                return TotalEmissionWithEscapeWithDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     dust_emission_model=dust_emission_model,
