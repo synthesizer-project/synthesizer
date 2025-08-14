@@ -647,7 +647,7 @@ class EmergentEmission(StellarEmissionModel):
         )
 
 
-class TotalEmissionWithEscapeWithDust(StellarEmissionModel):
+class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
     """An emission model that defines total emission with an escape fraction.
 
     This defines the combination of the emergent and dust emission components
@@ -748,7 +748,7 @@ class TotalEmissionWithEscapeWithDust(StellarEmissionModel):
         )
 
 
-class TotalEmissionNoEscapeWithDust(StellarEmissionModel):
+class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
     """An emission model that defines total emission.
 
     This defines the combination of the emergent and dust emission components
@@ -839,7 +839,7 @@ class TotalEmissionNoEscapeWithDust(StellarEmissionModel):
         )
 
 
-class TotalEmissionNoEscapeNoDust:
+class TotalEmissionNoEscapedNoDust:
     """An emission model that defines total emission without dust emission.
 
     When no escape fraction is applied and no dust emission is included
@@ -910,7 +910,7 @@ class TotalEmissionNoEscapeNoDust:
         return attenuated
 
 
-class TotalEmissionWithEscapeNoDust:
+class TotalEmissionWithEscapedNoDust:
     """An emission model that defines total emission with an escape fraction.
 
     When there is an escape fraction applied but no dust emission is included
@@ -1030,7 +1030,7 @@ class TotalEmission:
             # If we have no dust emission then we can just return the
             # attenuated emission
             if dust_emission_model is None:
-                return TotalEmissionNoEscapeNoDust(
+                return TotalEmissionNoEscapedNoDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     label=label,
@@ -1038,7 +1038,7 @@ class TotalEmission:
                     **kwargs,
                 )
             else:
-                return TotalEmissionNoEscapeWithDust(
+                return TotalEmissionNoEscapedWithDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     dust_emission_model=dust_emission_model,
@@ -1052,7 +1052,7 @@ class TotalEmission:
             # If we have no dust emission then we can just return the
             # emergent emission
             if dust_emission_model is None:
-                return TotalEmissionWithEscapeNoDust(
+                return TotalEmissionWithEscapedNoDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     fesc=fesc,
@@ -1063,7 +1063,7 @@ class TotalEmission:
             else:
                 # Otherwise we return the total emission with the escaped
                 # component
-                return TotalEmissionWithEscapeWithDust(
+                return TotalEmissionWithEscapedWithDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     dust_emission_model=dust_emission_model,
