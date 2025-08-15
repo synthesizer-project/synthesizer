@@ -29,6 +29,7 @@ from synthesizer.emission_models.transformers import (
     EscapedFraction,
     ProcessedFraction,
 )
+from synthesizer.emission_models.utils import combine_user_and_internal_kwargs
 from synthesizer.synth_warnings import warn
 
 
@@ -51,10 +52,12 @@ class IncidentEmission(StellarEmissionModel):
         """
         StellarEmissionModel.__init__(
             self,
-            grid=grid,
-            label=label,
-            extract="incident",
-            **kwargs,
+            **combine_user_and_internal_kwargs(
+                user_kwargs=kwargs,
+                grid=grid,
+                label=label,
+                extract="incident",
+            ),
         )
 
 

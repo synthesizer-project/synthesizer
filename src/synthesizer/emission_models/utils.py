@@ -160,3 +160,28 @@ def get_params(params, model, emission, emitter):
         )
 
     return values
+
+
+def combine_user_and_internal_kwargs(
+    user_kwargs,
+    **internal_kwargs,
+):
+    """Combine user and internal kwargs for emission model creation.
+
+    This function combines user-specified keyword arguments with internal
+    defaults, ensuring that user preferences take precedence.
+
+    Args:
+        user_kwargs (dict):
+            The user-specified keyword arguments.
+        internal_kwargs (dict):
+            The internal default keyword arguments to be combined with user
+            preferences.
+
+    Returns:
+        dict:
+            A dictionary containing the combined keyword arguments.
+    """
+    combined_kwargs = internal_kwargs.copy()
+    combined_kwargs.update(user_kwargs)
+    return combined_kwargs
