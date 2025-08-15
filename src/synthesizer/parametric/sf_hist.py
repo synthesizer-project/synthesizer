@@ -761,7 +761,7 @@ class DenseBasis(Common):
 
         # define these intervals in log space
         finewidths = 10 ** (self.log_finegrid + tbw / 2) - 10 ** (
-            self.finegrid - tbw / 2
+            self.log_finegrid - tbw / 2
         )
 
         # Interpolate the SFH on to finer grid in units of SFR
