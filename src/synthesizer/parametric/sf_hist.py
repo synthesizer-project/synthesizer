@@ -98,7 +98,11 @@ class Common:
         """
         # If we have been handed an array we need to loop
         if isinstance(age, (np.ndarray, list)):
-            return np.array([self._sfr(a) for a in age])
+            if hasattr(self, "_sfrs"):
+                # If the child has defined a vectorised version of _sfr
+                return self._sfrs(age)
+            else:
+                return np.array([self._sfr(a) for a in age])
 
         return self._sfr(age)
 
@@ -315,6 +319,18 @@ class Constant(Common):
             return 1.0
         return 0.0
 
+    def _sfrs(self, ages):
+        """Vectorised version of _sfr for multiple ages.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the SFR.
+        """
+        sfrs = np.zeros_like(ages)
+        mask = (ages <= self.max_age) & (ages >= self.min_age)
+        sfrs[mask] = 1.0
+        return sfrs
+
 
 class Gaussian(Common):
     """A Gaussian star formation history.
@@ -372,6 +388,21 @@ class Gaussian(Common):
         if (age <= self.max_age) & (age >= self.min_age):
             return np.exp(-np.power((age - self.peak_age) / self.sigma, 2.0))
         return 0.0
+
+    def _sfrs(self, ages):
+        """Vectorised version of _sfr for multiple ages.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the SFR.
+        """
+        # Set the SFR based on the duration.
+        sfrs = np.zeros_like(ages)
+        mask = (ages <= self.max_age) & (ages >= self.min_age)
+        sfrs[mask] = np.exp(
+            -np.power((ages[mask] - self.peak_age) / self.sigma, 2.0)
+        )
+        return sfrs
 
 
 class Exponential(Common):
@@ -437,6 +468,23 @@ class Exponential(Common):
             # return np.exp(age / self.tau)
 
         return 0.0
+
+    def _sfrs(self, ages):
+        """Vectorised version of _sfr for multiple ages.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the SFR.
+        """
+        # define time coordinate
+        t = self.max_age - ages
+
+        # Set the SFR based on the duration.
+        sfrs = np.zeros_like(ages)
+        mask = (ages < self.max_age) & (ages >= self.min_age)
+        sfrs[mask] = np.exp(-t[mask] / self.tau)
+
+        return sfrs
 
 
 class TruncatedExponential(Exponential):
@@ -563,6 +611,23 @@ class DelayedExponential(Common):
             return t * np.exp(-t / self.tau)
         return 0.0
 
+    def _sfrs(self, ages):
+        """Vectorised version of _sfr for multiple ages.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the SFR.
+        """
+        # define time coordinate
+        t = self.max_age - ages
+
+        # Set the SFR based on the duration.
+        sfrs = np.zeros_like(ages)
+        mask = (ages < self.max_age) & (ages >= self.min_age)
+        sfrs[mask] = t[mask] * np.exp(-t[mask] / self.tau)
+
+        return sfrs
+
 
 class LogNormal(Common):
     """A log-normal star formation history.
@@ -631,6 +696,26 @@ class LogNormal(Common):
 
         return 0.0
 
+    def _sfrs(self, ages):
+        """Vectorised version of _sfr for multiple ages.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the SFR.
+        """
+        # Set the SFR based on the duration.
+        sfrs = np.zeros_like(ages)
+        mask = (ages < self.max_age) & (ages >= self.min_age)
+        norm = 1.0 / (self.max_age - ages[mask])
+        exponent = (
+            (np.log(self.max_age - ages[mask]) - self.t_0) ** 2
+            / 2
+            / self.tau**2
+        )
+        sfrs[mask] = norm * np.exp(-exponent)
+
+        return sfrs
+
 
 class DoublePowerLaw(Common):
     """A double power law star formation history.
@@ -696,6 +781,22 @@ class DoublePowerLaw(Common):
             return (term1 + term2) ** -1
 
         return 0.0
+
+    def _sfrs(self, ages):
+        """Vectorised version of _sfr for multiple ages.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the SFR.
+        """
+        # Set the SFR based on the duration.
+        sfrs = np.zeros_like(ages)
+        mask = (ages < self.max_age) & (ages >= self.min_age)
+        term1 = (ages[mask] / self.peak_age) ** self.alpha
+        term2 = (ages[mask] / self.peak_age) ** self.beta
+        sfrs[mask] = (term1 + term2) ** -1
+
+        return sfrs
 
 
 class DenseBasis(Common):
@@ -781,17 +882,18 @@ class DenseBasis(Common):
         )
 
         # Define a new finer grid, and time differences between steps
-        self.finegrid = np.linspace(min_age, max_age, 1000)
-        tbw = np.mean(np.diff(self.finegrid))
+        self.log_finegrid = np.linspace(min_age, max_age, 1000)
+        self.finegrid = 10**self.log_finegrid
+        tbw = np.mean(np.diff(self.log_finegrid))
 
         # define these intervals in log space
-        finewidths = 10 ** (self.finegrid + tbw / 2) - 10 ** (
+        finewidths = 10 ** (self.log_finegrid + tbw / 2) - 10 ** (
             self.finegrid - tbw / 2
         )
 
         # Interpolate the SFH on to finer grid in units of SFR
         self.intsfh = self._interp_sfh(
-            tempsfh, temptime, 10**self.finegrid / 1e9
+            tempsfh, temptime, self.finegrid / 1e9
         ) / (finewidths / 1e9)
 
     def _interp_sfh(self, sfh, tax, newtax):
@@ -826,8 +928,11 @@ class DenseBasis(Common):
             sfr (float):
                 Star formation rate at `age`
         """
-        sfr = np.interp(age, 10**self.finegrid, self.intsfh)
+        sfr = np.interp(age, self.finegrid, self.intsfh)
         return sfr
+
+    def _sfrs(self, ages):
+        return self._sfr(ages)
 
 
 class Continuity(Common):
