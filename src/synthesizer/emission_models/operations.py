@@ -662,6 +662,7 @@ class Transformation:
         particle_emissions,
         emitter,
         this_mask,
+        lam,
     ):
         """Transform an emission.
 
@@ -680,6 +681,8 @@ class Transformation:
                 The emitter to transform the spectra for.
             this_mask (dict):
                 The mask to apply to the spectra.
+            lam (unyt_array):
+                The wavelength grid corresponding to the lam_mask elements.
 
         Returns:
             dict:
@@ -691,13 +694,39 @@ class Transformation:
         else:
             apply_to = emissions[this_model.apply_to.label]
 
-        # Apply the transform to the spectra
+        # If we have a LineColleciton and a lam_mask, we need to translate
+        # the nlam lam_mask into an nlines lam_mask
+        if (
+            isinstance(apply_to, LineCollection)
+            and this_model._lam_mask is not None
+        ):
+            # Get the line wavelengths
+            line_lams = apply_to.lam
+
+            # Get the indices that would bin the lines into the
+            # spectra grid wavelength array
+            line_indices = np.digitize(
+                line_lams,
+                lam,
+            )
+
+            # Translate these indices into a mask
+            lam_mask = np.zeros_like(line_lams, dtype=bool)
+            for i, ind in enumerate(line_indices):
+                if this_model._lam_mask[ind]:
+                    lam_mask[i] = True
+
+        else:
+            # Otherwise we can just use the lam_mask as is
+            lam_mask = this_model.lam_mask
+
+        # Apply the transform to the emission
         emission = self.transformer._transform(
             apply_to,
             emitter,
             this_model,
             this_mask if this_model.per_particle else None,
-            this_model.lam_mask,
+            lam_mask,
         )
 
         # Store the spectra in the right place (integrating if we need to)
