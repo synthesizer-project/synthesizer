@@ -1131,6 +1131,30 @@ class LineCollection:
         else:
             mask = None
 
+        # Handle some mask munging we have to do to make shapes work
+        if mask is not None:
+            if mask.shape == lum.shape:
+                # If the mask is the same shape as the luminosity we can use it
+                # directly
+                pass
+            elif mask.ndim == 1 and mask.shape[0] == lum.shape[0]:
+                # If the mask is 1D and matches the first dimension of the
+                # luminosity we don't need to do anything
+                pass
+            elif mask.ndim == 1 and mask.shape[0] == lum.shape[-1]:
+                # If the mask is 1D and matches the last dimension of the
+                # luminosity we need to expand it to match the luminosity shape
+                mask = np.broadcast_to(mask[np.newaxis, :], lum.shape)
+            else:
+                # Otherwise, we have an incompatible mask
+                raise exceptions.InconsistentArguments(
+                    f"Mask shape {mask.shape} is incompatible with the"
+                    f" luminosity {lum.shape} or "
+                    f"wavelength {self.lam.shape} "
+                    "wavelength shape. Please provide a mask with the same "
+                    "shape as the luminosity or wavelength."
+                )
+
         # First we will handle the luminosity scaling (we need to do each
         # individually because the scalings can have different dimensions
         # depending on the conversion done above)

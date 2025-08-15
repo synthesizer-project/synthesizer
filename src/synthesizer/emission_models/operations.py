@@ -711,7 +711,7 @@ class Transformation:
             )
 
             # Translate these indices into a mask
-            lam_mask = np.zeros_like(line_lams, dtype=bool)
+            lam_mask = np.zeros(apply_to.nlines, dtype=bool)
             for i, ind in enumerate(line_indices):
                 if this_model._lam_mask[ind]:
                     lam_mask[i] = True
