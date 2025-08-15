@@ -705,9 +705,12 @@ class Transformation:
 
             # Get the indices that would bin the lines into the
             # spectra grid wavelength array
-            line_indices = np.digitize(
-                line_lams,
-                lam,
+            line_indices = (
+                np.digitize(
+                    line_lams,
+                    lam,
+                )
+                - 1
             )
 
             # Translate these indices into a mask
