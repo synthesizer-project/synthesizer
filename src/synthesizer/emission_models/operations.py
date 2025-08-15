@@ -280,20 +280,22 @@ class Extraction:
         if this_model._lam_mask is not None:
             # Get the indices that would bin the lines into the
             # spectra grid wavelength array
-            line_indices = (
-                np.digitize(
-                    extractor._line_lams,
-                    extractor._grid.lam,
-                )
-                - 1
+            lam_grid = extractor._grid.lam
+            raw_indices = np.digitize(
+                extractor._line_lams,
+                lam_grid,
+                right=False,
             )
 
             # Remove any lines which are masked out in the lam_mask
-            for ind in line_indices:
-                if ind < 0 or ind >= this_model._lam_mask.size:
+            for i, raw in enumerate(raw_indices):
+                # Outside the lam grid -> leave this line as-is (no
+                # lam-based filtering)
+                if raw == 0 or raw == lam_grid.size:
                     continue
-                if not this_model._lam_mask[ind]:
-                    lam_mask[ind] = False
+                grid_ix = raw - 1  # map to 0-based left-bin index
+                if not this_model._lam_mask[grid_ix]:
+                    lam_mask[i] = False
 
         # Get the spectra (note that result is a tuple containing the
         # particle line and the integrated line if per_particle is True,
@@ -710,20 +712,24 @@ class Transformation:
 
             # Get the indices that would bin the lines into the
             # spectra grid wavelength array
-            line_indices = (
+            raw_indices = (
                 np.digitize(
                     line_lams,
                     lam,
+                    right=False,
                 )
                 - 1
             )
 
             # Translate these indices into a mask
             lam_mask = np.zeros(apply_to.nlines, dtype=bool)
-            for i, ind in enumerate(line_indices):
-                if ind < 0 or ind >= this_model._lam_mask.size:
+            for i, raw in enumerate(raw_indices):
+                # Skip lines outside the grid: raw == 0 (below first edge)
+                # or raw == nlam (at/above last edge)
+                if raw == 0 or raw == lam.size:
                     continue
-                if this_model._lam_mask[ind]:
+                grid_ix = raw - 1
+                if this_model._lam_mask[grid_ix]:
                     lam_mask[i] = True
 
         else:
