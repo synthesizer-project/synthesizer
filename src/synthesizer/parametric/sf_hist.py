@@ -755,17 +755,18 @@ class DenseBasis(Common):
         )
 
         # Define a new finer grid, and time differences between steps
-        self.finegrid = np.linspace(min_age, max_age, 1000)
-        tbw = np.mean(np.diff(self.finegrid))
+        self.log_finegrid = np.linspace(min_age, max_age, 1000)
+        self.finegrid = 10**self.log_finegrid
+        tbw = np.mean(np.diff(self.log_finegrid))
 
         # define these intervals in log space
-        finewidths = 10 ** (self.finegrid + tbw / 2) - 10 ** (
-            self.finegrid - tbw / 2
+        finewidths = 10 ** (self.log_finegrid + tbw / 2) - 10 ** (
+            self.log_finegrid - tbw / 2
         )
 
         # Interpolate the SFH on to finer grid in units of SFR
         self.intsfh = self._interp_sfh(
-            tempsfh, temptime, 10**self.finegrid / 1e9
+            tempsfh, temptime, self.finegrid / 1e9
         ) / (finewidths / 1e9)
 
     def _interp_sfh(self, sfh, tax, newtax):
@@ -800,5 +801,5 @@ class DenseBasis(Common):
             sfr (float):
                 Star formation rate at `age`
         """
-        sfr = np.interp(age, 10**self.finegrid, self.intsfh)
+        sfr = np.interp(age, self.finegrid, self.intsfh)
         return sfr
