@@ -280,13 +280,18 @@ class Extraction:
         if this_model._lam_mask is not None:
             # Get the indices that would bin the lines into the
             # spectra grid wavelength array
-            line_indices = np.digitize(
-                extractor._line_lams,
-                extractor._grid.lam,
+            line_indices = (
+                np.digitize(
+                    extractor._line_lams,
+                    extractor._grid.lam,
+                )
+                - 1
             )
 
             # Remove any lines which are masked out in the lam_mask
             for ind in line_indices:
+                if ind < 0 or ind >= this_model._lam_mask.size:
+                    continue
                 if not this_model._lam_mask[ind]:
                     lam_mask[ind] = False
 
@@ -716,6 +721,8 @@ class Transformation:
             # Translate these indices into a mask
             lam_mask = np.zeros(apply_to.nlines, dtype=bool)
             for i, ind in enumerate(line_indices):
+                if ind < 0 or ind >= this_model._lam_mask.size:
+                    continue
                 if this_model._lam_mask[ind]:
                     lam_mask[i] = True
 
