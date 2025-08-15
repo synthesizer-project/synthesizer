@@ -2,7 +2,11 @@
 
 import numpy as np
 
-from synthesizer.emission_models import IntrinsicEmission
+from synthesizer.emission_models import (
+    IntrinsicEmission,
+    ReprocessedEmission,
+    TransmittedEmission,
+)
 
 
 def test_fesc_model_level(
@@ -17,12 +21,36 @@ def test_fesc_model_level(
     models derived from it.
     """
     # Get the spectra with fesc=0
-    model = IntrinsicEmission(test_grid, fesc=0)
+    transmitted0 = TransmittedEmission(
+        test_grid,
+        label="transmitted",
+        fesc=0.0,
+    )
+    model = ReprocessedEmission(
+        test_grid,
+        label="reprocessed",
+        transmitted=transmitted0,
+    )
     spec_fesc0 = random_part_stars.get_spectra(model)
     random_part_stars.clear_all_emissions()
 
     # Get the spectra with fesc=1
-    model = IntrinsicEmission(test_grid, fesc=1)
+    transmitted1 = TransmittedEmission(
+        test_grid,
+        label="transmitted",
+        fesc=1.0,
+    )
+    reprocessed1 = ReprocessedEmission(
+        test_grid,
+        label="reprocessed",
+        transmitted=transmitted1,
+    )
+    model = IntrinsicEmission(
+        test_grid,
+        label="intrinsic",
+        reprocessed=reprocessed1,
+        escaped=transmitted1,
+    )
     spec_fesc1 = random_part_stars.get_spectra(model)
 
     # Ensure the two differ
@@ -51,7 +79,6 @@ def test_fesc_override(
 
     # Loop over the models and test
     for model in [
-        nebular_emission_model,
         reprocessed_emission_model,
         intrinsic_emission_model,
         pacman_emission_model,

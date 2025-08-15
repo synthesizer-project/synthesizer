@@ -23,7 +23,9 @@ from synthesizer.emission_models import (
     BimodalPacmanEmission,
     IncidentEmission,
     IntrinsicEmission,
+    NebularContinuumEmission,
     NebularEmission,
+    NebularLineEmission,
     PacmanEmission,
     ReprocessedEmission,
     TemplateEmission,
@@ -80,7 +82,17 @@ def lam():
 def nebular_emission_model(test_grid):
     """Return a NebularEmission object."""
     # First need a grid to pass to the NebularEmission object
-    return NebularEmission(grid=test_grid)
+    nebular_line = NebularLineEmission(
+        grid=test_grid,
+    )
+    nebular_continuum = NebularContinuumEmission(
+        grid=test_grid,
+    )
+    return NebularEmission(
+        grid=test_grid,
+        nebular_line=nebular_line,
+        nebular_continuum=nebular_continuum,
+    )
 
 
 @pytest.fixture
@@ -91,17 +103,28 @@ def incident_emission_model(test_grid):
 
 
 @pytest.fixture
-def transmitted_emission_model(test_grid):
+def transmitted_emission_model(test_grid, incident_emission_model):
     """Return a TransmittedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    return TransmittedEmission(grid=test_grid)
+    return TransmittedEmission(
+        grid=test_grid,
+        incident=incident_emission_model,
+    )
 
 
 @pytest.fixture
-def reprocessed_emission_model(test_grid):
+def reprocessed_emission_model(
+    test_grid,
+    nebular_emission_model,
+    transmitted_emission_model,
+):
     """Return a ReprocessedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    return ReprocessedEmission(grid=test_grid)
+    return ReprocessedEmission(
+        grid=test_grid,
+        nebular=nebular_emission_model,
+        transmitted=transmitted_emission_model,
+    )
 
 
 @pytest.fixture
