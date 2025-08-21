@@ -56,7 +56,7 @@ void populate_smoothed_data_cube_serial(
     const int kdim, double *data_cube) {
 
   /* Loop over positions including the sed */
-  for (int ind = 0; ind < npart; ind++) {
+  for (size_t ind = 0; ind < npart; ind++) {
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
@@ -209,7 +209,7 @@ void populate_smoothed_data_cube_parallel(
 
   /* Loop over positions including the sed */
 #pragma omp parallel for num_threads(nthreads)
-  for (int ind = 0; ind < npart; ind++) {
+  for (size_t ind = 0; ind < npart; ind++) {
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
@@ -398,7 +398,7 @@ void populate_hist_data_cube_serial(const double *sed_values, const double *xs,
                                     double *data_cube) {
 
   /* Loop over positions including the sed */
-  for (int ind = 0; ind < npart; ind++) {
+  for (size_t ind = 0; ind < npart; ind++) {
 
     /* Get this particle's position */
     const double x = xs[ind];
@@ -460,7 +460,7 @@ void populate_hist_data_cube_parallel(const double *sed_values,
   /* Loop over positions including the sed */
 #pragma omp parallel for num_threads(nthreads)                                 \
     shared(data_cube, sed_values, xs, ys, res, npix_x, npix_y, npart, nlam)
-  for (int ind = 0; ind < npart; ind++) {
+  for (size_t ind = 0; ind < npart; ind++) {
 
     /* Get this particle's position */
     const double x = xs[ind];
@@ -551,7 +551,8 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
   (void)self;
 
   double res;
-  int npix_x, npix_y, npart, nlam, nthreads;
+  int npix_x, npix_y, nlam, nthreads;
+  size_t npart;
   PyArrayObject *np_sed_values;
   PyArrayObject *np_xs, *np_ys;
 
@@ -610,7 +611,8 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
   (void)self;
 
   double res, threshold;
-  int npix_x, npix_y, npart, nlam, kdim, nthreads;
+  int npix_x, npix_y, nlam, kdim, nthreads;
+  size_t npart;
   PyArrayObject *np_sed_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 

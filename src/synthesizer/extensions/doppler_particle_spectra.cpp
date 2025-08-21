@@ -85,7 +85,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
   std::vector<int> mapped_indices(nlam);
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; ++p) {
+  for (size_t p = 0; p < parts->npart; ++p) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -220,8 +220,8 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     int tid = omp_get_thread_num();
 
     /* Get the start and end indices for this thread. */
-    int start_idx = tid * nparts_per_thread;
-    int end_idx =
+    size_t start_idx = tid * nparts_per_thread;
+    size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
@@ -231,7 +231,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
-    for (int p = start_idx; p < end_idx; p++) {
+    for (size_t p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -375,7 +375,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
   std::vector<int> mapped_indices(nlam);
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -473,8 +473,8 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
     int tid = omp_get_thread_num();
 
     /* Get the start and end indices for this thread. */
-    int start_idx = tid * nparts_per_thread;
-    int end_idx =
+    size_t start_idx = tid * nparts_per_thread;
+    size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
@@ -484,7 +484,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
     std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
-    for (int p = start_idx; p < end_idx; p++) {
+    for (size_t p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -628,7 +628,8 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
    * compiler we don't care. */
   (void)self;
 
-  int ndim, npart, nlam, nthreads;
+  int ndim, nlam, nthreads;
+  size_t npart;
   PyObject *grid_tuple, *part_tuple;
   PyObject *py_c;
   PyArrayObject *np_grid_spectra, *np_lam;

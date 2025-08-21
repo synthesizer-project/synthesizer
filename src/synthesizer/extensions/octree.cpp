@@ -43,7 +43,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* No point splitting below the maximum smoothing length or if we have too
    * few particles. */
-  if (c->width < sqrt(c->max_sml_squ) || npart < min_count) {
+  if (c->width < sqrt(c->max_sml_squ) || npart < static_cast<size_t>(min_count)) {
     return;
   }
 
@@ -81,7 +81,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* Loop over particles first counting them. */
   int part_count[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-  for (int ipart = 0; ipart < npart; ipart++) {
+  for (size_t ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
     double ipos[3] = {
@@ -115,7 +115,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   }
 
   /* Loop over particles again, this time assigning them. */
-  for (int ipart = 0; ipart < npart; ipart++) {
+  for (size_t ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
     double ipos[3] = {
@@ -221,7 +221,7 @@ static void construct_particles(struct particle *particles, const double *pos,
   /* Loop over gas particles and associate them with the root. We could
    * just attach the pointer but we already need to find the maximum sml in
    * a loop so might as well loop over them as we attach them. */
-  for (int ip = 0; ip < npart; ip++) {
+  for (size_t ip = 0; ip < npart; ip++) {
 
     /* Attach the particle properties */
     particles[ip].pos[0] = pos[ip * 3];

@@ -133,7 +133,7 @@ double *Particles::get_part_props(int idim) const {
  * @param pind: The index of the particle.
  * @return The weight of the particle at the given index.
  */
-double Particles::get_weight_at(int pind) const {
+double Particles::get_weight_at(size_t pind) const {
   return get_double_at(np_weights_, pind);
 }
 
@@ -143,7 +143,7 @@ double Particles::get_weight_at(int pind) const {
  * @param pind: The index of the particle.
  * @return The velocity of the particle at the given index.
  */
-double Particles::get_vel_at(int pind) const {
+double Particles::get_vel_at(size_t pind) const {
   return get_double_at(np_velocities_, pind);
 }
 
@@ -153,7 +153,7 @@ double Particles::get_vel_at(int pind) const {
  * @param pind: The index of the particle.
  * @return The mask of the particle at the given index.
  */
-npy_bool Particles::get_mask_at(int pind) const {
+npy_bool Particles::get_mask_at(size_t pind) const {
   /* If the mask is NULL, return true (i.e. not masked). */
   if (np_mask_ == NULL) {
     return true;
@@ -175,7 +175,7 @@ npy_bool Particles::get_mask_at(int pind) const {
  * @param pind: The index of the particle.
  * @return The property of the particle at the given index.
  */
-double Particles::get_part_prop_at(int idim, int pind) const {
+double Particles::get_part_prop_at(int idim, size_t pind) const {
   /* Get the array stored at idim. */
   PyArrayObject *np_part_arr =
       (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
@@ -199,7 +199,7 @@ double Particles::get_part_prop_at(int idim, int pind) const {
  * @param pind: The index of the particle.
  * @return True if the particle is masked, false otherwise.
  */
-bool Particles::part_is_masked(int pind) const {
+bool Particles::part_is_masked(size_t pind) const {
   /* If the mask is NULL, return false (i.e. not masked). */
   if (np_mask_ == NULL) {
     return false;
@@ -237,7 +237,7 @@ static void get_particle_indices_and_fracs_serial(GridProps *grid_props,
   parts->grid_fracs.resize(parts->npart * ndim);
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -293,7 +293,7 @@ static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
 
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   // Loop over particles in parallel
-  for (int p = 0; p < npart; p++) {
+  for (size_t p = 0; p < npart; p++) {
 
     // Skip masked particles
     if (parts->part_is_masked(p)) {
@@ -367,7 +367,7 @@ static void get_particle_indices_serial(GridProps *grid_props,
   parts->grid_indices.resize(parts->npart);
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -405,7 +405,7 @@ static void get_particle_indices_parallel(GridProps *grid_props,
 
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   // Loop over particles in parallel
-  for (int p = 0; p < npart; p++) {
+  for (size_t p = 0; p < npart; p++) {
 
     // Skip masked particles
     if (parts->part_is_masked(p)) {

@@ -65,7 +65,7 @@ static inline int binary_search(int low, int high, const double *arr,
 static inline void
 get_part_ind_frac_cic(std::array<int, MAX_GRID_NDIM> &part_indices,
                       std::array<double, MAX_GRID_NDIM> &axis_fracs,
-                      GridProps *grid_props, Particles *parts, int p) {
+                      GridProps *grid_props, Particles *parts, size_t p) {
 
   /* Loop over dimensions, finding the mass weightings and indices. */
   for (int dim = 0; dim < grid_props->ndim; dim++) {
@@ -130,7 +130,7 @@ get_part_ind_frac_cic(std::array<int, MAX_GRID_NDIM> &part_indices,
  */
 static inline void
 get_part_inds_ngp(std::array<int, MAX_GRID_NDIM> &part_indices,
-                  GridProps *grid_props, Particles *parts, int p) {
+                  GridProps *grid_props, Particles *parts, size_t p) {
 
   /* Loop over dimensions finding the indices. */
   for (int dim = 0; dim < grid_props->ndim; dim++) {

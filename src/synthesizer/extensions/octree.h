@@ -7,6 +7,7 @@
 
 /* C headers. */
 #include <stdint.h>
+#include <cstddef>
 
 /* Define the maximum tree depth. */
 #define MAX_DEPTH 64

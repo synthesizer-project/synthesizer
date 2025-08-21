@@ -44,13 +44,13 @@ public:
   double *get_velocities() const;
   double **get_all_props(int ndim) const;
   double *get_part_props(int idim) const;
-  double get_weight_at(int pind) const;
-  double get_vel_at(int pind) const;
-  npy_bool get_mask_at(int pind) const;
-  double get_part_prop_at(int idim, int pind) const;
+  double get_weight_at(size_t pind) const;
+  double get_vel_at(size_t pind) const;
+  npy_bool get_mask_at(size_t pind) const;
+  double get_part_prop_at(int idim, size_t pind) const;
 
   /* Is a particle masked? */
-  bool part_is_masked(int pind) const;
+  bool part_is_masked(size_t pind) const;
 
 private:
   /* The numpy array holding the particle weights (e.g. initial mass for

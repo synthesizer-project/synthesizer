@@ -293,7 +293,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
     struct particle *parts = c->particles;
 
     /* Loop over the particles adding their contribution to the local buffer. */
-    for (int p = 0; p < c->part_count; p++) {
+    for (size_t p = 0; p < c->part_count; p++) {
 
       /* Get the particle. */
       struct particle *part = &parts[p];
@@ -617,7 +617,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   (void)self;
 
   double res, threshold;
-  int npix_x, npix_y, npart, kdim, nthreads, nimgs;
+  int npix_x, npix_y, kdim, nthreads, nimgs;
+  size_t npart;
   PyArrayObject *np_pix_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_pos;
 
