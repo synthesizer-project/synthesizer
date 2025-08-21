@@ -147,10 +147,10 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
         const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
 
         /* Distribute into particle & global arrays */
-        const size_t base_idx = p * nlam;
+        const size_t base_idx =
+            static_cast<size_t>(p) * static_cast<size_t>(nlam);
         part_spectra[base_idx + ils - 1] += (1.0 - frac_s) * gs;
         part_spectra[base_idx + ils] += frac_s * gs;
-      }
     }
   }
 }
