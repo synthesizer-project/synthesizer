@@ -85,7 +85,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
   std::vector<int> mapped_indices(nlam);
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; ++p) {
+  for (size_t p = 0; p < parts->npart; ++p) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -147,10 +147,10 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
         const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
 
         /* Distribute into particle & global arrays */
-        const size_t base_idx =
-            static_cast<size_t>(p) * static_cast<size_t>(nlam);
+        const size_t base_idx = p * nlam;
         part_spectra[base_idx + ils - 1] += (1.0 - frac_s) * gs;
         part_spectra[base_idx + ils] += frac_s * gs;
+      }
     }
   }
 }
@@ -231,7 +231,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
     std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
-    for (int p = start_idx; p < end_idx; p++) {
+    for (size_t p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -375,7 +375,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
   std::vector<int> mapped_indices(nlam);
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -430,9 +430,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
           grid_props->get_spectra_at(grid_ind, ilam) * weight;
 
       /* Add the contribution to the corresponding wavelength element. */
-      const size_t idx =
-          static_cast<size_t>(p) * static_cast<size_t>(nlam)
-           static_cast<size_t>(ilam_shifted);
+      size_t idx = p * nlam + ilam_shifted;
       part_spectra[idx - 1] += (1.0 - frac_shifted) * grid_spectra_value;
       part_spectra[idx] += frac_shifted * grid_spectra_value;
     }
@@ -485,7 +483,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
     std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
-    for (int p = start_idx; p < end_idx; p++) {
+    for (size_t p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {

@@ -77,7 +77,7 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
   }
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -199,7 +199,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles in this thread's range. */
-    for (int p = start_idx; p < end_idx; p++) {
+    for (size_t p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -317,7 +317,7 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
   const int nlam = grid_props->nlam;
 
   /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < parts->npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -343,9 +343,10 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
 
       /* Assign to this particle's spectra array. */
       const size_t part_spec_ind =
-          static_cast<size_t>(p) * static_cast<size_t>(nlam)
-           static_cast<size_t>(ilam);
+          static_cast<size_t>(p) * static_cast<size_t>(nlam) +
+          static_cast<size_t>(ilam);
       part_spectra[part_spec_ind] = spec_val * weight;
+    }
   }
 }
 
@@ -396,7 +397,7 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
     std::vector<double> this_part_spectra(nlam, 0.0);
 
     /* Loop over particles. */
-    for (int p = start_idx; p < end_idx; p++) {
+    for (size_t p = start_idx; p < end_idx; p++) {
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
