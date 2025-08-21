@@ -342,9 +342,10 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
       const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
 
       /* Assign to this particle's spectra array. */
-      size_t part_spec_ind = p * nlam + ilam;
+      const size_t part_spec_ind =
+          static_cast<size_t>(p) * static_cast<size_t>(nlam)
+           static_cast<size_t>(ilam);
       part_spectra[part_spec_ind] = spec_val * weight;
-    }
   }
 }
 
