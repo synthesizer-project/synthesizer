@@ -40,7 +40,10 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
                                     double *part_spectra) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
   /* Calculate the number of cell in a patch of the grid (2^ndim). */
   int ncells = 1 << ndim;
@@ -77,7 +80,7 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
   }
 
   /* Loop over particles. */
-  for (size_t p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -143,8 +146,11 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
                                  double *part_spectra, int nthreads) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  const int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
   const int ncells = 1 << ndim;
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
   /* Subset dimensions are always 2 (low and high side). */
   std::array<int, MAX_GRID_NDIM> sub_dims;
@@ -182,7 +188,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    size_t nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
@@ -314,10 +320,13 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
 static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
                                     double *part_spectra) {
   /* Unpack the grid properties. */
-  const int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
   /* Loop over particles. */
-  for (size_t p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -365,7 +374,10 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
 static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
                                  double *part_spectra, int nthreads) {
   /* Unpack the grid properties. */
-  const int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
   /* Precompute unmasked wavelengths */
   std::vector<int> good_lams;
@@ -380,7 +392,7 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   {
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    size_t nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();

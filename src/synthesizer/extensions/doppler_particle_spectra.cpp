@@ -55,9 +55,12 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  const int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
   const int ncells = 1 << ndim;
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
   /* Build sub_dims = [2,2,...,2] once */
   std::array<int, MAX_GRID_NDIM> sub_dims;
@@ -85,7 +88,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
   std::vector<int> mapped_indices(nlam);
 
   /* Loop over particles. */
-  for (size_t p = 0; p < parts->npart; ++p) {
+  for (size_t p = 0; p < npart; ++p) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -181,9 +184,12 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  const int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
   const int ncells = 1 << ndim;
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
   /* Build sub_dims = [2,2,...,2] once */
   std::array<int, MAX_GRID_NDIM> sub_dims;
@@ -214,7 +220,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    size_t nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
@@ -367,15 +373,18 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
   /* Allocate the shifted wavelengths array and the mapped indices array. */
   std::vector<double> shifted_wavelengths(nlam);
   std::vector<int> mapped_indices(nlam);
 
   /* Loop over particles. */
-  for (size_t p = 0; p < parts->npart; p++) {
+  for (size_t p = 0; p < npart; p++) {
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -454,8 +463,11 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  const int nlam = grid_props->nlam;
+  size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
+
+  /* Get and cast the number of particles. */
+  size_t npart = static_cast<size_t>(parts->npart);
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -466,7 +478,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    size_t nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
