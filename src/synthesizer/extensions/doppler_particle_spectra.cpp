@@ -147,7 +147,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
         const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
 
         /* Distribute into particle & global arrays */
-        const int base_idx = p * nlam;
+        const size_t base_idx = p * nlam;
         part_spectra[base_idx + ils - 1] += (1.0 - frac_s) * gs;
         part_spectra[base_idx + ils] += frac_s * gs;
       }
@@ -214,14 +214,14 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
 
     /* Get the start and end indices for this thread. */
-    int start_idx = tid * nparts_per_thread;
-    int end_idx =
+    size_t start_idx = tid * nparts_per_thread;
+    size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
@@ -287,7 +287,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
           /* Base spectra contribution */
           const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
-          const int base_idx = p * nlam;
+          const size_t base_idx = p * nlam;
 
           /* Deposit into the thread's part spectra */
           this_part_spectra[ils - 1] =
@@ -430,10 +430,9 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
           grid_props->get_spectra_at(grid_ind, ilam) * weight;
 
       /* Add the contribution to the corresponding wavelength element. */
-      part_spectra[p * nlam + ilam_shifted - 1] +=
-          (1.0 - frac_shifted) * grid_spectra_value;
-      part_spectra[p * nlam + ilam_shifted] +=
-          frac_shifted * grid_spectra_value;
+      size_t idx = p * nlam + ilam_shifted;
+      part_spectra[idx - 1] += (1.0 - frac_shifted) * grid_spectra_value;
+      part_spectra[idx] += frac_shifted * grid_spectra_value;
     }
   }
 }
@@ -467,14 +466,14 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
 
     /* Get the start and end indices for this thread. */
-    int start_idx = tid * nparts_per_thread;
-    int end_idx =
+    size_t start_idx = tid * nparts_per_thread;
+    size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */

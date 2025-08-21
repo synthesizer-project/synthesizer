@@ -117,7 +117,7 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
       for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
         const int ilam = good_lams[jl];
         const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
-        const int idx = p * nlam + ilam;
+        const size_t idx = p * nlam + ilam;
 
         /* Fused multiply-add for precision */
         part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
@@ -182,14 +182,14 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
 
     /* Get the start and end indices for this thread. */
-    int start_idx = tid * nparts_per_thread;
-    int end_idx =
+    size_t start_idx = tid * nparts_per_thread;
+    size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
@@ -342,7 +342,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
       const double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
 
       /* Assign to this particle's spectra array. */
-      part_spectra[p * nlam + ilam] = spec_val * weight;
+      size_t part_spec_ind = p * nlam + ilam;
+      part_spectra[part_spec_ind] = spec_val * weight;
     }
   }
 }
@@ -377,14 +378,14 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   {
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
 
     /* Get the start and end indices for this thread. */
-    int start_idx = tid * nparts_per_thread;
-    int end_idx =
+    size_t start_idx = tid * nparts_per_thread;
+    size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
