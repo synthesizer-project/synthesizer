@@ -60,7 +60,7 @@ struct cell {
 
 /* Prototypes. */
 void construct_cell_tree(const double *pos, const double *sml,
-                         const double *surf_den_val, const int npart,
+                         const double *surf_den_val, const size_t npart,
                          struct cell *root, int ncells, int maxdepth,
                          int min_count);
 void cleanup_cell_tree(struct cell *c);

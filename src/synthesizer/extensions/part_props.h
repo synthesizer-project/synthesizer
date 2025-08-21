@@ -23,7 +23,7 @@
 class Particles {
 public:
   /* The number of particles. */
-  int npart;
+  size_t npart;
 
   /* The grid index for each particle (for CIC this is the base index, i.e.
    * the lower left corner of the cells). */
@@ -34,7 +34,7 @@ public:
 
   /* Constructor */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
-            PyArrayObject *np_mask, PyObject *part_tuple, int npart);
+            PyArrayObject *np_mask, PyObject *part_tuple, size_t npart);
 
   /* Destructor */
   ~Particles();

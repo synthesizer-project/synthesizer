@@ -25,7 +25,7 @@ class GridProps;
  * @param part_tuple: The tuple of numpy arrays holding the particle properties.
  */
 Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
-                     PyArrayObject *np_mask, PyObject *part_tuple, int npart_)
+                     PyArrayObject *np_mask, PyObject *part_tuple, size_t npart_)
     : np_weights_(np_weights), np_velocities_(np_velocities), np_mask_(np_mask),
       part_tuple_(part_tuple) {
 
@@ -284,7 +284,7 @@ static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
 
   // Unpack the grid properties.
   const int ndim = grid_props->ndim;
-  const int npart = parts->npart;
+  const size_t npart = parts->npart;
 
   // Pre-allocate exactly npart slots so we can write into slices on
   // each thread without resizing.
@@ -397,7 +397,7 @@ static void get_particle_indices_serial(GridProps *grid_props,
 static void get_particle_indices_parallel(GridProps *grid_props,
                                           Particles *parts, int nthreads) {
   const int ndim = grid_props->ndim;
-  const int npart = parts->npart;
+  const size_t npart = parts->npart;
 
   // Pre-allocate exactly npart slots so we can write into slices on
   // each thread without resizing.

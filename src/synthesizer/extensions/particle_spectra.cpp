@@ -182,7 +182,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();
@@ -377,7 +377,7 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   {
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
-    int nparts_per_thread = parts->npart / nthreads;
+    size_t nparts_per_thread = parts->npart / nthreads;
 
     /* What thread is this? */
     int tid = omp_get_thread_num();

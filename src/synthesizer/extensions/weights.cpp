@@ -161,7 +161,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
 #pragma omp parallel num_threads(nthreads)
   {
     /* Slice up the particles between threads. */
-    const int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
+    const size_t npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
     const int tid = omp_get_thread_num();
     const int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
@@ -339,7 +339,7 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   {
 
     /* First let's slice up the particles between the threads. */
-    const int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
+    const size_t npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
 
     /* Get the thread id. */
     const int tid = omp_get_thread_num();

@@ -52,7 +52,7 @@
 void populate_smoothed_data_cube_serial(
     const double *sed_values, const double *smoothing_lengths, const double *xs,
     const double *ys, const double *kernel, const double res, const int npix_x,
-    const int npix_y, const int npart, const int nlam, const double threshold,
+    const int npix_y, const size_t npart, const int nlam, const double threshold,
     const int kdim, double *data_cube) {
 
   /* Loop over positions including the sed */
@@ -198,7 +198,7 @@ void populate_smoothed_data_cube_serial(
 void populate_smoothed_data_cube_parallel(
     const double *sed_values, const double *smoothing_lengths, const double *xs,
     const double *ys, const double *kernel, const double res, const int npix_x,
-    const int npix_y, const int npart, const int nlam, const double threshold,
+    const int npix_y, const size_t npart, const int nlam, const double threshold,
     const int kdim, double *data_cube, const int nthreads) {
 
   /* Set up an array of locks. */
@@ -347,7 +347,7 @@ void populate_smoothed_data_cube_parallel(
 void populate_smoothed_data_cube(
     const double *sed_values, const double *smoothing_lengths, const double *xs,
     const double *ys, const double *kernel, const double res, const int npix_x,
-    const int npix_y, const int npart, const int nlam, const double threshold,
+    const int npix_y, const size_t npart, const int nlam, const double threshold,
     const int kdim, double *data_cube, const int nthreads) {
 
   double start = tic();
@@ -394,7 +394,7 @@ void populate_smoothed_data_cube(
 void populate_hist_data_cube_serial(const double *sed_values, const double *xs,
                                     const double *ys, const double res,
                                     const int npix_x, const int npix_y,
-                                    const int npart, const int nlam,
+                                    const size_t npart, const int nlam,
                                     double *data_cube) {
 
   /* Loop over positions including the sed */
@@ -447,7 +447,7 @@ void populate_hist_data_cube_serial(const double *sed_values, const double *xs,
 void populate_hist_data_cube_parallel(const double *sed_values,
                                       const double *xs, const double *ys,
                                       const double res, const int npix_x,
-                                      const int npix_y, const int npart,
+                                      const int npix_y, const size_t npart,
                                       const int nlam, double *data_cube,
                                       const int nthreads) {
 
@@ -509,7 +509,7 @@ void populate_hist_data_cube_parallel(const double *sed_values,
 void populate_hist_data_cube(const double *sed_values, const double *xs,
                              const double *ys, const double res,
                              const int npix_x, const int npix_y,
-                             const int npart, const int nlam, double *data_cube,
+                             const size_t npart, const int nlam, double *data_cube,
                              const int nthreads) {
 
   double start = tic();

@@ -223,7 +223,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
  * @param pix_values The pixel values to use for each image.
  */
 static void populate_pixel_recursive(const struct cell *c, double threshold,
-                                     int kdim, const double *kernel, int npart,
+                                     int kdim, const double *kernel, size_t npart,
                                      double *out, int nimgs,
                                      const double *pix_values, const double res,
                                      const int npix_x, const int npix_y) {
@@ -458,7 +458,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
 void populate_smoothed_image_parallel(const double *pix_values,
                                       const double *kernel, const double res,
                                       const int npix_x, const int npix_y,
-                                      const int npart, const double threshold,
+                                      const size_t npart, const double threshold,
                                       const int kdim, double *img,
                                       const int nimgs, struct cell *root,
                                       const int nthreads) {
@@ -511,7 +511,7 @@ void populate_smoothed_image_parallel(const double *pix_values,
 void populate_smoothed_image_serial(const double *pix_values,
                                     const double *kernel, const double res,
                                     const int npix_x, const int npix_y,
-                                    const int npart, const double threshold,
+                                    const size_t npart, const double threshold,
                                     const int kdim, double *img,
                                     const int nimgs, struct cell *root) {
 
@@ -555,7 +555,7 @@ void populate_smoothed_image_serial(const double *pix_values,
  */
 void populate_smoothed_image(const double *pix_values, const double *kernel,
                              const double res, const int npix_x,
-                             const int npix_y, const int npart,
+                             const int npix_y, const size_t npart,
                              const double threshold, const int kdim,
                              double *img, const int nimgs, struct cell *root,
                              const int nthreads) {

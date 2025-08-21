@@ -47,7 +47,7 @@
 static void los_loop_serial(const double *pos_i, const double *pos_j,
                             const double *smls, const double *surf_den_vals,
                             const double *kernel, double *surf_dens,
-                            const int npart_i, const int npart_j,
+                            const size_t npart_i, const size_t npart_j,
                             const int kdim, const double threshold) {
 
   /* Loop over particle postions. */
@@ -126,11 +126,11 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
 static void los_loop_omp(const double *pos_i, const double *pos_j,
                          const double *smls, const double *surf_den_vals,
                          const double *kernel, double *surf_dens,
-                         const int npart_i, const int npart_j, const int kdim,
+                         const size_t npart_i, const size_t npart_j, const int kdim,
                          const double threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
-  int nparti_per_thread = npart_i / nthreads;
+  size_t nparti_per_thread = npart_i / nthreads;
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -230,8 +230,8 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
  */
 static void los_loop(const double *pos_i, const double *pos_j,
                      const double *smls, const double *surf_den_vals,
-                     const double *kernel, double *surf_dens, const int npart_i,
-                     const int npart_j, const int kdim, const double threshold,
+                     const double *kernel, double *surf_dens, const size_t npart_i,
+                     const size_t npart_j, const int kdim, const double threshold,
                      const int nthreads) {
 
   double start = tic();
@@ -314,7 +314,7 @@ static double calculate_los_recursive(struct cell *c, const double x,
   } else {
 
     /* We're in a leaf if we get here, unpack the particles. */
-    int npart_j = c->part_count;
+    size_t npart_j = c->part_count;
     struct particle *parts = c->particles;
 
     /* Loop over the particles adding their contribution. */
@@ -376,7 +376,7 @@ static double calculate_los_recursive(struct cell *c, const double x,
  */
 static void los_tree_serial(struct cell *root, const double *pos_i,
                             const double *kernel, double *surf_dens,
-                            const int npart_i, const int kdim,
+                            const size_t npart_i, const int kdim,
                             const double threshold) {
 
   /* Loop over the particles we are calculating the surface density for. */
@@ -412,11 +412,11 @@ static void los_tree_serial(struct cell *root, const double *pos_i,
 #ifdef WITH_OPENMP
 static void los_tree_omp(struct cell *root, const double *pos_i,
                          const double *kernel, double *surf_dens,
-                         const int npart_i, const int kdim,
+                         const size_t npart_i, const int kdim,
                          const double threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
-  int nparti_per_thread = npart_i / nthreads;
+  size_t nparti_per_thread = npart_i / nthreads;
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -471,7 +471,7 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
  * @param nthreads The number of threads to use.
  */
 static void los_tree(struct cell *root, const double *pos_i,
-                     const double *kernel, double *surf_dens, const int npart_i,
+                     const double *kernel, double *surf_dens, const size_t npart_i,
                      const int kdim, const double threshold,
                      const int nthreads) {
 
@@ -518,7 +518,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int npart_i, npart_j, kdim, force_loop, min_count, nthreads;
+  size_t npart_i, npart_j, kdim, force_loop, min_count, nthreads;
   double threshold;
   PyArrayObject *np_kernel, *np_pos_i, *np_pos_j, *np_smls, *np_surf_den_val;
 

@@ -39,7 +39,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* Get the particles in this cell. */
   struct particle *particles = c->particles;
-  int npart = c->part_count;
+  size_t npart = c->part_count;
 
   /* No point splitting below the maximum smoothing length or if we have too
    * few particles. */
@@ -211,7 +211,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
  */
 static void construct_particles(struct particle *particles, const double *pos,
                                 const double *sml, const double *surf_den_vals,
-                                const int npart, struct cell *root) {
+                                const size_t npart, struct cell *root) {
 
   double part_start = tic();
 
@@ -300,7 +300,7 @@ static void construct_particles(struct particle *particles, const double *pos,
  * @param min_count The minimum number of particles in a leaf cell.
  */
 void construct_cell_tree(const double *pos, const double *sml,
-                         const double *surf_den_val, const int npart,
+                         const double *surf_den_val, const size_t npart,
                          struct cell *root, int ncells, int maxdepth,
                          int min_count) {
 
