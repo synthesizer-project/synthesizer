@@ -430,7 +430,9 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
           grid_props->get_spectra_at(grid_ind, ilam) * weight;
 
       /* Add the contribution to the corresponding wavelength element. */
-      size_t idx = p * nlam + ilam_shifted;
+      const size_t idx =
+          static_cast<size_t>(p) * static_cast<size_t>(nlam)
+           static_cast<size_t>(ilam_shifted);
       part_spectra[idx - 1] += (1.0 - frac_shifted) * grid_spectra_value;
       part_spectra[idx] += frac_shifted * grid_spectra_value;
     }
