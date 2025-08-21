@@ -21,10 +21,10 @@ static void reduce_spectra_serial(double *spectra, double *part_spectra,
   for (int p = 0; p < npart; p++) {
     /* Loop over wavelengths. */
     for (int ilam = 0; ilam < nlam; ilam++) {
+      size_t part_spec_ind = p * nlam + ilam;
       /* Use fused multiply-add to accumulate with better precision.
        * Equivalent to: += spec_val * weight, but with a single rounding. */
-      spectra[ilam] =
-          std::fma(part_spectra[p * nlam + ilam], 1.0, spectra[ilam]);
+      spectra[ilam] = std::fma(part_spectra[part_spec_ind], 1.0, spectra[ilam]);
     }
   }
 }
@@ -48,7 +48,8 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
 #pragma omp parallel for num_threads(nthreads) reduction(+ : spectra[ : nlam])
   for (int p = 0; p < npart; p++) {
     for (int ilam = 0; ilam < nlam; ilam++) {
-      spectra[ilam] += part_spectra[p * nlam + ilam];
+      size_t part_spec_ind = p * nlam + ilam;
+      spectra[ilam] += part_spectra[part_spec_ind];
     }
   }
 #else // OpenMP < 4.5 or no array reduction support
@@ -59,7 +60,8 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
 #pragma omp for nowait schedule(static)
     for (int p = 0; p < npart; p++) {
       for (int ilam = 0; ilam < nlam; ilam++) {
-        local[ilam] += part_spectra[p * nlam + ilam];
+        size_t part_spec_ind = p * nlam + ilam;
+        local[ilam] += part_spectra[part_spec_ind];
       }
     }
     // Merge
