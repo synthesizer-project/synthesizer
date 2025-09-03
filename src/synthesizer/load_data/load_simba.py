@@ -347,6 +347,7 @@ def load_Simba_slab(
             g_hsml = hf["PartType0/SmoothingLength"][:][gas_mask]
             g_dustmass = hf["PartType0/Dust_Masses"][:][gas_mask]
             g_h2fraction = hf["PartType0/FractionH2"][:][gas_mask]
+            g_internalenergy = hf["PartType0/InternalEnergy"][:][gas_mask]
 
         # Load dark matter particles if requested
         if load_dark_matter:
@@ -449,6 +450,7 @@ def load_Simba_slab(
             smoothing_lengths=g_hsml * kpc,
             dust_masses=g_dustmass * Msun,
             centre=center * kpc,
+            internal_energy=g_internalenergy,
         )
     else:
         galaxy.sf_gas_mass = 0.0 * Msun
