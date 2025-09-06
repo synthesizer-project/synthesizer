@@ -40,21 +40,21 @@ keywords =[
 
 # Synthesizer authors
 authors = [
-  {name = "C. S. Fournier", email = "connor.sant.17@um.edu.mt"},
-  {name = "C. C. Lovell", email = "christopher.lovell@port.ac.uk" },
   {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
-  {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
-  {name = "A. P. Vijayan", email = "apavi@space.dtu.dk" },
+  {name = "C. C. Lovell", email = "chris.lovell.astro@gmail.com" },
+  {name = "A. P. Vijayan", email = "A.Payyoor-Vijayan@sussex.ac.uk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
-  {name = "K. Iyer", email = "kartheikiyer@gmail.com" },
   {name = "S. Newman", email = "sophie.newman@port.ac.uk" },
+  {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
+  {name = "K. Iyer", email = "kartheikiyer@gmail.com" },
+  {name = "C. S. Fournier", email = "connor.sant.17@um.edu.mt"},
 ]
 
 # Synthesizer maintainers
 maintainers = [
-  {name = "C. C. Lovell", email = "christopher.lovell@port.ac.uk" },
+  {name = "C. C. Lovell", email = "chris.lovell.astro@gmail.com" },
   {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
-  {name = "A. P. Vijayan", email = "apavi@space.dtu.dk" },
+  {name = "A. P. Vijayan", email = "A.Payyoor-Vijayan@sussex.ac.uk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
 ]
 
@@ -82,7 +82,7 @@ dependencies = [
   "scipy",
   "unyt",
   "cmasher",
-  "dust_extinction",
+  "dust_extinction>=1.6",
   "matplotlib",
   "spectres",
   "tqdm",
@@ -90,13 +90,14 @@ dependencies = [
   "pathos",
   "statsmodels",
   "pympler",
+  "platformdirs",
 ]
 
 # Optional dependencies for specific use cases
 [project.optional-dependencies]
 # Development
 dev = [
-    "ruff==0.7.4",
+    "ruff==0.11.7",
     "pre-commit",
     "nb-clean",
 ]
@@ -104,7 +105,7 @@ dev = [
 test = [
     "nbmake",
     "pytest",
-    "ruff==0.7.4",
+    "ruff==0.11.7",
     "mypy>=0.910",
 ]
 # Documentation building
@@ -120,6 +121,7 @@ docs = [
     "sphinx-toolbox",
     "nbsphinx",
     "sphinx-copybutton",
+    "readthedocs-sphinx-search",
 ]
 
 # Simulation specifc loader dependancies
@@ -139,7 +141,10 @@ eagle = [
 
 # Entry points
 [project.scripts]
+synthesizer-init = "synthesizer.data.initialise:synth_initialise"
+synthesizer-clear = "synthesizer.data.initialise:synth_clear_data"
 synthesizer-download="synthesizer.downloader.downloader:download"
+synthesizer-report = "synthesizer.data.initialise:synth_report_config"
 
 # Package data
 [tool.setuptools.package-data]
@@ -190,6 +195,7 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+    ".pre-commit-config.yaml",
     "*__init__.py"  # ignore all init files
 ]
 
@@ -201,13 +207,14 @@ indent-width = 4
 # Assume Python 3.8 by default regardless
 target-version = "py38"
 
+
 [tool.ruff.lint]
-# Enable Pyflakes (`F`) and pycodestyle (`E`)  codes by default.
-select = ["F", "E", "W"]
+select = ["F", "E", "W", "D"]
 ignore = [
        "E402",  # "module level import not at top of file" (isolate C imports in case python alternatives exist)
        "F811",  # "redefinition of unused name from line N" (breaks quantity objects)
        ]
+
 
 # Sort imports alphabetically
 extend-select = ["I"]
@@ -218,6 +225,13 @@ unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# For every .py under examples/, ignore all D-rules
+"examples/**/*.py" = ["D"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

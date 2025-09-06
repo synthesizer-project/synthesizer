@@ -17,8 +17,10 @@ import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
+from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
@@ -31,8 +33,7 @@ def _generate_image_particle_hist(
     coordinates,
     normalisation=None,
 ):
-    """
-    Generate a histogram image for a particle emitter.
+    """Generate a histogram image for a particle emitter.
 
     Args:
         img (Image):
@@ -47,6 +48,8 @@ def _generate_image_particle_hist(
     Returns:
         Image: The histogram image.
     """
+    start = tic()
+
     # Ensure the signal is a 1D array and is a compatible size with the
     # coordinates
     if signal.ndim != 1:
@@ -74,7 +77,7 @@ def _generate_image_particle_hist(
     if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
         np.isclose(coordinates, 0)
     ):
-        raise exceptions.InconsistentArguments(
+        warn(
             "Coordinates must be centered for imaging"
             f" (got min={coordinates.min()} and max={coordinates.max()})."
         )
@@ -97,6 +100,10 @@ def _generate_image_particle_hist(
     # strip them off
     coordinates = coordinates.to_value(spatial_units)
 
+    toc("Setting up histogram image inputs", start)
+
+    calc_start = tic()
+
     # Include normalisation in the original signal if we have one
     # (we'll divide by it later)
     if normalisation is not None:
@@ -115,8 +122,11 @@ def _generate_image_particle_hist(
         weights=signal,
     )[0]
 
+    toc("Histogram image generation", calc_start)
+
     # Normalise the image by the normalisation if applicable
     if normalisation is not None:
+        norm_start = tic()
         norm_img = np.histogram2d(
             coordinates[:, 0],
             coordinates[:, 1],
@@ -129,6 +139,8 @@ def _generate_image_particle_hist(
 
         img.arr /= norm_img
 
+        toc("Normalisation of histogram image", norm_start)
+
     return img
 
 
@@ -138,8 +150,7 @@ def _generate_images_particle_hist(
     signals,
     normalisations=None,
 ):
-    """
-    Generate histogram images for a particle emitter.
+    """Generate histogram images for a particle emitter.
 
     This is a wrapper around _generate_image_particle_hist to allow for
     multiple signals to be passed in at once to generate an ImageCollection.
@@ -190,8 +201,7 @@ def _generate_image_particle_smoothed(
     nthreads,
     normalisation=None,
 ):
-    """
-    Generate smoothed images for a particle emitter.
+    """Generate smoothed images for a particle emitter.
 
     Args:
         img (Image):
@@ -220,6 +230,8 @@ def _generate_image_particle_smoothed(
     Returns:
         Image: The smoothed image.
     """
+    start = tic()
+
     # Avoid cyclic imports
     from synthesizer.imaging import Image
 
@@ -298,7 +310,9 @@ def _generate_image_particle_smoothed(
         signal = signal.copy()
         signal *= normalisation.value
 
-    # Get the (npix_x, npix_y) image
+    toc("Setting up smoothed image inputs", start)
+
+    # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signal),
         ensure_array_c_compatible_double(_smoothing_lengths),
@@ -315,7 +329,7 @@ def _generate_image_particle_smoothed(
     )
 
     # Store the image array into the image object
-    img.arr = imgs_arr[0, :, :]
+    img.arr = imgs_arr[:, :, 0]
     img.units = (
         signal.units
         if isinstance(signal, (unyt_quantity, unyt_array))
@@ -324,6 +338,7 @@ def _generate_image_particle_smoothed(
 
     # Apply the normalisation if needed
     if normalisation is not None:
+        norm_start = tic()
         norm_img = Image(resolution=img.resolution, fov=img.fov)
         norm_img = _generate_image_particle_smoothed(
             norm_img,
@@ -337,6 +352,8 @@ def _generate_image_particle_smoothed(
 
         # Normalise the image by the normalisation property
         img.arr /= norm_img.arr
+
+        toc("Normalisation of image", norm_start)
 
     return img
 
@@ -352,8 +369,7 @@ def _generate_images_particle_smoothed(
     nthreads,
     normalisations=None,
 ):
-    """
-    Generate smoothed images for a particle emitter.
+    """Generate smoothed images for a particle emitter.
 
     Args:
         imgs (ImageCollection):
@@ -388,6 +404,8 @@ def _generate_images_particle_smoothed(
     Returns:
         ImageCollection: An image collection containing the smoothed images.
     """
+    start = tic()
+
     # Avoid cyclic imports
     from synthesizer.imaging import Image
 
@@ -445,7 +463,7 @@ def _generate_images_particle_smoothed(
     if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
         np.isclose(cent_coords, 0)
     ):
-        raise exceptions.InconsistentArguments(
+        warn(
             "Coordinates must be centered for imaging"
             f" (got min={cent_coords.min()} and max={cent_coords.max()})."
         )
@@ -474,6 +492,12 @@ def _generate_images_particle_smoothed(
         for ind, key in enumerate(labels):
             signals[ind, :] *= normalisations[key].value
 
+    # In the C++ extension we want to be dealing with (Npart, Nimg) signals
+    # to make the most of cache locality, so we transpose the signals
+    signals = signals.T
+
+    toc("Setting up smoothed image inputs", start)
+
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signals),
@@ -486,20 +510,29 @@ def _generate_images_particle_smoothed(
         cent_coords.shape[0],
         kernel_threshold,
         kernel.size,
-        signals.shape[0],
+        signals.shape[1],
         nthreads,
     )
 
+    # Apply units if needs be
+    if isinstance(signals, (unyt_quantity, unyt_array)):
+        unit_start = tic()
+        imgs_arr = unyt_array(
+            imgs_arr,
+            units=signals.units,
+        )
+        toc("Applying units to smoothed images", unit_start)
+
     # Store the image arrays on the image collection (this will
     # automatically convert them to Image objects)
+    unpack_start = tic()
     for ind, key in enumerate(labels):
-        if isinstance(signals, (unyt_quantity, unyt_array)):
-            imgs[key] = imgs_arr[ind, :, :] * signals.units
-        else:
-            imgs[key] = imgs_arr[ind, :, :]
+        imgs[key] = imgs_arr[:, :, ind]
+    toc("Unpacking smoothed images", unpack_start)
 
     # Apply normalisation if needed
     if normalisations is not None:
+        norm_start = tic()
         for ind, key in enumerate(labels):
             norm_img = Image(resolution=imgs.resolution, fov=imgs.fov)
             norm_img = _generate_image_particle_smoothed(
@@ -515,6 +548,8 @@ def _generate_images_particle_smoothed(
             # Normalise the image by the normalisation property
             imgs[key].arr /= norm_img.arr
 
+        toc("Normalisation of images", norm_start)
+
     return imgs
 
 
@@ -523,8 +558,7 @@ def _generate_image_parametric_smoothed(
     density_grid,
     signal,
 ):
-    """
-    Generate a smoothed image for a parametric emitter.
+    """Generate a smoothed image for a parametric emitter.
 
     Args:
         img (Image):
@@ -537,9 +571,13 @@ def _generate_image_parametric_smoothed(
     Returns:
         ImageCollection: An image collection containing the smoothed images.
     """
+    start = tic()
+
     # Multiply the density grid by the sed to get the image
     img.arr = density_grid[:, :] * signal
     img.units = signal.units
+
+    toc("Setting up smoothed image inputs", start)
 
     return img
 
@@ -549,8 +587,7 @@ def _generate_images_parametric_smoothed(
     density_grid,
     signals,
 ):
-    """
-    Generate smoothed images for a parametric emitter.
+    """Generate smoothed images for a parametric emitter.
 
     Args:
         imgs (ImageCollection):
@@ -593,8 +630,7 @@ def _generate_image_collection_generic(
     emitter,
     cosmo,
 ):
-    """
-    Generate an image collection for a generic emitter.
+    """Generate an image collection for a generic emitter.
 
     This function can be used to avoid repeating image generation code in
     wrappers elsewhere in the code. It'll produce an image collection based
@@ -604,28 +640,28 @@ def _generate_image_collection_generic(
     imaging can only be smoothed.
 
     Args:
-        instrument (Instrument)
+        instrument (Instrument):
             The instrument to create the images for.
-        photometry (PhotometryCollection)
+        photometry (PhotometryCollection):
             The photometry to use for the images. This should be a a collection
             of 2D arrays of photometry with shape (Nfilters, Nparticles).
-        fov (unyt_quantity/tuple, unyt_quantity)
+        fov (unyt_quantity/tuple, unyt_quantity):
             The width of the image.
-        img_type (str)
+        img_type (str):
             The type of image to create. Options are "hist" or "smoothed".
-        kernel (str)
+        kernel (str):
             The array describing the kernel. This is dervied from the
             kernel_functions module. (Only applicable to particle imaging)
-        kernel_threshold (float)
+        kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
             below this threshold are included in the image. (Only
             applicable to particle imaging)
-        nthreads (int)
+        nthreads (int):
             The number of threads to use when smoothing the image. This
             only applies to particle imaging.
-        emitter (Stars/BlackHoles/BlackHole)
+        emitter (Stars/BlackHoles/BlackHole):
             The emitter object to create the images for.
-        cosmo (astropy.cosmology.Cosmology)
+        cosmo (astropy.cosmology.Cosmology):
             A cosmology object defining the cosmology to use for the images.
             This is only relevant for angular images where a conversion to
             projected angular coordinates is needed.
@@ -671,8 +707,7 @@ def _generate_image_collection_generic(
 
     elif img_type == "hist":
         raise exceptions.InconsistentArguments(
-            "Parametric images can only be made using the smoothed "
-            "image type."
+            "Parametric images can only be made using the smoothed image type."
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
@@ -730,8 +765,7 @@ def _generate_ifu_particle_hist(
     cent_coords,
     nthreads,
 ):
-    """
-    Generate a histogram IFU for a particle emitter.
+    """Generate a histogram IFU for a particle emitter.
 
     Args:
         ifu (SpectralCube):
@@ -752,6 +786,8 @@ def _generate_ifu_particle_hist(
     Returns:
         SpectralCube: The histogram image.
     """
+    start = tic()
+
     # Sample the spectra onto the wavelength grid
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
 
@@ -769,7 +805,7 @@ def _generate_ifu_particle_hist(
 
     # Strip off and store the units on the spectra for later
     ifu.units = spectra.units
-    spectra = spectra.value.T
+    spectra = spectra.ndview
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:
@@ -777,7 +813,7 @@ def _generate_ifu_particle_hist(
             "Spectra must be a 2D array for an IFU image"
             f" (got {spectra.ndim})."
         )
-    if spectra.shape[1] != cent_coords.shape[0]:
+    if spectra.shape[0] != cent_coords.shape[0]:
         raise exceptions.InconsistentArguments(
             "Spectra and coordinates must be the same size"
             f" for an IFU image (got {spectra.shape[0]} and "
@@ -808,7 +844,7 @@ def _generate_ifu_particle_hist(
     if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
         np.isclose(cent_coords, 0)
     ):
-        raise exceptions.InconsistentArguments(
+        warn(
             "Coordinates must be centered for imaging"
             f" (got min={cent_coords.min()} and max={cent_coords.max()})."
         )
@@ -823,6 +859,8 @@ def _generate_ifu_particle_hist(
     # TODO: We should do away with this and write a histogram backend
     kernel = Kernel().get_kernel()
 
+    toc("Setting up histogram IFU inputs", start)
+
     ifu.arr = make_img(
         ensure_array_c_compatible_double(spectra),
         smls,
@@ -836,7 +874,7 @@ def _generate_ifu_particle_hist(
         kernel.size,
         sed.nlam,
         nthreads,
-    ).T
+    )
 
     return ifu
 
@@ -851,8 +889,7 @@ def _generate_ifu_particle_smoothed(
     kernel_threshold,
     nthreads,
 ):
-    """
-    Generate a histogram IFU for a particle emitter.
+    """Generate a histogram IFU for a particle emitter.
 
     Args:
         ifu (SpectralCube):
@@ -882,6 +919,8 @@ def _generate_ifu_particle_smoothed(
     Returns:
         SpectralCube: The histogram image.
     """
+    start = tic()
+
     # Sample the spectra onto the wavelength grid
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
 
@@ -957,6 +996,8 @@ def _generate_ifu_particle_smoothed(
     _coords[:, 0] += fov[0] / 2
     _coords[:, 1] += fov[1] / 2
 
+    toc("Setting up smoothed IFU inputs", start)
+
     # Generate the IFU
     ifu.arr = make_img(
         spectra,
@@ -973,7 +1014,7 @@ def _generate_ifu_particle_smoothed(
         kernel.size,
         sed.nlam,
         nthreads,
-    ).T
+    )
 
     return ifu
 
@@ -984,8 +1025,7 @@ def _generate_ifu_parametric_smoothed(
     quantity,
     density_grid,
 ):
-    """
-    Generate a smoothed IFU for a parametric emitter.
+    """Generate a smoothed IFU for a parametric emitter.
 
     Args:
         ifu (SpectralCube):
@@ -1000,6 +1040,8 @@ def _generate_ifu_parametric_smoothed(
         density_grid (unyt_array of float):
             The density grid to be smoothed over.
     """
+    start = tic()
+
     # Sample the spectra onto the wavelength grid if we need to
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
 
@@ -1029,6 +1071,8 @@ def _generate_ifu_parametric_smoothed(
     # Multiply the density grid by the sed to get the IFU
     ifu.arr = density_grid[:, :, None] * spectra
 
+    toc("Computing parametric IFU", start)
+
     return ifu
 
 
@@ -1046,8 +1090,7 @@ def _generate_ifu_generic(
     emitter,
     cosmo,
 ):
-    """
-    Generate a spectral cube.
+    """Generate a spectral cube.
 
     This function can be used to avoid repeating IFU generation code in
     wrappers elsewhere in the code. It'll produce a SpectralCube based
@@ -1057,35 +1100,35 @@ def _generate_ifu_generic(
     imaging can only be smoothed.
 
     Args:
-        instrument (Instrument)
+        instrument (Instrument):
             The instrument to create the images for.
-        fov (unyt_quantity/tuple, unyt_quantity)
+        fov (unyt_quantity/tuple, unyt_quantity):
             The width of the image.
-        lam (unyt_array)
+        lam (unyt_array):
             The wavelength array of the spectra.
-        img_type (str)
+        img_type (str):
             The type of image to create. Options are "hist" or "smoothed".
-        quantity (str)
+        quantity (str):
             The quantity to use for the spectra. This can be any valid
             spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
             'flux', etc.
-        per_particle (bool)
+        per_particle (bool):
             Whether to create an image per particle or not.
-        kernel (str)
+        kernel (str):
             The array describing the kernel. This is dervied from the
             kernel_functions module. (Only applicable to particle imaging)
-        kernel_threshold (float)
+        kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
             below this threshold are included in the image. (Only
             applicable to particle imaging)
-        nthreads (int)
+        nthreads (int):
             The number of threads to use when smoothing the image. This
             only applies to particle imaging.
-        label (str)
+        label (str):
             The label of the photometry to use.
-        emitter (Stars/BlackHoles/BlackHole)
+        emitter (Stars/BlackHoles/BlackHole):
             The emitter object to create the images for.
-        cosmo (astropy.cosmology.Cosmology)
+        cosmo (astropy.cosmology.Cosmology):
             A cosmology object defining the cosmology to use for the IFU.
             This is only relevant for angular IFUs where a conversion to
             projected angular coordinates is needed.

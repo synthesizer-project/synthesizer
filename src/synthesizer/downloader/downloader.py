@@ -22,42 +22,70 @@ import requests
 import yaml
 from tqdm import tqdm
 
-from synthesizer import exceptions
+from synthesizer import (
+    DATABASE_FILE,
+    GRID_DIR,
+    INSTRUMENT_CACHE_DIR,
+    TEST_DATA_DIR,
+    exceptions,
+)
+from synthesizer.instruments import AVAILABLE_INSTRUMENTS
+from synthesizer.synth_warnings import warn
 
-# Define the location of this file
-THIS_DIR = "/".join(os.path.abspath(__file__).split("/")[:-1])
+
+def load_database_yaml():
+    """Load the database yaml file."""
+    with open(DATABASE_FILE, "r") as f:
+        data = yaml.safe_load(f)
+
+    return data
 
 
 def load_test_data_links():
     """Load the test data links from the yaml file."""
-    with open(f"{THIS_DIR}/_data_ids.yml", "r") as f:
-        data = yaml.safe_load(f)
-
-    return data["TestData"]
+    return load_database_yaml()["TestData"]
 
 
 def load_dust_data_links():
     """Load the dust data links from the yaml file."""
-    with open(f"{THIS_DIR}/_data_ids.yml", "r") as f:
-        data = yaml.safe_load(f)
+    return load_database_yaml()["DustData"]
 
-    return data["DustData"]
+
+def load_instrument_data_links():
+    """Load the instrument data links from the yaml file."""
+    return load_database_yaml()["InstrumentData"]
 
 
 # Get the dicts contain the locations of the test and dust data
 TEST_FILES = load_test_data_links()
 DUST_FILES = load_dust_data_links()
+INSTRUMENT_FILES = load_instrument_data_links()
 
 # Combine everything into a nice single dict
-AVAILABLE_FILES = {**TEST_FILES, **DUST_FILES}
+AVAILABLE_FILES = {**TEST_FILES, **DUST_FILES, **INSTRUMENT_FILES}
+
+# Define a translation between instrument file names and their class names
+# (remove the .hdf5 extension and remove underscores)
+INSTRUMENT_TRANSLATION = {
+    key.replace(".hdf5", "").replace("_", ""): key for key in INSTRUMENT_FILES
+}
+
+# Define a translation for the test data files that converts the true
+# filename into the "test data alias"
+TEST_DATA_TRANSLATION = {
+    "test_grid.hdf5": (
+        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5"
+    ),
+    "test_grid_agn-blr.hdf5": "qsosed-test_cloudy-c23.01-agn-test.hdf5",
+    "test_grid_agn-nlr.hdf5": "qsosed-test_cloudy-c23.01-agn-test.hdf5",
+}
 
 
 def _download(
     filename,
     save_dir,
 ):
-    """
-    Download the file from the data server.
+    """Download the file from the data server.
 
     We extract the link for the file and its name on the server from the
     AVAILABLE_FILES dictionary.
@@ -65,19 +93,34 @@ def _download(
     We are now using Box
 
     Args:
-        filename (str)
+        filename (str):
             The name of the file to download.
-        save_dir (str)
+        save_dir (str):
             The directory in which to save the file.
     """
+    # Define the filename we will save under (this will ignore any aliases)
+    savename = filename
+
+    # Do we have an file with an alias?
+    if filename in TEST_DATA_TRANSLATION:
+        # If the filename is in the translation dict, use the alias
+        filename = TEST_DATA_TRANSLATION[filename]
+
     # Unpack the file details for extraction
     file_details = AVAILABLE_FILES[filename]
 
     # Unpack the url
     url = file_details["direct_link"]
 
+    # Ensure the save directory exists
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Be verbose about the save directory
+        print(f"{save_dir} does not exist. Creating it...")
+
     # Define the save path
-    save_path = f"{save_dir}/{filename}"
+    save_path = f"{save_dir}/{savename}"
 
     # Download the file
     response = requests.get(url, stream=True)
@@ -101,11 +144,10 @@ def _download(
 
 
 def download_test_grids(destination):
-    """
-    Download the test grids for synthesizer.
+    """Download the test grids for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download each file
@@ -118,11 +160,10 @@ def download_test_grids(destination):
 
 
 def download_stellar_test_grids(destination):
-    """
-    Download the SPS test grids for synthesizer.
+    """Download the SPS test grids for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download the stellar grid
@@ -130,11 +171,10 @@ def download_stellar_test_grids(destination):
 
 
 def download_agn_test_grids(destination):
-    """
-    Download the AGN test grids for synthesizer.
+    """Download the AGN test grids for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download each file
@@ -143,11 +183,10 @@ def download_agn_test_grids(destination):
 
 
 def download_dust_grid(destination):
-    """
-    Download the Drain and Li (2007) dust emission grid for synthesizer.
+    """Download the Drain and Li (2007) dust emission grid for synthesizer.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     # Download the dust grid
@@ -155,11 +194,10 @@ def download_dust_grid(destination):
 
 
 def download_camels_data(destination):
-    """
-    Download the CAMELS data.
+    """Download the CAMELS data.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     _download("camels_snap.hdf5", destination)
@@ -167,14 +205,27 @@ def download_camels_data(destination):
 
 
 def download_sc_sam_test_data(destination):
-    """
-    Download the SC-SAM test data.
+    """Download the SC-SAM test data.
 
     Args:
-        destination (str)
+        destination (str):
             The path to the destination directory.
     """
     _download("sc-sam_sfhist.dat", destination)
+
+
+def download_instruments(destination, instruments):
+    """Download the instruments.
+
+    Args:
+        destination (str):
+            The path to the destination directory.
+        instruments (list):
+            The list of instruments to download.
+    """
+    # Download each instrument
+    for instrument in instruments:
+        _download(INSTRUMENT_TRANSLATION[instrument], destination)
 
 
 def download():
@@ -235,6 +286,26 @@ def download():
         help="Download all available simulation data",
     )
 
+    # Add a flag to download instruments
+    parser.add_argument(
+        "--instruments",
+        nargs="+",
+        type=str,
+        help=(
+            "Download the specified instruments (these are stored in the "
+            f"cache directory {INSTRUMENT_CACHE_DIR}). "
+        ),
+        choices=AVAILABLE_INSTRUMENTS,
+        default=[],
+    )
+
+    # Add a flag to download all instruments
+    parser.add_argument(
+        "--all-instruments",
+        action="store_true",
+        help="Download all available instruments",
+    )
+
     # Add a flag to go ham and download everything
     parser.add_argument(
         "--all",
@@ -249,9 +320,14 @@ def download():
         "--destination",
         "-d",
         type=str,
-        help="The path to the destination directory",
-        required=True,
+        help=(
+            "The path to the destination directory by default this is"
+            f" stored in {GRID_DIR} for test data and {TEST_DATA_DIR} for"
+            " camels and sc-sam data. This argument overrides these defaults."
+        ),
+        default=None,
     )
+
     # Parse the arguments
     args = parser.parse_args()
 
@@ -265,40 +341,66 @@ def download():
     dest = args.destination
     scsam = args.scsam_data
     all_sim_data = args.all_sim_data
+    instruments = args.instruments
+    all_instruments = args.all_instruments
+
+    # Check if the destination directory exists
+    if dest is not None and not os.path.exists(dest):
+        raise exceptions.DownloadError(
+            f"Destination directory {dest} does not exist. "
+            "Please create it before running this script."
+        )
+
+    # Warn that dest is ignored for instruments
+    if (len(instruments) > 0 or all_instruments) and dest is not None:
+        warn(
+            "The destination argument is ignored for instruments. "
+            "Instruments are always downloaded to the cache directory "
+            f"({INSTRUMENT_CACHE_DIR}).",
+        )
 
     # Are we just getting everything?
     if everything:
-        download_test_grids(dest)
-        download_dust_grid(dest)
-        download_camels_data(dest)
-        download_sc_sam_test_data(dest)
+        download_test_grids(dest if dest is not None else GRID_DIR)
+        download_dust_grid(dest if dest is not None else GRID_DIR)
+        download_camels_data(dest if dest is not None else TEST_DATA_DIR)
+        download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
+        download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
         return
 
     # Test data?
     if test:
-        download_test_grids(dest)
+        download_test_grids(dest if dest is not None else GRID_DIR)
     else:
         if stellar:
-            download_stellar_test_grids(dest)
+            download_stellar_test_grids(dest if dest is not None else GRID_DIR)
         if agn:
-            download_agn_test_grids(dest)
+            download_agn_test_grids(dest if dest is not None else GRID_DIR)
+
+    # Instruments?
+    if len(instruments) > 0:
+        download_instruments(INSTRUMENT_CACHE_DIR, instruments)
+
+    # All instruments?
+    if all_instruments:
+        download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
 
     # Dust data?
     if dust:
-        download_dust_grid(dest)
+        download_dust_grid(dest if dest is not None else GRID_DIR)
 
     # Camels data?
     if camels:
-        download_camels_data(dest)
+        download_camels_data(dest if dest is not None else TEST_DATA_DIR)
 
     # SC-SAM data?
     if scsam:
-        download_sc_sam_test_data(dest)
+        download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
 
     # All simulation data?
     if all_sim_data:
-        download_camels_data(dest)
-        download_sc_sam_test_data(dest)
+        download_camels_data(dest if dest is not None else TEST_DATA_DIR)
+        download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
 
 
 if __name__ == "__main__":

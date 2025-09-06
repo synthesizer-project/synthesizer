@@ -61,52 +61,387 @@ from synthesizer.emission_models.models import (
     DustEmission,
 )
 from synthesizer.emission_models.stellar.models import (
+    EmergentEmission,
     IncidentEmission,
     NebularContinuumEmission,
     NebularEmission,
     NebularLineEmission,
+    ReprocessedEmission,
     TransmittedEmission,
 )
-from synthesizer.emission_models.transformers import (
-    EscapedFraction,
-    ProcessedFraction,
-)
 
 
-class PacmanEmission(StellarEmissionModel):
-    """
-    A class defining the Pacman model.
+class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
+    """A class defining the Pacman model without escape fraction.
 
-    This model defines both intrinsic and attenuated steller emission with or
-    without dust emission. It also includes the option to include escaped
-    emission for a given escape fraction. If a lyman alpha escape fraction is
-    given, a more sophisticated nebular emission model is used, including line
-    and nebuluar continuum emission.
+    This model defines both intrinsic and attenuated steller emission without
+    dust emission. If a lyman alpha escape fraction is given, a more
+    sophisticated nebular emission model is used, including line and
+    nebuluar continuum emission with the amount of lyman alpha emission
+    scaled by the escape fraction.
 
-    This model will always produce:
+    This model will produce
         - incident: the stellar emission incident onto the ISM.
-        - intrinsic: the intrinsic emission (when grid.reprocessed is False
-            this is the same as the incident emission).
-        - attenuated: the intrinsic emission attenuated by dust.
-        - escaped: the incident emission that completely escapes the ISM.
-        - emergent: the emission which emerges from the stellar population,
-            including any escaped emission.
-
-    if grid.reprocessed is True:
+        - nebular: the stellar emission from nebulae.
         - transmitted: the stellar emission transmitted through the ISM.
-        - nebular: the stellar emisison from nebulae.
         - reprocessed: the stellar emission reprocessed by the ISM.
+        - attenuated: the intrinsic emission attenuated by dust.
+    """
 
-    if dust_emission is not None:
+    def __init__(
+        self,
+        grid,
+        tau_v="tau_v",
+        dust_curve=PowerLaw(),
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        **kwargs,
+    ):
+        """Initialize the PacmanEmissionNoEscapeNoDust model.
+
+        Args:
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            tau_v (float):
+                The V-band optical depth.
+            dust_curve (synthesizer.emission_models.Transformer):
+                The assumed dust curve. Defaults to `PowerLaw`, with
+                default parameters.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction.
+            label (str):
+                The label for the total emission model. If `None` this will
+                be set to "attenuated".
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The PacmanEmission style models require a reprocessed grid."
+            )
+
+        # Create the models we need
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(
+            grid=grid,
+            label="transmitted",
+            fesc=0.0,  # No escape fraction
+            **kwargs,
+        )
+        nebular_line = NebularLineEmission(
+            grid=grid,
+            label="nebular_line",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="nebular_continuum",
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            label="nebular",
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
+            **kwargs,
+        )
+        reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="reprocessed",
+            nebular=nebular,
+            transmitted=transmitted,
+            **kwargs,
+        )
+
+        # Make the attenuated emission model
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label="attenuated" if label is None else label,
+            apply_to=reprocessed,
+            dust_curve=dust_curve,
+            tau_v=tau_v,
+            related_models=(incident,),
+            **kwargs,
+        )
+
+
+class PacmanEmissionNoEscapedWithDust(EmissionModel):
+    """A class defining the Pacman model with escape fraction + dust emission.
+
+    This model defines both intrinsic and attenuated steller emission with
+    dust emission. If a lyman alpha escape fraction is given, a more
+    sophisticated nebular emission model is used, including line and
+    nebuluar continuum emission with the amount of lyman alpha emission
+    scaled by the escape fraction.
+
+    This model will produce:
+        - incident: the stellar emission incident onto the ISM.
+        - nebular: the stellar emission from nebulae.
+        - transmitted: the stellar emission transmitted through the ISM.
+        - reprocessed: the stellar emission reprocessed by the ISM.
+        - attenuated: the intrinsic emission attenuated by dust.
         - dust_emission: the emission from dust.
         - total: the final total combined emission.
+    """
 
-    Attributes:
-        grid (synthesizer.grid.Grid): The grid object
-        dust_curve (AttenuationLaw): The dust curve
-        dust_emission (synthesizer.dust.EmissionModel): The dust emission
-        fesc (float): The escape fraction
-        fesc_ly_alpha (float): The Lyman alpha escape fraction
+    def __init__(
+        self,
+        grid,
+        tau_v="tau_v",
+        dust_curve=PowerLaw(),
+        dust_emission=None,
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        stellar_dust=True,
+        **kwargs,
+    ):
+        """Initialize the PacmanEmissionNoEscapeWithDust model.
+
+        Args:
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            tau_v (float):
+                The V-band optical depth.
+            dust_curve (synthesizer.emission_models.Transformer):
+                The assumed dust curve. Defaults to `PowerLaw`, with
+                default parameters.
+            dust_emission (synthesizer.dust.EmissionModel): The dust
+                emission.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction.
+            label (str):
+                The label for the total emission model. If `None` this will
+                be set to "total" or "emergent" if dust_emission is `None`.
+            stellar_dust (bool):
+                If `True`, the dust emission will be treated as stellar
+                emission, otherwise it will be treated as galaxy emission.
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The PacmanEmission style models require a reprocessed grid."
+            )
+
+        # Create the models we need
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(
+            grid=grid,
+            label="transmitted",
+            fesc=0.0,  # No escape fraction
+            **kwargs,
+        )
+        nebular_line = NebularLineEmission(
+            grid=grid,
+            label="nebular_line",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="nebular_continuum",
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            label="nebular",
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
+            **kwargs,
+        )
+        reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="reprocessed",
+            nebular=nebular,
+            transmitted=transmitted,
+            **kwargs,
+        )
+        attenuated = AttenuatedEmission(
+            label="attenuated",
+            dust_curve=dust_curve,
+            apply_to=reprocessed,
+            emitter="stellar",
+            tau_v=tau_v,
+            **kwargs,
+        )
+        dust_emission_model = DustEmission(
+            label="dust_emission",
+            dust_emission_model=dust_emission,
+            dust_lum_intrinsic=reprocessed,
+            dust_lum_attenuated=attenuated,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+        # Finally make the TotalEmission model, this is
+        # dust_emission + attenuated
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label="total" if label is None else label,
+            combine=(dust_emission_model, attenuated),
+            related_models=(incident,),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+
+class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
+    """A class defining the Pacman model with fesc and no dust emission.
+
+    This model defines both intrinsic and attenuated steller emission without
+    dust emission. If a lyman alpha escape fraction is given, a more
+    sophisticated nebular emission model is used, including line and
+    nebuluar continuum emission with the amount of lyman alpha emission
+    scaled by the escape fraction.
+
+    This model will produce:
+        - incident: the stellar emission incident onto the ISM.
+        - nebular: the stellar emission from nebulae.
+        - transmitted: the stellar emission transmitted through the ISM.
+        - reprocessed: the stellar emission reprocessed by the ISM.
+        - intrinsic: the intrinsic emission which is reprocessed + escaped.
+        - escaped: the incident emission that completely escapes the ISM.
+        - attenuated: the intrinsic emission attenuated by dust.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission (i.e. attenuated + escaped).
+    """
+
+    def __init__(
+        self,
+        grid,
+        tau_v="tau_v",
+        fesc="fesc",
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        **kwargs,
+    ):
+        """Initialize the PacmanEmissionWithEscapeNoDust model.
+
+        Args:
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            tau_v (float):
+                The V-band optical depth.
+            fesc (float):
+                The escape fraction.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction.
+            label (str):
+                The label for the total emission model. If `None` this will
+                be set to "emergent".
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The PacmanEmission style models require a reprocessed grid."
+            )
+
+        # Ensure we have a non-zero escape fraction
+        if fesc == 0.0 or fesc is None:
+            raise ValueError(
+                "The PacmanEmissionWithEscapeNoDust model requires a non-zero "
+                "escape fraction."
+            )
+
+        # Create the models we need
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(
+            grid=grid,
+            label="transmitted",
+            fesc=fesc,
+            incident=incident,
+            **kwargs,
+        )
+        escaped = transmitted["escaped"]
+        nebular_line = NebularLineEmission(
+            grid=grid,
+            label="nebular_line",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="nebular_continuum",
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
+            label="nebular",
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
+            **kwargs,
+        )
+        reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="reprocessed",
+            nebular=nebular,
+            transmitted=transmitted,
+            **kwargs,
+        )
+        intrinsic = StellarEmissionModel(
+            label="intrinsic",
+            combine=(reprocessed, escaped),
+            **kwargs,
+        )
+        attenuated = AttenuatedEmission(
+            label="attenuated",
+            dust_curve=PowerLaw(),
+            apply_to=reprocessed,
+            emitter="stellar",
+            tau_v=tau_v,
+            **kwargs,
+        )
+        # Finally make the emergent model, this is attenuated + escaped
+        StellarEmissionModel.__init__(
+            self,
+            label="emergent",
+            grid=grid,
+            combine=(attenuated, escaped),
+            related_models=(intrinsic,),
+            **kwargs,
+        )
+
+
+class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
+    """A class defining the Pacman model with fesc and dust emission.
+
+    This model defines both intrinsic and attenuated steller emission with
+    dust emission. If a lyman alpha escape fraction is given, a more
+    sophisticated nebular emission model is used, including line and
+    nebuluar continuum emission with the amount of lyman alpha emission
+    scaled by the escape fraction.
+
+    This model will produce:
+        - incident: the stellar emission incident onto the ISM.
+        - nebular: the stellar emission from nebulae.
+        - transmitted: the stellar emission transmitted through the ISM.
+        - reprocessed: the stellar emission reprocessed by the ISM.
+        - intrinsic: the intrinsic emission which is reprocessed + escaped.
+        - escaped: the incident emission that completely escapes the ISM.
+        - attenuated: the intrinsic emission attenuated by dust.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission (i.e. attenuated + escaped).
+        - dust_emission: the emission from dust.
+        - total: the final total combined emission.
     """
 
     def __init__(
@@ -121,8 +456,7 @@ class PacmanEmission(StellarEmissionModel):
         stellar_dust=True,
         **kwargs,
     ):
-        """
-        Initialize the PacmanEmission model.
+        """Initialize the PacmanEmissionWithEscapeWithDust model.
 
         Args:
             grid (synthesizer.grid.Grid):
@@ -147,229 +481,102 @@ class PacmanEmission(StellarEmissionModel):
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
-        # Attach the grid
-        self._grid = grid
-
-        # Attach the dust properties
-        self._tau_v = tau_v
-        self._dust_curve = dust_curve
-
-        # Attach the dust emission properties
-        self._dust_emission_model = dust_emission
-
-        # Attach the escape fraction properties
-        self._fesc = fesc
-        self._fesc_ly_alpha = fesc_ly_alpha
-
-        # Are we using a grid with reprocessing?
-        self.grid_reprocessed = grid.reprocessed
-
-        # Make the child emission models
-        self.incident = self._make_incident(**kwargs)
-        self.transmitted = self._make_transmitted(**kwargs)
-        self.escaped = self.transmitted["escaped"]
-        self.nebular = self._make_nebular(**kwargs)
-        self.reprocessed = self._make_reprocessed(**kwargs)
-        if not self.grid_reprocessed:
-            self.intrinsic = self._make_intrinsic_no_reprocessing(**kwargs)
-        else:
-            self.intrinsic = self._make_intrinsic_reprocessed(**kwargs)
-        self.attenuated = self._make_attenuated(**kwargs)
-        if self._dust_emission_model is not None:
-            self.emergent = self._make_emergent(**kwargs)
-            self.dust_emission = self._make_dust_emission(
-                stellar_dust, **kwargs
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The PacmanEmission style models require a reprocessed grid."
             )
 
-        # Finally make the TotalEmission model, this is
-        # dust_emission + emergent if dust_emission is not None, otherwise it
-        # is just emergent
-        self._make_total(label, stellar_dust, **kwargs)
+        # Ensure we have a non-zero escape fraction
+        if fesc == 0.0 or fesc is None:
+            raise ValueError(
+                "The PacmanEmissionWithEscapeWithDust model requires a "
+                "non-zero escape fraction."
+            )
 
-    def _make_incident(self, **kwargs):
-        """
-        Make the incident emission model.
-
-        This will ignore any escape fraction given the stellar emission
-        incident onto the nebular, ism and dust components.
-
-        Returns:
-            StellarEmissionModel:
-                - incident
-        """
-        return IncidentEmission(grid=self._grid, label="incident", **kwargs)
-
-    def _make_transmitted(self, **kwargs):
-        """
-        Make the transmitted emission model.
-
-        If the grid has not been reprocessed, this will return None for all
-        components because the transmitted spectra won't exist.
-
-        Returns:
-            StellarEmissionModel:
-                - transmitted
-        """
-        # No spectra if grid hasn't been reprocessed
-        if not self.grid_reprocessed:
-            return None
-
-        return TransmittedEmission(
-            grid=self._grid,
+        # Create the models we need
+        incident = IncidentEmission(
+            grid=grid,
+            label="incident",
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(
+            grid=grid,
             label="transmitted",
-            fesc=self._fesc,
+            fesc=fesc,
+            incident=incident,
             **kwargs,
         )
-
-    def _make_nebular(self, **kwargs):
-        # No spectra if grid hasn't been reprocessed
-        if not self.grid_reprocessed:
-            return None
-
-        return NebularEmission(
-            grid=self._grid,
+        escaped = transmitted["escaped"]
+        nebular_line = NebularLineEmission(
+            grid=grid,
+            label="nebular_line",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="nebular_continuum",
+            **kwargs,
+        )
+        nebular = NebularEmission(
+            grid=grid,
             label="nebular",
-            fesc_ly_alpha=self._fesc_ly_alpha,
+            nebular_line=nebular_line,
+            nebular_continuum=nebular_continuum,
             **kwargs,
         )
-
-    def _make_reprocessed(self, **kwargs):
-        # No spectra if grid hasn't been reprocessed
-        if not self.grid_reprocessed:
-            return None
-
-        return StellarEmissionModel(
+        reprocessed = ReprocessedEmission(
+            grid=grid,
             label="reprocessed",
-            combine=(self.transmitted, self.nebular),
+            nebular=nebular,
+            transmitted=transmitted,
             **kwargs,
         )
-
-    def _make_intrinsic_no_reprocessing(self, **kwargs):
-        """
-        Make the intrinsic emission model for an un-reprocessed grid.
-
-        This will produce the exact same emission as the incident emission but
-        unlikely the incident emission, the intrinsic emission will be
-        take into account an escape fraction.
-
-        Returns:
-            StellarEmissionModel:
-                - intrinsic
-        """
-        return IncidentEmission(
-            grid=self._grid,
+        intrinsic = StellarEmissionModel(
             label="intrinsic",
+            combine=(reprocessed, escaped),
             **kwargs,
         )
-
-    def _make_intrinsic_reprocessed(self, **kwargs):
-        # If fesc is zero then the intrinsic emission is the same as the
-        # reprocessed emission
-        if self._fesc == 0.0:
-            return StellarEmissionModel(
-                label="intrinsic",
-                combine=(self.nebular, self.transmitted),
-                **kwargs,
-            )
-
-        # Otherwise, intrinsic = reprocessed + escaped
-        return StellarEmissionModel(
-            label="intrinsic",
-            combine=(self.reprocessed, self.escaped),
-            **kwargs,
-        )
-
-    def _make_attenuated(self, **kwargs):
-        return AttenuatedEmission(
+        attenuated = AttenuatedEmission(
             label="attenuated",
-            dust_curve=self._dust_curve,
-            apply_to=self.reprocessed,
+            dust_curve=dust_curve,
+            apply_to=reprocessed,
             emitter="stellar",
-            tau_v=self._tau_v,
+            tau_v=tau_v,
             **kwargs,
         )
-
-    def _make_emergent(self, **kwargs):
-        # If fesc is zero the emergent spectra is just the attenuated spectra
-        return StellarEmissionModel(
+        emergent = EmergentEmission(
+            grid=grid,
             label="emergent",
-            combine=(self.attenuated, self.escaped),
+            attenuated=attenuated,
+            escaped=escaped,
             **kwargs,
         )
-
-    def _make_dust_emission(self, stellar_dust, **kwargs):
-        return DustEmission(
+        dust_emission_model = DustEmission(
             label="dust_emission",
-            dust_emission_model=self._dust_emission_model,
-            dust_lum_intrinsic=self.intrinsic,
-            dust_lum_attenuated=self.attenuated,
+            dust_emission_model=dust_emission,
+            dust_lum_intrinsic=reprocessed,
+            dust_lum_attenuated=attenuated,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
 
-    def _make_total(self, label, stellar_dust, **kwargs):
-        if self._dust_emission_model is not None:
-            # Define the related models
-            related_models = [
-                self.incident,
-                self.transmitted,
-                self.escaped,
-                self.nebular,
-                self.reprocessed,
-                self.intrinsic,
-                self.attenuated,
-                self.emergent,
-                self.dust_emission,
-            ]
-
-            # Remove any None models
-            related_models = [
-                m
-                for m in related_models
-                if m is not None and not isinstance(m, tuple)
-            ]
-
-            # Call the parent constructor with everything we've made
-            EmissionModel.__init__(
-                self,
-                grid=self._grid,
-                label="total" if label is None else label,
-                combine=(self.dust_emission, self.emergent),
-                related_models=related_models,
-                emitter="galaxy" if not stellar_dust else "stellar",
-                **kwargs,
-            )
-        else:
-            # OK, total = emergent so we need to handle whether
-            # emergent = attenuated + escaped or just attenuated
-            # Define the related models
-            related_models = [
-                self.incident,
-                self.transmitted,
-                self.nebular,
-                self.reprocessed,
-                self.intrinsic,
-                self.attenuated,
-            ]
-
-            # Remove any None models
-            related_models = [m for m in related_models if m is not None]
-
-            StellarEmissionModel.__init__(
-                self,
-                grid=self._grid,
-                label="emergent" if label is None else label,
-                dust_curve=self._dust_curve,
-                apply_to=self.intrinsic,
-                tau_v=self._tau_v,
-                related_models=related_models,
-                **kwargs,
-            )
+        # Finally make the TotalEmission model, this is dust_emission +
+        # emergent
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label="total" if label is None else label,
+            combine=(dust_emission_model, emergent),
+            related_models=(intrinsic,),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
 
 
-class BimodalPacmanEmission(StellarEmissionModel):
-    """
-    A class defining the Pacman model split into young and old populations.
+class PacmanEmission:
+    """A class defining the Pacman model.
 
     This model defines both intrinsic and attenuated steller emission with or
     without dust emission. It also includes the option to include escaped
@@ -377,16 +584,155 @@ class BimodalPacmanEmission(StellarEmissionModel):
     given, a more sophisticated nebular emission model is used, including line
     and nebuluar continuum emission.
 
-    All spectra produced have a young, old and combined component. The split
-    between young and old is by default 10^7 Myr but can be changed with the
-    age_pivot argument.
-
     This model will always produce:
+        - incident: the stellar emission incident onto the ISM.
+        - nebular: the stellar emission from nebulae.
+        - transmitted: the stellar emission transmitted through the ISM.
+        - reprocessed: the stellar emission reprocessed by the ISM.
+        - attenuated: the intrinsic emission attenuated by dust.
+
+    If an escape fraction is given, it will also produce:
+        - intrinsic: the intrinsic emission which is reprocessed + escaped.
+        - escaped: the incident emission that completely escapes the ISM.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission (i.e. attenuated + escaped).
+
+    If a dust emission model is given, it will also produce:
+        - dust_emission: the emission from dust.
+        - total: the final total combined emission.
+
+    """
+
+    def __new__(
+        cls,
+        grid,
+        tau_v="tau_v",
+        dust_curve=PowerLaw(),
+        dust_emission=None,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        stellar_dust=True,
+        **kwargs,
+    ):
+        """Get a PacmanEmission model.
+
+        Args:
+            grid (synthesizer.grid.Grid):
+                The grid object.
+            tau_v (float):
+                The V-band optical depth.
+            dust_curve (synthesizer.emission_models.Transformer):
+                The assumed dust curve. Defaults to `PowerLaw`, with
+                default parameters.
+            dust_emission (synthesizer.dust.EmissionModel): The dust
+                emission.
+            fesc (float):
+                The escape fraction.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction.
+            label (str):
+                The label for the total emission model. If `None` this will
+                be set to "total" (when dust emission is included),
+                "attenuated" (when dust emission and an escape fraction are
+                not included), and "emergent" (when dust emission is not
+                included and an escape fraction is included).
+            stellar_dust (bool):
+                If `True`, the dust emission will be treated as stellar
+                emission, otherwise it will be treated as galaxy emission.
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Are we ignoring the escape fraction?
+        if fesc == 0.0 or fesc is None:
+            # Do we have a dust emission model?
+            if dust_emission is None:
+                # No dust emission, no escape fraction, so we can use the
+                # PacmanEmissionNoEscapeNoDust model
+                return PacmanEmissionNoEscapedNoDust(
+                    grid=grid,
+                    tau_v=tau_v,
+                    dust_curve=dust_curve,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    **kwargs,
+                )
+            else:
+                # We have dust emission, no escape fraction, so we can use the
+                # PacmanEmissionNoEscapeWithDust model
+                return PacmanEmissionNoEscapedWithDust(
+                    grid=grid,
+                    tau_v=tau_v,
+                    dust_curve=dust_curve,
+                    dust_emission=dust_emission,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    stellar_dust=stellar_dust,
+                    **kwargs,
+                )
+        # Ok, we have an escape fraction
+        else:
+            # Do we have a dust emission model?
+            if dust_emission is None:
+                # No dust emission, so we can use the
+                # PacmanEmissionWithEscapeNoDust model
+                return PacmanEmissionWithEscapedNoDust(
+                    grid=grid,
+                    tau_v=tau_v,
+                    fesc=fesc,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    **kwargs,
+                )
+            else:
+                # We have dust emission, so we can use the
+                # PacmanEmissionWithEscapeWithDust model
+                return PacmanEmissionWithEscapedWithDust(
+                    grid=grid,
+                    tau_v=tau_v,
+                    dust_curve=dust_curve,
+                    dust_emission=dust_emission,
+                    fesc=fesc,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    stellar_dust=stellar_dust,
+                    **kwargs,
+                )
+
+
+class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
+    """A class defining the Bimodal Pacman model without fesc or dust emission.
+
+    This model defines both intrinsic and attenuated stellar emission without
+    dust emission, split into young and old populations. If a lyman alpha
+    escape fraction is given, a more sophisticated nebular emission model is
+    used, including line and nebular continuum emission with the amount of
+    lyman alpha emission scaled by the escape fraction.
+
+    This model will produce:
         - young_incident: the stellar emission incident onto the ISM for the
             young population.
         - old_incident: the stellar emission incident onto the ISM for the old
             population.
         - incident: the stellar emission incident onto the ISM for the
+            combined population.
+        - young_transmitted: the stellar emission transmitted through the ISM
+            for the young population.
+        - old_transmitted: the stellar emission transmitted through the ISM for
+            the old population.
+        - transmitted: the stellar emission transmitted through the ISM for the
+            combined population.
+        - young_nebular: the stellar emission from nebulae for the young
+            population.
+        - old_nebular: the stellar emission from nebulae for the old
+            population.
+        - nebular: the stellar emission from nebulae for the combined
+            population.
+        - young_reprocessed: the stellar emission reprocessed by the ISM for
+            the young population.
+        - old_reprocessed: the stellar emission reprocessed by the ISM for the
+            old population.
+        - reprocessed: the stellar emission reprocessed by the ISM for the
             combined population.
         - young_intrinsic: the intrinsic emission for the young population.
         - old_intrinsic: the intrinsic emission for the old population.
@@ -399,19 +745,289 @@ class BimodalPacmanEmission(StellarEmissionModel):
             young population.
         - old_attenuated: the intrinsic emission attenuated by dust for the old
             population.
+        - attenuated: the intrinsic emission attenuated by dust for the
+            combined population.
+    """
 
-    if grid.reprocessed is True:
+    def __init__(
+        self,
+        grid,
+        tau_v_ism="tau_v_ism",
+        tau_v_birth="tau_v_birth",
+        dust_curve_ism=Calzetti2000(),
+        dust_curve_birth=Calzetti2000(),
+        age_pivot=7 * dimensionless,
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        **kwargs,
+    ):
+        """Initialize the BimodalPacmanEmissionNoEscapeNoDust model.
+
+        Args:
+            grid(synthesizer.grid.Grid):
+                The grid object.
+            tau_v_ism(float):
+                The V-band optical depth for the ISM.
+            tau_v_birth(float):
+                The V-band optical depth for the nebular.
+            dust_curve_ism(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the ISM. Defaults to `Calzetti2000`
+                with default parameters.
+            dust_curve_birth(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the nebular. Defaults to
+                `Calzetti2000` with default parameters.
+            age_pivot(unyt.unyt_quantity):
+                The age pivot between young and old populations,
+                expressed in terms of log10(age) in Myr.
+            fesc_ly_alpha(float):
+                The Lyman alpha escape fraction.
+            label(str):
+                The label for the total emission model. If `None` this will
+                be set to "attenuated".
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The BimodalPacmanEmission style models require a"
+                " reprocessed grid."
+            )
+
+        # Create the incident models
+        young_incident = IncidentEmission(
+            grid=grid,
+            label="young_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_incident = IncidentEmission(
+            grid=grid,
+            label="old_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        incident = StellarEmissionModel(
+            label="incident",
+            combine=(young_incident, old_incident),
+            **kwargs,
+        )
+
+        # Create the transmitted models
+        young_transmitted = TransmittedEmission(
+            grid=grid,
+            label="young_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc=0.0,
+            **kwargs,
+        )
+        old_transmitted = TransmittedEmission(
+            grid=grid,
+            label="old_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc=0.0,
+            **kwargs,
+        )
+        transmitted = StellarEmissionModel(
+            label="transmitted",
+            combine=(young_transmitted, old_transmitted),
+            **kwargs,
+        )
+
+        # Create the nebular models
+        young_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="young_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        old_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="old_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        young_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="young_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="old_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        young_nebular = NebularEmission(
+            grid=grid,
+            label="young_nebular",
+            nebular_line=young_nebular_line,
+            nebular_continuum=young_nebular_continuum,
+            **kwargs,
+        )
+        old_nebular = NebularEmission(
+            grid=grid,
+            label="old_nebular",
+            nebular_line=old_nebular_line,
+            nebular_continuum=old_nebular_continuum,
+            **kwargs,
+        )
+        nebular = StellarEmissionModel(
+            label="nebular",
+            combine=(young_nebular, old_nebular),
+            **kwargs,
+        )
+
+        # Create the reprocessed models
+        young_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="young_reprocessed",
+            nebular=young_nebular,
+            transmitted=young_transmitted,
+            **kwargs,
+        )
+        old_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="old_reprocessed",
+            nebular=old_nebular,
+            transmitted=old_transmitted,
+            **kwargs,
+        )
+        reprocessed = StellarEmissionModel(
+            label="reprocessed",
+            combine=(young_reprocessed, old_reprocessed),
+            **kwargs,
+        )
+
+        # Create the intrinsic models
+        young_intrinsic = StellarEmissionModel(
+            label="young_intrinsic",
+            combine=(young_reprocessed,),
+            **kwargs,
+        )
+        old_intrinsic = StellarEmissionModel(
+            label="old_intrinsic",
+            combine=(old_reprocessed,),
+            **kwargs,
+        )
+        intrinsic = StellarEmissionModel(
+            label="intrinsic",
+            combine=(young_intrinsic, old_intrinsic),
+            **kwargs,
+        )
+
+        # Create the attenuated models
+        young_attenuated_nebular = AttenuatedEmission(
+            label="young_attenuated_nebular",
+            tau_v=tau_v_birth,
+            dust_curve=dust_curve_birth,
+            apply_to=young_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated_ism = AttenuatedEmission(
+            label="young_attenuated_ism",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=young_attenuated_nebular,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated = young_attenuated_ism
+        old_attenuated = AttenuatedEmission(
+            label="old_attenuated",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=old_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        attenuated = StellarEmissionModel(
+            label="attenuated",
+            combine=(young_attenuated, old_attenuated),
+            **kwargs,
+        )
+
+        # Store all models as related
+        related_models = (
+            young_incident,
+            old_incident,
+            incident,
+            young_transmitted,
+            old_transmitted,
+            transmitted,
+            young_nebular,
+            old_nebular,
+            nebular,
+            young_reprocessed,
+            old_reprocessed,
+            reprocessed,
+            young_intrinsic,
+            old_intrinsic,
+            intrinsic,
+            young_attenuated_nebular,
+            young_attenuated_ism,
+            old_attenuated,
+            attenuated,
+        )
+
+        # Make the final attenuated emission model
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label="attenuated" if label is None else label,
+            combine=(young_attenuated, old_attenuated),
+            related_models=related_models,
+            **kwargs,
+        )
+
+
+class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
+    """A class defining the Bimodal Pacman model without fesc + dust emission.
+
+    This model defines both intrinsic and attenuated stellar emission with
+    dust emission, split into young and old populations. If a lyman alpha
+    escape fraction is given, a more sophisticated nebular emission model is
+    used, including line and nebular continuum emission with the amount of
+    lyman alpha emission scaled by the escape fraction.
+
+    This model will produce:
+        - young_incident: the stellar emission incident onto the ISM for the
+            young population.
+        - old_incident: the stellar emission incident onto the ISM for the old
+            population.
+        - incident: the stellar emission incident onto the ISM for the
+            combined population.
         - young_transmitted: the stellar emission transmitted through the ISM
             for the young population.
         - old_transmitted: the stellar emission transmitted through the ISM for
             the old population.
         - transmitted: the stellar emission transmitted through the ISM for the
             combined population.
-        - young_nebular: the stellar emisison from nebulae for the young
+        - young_nebular: the stellar emission from nebulae for the young
             population.
-        - old_nebular: the stellar emisison from nebulae for the old
+        - old_nebular: the stellar emission from nebulae for the old
             population.
-        - nebular: the stellar emisison from nebulae for the combined
+        - nebular: the stellar emission from nebulae for the combined
             population.
         - young_reprocessed: the stellar emission reprocessed by the ISM for
             the young population.
@@ -419,6 +1035,1223 @@ class BimodalPacmanEmission(StellarEmissionModel):
             old population.
         - reprocessed: the stellar emission reprocessed by the ISM for the
             combined population.
+        - young_intrinsic: the intrinsic emission for the young population.
+        - old_intrinsic: the intrinsic emission for the old population.
+        - intrinsic: the intrinsic emission for the combined population.
+        - young_attenuated_nebular: the nebular emission attenuated by dust
+            for the young population.
+        - young_attenuated_ism: the intrinsic emission attenuated by dust for
+            the young population.
+        - young_attenuated: the intrinsic emission attenuated by dust for the
+            young population.
+        - old_attenuated: the intrinsic emission attenuated by dust for the old
+            population.
+        - attenuated: the intrinsic emission attenuated by dust for the
+            combined population.
+        - young_emergent: the emission which emerges from the young stellar
+            population.
+        - old_emergent: the emission which emerges from the old stellar
+            population.
+        - emergent: the emission which emerges from the stellar population.
+        - young_dust_emission_birth: the emission from dust for the young
+            population.
+        - young_dust_emission_ism: the emission from dust for the young
+            population.
+        - young_dust_emission: the emission from dust for the young population.
+        - old_dust_emission: the emission from dust for the old population.
+        - dust_emission: the emission from dust for the combined population.
+        - young_total: the final total combined emission for the young
+            population.
+        - old_total: the final total combined emission for the old population.
+        - total: the final total combined emission for the combined population.
+    """
+
+    def __init__(
+        self,
+        grid,
+        tau_v_ism="tau_v_ism",
+        tau_v_birth="tau_v_birth",
+        dust_curve_ism=Calzetti2000(),
+        dust_curve_birth=Calzetti2000(),
+        age_pivot=7 * dimensionless,
+        dust_emission_ism=None,
+        dust_emission_birth=None,
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        stellar_dust=True,
+        **kwargs,
+    ):
+        """Initialize the BimodalPacmanEmissionNoEscapeWithDust model.
+
+        Args:
+            grid(synthesizer.grid.Grid):
+                The grid object.
+            tau_v_ism(float):
+                The V-band optical depth for the ISM.
+            tau_v_birth(float):
+                The V-band optical depth for the nebular.
+            dust_curve_ism(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the ISM. Defaults to `Calzetti2000`
+                with default parameters.
+            dust_curve_birth(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the nebular. Defaults to
+                `Calzetti2000` with default parameters.
+            age_pivot(unyt.unyt_quantity):
+                The age pivot between young and old populations,
+                expressed in terms of log10(age) in Myr.
+            dust_emission_ism(synthesizer.dust.EmissionModel):
+                The dust emission model for the ISM.
+            dust_emission_birth(synthesizer.dust.EmissionModel):
+                The dust emission model for the nebular.
+            fesc_ly_alpha(float):
+                The Lyman alpha escape fraction.
+            label(str):
+                The label for the total emission model. If `None` this will
+                be set to "total".
+            stellar_dust(bool):
+                If `True`, the dust emission will be treated as stellar
+                emission, otherwise it will be treated as galaxy emission.
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The BimodalPacmanEmission style models require a "
+                "reprocessed grid."
+            )
+
+        # Create the incident models
+        young_incident = IncidentEmission(
+            grid=grid,
+            label="young_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_incident = IncidentEmission(
+            grid=grid,
+            label="old_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        incident = StellarEmissionModel(
+            label="incident",
+            combine=(young_incident, old_incident),
+            **kwargs,
+        )
+
+        # Create the transmitted models
+        young_transmitted = TransmittedEmission(
+            grid=grid,
+            label="young_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc=0.0,
+            **kwargs,
+        )
+        old_transmitted = TransmittedEmission(
+            grid=grid,
+            label="old_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc=0.0,
+            **kwargs,
+        )
+        transmitted = StellarEmissionModel(
+            label="transmitted",
+            combine=(young_transmitted, old_transmitted),
+            **kwargs,
+        )
+
+        # Create the nebular models
+        young_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="young_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        old_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="old_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        young_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="young_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="old_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        young_nebular = NebularEmission(
+            grid=grid,
+            label="young_nebular",
+            nebular_line=young_nebular_line,
+            nebular_continuum=young_nebular_continuum,
+            **kwargs,
+        )
+        old_nebular = NebularEmission(
+            grid=grid,
+            label="old_nebular",
+            nebular_line=old_nebular_line,
+            nebular_continuum=old_nebular_continuum,
+            **kwargs,
+        )
+        nebular = StellarEmissionModel(
+            label="nebular",
+            combine=(young_nebular, old_nebular),
+            **kwargs,
+        )
+
+        # Create the reprocessed models
+        young_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="young_reprocessed",
+            nebular=young_nebular,
+            transmitted=young_transmitted,
+            **kwargs,
+        )
+        old_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="old_reprocessed",
+            nebular=old_nebular,
+            transmitted=old_transmitted,
+            **kwargs,
+        )
+        reprocessed = StellarEmissionModel(
+            label="reprocessed",
+            combine=(young_reprocessed, old_reprocessed),
+            **kwargs,
+        )
+
+        # Create the intrinsic models
+        young_intrinsic = StellarEmissionModel(
+            label="young_intrinsic",
+            combine=(young_reprocessed,),
+            **kwargs,
+        )
+        old_intrinsic = StellarEmissionModel(
+            label="old_intrinsic",
+            combine=(old_reprocessed,),
+            **kwargs,
+        )
+        intrinsic = StellarEmissionModel(
+            label="intrinsic",
+            combine=(young_intrinsic, old_intrinsic),
+            **kwargs,
+        )
+
+        # Create the attenuated models
+        young_attenuated_nebular = AttenuatedEmission(
+            label="young_attenuated_nebular",
+            tau_v=tau_v_birth,
+            dust_curve=dust_curve_birth,
+            apply_to=young_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated_ism = AttenuatedEmission(
+            label="young_attenuated_ism",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=young_attenuated_nebular,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated = young_attenuated_ism
+        old_attenuated = AttenuatedEmission(
+            label="old_attenuated",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=old_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        attenuated = StellarEmissionModel(
+            label="attenuated",
+            combine=(young_attenuated, old_attenuated),
+            **kwargs,
+        )
+
+        # Create the emergent models (same as attenuated for no escape)
+        young_emergent = young_attenuated
+        old_emergent = old_attenuated
+        emergent = attenuated
+
+        # Create the dust emission models
+        young_dust_emission_birth = DustEmission(
+            label="young_dust_emission_birth",
+            dust_emission_model=dust_emission_birth,
+            dust_lum_intrinsic=young_intrinsic,
+            dust_lum_attenuated=young_attenuated_nebular,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        young_dust_emission_ism = DustEmission(
+            label="young_dust_emission_ism",
+            dust_emission_model=dust_emission_ism,
+            dust_lum_intrinsic=young_intrinsic,
+            dust_lum_attenuated=young_attenuated_ism,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        young_dust_emission = EmissionModel(
+            label="young_dust_emission",
+            combine=(young_dust_emission_birth, young_dust_emission_ism),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        old_dust_emission = DustEmission(
+            label="old_dust_emission",
+            dust_emission_model=dust_emission_ism,
+            dust_lum_intrinsic=old_intrinsic,
+            dust_lum_attenuated=old_attenuated,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        dust_emission = EmissionModel(
+            label="dust_emission",
+            combine=(young_dust_emission, old_dust_emission),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+        # Create the total models
+        young_total = EmissionModel(
+            label="young_total",
+            combine=(young_dust_emission, young_emergent),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        old_total = EmissionModel(
+            label="old_total",
+            combine=(old_dust_emission, old_emergent),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+        # Store all models as related
+        related_models = (
+            young_incident,
+            old_incident,
+            incident,
+            young_transmitted,
+            old_transmitted,
+            transmitted,
+            young_nebular,
+            old_nebular,
+            nebular,
+            young_reprocessed,
+            old_reprocessed,
+            reprocessed,
+            young_intrinsic,
+            old_intrinsic,
+            intrinsic,
+            young_attenuated_nebular,
+            young_attenuated_ism,
+            young_attenuated,
+            old_attenuated,
+            attenuated,
+            young_emergent,
+            old_emergent,
+            emergent,
+            young_dust_emission_birth,
+            young_dust_emission_ism,
+            young_dust_emission,
+            old_dust_emission,
+            dust_emission,
+            young_total,
+            old_total,
+        )
+
+        # Finally make the TotalEmission model
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label="total" if label is None else label,
+            combine=(young_total, old_total),
+            related_models=related_models,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+
+class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
+    """A class defining the BimodalPacman model with fesc but no dust emission.
+
+    This model defines both intrinsic and attenuated stellar emission without
+    dust emission, split into young and old populations. If a lyman alpha
+    escape fraction is given, a more sophisticated nebular emission model is
+    used, including line and nebular continuum emission with the amount of
+    lyman alpha emission scaled by the escape fraction.
+
+    This model will produce:
+        - young_incident: the stellar emission incident onto the ISM for the
+            young population.
+        - old_incident: the stellar emission incident onto the ISM for the old
+            population.
+        - incident: the stellar emission incident onto the ISM for the
+            combined population.
+        - young_transmitted: the stellar emission transmitted through the ISM
+            for the young population.
+        - old_transmitted: the stellar emission transmitted through the ISM for
+            the old population.
+        - transmitted: the stellar emission transmitted through the ISM for the
+            combined population.
+        - young_escaped: the incident emission that completely escapes the ISM
+            for the young population.
+        - old_escaped: the incident emission that completely escapes the ISM
+            for the old population.
+        - escaped: the incident emission that completely escapes the ISM for
+            the combined population.
+        - young_nebular: the stellar emission from nebulae for the young
+            population.
+        - old_nebular: the stellar emission from nebulae for the old
+            population.
+        - nebular: the stellar emission from nebulae for the combined
+            population.
+        - young_reprocessed: the stellar emission reprocessed by the ISM for
+            the young population.
+        - old_reprocessed: the stellar emission reprocessed by the ISM for the
+            old population.
+        - reprocessed: the stellar emission reprocessed by the ISM for the
+            combined population.
+        - young_intrinsic: the intrinsic emission for the young population.
+        - old_intrinsic: the intrinsic emission for the old population.
+        - intrinsic: the intrinsic emission for the combined population.
+        - young_attenuated_nebular: the nebular emission attenuated by dust
+            for the young population.
+        - young_attenuated_ism: the intrinsic emission attenuated by dust for
+            the young population.
+        - young_attenuated: the intrinsic emission attenuated by dust for the
+            young population.
+        - old_attenuated: the intrinsic emission attenuated by dust for the old
+            population.
+        - attenuated: the intrinsic emission attenuated by dust for the
+            combined population.
+        - young_emergent: the emission which emerges from the young stellar
+            population, including any escaped emission.
+        - old_emergent: the emission which emerges from the old stellar
+            population, including any escaped emission.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission.
+    """
+
+    def __init__(
+        self,
+        grid,
+        tau_v_ism="tau_v_ism",
+        tau_v_birth="tau_v_birth",
+        dust_curve_ism=Calzetti2000(),
+        dust_curve_birth=Calzetti2000(),
+        age_pivot=7 * dimensionless,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        **kwargs,
+    ):
+        """Initialize the BimodalPacmanEmissionWithEscapeNoDust model.
+
+        Args:
+            grid(synthesizer.grid.Grid):
+                The grid object.
+            tau_v_ism(float):
+                The V-band optical depth for the ISM.
+            tau_v_birth(float):
+                The V-band optical depth for the nebular.
+            dust_curve_ism(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the ISM. Defaults to `Calzetti2000`
+                with default parameters.
+            dust_curve_birth(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the nebular. Defaults to
+                `Calzetti2000` with default parameters.
+            age_pivot(unyt.unyt_quantity):
+                The age pivot between young and old populations,
+                expressed in terms of log10(age) in Myr.
+            fesc(float):
+                The escape fraction.
+            fesc_ly_alpha(float):
+                The Lyman alpha escape fraction.
+            label(str):
+                The label for the total emission model. If `None` this will
+                be set to "emergent".
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The BimodalPacmanEmission style models require a "
+                "reprocessed grid."
+            )
+
+        # Ensure we have a non-zero escape fraction
+        if fesc == 0.0 or fesc is None:
+            raise ValueError(
+                "The BimodalPacmanEmissionWithEscapeNoDust model requires a "
+                "non-zero escape fraction."
+            )
+
+        # Create the incident models
+        young_incident = IncidentEmission(
+            grid=grid,
+            label="young_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_incident = IncidentEmission(
+            grid=grid,
+            label="old_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        incident = StellarEmissionModel(
+            label="incident",
+            combine=(young_incident, old_incident),
+            **kwargs,
+        )
+
+        # Create the transmitted models with escape fraction
+        young_transmitted = TransmittedEmission(
+            grid=grid,
+            label="young_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc=fesc,
+            incident=young_incident,
+            escaped_label="young_escaped",
+            **kwargs,
+        )
+        old_transmitted = TransmittedEmission(
+            grid=grid,
+            label="old_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc=fesc,
+            incident=old_incident,
+            escaped_label="old_escaped",
+            **kwargs,
+        )
+        transmitted = StellarEmissionModel(
+            label="transmitted",
+            combine=(young_transmitted, old_transmitted),
+            **kwargs,
+        )
+
+        # Extract escaped models
+        young_escaped = young_transmitted["young_escaped"]
+        old_escaped = old_transmitted["old_escaped"]
+        escaped = StellarEmissionModel(
+            label="escaped",
+            combine=(young_escaped, old_escaped),
+            **kwargs,
+        )
+
+        # Create the nebular models
+        young_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="young_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        old_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="old_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        young_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="young_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="old_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        young_nebular = NebularEmission(
+            grid=grid,
+            label="young_nebular",
+            nebular_line=young_nebular_line,
+            nebular_continuum=young_nebular_continuum,
+            **kwargs,
+        )
+        old_nebular = NebularEmission(
+            grid=grid,
+            label="old_nebular",
+            nebular_line=old_nebular_line,
+            nebular_continuum=old_nebular_continuum,
+            **kwargs,
+        )
+        nebular = StellarEmissionModel(
+            label="nebular",
+            combine=(young_nebular, old_nebular),
+            **kwargs,
+        )
+
+        # Create the reprocessed models
+        young_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="young_reprocessed",
+            nebular=young_nebular,
+            transmitted=young_transmitted,
+            **kwargs,
+        )
+        old_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="old_reprocessed",
+            nebular=old_nebular,
+            transmitted=old_transmitted,
+            **kwargs,
+        )
+        reprocessed = StellarEmissionModel(
+            label="reprocessed",
+            combine=(young_reprocessed, old_reprocessed),
+            **kwargs,
+        )
+
+        # Create the intrinsic models (reprocessed + escaped)
+        young_intrinsic = StellarEmissionModel(
+            label="young_intrinsic",
+            combine=(young_reprocessed, young_escaped),
+            **kwargs,
+        )
+        old_intrinsic = StellarEmissionModel(
+            label="old_intrinsic",
+            combine=(old_reprocessed, old_escaped),
+            **kwargs,
+        )
+        intrinsic = StellarEmissionModel(
+            label="intrinsic",
+            combine=(young_intrinsic, old_intrinsic),
+            **kwargs,
+        )
+
+        # Create the attenuated models
+        young_attenuated_nebular = AttenuatedEmission(
+            label="young_attenuated_nebular",
+            tau_v=tau_v_birth,
+            dust_curve=dust_curve_birth,
+            apply_to=young_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated_ism = AttenuatedEmission(
+            label="young_attenuated_ism",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=young_attenuated_nebular,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated = young_attenuated_ism
+        old_attenuated = AttenuatedEmission(
+            label="old_attenuated",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=old_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        attenuated = StellarEmissionModel(
+            label="attenuated",
+            combine=(young_attenuated, old_attenuated),
+            **kwargs,
+        )
+
+        # Create the emergent models (attenuated + escaped)
+        young_emergent = StellarEmissionModel(
+            label="young_emergent",
+            combine=(young_attenuated, young_escaped),
+            **kwargs,
+        )
+        old_emergent = StellarEmissionModel(
+            label="old_emergent",
+            combine=(old_attenuated, old_escaped),
+            **kwargs,
+        )
+        emergent = StellarEmissionModel(
+            label="emergent",
+            combine=(young_emergent, old_emergent),
+            **kwargs,
+        )
+
+        # Store all models as related
+        related_models = (
+            young_incident,
+            old_incident,
+            incident,
+            young_transmitted,
+            old_transmitted,
+            transmitted,
+            young_escaped,
+            old_escaped,
+            escaped,
+            young_nebular,
+            old_nebular,
+            nebular,
+            young_reprocessed,
+            old_reprocessed,
+            reprocessed,
+            young_intrinsic,
+            old_intrinsic,
+            intrinsic,
+            young_attenuated_nebular,
+            young_attenuated_ism,
+            young_attenuated,
+            old_attenuated,
+            attenuated,
+            young_emergent,
+            old_emergent,
+            emergent,
+        )
+
+        # Make the final emergent emission model
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label="emergent" if label is None else label,
+            combine=(young_emergent, old_emergent),
+            related_models=related_models,
+            **kwargs,
+        )
+
+
+class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
+    """A class defining the Bimodal Pacman model with fesc and dust emission.
+
+    This model defines both intrinsic and attenuated stellar emission with
+    dust emission, split into young and old populations. If a lyman alpha
+    escape fraction is given, a more sophisticated nebular emission model is
+    used, including line and nebular continuum emission with the amount of
+    lyman alpha emission scaled by the escape fraction.
+
+    This model will produce:
+        - young_incident: the stellar emission incident onto the ISM for the
+            young population.
+        - old_incident: the stellar emission incident onto the ISM for the old
+            population.
+        - incident: the stellar emission incident onto the ISM for the
+            combined population.
+        - young_transmitted: the stellar emission transmitted through the ISM
+            for the young population.
+        - old_transmitted: the stellar emission transmitted through the ISM for
+            the old population.
+        - transmitted: the stellar emission transmitted through the ISM for the
+            combined population.
+        - young_escaped: the incident emission that completely escapes the ISM
+            for the young population.
+        - old_escaped: the incident emission that completely escapes the ISM
+            for the old population.
+        - escaped: the incident emission that completely escapes the ISM for
+            the combined population.
+        - young_nebular: the stellar emission from nebulae for the young
+            population.
+        - old_nebular: the stellar emission from nebulae for the old
+            population.
+        - nebular: the stellar emission from nebulae for the combined
+            population.
+        - young_reprocessed: the stellar emission reprocessed by the ISM for
+            the young population.
+        - old_reprocessed: the stellar emission reprocessed by the ISM for the
+            old population.
+        - reprocessed: the stellar emission reprocessed by the ISM for the
+            combined population.
+        - young_intrinsic: the intrinsic emission for the young population.
+        - old_intrinsic: the intrinsic emission for the old population.
+        - intrinsic: the intrinsic emission for the combined population.
+        - young_attenuated_nebular: the nebular emission attenuated by dust
+            for the young population.
+        - young_attenuated_ism: the intrinsic emission attenuated by dust for
+            the young population.
+        - young_attenuated: the intrinsic emission attenuated by dust for the
+            young population.
+        - old_attenuated: the intrinsic emission attenuated by dust for the old
+            population.
+        - attenuated: the intrinsic emission attenuated by dust for the
+            combined population.
+        - young_emergent: the emission which emerges from the young stellar
+            population, including any escaped emission.
+        - old_emergent: the emission which emerges from the old stellar
+            population, including any escaped emission.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission.
+        - young_dust_emission_birth: the emission from dust for the young
+            population.
+        - young_dust_emission_ism: the emission from dust for the young
+            population.
+        - young_dust_emission: the emission from dust for the young population.
+        - old_dust_emission: the emission from dust for the old population.
+        - dust_emission: the emission from dust for the combined population.
+        - young_total: the final total combined emission for the young
+            population.
+        - old_total: the final total combined emission for the old population.
+        - total: the final total combined emission for the combined population.
+    """
+
+    def __init__(
+        self,
+        grid,
+        tau_v_ism="tau_v_ism",
+        tau_v_birth="tau_v_birth",
+        dust_curve_ism=Calzetti2000(),
+        dust_curve_birth=Calzetti2000(),
+        age_pivot=7 * dimensionless,
+        dust_emission_ism=None,
+        dust_emission_birth=None,
+        fesc="fesc",
+        fesc_ly_alpha="fesc_ly_alpha",
+        label=None,
+        stellar_dust=True,
+        **kwargs,
+    ):
+        """Initialize the BimodalPacmanEmissionWithEscapeWithDust model.
+
+        Args:
+            grid(synthesizer.grid.Grid):
+                The grid object.
+            tau_v_ism(float):
+                The V-band optical depth for the ISM.
+            tau_v_birth(float):
+                The V-band optical depth for the nebular.
+            dust_curve_ism(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the ISM. Defaults to `Calzetti2000`
+                with default parameters.
+            dust_curve_birth(synthesizer.Transformer.AttenuationLaw):
+                The assumed dust curve for the nebular. Defaults to
+                `Calzetti2000` with default parameters.
+            age_pivot(unyt.unyt_quantity):
+                The age pivot between young and old populations,
+                expressed in terms of log10(age) in Myr.
+            dust_emission_ism(synthesizer.dust.EmissionModel):
+                The dust emission model for the ISM.
+            dust_emission_birth(synthesizer.dust.EmissionModel):
+                The dust emission model for the nebular.
+            fesc(float):
+                The escape fraction.
+            fesc_ly_alpha(float):
+                The Lyman alpha escape fraction.
+            label(str):
+                The label for the total emission model. If `None` this will
+                be set to "total".
+            stellar_dust(bool):
+                If `True`, the dust emission will be treated as stellar
+                emission, otherwise it will be treated as galaxy emission.
+            **kwargs:
+                Additional keyword arguments to pass to the models.
+        """
+        # Ensure the grid has been processed
+        if not grid.reprocessed:
+            raise ValueError(
+                "The BimodalPacmanEmission style models require a"
+                " reprocessed grid."
+            )
+
+        # Ensure we have a non-zero escape fraction
+        if fesc == 0.0 or fesc is None:
+            raise ValueError(
+                "The BimodalPacmanEmissionWithEscapeWithDust model requires a "
+                "non-zero escape fraction."
+            )
+
+        # Create the incident models
+        young_incident = IncidentEmission(
+            grid=grid,
+            label="young_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_incident = IncidentEmission(
+            grid=grid,
+            label="old_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        incident = StellarEmissionModel(
+            label="incident",
+            combine=(young_incident, old_incident),
+            **kwargs,
+        )
+
+        # Create the transmitted models with escape fraction
+        young_transmitted = TransmittedEmission(
+            grid=grid,
+            label="young_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc=fesc,
+            incident=young_incident,
+            **kwargs,
+        )
+        old_transmitted = TransmittedEmission(
+            grid=grid,
+            label="old_transmitted",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc=fesc,
+            incident=old_incident,
+            **kwargs,
+        )
+        transmitted = StellarEmissionModel(
+            label="transmitted",
+            combine=(young_transmitted, old_transmitted),
+            **kwargs,
+        )
+
+        # Extract escaped models
+        young_escaped = young_transmitted["escaped"]
+        old_escaped = old_transmitted["escaped"]
+        escaped = StellarEmissionModel(
+            label="escaped",
+            combine=(young_escaped, old_escaped),
+            **kwargs,
+        )
+
+        # Create the nebular models
+        young_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="young_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        old_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="old_nebular_line",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        young_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="young_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+            **kwargs,
+        )
+        old_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="old_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+            **kwargs,
+        )
+        young_nebular = NebularEmission(
+            grid=grid,
+            label="young_nebular",
+            nebular_line=young_nebular_line,
+            nebular_continuum=young_nebular_continuum,
+            **kwargs,
+        )
+        old_nebular = NebularEmission(
+            grid=grid,
+            label="old_nebular",
+            nebular_line=old_nebular_line,
+            nebular_continuum=old_nebular_continuum,
+            **kwargs,
+        )
+        nebular = StellarEmissionModel(
+            label="nebular",
+            combine=(young_nebular, old_nebular),
+            **kwargs,
+        )
+
+        # Create the reprocessed models
+        young_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="young_reprocessed",
+            nebular=young_nebular,
+            transmitted=young_transmitted,
+            **kwargs,
+        )
+        old_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="old_reprocessed",
+            nebular=old_nebular,
+            transmitted=old_transmitted,
+            **kwargs,
+        )
+        reprocessed = StellarEmissionModel(
+            label="reprocessed",
+            combine=(young_reprocessed, old_reprocessed),
+            **kwargs,
+        )
+
+        # Create the intrinsic models (reprocessed + escaped)
+        young_intrinsic = StellarEmissionModel(
+            label="young_intrinsic",
+            combine=(young_reprocessed, young_escaped),
+            **kwargs,
+        )
+        old_intrinsic = StellarEmissionModel(
+            label="old_intrinsic",
+            combine=(old_reprocessed, old_escaped),
+            **kwargs,
+        )
+        intrinsic = StellarEmissionModel(
+            label="intrinsic",
+            combine=(young_intrinsic, old_intrinsic),
+            **kwargs,
+        )
+
+        # Create the attenuated models
+        young_attenuated_nebular = AttenuatedEmission(
+            label="young_attenuated_nebular",
+            tau_v=tau_v_birth,
+            dust_curve=dust_curve_birth,
+            apply_to=young_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated_ism = AttenuatedEmission(
+            label="young_attenuated_ism",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=young_attenuated_nebular,
+            emitter="stellar",
+            **kwargs,
+        )
+        young_attenuated = young_attenuated_ism
+        old_attenuated = AttenuatedEmission(
+            label="old_attenuated",
+            tau_v=tau_v_ism,
+            dust_curve=dust_curve_ism,
+            apply_to=old_reprocessed,
+            emitter="stellar",
+            **kwargs,
+        )
+        attenuated = StellarEmissionModel(
+            label="attenuated",
+            combine=(young_attenuated, old_attenuated),
+            **kwargs,
+        )
+
+        # Create the emergent models (attenuated + escaped)
+        young_emergent = EmergentEmission(
+            grid=grid,
+            label="young_emergent",
+            attenuated=young_attenuated,
+            escaped=young_escaped,
+            **kwargs,
+        )
+        old_emergent = EmergentEmission(
+            grid=grid,
+            label="old_emergent",
+            attenuated=old_attenuated,
+            escaped=old_escaped,
+            **kwargs,
+        )
+        emergent = StellarEmissionModel(
+            label="emergent",
+            combine=(young_emergent, old_emergent),
+            **kwargs,
+        )
+
+        # Create the dust emission models
+        young_dust_emission_birth = DustEmission(
+            label="young_dust_emission_birth",
+            dust_emission_model=dust_emission_birth,
+            dust_lum_intrinsic=young_intrinsic,
+            dust_lum_attenuated=young_attenuated_nebular,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        young_dust_emission_ism = DustEmission(
+            label="young_dust_emission_ism",
+            dust_emission_model=dust_emission_ism,
+            dust_lum_intrinsic=young_intrinsic,
+            dust_lum_attenuated=young_attenuated_ism,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        young_dust_emission = EmissionModel(
+            label="young_dust_emission",
+            combine=(young_dust_emission_birth, young_dust_emission_ism),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        old_dust_emission = DustEmission(
+            label="old_dust_emission",
+            dust_emission_model=dust_emission_ism,
+            dust_lum_intrinsic=old_intrinsic,
+            dust_lum_attenuated=old_attenuated,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        dust_emission = EmissionModel(
+            label="dust_emission",
+            combine=(young_dust_emission, old_dust_emission),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+        # Create the total models
+        young_total = EmissionModel(
+            label="young_total",
+            combine=(young_dust_emission, young_emergent),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+        old_total = EmissionModel(
+            label="old_total",
+            combine=(old_dust_emission, old_emergent),
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+        # Store all models as related
+        related_models = (
+            young_incident,
+            old_incident,
+            incident,
+            young_transmitted,
+            old_transmitted,
+            transmitted,
+            young_escaped,
+            old_escaped,
+            escaped,
+            young_nebular,
+            old_nebular,
+            nebular,
+            young_reprocessed,
+            old_reprocessed,
+            reprocessed,
+            young_intrinsic,
+            old_intrinsic,
+            intrinsic,
+            young_attenuated_nebular,
+            young_attenuated_ism,
+            young_attenuated,
+            old_attenuated,
+            attenuated,
+            young_emergent,
+            old_emergent,
+            emergent,
+            young_dust_emission_birth,
+            young_dust_emission_ism,
+            young_dust_emission,
+            old_dust_emission,
+            dust_emission,
+            young_total,
+            old_total,
+        )
+
+        # Finally make the TotalEmission model
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label="total" if label is None else label,
+            combine=(young_total, old_total),
+            related_models=related_models,
+            emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
+        )
+
+
+class BimodalPacmanEmission:
+    """A class defining the Bimodal Pacman model.
+
+    This model defines both intrinsic and attenuated stellar emission with or
+    without dust emission. It also includes the option to include escaped
+    emission for a given escape fraction. If a lyman alpha escape fraction is
+    given, a more sophisticated nebular emission model is used, including line
+    and nebular continuum emission.
+
+    All spectra produced have a young, old and combined component. The split
+    between young and old is by default 10 ^ 7 Myr but can be changed with the
+    age_pivot argument.
+
+    This model will always produce:
+        - young_incident: the stellar emission incident onto the ISM for the
+            young population.
+        - old_incident: the stellar emission incident onto the ISM for the old
+            population.
+        - incident: the stellar emission incident onto the ISM for the
+            combined population.
+        - young_attenuated_nebular: the nebular emission attenuated by dust
+            for the young population.
+        - young_attenuated_ism: the intrinsic emission attenuated by dust for
+            the young population.
+        - young_attenuated: the intrinsic emission attenuated by dust for the
+            young population.
+        - old_attenuated: the intrinsic emission attenuated by dust for the old
+            population.
+        - young_transmitted: the stellar emission transmitted through the ISM
+            for the young population.
+        - old_transmitted: the stellar emission transmitted through the ISM for
+            the old population.
+        - transmitted: the stellar emission transmitted through the ISM for the
+            combined population.
+        - young_nebular: the stellar emission from nebulae for the young
+            population.
+        - old_nebular: the stellar emission from nebulae for the old
+            population.
+        - nebular: the stellar emission from nebulae for the combined
+            population.
+        - young_reprocessed: the stellar emission reprocessed by the ISM for
+            the young population.
+        - old_reprocessed: the stellar emission reprocessed by the ISM for the
+            old population.
+        - reprocessed: the stellar emission reprocessed by the ISM for the
+            combined population.
+
+    If an escape fraction is given, the following additional models will be
+    produced:
+        - young_intrinsic: the intrinsic emission for the young population.
+        - old_intrinsic: the intrinsic emission for the old population.
+        - intrinsic: the intrinsic emission for the combined population.
         - young_escaped: the incident emission that completely escapes the ISM
             for the young population.
         - old_escaped: the incident emission that completely escapes the ISM
@@ -445,28 +2278,10 @@ class BimodalPacmanEmission(StellarEmissionModel):
             population.
         - old_total: the final total combined emission for the old population.
         - total: the final total combined emission for the combined population.
-
-    Attributes:
-        grid (synthesizer.grid.Grid): The grid object.
-        tau_v_ism (float): The V-band optical depth for the ISM.
-        tau_v_birth (float): The V-band optical depth for the nebular.
-        dust_curve_ism (AttenuationLaw): The dust curve for the
-            ISM.
-        dust_curve_birth (AttenuationLaw): The dust curve for the
-            nebular.
-        age_pivot (unyt.unyt_quantity): The age pivot between young and old
-            populations, expressed in terms of log10(age) in Myr.
-        dust_emission_ism (synthesizer.dust.EmissionModel): The dust
-            emission for the ISM.
-        dust_emission_birth (synthesizer.dust.EmissionModel): The dust
-            emission for the nebular.
-        fesc (float): The escape fraction.
-        fesc_ly_alpha (float): The Lyman alpha escape fraction.
-
     """
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         grid,
         tau_v_ism="tau_v_ism",
         tau_v_birth="tau_v_birth",
@@ -481,784 +2296,117 @@ class BimodalPacmanEmission(StellarEmissionModel):
         stellar_dust=True,
         **kwargs,
     ):
-        """
-        Initialize the PacmanEmission model.
+        """Get a BimodalPacmanEmission model.
 
         Args:
-            grid (synthesizer.grid.Grid):
+            grid(synthesizer.grid.Grid):
                 The grid object.
-            tau_v_ism (float):
+            tau_v_ism(float):
                 The V-band optical depth for the ISM.
-            tau_v_birth (float):
+            tau_v_birth(float):
                 The V-band optical depth for the nebular.
-            dust_curve_ism (synthesizer.Transformer.AttenuationLaw):
+            dust_curve_ism(synthesizer.Transformer.AttenuationLaw):
                 The assumed dust curve for the ISM. Defaults to `Calzetti2000`
                 with default parameters.
-            dust_curve_birth (synthesizer.Transformer.AttenuationLaw):
+            dust_curve_birth(synthesizer.Transformer.AttenuationLaw):
                 The assumed dust curve for the nebular. Defaults to
                 `Calzetti2000` with default parameters.
-            age_pivot (unyt.unyt_quantity):
+            age_pivot(unyt.unyt_quantity):
                 The age pivot between young and old populations,
                 expressed in terms of log10(age) in Myr.
-            dust_emission_ism (synthesizer.dust.EmissionModel):
+            dust_emission_ism(synthesizer.dust.EmissionModel):
                 The dust emission model for the ISM.
-            dust_emission_birth (synthesizer.dust.EmissionModel):
+            dust_emission_birth(synthesizer.dust.EmissionModel):
                 The dust emission model for the nebular.
-            fesc (float):
+            fesc(float):
                 The escape fraction.
-            fesc_ly_alpha (float):
+            fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
-            label (str):
+            label(str):
                 The label for the total emission model. If `None` this will
                 be set to "total" or "emergent" if dust_emission is `None`.
-            stellar_dust (bool):
+            stellar_dust(bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
-        # Attach the grid
-        self._grid = grid
-
-        # Attach the dust properties
-        self.tau_v_ism = tau_v_ism
-        self.tau_v_birth = tau_v_birth
-        self._dust_curve_ism = dust_curve_ism
-        self._dust_curve_birth = dust_curve_birth
-
-        # Attach the age pivot
-        self.age_pivot = age_pivot
-
-        # Attach the dust emission properties
-        self.dust_emission_ism = dust_emission_ism
-        self.dust_emission_birth = dust_emission_birth
-
-        # Attach the escape fraction properties
-        self._fesc = fesc
-        self._fesc_ly_alpha = fesc_ly_alpha
-
-        # Are we using a grid with reprocessing?
-        self.grid_reprocessed = grid.reprocessed
-
-        # Make the child emission models
-        (
-            self.young_incident,
-            self.old_incident,
-            self.incident,
-        ) = self._make_incident(**kwargs)
-        (
-            self.young_transmitted,
-            self.old_transmitted,
-            self.transmitted,
-            self.young_escaped,
-            self.old_escaped,
-            self.escaped,
-        ) = self._make_transmitted(**kwargs)
-        (
-            self.young_nebular,
-            self.old_nebular,
-            self.nebular,
-        ) = self._make_nebular(**kwargs)
-        (
-            self.young_reprocessed,
-            self.old_reprocessed,
-            self.reprocessed,
-        ) = self._make_reprocessed(**kwargs)
-        if not self.grid_reprocessed:
-            (
-                self.young_intrinsic,
-                self.old_intrinsic,
-                self.intrinsic,
-            ) = self._make_intrinsic_no_reprocessing(**kwargs)
-        else:
-            (
-                self.young_intrinsic,
-                self.old_intrinsic,
-                self.intrinsic,
-            ) = self._make_intrinsic_reprocessed(**kwargs)
-        (
-            self.young_attenuated_nebular,
-            self.young_attenuated_ism,
-            self.young_attenuated,
-            self.old_attenuated,
-            self.attenuated,
-        ) = self._make_attenuated(**kwargs)
-        if (
-            self.dust_emission_ism is not None
-            and self.dust_emission_birth is not None
-        ):
-            (
-                self.young_emergent,
-                self.old_emergent,
-                self.emergent,
-            ) = self._make_emergent(**kwargs)
-            (
-                self.young_dust_emission_birth,
-                self.young_dust_emission_ism,
-                self.young_dust_emission,
-                self.old_dust_emission,
-                self.dust_emission,
-            ) = self._make_dust_emission(stellar_dust, **kwargs)
-
-        # Finally make the TotalEmission model, this is
-        # dust_emission + emergent if dust_emission is not None, otherwise it
-        # is just emergent
-        self._make_total(label, stellar_dust, **kwargs)
-
-    def _make_incident(self, **kwargs):
-        """
-        Make the incident emission model.
-
-        This will ignore any escape fraction given the stellar emission
-        incident onto the nebular, ism and dust components.
-
-        Returns:
-            StellarEmissionModel:
-                - young_incident
-                - old_incident
-                - incident
-        """
-        young_incident = IncidentEmission(
-            grid=self._grid,
-            label="young_incident",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            **kwargs,
-        )
-        old_incident = IncidentEmission(
-            grid=self._grid,
-            label="old_incident",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op=">=",
-            **kwargs,
-        )
-        incident = StellarEmissionModel(
-            label="incident",
-            combine=(young_incident, old_incident),
-            **kwargs,
-        )
-
-        return young_incident, old_incident, incident
-
-    def _make_transmitted(self, **kwargs):
-        """
-        Make the transmitted emission model.
-
-        If the grid has not been reprocessed, this will return None for all
-        components because the transmitted spectra won't exist.
-
-        This will also generate the escaped emission models.
-
-        Returns:
-            StellarEmissionModel:
-                - young_transmitted
-                - old_transmitted
-                - transmitted
-        """
-        # No spectra if grid hasn't been reprocessed
-        if not self.grid_reprocessed:
-            return None, None, None
-
-        full_young_transmitted = StellarEmissionModel(
-            grid=self._grid,
-            label="full_young_transmitted",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            extract="transmitted",
-            **kwargs,
-        )
-        full_old_transmitted = StellarEmissionModel(
-            grid=self._grid,
-            label="full_old_transmitted",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op=">=",
-            extract="transmitted",
-            **kwargs,
-        )
-
-        young_transmitted = StellarEmissionModel(
-            label="young_transmitted",
-            apply_to=full_young_transmitted,
-            transformer=ProcessedFraction(),
-            fesc=self._fesc,
-            **kwargs,
-        )
-        old_transmitted = StellarEmissionModel(
-            label="old_transmitted",
-            apply_to=full_old_transmitted,
-            transformer=ProcessedFraction(),
-            fesc=self._fesc,
-            **kwargs,
-        )
-
-        young_escaped = StellarEmissionModel(
-            label="young_escaped",
-            apply_to=full_young_transmitted,
-            transformer=EscapedFraction(),
-            fesc=self._fesc,
-            **kwargs,
-        )
-        old_escaped = StellarEmissionModel(
-            label="old_escaped",
-            apply_to=full_old_transmitted,
-            transformer=EscapedFraction(),
-            fesc=self._fesc,
-            **kwargs,
-        )
-
-        transmitted = StellarEmissionModel(
-            label="transmitted",
-            combine=(young_transmitted, old_transmitted),
-            **kwargs,
-        )
-        escaped = StellarEmissionModel(
-            label="escaped",
-            combine=(young_escaped, old_escaped),
-            **kwargs,
-        )
-
-        return (
-            young_transmitted,
-            old_transmitted,
-            transmitted,
-            young_escaped,
-            old_escaped,
-            escaped,
-        )
-
-    def _make_nebular(self, **kwargs):
-        # No spectra if grid hasn't been reprocessed
-        if not self.grid_reprocessed:
-            return None, None, None
-
-        # Get the line emission
-        young_neb_line = NebularLineEmission(
-            grid=self._grid,
-            label="young_linecont",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            fesc_ly_alpha=self._fesc_ly_alpha,
-            **kwargs,
-        )
-        old_neb_line = NebularLineEmission(
-            grid=self._grid,
-            label="old_linecont",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op=">=",
-            fesc_ly_alpha=self._fesc_ly_alpha,
-            **kwargs,
-        )
-
-        # Get the nebular continuum emission
-        young_neb_cont = NebularContinuumEmission(
-            grid=self._grid,
-            label="young_nebular_continuum",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            **kwargs,
-        )
-        old_neb_cont = NebularContinuumEmission(
-            grid=self._grid,
-            label="old_nebular_continuum",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op=">=",
-            **kwargs,
-        )
-
-        young_nebular = NebularEmission(
-            grid=self._grid,
-            label="young_nebular",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            fesc_ly_alpha=self._fesc_ly_alpha,
-            nebular_line=young_neb_line,
-            nebular_continuum=young_neb_cont,
-            **kwargs,
-        )
-        old_nebular = NebularEmission(
-            grid=self._grid,
-            label="old_nebular",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op=">=",
-            fesc=self._fesc,
-            fesc_ly_alpha=self._fesc_ly_alpha,
-            nebular_line=old_neb_line,
-            nebular_continuum=old_neb_cont,
-            **kwargs,
-        )
-        nebular = StellarEmissionModel(
-            label="nebular",
-            combine=(young_nebular, old_nebular),
-            **kwargs,
-        )
-
-        return young_nebular, old_nebular, nebular
-
-    def _make_reprocessed(self, **kwargs):
-        # No spectra if grid hasn't been reprocessed
-        if not self.grid_reprocessed:
-            return None, None, None
-
-        young_reprocessed = StellarEmissionModel(
-            label="young_reprocessed",
-            combine=(self.young_transmitted, self.young_nebular),
-            **kwargs,
-        )
-        old_reprocessed = StellarEmissionModel(
-            label="old_reprocessed",
-            combine=(self.old_transmitted, self.old_nebular),
-            **kwargs,
-        )
-        reprocessed = StellarEmissionModel(
-            label="reprocessed",
-            combine=(young_reprocessed, old_reprocessed),
-            **kwargs,
-        )
-
-        return young_reprocessed, old_reprocessed, reprocessed
-
-    def _make_intrinsic_no_reprocessing(self, **kwargs):
-        """
-        Make the intrinsic emission model for an un-reprocessed grid.
-
-        This will produce the exact same emission as the incident emission but
-        unlike the incident emission, the intrinsic emission will take into
-        account an escape fraction.
-
-        Returns:
-            StellarEmissionModel:
-                - young_intrinsic
-                - old_intrinsic
-                - intrinsic
-        """
-        young_intrinsic = IncidentEmission(
-            grid=self._grid,
-            label="young_intrinsic",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            fesc=self._fesc,
-            **kwargs,
-        )
-        old_intrinsic = IncidentEmission(
-            grid=self._grid,
-            label="old_intrinsic",
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op=">=",
-            fesc=self._fesc,
-            **kwargs,
-        )
-        intrinsic = StellarEmissionModel(
-            label="intrinsic",
-            combine=(young_intrinsic, old_intrinsic),
-            **kwargs,
-        )
-
-        return young_intrinsic, old_intrinsic, intrinsic
-
-    def _make_intrinsic_reprocessed(self, **kwargs):
-        """
-        Make the intrinsic emission model for a reprocessed grid.
-
-        Returns:
-            StellarEmissionModel:
-                - young_intrinsic
-                - old_intrinsic
-                - intrinsic
-        """
-        # If fesc is zero then the intrinsic emission is the same as the
-        # reprocessed emission
-        if self._fesc == 0.0:
-            young_intrinsic = StellarEmissionModel(
-                label="young_intrinsic",
-                combine=(self.young_nebular, self.young_transmitted),
-                **kwargs,
-            )
-            old_intrinsic = StellarEmissionModel(
-                label="old_intrinsic",
-                combine=(self.old_nebular, self.old_transmitted),
-                **kwargs,
-            )
-            intrinsic = StellarEmissionModel(
-                label="intrinsic",
-                combine=(young_intrinsic, old_intrinsic),
-                **kwargs,
-            )
-        else:
-            # Otherwise, intrinsic = reprocessed + escaped
-            young_intrinsic = StellarEmissionModel(
-                label="young_intrinsic",
-                combine=(self.young_reprocessed, self.young_escaped),
-                **kwargs,
-            )
-            old_intrinsic = StellarEmissionModel(
-                label="old_intrinsic",
-                combine=(self.old_reprocessed, self.old_escaped),
-                **kwargs,
-            )
-            intrinsic = StellarEmissionModel(
-                label="intrinsic",
-                combine=(young_intrinsic, old_intrinsic),
-                **kwargs,
-            )
-
-        return young_intrinsic, old_intrinsic, intrinsic
-
-    def _make_attenuated(self, **kwargs):
-        """
-        Make the attenuated emission model.
-
-        Returns:
-            StellarEmissionModel:
-                - young_attenuated_nebular
-                - young_attenuated_ism
-                - young_attenuated
-                - old_attenuated
-                - attenuated
-        """
-        young_attenuated_nebular = AttenuatedEmission(
-            label="young_attenuated_nebular",
-            tau_v=self.tau_v_birth,
-            dust_curve=self._dust_curve_birth,
-            apply_to=self.young_reprocessed,
-            emitter="stellar",
-            **kwargs,
-        )
-        young_attenuated_ism = AttenuatedEmission(
-            label="young_attenuated_ism",
-            tau_v=self.tau_v_ism,
-            dust_curve=self._dust_curve_ism,
-            apply_to=self.young_reprocessed,
-            emitter="stellar",
-            **kwargs,
-        )
-        young_attenuated = AttenuatedEmission(
-            label="young_attenuated",
-            tau_v=self.tau_v_ism,
-            dust_curve=self._dust_curve_ism,
-            apply_to=young_attenuated_nebular,
-            emitter="stellar",
-            **kwargs,
-        )
-        old_attenuated = AttenuatedEmission(
-            label="old_attenuated",
-            tau_v=self.tau_v_ism,
-            dust_curve=self._dust_curve_ism,
-            apply_to=self.old_reprocessed,
-            emitter="stellar",
-            **kwargs,
-        )
-        attenuated = StellarEmissionModel(
-            label="attenuated",
-            combine=(young_attenuated, old_attenuated),
-            **kwargs,
-        )
-
-        return (
-            young_attenuated_nebular,
-            young_attenuated_ism,
-            young_attenuated,
-            old_attenuated,
-            attenuated,
-        )
-
-    def _make_emergent(self, **kwargs):
-        # If fesc is zero the emergent spectra is just the attenuated spectra
-        if self._fesc == 0.0:
-            young_emergent = AttenuatedEmission(
-                label="young_emergent",
-                tau_v=self.tau_v_ism,
-                dust_curve=self._dust_curve_ism,
-                apply_to=self.young_attenuated_nebular,
-                emitter="stellar",
-                **kwargs,
-            )
-            old_emergent = AttenuatedEmission(
-                label="old_emergent",
-                tau_v=self.tau_v_ism,
-                dust_curve=self._dust_curve_ism,
-                apply_to=self.old_intrinsic,
-                emitter="stellar",
-                **kwargs,
-            )
-            emergent = StellarEmissionModel(
-                label="emergent",
-                combine=(young_emergent, old_emergent),
-                **kwargs,
-            )
-        else:
-            # Otherwise, emergent = attenuated + escaped
-            young_emergent = StellarEmissionModel(
-                label="young_emergent",
-                combine=(self.young_attenuated, self.young_escaped),
-                **kwargs,
-            )
-            old_emergent = StellarEmissionModel(
-                label="old_emergent",
-                combine=(self.old_attenuated, self.old_escaped),
-                **kwargs,
-            )
-            emergent = StellarEmissionModel(
-                label="emergent",
-                combine=(young_emergent, old_emergent),
-                **kwargs,
-            )
-
-        return young_emergent, old_emergent, emergent
-
-    def _make_dust_emission(self, stellar_dust, **kwargs):
-        young_dust_emission_birth = DustEmission(
-            label="young_dust_emission_birth",
-            dust_emission_model=self.dust_emission_birth,
-            dust_lum_intrinsic=self.young_intrinsic,
-            dust_lum_attenuated=self.young_attenuated_nebular,
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            emitter="stellar" if stellar_dust else "galaxy",
-            **kwargs,
-        )
-        young_dust_emission_ism = DustEmission(
-            label="young_dust_emission_ism",
-            dust_emission_model=self.dust_emission_ism,
-            dust_lum_intrinsic=self.young_intrinsic,
-            dust_lum_attenuated=self.young_attenuated_ism,
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op="<",
-            emitter="stellar" if stellar_dust else "galaxy",
-            **kwargs,
-        )
-        young_dust_emission = EmissionModel(
-            label="young_dust_emission",
-            combine=(young_dust_emission_birth, young_dust_emission_ism),
-            emitter="stellar" if stellar_dust else "galaxy",
-            **kwargs,
-        )
-        old_dust_emission = DustEmission(
-            label="old_dust_emission",
-            dust_emission_model=self.dust_emission_ism,
-            dust_lum_intrinsic=self.old_intrinsic,
-            dust_lum_attenuated=self.old_attenuated,
-            mask_attr="log10ages",
-            mask_thresh=self.age_pivot,
-            mask_op=">=",
-            emitter="stellar" if stellar_dust else "galaxy",
-            **kwargs,
-        )
-        dust_emission = EmissionModel(
-            label="dust_emission",
-            combine=(young_dust_emission, old_dust_emission),
-            emitter="stellar" if stellar_dust else "galaxy",
-            **kwargs,
-        )
-
-        return (
-            young_dust_emission_birth,
-            young_dust_emission_ism,
-            young_dust_emission,
-            old_dust_emission,
-            dust_emission,
-        )
-
-    def _make_total(self, label, stellar_dust, **kwargs):
-        if (
-            self.dust_emission_ism is not None
-            and self.dust_emission_birth is not None
-        ):
-            # Get the young and old total emission
-            young_total = EmissionModel(
-                label="young_total",
-                combine=(self.young_dust_emission, self.young_emergent),
-                emitter="stellar" if stellar_dust else "galaxy",
-                **kwargs,
-            )
-            old_total = EmissionModel(
-                label="old_total",
-                combine=(self.old_dust_emission, self.old_emergent),
-                emitter="stellar" if stellar_dust else "galaxy",
-                **kwargs,
-            )
-
-            # Define the related models
-            related_models = [
-                self.young_incident,
-                self.old_incident,
-                self.incident,
-                self.young_transmitted,
-                self.old_transmitted,
-                self.transmitted,
-                self.young_escaped,
-                self.old_escaped,
-                self.escaped,
-                self.young_nebular,
-                self.old_nebular,
-                self.nebular,
-                self.young_reprocessed,
-                self.old_reprocessed,
-                self.reprocessed,
-                self.young_intrinsic,
-                self.old_intrinsic,
-                self.intrinsic,
-                self.young_attenuated_nebular,
-                self.young_attenuated_ism,
-                self.young_attenuated,
-                self.old_attenuated,
-                self.attenuated,
-                self.young_emergent,
-                self.old_emergent,
-                self.emergent,
-                self.young_dust_emission_birth,
-                self.young_dust_emission_ism,
-                self.young_dust_emission,
-                self.old_dust_emission,
-                self.dust_emission,
-            ]
-
-            # Remove any None models
-            related_models = [m for m in related_models if m is not None]
-
-            # Call the parent constructor with everything we've made
-            EmissionModel.__init__(
-                self,
-                grid=self._grid,
-                label="total" if label is None else label,
-                combine=(young_total, old_total),
-                related_models=related_models,
-                emitter="stellar" if stellar_dust else "galaxy",
-                **kwargs,
-            )
-        else:
-            # OK, total = emergent so we need to handle whether
-            # emergent = attenuated + escaped or just attenuated
-            if self._fesc == 0.0:
-                # Get the young and old emergent emission
-                young_total = AttenuatedEmission(
-                    label="young_emergent",
-                    tau_v=self.tau_v_ism,
-                    dust_curve=self._dust_curve_ism,
-                    apply_to=self.young_intrinsic,
-                    emitter="stellar",
+        # Are we ignoring the escape fraction?
+        if fesc == 0.0 or fesc is None:
+            # Do we have dust emission models?
+            if dust_emission_ism is None or dust_emission_birth is None:
+                # No dust emission, no escape fraction, so we can use the
+                # BimodalPacmanEmissionNoEscapeNoDust model
+                return BimodalPacmanEmissionNoEscapedNoDust(
+                    grid=grid,
+                    tau_v_ism=tau_v_ism,
+                    tau_v_birth=tau_v_birth,
+                    dust_curve_ism=dust_curve_ism,
+                    dust_curve_birth=dust_curve_birth,
+                    age_pivot=age_pivot,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
                     **kwargs,
                 )
-                old_total = AttenuatedEmission(
-                    label="old_emergent",
-                    tau_v=self.tau_v_ism,
-                    dust_curve=self._dust_curve_ism,
-                    apply_to=self.old_intrinsic,
-                    emitter="stellar",
-                    **kwargs,
-                )
-
-                # Define the related models
-                related_models = [
-                    self.young_incident,
-                    self.old_incident,
-                    self.incident,
-                    self.young_transmitted,
-                    self.old_transmitted,
-                    self.transmitted,
-                    self.young_nebular,
-                    self.old_nebular,
-                    self.nebular,
-                    self.young_reprocessed,
-                    self.old_reprocessed,
-                    self.reprocessed,
-                    self.young_intrinsic,
-                    self.old_intrinsic,
-                    self.intrinsic,
-                    self.young_attenuated_nebular,
-                    self.young_attenuated_ism,
-                    self.young_attenuated,
-                    self.old_attenuated,
-                    self.attenuated,
-                ]
-
-                # Remove any None models
-                related_models = [m for m in related_models if m is not None]
-
-                # Call the parent constructor with everything we've made
-                StellarEmissionModel.__init__(
-                    self,
-                    grid=self._grid,
-                    label="emergent" if label is None else label,
-                    combine=(young_total, old_total),
-                    related_models=related_models,
-                    **kwargs,
-                )
-
             else:
-                # Otherwise, emergent = attenuated + escaped
-
-                # Get the young and old emergent emission
-                young_total = StellarEmissionModel(
-                    label="young_emergent",
-                    combine=(self.young_attenuated, self.young_escaped),
+                # We have dust emission, no escape fraction, so we can use the
+                # BimodalPacmanEmissionNoEscapeWithDust model
+                return BimodalPacmanEmissionNoEscapedWithDust(
+                    grid=grid,
+                    tau_v_ism=tau_v_ism,
+                    tau_v_birth=tau_v_birth,
+                    dust_curve_ism=dust_curve_ism,
+                    dust_curve_birth=dust_curve_birth,
+                    age_pivot=age_pivot,
+                    dust_emission_ism=dust_emission_ism,
+                    dust_emission_birth=dust_emission_birth,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    stellar_dust=stellar_dust,
                     **kwargs,
                 )
-                old_total = StellarEmissionModel(
-                    label="old_emergent",
-                    combine=(self.old_attenuated, self.old_escaped),
+        # Ok, we have an escape fraction
+        else:
+            # Do we have dust emission models?
+            if dust_emission_ism is None or dust_emission_birth is None:
+                # No dust emission, so we can use the
+                # BimodalPacmanEmissionWithEscapeNoDust model
+                return BimodalPacmanEmissionWithEscapedNoDust(
+                    grid=grid,
+                    tau_v_ism=tau_v_ism,
+                    tau_v_birth=tau_v_birth,
+                    dust_curve_ism=dust_curve_ism,
+                    dust_curve_birth=dust_curve_birth,
+                    age_pivot=age_pivot,
+                    fesc=fesc,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
                     **kwargs,
                 )
-
-                # Define the related models
-                related_models = [
-                    self.young_incident,
-                    self.old_incident,
-                    self.incident,
-                    self.young_transmitted,
-                    self.old_transmitted,
-                    self.transmitted,
-                    self.young_escaped,
-                    self.old_escaped,
-                    self.escaped,
-                    self.young_nebular,
-                    self.old_nebular,
-                    self.nebular,
-                    self.young_reprocessed,
-                    self.old_reprocessed,
-                    self.reprocessed,
-                    self.young_intrinsic,
-                    self.old_intrinsic,
-                    self.intrinsic,
-                    self.young_attenuated_nebular,
-                    self.young_attenuated_ism,
-                    self.young_attenuated,
-                    self.old_attenuated,
-                    self.attenuated,
-                ]
-
-                # Remove any None models
-                related_models = [m for m in related_models if m is not None]
-
-                # Call the parent constructor with everything we've made
-                StellarEmissionModel.__init__(
-                    self,
-                    grid=self._grid,
-                    label="emergent" if label is None else label,
-                    combine=(young_total, old_total),
-                    related_models=related_models,
+            else:
+                # We have dust emission, so we can use the
+                # BimodalPacmanEmissionWithEscapeWithDust model
+                return BimodalPacmanEmissionWithEscapedWithDust(
+                    grid=grid,
+                    tau_v_ism=tau_v_ism,
+                    tau_v_birth=tau_v_birth,
+                    dust_curve_ism=dust_curve_ism,
+                    dust_curve_birth=dust_curve_birth,
+                    age_pivot=age_pivot,
+                    dust_emission_ism=dust_emission_ism,
+                    dust_emission_birth=dust_emission_birth,
+                    fesc=fesc,
+                    fesc_ly_alpha=fesc_ly_alpha,
+                    label=label,
+                    stellar_dust=stellar_dust,
                     **kwargs,
                 )
 
 
 class CharlotFall2000(BimodalPacmanEmission):
-    """
-    The Charlot & Fall (2000) emission model.
+    """The Charlot & Fall(2000) emission model.
 
-    This emission model is based on the Charlot & Fall (2000) model, which
+    This emission model is based on the Charlot & Fall(2000) model, which
     describes the emission from a galaxy as a combination of emission from a
     young stellar population and an old stellar population. The dust
     attenuation for each population can be different, and dust emission can be
@@ -1269,18 +2417,18 @@ class CharlotFall2000(BimodalPacmanEmission):
     there is no option to specify an escape fraction.
 
     Attributes:
-        grid (synthesizer.grid.Grid): The grid object.
-        tau_v_ism (float): The V-band optical depth for the ISM.
-        tau_v_birth (float): The V-band optical depth for the nebular.
-        dust_curve_ism (AttenuationLaw):
+        grid(synthesizer.grid.Grid): The grid object.
+        tau_v_ism(float): The V-band optical depth for the ISM.
+        tau_v_birth(float): The V-band optical depth for the nebular.
+        dust_curve_ism(AttenuationLaw):
             The dust curve for the ISM.
-        dust_curve_birth (AttenuationLaw): The dust curve for the
+        dust_curve_birth(AttenuationLaw): The dust curve for the
             nebular.
-        age_pivot (unyt.unyt_quantity): The age pivot between young and old
+        age_pivot(unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
-        dust_emission_ism (synthesizer.dust.EmissionModel): The dust
+        dust_emission_ism(synthesizer.dust.EmissionModel): The dust
             emission model for the ISM.
-        dust_emission_birth (synthesizer.dust.EmissionModel): The dust
+        dust_emission_birth(synthesizer.dust.EmissionModel): The dust
             emission model for the nebular.
     """
 
@@ -1298,33 +2446,32 @@ class CharlotFall2000(BimodalPacmanEmission):
         stellar_dust=True,
         **kwargs,
     ):
-        """
-        Initialize the PacmanEmission model.
+        """Initialize the PacmanEmission model.
 
         Args:
-            grid (synthesizer.grid.Grid):
+            grid(synthesizer.grid.Grid):
                 The grid object.
-            tau_v_ism (float):
+            tau_v_ism(float):
                 The V-band optical depth for the ISM.
-            tau_v_birth (float):
+            tau_v_birth(float):
                 The V-band optical depth for the nebular.
-            age_pivot (unyt.unyt_quantity):
+            age_pivot(unyt.unyt_quantity):
                 The age pivot between young and old populations, expressed
-                in terms of log10(age) in Myr. Defaults to 10^7 Myr.
-            dust_curve_ism (AttenuationLaw):
+                in terms of log10(age) in Myr. Defaults to 10 ^ 7 Myr.
+            dust_curve_ism(AttenuationLaw):
                 The dust curve for the ISM. Defaults to `Calzetti2000`
                 with fiducial parameters.
-            dust_curve_birth (AttenuationLaw):
+            dust_curve_birth(AttenuationLaw):
                 The dust curve for the nebular. Defaults to `Calzetti2000`
                 with fiducial parameters.
-            dust_emission_ism (synthesizer.dust.EmissionModel):
+            dust_emission_ism(synthesizer.dust.EmissionModel):
                 The dust emission model for the ISM.
-            dust_emission_birth (synthesizer.dust.EmissionModel):
+            dust_emission_birth(synthesizer.dust.EmissionModel):
                 The dust emission model for the nebular.
-            label (str):
+            label(str):
                 The label for the total emission model. If None this will
                 be set to "total" or "emergent" if dust_emission is `None`.
-            stellar_dust (bool):
+            stellar_dust(bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
             kwargs:
@@ -1348,8 +2495,7 @@ class CharlotFall2000(BimodalPacmanEmission):
 
 
 class ScreenEmission(PacmanEmission):
-    """
-    The ScreenEmission model.
+    """The ScreenEmission model.
 
     This emission model is a simple dust screen model, where the dust is
     assumed to be in a screen in front of the stars. The dust curve and
@@ -1360,9 +2506,9 @@ class ScreenEmission(PacmanEmission):
     fesc and fesc_ly_alpha are zero by definition.
 
     Attributes:
-        grid (synthesizer.grid.Grid): The grid object.
-        dust_curve (AttenuationLaw): The dust curve.
-        dust_emission (synthesizer.dust.EmissionModel): The dust emission
+        grid(synthesizer.grid.Grid): The grid object.
+        dust_curve(AttenuationLaw): The dust curve.
+        dust_emission(synthesizer.dust.EmissionModel): The dust emission
             model.
     """
 
@@ -1377,12 +2523,13 @@ class ScreenEmission(PacmanEmission):
         fesc_ly_alpha=None,
         **kwargs,
     ):
-        """
-        Initialize the ScreenEmission model.
+        """Initialize the ScreenEmission model.
 
         Args:
             grid (synthesizer.grid.Grid):
                 The grid object.
+            tau_v (float):
+                The V-band optical depth for the dust screen.
             dust_curve (AttenuationLaw):
                 The assumed dust curve. Defaults to `Calzetti2000` with
                 default parameters.
@@ -1391,16 +2538,21 @@ class ScreenEmission(PacmanEmission):
             label (str):
                 The label for the total emission model. If None this will
                 be set to "total" or "emergent" if dust_emission is None.
+            fesc (float):
+                The escape fraction. This is always zero for this model.
+            fesc_ly_alpha (float):
+                The Lyman alpha escape fraction. This is always zero for
+                this model.
             kwargs:
                 Additional keyword arguments to pass to the models.
         """
         # Call the parent constructor to intialise the model
         PacmanEmission.__init__(
             self,
-            grid,
-            tau_v,
-            dust_curve,
-            dust_emission,
+            grid=grid,
+            tau_v=tau_v,
+            dust_curve=dust_curve,
+            dust_emission=dust_emission,
             fesc=fesc,
             fesc_ly_alpha=fesc_ly_alpha,
             label=label,

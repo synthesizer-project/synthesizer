@@ -5,95 +5,137 @@
 #ifndef PROPERTY_FUNCS_H_
 #define PROPERTY_FUNCS_H_
 
-/* We need the below because numpy triggers warnings which are errors
- * when we compiled with RUTHLESS. */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
+/* Standard includes */
+#include <stdlib.h>
 
 /* Python includes */
+#define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
+#define NO_IMPORT_ARRAY
+#include "numpy_init.h"
 #include <Python.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/arrayobject.h>
-#include <numpy/ndarrayobject.h>
-#include <numpy/ndarraytypes.h>
 
-#pragma GCC diagnostic pop
+/**
+ * @brief Get a double value at a specific index in a numpy array.
+ *
+ * This function assumes the numpy array is of type float64 and contiguous.
+ * If the array is not of type float64, it will raise a TypeError.
+ * If the index is out of bounds, it will raise an IndexError.
+ *
+ * @param np_arr: The numpy array to access.
+ * @param ind: The index to access.
+ * @return The double value at the specified index.
+ */
+static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
+  if (PyArray_TYPE(np_arr) != NPY_FLOAT64) {
+    PyErr_SetString(PyExc_TypeError,
+                    "[get_double_at]: Array must be of type float64.");
+    return 0.0;
+  }
 
-/* A struct to hold grid properties. */
-struct grid {
+  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_double_at]: Index (%ld) out of bounds. Valid range is [0, "
+             "%ld).",
+             ind, PyArray_SIZE(np_arr));
+    PyErr_SetString(PyExc_IndexError, error_msg);
+    return 0.0;
+  }
 
-  /* An array of pointers holding the properties along each axis. */
-  double **props;
+  if (PyArray_ISCONTIGUOUS(np_arr)) {
+    const double *data_ptr = static_cast<const double *>(PyArray_DATA(np_arr));
+    return data_ptr[ind];
+  } else {
+    PyErr_SetString(
+        PyExc_ValueError,
+        "[get_double_at]: Array must be contiguous to use get_double_at.");
+    return 0.0;
+  }
+}
 
-  /* The number of dimensions. */
-  int ndim;
+/**
+ * @brief Get an integer value at a specific index in a numpy array.
+ *
+ * This function assumes the numpy array is of type int32 and contiguous.
+ * If the array is not of type int32, it will raise a TypeError.
+ * If the index is out of bounds, it will raise an IndexError.
+ *
+ * @param np_arr: The numpy array to access.
+ * @param ind: The index to access.
+ * @return The integer value at the specified index.
+ */
+static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
+  if (PyArray_TYPE(np_arr) != NPY_INT32) {
+    PyErr_SetString(PyExc_TypeError,
+                    "[get_int_at]: Array must be of type int32.");
+    return 0;
+  }
 
-  /* The number of grid cells along each axis. */
-  int *dims;
+  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_int_at]: Index (%ld) out of bounds. Valid range is [0, "
+             "%ld).",
+             ind, PyArray_SIZE(np_arr));
+    PyErr_SetString(PyExc_IndexError, error_msg);
+    return 0;
+  }
 
-  /* The number of wavelength elements. */
-  int nlam;
+  if (PyArray_ISCONTIGUOUS(np_arr)) {
+    const int *data_ptr = static_cast<const int *>(PyArray_DATA(np_arr));
+    return data_ptr[ind];
+  } else {
+    PyErr_SetString(
+        PyExc_ValueError,
+        "[get_int_at]: Array must be contiguous to use get_int_at.");
+    return 0;
+  }
+}
 
-  /* The number of cells. */
-  int size;
+/**
+ * @brief Get a boolean value at a specific index in a numpy array.
+ *
+ * This function assumes the numpy array is of type bool and contiguous.
+ * If the array is not of type bool, it will raise a TypeError.
+ * If the index is out of bounds, it will raise an IndexError.
+ *
+ * @param np_arr: The numpy array to access.
+ * @param ind: The index to access.
+ * @return The boolean value at the specified index.
+ */
+static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
+  if (PyArray_TYPE(np_arr) != NPY_BOOL) {
+    PyErr_SetString(PyExc_TypeError,
+                    "[get_bool_at]: Array must be of type bool.");
+    return false;
+  }
 
-  /* The spectra array. */
-  double *spectra;
+  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_bool_at]: Index (%ld) out of bounds. Valid range is [0, "
+             "%ld).",
+             ind, PyArray_SIZE(np_arr));
+    PyErr_SetString(PyExc_IndexError, error_msg);
+    return false;
+  }
 
-  /* The lines array. */
-  double *lines;
-
-  /* The continuum array. */
-  double *continuum;
-
-  /* Wavelength */
-  double *lam;
-
-  /* The mask array denoting which wavelength elements should be included. */
-  npy_bool *lam_mask;
-};
-
-/* A struct to hold particle properties. */
-struct particles {
-
-  /* An array of pointers holding the properties along each axis. */
-  double **props;
-
-  /* The number of particles. */
-  int npart;
-
-  /* The particle mass array. */
-  double *mass;
-
-  /* Velocities for redshift */
-  double *velocities;
-
-  /* The mask array denoting which particles should be included. */
-  npy_bool *mask;
-};
+  if (PyArray_ISCONTIGUOUS(np_arr)) {
+    const npy_bool *data_ptr =
+        static_cast<const npy_bool *>(PyArray_DATA(np_arr));
+    return data_ptr[ind];
+  } else {
+    PyErr_SetString(
+        PyExc_ValueError,
+        "[get_bool_at]: Array must be contiguous to use get_bool_at.");
+    return false;
+  }
+}
 
 /* Prototypes */
-void *synth_malloc(size_t n, char *msg);
-double *extract_data_double(PyArrayObject *np_arr, char *name);
-int *extract_data_int(PyArrayObject *np_arr, char *name);
-npy_bool *extract_data_bool(PyArrayObject *np_arr, char *name);
+double *extract_data_double(PyArrayObject *np_arr, const char *name);
+int *extract_data_int(PyArrayObject *np_arr, const char *name);
+npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
-double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
-struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
-                                     PyArrayObject *np_ndims,
-                                     PyArrayObject *np_grid_spectra,
-                                     PyArrayObject *np_lam,
-                                     PyArrayObject *np_lam_mask, const int ndim,
-                                     const int nlam);
-struct grid *get_lines_grid_struct(PyObject *grid_tuple,
-                                   PyArrayObject *np_ndims,
-                                   PyArrayObject *np_grid_lines,
-                                   PyArrayObject *np_grid_continuum,
-                                   const int ndim, const int nlam);
-struct particles *get_part_struct(PyObject *part_tuple,
-                                  PyArrayObject *np_part_mass,
-                                  PyArrayObject *np_velocities,
-                                  PyArrayObject *np_mask, const int npart,
-                                  const int ndim);
 
 #endif // PROPERTY_FUNCS_H_

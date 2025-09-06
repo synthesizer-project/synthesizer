@@ -15,14 +15,14 @@ from synthesizer.grid import Grid
 
 # define grid
 grid_name = "test_grid"
-grid_dir = "../../tests/test_grid/"
-grid = Grid(grid_name, grid_dir=grid_dir, read_lines=True)
+
+grid = Grid(grid_name)
 
 # define grid point
 grid_point = grid.get_grid_point(log10ages=6.5, metallicity=0.01)
 
 # get an Sed
-sed = grid.get_spectra(grid_point, spectra_id="linecont")
+sed = grid.get_sed_at_grid_point(grid_point, spectra_type="linecont")
 
 
 plt.plot(np.log10(sed.lam), np.log10(sed.lnu))

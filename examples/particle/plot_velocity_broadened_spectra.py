@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import km, rad, s
 
+from synthesizer import TEST_DATA_DIR
 from synthesizer.emission_models import NebularEmission
 from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
@@ -26,15 +27,15 @@ np.random.seed(42)
 
 # Define the grid
 grid_name = "test_grid"
-grid_dir = "../../tests/test_grid/"
-grid = Grid(grid_name, grid_dir=grid_dir)
+
+grid = Grid(grid_name)
 
 # Define the model with velocity shift
 model = NebularEmission(grid, vel_shift=True)
 
 # Create galaxy object
 galaxy = load_CAMELS_IllustrisTNG(
-    "../../tests/data/",
+    TEST_DATA_DIR,
     snap_name="camels_snap.hdf5",
     group_name="camels_subhalo.hdf5",
     physical=True,
@@ -49,8 +50,8 @@ galaxy.stars.velocities = (
 start_with_shift = time.time()
 galaxy.stars.get_spectra(model)
 print(
-    "Time to get spectra with velocity shift: "
-    f"{time.time() - start_with_shift}"
+    "Time to get spectra with velocity shift:"
+    f" {time.time() - start_with_shift}"
 )
 
 # Unpack the spectra with the velocity broadening
@@ -66,8 +67,8 @@ galaxy.clear_all_emissions()
 start_without_shift = time.time()
 galaxy.stars.get_spectra(model, vel_shift=False)
 print(
-    "Time to get spectra without velocity shift: "
-    f"{time.time() - start_without_shift}"
+    "Time to get spectra without velocity shift:"
+    f" {time.time() - start_without_shift}"
 )
 
 # Unpack the spectra without the velocity broadening

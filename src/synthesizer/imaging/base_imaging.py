@@ -12,15 +12,14 @@ properties and methods.
 from abc import ABC, abstractmethod
 
 import numpy as np
-from unyt import arcsecond, kpc, unyt_array, unyt_quantity
+from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
 
 
 class ImagingBase(ABC):
-    """
-    A base class to encompass common functionality for all imaging classes.
+    """A base class to encompass common functionality for all imaging classes.
 
     This base classes handles the common geometry operations and related
     information. Of particular importance is the abstraction of
@@ -64,7 +63,7 @@ class ImagingBase(ABC):
     cart_fov = Quantity("spatial")
     ang_fov = Quantity("angle")
 
-    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
+    @accepts(resolution=(kpc, arcsecond), fov=(kpc, degree))
     def __init__(
         self,
         resolution,
@@ -76,12 +75,21 @@ class ImagingBase(ABC):
         any imaging class should have. It is not intended to be used directly.
 
         Args:
-            resolution (unyt_quantity)
+            resolution (unyt_quantity):
                 The size of a pixel. Either in angular or Cartesian units.
-            fov (unyt_quantity/tuple, unyt_quantity)
+            fov (unyt_quantity/tuple, unyt_quantity):
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
         """
+        # Ensure that the resolution and fov are compatible (i.e. both
+        # are angular or both are Cartesian)
+        if not unit_is_compatible(resolution, fov.units):
+            raise exceptions.InconsistentArguments(
+                "The resolution and FOV must be in compatible units. "
+                f"Found resolution={resolution.units}, "
+                f"and fov={fov.units}."
+            )
+
         # Ensure the fov has an entry for each axis if it doesn't already
         # (e.g. if it is a single value)
         if fov.size == 1:
@@ -102,15 +110,6 @@ class ImagingBase(ABC):
             self.cart_fov = None
             self.ang_fov = fov
 
-        # Ensure that the resolution and fov are compatible (i.e. both
-        # are angular or both are Cartesian)
-        if not unit_is_compatible(self.resolution, self.fov.units):
-            raise exceptions.InconsistentArguments(
-                "The resolution and FOV must be in compatible units. "
-                f"Found resolution={self.resolution.units}, "
-                f"and fov={self.fov.units}."
-            )
-
         # Compute the number of pixels in the FOV
         self._compute_npix()
 
@@ -120,15 +119,16 @@ class ImagingBase(ABC):
         self.orig_npix = self.npix.copy()
 
     def _compute_npix(self, compute_fov=True):
-        """
-        Compute the number of pixels given the resolution and fov.
+        """Compute the number of pixels given the resolution and fov.
 
         Args:
             compute_fov (bool): If True, compute the fov based on the
                 resolution and new npix. Defaults to True.
         """
         # Compute how many pixels fall in the FOV
-        self.npix = np.int32(np.ceil(self.fov / self.resolution))
+        self.npix = np.round(self.fov / self.resolution + 1e-10).astype(
+            np.int32
+        )
 
         # Ensure that the npix is an array of 2 values
         if self.npix.size == 1:
@@ -139,8 +139,7 @@ class ImagingBase(ABC):
             self._compute_fov(compute_npix=False)
 
     def _compute_fov(self, compute_npix=True):
-        """
-        Compute the FOV given the resolution and npix.
+        """Compute the FOV given the resolution and npix.
 
         Args:
             compute_npix (bool): If True, compute the npix based on the
@@ -156,8 +155,7 @@ class ImagingBase(ABC):
             self._compute_npix(compute_fov=False)
 
     def _compute_resolution(self, compute_fov=True):
-        """
-        Compute the resolution given the FOV and npix.
+        """Compute the resolution given the FOV and npix.
 
         Args:
             compute_fov (bool): If True, compute the fov based on the
@@ -232,8 +230,7 @@ class ImagingBase(ABC):
         self._compute_npix(compute_fov=True)
 
     def set_fov(self, fov):
-        """
-        Set the field of view of the image.
+        """Set the field of view of the image.
 
         This will also update the resolution and npix to reflect the new
         fov.
@@ -271,8 +268,7 @@ class ImagingBase(ABC):
         self._compute_npix(compute_fov=True)
 
     def set_npix(self, npix):
-        """
-        Set the number of pixels in the image.
+        """Set the number of pixels in the image.
 
         This will also update the resolution and fov to reflect the new npix.
 

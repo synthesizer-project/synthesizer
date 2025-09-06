@@ -36,8 +36,8 @@ start = time.time()
 
 # Define the grid
 grid_name = "test_grid"
-grid_dir = "../../tests/test_grid/"
-grid = Grid(grid_name, grid_dir=grid_dir)
+
+grid = Grid(grid_name)
 
 # Define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6.0, 10.5, 0.1)
@@ -150,9 +150,7 @@ print(
     f"LOS calculation with loop took {loop_time:.4f} "
     f"seconds for nstar={n} and ngas={ngas}"
 )
-print(
-    "Ratio in wallclock: " f"Time_loop/Time_tree={loop_time / tree_time:.4f}"
-)
+print(f"Ratio in wallclock: Time_loop/Time_tree={loop_time / tree_time:.4f}")
 print(
     f"Tree gave={tree_sum:.2e} Loop gave={loop_sum:.2e} "
     "Normalised residual="

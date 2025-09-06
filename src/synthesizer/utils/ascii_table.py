@@ -22,12 +22,11 @@ Example usage:
 import inspect
 
 import numpy as np
-from unyt import unyt_array
+from unyt import unyt_array, unyt_quantity
 
 
 class TableFormatter:
-    """
-    A class to format an arbitrary object's attributes into a table.
+    """A class to format an arbitrary object's attributes into a table.
 
     Attributes:
         obj (object):
@@ -37,8 +36,7 @@ class TableFormatter:
     """
 
     def __init__(self, obj):
-        """
-        Initialize the TableFormatter with the given object.
+        """Initialize the TableFormatter with the given object.
 
         Args:
             obj (object):
@@ -79,9 +77,11 @@ class TableFormatter:
             if not (key[0] == "_" and getattr(obj, key[1:], None) is None)
         }
 
+        # Keep track of the attributes we have done so we don't do them again
+        self._done_attributes = set()
+
     def format_array(self, array):
-        """
-        Format numpy arrays to show their mean value.
+        """Format numpy arrays to show their mean value.
 
         Args:
             array (numpy.ndarray):
@@ -106,8 +106,7 @@ class TableFormatter:
         )
 
     def format_dict(self, dictionary):
-        """
-        Format dictionaries to show their keys and the types of their values.
+        """Format dictionaries to show their keys and their value types.
 
         Args:
             dictionary (dict):
@@ -132,8 +131,7 @@ class TableFormatter:
         return out
 
     def format_list(self, lst):
-        """
-        Format lists content to spead out the values over multiple lines.
+        """Format lists content to spead out the values over multiple lines.
 
         Args:
             lst (list):
@@ -183,8 +181,7 @@ class TableFormatter:
         return out
 
     def get_value_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -193,16 +190,31 @@ class TableFormatter:
         """
         rows = []
         for attr, value in self.attributes.items():
+            # Skip if the value is None
             if value is None:
                 continue
+
             # Handle Quantitys
             if attr[0] == "_" and hasattr(self.obj, attr[1:]):
                 attr = attr[1:]
                 value = getattr(self.obj, attr)
+
+            # If we have already done this attribute, skip it
+            if attr in self._done_attributes:
+                continue
+
+            # Only show the attribute if it is truly a scalar value
             if not (
-                isinstance(value, dict)
-                or isinstance(value, np.ndarray)
-                or isinstance(value, list)
+                isinstance(
+                    value,
+                    (
+                        dict,
+                        list,
+                        np.ndarray,
+                        unyt_quantity,
+                        unyt_array,
+                    ),
+                )
             ):
                 # Handle the different situations
                 if isinstance(value, float) and (value >= 1e4 or value < 0.01):
@@ -218,11 +230,12 @@ class TableFormatter:
                 else:
                     formatted_value = str(value)
                 rows.append((attr, formatted_value))
+                self._done_attributes.add(attr)
+
         return rows
 
     def get_array_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -235,6 +248,11 @@ class TableFormatter:
             if attr[0] == "_" and hasattr(self.obj, attr[1:]):
                 attr = attr[1:]
                 value = getattr(self.obj, attr)
+
+            # If we have already done this attribute, skip it
+            if attr in self._done_attributes:
+                continue
+
             # For short arrays, just show the values
             if isinstance(value, (np.ndarray, unyt_array)) and value.size <= 3:
                 formatted_value = str(value)
@@ -242,11 +260,15 @@ class TableFormatter:
             elif isinstance(value, (np.ndarray, unyt_array)):
                 formatted_value = self.format_array(value)
                 rows.append((f"{attr} {value.shape}", formatted_value))
+            else:
+                continue
+
+            self._done_attributes.add(attr)
+
         return rows
 
     def get_dict_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -255,7 +277,15 @@ class TableFormatter:
         """
         rows = []
         for attr, value in self.attributes.items():
+            # If we have already done this attribute, skip it
+            if attr in self._done_attributes:
+                continue
+
+            # Only show the attribute if it is a dict
             if isinstance(value, dict):
+                self._done_attributes.add(attr)
+
+                # Format the dictionary
                 formatted_values = self.format_dict(value)
                 for i, (key, formatted_value) in enumerate(formatted_values):
                     if i == 0:
@@ -265,8 +295,7 @@ class TableFormatter:
         return rows
 
     def get_list_rows(self):
-        """
-        Collect the object's attributes and formats them into rows.
+        """Collect the object's attributes and formats them into rows.
 
         Returns:
             list of tuple:
@@ -275,7 +304,15 @@ class TableFormatter:
         """
         rows = []
         for attr, value in self.attributes.items():
+            # If we have already done this attribute, skip it
+            if attr in self._done_attributes:
+                continue
+
+            # Only show the attribute if it is a list
             if isinstance(value, list) and len(value) > 0:
+                self._done_attributes.add(attr)
+
+                # Format the list
                 formatted_values = self.format_list(value)
                 for i, formatted_value in enumerate(formatted_values):
                     if i == 0:
@@ -285,8 +322,7 @@ class TableFormatter:
         return rows
 
     def get_table(self, title_text):
-        """
-        Generate a formatted table.
+        """Generate a formatted table.
 
         Args:
             title_text (str):

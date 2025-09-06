@@ -43,16 +43,14 @@ jobs:
           pip install pytest-xdist  # enable parallel pytest execution
           # Output the compilation report so it can be viewed in an action log
           cat build_synth.log
-      - uses: astral-sh/ruff-action@v1 # Lint with Ruff
+      - uses: astral-sh/ruff-action@v3 # Lint with Ruff
         with:
-          version: 0.7.4
-          args: "format --check"
-          changed-files: "true"
+          version: 0.11.7
+          args: "format --check --diff"
       - name: Download test data
         run: |
-          # Download test grid data
-          synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
-          synthesizer-download -d tests/data --all-sim-data
+          # Download the data we need
+          synthesizer-download --test-grids --dust-grid --all-sim-data --instruments EuclidNISP
       - name: Test with pytest
         run: |
           pytest -n auto

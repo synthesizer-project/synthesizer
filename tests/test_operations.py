@@ -15,8 +15,7 @@ def test_single_star_extraction(
     nebular_emission_model,
     reprocessed_emission_model,
 ):
-    """
-    Test extraciton of a single star's emission.
+    """Test extraciton of a single star's emission.
 
     This will use and compare a single star for a particle Stars object and a
     single SFZH bin for a parametric Stars object. These two descriptions
@@ -41,7 +40,7 @@ def test_single_star_extraction(
     ), (
         f"The SFZH's are not equivalent (non-zero elements: "
         f"particle={np.where(single_star_particle.sfzh.sfzh > 0)}, "
-        f"parametric={np.where(single_star_parametric.sfzh >0)})"
+        f"parametric={np.where(single_star_parametric.sfzh > 0)})"
     )
 
     # Ok, we know the SFZH's are equivalent, let's now get the spectra
@@ -122,7 +121,10 @@ def test_combination_spectra(
     # emission models
     model = StellarEmissionModel(
         label="combined",
-        combine=(incident_emission_model, transmitted_emission_model),
+        combine=(
+            transmitted_emission_model["incident"],
+            transmitted_emission_model,
+        ),
     )
 
     # Get the spectra

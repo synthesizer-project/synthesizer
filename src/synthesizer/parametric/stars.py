@@ -20,6 +20,7 @@ from unyt import Hz, Msun, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
+from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.units import Quantity, accepts
@@ -28,8 +29,7 @@ from synthesizer.utils.stats import weighted_mean, weighted_median
 
 
 class Stars(StarsComponent):
-    """
-    The parametric stellar population object.
+    """The parametric stellar population object.
 
     This class holds a binned star formation and metal enrichment history
     describing the age and metallicity of the stellar population, an
@@ -38,9 +38,9 @@ class Stars(StarsComponent):
     stellar population.
 
     Attributes:
-        ages (array-like, float)
+        ages (np.ndarray of float):
             The array of ages defining the age axis of the SFZH.
-        metallicities (array-like, float)
+        metallicities (np.ndarray of float):
             The array of metallicitities defining the metallicity axies of
             the SFZH.
         initial_mass (unyt_quantity/float)
@@ -49,12 +49,12 @@ class Stars(StarsComponent):
             An instance of one of the morphology classes describing the
             stellar population's morphology. This can be any of the family
             of morphology classes from synthesizer.morphology.
-        sfzh (array-like, float)
+        sfzh (np.ndarray of float):
             An array describing the binned SFZH. If provided all following
             arguments are ignored.
-        sf_hist (array-like, float)
+        sf_hist (np.ndarray of float):
             An array describing the star formation history.
-        metal_dist (array-like, float)
+        metal_dist (np.ndarray of float):
             An array describing the metallity distribution.
         sf_hist_func (SFH.*)
             An instance of one of the child classes of SFH. This will be
@@ -64,19 +64,19 @@ class Stars(StarsComponent):
             An instance of one of the child classes of ZH. This will be
             used to calculate metal_dist and takes precendence over a
             passed metal_dist if both are present.
-        instant_sf (float)
+        instant_sf (float):
             An age at which to compute an instantaneous SFH, i.e. all
             stellar mass populating a single SFH bin.
-        instant_metallicity (float)
+        instant_metallicity (float):
             A metallicity at which to compute an instantaneous ZH, i.e. all
             stellar populating a single ZH bin.
         log10ages_lims (array_like_float)
             The log10(age) limits of the SFZH grid.
-        metallicities_lims (array-like, float)
+        metallicities_lims (np.ndarray of float):
             The metallicity limits of the SFZH grid.
-        log10metallicities_lims (array-like, float)
+        log10metallicities_lims (np.ndarray of float):
             The log10(metallicity) limits of the SFZH grid.
-        metallicity_grid_type (string)
+        metallicity_grid_type (str):
             The type of gridding for the metallicity axis. Either:
                 - Regular linear ("Z")
                 - Regular logspace ("log10Z")
@@ -100,8 +100,7 @@ class Stars(StarsComponent):
         fesc_ly_alpha=None,
         **kwargs,
     ):
-        """
-        Initialise the parametric stellar population.
+        """Initialise the parametric stellar population.
 
         Can either be instantiated by:
         - Passing a SFZH grid explictly.
@@ -113,29 +112,29 @@ class Stars(StarsComponent):
           or functions.
 
         Args:
-            log10ages (array-like, float)
+            log10ages (np.ndarray of float):
                 The array of ages defining the log10(age) axis of the SFZH.
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The array of metallicitities defining the metallicity axies of
                 the SFZH.
-            initial_mass (unyt_quantity/float)
+            initial_mass (unyt_quantity/float):
                 The total initial stellar mass. If provided the SFZH grid will
                 be rescaled to obey this total mass.
-            morphology (morphology.* e.g. Sersic2D)
+            morphology (morphology.* e.g. Sersic2D):
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
                 of morphology classes from synthesizer.morphology.
-            sfzh (array-like, float)
+            sfzh (np.ndarray of float):
                 An array describing the binned SFZH. If provided all following
                 arguments are ignored.
-            sf_hist (float/unyt_quantity/array-like, float/SFH.*)
+            sf_hist (float/unyt_quantity/np.ndarray of float/SFH.*):
                 Either:
                     - An age at which to compute an instantaneous SFH, i.e. all
                       stellar mass populating a single SFH bin.
                     - An array describing the star formation history.
                     - An instance of one of the child classes of SFH. This
                       will be used to calculate an array describing the SFH.
-            metal_dist (float/unyt_quantity/array-like, float/ZDist.*)
+            metal_dist (float/unyt_quantity/np.ndarray of float/ZDist.*):
                 Either:
                     - A metallicity at which to compute an instantaneous
                       ZH, i.e. all stellar mass populating a single Z bin.
@@ -143,8 +142,13 @@ class Stars(StarsComponent):
                     - An instance of one of the child classes of ZH. This
                       will be used to calculate an array describing the
                       metallicity distribution.
-            fesc (float)
+            fesc (float):
                 The escape fraction of incident radiation from the stars.
+            fesc_ly_alpha (float):
+                The escape fraction of Ly-alpha radiation from the stars.
+            **kwargs (dict):
+                Arbitrary keyword arguments to be set as attributes on the
+                Stars instance.
         """
         # Instantiate the parent
         StarsComponent.__init__(
@@ -282,18 +286,17 @@ class Stars(StarsComponent):
 
     @accepts(instant_sf=yr)
     def _get_sfzh(self, instant_sf, instant_metallicity):
-        """
-        Compute the SFZH for all possible combinations of input.
+        """Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
         the SFH and ZH arrays are computed first.
 
         Args:
-            instant_sf (unyt_quantity/float)
+            instant_sf (unyt_quantity/float):
                 An age at which to compute an instantaneous SFH, i.e. all
                 stellar mass populating a single SFH bin. Note, this must
                 be the age itself, not the log10(age).
-            instant_metallicity (float)
+            instant_metallicity (float):
                 A metallicity at which to compute an instantaneous ZH, i.e. all
                 stellar populating a single ZH bin. Note, this must be the
                 metallicity itself, not the log10(metallicity).
@@ -426,22 +429,21 @@ class Stars(StarsComponent):
             self.initial_mass = np.sum(self.sfzh) * Msun
 
     def get_mask(self, attr, thresh, op, mask=None):
-        """
-        Create a mask using a threshold and attribute on which to mask.
+        """Create a mask using a threshold and attribute on which to mask.
 
         Args:
-            attr (str)
+            attr (str):
                 The attribute to derive the mask from.
-            thresh (float)
+            thresh (float):
                 The threshold value.
-            op (str)
+            op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
                 or "!=".
-            mask (array)
+            mask (np.ndarray):
                 Optionally, a mask to combine with the new mask.
 
         Returns:
-            mask (array)
+            mask (np.ndarray):
                 The mask array.
         """
         # Get the attribute
@@ -498,36 +500,28 @@ class Stars(StarsComponent):
         return new_mask
 
     def calculate_median_age(self):
-        """
-        Calculate the median age of the stellar population.
-        """
+        """Calculate the median age of the stellar population."""
         return weighted_median(self.ages, self.sf_hist) * self.ages.units
 
     def calculate_mean_age(self):
-        """
-        Calculate the mean age of the stellar population.
-        """
+        """Calculate the mean age of the stellar population."""
         return weighted_mean(self.ages, self.sf_hist)
 
     def calculate_mean_metallicity(self):
-        """
-        Calculate the mean metallicity of the stellar population.
-        """
+        """Calculate the mean metallicity of the stellar population."""
         return weighted_mean(self.metallicities, self.metal_dist)
 
     def __add__(self, other_stars):
-        """
-        Add two Stars instances together.
+        """Add two Stars instances together.
 
         In simple terms this sums the SFZH grids of both Stars instances.
 
         This will only work for Stars objects with the same SFZH grid axes.
 
         Args:
-            other_stars (parametric.Stars)
+            other_stars (parametric.Stars):
                 The other instance of Stars to add to this one.
         """
-
         if np.all(self.log10ages == other_stars.log10ages) and np.all(
             self.metallicities == other_stars.metallicities
         ):
@@ -541,17 +535,17 @@ class Stars(StarsComponent):
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
     def __radd__(self, other_stars):
-        """
+        """Add two Stars instances together (reflected addition).
+
         Overloads "reflected" addition to allow two Stars instances to be added
         together when in reverse order, i.e. second_stars + self.
 
         This will only work for Stars objects with the same SFZH grid axes.
 
         Args:
-            other_stars (parametric.Stars)
+            other_stars (parametric.Stars):
                 The other instance of Stars to add to this one.
         """
-
         if np.all(self.log10ages == other_stars.log10ages) and np.all(
             self.metallicities == other_stars.metallicities
         ):
@@ -566,26 +560,23 @@ class Stars(StarsComponent):
 
     @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
-        """
-        Scale the mass of the stellar population to match a luminosity in a
-        specific filter.
+        """Scale the stellar mass to match a luminosity in a specific filter.
 
         NOTE: This will overwrite the initial mass attribute.
 
         Args:
-            lum (unyt_quantity)
+            lum (unyt_quantity):
                 The desried luminosity in scale_filter.
-            scale_filter (Filter)
+            scale_filter (Filter):
                 The filter in which lum is measured.
-            spectra_type (str)
+            spectra_type (str):
                 The spectra key with which to do this scaling, e.g. "incident"
                 or "emergent".
 
-        Raises
+        Raises:
             MissingSpectraType
                 If the requested spectra doesn't exist an error is thrown.
         """
-
         # Check we have the spectra
         if spectra_type not in self.spectra:
             raise exceptions.MissingSpectraType(
@@ -618,26 +609,23 @@ class Stars(StarsComponent):
 
     @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
-        """
-        Scale the mass of the stellar population to match a flux in a
-        specific filter.
+        """Scale the stellar mass to match a flux in a specific filter.
 
         NOTE: This will overwrite the initial mass attribute.
 
         Args:
-            flux (unyt_quantity)
+            flux (unyt_quantity):
                 The desried flux in scale_filter.
-            scale_filter (Filter)
+            scale_filter (Filter):
                 The filter in which flux is measured.
-            spectra_type (str)
+            spectra_type (str):
                 The spectra key with which to do this scaling, e.g. "incident"
                 or "emergent".
 
-        Raises
+        Raises:
             MissingSpectraType
                 If the requested spectra doesn't exist an error is thrown.
         """
-
         # Check we have the spectra
         if spectra_type not in self.spectra:
             raise exceptions.MissingSpectraType(
@@ -684,8 +672,7 @@ class Stars(StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
     ):
-        """
-        Generate the binned SFZH history of this stellar component.
+        """Generate the binned SFZH history of this stellar component.
 
         In the parametric case this will resample the existing SFZH onto the
         desired grid. For a particle based component the binned SFZH is
@@ -697,16 +684,16 @@ class Stars(StarsComponent):
         is equivalent to the weights used to extract spectra from the grid.
 
         Args:
-            log10ages (array-like, float)
+            log10ages (np.ndarray of float):
                 The log10 ages of the desired SFZH.
-            metallicities (array-like, float)
+            metallicities (np.ndarray of float):
                 The metallicities of the desired SFZH.
-            grid_assignment_method (string)
+            grid_assignment_method (str):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or their uppercase equivalents (CIC, NGP).
                 Defaults to cic. (particle only)
-            nthreads (int)
+            nthreads (int):
                 The number of threads to use in the computation. If set to -1
                 all available threads will be used. (particle only)
 
@@ -745,11 +732,10 @@ class Stars(StarsComponent):
         self,
         show=True,
     ):
-        """
-        Plot the binned SZFH.
+        """Plot the binned SZFH.
 
         Args:
-            show (bool)
+            show (bool):
                 Should we invoke plt.show()?
 
         Returns:
@@ -810,8 +796,7 @@ class Stars(StarsComponent):
         return fig, ax
 
     def get_sfh(self):
-        """
-        Get the star formation history of the stellar population.
+        """Get the star formation history of the stellar population.
 
         Returns:
             unyt_array:
@@ -830,15 +815,14 @@ class Stars(StarsComponent):
         ylimits=(),
         show=True,
     ):
-        """
-        Plot the star formation history of the stellar population.
+        """Plot the star formation history of the stellar population.
 
         Args:
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits of the x-axis.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits of the y-axis.
-            show (bool)
+            show (bool):
                 Should we invoke plt.show()?
 
         Returns:
@@ -867,8 +851,7 @@ class Stars(StarsComponent):
         return fig, ax
 
     def get_metal_dist(self):
-        """
-        Get the metallicity distribution of the stellar population.
+        """Get the metallicity distribution of the stellar population.
 
         Returns:
             unyt_array:
@@ -882,15 +865,14 @@ class Stars(StarsComponent):
         ylimits=(),
         show=True,
     ):
-        """
-        Plot the metallicity distribution of the stellar population.
+        """Plot the metallicity distribution of the stellar population.
 
         Args:
-            xlimits (tuple)
+            xlimits (tuple):
                 The limits of the x-axis.
-            ylimits (tuple)
+            ylimits (tuple):
                 The limits of the y-axis.
-            show (bool)
+            show (bool):
                 Should we invoke plt.show()?
 
         Returns:
@@ -925,14 +907,11 @@ class Stars(StarsComponent):
         return fig, ax
 
     def get_weighted_attr(self, attr):
-        """
-        Get a weighted attribute of the stellar population.
+        """Get a weighted attribute of the stellar population.
 
         Args:
-            attr (str)
+            attr (str):
                 The attribute to get.
-            axis (int)
-                The axis to sum over.
 
         Returns:
             unyt_quantity:
@@ -946,10 +925,29 @@ class Stars(StarsComponent):
             )
 
         # Get the attribute and the weights
-        attr = getattr(self, attr)
         if "age" in attr:
             weight = self.sf_hist
         else:
             weight = self.metal_dist
+        attr = getattr(self, attr)
 
         return weighted_mean(attr, weight)
+
+    def calculate_surviving_mass(self, grid: Grid):
+        """Calculate the surviving mass of the stellar population.
+
+        This is the total mass of stars that have survived to the present day
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving mass.
+                This is used to get the stellar fraction at each SFZH bin.
+
+        Returns:
+            unyt_quantity: The total surviving mass of the stellar
+            population in Msun.
+        """
+        surviving_mass = np.sum(self.sfzh * grid.stellar_fraction)
+
+        return surviving_mass * Msun

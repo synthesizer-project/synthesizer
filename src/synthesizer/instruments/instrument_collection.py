@@ -46,8 +46,7 @@ from synthesizer.utils.ascii_table import TableFormatter
 
 
 class InstrumentCollection:
-    """
-    A container for instruments.
+    """A container for instruments.
 
     The InstrumentCollection class is a container for Instrument objects.
     It can be treated as a dictionary of instruments, with the label of the
@@ -68,8 +67,7 @@ class InstrumentCollection:
     """
 
     def __init__(self, filepath=None):
-        """
-        Initialise the collection ready to collect together instruments.
+        """Initialise the collection ready to collect together instruments.
 
         Args:
             filepath (str):
@@ -81,6 +79,10 @@ class InstrumentCollection:
         self.instruments = {}
         self.instrument_labels = []
 
+        # Create a helper attribute for getting all filters in the collection
+        # without having to iterate over the collection
+        self.all_filters = None
+
         # Variables to keep track of the current instrument when iterating
         # over the collection
         self._current_ind = 0
@@ -91,8 +93,7 @@ class InstrumentCollection:
             self.load_instruments(filepath)
 
     def load_instruments(self, filepath):
-        """
-        Load instruments from a file.
+        """Load instruments from a file.
 
         Args:
             filepath (str):
@@ -124,8 +125,7 @@ class InstrumentCollection:
                 self.add_instruments(instrument)
 
     def add_instruments(self, *instruments):
-        """
-        Add instruments to the collection.
+        """Add instruments to the collection.
 
         Args:
             *instruments (Instrument):
@@ -139,12 +139,12 @@ class InstrumentCollection:
             # Ensure the object is an Instrument
             if not isinstance(instrument, Instrument):
                 raise exceptions.InconsistentArguments(
-                    f"Object {instrument} is not an Instrument."
+                    f"Object {type(instrument)} is not an Instrument."
                 )
 
             # Ensure the label doesn't already exist in the Collection
             if instrument.label in self.instruments:
-                raise exceptions.DuplicateInstrument(
+                raise exceptions.InconsistentArguments(
                     f"Instrument {instrument.label} already exists."
                 )
 
@@ -153,9 +153,15 @@ class InstrumentCollection:
             self.instrument_labels.append(instrument.label)
             self.ninstruments += 1
 
+            # Add the filters to the collection
+            if instrument.can_do_photometry:
+                if self.all_filters is None:
+                    self.all_filters = instrument.filters
+                else:
+                    self.all_filters += instrument.filters
+
     def write_instruments(self, filepath):
-        """
-        Save the instruments in the collection to a file.
+        """Save the instruments in the collection to a file.
 
         Args:
             filepath (str):
@@ -182,8 +188,7 @@ class InstrumentCollection:
         return len(self.instruments)
 
     def __iter__(self):
-        """
-        Iterate over the instrument colleciton.
+        """Iterate over the instrument colleciton.
 
         Overload iteration to allow simple looping over instrument objects,
         combined with __next__ this enables for f in InstrumentCollection
@@ -192,8 +197,7 @@ class InstrumentCollection:
         return self
 
     def __next__(self):
-        """
-        Get the next instrument in the collection.
+        """Get the next instrument in the collection.
 
         Overload iteration to allow simple looping over filter objects,
         combined with __iter__ this enables for f in InstrumentCollection
@@ -217,15 +221,14 @@ class InstrumentCollection:
             ]
 
     def __getitem__(self, key):
-        """
-        Get an Instrument by its label.
+        """Get an Instrument by its label.
 
         Enables the extraction of instrument objects from the
         InstrumentCollection by getitem syntax (InstrumentCollection[key]
         rather than InstrumentCollection.instruments[key]).
 
         Args:
-            key (string)
+            key (str):
                 The label of the desired instrument.
 
         Returns:
@@ -240,8 +243,7 @@ class InstrumentCollection:
         return self.instruments[key]
 
     def __str__(self):
-        """
-        Return a string representation of the InstrumentCollection.
+        """Return a string representation of the InstrumentCollection.
 
         Returns:
             str
@@ -253,8 +255,7 @@ class InstrumentCollection:
         return formatter.get_table("Instrument Collection")
 
     def __add__(self, other):
-        """
-        Combine InstrumentCollections or add an Instrument to this collection.
+        """Add an Instrument or another InstrumentCollection to this one.
 
         Args:
             other (InstrumentCollection/Instrument):
@@ -283,9 +284,21 @@ class InstrumentCollection:
 
         return self
 
-    def items(self):
+    def __contains__(self, key):
+        """Check if an instrument is in the collection.
+
+        Args:
+            key (str):
+                The label of the instrument to check for.
+
+        Returns:
+            bool:
+                True if the instrument is in the collection, False otherwise.
         """
-        Get the items in the InstrumentCollection.
+        return key in self.instruments
+
+    def items(self):
+        """Get the items in the InstrumentCollection.
 
         Returns:
             dict_items

@@ -51,13 +51,12 @@ from synthesizer.utils import planck
 
 
 class EmissionBase:
-    """
-    Dust emission base class for holding common methods.
+    """Dust emission base class for holding common methods.
 
     Attributes:
-        temperature (float)
+        temperature (float):
             The temperature of the dust.
-        cmb_factor (float)
+        cmb_factor (float):
             The multiplicative factor to account for
             CMB heating at high-redshift
     """
@@ -71,13 +70,12 @@ class EmissionBase:
         temperature: Optional[Union[unyt_quantity, float]] = None,
         cmb_factor: float = 1,
     ) -> None:
-        """
-        Initialise the base class for dust emission models.
+        """Initialise the base class for dust emission models.
 
         Args:
-            temperature (float)
+            temperature (float):
                 The temperature of the dust.
-            cmb_factor (float)
+            cmb_factor (float):
                 The multiplicative factor to account for
                 CMB heating at high-redshift
         """
@@ -102,15 +100,14 @@ class EmissionBase:
         intrinsic_sed=None,
         attenuated_sed=None,
     ):
-        """
-        Return the normalised lnu for the provided wavelength grid.
+        """Return the normalised lnu for the provided wavelength grid.
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                 An array of wavelengths (expected in AA, global unit)
-            intrinsic_sed (Sed)
+            intrinsic_sed (Sed):
                 The intrinsic SED to scale with dust.
-            attenuated_sed (Sed)
+            attenuated_sed (Sed):
                 The attenuated SED to scale with dust.
         """
         # If we haven't been given spectra to scale with dust just return the
@@ -160,16 +157,14 @@ class EmissionBase:
 
     @accepts(lam=angstrom)
     def _get_spectra(self, lam: unyt_array) -> Sed:
-        """
-        Return the normalised lnu for the provided wavelength grid.
+        """Return the normalised lnu for the provided wavelength grid.
 
         Args:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                     An array of wavelengths (expected in AA, global unit)
 
         Returns:
-            lnu (unyt_array)
-                The spectral luminosity density.
+            Sed: The spectral luminosity density.
         """
         # Get frequencies
         nu = (c / lam).to(Hz)
@@ -185,15 +180,14 @@ class EmissionBase:
         return sed
 
     def apply_cmb_heating(self, emissivity: float, redshift: float) -> None:
-        """
-        Return the factor by which the CMB boosts the infrared luminosity.
+        """Return the factor by which the CMB boosts the infrared luminosity.
 
         (See implementation in da Cunha+2013)
 
         Args:
-            emissivity (float)
+            emissivity (float):
                 The emissivity index in the FIR (no unit)
-            redshift (float)
+            redshift (float):
                 The redshift of the galaxy
         """
         # Temperature of CMB at redshift=0
@@ -216,16 +210,13 @@ class EmissionBase:
 
 
 class Blackbody(EmissionBase):
-    """
-    A class to generate a blackbody emission spectrum.
+    """A class to generate a blackbody emission spectrum.
 
     Attributes:
-        temperature (float)
-            The temperature of the dust.
-        cmb_heating (bool)
+        temperature_z (float):
+            The temperature of the dust at redshift z.
+        apply_cmb_heating (bool):
             Option for adding heating by CMB.
-        redshift (float)
-            Redshift.
     """
 
     temperature: unyt_quantity
@@ -239,19 +230,15 @@ class Blackbody(EmissionBase):
         cmb_heating: bool = False,
         redshift: float = 0,
     ) -> None:
-        """
-        Generate a simple blackbody spectrum.
+        """Generate a simple blackbody spectrum.
 
         Args:
-            temperature (unyt_array)
+            temperature (unyt_array):
                 The temperature of the dust.
-
-            cmb_heating (bool)
+            cmb_heating (bool):
                 Option for adding heating by CMB
-
-            redshift (float)
+            redshift (float):
                 Redshift of the galaxy
-
         """
         EmissionBase.__init__(self, temperature)
 
@@ -268,15 +255,14 @@ class Blackbody(EmissionBase):
 
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array) -> unyt_array:
-        """
-        Generate unnormalised spectrum for given frequency (nu) grid.
+        """Generate unnormalised spectrum for given frequency (nu) grid.
 
         Args:
-            nu (unyt_array)
+            nu (unyt_array):
                 The frequency at which to calculate lnu.
 
         Returns:
-            unyt_array
+            unyt_array:
                 The unnormalised spectral luminosity density.
 
         """
@@ -284,22 +270,27 @@ class Blackbody(EmissionBase):
 
 
 class Greybody(EmissionBase):
-    """
-    A class to generate a greybody emission spectrum.
+    """A class to generate a greybody emission spectrum.
 
     Attributes:
-        emissivity (float)
+        emissivity (float):
             The emissivity of the dust (dimensionless).
-        cmb_heating (bool)
+        apply_cmb_heating (bool):
             Option for adding heating by CMB
-        redshift (float)
-            Redshift of the galaxy
+        temperature_z (unyt_quantity):
+            The temperature of the dust at redshift z.
+        optically_thin (bool):
+            If dust is optically thin
+        lam_0 (float):
+            Wavelength (in um) where the dust optical depth is unity
     """
 
     temperature: unyt_quantity
     emissivity: float
     cmb_heating: bool
     redshift: float
+    optically_thin: bool
+    lam_0: float
 
     @accepts(temperature=K)
     def __init__(
@@ -308,19 +299,24 @@ class Greybody(EmissionBase):
         emissivity: float,
         cmb_heating: bool = False,
         redshift: float = 0,
+        optically_thin: bool = True,
+        lam_0: float = 100.0 * um,
     ) -> None:
-        """
-        Initialise the dust emission model.
+        """Initialise the dust emission model.
 
         Args:
-            temperature (unyt_array)
+            temperature (unyt_array):
                 The temperature of the dust.
-            emissivity (float)
+            emissivity (float):
                 The Emissivity (dimensionless).
-            cmb_heating (bool)
+            cmb_heating (bool):
                 Option for adding heating by CMB
-            redshift (float)
+            redshift (float):
                 Redshift of the galaxy
+            optically_thin (bool):
+                If dust is optically thin
+            lam_0 (float):
+                Wavelength (in um) where the dust optical depth is unity
         """
         EmissionBase.__init__(self, temperature)
 
@@ -333,47 +329,54 @@ class Greybody(EmissionBase):
             self.temperature_z = temperature
 
         self.emissivity = emissivity
+        self.optically_thin = optically_thin
+        self.lam_0 = lam_0
 
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array) -> unyt_array:
-        """
-        Generate unnormalised spectrum for given frequency (nu) grid.
+        """Generate unnormalised spectrum for given frequency (nu) grid.
 
         Args:
-            nu (unyt_array)
+            nu (unyt_array):
                 The frequencies at which to calculate the spectral luminosity
                 density.
 
-        Returns
-            lnu (unyt_array)
+        Returns:
+            lnu (unyt_array):
                 The unnormalised spectral luminosity density.
 
         """
-        return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
+        if self.optically_thin:
+            return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
+        else:
+            _nu_0 = self.lam_0 / c
+            optically_thick_factor = 1 - np.exp(
+                -((nu / _nu_0) ** self.emissivity)
+            )
+            return optically_thick_factor * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
-    """
-    A class to generate a dust emission spectrum using the Casey (2012) model.
+    """A class to generate dust emission spectra using the Casey (2012) model.
 
     https://ui.adsabs.harvard.edu/abs/2012MNRAS.425.3094C/abstract
 
     Attributes:
-        emissivity (float)
+        emissivity (float):
             The emissivity of the dust (dimensionless).
-        alpha (float)
+        alpha (float):
             The power-law slope (dimensionless)  [good value = 2.0].
-        n_bb (float)
+        n_bb (float):
             Normalisation of the blackbody component [default 1.0].
-        lam_0 (float)
+        lam_0 (float):
             Wavelength where the dust optical depth is unity.
-        lam_c (float)
+        lam_c (float):
             The power law turnover wavelength.
-        n_pl (float)
+        n_pl (float):
             The power law normalisation.
-        cmb_heating (bool)
+        cmb_heating (bool):
                 Option for adding heating by CMB
-        redshift (float)
+        redshift (float):
             Redshift of the galaxy
     """
 
@@ -396,25 +399,22 @@ class Casey12(EmissionBase):
         cmb_heating: bool = False,
         redshift: float = 0,
     ) -> None:
-        """
-        Initialise the dust emission model.
+        """Initialise the dust emission model.
 
         Args:
-            lam (unyt_array)
-                The wavelengths at which to calculate the emission.
-            temperature (unyt_array)
+            temperature (unyt_array):
                 The temperature of the dust.
-            emissivity (float)
-                The emissivity (dimensionless) [good value = 1.6].
-            alpha (float)
+            emissivity (float):
+                The emissivity (dimensionless) [good value = 2.0].
+            alpha (float):
                 The power-law slope (dimensionless)  [good value = 2.0].
-            n_bb (float)
+            N_bb (float):
                 Normalisation of the blackbody component [default 1.0].
-            lam_0 (float)
+            lam_0 (float):
                 Wavelength where the dust optical depth is unity.
-            cmb_heating (bool)
+            cmb_heating (bool):
                 Option for adding heating by CMB
-            redshift (float)
+            redshift (float):
                 Redshift of the galaxy
         """
         EmissionBase.__init__(self, temperature)
@@ -457,27 +457,25 @@ class Casey12(EmissionBase):
 
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array) -> Union[NDArray[np.float64], unyt_array]:
-        """
-        Generate unnormalised spectrum for given frequency (nu) grid.
+        """Generate unnormalised spectrum for given frequency (nu) grid.
 
         Args:
-            nu (unyt_array)
+            nu (unyt_array):
                 The frequencies at which to calculate the spectral luminosity
                 density.
 
-        Returns
-            lnu (unyt_array)
+        Returns:
+            lnu (unyt_array):
                 The unnormalised spectral luminosity density.
 
         """
 
         # Define a function to calcualate the power-law component.
         def _power_law(lam: unyt_array) -> float:
-            """
-            Calcualate the power-law component.
+            """Calcualate the power-law component.
 
             Args:
-                lam (unyt_array)
+                lam (unyt_array):
                     The wavelengths at which to calculate lnu.
             """
             return (
@@ -492,11 +490,10 @@ class Casey12(EmissionBase):
             )
 
         def _blackbody(lam: unyt_array) -> unyt_array:
-            """
-            Calcualate the blackbody component.
+            """Calcualate the blackbody component.
 
             Args:
-                lam (unyt_array)
+                lam (unyt_array):
                     The wavelengths at which to calculate lnu.
             """
             return (
@@ -515,8 +512,7 @@ class Casey12(EmissionBase):
 
 
 class IR_templates:
-    """
-    A class to generate a dust emission spectrum.
+    """A class to generate a dust emission spectrum.
 
     Can use either:
     (i) Draine and Li model (2007) --
@@ -529,28 +525,28 @@ class IR_templates:
     Attributes:
         grid (Grid object)
             The dust grid to use
-        mdust (float)
+        mdust (float):
             The mass of dust in the galaxy (Msun).
-        dgr (float)
+        dgr (float):
             The dust-to-gas ratio of the galaxy
-        MH (float)
+        MH (float):
             The mass in hydrogen of the galaxy
-        template (string)
+        template (str):
             The IR template model to be used
             (Currently only Draine and Li 2007 model implemented)
-        ldust (float)
+        ldust (float):
             The dust luminosity of the galaxy (integrated from 0 to inf),
             obtained using energy balance here.
-        gamma (float)
+        gamma (float):
             Fraction of the dust mass that is associated with the
             power-law part of the starlight intensity distribution.
-        qpah (float)
+        qpah (float):
             Fraction of dust mass in the form of PAHs [good value=2.5%]
-        umin (float)
+        umin (float):
             Radiation field heating majority of the dust.
-        alpha (float)
+        alpha (float):
             The power law normalisation [good value = 2.].
-        p0 (float)
+        p0 (float):
             Power absorbed per unit dust mass in a radiation field
             with U = 1
     """
@@ -584,37 +580,36 @@ class IR_templates:
         p0: float = 125.0,
         verbose: bool = True,
     ) -> None:
-        """
-        Initialise the dust emission model.
+        """Initialise the dust emission model.
 
         Args:
-            grid (Grid object)
+            grid (Grid):
                 The dust grid to use
-            mdust (unyt_quantity)
+            mdust (unyt_quantity):
                 The mass of dust in the galaxy (Msun).
-            dgr (float)
+            dgr (float):
                 The dust-to-gas ratio of the galaxy
-            MH (unyt_quantity)
+            MH (unyt_quantity):
                 The mass in hydrogen
-            template (string)
+            template (str):
                 The IR template model to be used
                 (Currently only Draine and Li 2007 model implemented)
-            ldust (unyt_quantity)
+            ldust (unyt_quantity):
                 The dust luminosity of the galaxy (integrated from 0 to inf),
                 obtained using energy balance here.
-            gamma (float)
+            gamma (float):
                 Fraction of the dust mass that is associated with the
                 power-law part of the starlight intensity distribution.
-            qpah (float)
+            qpah (float):
                 Fraction of dust mass in the form of PAHs [good value=2.5%]
-            umin (float)
+            umin (float):
                 Radiation field heating majority of the dust.
-            alpha (float)
+            alpha (float):
                 The power law normalisation [good value = 2.].
-            p0 (float)
+            p0 (float):
                 Power absorbed per unit dust mass in a radiation field
                 with U = 1
-            verbose (bool)
+            verbose (bool):
                 Are we talking?
         """
         self.grid: Grid = grid
@@ -631,8 +626,7 @@ class IR_templates:
         self.verbose: bool = verbose
 
     def dl07(self) -> None:
-        """
-        Draine and Li models.
+        """Draine and Li models.
 
         For simplicity, only MW models are implemented
         (SMC model has only qpah=0.1%). These are the extended grids of DL07.
@@ -659,8 +653,7 @@ class IR_templates:
                 "using default values"
             )
             warn(
-                "Computing required values using Magdis+2012 "
-                "stacking results"
+                "Computing required values using Magdis+2012 stacking results"
             )
 
             self.u_avg = u_mean_magdis12(
@@ -698,18 +691,19 @@ class IR_templates:
         dust_components=False,
         **kwargs,
     ):
-        """
-        Return the lnu for the provided wavelength grid.
+        """Return the lnu for the provided wavelength grid.
 
         Arguments:
-            lam (float/array-like, float)
+            lam (float/np.ndarray of float):
                     An array of wavelengths.
-            intrinsic_sed (Sed)
+            intrinsic_sed (Sed):
                 The intrinsic SED to scale with dust.
-            attenuated_sed (Sed)
+            attenuated_sed (Sed):
                 The attenuated SED to scale with dust.
-            dust_components (boolean)
-                    If True, returns the constituent dust components
+            dust_components (bool):
+                    If True, returns the constituent dust components.
+            **kwargs (dict):
+                Additional keyword arguments to pass to the model.
 
         """
         # Calculate the dust luminosity
@@ -767,8 +761,7 @@ class IR_templates:
 
 
 def u_mean_magdis12(mdust: float, ldust: float, p0: float) -> float:
-    """
-    Calculate the mean radiation field heating the dust.
+    """Calculate the mean radiation field heating the dust.
 
     P0 value obtained from stacking analysis in Magdis+12
     For alpha=2.0
@@ -778,8 +771,7 @@ def u_mean_magdis12(mdust: float, ldust: float, p0: float) -> float:
 
 
 def u_mean(umin: float, umax: float, gamma: float) -> float:
-    """
-    Calculate the mean radiation field heating the dust.
+    """Calculate the mean radiation field heating the dust.
 
     For fixed alpha=2.0, get <U> for Draine and Li model
     """
@@ -789,8 +781,7 @@ def u_mean(umin: float, umax: float, gamma: float) -> float:
 
 
 def solve_umin(umin: float, umax: float, u_avg: float, gamma: float) -> float:
-    """
-    Solve for Umin in the Draine and Li model.
+    """Solve for Umin in the Draine and Li model.
 
     For fixed alpha=2.0, equation to solve to <U> in Draine and Li
     """

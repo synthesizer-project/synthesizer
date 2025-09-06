@@ -52,8 +52,7 @@ from synthesizer.utils import TableFormatter
 
 
 class SpectralCube(ImagingBase):
-    """
-    The Spectral data cube object.
+    """The Spectral data cube object.
 
     This object is used to generate and store spectral data cube. This can be
     done in two ways: by sorting particle spectra into the data cube or by
@@ -91,8 +90,7 @@ class SpectralCube(ImagingBase):
         fov,
         lam,
     ):
-        """
-        Intialise the SpectralCube.
+        """Intialise the SpectralCube.
 
         Either fov or npix must be given. If both are given, fov is used.
 
@@ -125,8 +123,7 @@ class SpectralCube(ImagingBase):
 
     @property
     def data_cube(self):
-        """
-        Return the data cube.
+        """Return the data cube.
 
         This is a property to allow the data cube to be accessed as an
         attribute.
@@ -146,8 +143,7 @@ class SpectralCube(ImagingBase):
 
     @property
     def ifu(self):
-        """
-        Return the IFU array.
+        """Return the IFU array.
 
         An alias for the data cube.
 
@@ -168,9 +164,21 @@ class SpectralCube(ImagingBase):
         return self.arr * self.units
 
     @property
-    def shape(self):
+    def cube(self):
+        """Return the data cube.
+
+        An alias for the data_cube property.
+
+        Returns:
+            array_like (float):
+                A 3D array containing the data cube. (npix[0], npix[1],
+                lam.size)
         """
-        Return the shape of the data cube.
+        return self.data_cube
+
+    @property
+    def shape(self):
+        """Return the shape of the data cube.
 
         Returns:
             tuple (int):
@@ -182,8 +190,7 @@ class SpectralCube(ImagingBase):
         return self.arr.shape
 
     def __str__(self):
-        """
-        Return a string representation of the SpectralCube object.
+        """Return a string representation of the SpectralCube object.
 
         Returns:
             table (str)
@@ -195,8 +202,7 @@ class SpectralCube(ImagingBase):
         return formatter.get_table("SpectralCube")
 
     def __add__(self, other):
-        """
-        Add two SpectralCubes together.
+        """Add two SpectralCubes together.
 
         This is done by adding the IFU arrays together but SpectralCubes can
         only be added if they have the same units, resolution, FOV, and
@@ -263,8 +269,7 @@ class SpectralCube(ImagingBase):
         quantity="lnu",
         nthreads=1,
     ):
-        """
-        Calculate a spectral data cube with no smoothing.
+        """Calculate a spectral data cube with no smoothing.
 
         This is only applicable to particle based spectral cubes.
 
@@ -304,8 +309,7 @@ class SpectralCube(ImagingBase):
         quantity="lnu",
         nthreads=1,
     ):
-        """
-        Calculate a spectral data cube with smoothing.
+        """Calculate a spectral data cube with smoothing.
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
@@ -386,6 +390,11 @@ class SpectralCube(ImagingBase):
             )
 
     def apply_psf(self):
+        """Apply a PSF to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -394,6 +403,11 @@ class SpectralCube(ImagingBase):
         )
 
     def apply_noise_array(self):
+        """Apply noise to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -402,6 +416,11 @@ class SpectralCube(ImagingBase):
         )
 
     def apply_noise_from_std(self):
+        """Apply noise to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -410,6 +429,11 @@ class SpectralCube(ImagingBase):
         )
 
     def apply_noise_from_snr(self):
+        """Apply noise to the data cube.
+
+        This is not yet implemented. Feel free to implement and raise a
+        pull request.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -425,8 +449,7 @@ class SpectralCube(ImagingBase):
         vmin=None,
         vmax=None,
     ):
-        """
-        Create an animation of the spectral cube.
+        """Create an animation of the spectral cube.
 
         Each frame of the animation is a wavelength bin.
 
@@ -439,9 +462,9 @@ class SpectralCube(ImagingBase):
             fps (int, optional):
                 the number of frames per second in the output animation.
                 Default is 30 frames per second.
-            vmin (float)
+            vmin (float):
                 The minimum of the normalisation.
-            vmax (float)
+            vmax (float):
                 The maximum of the normalisation.
 
         Returns:

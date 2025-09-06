@@ -24,6 +24,9 @@ struct particle {
 
   /* Surface density variable. */
   double surf_den_var;
+
+  /*! The index of the particle in the original array. */
+  int index;
 };
 
 /**

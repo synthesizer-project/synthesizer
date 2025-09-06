@@ -10,6 +10,7 @@ from unyt import (
     Myr,
     angstrom,
     cm,
+    dimensionless,
     erg,
     km,
     kpc,
@@ -22,7 +23,9 @@ from synthesizer.emission_models import (
     BimodalPacmanEmission,
     IncidentEmission,
     IntrinsicEmission,
+    NebularContinuumEmission,
     NebularEmission,
+    NebularLineEmission,
     PacmanEmission,
     ReprocessedEmission,
     TemplateEmission,
@@ -46,7 +49,7 @@ from synthesizer.pipeline import Pipeline
 @pytest.fixture
 def test_grid():
     """Return a Grid object."""
-    return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
+    return Grid("test_grid.hdf5")
 
 
 @pytest.fixture
@@ -59,8 +62,7 @@ def test_template():
 
 @pytest.fixture
 def lam():
-    """
-    Return a wavelength array.
+    """Return a wavelength array.
 
     This function generates a logarithmically spaced array of wavelengths
     ranging from 10^2 to 10^6 angstroms, with 1000 points in total.
@@ -80,7 +82,17 @@ def lam():
 def nebular_emission_model(test_grid):
     """Return a NebularEmission object."""
     # First need a grid to pass to the NebularEmission object
-    return NebularEmission(grid=test_grid)
+    nebular_line = NebularLineEmission(
+        grid=test_grid,
+    )
+    nebular_continuum = NebularContinuumEmission(
+        grid=test_grid,
+    )
+    return NebularEmission(
+        grid=test_grid,
+        nebular_line=nebular_line,
+        nebular_continuum=nebular_continuum,
+    )
 
 
 @pytest.fixture
@@ -91,17 +103,28 @@ def incident_emission_model(test_grid):
 
 
 @pytest.fixture
-def transmitted_emission_model(test_grid):
+def transmitted_emission_model(test_grid, incident_emission_model):
     """Return a TransmittedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    return TransmittedEmission(grid=test_grid)
+    return TransmittedEmission(
+        grid=test_grid,
+        incident=incident_emission_model,
+    )
 
 
 @pytest.fixture
-def reprocessed_emission_model(test_grid):
+def reprocessed_emission_model(
+    test_grid,
+    nebular_emission_model,
+    transmitted_emission_model,
+):
     """Return a ReprocessedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    return ReprocessedEmission(grid=test_grid)
+    return ReprocessedEmission(
+        grid=test_grid,
+        nebular=nebular_emission_model,
+        transmitted=transmitted_emission_model,
+    )
 
 
 @pytest.fixture
@@ -123,6 +146,7 @@ def bimodal_pacman_emission_model(test_grid):
         grid=test_grid,
         dust_curve_ism=PowerLaw(slope=-0.7),
         dust_curve_birth=PowerLaw(slope=-1.3),
+        age_pivot=6.7 * dimensionless,
     )
 
 
@@ -225,7 +249,7 @@ def unit_emission_stars():
 def random_part_stars():
     """Return a particle Stars object with velocities."""
     # Randomly generate the attribute we'll need for the stars
-    nstars = np.random.randint(5, 10)
+    nstars = np.random.randint(10, 100)
     initial_masses = np.random.uniform(0.1, 10, nstars) * 1e6 * Msun
     ages = np.random.uniform(4, 7, nstars) * Myr
     metallicities = np.random.uniform(0.01, 0.1, nstars)
@@ -233,8 +257,8 @@ def random_part_stars():
     tau_v = np.random.uniform(0.1, 0.9, nstars)
     coordinates = (
         np.random.normal(
-            0.1,
-            np.random.rand(1) * 100,
+            0.0,
+            np.random.rand(1) * 0.01,
             (nstars, 3),
         )
         * Mpc
@@ -248,7 +272,7 @@ def random_part_stars():
         * km
         / s
     )
-    smls = np.random.uniform(0.1, 1, nstars) * Mpc
+    smls = np.random.uniform(0.005, 0.001, nstars) * Mpc
 
     return Stars(
         initial_masses=initial_masses,
@@ -503,6 +527,16 @@ def nircam_instrument(nircam_filters):
 
 
 @pytest.fixture
+def nircam_instrument_no_psf(nircam_filters):
+    """Return a NIRCAM instrument object without PSF."""
+    return Instrument(
+        "JWST",
+        filters=nircam_filters,
+        resolution=1 * Mpc,
+    )
+
+
+@pytest.fixture
 def spectroscopy_instrument(test_grid):
     """Return a generic spectroscopy instrument object."""
     return Instrument("GenericSpec", lam=test_grid.lam)
@@ -530,11 +564,10 @@ def uvj_nircam_insts(uvj_instrument, nircam_instrument):
 
 
 @pytest.fixture
-def base_pipeline(uvj_nircam_insts, nebular_emission_model):
+def base_pipeline(nebular_emission_model):
     """Return an empty pipeline."""
     return Pipeline(
         emission_model=nebular_emission_model,
-        instruments=uvj_nircam_insts,
         nthreads=1,
         verbose=0,
     )
@@ -542,14 +575,12 @@ def base_pipeline(uvj_nircam_insts, nebular_emission_model):
 
 @pytest.fixture
 def pipeline_with_galaxies(
-    uvj_nircam_insts,
     nebular_emission_model,
     list_of_random_particle_galaxies,
 ):
     """Return an empty pipeline."""
     p = Pipeline(
         emission_model=nebular_emission_model,
-        instruments=uvj_nircam_insts,
         nthreads=1,
         verbose=0,
     )
@@ -559,7 +590,6 @@ def pipeline_with_galaxies(
 
 @pytest.fixture
 def pipeline_with_galaxies_per_particle(
-    uvj_nircam_insts,
     nebular_emission_model,
     list_of_random_particle_galaxies,
 ):
@@ -568,7 +598,6 @@ def pipeline_with_galaxies_per_particle(
     nebular_emission_model.set_per_particle(True)
     p = Pipeline(
         emission_model=nebular_emission_model,
-        instruments=uvj_nircam_insts,
         nthreads=1,
         verbose=0,
     )

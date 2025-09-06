@@ -3,7 +3,7 @@ Installation
 
 This guide will walk you through creating an isolated environment and installing the package.
 
-If you instead want to set up a new installation for development see the installation instructions in the `contributing guidelines <../../CONTRIBUTING.md>'_.
+If you instead want to set up a new installation for development see the installation instructions in the `contributing guidelines <contributing.rst>`_.
 
 **Note**: We do not currently support Windows, to use Synthesizer on Windows please install the Windows Subsystem for Linux (WSL).
 
@@ -53,7 +53,7 @@ Installing with OpenMP support
 
 DISCLAIMER: This section is only important if you want to make use of shared memory parallelism for large calculations.
 
-To make use of synthesizer's `shared memory parallelism <../parallelism/openmp.rst>`_ you must first have OpenMP installed on your system.
+To make use of synthesizer's `shared memory parallelism <../performance/openmp.rst>`_ you must first have OpenMP installed on your system.
 Most compilers come with OpenMP baked in with a few exceptions. 
 This means installation with OpenMP is as simple as setting a flag at installation:
 
@@ -107,3 +107,29 @@ Multiple optional dependency groups can be installed in one command. For instanc
 .. code-block:: bash
 
     pip install cosmos-synthesizer[test,docs]
+
+Initialising Synthesizer
+########################
+
+Synthesizer has a small number of data files and directories it needs to function correctly. 
+In most circumstances you don't need to worry about these and everything will be default with automatically.
+The first time you import Synthesizer it will automatically create this directory and tell you where it is and what files have been placed there. 
+
+However, this can be invoked manually using the ``synthesizer-init`` command. 
+
+If you want to see where Synthesizer will place its data files, you can run the ``synthesizer-report`` command. 
+
+To clear out all Synthesizer data files and directories, you can run the ``synthesizer-clear`` command.
+
+Environment Variables 
+##################### 
+
+If you want to customise any of these locations you can define a set of environment varaibles to do so. 
+
+The environment variables are:
+- ``SYNTHESIZER_DIR``: The base directory for Synthesizer files. 
+- ``SYNTHESIZER_DATA_DIR``: The directory for Synthesizer data files. 
+- ``SYNTHESIZER_INSTRUMENT_CACHE``: The directory for Synthesizer's premade instrument files.
+- ``SYNTHESIZER_TEST_DATA_DIR``: The directory for Synthesizer's test data files.
+
+Setting any of these environment variables will result in their creation and population the next time you run ``synthesizer-init`` or import Synthesizer.

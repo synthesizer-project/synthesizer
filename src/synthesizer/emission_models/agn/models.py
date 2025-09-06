@@ -21,8 +21,7 @@ from synthesizer.emission_models.transformers import (
 
 
 class NLRIncidentEmission(BlackHoleEmissionModel):
-    """
-    An emission model that extracts the NLR incident emission.
+    """An emission model that extracts the NLR incident emission.
 
     This defines the extraction of key "incident" from a NLR grid.
 
@@ -31,15 +30,15 @@ class NLRIncidentEmission(BlackHoleEmissionModel):
     """
 
     def __init__(self, grid, label="nlr_incident", **kwargs):
-        """
-        Initialise the NLRIncidentEmission model.
+        """Initialise the NLRIncidentEmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The grid object containing the NLR incident emission.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         BlackHoleEmissionModel.__init__(
@@ -52,8 +51,7 @@ class NLRIncidentEmission(BlackHoleEmissionModel):
 
 
 class BLRIncidentEmission(BlackHoleEmissionModel):
-    """
-    An emission model that extracts the BLR incident emission.
+    """An emission model that extracts the BLR incident emission.
 
     This defines the extraction of key "incident" from a BLR grid.
 
@@ -62,15 +60,15 @@ class BLRIncidentEmission(BlackHoleEmissionModel):
     """
 
     def __init__(self, grid, label="blr_incident", **kwargs):
-        """
-        Initialise the BLRIncidentEmission model.
+        """Initialise the BLRIncidentEmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The grid object containing the BLR incident emission.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         BlackHoleEmissionModel.__init__(
@@ -83,8 +81,7 @@ class BLRIncidentEmission(BlackHoleEmissionModel):
 
 
 class NLRTransmittedEmission(BlackHoleEmissionModel):
-    """
-    An emission model that extracts the NLR transmitted emission.
+    """An emission model that extracts the NLR transmitted emission.
 
     This defines the extraction of key "transmitted" from a NLR grid.
 
@@ -99,19 +96,19 @@ class NLRTransmittedEmission(BlackHoleEmissionModel):
         covering_fraction="covering_fraction",
         **kwargs,
     ):
-        """
-        Initialise the NLRTransmittedEmission model.
+        """Initialise the NLRTransmittedEmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The grid object containing the NLR transmitted emission.
-            label (str)
+            label (str):
                 The label for the model.
-            covering_fraction (float)
+            covering_fraction (float):
                 The covering fraction of the NLR (Effectively the escape
                 fraction of the NLR). Default is to read "covering_fraction"
                 from the blackhole.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         # First get the full NLR trasmitted emission
@@ -135,8 +132,7 @@ class NLRTransmittedEmission(BlackHoleEmissionModel):
 
 
 class BLRTransmittedEmission(BlackHoleEmissionModel):
-    """
-    An emission model that extracts the BLR transmitted emission.
+    """An emission model that extracts the BLR transmitted emission.
 
     This defines the extraction of key "transmitted" from a BLR grid.
 
@@ -151,20 +147,19 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
         covering_fraction="covering_fraction",
         **kwargs,
     ):
-        """
-        Initialise the BLRTransmittedEmission model.
+        """Initialise the BLRTransmittedEmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The grid object containing the BLR transmitted emission.
-            label (str)
+            label (str):
                 The label for the model.
-            covering_fraction (float)
+            covering_fraction (float):
                 The covering fraction of the BLR (Effectively the escape
                 fraction of the BLR). Default is to read "covering_fraction"
                 from the blackhole.
-            **kwargs
-
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
         """
         # First get the full BLR trasmitted emission
         full_blr_transmitted = BlackHoleEmissionModel(
@@ -187,8 +182,7 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
 
 
 class NLREmission(BlackHoleEmissionModel):
-    """
-    An emission model that computes the NLR emission.
+    """An emission model that computes the NLR emission.
 
     This defines the extraction of key "nebular" emission from the NLR grid.
 
@@ -197,15 +191,15 @@ class NLREmission(BlackHoleEmissionModel):
     """
 
     def __init__(self, grid, label="nlr", **kwargs):
-        """
-        Initialise the NLREmission model.
+        """Initialise the NLREmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The grid object containing the NLR emission.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         BlackHoleEmissionModel.__init__(
@@ -218,8 +212,7 @@ class NLREmission(BlackHoleEmissionModel):
 
 
 class BLREmission(BlackHoleEmissionModel):
-    """
-    An emission model that computes the BLR emission.
+    """An emission model that computes the BLR emission.
 
     This defines the extraction of key "nebular" emission from the BLR grid.
 
@@ -228,15 +221,15 @@ class BLREmission(BlackHoleEmissionModel):
     """
 
     def __init__(self, grid, label="blr", **kwargs):
-        """
-        Initialise the BLREmission model.
+        """Initialise the BLREmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The grid object containing the BLR emission.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         BlackHoleEmissionModel.__init__(
@@ -249,8 +242,7 @@ class BLREmission(BlackHoleEmissionModel):
 
 
 class DiscIncidentEmission(BlackHoleEmissionModel):
-    """
-    An emission model that extracts the incident disc emission.
+    """An emission model that extracts the incident disc emission.
 
     By definition this is just an alias to the incident NLR emission, i.e.
     the emission directly from the NLR with no reprocessing.
@@ -260,15 +252,15 @@ class DiscIncidentEmission(BlackHoleEmissionModel):
     """
 
     def __init__(self, grid, label="disc_incident", **kwargs):
-        """
-        Initialise the DiscIncidentEmission model.
+        """Initialise the DiscIncidentEmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The grid object containing the incident disc emission.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         BlackHoleEmissionModel.__init__(
@@ -281,8 +273,7 @@ class DiscIncidentEmission(BlackHoleEmissionModel):
 
 
 class DiscTransmittedEmission(BlackHoleEmissionModel):
-    """
-    An emission model that combines the transmitted disc emission.
+    """An emission model that combines the transmitted disc emission.
 
     This will combine the transmitted NLR and BLR emission to give the
     transmitted disc emission.
@@ -300,17 +291,23 @@ class DiscTransmittedEmission(BlackHoleEmissionModel):
         covering_fraction_nlr=None,
         **kwargs,
     ):
-        """
-        Initialise the DiscTransmittedEmission model.
+        """Initialise the DiscTransmittedEmission model.
 
         Args:
-            nlr_grid (Grid)
+            nlr_grid (Grid):
                 The grid object containing the NLR transmitted emission.
-            blr_grid (Grid)
+            blr_grid (Grid):
                 The grid object containing the BLR transmitted emission.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            covering_fraction_blr (float):
+                The covering fraction of the BLR (Effectively the escape
+                fraction of the BLR). Default is 0.1.
+            covering_fraction_nlr (float):
+                The covering fraction of the NLR (Effectively the escaped
+                fraction of the NLR). Default is 0.1.
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         # Create the child models
@@ -336,8 +333,7 @@ class DiscTransmittedEmission(BlackHoleEmissionModel):
 
 
 class DiscEscapedEmission(BlackHoleEmissionModel):
-    """
-    An emission model that computes the escaped disc emission.
+    """An emission model that computes the escaped disc emission.
 
     This will extract the incident disc emission but apply
     fesc=1 - covering_fraction, since the escaped is the mirror of the
@@ -355,21 +351,21 @@ class DiscEscapedEmission(BlackHoleEmissionModel):
         covering_fraction_blr=None,
         **kwargs,
     ):
-        """
-        Initialise the DiscEscapedEmission model.
+        """Initialise the DiscEscapedEmission model.
 
         Args:
-            grid (Grid)
+            grid (Grid):
                 The NLR grid object.
-            label (str)
+            label (str):
                 The label for the model.
-            covering_fraction_nlr (float)
+            covering_fraction_nlr (float):
                 The covering fraction of the NLR (Effectively the escape
                 fraction of the NLR). Default is 0.1.
-            covering_fraction_blr (float)
+            covering_fraction_blr (float):
                 The covering fraction of the BLR (Effectively the escape
                 fraction of the BLR). Default is 0.1.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
         """
         dic_incident = DiscIncidentEmission(
             grid=grid,
@@ -394,8 +390,7 @@ class DiscEscapedEmission(BlackHoleEmissionModel):
 
 
 class DiscEmission(BlackHoleEmissionModel):
-    """
-    An emission model that computes the total disc emission.
+    """An emission model that computes the total disc emission.
 
     This will combine the tranmitted and escaped disc emission.
 
@@ -412,17 +407,23 @@ class DiscEmission(BlackHoleEmissionModel):
         label="disc",
         **kwargs,
     ):
-        """
-        Initialise the DiscEmission model.
+        """Initialise the DiscEmission model.
 
         Args:
-            nlr_grid (Grid)
+            nlr_grid (Grid):
                 The grid object containing the NLR emission.
-            blr_grid (Grid)
+            blr_grid (Grid):
                 The grid object containing the BLR emission.
-            label (str)
+            label (str):
                 The label for the model.
-            **kwargs
+            covering_fraction_nlr (float):
+                The covering fraction of the NLR (Effectively the escape
+                fraction of the NLR). Default is 0.1.
+            covering_fraction_blr (float):
+                The covering fraction of the BLR (Effectively the escape
+                fraction of the BLR). Default is 0.1.
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         # Create the child models
@@ -451,8 +452,7 @@ class DiscEmission(BlackHoleEmissionModel):
 
 
 class TorusEmission(BlackHoleEmissionModel):
-    """
-    An emission model that computes the torus emission.
+    """An emission model that computes the torus emission.
 
     This will generate the torus emission from the model.
 
@@ -468,21 +468,21 @@ class TorusEmission(BlackHoleEmissionModel):
         disc_incident=None,
         **kwargs,
     ):
-        """
-        Initialise the TorusEmission model.
+        """Initialise the TorusEmission model.
 
         Args:
-            torus_emission_model (dust.emission)
+            torus_emission_model (dust.emission):
                 The dust emission model to use for the torus.
-            grid (Grid)
+            grid (Grid):
                 The grid object to extract the disc incident emission from.
                 Only required if disc_incident is None.
-            label (str)
+            label (str):
                 The label for the model.
-            disc_incident (BlackHoleEmissionModel)
+            disc_incident (BlackHoleEmissionModel):
                 The disc incident emission model to use. If not provided
                 this will be generated from the grid.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         # Make the disc incident model if not provided
@@ -503,8 +503,7 @@ class TorusEmission(BlackHoleEmissionModel):
 
 
 class AGNIntrinsicEmission(BlackHoleEmissionModel):
-    """
-    An emission model that computes the intrinsic AGN emission.
+    """An emission model that computes the intrinsic AGN emission.
 
     This will generate the intrinsic AGN emission from the model by combining
     all child models.
@@ -523,25 +522,25 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
         covering_fraction_blr=None,
         **kwargs,
     ):
-        """
-        Initialise the AGNIntrinsicEmission model.
+        """Initialise the AGNIntrinsicEmission model.
 
         Args:
-            nlr_grid (Grid)
+            nlr_grid (Grid):
                 The grid object containing the NLR emission.
-            blr_grid (Grid)
+            blr_grid (Grid):
                 The grid object containing the BLR emission.
-            torus_emission_model (dust.emission)
+            torus_emission_model (dust.emission):
                 The dust emission model to use for the torus.
-            label (str)
+            label (str):
                 The label for the model.
-            covering_fraction_nlr (float)
+            covering_fraction_nlr (float):
                 The covering fraction of the NLR (Effectively the escape
                 fraction of the NLR). Default is 0.1.
-            covering_fraction_blr (float)
+            covering_fraction_blr (float):
                 The covering fraction of the BLR (Effectively the escape
                 fraction of the BLR). Default is 0.1.
-            **kwargs
+            **kwargs (dict):
+                Additional keyword arguments to pass to the parent class.
 
         """
         # Create the child models

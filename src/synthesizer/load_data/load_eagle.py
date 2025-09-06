@@ -1,6 +1,4 @@
-"""
-A module for interfacing with the outputs of the EAGLE
-hydrodynamical simulations suite.
+"""A submodule for loading EAGLE data into Synthesizer.
 
 The EAGLE hdf5 data loading scripts have been taken from
 the `eagle_io` package (https://github.com/flaresimulations/eagle_IO/).
@@ -48,26 +46,21 @@ def load_EAGLE(
     tot_chunks: int = 1535,
     verbose: bool = False,
 ) -> List[Union[Galaxy, Never]]:
-    """
-    Load EAGLE required EAGLE galaxy properties
-    for generating their SEDs
-    Most useful for running on high-z snaps or
-    individual chunks
+    """Load EAGLE required EAGLE galaxy properties.
 
     Args:
         fileloc (string):
             eagle data file location
         args (namedtuple):
             parser arguments passed on to this job
-        tot_chunks (int)
+        tot_chunks (int):
             total number of files to process
-        verbose (bool)
+        verbose (bool):
             Are we talking?
 
     Returns:
         a dictionary of Galaxy objects with stars and gas components
     """
-
     tag = args.tag
     numThreads = args.nthreads
     chunk = args.chunk
@@ -335,13 +328,14 @@ def load_EAGLE_shm(
     tot_chunks: int = 1535,
     verbose: bool = False,
 ) -> List[Union[Galaxy, Never]]:
-    """
-    Load EAGLE required EAGLE galaxy properties
-    for generating their SEDs using numpy memmap.
-    Most useful for running on high-z snaps
+    """Load EAGLE required EAGLE galaxy properties.
+
+    Note, this function will use a memory mapped array to read in the data
+    from the hdf5 files. This is much faster than reading in the data
+    directly from the hdf5 files.
 
     Args:
-        chunk (int)
+        chunk (int):
             file number to process
         fileloc (string):
             eagle data file location
@@ -353,19 +347,18 @@ def load_EAGLE_shm(
             total number of gas particles
         args (namedtuple):
             parser arguments passed on to this job
-        numThreads (int)
+        numThreads (int):
             number of threads to use
         dtype (numpy object):
             data type of the array in memory
-        tot_chunks (int)
+        tot_chunks (int):
             total number of files to process
-        verbose (bool)
+        verbose (bool):
             Are we talking?
 
     Returns:
         a dictionary of Galaxy objects with stars and gas components
     """
-
     # get the redshift from the given eagle tag
     zed = float(tag[5:].replace("p", "."))
     h = 0.6777
@@ -503,15 +496,14 @@ def load_EAGLE_shm(
 
 
 def np_shm_read(name: str, array_shape: tuple, dtype: str) -> NDArray[Any]:
-    """
-    Read the required numpy memmap array
+    """Read the required numpy memmap array.
 
-    Arguments:
-        name (str)
+    Args:
+        name (str):
             location of the memmap
-        array_shape (tuple)
+        array_shape (tuple):
             shape of the memmap array
-        dtype (str)
+        dtype (str):
             data type of the memmap array
 
     Returns:
@@ -522,13 +514,12 @@ def np_shm_read(name: str, array_shape: tuple, dtype: str) -> NDArray[Any]:
 
 
 def get_files(fileType: str, directory: str, tag: str) -> List[str]:
-    """
-    Fetch filename for the different eagle outputs for reading
+    """Fetch filename for the different eagle outputs for reading.
 
-    Arguments:
-        fileType (string)
+    Args:
+        fileType (str):
             type of file in the eagle outputs
-        directory (string)
+        directory (str):
             eagle data file location
         tag (string):
             snapshot tag to load
@@ -536,7 +527,6 @@ def get_files(fileType: str, directory: str, tag: str) -> List[str]:
     Returns:
         array of files to read
     """
-
     if fileType in ["FOF", "FOF_PARTICLES"]:
         files = glob.glob(
             "%s/groups_%s/group_tab_%s*.hdf5" % (directory, tag, tag)
@@ -588,13 +578,12 @@ def get_files(fileType: str, directory: str, tag: str) -> List[str]:
 
 
 def read_hdf5(filename: str, dataset: str) -> NDArray[Any]:
-    """
-    Read the required dataset from the eagle hdf5 file
+    """Read the required dataset from the eagle hdf5 file.
 
-    Arguments:
-        filename (str)
+    Args:
+        filename (str):
             name of the hdf5 file
-        dataset (str)
+        dataset (str):
             name of the dataset to extract
 
     Returns:
@@ -621,32 +610,33 @@ def read_array(
     photUnits: bool = False,
     verbose: bool = True,
 ) -> Union[NDArray[Any], unyt_array[unyt_quantity]]:
-    """
+    """Read the required dataset from the eagle hdf5 file.
 
-    Arguments:
-        ftype (str)
+    Args:
+        ftype (str):
             eagle file type to read
-        directory (str)
+        directory (str):
             location of the eagle simulation directory
-        tag (str)
+        tag (str):
             snapshot tag to read
-        dataset (str)
+        dataset (str):
             name of the dataset to read
-        numThreads (int)
+        numThreads (int):
             number threads to use
-        noH (bool)
+        noH (bool):
             remove any reduced Hubble factors
-        physicalUnits (bool)
+        physicalUnits (bool):
             return in physical units
-        CGS (bool)
+        CGS (bool):
             return in CGS units
-        verbose (bool)
+        photUnits (bool):
+            return in photometric units
+        verbose (bool):
             verbose condition
 
     Returns:
         Numpy/unyt array from eagle hdf5 filetype
     """
-
     start = timeit.default_timer()
 
     files = get_files(ftype, directory, tag)
@@ -708,20 +698,20 @@ def read_header(
     tag: str,
     dataset: str,
 ) -> NDArray[Any]:
-    """
-    ftype (str)
+    """Read the required header dataset from the eagle hdf5 file.
+
+    Ftype (str):
         eagle file type to read
-    directory (str)
+    directory (str):
         location of the eagle simulation directory
-    tag (str)
+    tag (str):
         snapshot tag to read
-    dataset (str)
+    dataset (str):
         name of the dataset to read
 
     Returns:
         Reads in required eagle hdf5 header data
     """
-
     files = get_files(ftype, directory, tag)
     with h5py.File(files[0], "r") as hf:
         hdr = hf["Header"].attrs[dataset]
@@ -730,16 +720,22 @@ def read_header(
 
 
 def apply_physicalUnits_conversion(
-    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+    filename: str,
+    dataset: str,
+    dat: NDArray[Any],
+    verbose: bool = True,
 ) -> NDArray[Any]:
-    """
-    Arguments:
-        filename (str)
+    """Apply physical conversion to the dataset.
+
+    Args:
+        filename (str):
             filename to read from
-        dataset (str)
+        dataset (str):
             dataset to read attribute
-        dat (array)
+        dat (array):
             dataset array to apply conversion
+        verbose (bool):
+            verbose condition
 
     Returns:
         Numpy array of the dataset converted to physical units
@@ -762,16 +758,22 @@ def apply_physicalUnits_conversion(
 
 
 def apply_hfreeUnits_conversion(
-    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+    filename: str,
+    dataset: str,
+    dat: NDArray[Any],
+    verbose: bool = True,
 ) -> NDArray[Any]:
-    """
-    Arguments:
-        filename (str)
+    """Read the required dataset from the eagle hdf5 file.
+
+    Args:
+        filename (str):
             filename to read from
-        dataset (str)
+        dataset (str):
             dataset to read attribute
-        dat (array)
+        dat (array):
             dataset array to apply conversion
+        verbose (bool):
+            verbose condition
 
     Returns:
         Numpy array of the dataset converted to `h` free units
@@ -794,21 +796,26 @@ def apply_hfreeUnits_conversion(
 
 
 def apply_CGSUnits_conversion(
-    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+    filename: str,
+    dataset: str,
+    dat: NDArray[Any],
+    verbose: bool = True,
 ) -> NDArray[Any]:
-    """
-    Arguments:
-        filename (str)
+    """Apply CGS conversion to the dataset.
+
+    Args:
+        filename (str):
             filename to read from
-        dataset (str)
+        dataset (str):
             dataset to read attribute
-        dat (array)
+        dat (array):
             dataset array to apply conversion
+        verbose (bool):
+            verbose condition
 
     Returns:
         Numpy array of the dataset converted to CGS units
     """
-
     with h5py.File(filename, "r") as hf:
         cgs = hf[dataset].attrs["CGSConversionFactor"]
 
@@ -826,16 +833,22 @@ def apply_CGSUnits_conversion(
 
 
 def apply_PhotUnits(
-    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+    filename: str,
+    dataset: str,
+    dat: NDArray[Any],
+    verbose: bool = True,
 ) -> unyt_array[unyt_quantity]:
-    """ "
-    Arguments:
-        filename (str)
+    """Apply photometric units to the dataset.
+
+    Args:
+        filename (str):
             filename to read from
-        dataset (str)
+        dataset (str):
             dataset to read attribute
-        dat (array)
+        dat (array):
             dataset array to apply conversion
+        verbose (bool):
+            verbose condition
 
     Returns:
         Unyt array of the dataset in the photometric units
@@ -847,11 +860,10 @@ def apply_PhotUnits(
 
 
 def get_star_formation_time(scale_factor: float) -> float:
-    """
-    Function to convert scale factor to z
+    """Convert scale factor to z.
 
-    Arguments:
-        scale_factor (float)
+    Args:
+        scale_factor (float):
             scale factor of the star particle
 
     Returns:
@@ -867,17 +879,16 @@ def get_age(
     args: namedtuple,
     numThreads: int = 4,
 ) -> NDArray[Any]:
-    """
-    Function to convert scale factor to z
+    """Convert scale factor to z.
 
-    Arguments:
-        scale_factors (array)
+    Args:
+        scale_factors (array):
             scale factor of the star particle
-        z (float)
+        z (float):
             redshift
         args (namedtuple):
             parser arguments passed on to this job
-        numThreads (int)
+        numThreads (int):
             number of threads to use
 
     Returns:
@@ -937,72 +948,70 @@ def assign_galaxy_prop(
     s_kwargs: Dict = {},
     g_kwargs: Dict = {},
 ) -> Galaxy:
-    """
-    Load stellar and gas particle data into synthesizer galaxy object.
+    """Load stellar and gas particle data into synthesizer galaxy object.
 
-    Arguments:
-        ii (int)
+    Args:
+        ii (int):
             galaxy number
-        zed (float)
+        zed (float):
             redshift
-        boxl (float)
+        boxl (float):
             simulation box side length
-        aperture (float)
+        aperture (float):
             aperture to use from centre of potential
-        grpno (array)
+        grpno (array):
             Group numbers in this chunk
-        sgrpno (array)
+        sgrpno (array):
             Subgroup numbers in this chunk
-        cop (array)
+        cop (array):
             centre of potential of subhalos in this chunk
-        s_grpno (array)
+        s_grpno (array):
             Stellar particle group numbers
-        s_sgrpno (array)
+        s_sgrpno (array):
             Stellar particle subgroup numbers
-        s_imasses (array)
+        s_imasses (np.ndarray):
             Stellar particle initial masses in Msun
-        s_masses (array)
+        s_masses (np.ndarray):
             Stellar particle current masses in Msun
-        s_ages (array)
+        s_ages (np.ndarray):
             Stellar particle ages in Gyr
-        s_Zsmooth (array)
+        s_Zsmooth (np.ndarray):
             Stellar particle smoothed metallicity
-        s_coords (array)
+        s_coords (np.ndarray):
             Stellar particle coordinates in pMpc
-        s_hsml(array)
+        s_hsml(np.ndarray):
             Stellar particle smoothing length in pMpc
-        s_oxygen (array)
+        s_oxygen (np.ndarray):
             Stellar particle abundance in oxygen
-        s_hydrogen (array)
+        s_hydrogen (np.ndarray):
             Stellar particle abundance in hydrogen
-        s_velocities (array)
+        s_velocities (np.ndarray):
             Stellar Velocities
-        g_grpno (array)
+        g_grpno (np.ndarray):
             Gas particle group number
-        g_sgrpno (array)
+        g_sgrpno (np.ndarray):
             Gas particle subgroup number
-        g_masses (array)
+        g_masses (np.ndarray):
             Gas particle masses in Msun
-        g_Zsmooth (array)
+        g_Zsmooth (np.ndarray):
             Gas particle smoothed metallicity
-        g_sfr (array)
+        g_sfr (np.ndarray):
             Gas particle instantaneous SFR in Msun/yr
-        g_coords: (array)
+        g_coords: (np.ndarray):
             Gas particle coordinates in pMpc
-        g_hsml(array)
+        g_hsml(np.ndarray):
             Gas particle smoothing length in pMpc
-        verbose (bool)
+        verbose (bool):
             Are we talking?
-        s_kwargs (dictionary)
+        s_kwargs (dict):
             kwargs for stars
-        g_kwargs (dictionary)
+        g_kwargs (dict):
             kwargs for gas
 
     Returns:
         Galaxy
             synthesizer galaxy object
     """
-
     galaxy = Galaxy(redshift=zed, verbose=verbose)
 
     # set the bounds of the box length
