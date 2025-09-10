@@ -11,6 +11,9 @@ Some notes on (standard) notation:
 - [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 """
 
+import copy
+import inspect
+
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,17 +51,12 @@ class Abundances:
         reference (AbundancePattern):
             Reference abundance pattern. Optional initialisation argument.
             Defaults to the GalacticConcordance pattern.
-        depletion (dict, float)
-            The depletion pattern to use. Should not be provided with
-            depletion_model. Optional initialisation argument. Defaults to
+        depletion_pattern (dict):
+            The depletion pattern.
+        depletion_model (object or dict)
+            The a synthesizer.depletion_models object or dictionary of
+            depletion. Optional initialisation argument. Defaults to
             None.
-        depletion_model (object)
-            The depletion model object. Should not be provided with
-            depletion. Optional initialisation argument. Defaults to None.
-        depletion_scale (float):
-            The depletion scale factor. Sometimes this is linear, but for
-            some models (e.g. Jenkins (2009)) it's more complex. Optional
-            initialisation argument. Defaults to None.
         helium_mass_fraction (float):
             The helium mass fraction (more commonly denoted as "Y").
         hydrogen_mass_fraction (float):
@@ -86,7 +84,6 @@ class Abundances:
         alpha=0.0,
         abundances=None,
         reference=reference_abundance_patterns.GalacticConcordance,
-        depletion=None,
         depletion_model=None,
         depletion_scale=None,
     ):
@@ -107,16 +104,10 @@ class Abundances:
                 functions to calculate them for the specified metallicity.
             reference (class or str):
                 Reference abundance pattern object or str defining the class.
-            depletion (dict, float):
-                The depletion pattern to use. Should not be provided with
-                depletion_model.
             depletion_model (class or str):
                 The depletion model class or string defining the class.
-                Should not be provided with depletion.
             depletion_scale (float):
-                The depletion scale factor. Sometimes this is linear, but for
-                some models (e.g. Jenkins (2009)) it's more complex.
-
+                Scale passed to the depletion model.
         """
         # Raise an exception if someone tries to set both metallicity and
         # oxygen abundance.
@@ -155,11 +146,45 @@ class Abundances:
         self.alpha = alpha
         self.reference = reference
         # depletion on to dust
-        self.depletion = depletion
         self.depletion_model = depletion_model
-        self.depletion_scale = depletion_scale
 
         # If depletion model is provided as a string use this to extract the
+        # class.
+        if type(depletion_model) is str:
+            self.depletion_model = getattr(depletion_models, depletion_model)()
+
+        # If a depletion_model is provided...
+        if depletion_model:
+            # If depletion_model is provided as a dictionary use this directly
+            # as the depletion_pattern.
+            if type(depletion_model) is dict:
+                self.depletion_pattern = depletion_model
+
+            # If the depletion model is a class, instantiate it.
+            elif inspect.isclass(depletion_model):
+                if depletion_scale is not None:
+                    self.depletion_model = depletion_model(
+                        scale=depletion_scale
+                    )
+                else:
+                    self.depletion_model = depletion_model()
+
+                # Extract the depletion pattern from the depletion model
+                # object.
+                self.depletion_pattern = self.depletion_model.depletion
+
+            # Otherwise extract the depletion pattern from the depletion model
+            # object.
+            elif isinstance(depletion_model, depletion_models.DepletionModel):
+                self.depletion_pattern = depletion_model.depletion
+
+            # Otherwise raise exception.
+            else:
+                raise exceptions.UnrecognisedOption(
+                    """Depletion model not recognised!"""
+                )
+
+        # If abundance pattern is provided as a string use this to extract the
         # class.
         if isinstance(reference, str):
             if reference in reference_abundance_patterns.available_patterns:
@@ -428,12 +453,8 @@ class Abundances:
 
         # If a depletion pattern or depletion_model is provided then calculate
         # the depletion.
-        if (depletion is not None) or (depletion_model is not None):
-            self.add_depletion(
-                depletion=depletion,
-                depletion_model=depletion_model,
-                depletion_scale=depletion_scale,
-            )
+        if depletion_model is not None:
+            self.add_depletion()
         else:
             self.gas = self.total
             self.depletion = {element: 1.0 for element in self.all_elements}
@@ -442,9 +463,7 @@ class Abundances:
             self.dust_mass_fraction = 0.0
             self.dust_to_metal_ratio = 0.0
 
-    def add_depletion(
-        self, depletion=None, depletion_model=None, depletion_scale=None
-    ):
+    def add_depletion(self):
         """Add depletion using a provided depletion pattern or model.
 
         This method creates the following attributes:
@@ -461,109 +480,54 @@ class Abundances:
             dust_to_metal_ratio (float):
                 Dust-to-metal ratio.
 
-        Args:
-            depletion (dict, float):
-                The depletion pattern to use. Should not be provided with
-                depletion_model.
-            depletion_model (object):
-                The depletion model object. Should not be provided with
-                depletion.
-            depletion_scale (float):
-                The depletion scale factor. Sometimes this is linear, but for
-                some models (e.g. Jenkins (2009)) it's more complex.
         """
-        # If depletion model is provided as a string use this to extract the
-        # class.
-        if isinstance(depletion_model, str):
-            if depletion_model in depletion_models.available_patterns:
-                depletion_model = getattr(depletion_models, depletion_model)
-            else:
-                raise exceptions.UnrecognisedOption(
-                    """Depletion model not
-                recognised!"""
+        # deplete the gas and dust
+        self.gas = {}
+        self.dust = {}
+        for element in self.all_elements:
+            # if an entry exists for the element apply depletion
+            if element in self.depletion_pattern.keys():
+                # depletion factors >1.0 are unphysical so cap at 1.0
+                if self.depletion_pattern[element] > 1.0:
+                    self.depletion_pattern[element] = 1.0
+
+                self.gas[element] = np.log10(
+                    10 ** self.total[element] * self.depletion_pattern[element]
                 )
 
-        # Raise exception if both a depletion pattern and depletion_model is
-        # provided.
-        if (depletion is not None) and (depletion_model is not None):
-            raise exceptions.InconsistentParameter(
-                "Can not provide by a depletion pattern and a depletion model"
-            )
-
-        # Raise exception if a depletion_scale is provided by not a
-        # depletion_model.
-        if (depletion_scale is not None) and (depletion_model is None):
-            raise exceptions.InconsistentParameter(
-                """If a depletion scale is provided then a depletion model must
-                also be provided"""
-            )
-
-        # If provided, calculate depletion pattern by calling the depletion
-        # model with the depletion scale.
-        if depletion_model:
-            # If a depletion_scale is provided use this...
-            if self.depletion_scale is not None:
-                depletion = depletion_model(depletion_scale).depletion
-            # ... otherwise use the default.
-            else:
-                depletion = depletion_model().depletion
-
-        # apply depletion pattern
-        if depletion:
-            # deplete the gas and dust
-            self.gas = {}
-            self.dust = {}
-            for element in self.all_elements:
-                # if an entry exists for the element apply depletion
-                if element in depletion.keys():
-                    # depletion factors >1.0 are unphysical so cap at 1.0
-                    if depletion[element] > 1.0:
-                        depletion[element] = 1.0
-
-                    self.gas[element] = np.log10(
-                        10 ** self.total[element] * depletion[element]
+                if self.depletion_pattern[element] == 1.0:
+                    self.dust[element] = -np.inf
+                else:
+                    self.dust[element] = np.log10(
+                        10 ** self.total[element]
+                        * (1 - self.depletion_pattern[element])
                     )
 
-                    if depletion[element] == 1.0:
-                        self.dust[element] = -np.inf
-                    else:
-                        self.dust[element] = np.log10(
-                            10 ** self.total[element]
-                            * (1 - depletion[element])
-                        )
+            # otherwise assume no depletion
+            else:
+                self.depletion_pattern[element] = 1.0
+                self.gas[element] = self.total[element]
+                self.dust[element] = -np.inf
 
-                # otherwise assume no depletion
-                else:
-                    depletion[element] = 1.0
-                    self.gas[element] = self.total[element]
-                    self.dust[element] = -np.inf
+        # calculate mass fraction in metals
+        # NOTE: this should be identical to the metallicity.
+        self.metal_mass_fraction = self.calculate_mass_fraction(self.metals)
 
-            # calculate mass fraction in metals
-            # NOTE: this should be identical to the metallicity.
-            self.metal_mass_fraction = self.calculate_mass_fraction(
-                self.metals
-            )
+        # calculate mass fraction in dust
+        self.dust_mass_fraction = self.calculate_mass_fraction(
+            self.metals, a=self.dust
+        )
 
-            # calculate mass fraction in dust
-            self.dust_mass_fraction = self.calculate_mass_fraction(
-                self.metals, a=self.dust
-            )
+        # calculate dust-to-metal ratio and save as an attribute
+        self.dust_to_metal_ratio = (
+            self.dust_mass_fraction / self.metal_mass_fraction
+        )
 
-            # calculate dust-to-metal ratio and save as an attribute
-            self.dust_to_metal_ratio = (
-                self.dust_mass_fraction / self.metal_mass_fraction
-            )
-
-            # calculate integrated dust abundance
-            # this is used by cloudy23
-            self.dust_abundance = self.calculate_integrated_abundance(
-                self.metals, a=self.dust
-            )
-
-            # Associate parameters with object
-            self.depletion = depletion
-            self.depletion_scale = depletion_scale
-            self.depletion_model = depletion_model
+        # calculate integrated dust abundance
+        # this is used by cloudy23
+        self.dust_abundance = self.calculate_integrated_abundance(
+            self.metals, a=self.dust
+        )
 
     def __getitem__(self, arg):
         """Return the abundance for a particular element.
@@ -703,9 +667,14 @@ class Abundances:
             a = self.total
 
         # calculate the total mass
-        total_mass = self.calculate_mass(self.all_elements, a=a)
+        total_mass = self.calculate_mass(
+            self.all_elements, a=copy.copy(self.total)
+        )
 
-        return self.calculate_mass(elements, a=a) / total_mass
+        # calculate the mass in the elements of interest
+        mass = self.calculate_mass(elements, a=a)
+
+        return mass / total_mass
 
     def reference_relative_abundance(self, element, ref_element="H"):
         """Return the relative abundance of an element.
