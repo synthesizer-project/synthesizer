@@ -20,6 +20,8 @@ Example usage::
 
 """
 
+import random
+
 from unyt import deg
 
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
@@ -41,10 +43,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             The disc emission model assuming isotropic emission.
         disc_incident (BlackHoleEmissionModel):
             The disc emission model accounting for the geometry but unmasked.
-        nlr_transmitted (BlackHoleEmissionModel):
-            The NLR transmitted emission
-        blr_transmitted (BlackHoleEmissionModel):
-            The BLR transmitted emission
         disc_transmitted (BlackHoleEmissionModel):
             The disc transmitted emission
         disc_escaped (BlackHoleEmissionModel):
@@ -189,61 +187,62 @@ class UnifiedAGN(BlackHoleEmissionModel):
         blr_grid,
         covering_fraction_nlr,
         covering_fraction_blr,
+        disc_transmission,
         **kwargs,
     ):
-        """Make the disc transmitted spectra."""
-        # Make the line regions
-        full_nlr = BlackHoleEmissionModel(
-            grid=nlr_grid,
-            label="full_disc_transmitted_nlr",
-            extract="transmitted",
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
-            **kwargs,
-        )
-        nlr = BlackHoleEmissionModel(
-            label="disc_transmitted_nlr",
-            apply_to=full_nlr,
-            transformer=CoveringFraction(
-                covering_attrs=("covering_fraction_nlr",)
-            ),
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
-            fesc=covering_fraction_nlr,
-            **kwargs,
-        )
-        full_blr = BlackHoleEmissionModel(
-            grid=blr_grid,
-            label="full_disc_transmitted_blr",
-            extract="transmitted",
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
-            **kwargs,
-        )
-        blr = BlackHoleEmissionModel(
-            label="disc_transmitted_blr",
-            apply_to=full_blr,
-            transformer=CoveringFraction(
-                covering_attrs=("covering_fraction_blr",)
-            ),
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
-            fesc=covering_fraction_blr,
-            **kwargs,
-        )
+        """Make the disc transmitted spectra.
 
-        # Combine the models
-        model = BlackHoleEmissionModel(
-            label="disc_transmitted",
-            combine=(nlr, blr),
-            **kwargs,
-        )
+        Note: in an earlier incarnation of this model the transmitted disc
+        spectra was the combination of the escaping light and then the sum of
+        the transmission through the NLR and BLR weighted by the covering
+        fraction. However, this does not make much sense since an observer
+        is only seeing one line of sight.
+        """
+        # If the disc_transmission is random, then assign between nlr, blr or
+        # none based on the covering fractions.
 
-        return nlr, blr, model
+        if disc_transmission == "random":
+            disc_transmission_options = ["nlr", "blr", "none"]
+            probabilities = [
+                covering_fraction_nlr,
+                covering_fraction_blr,
+                1 - covering_fraction_nlr - covering_fraction_blr,
+            ]  # probabilities must sum to 1 (or will be normalized)
+
+            disc_transmission = random.choices(
+                disc_transmission_options, weights=probabilities, k=1
+            )[0]
+
+        # If the disc emission is transmitted through the NLR ...
+        if disc_transmission == "nlr":
+            disc_transmitted = BlackHoleEmissionModel(
+                grid=nlr_grid,
+                label="full_disc_transmitted_nlr",
+                extract="transmitted",
+                mask_attr="_torus_edgeon_cond",
+                mask_thresh=90 * deg,
+                mask_op="<",
+                **kwargs,
+            )
+
+        # If the disc emission is transmitted through the BLR ...
+        if disc_transmission == "blr":
+            disc_transmitted = BlackHoleEmissionModel(
+                grid=blr_grid,
+                label="full_disc_transmitted_blr",
+                extract="transmitted",
+                mask_attr="_torus_edgeon_cond",
+                mask_thresh=90 * deg,
+                mask_op="<",
+                **kwargs,
+            )
+
+        # If the disc emission simply escapes then it is equivalent to the
+        # incident spectra.
+        if disc_transmission == "none":
+            disc_transmitted = self.disc_incident
+
+        return disc_transmitted
 
     def _make_disc(self, **kwargs):
         """Make the disc spectra."""
