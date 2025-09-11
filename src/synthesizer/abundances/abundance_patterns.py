@@ -12,7 +12,6 @@ Some notes on (standard) notation:
 """
 
 import copy
-import inspect
 
 import cmasher as cmr
 import matplotlib.pyplot as plt
@@ -21,7 +20,6 @@ import numpy as np
 from synthesizer import exceptions
 from synthesizer.abundances import (
     abundance_scalings,
-    depletion_models,
     elements,
     reference_abundance_patterns,
 )
@@ -84,8 +82,8 @@ class Abundances:
         alpha=0.0,
         abundances=None,
         reference=reference_abundance_patterns.GalacticConcordance,
+        depletion_pattern=None,
         depletion_model=None,
-        depletion_scale=None,
     ):
         """Initialise an abundance pattern.
 
@@ -104,10 +102,10 @@ class Abundances:
                 functions to calculate them for the specified metallicity.
             reference (class or str):
                 Reference abundance pattern object or str defining the class.
-            depletion_model (class or str):
-                The depletion model class or string defining the class.
-            depletion_scale (float):
-                Scale passed to the depletion model.
+            depletion_pattern (dict):
+                The depletion pattern
+            depletion_model (class):
+                An instance of a synthesizer.depletion_models class.
         """
         # Raise an exception if someone tries to set both metallicity and
         # oxygen abundance.
@@ -148,41 +146,13 @@ class Abundances:
         # depletion on to dust
         self.depletion_model = depletion_model
 
-        # If depletion model is provided as a string use this to extract the
-        # class.
-        if type(depletion_model) is str:
-            self.depletion_model = getattr(depletion_models, depletion_model)()
+        # If a depletion pattern is provided use this directly.
+        if depletion_pattern:
+            self.depletion_pattern = depletion_pattern
 
-        # If a depletion_model is provided...
-        if depletion_model:
-            # If depletion_model is provided as a dictionary use this directly
-            # as the depletion_pattern.
-            if type(depletion_model) is dict:
-                self.depletion_pattern = depletion_model
-
-            # If the depletion model is a class, instantiate it.
-            elif inspect.isclass(depletion_model):
-                if depletion_scale is not None:
-                    self.depletion_model = depletion_model(
-                        scale=depletion_scale
-                    )
-                else:
-                    self.depletion_model = depletion_model()
-
-                # Extract the depletion pattern from the depletion model
-                # object.
-                self.depletion_pattern = self.depletion_model.depletion
-
-            # Otherwise extract the depletion pattern from the depletion model
-            # object.
-            elif isinstance(depletion_model, depletion_models.DepletionModel):
-                self.depletion_pattern = depletion_model.depletion
-
-            # Otherwise raise exception.
-            else:
-                raise exceptions.UnrecognisedOption(
-                    """Depletion model not recognised!"""
-                )
+        # Otherwise, if a depletion_model is provided...
+        elif depletion_model:
+            self.depletion_pattern = self.depletion_model.depletion
 
         # If abundance pattern is provided as a string use this to extract the
         # class.
@@ -457,7 +427,9 @@ class Abundances:
             self.add_depletion()
         else:
             self.gas = self.total
-            self.depletion = {element: 1.0 for element in self.all_elements}
+            self.depletion_pattern = {
+                element: 1.0 for element in self.all_elements
+            }
             self.dust = {element: -np.inf for element in self.all_elements}
             self.metal_mass_fraction = self.metallicity
             self.dust_mass_fraction = 0.0
@@ -599,7 +571,7 @@ class Abundances:
                 f"{self.total[ele]:.2f}",
                 f"{self.total[ele] + 12:.2f}",
                 f"{self.total[ele] - self.reference.abundance[ele]:.2f}",
-                f"{self.depletion[ele]:.2f}",
+                f"{self.depletion_pattern[ele]:.2f}",
                 f"{self.gas[ele]:.2f}",
                 f"{self.dust[ele]:.2f}",
             )
