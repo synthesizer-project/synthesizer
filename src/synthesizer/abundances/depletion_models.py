@@ -15,7 +15,13 @@ available_patterns = [
 ]
 
 
-class Jenkins2009_Gunasekera2021:
+class DepletionModel:
+    """Base class for depletion models."""
+
+    pass
+
+
+class Jenkins2009_Gunasekera2021(DepletionModel):
     """Implemention of the Jenkins (2009) depletion pattern.
 
     This is the model that is built into cloudy23 as described by
@@ -65,12 +71,12 @@ class Jenkins2009_Gunasekera2021:
         "Zn": (-0.61, -0.28, 0.56),
     }
 
-    def __init__(self, fstar=0.5, limit=1.0):
+    def __init__(self, scale=0.5, limit=1.0):
         """Initialise the class.
 
         Args:
-            fstar (float):
-                The Jenkins (2009) scaling parameter.
+            scale (float):
+                The Jenkins (2009) scaling parameter (F*).
             limit (float):
                 The maximum depletion value. This is used to limit the
                 depletion to a maximum value. This is useful for elements
@@ -82,11 +88,11 @@ class Jenkins2009_Gunasekera2021:
             a_x, b_x, z_x = parameters
             # calculate depletion, including limit
 
-            depletion = np.min([limit, 10 ** (b_x + a_x * (fstar - z_x))])
+            depletion = np.min([limit, 10 ** (b_x + a_x * (scale - z_x))])
             self.depletion[element] = depletion
 
 
-class CloudyClassic:
+class CloudyClassic(DepletionModel):
     """Implementation of the 'cloudy classic' depletion pattern.
 
     This is the same as the one that is built into cloudy23.
@@ -138,7 +144,7 @@ class CloudyClassic:
         }
 
 
-class Gutkin2016:
+class Gutkin2016(DepletionModel):
     """Depletion pattern created for Synthesizer 2024.
 
     Gutkin+2016 (ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract)
