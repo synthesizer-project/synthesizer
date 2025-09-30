@@ -108,6 +108,8 @@ WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 RUTHLESS = "RUTHLESS" in os.environ
 ATOMIC_TIMING = "ATOMIC_TIMING" in os.environ
+DISABLE_OPTIMIZATIONS = "DISABLE_OPTIMIZATIONS" in os.environ
+DEBUG = "DEBUG" in os.environ
 
 # Define the log file
 LOG_FILE = "build_synth.log"
@@ -215,6 +217,14 @@ if RUTHLESS:
         default_compile_flags.append("-Wall")
         default_compile_flags.append("-Wextra")
 
+# If DEBUG is set, add debug flags
+if DEBUG:
+    if sys.platform == "win32":
+        default_compile_flags.append("/Zi")
+    else:
+        default_compile_flags.append("-g")
+    logger.info("### DEBUG enabled: added debug symbols")
+
 # Get user specified flags
 compile_flags = CFLAGS.split()
 link_args = LDFLAGS.split()
@@ -231,6 +241,34 @@ if WITH_DEBUGGING_CHECKS:
     compile_flags.append("-DWITH_DEBUGGING_CHECKS")
 if ATOMIC_TIMING:
     compile_flags.append("-DATOMIC_TIMING")
+
+# If DISABLE_OPTIMIZATIONS is set, strip any optimisation flags and add
+# canonical no-optimisation flags
+if DISABLE_OPTIMIZATIONS:
+    logger.info(
+        "### DISABLE_OPTIMIZATIONS enabled: stripping optimisation flags"
+    )
+
+    def _strip_optim(flags):
+        out = []
+        for f in flags:
+            if sys.platform == "win32":
+                # Remove /O* and speed-favoring options
+                if f.startswith("/O") or f.lower().startswith("/favor:"):
+                    continue
+            else:
+                # Remove -O* (e.g., -O2, -O3, -Ofast, -Os, -Oz) and fast-math
+                if f.startswith("-O") or f == "-ffast-math":
+                    continue
+            out.append(f)
+        return out
+
+    compile_flags = _strip_optim(compile_flags)
+    # Add canonical no-opt flag
+    if sys.platform == "win32":
+        compile_flags.append("/Od")
+    else:
+        compile_flags.append("-O0")
 
 # Report the flags we will use
 logger.info(f"### Using compile flags: {compile_flags}")
