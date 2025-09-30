@@ -114,6 +114,11 @@ DEBUG = "DEBUG" in os.environ
 # Define the log file
 LOG_FILE = "build_synth.log"
 
+# Clear the contents of the log file if it exists
+if os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "w") as f:
+        f.write("")
+
 # Set up logging (this allows us to log messages directly to a file during
 # the build)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
