@@ -221,12 +221,20 @@ build_balanced_work_list(struct cell *root, int nthreads,
  * @param out The output array to populate with the pixel values.
  * @param nimgs The number of images to populate.
  * @param pix_values The pixel values to use for each image.
+ * @param res The pixel resolution.
+ * @param npix_x The number of pixels along the x axis.
+ * @param npix_y The number of pixels along the y axis.
+ *
+ * @return ret Return code (0 = success, 1 = failure).
  */
-static void populate_pixel_recursive(const struct cell *c, double threshold,
-                                     int kdim, const double *kernel, int npart,
-                                     double *out, int nimgs,
-                                     const double *pix_values, const double res,
-                                     const int npix_x, const int npix_y) {
+static int populate_pixel_recursive(const struct cell *c, double threshold,
+                                    int kdim, const double *kernel, int npart,
+                                    double *out, int nimgs,
+                                    const double *pix_values, const double res,
+                                    const int npix_x, const int npix_y) {
+
+  /* Default to success. */
+  int ret = 0;
 
   /* Is the cell split? */
   if (c->split) {
@@ -241,8 +249,13 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
       }
 
       /* Recurse... */
-      populate_pixel_recursive(cp, threshold, kdim, kernel, npart, out, nimgs,
-                               pix_values, res, npix_x, npix_y);
+      int child_ret =
+          populate_pixel_recursive(cp, threshold, kdim, kernel, npart, out,
+                                   nimgs, pix_values, res, npix_x, npix_y);
+      if (child_ret != 0) {
+        /* Bubble up failure immediately. */
+        return 1;
+      }
     }
 
   } else {
@@ -273,9 +286,9 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
     int j_min = std::max(0, (int)floor(y_min_world / res));
     int j_max = std::min(npix_y, (int)ceil(y_max_world / res));
 
-    /* If we are outside the cell then just return. */
+    /* If we are outside the cell then just return success (nothing to do). */
     if (i_min >= npix_x || i_max <= 0 || j_min >= npix_y || j_max <= 0) {
-      return;
+      return 0;
     }
 
     /* Calculate the dimensions of our local image buffer. */
@@ -284,15 +297,15 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
 
     /* Safety check: ensure we have valid dimensions. */
     if (local_width <= 0 || local_height <= 0) {
-      PyErr_SetString(PyExc_ValueError,
-                      "Invalid local image dimensions calculated.");
-      return;
+      /* Do not touch Python here; simply signal failure. */
+      return 1;
     }
 
     /* Allocate and zero-initialize the local image buffer. This will store
      * contributions from all particles in this cell before we copy them
      * back to the global image. */
-    std::vector<double> local_img(local_width * local_height * nimgs, 0.0);
+    std::vector<double> local_img((size_t)local_width * local_height * nimgs,
+                                  0.0);
 
     /* Unpack the particles from this leaf cell. */
     struct particle *parts = c->particles;
@@ -326,7 +339,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
             for (int nimg = 0; nimg < nimgs; nimg++) {
               int local_idx =
                   local_i * local_height * nimgs + local_j * nimgs + nimg;
-              if (local_idx >= 0 && local_idx < local_img.size()) {
+              if (local_idx >= 0 && local_idx < (int)local_img.size()) {
                 local_img[local_idx] += pix_values[part->index * nimgs + nimg];
               }
             }
@@ -391,7 +404,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
             for (int nimg = 0; nimg < nimgs; nimg++) {
               int local_idx =
                   local_i * local_height * nimgs + local_j * nimgs + nimg;
-              if (local_idx >= 0 && local_idx < local_img.size()) {
+              if (local_idx >= 0 && local_idx < (int)local_img.size()) {
                 local_img[local_idx] +=
                     kvalue * pix_values[part->index * nimgs + nimg];
               }
@@ -434,6 +447,8 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
       }
     }
   }
+
+  return ret;
 }
 
 /**
@@ -457,31 +472,49 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
  * @param nimgs: The number of images to populate.
  * @param root: The root of the tree.
  * @param nthreads: The number of threads to use.
- * @return void
+ * @return ret Return code (0 = success, 1 = failure).
  */
 #ifdef WITH_OPENMP
-void populate_smoothed_image_parallel(const double *pix_values,
-                                      const double *kernel, const double res,
-                                      const int npix_x, const int npix_y,
-                                      const int npart, const double threshold,
-                                      const int kdim, double *img,
-                                      const int nimgs, struct cell *root,
-                                      const int nthreads) {
+int populate_smoothed_image_parallel(const double *pix_values,
+                                     const double *kernel, const double res,
+                                     const int npix_x, const int npix_y,
+                                     const int npart, const double threshold,
+                                     const int kdim, double *img,
+                                     const int nimgs, struct cell *root,
+                                     const int nthreads) {
 
   /* Build a balanced work list. */
   std::vector<weighted_cell> work_list =
       build_balanced_work_list(root, nthreads);
 
+  /* Shared failure flag across threads. */
+  int any_fail = 0;
+
   /* Parallel loop over the work list. */
-#pragma omp parallel for num_threads(nthreads) schedule(dynamic)
-  for (int i = 0; i < work_list.size(); i++) {
+#pragma omp parallel for num_threads(nthreads) schedule(dynamic)               \
+    shared(any_fail)
+  for (int i = 0; i < (int)work_list.size(); i++) {
+    /* If any thread has failed, skip more work. */
+    if (any_fail) {
+      continue;
+    }
+
     const weighted_cell &wc = work_list[i];
     struct cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
-    populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
-                             pix_values, res, npix_x, npix_y);
+    int local_ret =
+        populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
+                                 pix_values, res, npix_x, npix_y);
+    if (local_ret != 0) {
+#ifdef WITH_OPENMP
+#pragma omp atomic write
+#endif
+      any_fail = 1;
+    }
   }
+
+  return any_fail ? 1 : 0;
 }
 #endif
 
@@ -512,28 +545,38 @@ void populate_smoothed_image_parallel(const double *pix_values,
  * @param img: The image to be populated.
  * @param nimgs: The number of images to populate.
  * @param root: The root of the tree.
+ * @return ret Return code (0 = success, 1 = failure).
  */
-void populate_smoothed_image_serial(const double *pix_values,
-                                    const double *kernel, const double res,
-                                    const int npix_x, const int npix_y,
-                                    const int npart, const double threshold,
-                                    const int kdim, double *img,
-                                    const int nimgs, struct cell *root) {
+int populate_smoothed_image_serial(const double *pix_values,
+                                   const double *kernel, const double res,
+                                   const int npix_x, const int npix_y,
+                                   const int npart, const double threshold,
+                                   const int kdim, double *img, const int nimgs,
+                                   struct cell *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
    * but it keeps the code consistent with the parallel version and has
    * negligible cost and does give cache benefits). */
   std::vector<weighted_cell> work_list = build_balanced_work_list(root, 1);
 
+  int ret = 0;
+
   /* Loop over the work list. */
-  for (int i = 0; i < work_list.size(); i++) {
+  for (int i = 0; i < (int)work_list.size(); i++) {
     const weighted_cell &wc = work_list[i];
     struct cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
-    populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
-                             pix_values, res, npix_x, npix_y);
+    int local_ret =
+        populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
+                                 pix_values, res, npix_x, npix_y);
+    if (local_ret != 0) {
+      ret = 1;
+      break;
+    }
   }
+
+  return ret;
 }
 
 /**
@@ -557,39 +600,46 @@ void populate_smoothed_image_serial(const double *pix_values,
  * @param nimgs: The number of images to populate.
  * @param root: The root of the tree.
  * @param nthreads: The number of threads to use.
+ * @return ret Return code (0 = success, 1 = failure).
  */
-void populate_smoothed_image(const double *pix_values, const double *kernel,
-                             const double res, const int npix_x,
-                             const int npix_y, const int npart,
-                             const double threshold, const int kdim,
-                             double *img, const int nimgs, struct cell *root,
-                             const int nthreads) {
+int populate_smoothed_image(const double *pix_values, const double *kernel,
+                            const double res, const int npix_x,
+                            const int npix_y, const int npart,
+                            const double threshold, const int kdim, double *img,
+                            const int nimgs, struct cell *root,
+                            const int nthreads) {
   double start = tic();
+
+  int ret = 0;
 
   /* If we have multiple threads and OpenMP we can parallelise. */
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
 
     /* Populate the image in parallel. */
-    populate_smoothed_image_parallel(pix_values, kernel, res, npix_x, npix_y,
-                                     npart, threshold, kdim, img, nimgs, root,
-                                     nthreads);
+    ret = populate_smoothed_image_parallel(pix_values, kernel, res, npix_x,
+                                           npix_y, npart, threshold, kdim, img,
+                                           nimgs, root, nthreads);
 
   } else {
 
     /* If we don't have OpenMP call the serial version. */
-    populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y,
-                                   npart, threshold, kdim, img, nimgs, root);
+    ret = populate_smoothed_image_serial(pix_values, kernel, res, npix_x,
+                                         npix_y, npart, threshold, kdim, img,
+                                         nimgs, root);
   }
 #else
   (void)nthreads;
 
   /* If we don't have OpenMP call the serial version. */
-  populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y, npart,
-                                 threshold, kdim, img, nimgs, root);
+  ret =
+      populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y,
+                                     npart, threshold, kdim, img, nimgs, root);
 #endif
 
   toc("Populating smoothed image", start);
+
+  return ret;
 }
 
 /**
@@ -665,11 +715,22 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   toc("Creating output image array", out_start);
 
   /* Populate the image. */
-  populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
-                          threshold, kdim, img, nimgs, root, nthreads);
+  int ret =
+      populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
+                              threshold, kdim, img, nimgs, root, nthreads);
 
   /* Cleanup the cell tree. */
   cleanup_cell_tree(root);
+
+  /* If something went wrong, raise a Python exception here (we have the GIL).
+   */
+  if (ret != 0) {
+    Py_DECREF(np_img);
+    PyErr_SetString(
+        PyExc_ValueError,
+        "populate_smoothed_image failed (invalid local image region).");
+    return NULL;
+  }
 
   toc("Computing smoothed image", start_time);
 
