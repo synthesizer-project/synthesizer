@@ -273,6 +273,11 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
     int j_min = std::max(0, (int)floor(y_min_world / res));
     int j_max = std::min(npix_y, (int)ceil(y_max_world / res));
 
+    /* If we are outside the cell then just return. */
+    if (i_min >= npix_x || i_max <= 0 || j_min >= npix_y || j_max <= 0) {
+      return;
+    }
+
     /* Calculate the dimensions of our local image buffer. */
     int local_width = i_max - i_min;
     int local_height = j_max - j_min;
