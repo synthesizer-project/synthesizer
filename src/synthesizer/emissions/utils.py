@@ -93,7 +93,7 @@ line_labels = {
     "O 3 4958.91A, O 3 5006.84A": (
         r"[\mathrm{O\,III}]\,\lambda\lambda4959,5007"
     ),
-    "H 1 6564.62A": r"\mathrm{H}\alpha$",
+    "H 1 6564.62A": r"H\alpha",
     "N 2 6583.45A": r"[\mathrm{N\,II}]\,\lambda6583",
     "O 1 6300.30A": r"[\mathrm{O\,I}]\,\lambda6300",
     "S 2 6716.44A, S 2 6730.82A": (
