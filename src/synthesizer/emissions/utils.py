@@ -72,6 +72,40 @@ def get_composite_line_id_from_list(id):
         return id
 
 
+# Dictionary of common line labels to use by default
+line_labels = {
+    "C 4 1548.19A, C 4 1550.77A": (
+        r"[\mathrm{C\,IV}]\,\lambda\lambda1548,1551"
+    ),
+    "O 3 1660.81A, O 3 1666.15A": (
+        r"\mathrm{O\,III}]\,\lambda\lambda1661,1666"
+    ),
+    "C 3 1906.68A, C 3 1908.73A": (
+        r"\mathrm{C\,III}]\,\lambda\lambda1907,1909$"
+    ),
+    "He 2 1640.41A": r"\mathrm{He\,II}\,\lambda1640",
+    "O 2 3726.03A, O 2 3728.81A": (
+        r"[\mathrm{O\,II}]\,\lambda\lambda3726,3729"
+    ),
+    "Ne 3 3868.76A": r"[\mathrm{Ne\,III}]\,\lambda3869",
+    "H 1 4101.73A": r"\mathrm{H}\delta",
+    "H 1 4340.46A": r"\mathrm{H}\gamma",
+    "H 1 4861.32A": r"\mathrm{H}\beta",
+    "O 3 5006.84A": r"[\mathrm{O\,III}]\,\lambda5007",
+    "O 3 4958.91A, O 3 5006.84A": (
+        r"[\mathrm{O\,III}]\,\lambda\lambda4959,5007"
+    ),
+    "H 1 6562.80A": r"\mathrm{H}\alpha",
+    "N 2 6583.45A": r"[\mathrm{N\,II}]\,\lambda6583",
+    "O 1 6300.30A": r"[\mathrm{O\,I}]\,\lambda6300",
+    "S 2 6716.44A, S 2 6730.82A": (
+        r"[\mathrm{S\,II}]\,\lambda\lambda6716,6731"
+    ),
+    "S 2 6730.82A": r"[\mathrm{S\,II}]\,\lambda6731",
+    "S 2 6716.44A": r"[\mathrm{S\,II}]\,\lambda6716",
+}
+
+
 def get_line_label(line_id):
     """Get a line label for a given line_id, ratio, or diagram.
 
@@ -232,17 +266,6 @@ O3 = aliases["O3"]
 Ne3 = aliases["Ne3"]
 N2 = aliases["N2"]
 S2 = aliases["S2"]
-
-
-# Dictionary of common line labels to use by default
-line_labels = {
-    "O 2 3726.03A,O 2 3728.81A": "[OII]3726,3729",
-    "H 1 4861.32A": r"H\beta",
-    "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
-    "H 1 6562.80A": r"H\alpha",
-    "O 3 5006.84A": "[OIII]5007",
-    "N 2 6583.45A": "[NII]6583",
-}
 
 
 def alias_to_line_id(alias):
