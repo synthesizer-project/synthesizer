@@ -88,12 +88,14 @@ line_labels = {
         r"[\mathrm{O\,II}]\,\lambda\lambda3726,3729"
     ),
     "Ne 3 3868.76A": r"[\mathrm{Ne\,III}]\,\lambda3869",
-    "H 1 4862.69A": r"\mathrm{H}\beta",
+    "H 1 4101.73A": r"\mathrm{H}\delta",
+    "H 1 4340.46A": r"\mathrm{H}\gamma",
+    "H 1 4861.32A": r"\mathrm{H}\beta",
     "O 3 5006.84A": r"[\mathrm{O\,III}]\,\lambda5007",
     "O 3 4958.91A, O 3 5006.84A": (
         r"[\mathrm{O\,III}]\,\lambda\lambda4959,5007"
     ),
-    "H 1 6564.62A": r"H\alpha",
+    "H 1 6564.62A": r"\mathrm{H}\alpha",
     "N 2 6583.45A": r"[\mathrm{N\,II}]\,\lambda6583",
     "O 1 6300.30A": r"[\mathrm{O\,I}]\,\lambda6300",
     "S 2 6716.44A, S 2 6730.82A": (
