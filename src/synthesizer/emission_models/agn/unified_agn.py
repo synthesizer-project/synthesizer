@@ -149,6 +149,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="disc_incident_isotropic",
             extract="incident",
             cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
@@ -165,6 +167,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=grid,
             label="disc_incident",
             extract="incident",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
