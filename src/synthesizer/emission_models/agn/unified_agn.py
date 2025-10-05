@@ -200,6 +200,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         nlr = BlackHoleEmissionModel(
@@ -212,6 +214,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_thresh=90 * deg,
             mask_op="<",
             fesc=covering_fraction_nlr,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         full_blr = BlackHoleEmissionModel(
@@ -221,6 +225,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
@@ -233,6 +239,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_thresh=90 * deg,
             mask_op="<",
             fesc=covering_fraction_blr,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
@@ -268,6 +276,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="full_reprocessed_nlr",
             extract="nebular",
             cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         full_blr = BlackHoleEmissionModel(
@@ -278,6 +288,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_thresh=90 * deg,
             mask_op="<",
             cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
@@ -289,6 +301,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 covering_attrs=("covering_fraction_nlr",)
             ),
             fesc=covering_fraction_nlr,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
@@ -298,6 +312,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 covering_attrs=("covering_fraction_blr",)
             ),
             fesc=covering_fraction_blr,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
         return nlr, blr
