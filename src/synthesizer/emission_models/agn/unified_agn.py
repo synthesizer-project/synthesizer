@@ -66,7 +66,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         covering_fraction_nlr="covering_fraction_nlr",
         covering_fraction_blr="covering_fraction_blr",
         covered_fraction="covered_fraction",
-        disc_transmission="nlr",
+        disc_transmission="combined",
         label="intrinsic",
         **kwargs,
     ):
