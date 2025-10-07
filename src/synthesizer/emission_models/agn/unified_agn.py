@@ -128,8 +128,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Get the disc emission model
-        self.disc = self.disc_transmitted
+        self.disc = self._make_disc(**kwargs)
 
         # Get the line regions
         self.nlr, self.blr = self._make_line_regions(
@@ -158,6 +157,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_incident,
                 self.disc_averaged,
                 self.disc_averaged_without_torus,
+                self.disc,
             ),
             **kwargs,
         )
@@ -319,6 +319,14 @@ class UnifiedAGN(BlackHoleEmissionModel):
             )
 
         return disc_transmitted
+
+    def _make_disc(self, **kwargs):
+        """Now is effectively just an alias to disc_transmitted."""
+        return BlackHoleEmissionModel(
+            label="disc",
+            combine=(self.disc_transmitted,),
+            **kwargs,
+        )
 
     def _make_disc_averaged(
         self,
