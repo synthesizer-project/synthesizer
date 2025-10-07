@@ -47,7 +47,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             The BLR transmitted emission
         disc_transmitted (BlackHoleEmissionModel):
             The disc transmitted emission
-        disc_escaped (BlackHoleEmissionModel):
+        disc_lr_escaped (BlackHoleEmissionModel):
             The disc escaped emission
         disc (BlackHoleEmissionModel):
             The disc emission model
