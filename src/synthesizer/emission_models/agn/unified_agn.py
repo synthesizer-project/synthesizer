@@ -90,8 +90,14 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Get the incident model accounting for the geometry but unmasked
-        self.disc_incident, self.disc_escaped = self._make_disc_incident(
+        # Get the incident disc emission model
+        self.disc_incident = self._make_disc_incident(
+            nlr_grid,
+            **kwargs,
+        )
+
+        # Get the escaped emission, also accounting for torus
+        self.disc_escaped = self._make_disc_escaped(
             nlr_grid,
             covered_fraction,
             **kwargs,
@@ -159,7 +165,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
     def _make_disc_incident(
         self,
         grid,
-        covered_fraction,
         **kwargs,
     ):
         """Make the disc spectra."""
@@ -172,6 +177,28 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
+        return model
+
+    def _make_disc_escaped(
+        self,
+        grid,
+        covered_fraction,
+        **kwargs,
+    ):
+        """Make the disc spectra but using the mask."""
+        model = BlackHoleEmissionModel(
+            grid=grid,
+            label="disc_incident",
+            extract="incident",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            **kwargs,
+        )
+
+        """Apply the covering fraction."""
         disc_escaped = BlackHoleEmissionModel(
             label="disc_escaped",
             transformer=EscapingFraction(
@@ -185,7 +212,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        return model, disc_escaped
+        return disc_escaped
 
     def _make_disc_transmitted(
         self,
