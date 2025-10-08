@@ -93,7 +93,8 @@ class Abundances:
                 Can not be set with oxygen_to_hydrogen.
             oxygen_to_hydrogen (float):
                 The logarithmic oxygen to hydrogen ratio, i.e. 12 + log10(O/H).
-                Can not be set with metallicity.
+                Can not be set with metallicity. Note: this is not currently
+                fully implemented.
             alpha (float):
                 Enhancement of the alpha elements relative to the reference
                 abundance pattern.
@@ -107,7 +108,7 @@ class Abundances:
             depletion_model (class):
                 An instance of a synthesizer.depletion_models class.
         """
-        # Raise an exception if someone tries to set both metallicity and
+        # Raise an exception if a user tries to set both metallicity and
         # oxygen abundance.
         if (metallicity is not None) and (oxygen_to_hydrogen is not None):
             raise exceptions.InconsistentArguments(
@@ -224,7 +225,7 @@ class Abundances:
                         unscaled_metals.add(element)
 
                     # If we're using oxygen_to_hydrogen we need to instead use
-                    # corresponding function.
+                    # corresponding function. This is not yet implemented.
                     if oxygen_to_hydrogen:
                         raise exceptions.UnimplementedFunctionality(
                             """This functionality is not yet implented!"""
