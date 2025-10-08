@@ -82,7 +82,6 @@ class BlackholesComponent(Component):
     @accepts(
         mass=Msun.in_base("galactic"),
         accretion_rate=Msun.in_base("galactic") / yr,
-        accretion_rate_eddington=Msun.in_base("galactic") / yr,
         inclination=deg,
         bolometric_luminosity=erg / s,
         hydrogen_density_blr=cm**-3,
