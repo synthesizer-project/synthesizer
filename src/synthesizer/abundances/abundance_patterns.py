@@ -156,6 +156,7 @@ class Abundances:
         self.reference = reference
         # depletion on to dust
         self.depletion_model = depletion_model
+        self.depletion_pattern = None
 
         # If a depletion pattern is provided use this directly.
         if depletion_pattern:
