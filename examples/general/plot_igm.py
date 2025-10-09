@@ -2,7 +2,7 @@
 IGM transmission example
 ========================
 
-Plot IGM transmission curves (Inoue+14 & Madau+96
+Plot IGM transmission curves (Inoue+14, Madau+96, & Asada+24)
 """
 
 import cmasher as cmr
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import angstrom
 
-from synthesizer.emission_models.attenuation import Inoue14, Madau96
+from synthesizer.emission_models.attenuation import Asada24, Inoue14, Madau96
 
 lam = np.arange(0, 20000) * angstrom
 
@@ -18,7 +18,7 @@ lam = np.arange(0, 20000) * angstrom
 redshifts = [3.0, 5.0, 7.0]
 colors = cmr.take_cmap_colors("cmr.guppy", len(redshifts))
 
-for IGM, ls in zip([Inoue14, Madau96], ["-", ":"]):
+for IGM, ls in zip([Inoue14, Madau96, Asada24], ["-", ":", "-."]):
     igm = IGM()
     for z, color in zip(redshifts, colors):
         plt.plot(
