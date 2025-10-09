@@ -108,6 +108,16 @@ class Abundances:
             depletion_model (class):
                 An instance of a synthesizer.depletion_models class.
         """
+        # Raise an exception if oxygen_to_hydrogen is used (not yet fully
+        # implemented)
+        if oxygen_to_hydrogen is not None:
+            raise exceptions.UnimplementedFunctionality(
+                """
+                oxygen_to_hydrogen parameter is not yet fully implemented.
+                Please use metallicity instead.
+                """
+            )
+
         # Raise an exception if a user tries to set both metallicity and
         # oxygen abundance.
         if (metallicity is not None) and (oxygen_to_hydrogen is not None):
@@ -224,13 +234,6 @@ class Abundances:
                         # below for the rescaling.
                         unscaled_metals.add(element)
 
-                    # If we're using oxygen_to_hydrogen we need to instead use
-                    # corresponding function. This is not yet implemented.
-                    if oxygen_to_hydrogen:
-                        raise exceptions.UnimplementedFunctionality(
-                            """This functionality is not yet implented!"""
-                        )
-
             if isinstance(abundances, dict):
                 # loop over each element in the dictionary
                 for element_key, value in abundances.items():
@@ -316,14 +319,6 @@ class Abundances:
                                 # Since we're fixing the value we shouldn't
                                 # rescale later
                                 unscaled_metals.add(element)
-
-                            # If we're using oxygen_to_hydrogen we need to
-                            # instead use corresponding function.
-                            if oxygen_to_hydrogen:
-                                raise exceptions.UnimplementedFunctionality(
-                                    """This functionality is not yet
-                                    implented!"""
-                                )
 
         # Now we need to rescale everything to match either the metallicity,
         # oxygen_to_hydrogen, or if neither of these are provided, the
