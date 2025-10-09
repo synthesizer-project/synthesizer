@@ -1,7 +1,7 @@
 """A module for computing Intergalactic Medium (IGM) absorption.
 
 This module contains classes for computing IGM absorption from Inoue et al.
-(2014) and Madau et al. (1996) models.
+(2014), Madau et al. (1996), and Asada et al. (2024) models.
 
 These are used when observer frame fluxes are computed using Sed.get_fnu(...)
 and are not designed to be used directly by the user.
