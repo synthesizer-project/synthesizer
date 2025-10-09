@@ -208,7 +208,6 @@ class BlackholesComponent(Component):
                 """Both accretion rate and bolometric luminosity provided but
                 that is confusing. Provide one or the other!"""
             )
-
         if (self.accretion_rate_eddington is not None) and (
             self.bolometric_luminosity is not None
         ):
@@ -216,6 +215,17 @@ class BlackholesComponent(Component):
                 """Both accretion rate (in terms of Eddington) and bolometric
                 luminosity provided but that is confusing. Provide one or
                 the other!"""
+            )
+
+        # Ensure that both accretion_rate and accretion_rate_eddington are not
+        # provided, this is also confusing.
+        if (self.accretion_rate is not None) and (
+            self.accretion_rate_eddington is not None
+        ):
+            raise exceptions.InconsistentArguments(
+                """Both accretion rate and accretion rate in terms of
+                Eddington provided but that is confusing. Provide one or the
+                other!"""
             )
 
         # If mass calculate the Eddington luminosity.
