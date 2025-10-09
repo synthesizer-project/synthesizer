@@ -1553,7 +1553,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if len(self.fixed_parameters) > 0:
             fixed_parameters = group.create_group("FixedParameters")
             for key, value in self.fixed_parameters.items():
-                fixed_parameters.attrs[key] = value
+                try:
+                    fixed_parameters.attrs[key] = value
+                except TypeError as e:
+                    print(f"Error saving fixed parameter {key}: {e}")
 
         # Save the children
         if len(self._children) > 0:
