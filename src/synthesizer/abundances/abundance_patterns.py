@@ -420,7 +420,7 @@ class Abundances:
 
         # If a depletion pattern or depletion_model is provided then calculate
         # the depletion.
-        if depletion_model is not None:
+        if self.depletion_pattern is not None:
             self.add_depletion()
         else:
             self.gas = self.total
