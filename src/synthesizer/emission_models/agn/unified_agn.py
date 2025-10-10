@@ -106,8 +106,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             )
         )
 
-        print(self.disc_transmitted_nlr)
-
         # Get the averaged disc emission
         (
             self.disc_averaged,
@@ -131,12 +129,14 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self.disc = self._make_disc(**kwargs)
 
         # Get the line regions
-        self.nlr, self.blr = self._make_line_regions(
-            nlr_grid,
-            blr_grid,
-            covering_fraction_nlr,
-            covering_fraction_blr,
-            **kwargs,
+        self.nlr, self.nlr_continuum, self.blr, self.blr_continuum = (
+            self._make_line_regions(
+                nlr_grid,
+                blr_grid,
+                covering_fraction_nlr,
+                covering_fraction_blr,
+                **kwargs,
+            )
         )
 
         # Get the torus emission model
@@ -158,6 +158,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_averaged,
                 self.disc_averaged_without_torus,
                 self.disc,
+                self.nlr_continuum,
+                self.blr_continuum,
             ),
             **kwargs,
         )
@@ -263,9 +265,21 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # If disc_transmission == 'none' the emission seen by the observer is
         # simply the incident emission. This step also accounts for the torus.
         if disc_transmission == "none":
+            # disc_transmitted = BlackHoleEmissionModel(
+            #     label="disc_transmitted",
+            #     combine=(self.disc_incident,),
+            #     mask_attr="_torus_edgeon_cond",
+            #     mask_thresh=90 * deg,
+            #     mask_op="<",
+            #     **kwargs,
+            # )
+
             disc_transmitted = BlackHoleEmissionModel(
+                grid=nlr_grid,
                 label="disc_transmitted",
-                combine=(self.disc_incident,),
+                extract="incident",
+                hydrogen_density="hydrogen_density_blr",
+                ionisation_parameter="ionisation_parameter_blr",
                 mask_attr="_torus_edgeon_cond",
                 mask_thresh=90 * deg,
                 mask_op="<",
@@ -417,10 +431,34 @@ class UnifiedAGN(BlackHoleEmissionModel):
             ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
+
         full_blr = BlackHoleEmissionModel(
             grid=blr_grid,
             label="full_reprocessed_blr",
             extract="nebular",
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
+            **kwargs,
+        )
+
+        """Make the line region continuum."""
+        full_nlr_continuum = BlackHoleEmissionModel(
+            grid=nlr_grid,
+            label="full_continuum_nlr",
+            extract="nebular_continuum",
+            cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
+            **kwargs,
+        )
+        full_blr_continuum = BlackHoleEmissionModel(
+            grid=blr_grid,
+            label="full_continuum_blr",
+            extract="nebular_continuum",
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
@@ -453,7 +491,30 @@ class UnifiedAGN(BlackHoleEmissionModel):
             ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
-        return nlr, blr
+        nlr_continuum = BlackHoleEmissionModel(
+            label="nlr_continuum",
+            apply_to=full_nlr_continuum,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_nlr",)
+            ),
+            fesc=covering_fraction_nlr,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
+            **kwargs,
+        )
+        blr_continuum = BlackHoleEmissionModel(
+            label="blr_continuum",
+            apply_to=full_blr_continuum,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_blr",)
+            ),
+            fesc=covering_fraction_blr,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
+            **kwargs,
+        )
+
+        return nlr, nlr_continuum, blr, blr_continuum
 
     def _make_torus(self, torus_emission_model, **kwargs):
         """Make the torus spectra."""
