@@ -81,7 +81,7 @@ line_labels = {
         r"\mathrm{O\,III}]\,\lambda\lambda1661,1666"
     ),
     "C 3 1906.68A, C 3 1908.73A": (
-        r"\mathrm{C\,III}]\,\lambda\lambda1907,1909$"
+        r"\mathrm{C\,III}]\,\lambda\lambda1907,1909"
     ),
     "He 2 1640.41A": r"\mathrm{He\,II}\,\lambda1640",
     "O 2 3726.03A, O 2 3728.81A": (
