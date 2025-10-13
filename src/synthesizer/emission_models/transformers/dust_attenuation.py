@@ -66,6 +66,8 @@ class AttenuationLaw(Transformer):
         self._name_transforms = {}
         # Stores overridden parameters temporarily
         self._temp_params = {}
+        # Sentinel used to mark "attribute did not exist" in snapshots
+        self._RESET_SENTINEL = object()
         if "tau_v" not in required_params:
             raise exceptions.InconsistentArguments(
                 "AttenuationLaw requires 'tau_v' as a parameter."
@@ -114,11 +116,12 @@ class AttenuationLaw(Transformer):
         # Set any additional parameters on the dust curve
         self._set_params(**dust_curve_kwargs)
 
-        # Get the optical depth at each wavelength
-        tau_x_v = self.get_tau(lam)
-
-        # Reset the parameters to their previous state
-        self._reset_params()
+        try:
+            # Get the optical depth at each wavelength
+            tau_x_v = self.get_tau(lam)
+        finally:
+            # Always restore previous state
+            self._reset_params()
 
         # Include the V band optical depth in the exponent
         # For a scalar we can just multiply but for an array we need to
@@ -198,25 +201,28 @@ class AttenuationLaw(Transformer):
             **params (dict):
                 The parameters to set.
         """
-        # Save existing state of parameters
+        # Save existing state of only the attributes we will override,
+        # then apply overrides mapped to the actual attribute names.
         self._temp_params = {}
-        for key in self._required_params:
-            attr = self._name_transforms.get(key, key)
-            sentinel = object()
-            value = getattr(self, attr, sentinel)
-            self._temp_params[attr] = sentinel if value is sentinel else value
+        overrides = {}
         for key, value in params.items():
-            key = self._name_transforms.get(key, key)
-            setattr(self, key, value)
+            attr = self._name_transforms.get(key, key)
+            overrides[attr] = value
+        for attr, value in overrides.items():
+            prev = getattr(self, attr, self._RESET_SENTINEL)
+            self._temp_params[attr] = prev
+            setattr(self, attr, value)
 
     def _reset_params(self):
         """Reset the parameters of the dust curve to their previous state."""
-        sentinel = object()
-        for key, value in self._temp_params.items():
-            if value is sentinel:
-                delattr(self, key)
+        for attr, prev in self._temp_params.items():
+            if prev is self._RESET_SENTINEL:
+                # Attribute did not exist prior to override
+                if hasattr(self, attr):
+                    delattr(self, attr)
             else:
-                setattr(self, key, value)
+                setattr(self, attr, prev)
+        self._temp_params = {}
 
     @accepts(lam=angstrom)
     def plot_attenuation(
