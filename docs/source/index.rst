@@ -33,7 +33,7 @@ Contents
 Citation & Acknowledgement
 --------------------------
 
-Please cite **both** of the following papers (`Lovell et al. 2025 <https://ui.adsabs.harvard.edu/abs/2025arXiv250803888L/abstract>`_, `Roper et al. 2025 <https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract>`_) if you use Synthesizer in your research:
+Please cite **both** of the following papers (`Lovell et al. 2025 <https://astro.theoj.org/article/145766-synthesizer-a-software-package-for-synthetic-astronomical-observables>`_, `Roper et al. 2025 <https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract>`_) if you use Synthesizer in your research:
 
 .. code-block:: bibtex
 
