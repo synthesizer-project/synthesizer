@@ -1416,6 +1416,7 @@ class Sed:
         tau_v,
         dust_curve,
         mask=None,
+        **dust_curve_kwargs,
     ):
         """Apply attenuation to spectra.
 
@@ -1429,6 +1430,9 @@ class Sed:
                 A mask array with an entry for each spectra. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for Sed's holding an (N, Nlam) array.
+            dust_curve_kwargs (dict):
+                A dictionary of extra parameters set at runtime on the
+                attenuation model.
 
         Returns:
             Sed
@@ -1462,7 +1466,9 @@ class Sed:
                 )
 
         # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, self.lam)
+        transmission = dust_curve.get_transmission(
+            tau_v, self.lam, **dust_curve_kwargs
+        )
 
         # Get a copy of the rest frame spectra, we need to avoid
         # modifying the original
