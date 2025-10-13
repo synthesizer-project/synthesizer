@@ -47,20 +47,15 @@ Please see [here](docs/CONTRIBUTING.md) for contribution guidelines.
 
 Please cite **both** of the following papers ([Lovell et al. 2025](https://ui.adsabs.harvard.edu/abs/2025arXiv250803888L/abstract), [Roper et al. 2025](https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract)) if you use Synthesizer in your research:
 
-    @ARTICLE{2025arXiv250803888L,
-           author = {{Lovell}, Christopher C. and {Roper}, William J. and {Vijayan}, Aswin P. and {Wilkins}, Stephen M. and {Newman}, Sophie and {Seeyave}, Louise},
-            title = "{Synthesizer: a Software Package for Synthetic Astronomical Observables}",
-          journal = {arXiv e-prints},
-         keywords = {Instrumentation and Methods for Astrophysics, Cosmology and Nongalactic Astrophysics, Astrophysics of Galaxies},
-             year = 2025,
-            month = aug,
-              eid = {arXiv:2508.03888},
-            pages = {arXiv:2508.03888},
-    archivePrefix = {arXiv},
-           eprint = {2508.03888},
-     primaryClass = {astro-ph.IM},
-           adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250803888L},
-          adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+    @article{Lovell2025Synthesizer,
+    	author = {Lovell, Christopher C. and Roper, William J. and Vijayan, Aswin P. and Wilkins, Stephen M. and Newman, Sophie and Seeyave, Louise},
+    	journal = {The Open Journal of Astrophysics},
+    	doi = {10.33232/001c.145766},
+    	year = {2025},
+    	month = {oct 9},
+    	publisher = {Maynooth Academic Publishing},
+    	title = {Synthesizer: a {Software} {Package} for {Synthetic} {Astronomical} {Observables}},
+    	volume = {8},
     }
 
     @ARTICLE{2025arXiv250615811R,
