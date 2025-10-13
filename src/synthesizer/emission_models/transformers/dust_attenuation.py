@@ -60,8 +60,16 @@ class AttenuationLaw(Transformer):
         """
         # Store the description of the model.
         self.description = description
+        # Store user-supplied conversions between model arguments and parameter
+        # names, e.g. allows the user to set e.g. slope = 'slope_young' on the
+        # emitter or model and have that passed to the dust curve as slope
         self._name_transforms = {}
-
+        # Stores overridden parameters temporarily
+        self._temp_params = {}
+        if "tau_v" not in required_params:
+            raise exceptions.InconsistentArguments(
+                "AttenuationLaw requires 'tau_v' as a parameter."
+            )
         # Call the parent constructor
         Transformer.__init__(self, required_params=required_params)
 
@@ -108,6 +116,9 @@ class AttenuationLaw(Transformer):
 
         # Get the optical depth at each wavelength
         tau_x_v = self.get_tau(lam)
+
+        # Reset the parameters to their previous state
+        self._reset_params()
 
         # Include the V band optical depth in the exponent
         # For a scalar we can just multiply but for an array we need to
@@ -187,9 +198,19 @@ class AttenuationLaw(Transformer):
             **params (dict):
                 The parameters to set.
         """
+        # Save existing state of parameters
+        self._temp_params = {
+            key: getattr(self, key, None) for key in self._required_params
+        }
         for key, value in params.items():
             key = self._name_transforms.get(key, key)
             setattr(self, key, value)
+
+    def _reset_params(self):
+        """Reset the parameters of the dust curve to their previous state."""
+        for key, value in self._temp_params.items():
+            setattr(self, key, value)
+        self._temp_params = {}
 
     @accepts(lam=angstrom)
     def plot_attenuation(
