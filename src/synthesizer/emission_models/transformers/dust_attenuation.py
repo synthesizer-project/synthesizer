@@ -31,6 +31,8 @@ this_dir, this_filename = os.path.split(__file__)
 
 __all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLi08"]
 
+_RESET_SENTINEL = object()
+
 
 class AttenuationLaw(Transformer):
     """The base class for all attenuation laws.
@@ -66,8 +68,6 @@ class AttenuationLaw(Transformer):
         self._name_transforms = {}
         # Stores overridden parameters temporarily
         self._temp_params = {}
-        # Sentinel used to mark "attribute did not exist" in snapshots
-        self._RESET_SENTINEL = object()
         if "tau_v" not in required_params:
             raise exceptions.InconsistentArguments(
                 "AttenuationLaw requires 'tau_v' as a parameter."
@@ -209,14 +209,14 @@ class AttenuationLaw(Transformer):
             attr = self._name_transforms.get(key, key)
             overrides[attr] = value
         for attr, value in overrides.items():
-            prev = getattr(self, attr, self._RESET_SENTINEL)
+            prev = getattr(self, attr, _RESET_SENTINEL)
             self._temp_params[attr] = prev
             setattr(self, attr, value)
 
     def _reset_params(self):
         """Reset the parameters of the dust curve to their previous state."""
         for attr, prev in self._temp_params.items():
-            if prev is self._RESET_SENTINEL:
+            if prev is _RESET_SENTINEL:
                 # Attribute did not exist prior to override
                 if hasattr(self, attr):
                     delattr(self, attr)
