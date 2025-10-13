@@ -199,18 +199,24 @@ class AttenuationLaw(Transformer):
                 The parameters to set.
         """
         # Save existing state of parameters
-        self._temp_params = {
-            key: getattr(self, key, None) for key in self._required_params
-        }
+        self._temp_params = {}
+        for key in self._required_params:
+            attr = self._name_transforms.get(key, key)
+            sentinel = object()
+            value = getattr(self, attr, sentinel)
+            self._temp_params[attr] = sentinel if value is sentinel else value
         for key, value in params.items():
             key = self._name_transforms.get(key, key)
             setattr(self, key, value)
 
     def _reset_params(self):
         """Reset the parameters of the dust curve to their previous state."""
+        sentinel = object()
         for key, value in self._temp_params.items():
-            setattr(self, key, value)
-        self._temp_params = {}
+            if value is sentinel:
+                delattr(self, key)
+            else:
+                setattr(self, key, value)
 
     @accepts(lam=angstrom)
     def plot_attenuation(
