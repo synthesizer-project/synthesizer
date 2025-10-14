@@ -65,7 +65,7 @@ def sigma_a(nu_rest):
     return s
 
 
-__all__ = ["Inoue14", "Madau96", "Asada24"]
+__all__ = ["Inoue14", "Madau96", "Asada25"]
 
 
 class IGMBase(Transformer):
@@ -563,7 +563,7 @@ class Madau96(IGMBase):
         return exp_teff
 
 
-class Asada24(IGMBase):
+class Asada25(IGMBase):
     r"""IGM+CGM absorption from Asada et al. 2025.
 
     If you use this model please cite the following paper:
@@ -597,7 +597,7 @@ class Asada24(IGMBase):
         scale_tau=1.0,
         add_cgm=True,
     ):
-        """Initialize the Asada24 class.
+        """Initialize the Asada25 class.
 
         Args:
             sigmoid_params (tuple): Parameters that control the redshift
@@ -608,7 +608,7 @@ class Asada24(IGMBase):
                 If False, the transmission will be identical to Inoue+2014.
         """
         # Initialize the base class
-        IGMBase.__init__(self, "Asada24")
+        IGMBase.__init__(self, "Asada25")
 
         # Prepare attributes that will be loaded from data files
         self.lam = None

@@ -31,7 +31,7 @@ from synthesizer.emission_models import (
     TemplateEmission,
     TransmittedEmission,
 )
-from synthesizer.emission_models.attenuation import Asada24, Inoue14, Madau96
+from synthesizer.emission_models.attenuation import Asada25, Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid, Template
@@ -173,8 +173,8 @@ def m96():
 
 @pytest.fixture
 def a24():
-    """Return an Asada24 IGM object."""
-    return Asada24()
+    """Return an Asada25 IGM object."""
+    return Asada25()
 
 
 # ================================= STARS =====================================
