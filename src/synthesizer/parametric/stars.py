@@ -951,3 +951,23 @@ class Stars(StarsComponent):
         surviving_mass = np.sum(self.sfzh * grid.stellar_fraction)
 
         return surviving_mass * Msun
+
+    def get_ionising_photon_luminosity(self, grid: Grid) -> float:
+        """Calculate the ionising photon luminosity from the grid.
+
+        Args:
+            grid (object, Grid):
+                The SPS Grid object from which to extract spectra.
+
+        Returns:
+            Log of the ionising photon luminosity summed over the grid
+            dimensions.
+        """
+        if "HI" not in grid.log10_specific_ionising_lum:
+            raise exceptions.MissingGridPropetry(
+                "The provided grid does not contain HI ionising luminosities"
+            )
+        return np.sum(
+            10 ** grid.log10_specific_ionising_lum["HI"] * self.sfzh,
+            axis=(0, 1),
+        )

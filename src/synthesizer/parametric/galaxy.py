@@ -25,13 +25,11 @@ Example usage:
 
 """
 
-import numpy as np
 from unyt import Mpc
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import SpectralCube
-from synthesizer.synth_warnings import deprecated
 from synthesizer.units import accepts
 
 
@@ -191,37 +189,6 @@ class Galaxy(BaseGalaxy):
                 )
 
         return new_galaxy
-
-    @deprecated(
-        "get_Q is deprecared due to incorrect naming converntion. Please use "
-        "get_ionising_photon_luminosity instead."
-    )
-    def get_Q(self, grid):
-        """Calculate the ionising photon luminosity.
-
-        Args:
-            grid (object, Grid):
-                The SPS Grid object from which to extract spectra.
-
-        Returns:
-            Log of the ionising photon luminosity over the grid dimensions
-        """
-        return self.get_ionising_photon_luminosity(grid)
-
-    def get_ionising_photon_luminosity(self, grid):
-        """Calculate the ionising photon luminosity.
-
-        Args:
-            grid (object, Grid):
-                The SPS Grid object from which to extract spectra.
-
-        Returns:
-            Log of the ionising photon luminosity over the grid dimensions
-        """
-        return np.sum(
-            10 ** grid.log10_specific_ionising_lum["HI"] * self.sfzh,
-            axis=(0, 1),
-        )
 
     def get_data_cube(
         self,
