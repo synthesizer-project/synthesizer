@@ -109,9 +109,6 @@ class Galaxy(BaseGalaxy):
         # The name
         self.name = name
 
-        # Local pointer to SFZH array
-        self.sfzh = self.stars.sfzh
-
         # Define the dictionary to hold spectra
         self.spectra = {}
 
