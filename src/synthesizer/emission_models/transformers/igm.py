@@ -64,6 +64,7 @@ def sigma_a(nu_rest):
 
     return s
 
+
 __all__ = ["Inoue14", "Madau96", "Asada24"]
 
 
@@ -563,9 +564,12 @@ class Madau96(IGMBase):
 
 
 class Asada24(IGMBase):
-    r"""IGM+CGM absorption from Asada et al. (2024, in prep).
+    r"""IGM+CGM absorption from Asada et al. 2025.
 
-    The IGM model is from Inoue+ (2014), with additional Lyα damping
+    If you use this model please cite the following paper:
+    https://iopscience.iop.org/article/10.3847/2041-8213/adc388
+
+    The IGM model is from Inoue+ (2014), with additional Lya damping
     absorption at z>6 as described in Asada+24. This model includes both
     Intergalactic Medium (IGM) and Circumgalactic Medium (CGM) effects.
 
