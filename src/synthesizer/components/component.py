@@ -659,7 +659,7 @@ class Component(ABC):
         # gracefully when labelling
         if instrument.label == "GenericInstrument":
             nimgs = len(self.images_lnu) + 1
-            instrument_label = f"GenericInstrument_{nimgs}"
+            instrument_label = f"Instrument_{nimgs}"
             self.images_lnu[instrument_label].update(images)
         else:
             self.images_lnu.update(images)
@@ -797,7 +797,7 @@ class Component(ABC):
         # gracefully when labelling
         if instrument.label == "GenericInstrument":
             nimgs = len(self.images_fnu) + 1
-            instrument_label = f"GenericInstrument_{nimgs}"
+            instrument_label = f"Instrument_{nimgs}"
             self.images_fnu[instrument_label] = images
         else:
             self.images_fnu.update(images)
