@@ -207,12 +207,13 @@ class Component(ABC):
         This requires the redshift to be set on the component.
 
         This will use the astropy cosmology module to calculate the
-        angular diameter distance. If the redshift is 0, the distance will be set to
-        10 pc to avoid any issues with 0s.
+        angular diameter distance. If the redshift is 0, the distance will be
+        set to 10 pc to avoid any issues with 0s.
 
         Args:
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation.
+
         Returns:
             unyt_quantity:
                 The angular diameter distance of the component in kpc.
@@ -231,7 +232,8 @@ class Component(ABC):
                 "angular diameter distance."
             )
 
-        # At redshift > 0 we can calculate the angular diameter distance explicitly
+        # At redshift > 0 we can calculate the angular diameter distance
+        # explicitly
         if self.redshift > 0:
             return (
                 cosmo.angular_diameter_distance(self.redshift).to("kpc").value
@@ -616,7 +618,7 @@ class Component(ABC):
 
             # Make the place holder instrument
             instrument = Instrument(
-                "place-holder",
+                "GenericInstrument",
                 resolution=resolution,
                 filters=filters,
             )
@@ -653,8 +655,14 @@ class Component(ABC):
             cosmo=cosmo,
         )
 
-        # Store the images
-        self.images_lnu.update(images)
+        # Store the images and handle if we have a generic instrument
+        # gracefully when labelling
+        if instrument.label == "GenericInstrument":
+            nimgs = len(self.images_lnu) + 1
+            instrument_label = f"GenericInstrument_{nimgs}"
+            self.images_lnu[instrument_label].update(images)
+        else:
+            self.images_lnu.update(images)
 
         # If we are limiting to a specific image then return that
         if limit_to is not None:
@@ -748,7 +756,7 @@ class Component(ABC):
 
             # Make the place holder instrument
             instrument = Instrument(
-                "place-holder",
+                "GenericInstrument",
                 resolution=resolution,
                 filters=filters,
             )
@@ -785,8 +793,14 @@ class Component(ABC):
             cosmo=cosmo,
         )
 
-        # Store the images
-        self.images_fnu.update(images)
+        # Store the images and handle if we have a generic instrument
+        # gracefully when labelling
+        if instrument.label == "GenericInstrument":
+            nimgs = len(self.images_fnu) + 1
+            instrument_label = f"GenericInstrument_{nimgs}"
+            self.images_fnu[instrument_label] = images
+        else:
+            self.images_fnu.update(images)
 
         # If we are limiting to a specific image then return that
         if limit_to is not None:
