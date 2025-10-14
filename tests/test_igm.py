@@ -51,9 +51,9 @@ def test_A24_transmission_high_z(a24, lam):
 
 def test_A24_without_cgm(lam):
     """Test A24 model with CGM turned off."""
-    from synthesizer.emission_models.attenuation import Asada24
+    from synthesizer.emission_models.attenuation import Asada25
 
-    a24_no_cgm = Asada24(add_cgm=False)
+    a24_no_cgm = Asada25(add_cgm=False)
     z = 7.0
     transmission = a24_no_cgm.get_transmission(z, lam)
     assert isinstance(transmission, np.ndarray)
@@ -63,9 +63,9 @@ def test_A24_without_cgm(lam):
 
 def test_A24_sigmoid_params(lam):
     """Test A24 model with custom sigmoid parameters."""
-    from synthesizer.emission_models.attenuation import Asada24
+    from synthesizer.emission_models.attenuation import Asada25
 
-    a24_custom = Asada24(sigmoid_params=(4.0, 2.0, 19.0))
+    a24_custom = Asada25(sigmoid_params=(4.0, 2.0, 19.0))
     z = 7.0
     transmission = a24_custom.get_transmission(z, lam)
     assert isinstance(transmission, np.ndarray)
