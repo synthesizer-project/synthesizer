@@ -237,12 +237,12 @@ class Particles:
 
         # If we don't have the LOS distances then we need to calculate them
         if los_dists is None:
-            # Get the luminosity distance
-            lum_dist = self.get_luminosity_distance(cosmo)
+            # Get the angular diameter distance
+            ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-            # Combine the luminosity distance with the line of sight distance
+            # Combine the angular diameter distance with the line of sight distance
             # (along the z-axis)
-            los_dists = lum_dist + cent_coords[:, 2]
+            los_dists = ang_diam_dist + cent_coords[:, 2]
 
             # If we are at redshift 0.0 then we need to shift things to
             # put the closest particle at 10 pc
@@ -315,12 +315,12 @@ class Particles:
 
         # If we don't have the LOS distances then we need to calculate them
         if los_dists is None:
-            # Get the luminosity distance
-            lum_dist = self.get_luminosity_distance(cosmo)
+            # Get the angular diameter distance
+            ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-            # Combine the luminosity distance with the line of sight distance
+            # Combine the angular diameter distance with the line of sight distance
             # (along the z-axis)
-            los_dists = lum_dist + cent_coords[:, 2]
+            los_dists = ang_diam_dist + cent_coords[:, 2]
 
             # If we are at redshift 0.0 then we need to shift things to
             # put the closest particle at 10 pc
@@ -375,12 +375,12 @@ class Particles:
         # Get the centered coordinates
         cent_coords = self.centered_coordinates
 
-        # Get the luminosity distance
-        lum_dist = self.get_luminosity_distance(cosmo)
+        # Get the angular diameter distance
+        ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-        # Combine the luminosity distance with the line of sight distance
+        # Combine the angular diameter distance with the line of sight distance
         # (along the z-axis)
-        los_dists = lum_dist + cent_coords[:, 2]
+        los_dists = ang_diam_dist + cent_coords[:, 2]
 
         # If we are at redshift 0.0 then we need to shift things to
         # put the closest particle at 10 pc

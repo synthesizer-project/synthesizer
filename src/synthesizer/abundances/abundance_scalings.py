@@ -67,6 +67,7 @@ class Dopita2006:
         )
         self.doi = "10.1086/508261"
         self.available_elements = ["N", "C"]
+        self.available_elements_names = ["nitrogen", "carbon"]
 
         # the reference metallicity for the model
         self.reference_metallicity = 0.016

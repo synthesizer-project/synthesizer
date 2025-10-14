@@ -208,7 +208,6 @@ class BlackholesComponent(Component):
                 """Both accretion rate and bolometric luminosity provided but
                 that is confusing. Provide one or the other!"""
             )
-
         if (self.accretion_rate_eddington is not None) and (
             self.bolometric_luminosity is not None
         ):
@@ -217,6 +216,28 @@ class BlackholesComponent(Component):
                 luminosity provided but that is confusing. Provide one or
                 the other!"""
             )
+
+        # Ensure that both accretion_rate and accretion_rate_eddington are not
+        # provided, this is also confusing.
+        if (self.accretion_rate is not None) and (
+            self.accretion_rate_eddington is not None
+        ):
+            raise exceptions.InconsistentArguments(
+                """Both accretion rate and accretion rate in terms of
+                Eddington provided but that is confusing. Provide one or the
+                other!"""
+            )
+
+        # If mass calculate the Eddington luminosity.
+        if self.mass is not None:
+            self.calculate_eddington_luminosity()
+
+        # If accretion_rate_eddington provided calculate the accretion rate.
+        if (
+            self.accretion_rate_eddington is not None
+            and self.eddington_luminosity is not None
+        ):
+            self.calculate_accretion_rate()
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # bolometric luminosity.
@@ -235,10 +256,6 @@ class BlackholesComponent(Component):
             and self.epsilon is not None
         ):
             self.calculate_bb_temperature()
-
-        # If mass calculate the Eddington luminosity.
-        if self.mass is not None:
-            self.calculate_eddington_luminosity()
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # Eddington ratio.
@@ -265,6 +282,25 @@ class BlackholesComponent(Component):
             self.cosine_inclination = np.cos(
                 self.inclination.to("radian").value
             )
+
+    def calculate_accretion_rate(self):
+        """Calculate the black hole accretion rate from the eddington ratio.
+
+        This is used when accretion rate is provided in terms of the Eddington
+        ratio and not the explicit accretion rate.
+
+
+        Returns:
+            unyt_array:
+                The black hole accretion rate
+        """
+        self.accretion_rate = (
+            self.accretion_rate_eddington
+            * self.eddington_luminosity
+            / (self.epsilon * c**2)
+        )
+
+        return self.accretion_rate
 
     def calculate_bolometric_luminosity(self):
         """Calculate the black hole bolometric luminosity.
