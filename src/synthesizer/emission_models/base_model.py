@@ -59,6 +59,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import ImageCollection
 from synthesizer.imaging.image_generators import (
     _generate_image_collection_generic,
+    _generate_line_image_collection_generic,
 )
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import deprecation, warn
@@ -3197,6 +3198,219 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         toc("Generating all images", start)
 
         return images
+
+    def _get_line_images(
+        self,
+        line_ids,
+        instrument,
+        fov,
+        emitters,
+        img_type="smoothed",
+        line_images=None,
+        _is_related=False,
+        limit_to=None,
+        do_flux=False,
+        kernel=None,
+        kernel_threshold=1.0,
+        cosmo=None,
+        nthreads=1,
+        **kwargs,
+    ):
+        """Generate line images as described by the emission model.
+
+        This will create line images for all models in the emission model which
+        have saved lines for the requested line_ids, unless limit_to is set
+        to a specific model, in which case only that model will have line
+        images generated.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the line images.
+            instrument (Instrument):
+                The instrument to use for the line image generation.
+            fov (float):
+                The field of view of the image in angular units.
+            emitters (dict):
+                The emitters to generate the line images for in the form of a
+                dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
+            img_type (str):
+                The type of image to generate. Options are "smoothed" or
+                "hist".
+            line_images (dict):
+                A dictionary of line images to add to. Used for recursive
+                calls.
+            _is_related (bool):
+                Are we generating related model line images?
+            limit_to (str, list):
+                If not None, defines specific model(s) to limit generation to.
+            do_flux (bool):
+                If True, generate from fluxes, if False from luminosities.
+            kernel (str):
+                The convolution kernel to use for image generation.
+            kernel_threshold (float):
+                The threshold for the convolution kernel.
+            cosmo (Cosmology):
+                The cosmology to use for image generation.
+            nthreads (int):
+                The number of threads to use for image generation.
+            **kwargs (dict):
+                Any additional keyword arguments.
+
+        Returns:
+            dict: A dictionary of line ImageCollections keyed by model label,
+                  then by line_id.
+        """
+        start = tic()
+
+        # We don't want to modify the original emission model
+        emission_model = copy.copy(self)
+
+        # If we haven't got a line_images dictionary yet we'll make one
+        if line_images is None:
+            line_images = {}
+
+        # Convert `limit_to` to a list if it is a string
+        if limit_to is not None:
+            limit_to = (
+                [limit_to] if isinstance(limit_to, str) else limit_to.copy()
+            )
+
+        # If we are limiting to a specific model/s and these are a combination
+        # model, we need to make sure we include the models they are
+        # combining.
+        _orig_limit_to = limit_to
+        if limit_to is not None:
+            _orig_limit_to = limit_to.copy()
+            for label in limit_to:
+                # Get this model
+                this_model = emission_model._models[label]
+
+                # If this is a combination model, add the models it is
+                # combining to the list
+                if this_model._is_combining:
+                    limit_to.extend([m.label for m in this_model.combine])
+
+            # Remove duplicates
+            limit_to = list(set(limit_to))
+
+        # Set up the list to collect all the line data
+        lines_data = {e: {} for e in emitters.keys()}
+
+        # Loop through all models and collect their line data
+        for label in emission_model._models.keys():
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label not in limit_to:
+                continue
+
+            # Skip if we didn't save this model
+            if not this_model.save:
+                continue
+
+            # Get the emitter
+            emitter = (
+                emitters[this_model.emitter]
+                if this_model.emitter != "galaxy"
+                else None
+            )
+
+            # If we have no emitter, we can't generate a line image
+            if emitter is None:
+                continue
+
+            # Get the appropriate lines
+            try:
+                if hasattr(emitter, "lines") and label in emitter.lines:
+                    this_lines = emitter.lines[label]
+                else:
+                    # No lines for this model
+                    continue
+            except (KeyError, AttributeError):
+                # Missing the lines
+                raise exceptions.MissingSpectraType(
+                    f"Can't make line images for {label} without the lines. "
+                    "Did you not save the lines or produce them?"
+                )
+
+            # Include this line data in the collection
+            lines_data[this_model.emitter][label] = this_lines
+
+        # With everything collected, we can now generate the line images for
+        # each emitter in one go
+        for emitter_key in emitters.keys():
+            # Do we have anything to do?
+            if len(lines_data[emitter_key]) == 0:
+                continue
+
+            # For each model's lines, generate line images
+            for label, lines in lines_data[emitter_key].items():
+                # Generate the line images for all the line_ids
+                _line_imgs = _generate_line_image_collection_generic(
+                    line_ids=line_ids,
+                    instrument=instrument,
+                    lines=lines,
+                    fov=fov,
+                    img_type=img_type,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
+                    emitter=emitters[emitter_key],
+                    cosmo=cosmo,
+                )
+
+                # Store the line images for this model
+                if _line_imgs:
+                    line_images[label] = _line_imgs
+
+        # Loop over combination models and create any line images we haven't
+        # already
+        for label in emission_model._bottom_to_top:
+            # If we are limiting to a specific model, skip all others
+            if limit_to is not None and label not in limit_to:
+                continue
+
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # Skip if we didn't save this model
+            if not this_model.save:
+                continue
+
+            # Check we haven't already made these line images
+            if label in line_images:
+                continue
+
+            # Call the appropriate method to generate the line images for this
+            # model
+            if this_model._is_combining:
+                try:
+                    line_images = self._combine_line_images(
+                        line_images,
+                        this_model,
+                        line_ids,
+                        instrument,
+                        fov,
+                        img_type,
+                        do_flux,
+                        emitters,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                    )
+                except exceptions.MissingImage:
+                    # We don't have the constituent line images to combine
+                    continue
+
+        # Remove any line images we aren't returning (if limited)
+        if _orig_limit_to is not None:
+            for key in set(line_images) - set(_orig_limit_to):
+                del line_images[key]
+
+        toc("Generating all line images", start)
+
+        return line_images
 
 
 class StellarEmissionModel(EmissionModel):
