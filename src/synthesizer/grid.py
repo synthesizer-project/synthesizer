@@ -501,8 +501,7 @@ class Grid:
         """Get the spectra grid from the HDF5 file.
 
         If using a cloudy reprocessed grid this method will automatically
-        calculate 2 spectra not native to the grid file:
-            total = transmitted + nebular
+        calculate the nebular continuum spectra not native to the grid file:
             nebular_continuum = nebular - linecont
 
         Args:
@@ -541,12 +540,6 @@ class Grid:
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed is True:
-            # The total emission (ignoring any dust reprocessing) is just
-            # the transmitted plus the nebular
-            self.spectra["total"] = (
-                self.spectra["transmitted"] + self.spectra["nebular"]
-            )
-
             # The nebular continuum is the nebular emission with the line
             # contribution removed
             self.spectra["nebular_continuum"] = (

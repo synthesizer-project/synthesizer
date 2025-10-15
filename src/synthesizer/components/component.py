@@ -201,6 +201,46 @@ class Component(ABC):
         # avoid any issues with 0s
         return (10 * pc).to(kpc)
 
+    def get_angular_diameter_distance(self, cosmo):
+        """Get the angular diameter distance of the component.
+
+        This requires the redshift to be set on the component.
+
+        This will use the astropy cosmology module to calculate the
+        angular diameter distance. If the redshift is 0, the distance will be set to
+        10 pc to avoid any issues with 0s.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation.
+        Returns:
+            unyt_quantity:
+                The angular diameter distance of the component in kpc.
+        """
+        # If we don't have a redshift then we can't calculate the
+        # angular diameter distance
+        if not hasattr(self, "redshift"):
+            raise exceptions.InconsistentArguments(
+                "The component does not have a redshift set."
+            )
+
+        # Check redshift is set
+        if self.redshift is None:
+            raise exceptions.InconsistentArguments(
+                "The component must have a redshift set to calculate the "
+                "angular diameter distance."
+            )
+
+        # At redshift > 0 we can calculate the angular diameter distance explicitly
+        if self.redshift > 0:
+            return (
+                cosmo.angular_diameter_distance(self.redshift).to("kpc").value
+                * kpc
+            )
+        # At redshift 0 just place the component at 10 pc to
+        # avoid any issues with 0s
+        return (10 * pc).to(kpc)
+
     def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """Calculate luminosity photometry using a FilterCollection object.
 

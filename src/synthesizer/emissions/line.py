@@ -1302,10 +1302,7 @@ class LineCollection:
         return self
 
     def apply_attenuation(
-        self,
-        tau_v,
-        dust_curve,
-        mask=None,
+        self, tau_v, dust_curve, mask=None, **dust_curve_kwargs
     ):
         """Apply attenuation to this LineCollection.
 
@@ -1319,6 +1316,9 @@ class LineCollection:
                 A mask array with an entry for each line. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for multidimensional lines.
+            dust_curve_kwargs (dict):
+                A dictionary of extra parameters set at runtime on the
+                attenuation model.
 
         Returns:
                 LineCollection
@@ -1352,7 +1352,9 @@ class LineCollection:
                 )
 
         # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, self.lam)
+        transmission = dust_curve.get_transmission(
+            tau_v, self.lam, **dust_curve_kwargs
+        )
 
         # Apply the transmision
         att_lum = self.luminosity

@@ -193,10 +193,6 @@ def create_cloudy_input(
     # update default_params with kwargs
     params = default_params | kwargs
 
-    # old approach for updated parameters
-    # for key, value in list(kwargs.items()):
-    #     params[key] = value
-
     # begin input list
     cinput = []
 
@@ -216,7 +212,7 @@ def create_cloudy_input(
                 cinput.append(
                     (
                         f"element abundance {abundances.element_name[ele]} "
-                        f"{abundances.total[ele]} no grains\n"
+                        f"{abundances.gas[ele]} no grains\n"
                     )
                 )
 
