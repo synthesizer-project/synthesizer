@@ -901,6 +901,10 @@ class Grid:
         # Update wavelength array
         self.lam = new_lam
 
+        # Remove any lines outside the new wavelength range
+        if self.lines_available:
+            self._remove_lines_outside_lam()
+
     def __str__(self):
         """Return a string representation of the particle object.
 
@@ -948,11 +952,337 @@ class Grid:
         """Return the number of lines in the grid."""
         return len(self.available_lines)
 
+    def _remove_lines_outside_lam(self):
+        """Remove lines outside the wavelength range of the grid."""
+        if self.lines_available:
+            lines_to_keep = np.where(
+                (self.line_lams >= self.lam[0])
+                & (self.line_lams <= self.lam[-1])
+            )[0]
+
+            if len(lines_to_keep) < len(self.line_lams):
+                warn(
+                    "Some lines are outside the wavelength range of the "
+                    "grid and will be removed: "
+                    f"{self.available_lines[~lines_to_keep]}."
+                )
+
+            self.available_lines = self.available_lines[lines_to_keep]
+            self.line_lams = self.line_lams[lines_to_keep]
+
+            for spectra_id in self.available_line_emissions:
+                self.line_lums[spectra_id] = self.line_lums[spectra_id][
+                    ..., lines_to_keep
+                ]
+                self.line_conts[spectra_id] = self.line_conts[spectra_id][
+                    ..., lines_to_keep
+                ]
+
+    @accepts(lam_min=angstrom, lam_max=angstrom)
+    def reduce_rest_frame_range(self, lam_min, lam_max):
+        """Limit the wavelength range of the grid.
+
+        Args:
+            lam_min (unyt_quantity/float):
+                The minimum wavelength to limit the grid to.
+            lam_max (unyt_quantity/float):
+                The maximum wavelength to limit the grid to.
+        """
+        # Check the limits are valid
+        if lam_min >= lam_max:
+            raise exceptions.InconsistentArguments(
+                "lam_min must be less than lam_max"
+            )
+
+        # Find the indices of the wavelength limits
+        min_index = self.get_nearest_index(lam_min, self.lam)
+        max_index = self.get_nearest_index(lam_max, self.lam) + 1
+
+        # Limit the wavelength array
+        self.lam = self.lam[min_index:max_index]
+
+        # Limit all the spectra arrays
+        for spectra_id in self.available_spectra_emissions:
+            self.spectra[spectra_id] = self.spectra[spectra_id][
+                ..., min_index:max_index
+            ]
+
+        # Remove lines outside the new wavelength range
+        if self.lines_available:
+            self._remove_lines_outside_lam()
+
+    @accepts(lam_min=angstrom, lam_max=angstrom)
+    def reduce_observed_range(self, lam_min, lam_max, redshift):
+        """Limit the wavelength range of the grid to observer frame limits.
+
+        Args:
+            lam_min (unyt_quantity/float):
+                The minimum observed wavelength to limit the grid to.
+            lam_max (unyt_quantity/float):
+                The maximum observed wavelength to limit the grid to.
+            redshift (float):
+                The redshift to use for converting the observed wavelengths
+                to rest frame.
+        """
+        # Check the limits are valid
+        if lam_min >= lam_max:
+            raise exceptions.InconsistentArguments(
+                "lam_min must be less than lam_max"
+            )
+
+        # Convert to rest frame
+        rest_lam_min = lam_min / (1 + redshift)
+        rest_lam_max = lam_max / (1 + redshift)
+
+        # Find the indices of the wavelength limits
+        min_index = self.get_nearest_index(rest_lam_min, self.lam)
+        max_index = self.get_nearest_index(rest_lam_max, self.lam) + 1
+
+        # Limit the wavelength array
+        self.lam = self.lam[min_index:max_index]
+
+        # Limit all the spectra arrays
+        for spectra_id in self.available_spectra_emissions:
+            self.spectra[spectra_id] = self.spectra[spectra_id][
+                ..., min_index:max_index
+            ]
+
+        # Remove lines outside the new wavelength range
+        if self.lines_available:
+            self._remove_lines_outside_lam()
+
+    def reduce_rest_frame_filters(self, filters):
+        """Limit the wavelength range of the grid to the range of filters.
+
+        Args:
+            filters (list):
+                A list of Filter objects to use for determining the
+                wavelength range to limit the grid to.
+        """
+        # Check we have been given a list
+        if not isinstance(filters, list):
+            raise exceptions.InconsistentArguments(
+                "filters must be a list of Filter objects"
+            )
+
+        # Unpack the transmission and wavelengths of the filters so we can
+        # resample onto the grid wavelength array
+        transmissions = [f.transmission for f in filters]
+        wavelengths = filters.lam
+
+        # Resample the filter transmissions onto the grid wavelength array
+        transmissions_resampled = [
+            spectres(self.lam.value, wavelengths.value, t, fill=0.0)
+            for t in transmissions
+        ]
+
+        # Find all non-zero transmission wavelengths in the filters
+        lam_mask = np.zeros(self.lam.shape, dtype=bool)
+        for t in transmissions_resampled:
+            lam_mask |= t > 0.0
+
+        # If no filters overlap the grid wavelength range, raise an error
+        if not np.any(lam_mask):
+            raise exceptions.InconsistentArguments(
+                "None of the provided filters overlap the wavelength range "
+                f"of the grid: filter_range {np.min(wavelengths)}, "
+                f"{np.max(wavelengths)}, "
+                f"grid_range {(self.lam[0], self.lam[-1])}"
+            )
+
+        # Remove wavelengths and spectra outside the filter range
+        self.lam = self.lam[lam_mask]
+        for spectra_id in self.available_spectra_emissions:
+            self.spectra[spectra_id] = self.spectra[spectra_id][..., lam_mask]
+
+        # Remove lines outside the new wavelength range this will leave lines
+        # that don't lie within non-zero transmission regions of the filters
+        # but we can at least get rid of ones fully outside the range.
+        if self.lines_available:
+            self._remove_lines_outside_lam()
+
+    def reduce_observed_filters(self, filters, redshift):
+        """Limit the wavelength range of the grid to the range of filters.
+
+        Args:
+            filters (list):
+                A list of Filter objects to use for determining the
+                wavelength range to limit the grid to.
+            redshift (float):
+                The redshift to use for converting the observed wavelengths
+                to rest frame.
+        """
+        # Check we have been given a list
+        if not isinstance(filters, list):
+            raise exceptions.InconsistentArguments(
+                "filters must be a list of Filter objects"
+            )
+
+        # Unpack the transmission and wavelengths of the filters so we can
+        # resample onto the grid wavelength array
+        transmissions = [f.transmission for f in filters]
+        wavelengths = filters.lam
+
+        # Convert filter wavelengths to rest frame
+        rest_wavelengths = wavelengths / (1 + redshift)
+
+        # Resample the filter transmissions onto the grid wavelength array
+        transmissions_resampled = [
+            spectres(self.lam.value, rest_wavelengths.value, t, fill=0.0)
+            for t in transmissions
+        ]
+
+        # Find all non-zero transmission wavelengths in the filters
+        lam_mask = np.zeros(self.lam.shape, dtype=bool)
+        for t in transmissions_resampled:
+            lam_mask |= t > 0.0
+
+        # If no filters overlap the grid wavelength range, raise an error
+        if not np.any(lam_mask):
+            raise exceptions.InconsistentArguments(
+                "None of the provided filters overlap the wavelength range "
+                f"of the grid: filter_range {np.min(wavelengths)}, "
+                f"{np.max(wavelengths)}, "
+                f"grid_range {(self.lam[0], self.lam[-1])}"
+            )
+
+        # Remove wavelengths and spectra outside the filter range
+        self.lam = self.lam[lam_mask]
+        for spectra_id in self.available_spectra_emissions:
+            self.spectra[spectra_id] = self.spectra[spectra_id][..., lam_mask]
+
+        # Remove lines outside the new wavelength range this will leave lines
+        # that don't lie within non-zero transmission regions of the filters
+        # but we can at least get rid of ones fully outside the range.
+        if self.lines_available:
+            self._remove_lines_outside_lam()
+
+    @accepts(lam=angstrom)
+    def reduce_rest_frame_lam(self, lam):
+        """Limit the wavelength range of the grid to the range of a new lam.
+
+        Args:
+            lam (unyt_array):
+                The rest frame wavelength array to resample the grid to.
+        """
+        self.interp_spectra(lam)
+
+    @accepts(lam=angstrom)
+    def reduce_observed_lam(self, lam, redshift):
+        """Limit the wavelength range of the grid to the range of a new lam.
+
+        Args:
+            lam (unyt_array):
+                The observer wavelength array to resample the grid to.
+            redshift (float):
+                The redshift to use for converting the observed wavelengths
+                to rest frame.
+        """
+        # Convert to rest frame
+        rest_lam = lam / (1 + redshift)
+
+        self.interp_spectra(rest_lam)
+
+    def reduce_axis(self, axis_low, axis_high, axis_name):
+        """Limit a grid axis to a specified range.
+
+        Args:
+            axis_low (unyt_quantity):
+                The lower limit of the axis to limit the grid to.
+            axis_high (unyt_quantity):
+                The upper limit of the axis to limit the grid to.
+            axis_name (str):
+                The name of the axis to limit.
+        """
+        # Get the current axis values (and ensure the axis exists)
+        axis_values = getattr(self, axis_name, None)
+        if axis_values is None:
+            raise exceptions.InconsistentArguments(
+                f"Axis {axis_name} not found in grid. Available axes: "
+                f"{self.axes}"
+            )
+
+        # Check the limits are valid
+        if axis_low >= axis_high:
+            raise exceptions.InconsistentArguments(
+                "axis_low must be less than axis_high"
+            )
+        if axis_low < np.min(axis_values) or axis_high > np.max(axis_values):
+            raise exceptions.InconsistentArguments(
+                f"axis_low and axis_high must be within the range of the "
+                f"axis {axis_name}: ({np.min(axis_values)}, "
+                f"{np.max(axis_values)})"
+            )
+
+        # Find the indices of the axis limits
+        low_index = self.get_nearest_index(axis_low, axis_values)
+        high_index = self.get_nearest_index(axis_high, axis_values) + 1
+
+        # Which axis is this?
+        axis_index = self.axes.index(axis_name)
+
+        # Limit the axis values
+        setattr(
+            self,
+            axis_name,
+            axis_values[low_index:high_index],
+        )
+        self._axes_values[axis_name] = getattr(self, axis_name)
+        if f"log10{axis_name}" in self._extract_axes:
+            self._extract_axes_values[f"log10{axis_name}"] = np.log10(
+                getattr(self, axis_name)
+            )
+        elif pluralize(axis_name) in self._extract_axes:
+            self._extract_axes_values[pluralize(axis_name)] = getattr(
+                self, pluralize(axis_name)
+            )
+        elif f"log10{pluralize(axis_name)}" in self._extract_axes:
+            self._extract_axes_values[f"log10{pluralize(axis_name)}"] = (
+                np.log10(getattr(self, pluralize(axis_name)))
+            )
+        if depluralize(axis_name) in self._extract_axes:
+            self._extract_axes_values[depluralize(axis_name)] = getattr(
+                self, depluralize(axis_name)
+            )
+        elif f"log10{depluralize(axis_name)}" in self._extract_axes:
+            self._extract_axes_values[f"log10{depluralize(axis_name)}"] = (
+                np.log10(getattr(self, depluralize(axis_name)))
+            )
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Axis {axis_name} not found in extract axes. Available "
+                f"extract axes: {self._extract_axes}. This should really "
+                "never happen... bad things are afoot."
+            )
+
+        # Limit all the spectra arrays
+        for spectra_id in self.available_spectra_emissions:
+            self.spectra[spectra_id] = np.take(
+                self.spectra[spectra_id],
+                indices=range(low_index, high_index),
+                axis=axis_index,
+            )
+
+        # Limit all the line luminosity and continuum arrays
+        for spectra_id in self.available_line_emissions:
+            self.line_lums[spectra_id] = np.take(
+                self.line_lums[spectra_id],
+                indices=range(low_index, high_index),
+                axis=axis_index,
+            )
+            self.line_conts[spectra_id] = np.take(
+                self.line_conts[spectra_id],
+                indices=range(low_index, high_index),
+                axis=axis_index,
+            )
+
     @staticmethod
     def get_nearest_index(value, array):
         """Calculate the closest index in an array for a given value.
 
-        TODO: What is this doing here!?
+        TODO: What is this doing here!? [circa 2023]
+        Found this years later and its still here [Will 2025-10-15]
+        This should be a standalone function somewhere.
 
         Args:
             value (float/unyt_quantity):
