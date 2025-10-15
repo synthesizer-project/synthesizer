@@ -326,10 +326,43 @@ class TestGridReductionMethods:
         lam_min = original_lam[len(original_lam) // 4]
         lam_max = original_lam[3 * len(original_lam) // 4]
 
-        # Reduce the grid
-        grid.reduce_rest_frame_range(lam_min, lam_max)
+        # Reduce the grid (returns new grid by default)
+        reduced_grid = grid.reduce_rest_frame_range(lam_min, lam_max)
 
-        # Check wavelength array was reduced
+        # Original grid should be unchanged
+        assert len(grid.lam) == len(original_lam)
+
+        # Reduced grid should be modified
+        assert len(reduced_grid.lam) < len(original_lam)
+        assert reduced_grid.lam[0] >= lam_min
+        assert reduced_grid.lam[-1] <= lam_max
+
+        # Check spectra shapes changed accordingly
+        for spectra_type in reduced_grid.available_spectra:
+            assert reduced_grid.spectra[spectra_type].shape[-1] == len(
+                reduced_grid.lam
+            )
+
+    def test_reduce_rest_frame_range_inplace(self, test_grid_name):
+        """Test reducing grid to a rest frame wavelength range in-place."""
+        # Create a fresh grid instance
+        grid = Grid(test_grid_name)
+        if not grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        original_lam = grid.lam.copy()
+
+        # Define a wavelength range
+        lam_min = original_lam[len(original_lam) // 4]
+        lam_max = original_lam[3 * len(original_lam) // 4]
+
+        # Reduce the grid in-place
+        result = grid.reduce_rest_frame_range(lam_min, lam_max, inplace=True)
+
+        # Should return None for in-place operations
+        assert result is None
+
+        # Original grid should be modified
         assert len(grid.lam) < len(original_lam)
         assert grid.lam[0] >= lam_min
         assert grid.lam[-1] <= lam_max
@@ -363,17 +396,43 @@ class TestGridReductionMethods:
         obs_lam_min = original_lam[len(original_lam) // 4] * (1 + redshift)
         obs_lam_max = original_lam[3 * len(original_lam) // 4] * (1 + redshift)
 
-        # Reduce the grid
-        grid.reduce_observed_range(obs_lam_min, obs_lam_max, redshift)
+        # Reduce the grid (returns new grid by default)
+        reduced_grid = grid.reduce_observed_range(
+            obs_lam_min, obs_lam_max, redshift
+        )
+
+        # Original grid should be unchanged
+        assert len(grid.lam) == len(original_lam)
 
         # Check wavelength array was reduced
-        assert len(grid.lam) < len(original_lam)
+        assert len(reduced_grid.lam) < len(original_lam)
 
         # Check that the rest frame limits are correct
         rest_lam_min = obs_lam_min / (1 + redshift)
         rest_lam_max = obs_lam_max / (1 + redshift)
-        assert grid.lam[0] >= rest_lam_min
-        assert grid.lam[-1] <= rest_lam_max
+        assert reduced_grid.lam[0] >= rest_lam_min
+        assert reduced_grid.lam[-1] <= rest_lam_max
+
+        # More rigorous physical correctness checks
+        # The reduced grid should contain wavelengths that when redshifted
+        # fall within the observed range
+        redshifted_lam_min = reduced_grid.lam[0] * (1 + redshift)
+        redshifted_lam_max = reduced_grid.lam[-1] * (1 + redshift)
+
+        # Allow small tolerance for numerical precision
+        tolerance = 0.01  # 1% tolerance
+        assert redshifted_lam_min >= obs_lam_min * (1 - tolerance)
+        assert redshifted_lam_max <= obs_lam_max * (1 + tolerance)
+
+        # Verify no wavelengths outside the expected rest-frame range exist
+        # in the original grid that should have been included
+        expected_rest_range_mask = (original_lam >= rest_lam_min) & (
+            original_lam <= rest_lam_max
+        )
+        expected_count = np.sum(expected_rest_range_mask)
+        # The reduced grid should have approximately the same number of points
+        # (within reasonable tolerance for edge effects)
+        assert abs(len(reduced_grid.lam) - expected_count) <= 2
 
     def test_reduce_rest_frame_lam(self, test_grid_name):
         """Test reducing grid to a new rest frame wavelength array."""
@@ -382,15 +441,19 @@ class TestGridReductionMethods:
         if not grid.has_spectra:
             pytest.skip("Grid has no spectra")
 
+        original_lam = grid.lam.copy()
         # Create a new wavelength array with fewer points
         new_lam = grid.lam[::2]  # Every other wavelength
 
-        # Reduce the grid
-        grid.reduce_rest_frame_lam(new_lam)
+        # Reduce the grid (returns new grid by default)
+        reduced_grid = grid.reduce_rest_frame_lam(new_lam)
+
+        # Original grid should be unchanged
+        assert len(grid.lam) == len(original_lam)
 
         # Check wavelength array changed
-        assert len(grid.lam) == len(new_lam)
-        assert np.allclose(grid.lam, new_lam)
+        assert len(reduced_grid.lam) == len(new_lam)
+        assert np.allclose(reduced_grid.lam, new_lam)
 
     def test_reduce_observed_lam(self, test_grid_name):
         """Test reducing grid to a new observed frame wavelength array."""
@@ -399,6 +462,7 @@ class TestGridReductionMethods:
         if not grid.has_spectra:
             pytest.skip("Grid has no spectra")
 
+        original_lam = grid.lam.copy()
         redshift = 1.0
 
         # Create a new observed wavelength array
@@ -406,13 +470,69 @@ class TestGridReductionMethods:
             1 + redshift
         )  # Every other wavelength, redshifted
 
-        # Reduce the grid
-        grid.reduce_observed_lam(obs_lam, redshift)
+        # Reduce the grid (returns new grid by default)
+        reduced_grid = grid.reduce_observed_lam(obs_lam, redshift)
+
+        # Original grid should be unchanged
+        assert len(grid.lam) == len(original_lam)
 
         # Check wavelength array changed to rest frame equivalent
         expected_rest_lam = obs_lam / (1 + redshift)
-        assert len(grid.lam) == len(expected_rest_lam)
-        assert np.allclose(grid.lam, expected_rest_lam)
+        assert len(reduced_grid.lam) == len(expected_rest_lam)
+        assert np.allclose(reduced_grid.lam, expected_rest_lam)
+
+    def test_redshift_transformations_physical_correctness(
+        self, test_grid_name
+    ):
+        """Test that all observed frame methods handle redshift correctly."""
+        # Create a fresh grid instance
+        grid = Grid(test_grid_name)
+        if not grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        # Test with various redshifts to ensure consistency
+        redshifts = [0.5, 1.0, 2.0, 5.0]
+
+        for z in redshifts:
+            original_lam = grid.lam.copy()
+
+            # Test observed range reduction
+            # Pick a rest-frame range
+            rest_min = original_lam[len(original_lam) // 3]
+            rest_max = original_lam[2 * len(original_lam) // 3]
+
+            # Convert to observed frame
+            obs_min = rest_min * (1 + z)
+            obs_max = rest_max * (1 + z)
+
+            # Reduce and verify
+            reduced_grid = grid.reduce_observed_range(obs_min, obs_max, z)
+
+            # The cosmological redshift formula: λ_obs = λ_rest * (1 + z)
+            # So λ_rest = λ_obs / (1 + z)
+
+            # Check that the actual range matches expectations
+            actual_rest_min = obs_min / (1 + z)
+            actual_rest_max = obs_max / (1 + z)
+
+            # Allow small numerical tolerance
+            tolerance = 1e-10
+            assert abs(actual_rest_min - rest_min) < tolerance
+            assert abs(actual_rest_max - rest_max) < tolerance
+
+            # Verify the reduced grid has the right rest-frame range
+            assert reduced_grid.lam[0] >= actual_rest_min * 0.99
+            assert reduced_grid.lam[-1] <= actual_rest_max * 1.01
+
+            # Test observed wavelength array reduction
+            # Create observed array and verify transformation
+            obs_lam_test = (
+                np.array([3000, 4000, 5000, 6000]) * (1 + z) * angstrom
+            )
+            reduced_grid_lam = grid.reduce_observed_lam(obs_lam_test, z)
+
+            expected_rest = obs_lam_test / (1 + z)
+            assert np.allclose(reduced_grid_lam.lam, expected_rest)
 
     def test_reduce_axis(self, test_grid_name):
         """Test reducing a grid axis to a specified range."""
@@ -428,32 +548,38 @@ class TestGridReductionMethods:
         axis_low = axis_values[1]  # Second value
         axis_high = axis_values[-2]  # Second to last value
 
-        # Reduce the axis
-        grid.reduce_axis(axis_low, axis_high, axis_name)
+        # Reduce the axis (returns new grid by default)
+        reduced_grid = grid.reduce_axis(axis_low, axis_high, axis_name)
+
+        # Original grid should be unchanged
+        assert getattr(grid, axis_name).shape == axis_values.shape
+        assert grid.shape == original_shape
 
         # Check that the axis was reduced
-        new_axis_values = getattr(grid, axis_name)
+        new_axis_values = getattr(reduced_grid, axis_name)
         assert len(new_axis_values) < len(axis_values)
         assert new_axis_values[0] >= axis_low
         assert new_axis_values[-1] <= axis_high
 
         # Check that grid shape changed
-        new_shape = grid.shape
+        new_shape = reduced_grid.shape
         assert new_shape[0] < original_shape[0]  # First axis should be smaller
 
         # Check that spectra and lines were reduced accordingly
-        if grid.has_spectra:
-            for spectra_type in grid.available_spectra:
-                assert grid.spectra[spectra_type].shape == new_shape
+        if reduced_grid.has_spectra:
+            for spectra_type in reduced_grid.available_spectra:
+                assert reduced_grid.spectra[spectra_type].shape == new_shape
 
-        if grid.has_lines:
-            for emission_type in grid.available_line_emissions:
-                expected_line_shape = new_shape[:-1] + (grid.nlines,)
+        if reduced_grid.has_lines:
+            for emission_type in reduced_grid.available_line_emissions:
+                expected_line_shape = new_shape[:-1] + (reduced_grid.nlines,)
                 assert (
-                    grid.line_lums[emission_type].shape == expected_line_shape
+                    reduced_grid.line_lums[emission_type].shape
+                    == expected_line_shape
                 )
                 assert (
-                    grid.line_conts[emission_type].shape == expected_line_shape
+                    reduced_grid.line_conts[emission_type].shape
+                    == expected_line_shape
                 )
 
     def test_reduce_axis_invalid_args(self, test_grid_name):
@@ -492,19 +618,22 @@ class TestGridReductionMethods:
         filters = UVJ()  # FilterCollection object
         original_lam = grid.lam.copy()
 
-        # Reduce the grid to filter range
-        grid.reduce_rest_frame_filters(filters)
+        # Reduce the grid to filter range (returns new grid by default)
+        reduced_grid = grid.reduce_rest_frame_filters(filters)
+
+        # Original grid should be unchanged
+        assert len(grid.lam) == len(original_lam)
 
         # Check wavelength array was reduced
-        assert len(grid.lam) < len(original_lam)
+        assert len(reduced_grid.lam) < len(original_lam)
 
         # Check that wavelengths are within filter range
         filter_min = min(f.lam_eff for f in filters)
         filter_max = max(f.lam_eff for f in filters)
         # Allow some tolerance since we're comparing effective wavelengths
         # to range edges
-        assert grid.lam[0] >= filter_min * 0.8
-        assert grid.lam[-1] <= filter_max * 1.2
+        assert reduced_grid.lam[0] >= filter_min * 0.8
+        assert reduced_grid.lam[-1] <= filter_max * 1.2
 
     def test_reduce_observed_filters(self, test_grid_name):
         """Test reducing grid to observed frame filter ranges."""
@@ -518,24 +647,42 @@ class TestGridReductionMethods:
         redshift = 1.0
         original_lam = grid.lam.copy()
 
-        # Reduce the grid to observed filter range
-        grid.reduce_observed_filters(filters, redshift)
+        # Reduce the grid to observed filter range (returns new grid by
+        # default)
+        reduced_grid = grid.reduce_observed_filters(filters, redshift)
+
+        # Original grid should be unchanged
+        assert len(grid.lam) == len(original_lam)
 
         # Check wavelength array was reduced
-        assert len(grid.lam) < len(original_lam)
+        assert len(reduced_grid.lam) < len(original_lam)
 
-        # Check that rest frame wavelengths correspond to observed filter range
+        # Physical correctness check: verify redshift transformation
+        # Get the rest-frame filter range
         filter_min = min(f.lam_eff for f in filters)
         filter_max = max(f.lam_eff for f in filters)
-
-        # Convert to rest frame
         rest_filter_min = filter_min / (1 + redshift)
         rest_filter_max = filter_max / (1 + redshift)
 
+        # The reduced grid should span approximately this rest-frame range
+        # (allowing for filter width and edge effects)
+        assert reduced_grid.lam[0] <= rest_filter_max * 1.2
+        assert reduced_grid.lam[-1] >= rest_filter_min * 0.8
+
+        # More stringent check: verify the observed wavelengths of the
+        # reduced grid would fall within a reasonable filter range
+        obs_lam_min = reduced_grid.lam[0] * (1 + redshift)
+        obs_lam_max = reduced_grid.lam[-1] * (1 + redshift)
+
+        # These should overlap significantly with the filter range
+        # Check for reasonable overlap (allowing for filter widths)
+        assert obs_lam_min <= filter_max * 1.5
+        assert obs_lam_max >= filter_min * 0.5
+
         # Allow some tolerance since we're comparing effective wavelengths
         # to range edges
-        assert grid.lam[0] >= rest_filter_min * 0.8
-        assert grid.lam[-1] <= rest_filter_max * 1.2
+        assert reduced_grid.lam[0] >= rest_filter_min * 0.8
+        assert reduced_grid.lam[-1] <= rest_filter_max * 1.2
 
 
 class TestGridCollapse:
@@ -547,27 +694,33 @@ class TestGridCollapse:
         grid = Grid(test_grid_name)
         original_shape = grid.shape
         original_naxes = grid.naxes
+        original_axes = grid.axes.copy()
 
-        # Collapse the first axis by averaging
+        # Collapse the first axis by averaging (returns new grid by default)
         axis_to_collapse = grid.axes[0]
-        grid.collapse(
+        collapsed_grid = grid.collapse(
             axis_to_collapse,
             method="marginalize",
             marginalize_function=np.mean,
         )
 
-        # Check that dimensionality was reduced
-        assert grid.naxes == original_naxes - 1
-        assert axis_to_collapse not in grid.axes
+        # Original grid should be unchanged
+        assert grid.naxes == original_naxes
+        assert grid.axes == original_axes
+        assert grid.shape == original_shape
+
+        # Check that dimensionality was reduced in collapsed grid
+        assert collapsed_grid.naxes == original_naxes - 1
+        assert axis_to_collapse not in collapsed_grid.axes
 
         # Check that shapes changed correctly
-        new_shape = grid.shape
+        new_shape = collapsed_grid.shape
         assert len(new_shape) == len(original_shape) - 1
         assert new_shape == original_shape[1:]  # First axis removed
 
         # Check that the collapsed axis is no longer accessible
         with pytest.raises(AttributeError):
-            getattr(grid, axis_to_collapse)
+            getattr(collapsed_grid, axis_to_collapse)
 
     def test_collapse_interpolate(self, test_grid_name):
         """Test collapsing grid by interpolating to a specific value."""
@@ -575,6 +728,7 @@ class TestGridCollapse:
         grid = Grid(test_grid_name)
         original_shape = grid.shape
         original_naxes = grid.naxes
+        original_axes = grid.axes.copy()
 
         # Get axis and pick a value to interpolate to
         axis_to_collapse = grid.axes[0]
@@ -583,17 +737,22 @@ class TestGridCollapse:
         # Pick a value in the middle of the range
         interp_value = axis_values[len(axis_values) // 2]
 
-        # Collapse by interpolation
-        grid.collapse(
+        # Collapse by interpolation (returns new grid by default)
+        collapsed_grid = grid.collapse(
             axis_to_collapse, method="interpolate", value=interp_value
         )
 
+        # Original grid should be unchanged
+        assert grid.naxes == original_naxes
+        assert grid.axes == original_axes
+        assert grid.shape == original_shape
+
         # Check that dimensionality was reduced
-        assert grid.naxes == original_naxes - 1
-        assert axis_to_collapse not in grid.axes
+        assert collapsed_grid.naxes == original_naxes - 1
+        assert axis_to_collapse not in collapsed_grid.axes
 
         # Check that shapes changed correctly
-        new_shape = grid.shape
+        new_shape = collapsed_grid.shape
         assert len(new_shape) == len(original_shape) - 1
         assert new_shape == original_shape[1:]  # First axis removed
 
@@ -603,6 +762,7 @@ class TestGridCollapse:
         grid = Grid(test_grid_name)
         original_shape = grid.shape
         original_naxes = grid.naxes
+        original_axes = grid.axes.copy()
 
         # Get axis and pick a value to extract
         axis_to_collapse = grid.axes[0]
@@ -611,15 +771,22 @@ class TestGridCollapse:
         # Pick a value close to one of the grid points
         nearest_value = axis_values[len(axis_values) // 2]
 
-        # Collapse by nearest extraction
-        grid.collapse(axis_to_collapse, method="nearest", value=nearest_value)
+        # Collapse by nearest extraction (returns new grid by default)
+        collapsed_grid = grid.collapse(
+            axis_to_collapse, method="nearest", value=nearest_value
+        )
+
+        # Original grid should be unchanged
+        assert grid.naxes == original_naxes
+        assert grid.axes == original_axes
+        assert grid.shape == original_shape
 
         # Check that dimensionality was reduced
-        assert grid.naxes == original_naxes - 1
-        assert axis_to_collapse not in grid.axes
+        assert collapsed_grid.naxes == original_naxes - 1
+        assert axis_to_collapse not in collapsed_grid.axes
 
         # Check that shapes changed correctly
-        new_shape = grid.shape
+        new_shape = collapsed_grid.shape
         assert len(new_shape) == len(original_shape) - 1
         assert new_shape == original_shape[1:]  # First axis removed
 
