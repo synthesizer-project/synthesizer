@@ -90,8 +90,14 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Get the incident model accounting for the geometry but unmasked
-        self.disc_incident, self.disc_escaped = self._make_disc_incident(
+        # Get the incident disc emission model
+        self.disc_incident = self._make_disc_incident(
+            nlr_grid,
+            **kwargs,
+        )
+
+        # Get the escaped emission, also accounting for torus
+        self.disc_escaped = self._make_disc_escaped(
             nlr_grid,
             covered_fraction,
             **kwargs,
@@ -149,6 +155,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="disc_incident_isotropic",
             extract="incident",
             cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
@@ -157,7 +165,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
     def _make_disc_incident(
         self,
         grid,
-        covered_fraction,
         **kwargs,
     ):
         """Make the disc spectra."""
@@ -165,9 +172,36 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=grid,
             label="disc_incident",
             extract="incident",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
+        return model
+
+    def _make_disc_escaped(
+        self,
+        grid,
+        covered_fraction,
+        **kwargs,
+    ):
+        """Make the disc escaped emission."""
+        # Get disc incident emission that will escape, masking based on torus
+        # geometry
+        model = BlackHoleEmissionModel(
+            grid=grid,
+            label="disc_incident_escaped",
+            extract="incident",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            save=False,
+            **kwargs,
+        )
+
+        # Apply the covering fraction.
         disc_escaped = BlackHoleEmissionModel(
             label="disc_escaped",
             transformer=EscapingFraction(
@@ -181,7 +215,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        return model, disc_escaped
+        return disc_escaped
 
     def _make_disc_transmitted(
         self,
@@ -200,6 +234,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         nlr = BlackHoleEmissionModel(
@@ -212,6 +248,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_thresh=90 * deg,
             mask_op="<",
             fesc=covering_fraction_nlr,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         full_blr = BlackHoleEmissionModel(
@@ -221,6 +259,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
@@ -233,6 +273,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_thresh=90 * deg,
             mask_op="<",
             fesc=covering_fraction_blr,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
@@ -268,6 +310,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="full_reprocessed_nlr",
             extract="nebular",
             cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         full_blr = BlackHoleEmissionModel(
@@ -278,6 +322,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_thresh=90 * deg,
             mask_op="<",
             cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
@@ -289,6 +335,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 covering_attrs=("covering_fraction_nlr",)
             ),
             fesc=covering_fraction_nlr,
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
@@ -298,6 +346,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 covering_attrs=("covering_fraction_blr",)
             ),
             fesc=covering_fraction_blr,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
         return nlr, blr
