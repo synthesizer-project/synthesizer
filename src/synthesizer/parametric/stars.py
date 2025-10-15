@@ -964,7 +964,7 @@ class Stars(StarsComponent):
             dimensions.
         """
         if "HI" not in grid.log10_specific_ionising_lum:
-            raise exceptions.MissingGridPropetry(
+            raise exceptions.MissingGridProperty(
                 "The provided grid does not contain HI ionising luminosities"
             )
         return np.sum(
