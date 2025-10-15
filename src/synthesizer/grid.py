@@ -748,8 +748,8 @@ class Grid:
             self.interp_spectra(new_lam)
 
         # If we have been given wavelength limtis truncate the grid
-        if len(lam_lims) > 0 and new_lam is None:
-            self.truncate_grid_lam(*lam_lims)
+        elif len(lam_lims) > 0:
+            self.reduce_rest_frame_range(*lam_lims)
 
     @property
     def reprocessed(self):
@@ -1994,32 +1994,6 @@ class Grid:
         }
 
         return flattened_axes_values
-
-    @accepts(min_lam=angstrom, max_lam=angstrom)
-    def truncate_grid_lam(self, min_lam, max_lam):
-        """Truncate the grid to a specific wavelength range.
-
-        If out of range wavlengths are requested, the grid will be
-        truncated to the nearest wavelength within the grid.
-
-        Args:
-            min_lam (unyt_quantity):
-                The minimum wavelength to truncate the grid to.
-
-            max_lam (unyt_quantity):
-                The maximum wavelength to truncate the grid to.
-        """
-        # Get the indices of the wavelengths to keep
-        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
-
-        # Apply the mask to the grid wavelengths
-        self.lam = self.lam[okinds]
-
-        # Apply the mask to the spectra
-        for spectra_type in self.available_spectra:
-            self.spectra[spectra_type] = np.ascontiguousarray(
-                self.spectra[spectra_type][..., okinds]
-            )
 
     def animate_grid(
         self,
