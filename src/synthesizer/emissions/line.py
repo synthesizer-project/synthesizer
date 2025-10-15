@@ -170,7 +170,7 @@ class LineCollection:
         # look up table to map line ids to indices and enable dictionary like
         # look ups
         self._line2index = {
-            line_id: i for i, line_id in enumerate(self.line_ids)
+            str(line_id): i for i, line_id in enumerate(self.line_ids)
         }
 
         # Atrributes to enable looping
@@ -668,6 +668,48 @@ class LineCollection:
             "Unrecognised line_id type. Please provide a string, list, or "
             f"comma separated string (type={type(line_id)} line_id={line_id})"
         )
+
+    def items(self):
+        """Return an iterator over the line_id, Line pairs in the collection.
+
+        This enables syntax such as for line_id, line in LineCollection.items()
+
+        Returns:
+            iterator
+                An iterator over the line_id, Line pairs in the collection.
+        """
+        for line_id in self.line_ids:
+            yield str(line_id), self[line_id]
+
+    def keys(self):
+        """Return an iterator over the line_ids in the collection.
+
+        This enables syntax such as for line_id in LineCollection.keys()
+
+        Returns:
+            iterator
+                An iterator over the line_ids in the collection.
+        """
+        for line_id in self.line_ids:
+            yield str(line_id)
+
+    def __contains__(self, line_id):
+        """Check if a line_id is in the collection.
+
+        This enables syntax such as if line_id in LineCollection
+
+        Args:
+            line_id (str):
+                The line_id to check for.
+
+        Returns:
+            bool
+                True if the line_id is in the collection, False otherwise.
+        """
+        # Convert to string to handle numpy string objects
+        line_id_str = str(line_id)
+        # Check in our string-keyed index
+        return line_id_str in self._line2index
 
     def sum(self, axis=None):
         """Sum the lines in the collection.
