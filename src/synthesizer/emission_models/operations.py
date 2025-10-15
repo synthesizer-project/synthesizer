@@ -978,6 +978,96 @@ class Combination:
 
         return images
 
+    def _combine_line_images(
+        self,
+        line_images,
+        this_model,
+        line_ids,
+        instrument,
+        fov,
+        img_type,
+        do_flux,
+        emitters,
+        kernel,
+        kernel_threshold,
+        nthreads,
+    ):
+        """Combine the line images by addition.
+
+        Args:
+            line_images (dict):
+                The dictionary of line image collections.
+            this_model (EmissionModel):
+                The model defining the combination.
+            line_ids (list):
+                The line IDs to combine.
+            instrument (Instrument):
+                The instrument to use when generating line images.
+            fov (float):
+                The field of view of the line images.
+            img_type (str):
+                The type of image to generate.
+            do_flux (bool):
+                Are we generating flux images?
+            emitters (dict):
+                The emitters to generate the line images for.
+            kernel (str):
+                The kernel to use when generating line images.
+            kernel_threshold (float):
+                The threshold to use when generating line images.
+            nthreads (int):
+                The number of threads to use when generating line images.
+
+        Returns:
+            dict: The updated line_images dictionary.
+        """
+        # Check we saved the models we are combining
+        missing = [
+            model.label
+            for model in this_model.combine
+            if model.label not in line_images
+        ]
+
+        # Ok, we're missing some line images. All other line images that can
+        # be made have been made
+        if len(missing) > 0:
+            raise exceptions.MissingImage(
+                "Can't generate galaxy level line images without saving the "
+                f"lines from the component models ({', '.join(missing)})."
+            )
+
+        # Initialize the output line images dictionary for this model
+        combined_line_images = {}
+
+        # For each line_id, combine the line images from all models
+        for line_id in line_ids:
+            # Get the line images for each model we are combining
+            combine_images = []
+            for model in this_model.combine:
+                if (
+                    model.label in line_images
+                    and line_id in line_images[model.label]
+                ):
+                    combine_images.append(line_images[model.label][line_id])
+
+            # Only combine if we have images to combine
+            if combine_images:
+                # Get the first image to add to
+                out_image = combine_images[0]
+
+                # Combine the line images
+                for img in combine_images[1:]:
+                    out_image += img
+
+                # Store the combined line image
+                combined_line_images[line_id] = out_image
+
+        # Store the combined line images for this model
+        if combined_line_images:
+            line_images[this_model.label] = combined_line_images
+
+        return line_images
+
     def _combine_summary(self):
         """Return a summary of a combination model."""
         # Create a list to hold the summary
