@@ -1055,16 +1055,10 @@ class Grid:
         """Limit the wavelength range of the grid to the range of filters.
 
         Args:
-            filters (list):
+            filters (FilterCollection):
                 A list of Filter objects to use for determining the
                 wavelength range to limit the grid to.
         """
-        # Check we have been given a list
-        if not isinstance(filters, list):
-            raise exceptions.InconsistentArguments(
-                "filters must be a list of Filter objects"
-            )
-
         # Unpack the transmission and wavelengths of the filters so we can
         # resample onto the grid wavelength array
         transmissions = [f.transmission for f in filters]
@@ -1105,19 +1099,13 @@ class Grid:
         """Limit the wavelength range of the grid to the range of filters.
 
         Args:
-            filters (list):
+            filters (FilterCollection):
                 A list of Filter objects to use for determining the
                 wavelength range to limit the grid to.
             redshift (float):
                 The redshift to use for converting the observed wavelengths
                 to rest frame.
         """
-        # Check we have been given a list
-        if not isinstance(filters, list):
-            raise exceptions.InconsistentArguments(
-                "filters must be a list of Filter objects"
-            )
-
         # Unpack the transmission and wavelengths of the filters so we can
         # resample onto the grid wavelength array
         transmissions = [f.transmission for f in filters]
@@ -1240,7 +1228,7 @@ class Grid:
             self._extract_axes_values[f"log10{pluralize(axis_name)}"] = (
                 np.log10(getattr(self, pluralize(axis_name)))
             )
-        if depluralize(axis_name) in self._extract_axes:
+        elif depluralize(axis_name) in self._extract_axes:
             self._extract_axes_values[depluralize(axis_name)] = getattr(
                 self, depluralize(axis_name)
             )
