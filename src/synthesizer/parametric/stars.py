@@ -960,8 +960,8 @@ class Stars(StarsComponent):
                 The SPS Grid object from which to extract spectra.
 
         Returns:
-            Log of the ionising photon luminosity summed over the grid
-            dimensions.
+         Returns:
+             The ionising photon luminosity summed over the grid dimensions.
         """
         if "HI" not in grid.log10_specific_ionising_lum:
             raise exceptions.MissingGridProperty(
