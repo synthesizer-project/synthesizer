@@ -1239,3 +1239,175 @@ def _generate_ifu_generic(
         )
 
     return ifu
+
+
+def _generate_line_image_collection_generic(
+    line_ids,
+    instrument,
+    lines,
+    fov,
+    img_type,
+    kernel,
+    kernel_threshold,
+    nthreads,
+    emitter,
+    cosmo,
+):
+    """Generate line image collections for a generic emitter.
+
+    This function creates line images based on the input line data.
+    Particle based imaging can either be hist or smoothed, while parametric
+    imaging can only be smoothed.
+
+    Args:
+        line_ids (list):
+            A list of line ids to include in the line images.
+        instrument (Instrument):
+            The instrument to create the images for.
+        lines (dict):
+            The line collections to use for the images. This should be a
+            dictionary of LineCollection objects keyed by line_id.
+        fov (unyt_quantity/tuple, unyt_quantity):
+            The width of the image.
+        img_type (str):
+            The type of image to create. Options are "hist" or "smoothed".
+        kernel (str):
+            The array describing the kernel. This is derived from the
+            kernel_functions module. (Only applicable to particle imaging)
+        kernel_threshold (float):
+            The threshold for the kernel. Particles with a kernel value
+            below this threshold are included in the image. (Only
+            applicable to particle imaging)
+        nthreads (int):
+            The number of threads to use when smoothing the image. This
+            only applies to particle imaging.
+        emitter (Stars/BlackHoles/BlackHole):
+            The emitter object to create the images for.
+        cosmo (astropy.cosmology.Cosmology):
+            A cosmology object defining the cosmology to use for the images.
+            This is only relevant for angular images where a conversion to
+            projected angular coordinates is needed.
+
+    Returns:
+        dict: A dictionary of ImageCollection objects keyed by line_id.
+    """
+    # Avoid cyclic imports
+    from synthesizer.imaging import Image, ImageCollection
+
+    line_image_collections = {}
+
+    # Generate images for each requested line_id
+    for line_id in line_ids:
+        if line_id not in lines:
+            raise exceptions.MissingLines(
+                f"Line {line_id} not found in line collection"
+            )
+            continue
+
+        line = lines[line_id]
+
+        # Get the line luminosity/flux as the signal
+        if hasattr(line, "luminosity"):
+            signal = line.luminosity
+        elif hasattr(line, "flux"):
+            signal = line.flux
+        else:
+            raise exceptions.MissingAttribute(
+                f"Line {line_id} has no luminosity or flux data"
+            )
+
+        # Create individual images for this line
+        imgs = {}
+
+        # For now, create a single image. In the future, this could be extended
+        # to handle multiple filters or wavelength bins
+        filter_name = f"line_{line_id}"
+
+        # Check if this is a particle or parametric emitter
+        if hasattr(emitter, "morphology"):
+            # Parametric emitter - use smoothed approach with morphology
+            if img_type == "hist":
+                raise exceptions.InconsistentArguments(
+                    "Parametric emitters can only produce smoothed images."
+                )
+
+            # For parametric emitters, generate images using morphology
+
+            # Create an image directly
+            img = Image(resolution=instrument.resolution, fov=fov)
+
+            # Get the density grid from the morphology
+            density_grid = emitter.morphology.get_density_grid(
+                img.resolution,
+                img.npix,
+            )
+
+            # For parametric emitters, the signal is a scalar (total line
+            # luminosity). We distribute this across the density grid
+            img.arr = signal * density_grid / density_grid.sum()
+
+            # Set the units
+            if hasattr(signal, "units"):
+                img.units = signal.units
+
+        else:
+            # Particle emitter - need coordinates
+            if hasattr(emitter, "coordinates"):
+                coordinates = emitter.coordinates
+            elif hasattr(emitter, "coord"):
+                coordinates = emitter.coord
+            else:
+                raise exceptions.MissingAttribute(
+                    f"Particle emitter {type(emitter)} has no coordinates"
+                )
+            # Particle emitter
+            if img_type == "hist":
+                # Create histogram image
+                img = _generate_image_particle_hist(
+                    img=Image(resolution=instrument.resolution, fov=fov),
+                    signal=signal,
+                    coordinates=coordinates,
+                )
+            elif img_type == "smoothed":
+                # Create smoothed image
+                if hasattr(emitter, "smoothing_lengths"):
+                    smoothing_lengths = emitter.smoothing_lengths
+                else:
+                    # Use a default smoothing length if not available
+                    smoothing_lengths = (
+                        np.full(
+                            coordinates.shape[0],
+                            instrument.resolution.to_value(coordinates.units),
+                        )
+                        * coordinates.units
+                    )
+
+                img = _generate_image_particle_smoothed(
+                    img=Image(resolution=instrument.resolution, fov=fov),
+                    signal=signal,
+                    coordinates=coordinates,
+                    smoothing_lengths=smoothing_lengths,
+                    kernel=kernel
+                    if kernel is not None
+                    else Kernel().get_kernel(),
+                    kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
+                )
+            else:
+                raise exceptions.UnknownImageType(
+                    f"Unknown img_type {img_type} for line images. "
+                    "Options are 'hist' or 'smoothed'"
+                )
+
+        # Store the image
+        imgs[filter_name] = img
+
+        # Create the ImageCollection for this line
+        if imgs:
+            line_image_collections[line_id] = ImageCollection(
+                resolution=instrument.resolution,
+                fov=fov,
+                imgs=imgs,
+            )
+
+    return line_image_collections
