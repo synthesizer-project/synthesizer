@@ -47,7 +47,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             The BLR transmitted emission
         disc_transmitted (BlackHoleEmissionModel):
             The disc transmitted emission
-        disc_lr_escaped (BlackHoleEmissionModel):
+        disc_escaped (BlackHoleEmissionModel):
             The disc escaped emission
         disc (BlackHoleEmissionModel):
             The disc emission model
@@ -185,20 +185,23 @@ class UnifiedAGN(BlackHoleEmissionModel):
         covered_fraction,
         **kwargs,
     ):
-        """Make the disc spectra but using the mask."""
+        """Make the disc escaped emission."""
+        # Get disc incident emission that will escape, masking based on torus
+        # geometry
         model = BlackHoleEmissionModel(
             grid=grid,
-            label="disc_incident",
+            label="disc_incident_escaped",
             extract="incident",
             hydrogen_density="hydrogen_density_blr",
             ionisation_parameter="ionisation_parameter_blr",
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            save=False,
             **kwargs,
         )
 
-        """Apply the covering fraction."""
+        # Apply the covering fraction.
         disc_escaped = BlackHoleEmissionModel(
             label="disc_escaped",
             transformer=EscapingFraction(
