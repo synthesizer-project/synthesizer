@@ -89,8 +89,17 @@ def _reconstruct_cosmology(cosmo_key):
     )
     valid_params.discard("self")  # Remove 'self'
 
+    # What are the required parameters for this class?
+    required_params = {
+        name
+        for name, param in inspect.signature(
+            cosmo_class.__init__
+        ).parameters.items()
+        if param.default is param.empty and name != "self"
+    }
+
     # Are we missing any required parameters?
-    for param in valid_params:
+    for param in required_params:
         if param not in params:
             raise ValueError(
                 f"Cannot reconstruct {class_name} cosmology: we seem to be "
@@ -110,7 +119,7 @@ def _reconstruct_cosmology(cosmo_key):
         elif key == "Tcmb0":
             kwargs[key] = value * u.K
         elif key == "m_nu":
-            kwargs[key] = list(value) * u.eV
+            kwargs[key] = u.Quantity(value, u.eV)
         else:
             kwargs[key] = value
 
