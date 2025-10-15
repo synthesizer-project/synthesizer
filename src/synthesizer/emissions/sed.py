@@ -1105,7 +1105,7 @@ class Sed:
         self.obsnu = self._nu / (1.0 + z)
 
         # Compute the luminosity distance
-        luminosity_distance = get_luminosity_distance.to("cm")
+        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy

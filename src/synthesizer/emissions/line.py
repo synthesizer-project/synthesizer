@@ -879,7 +879,7 @@ class LineCollection:
             return self.get_flux0()
 
         # Get the luminosity distance
-        luminosity_distance = get_luminosity_distance.to("cm")
+        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Compute flux and observed continuum
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
