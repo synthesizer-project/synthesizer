@@ -79,6 +79,15 @@ class BaseGalaxy:
         self.images_noise_lnu = {}
         self.images_noise_fnu = {}
 
+        # Define the dictionaries to hold the line images (same structure as
+        # images)
+        self.line_images_lnu = {}
+        self.line_images_fnu = {}
+        self.line_images_psf_lnu = {}
+        self.line_images_psf_fnu = {}
+        self.line_images_noise_lnu = {}
+        self.line_images_noise_fnu = {}
+
         # Initialise the dictionary to hold instrument specific spectroscopy
         self.spectroscopy = {}
 
@@ -1595,6 +1604,406 @@ class BaseGalaxy:
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
+
+    def get_line_images_luminosity(
+        self,
+        line_ids,
+        emission_model,
+        img_type="smoothed",
+        instrument=None,
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+        resolution=None,
+        fov=None,
+        cosmo=None,
+    ):
+        """Make line ImageCollections from luminosities.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary line data is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_images_lnu attribute. The line
+        image collection at the root of the emission model will also be
+        returned.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the line images.
+            emission_model (EmissionModel):
+                The emission model to use to generate the line images.
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            instrument (Instrument):
+                The instrument to use for the image. This can be None but if
+                not it will be used to label the images by instrument.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            limit_to (str/list):
+                Optionally pass a single model label to limit image generation
+                to only that model.
+            resolution (unyt_quantity of float):
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict: A dictionary containing line ImageCollections keyed by
+                line_id.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric galaxy
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed images."
+            )
+
+        # Ensure we aren't trying to make an image for a particle galaxy
+        # without a per particle model
+        if self.galaxy_type == "Particle" and not emission_model.per_particle:
+            raise exceptions.InconsistentArguments(
+                "Particle Galaxies can only produce images from per particle "
+                "emission models."
+            )
+
+        # If we haven't got an instrument create one
+        if instrument is None:
+            if resolution is None or fov is None:
+                raise ValueError(
+                    "If instrument not provided, a resolution and fov must "
+                    "be specified."
+                )
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+            )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Convert `limit_to` to a list if it is a string
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+
+        # Get the line images
+        line_images = emission_model._get_line_images(
+            line_ids=line_ids,
+            instrument=instrument,
+            fov=fov,
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=False,
+            cosmo=cosmo,
+        )
+
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
+
+        # Unpack the line images to the right component
+        for model in emission_model._models.values():
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label not in limit_to:
+                continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the line images to the right component
+            if model.emitter == "galaxy":
+                if instrument_name is not None:
+                    self.line_images_lnu.setdefault(instrument_name, {})
+                    self.line_images_lnu[instrument_name][model.label] = (
+                        line_images[model.label]
+                    )
+                else:
+                    self.line_images_lnu[model.label] = line_images[
+                        model.label
+                    ]
+            elif model.emitter == "stellar":
+                if instrument_name is not None:
+                    self.stars.line_images_lnu.setdefault(instrument_name, {})
+                    self.stars.line_images_lnu[instrument_name][
+                        model.label
+                    ] = line_images[model.label]
+                else:
+                    self.stars.line_images_lnu[model.label] = line_images[
+                        model.label
+                    ]
+            elif model.emitter == "blackhole":
+                if instrument_name is not None:
+                    self.black_holes.line_images_lnu.setdefault(
+                        instrument_name, {}
+                    )
+                    self.black_holes.line_images_lnu[instrument_name][
+                        model.label
+                    ] = line_images[model.label]
+                else:
+                    self.black_holes.line_images_lnu[model.label] = (
+                        line_images[model.label]
+                    )
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return line_images[limit_to[0]]  # return the first image in list
+
+        # Return the line images at the root of the emission model
+        return line_images[emission_model.label]
+
+    def get_line_images_flux(
+        self,
+        line_ids,
+        fov,
+        emission_model,
+        img_type="smoothed",
+        instrument=None,
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+        resolution=None,
+        cosmo=None,
+    ):
+        """Make line ImageCollections from fluxes.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary line data is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_images_fnu attribute. The line
+        image collection at the root of the emission model will also be
+        returned.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the line images.
+            fov (unyt_quantity of float):
+                The field of view of the image.
+            emission_model (EmissionModel):
+                The emission model to use to generate the line images.
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            instrument (Instrument):
+                The instrument to use for the image. This can be None but if
+                not it will be used to label the images by instrument.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            limit_to (str/list):
+                Optionally pass a single model label to limit image generation
+                to only that model.
+            resolution (unyt_quantity of float):
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict: A dictionary containing line ImageCollections keyed by
+                line_id.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric galaxy
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed images."
+            )
+
+        # Ensure we aren't trying to make an image for a particle galaxy
+        # without a per particle model
+        if self.galaxy_type == "Particle" and not emission_model.per_particle:
+            raise exceptions.InconsistentArguments(
+                "Particle Galaxies can only produce images from per particle "
+                "emission models."
+            )
+
+        # If we haven't got an instrument create one
+        if instrument is None:
+            if resolution is None or fov is None:
+                raise ValueError(
+                    "If instrument not provided, a resolution and fov must "
+                    "be specified."
+                )
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+            )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Convert `limit_to` to a list if it is a string
+        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+
+        # Get the line images
+        line_images = emission_model._get_line_images(
+            line_ids=line_ids,
+            instrument=instrument,
+            fov=fov,
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=True,
+            cosmo=cosmo,
+        )
+
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
+
+        # Unpack the line images to the right component
+        for model in emission_model._models.values():
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label not in limit_to:
+                continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the line images to the right component
+            if model.emitter == "galaxy":
+                if instrument_name is not None:
+                    self.line_images_fnu.setdefault(instrument_name, {})
+                    self.line_images_fnu[instrument_name][model.label] = (
+                        line_images[model.label]
+                    )
+                else:
+                    self.line_images_fnu[model.label] = line_images[
+                        model.label
+                    ]
+            elif model.emitter == "stellar":
+                if instrument_name is not None:
+                    self.stars.line_images_fnu.setdefault(instrument_name, {})
+                    self.stars.line_images_fnu[instrument_name][
+                        model.label
+                    ] = line_images[model.label]
+                else:
+                    self.stars.line_images_fnu[model.label] = line_images[
+                        model.label
+                    ]
+            elif model.emitter == "blackhole":
+                if instrument_name is not None:
+                    self.black_holes.line_images_fnu.setdefault(
+                        instrument_name, {}
+                    )
+                    self.black_holes.line_images_fnu[instrument_name][
+                        model.label
+                    ] = line_images[model.label]
+                else:
+                    self.black_holes.line_images_fnu[model.label] = (
+                        line_images[model.label]
+                    )
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return line_images[limit_to[0]]  # return the first image in list
+
+        # Return the line images at the root of the emission model
+        return line_images[emission_model.label]
 
     def apply_psf_to_images_lnu(
         self,

@@ -84,6 +84,15 @@ class Component(ABC):
         self.images_noise_lnu = {}
         self.images_noise_fnu = {}
 
+        # Define the dictionaries to hold the line images (same structure as
+        # images)
+        self.line_images_lnu = {}
+        self.line_images_fnu = {}
+        self.line_images_psf_lnu = {}
+        self.line_images_psf_fnu = {}
+        self.line_images_noise_lnu = {}
+        self.line_images_noise_fnu = {}
+
         # Define the dictionaries to hold instrument specific spectroscopy
         self.spectroscopy = {}
         self.particle_spectroscopy = {}
@@ -207,12 +216,13 @@ class Component(ABC):
         This requires the redshift to be set on the component.
 
         This will use the astropy cosmology module to calculate the
-        angular diameter distance. If the redshift is 0, the distance will be set to
-        10 pc to avoid any issues with 0s.
+        angular diameter distance. If the redshift is 0, the distance will be
+        set to 10 pc to avoid any issues with 0s.
 
         Args:
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation.
+
         Returns:
             unyt_quantity:
                 The angular diameter distance of the component in kpc.
@@ -231,7 +241,8 @@ class Component(ABC):
                 "angular diameter distance."
             )
 
-        # At redshift > 0 we can calculate the angular diameter distance explicitly
+        # At redshift > 0 we can calculate the angular diameter distance
+        # explicitly
         if self.redshift > 0:
             return (
                 cosmo.angular_diameter_distance(self.redshift).to("kpc").value
@@ -794,6 +805,266 @@ class Component(ABC):
 
         # Return the image at the root of the emission model
         return images[emission_model.label]
+
+    def get_line_images_luminosity(
+        self,
+        line_ids,
+        resolution,
+        fov,
+        emission_model,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+        instrument=None,
+        cosmo=None,
+    ):
+        """Make line ImageCollections from component luminosities.
+
+        For Parametric components, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary line data is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_images_lnu attribute. The line image
+        collection at the root of the emission model will also be returned.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the line images.
+            resolution (unyt_quantity of float):
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov (float):
+                The width of the image in image coordinates.
+            emission_model (EmissionModel):
+                The emission model to use to generate the line images.
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            limit_to (str):
+                The label of the image to limit to. If None, all images are
+                returned.
+            instrument (Instrument):
+                The instrument to use to generate the images.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict: A dictionary containing line ImageCollections keyed by
+                line_id.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric
+        # component
+        if hasattr(self, "morphology") and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                f"Parametric {self.component_type} can only produce "
+                "smoothed images."
+            )
+
+        # If we haven't got an instrument create one
+        if instrument is None:
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+            )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Get the line images
+        line_images = emission_model._get_line_images(
+            line_ids=line_ids,
+            instrument=instrument,
+            fov=fov,
+            emitters={"stellar": self}
+            if self.component_type == "Stars"
+            else {"blackhole": self},
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=False,
+            cosmo=cosmo,
+        )
+
+        # Store the line images
+        self.line_images_lnu.update(line_images)
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return line_images[limit_to]
+
+        # Return the line images at the root of the emission model
+        return line_images[emission_model.label]
+
+    def get_line_images_flux(
+        self,
+        line_ids,
+        resolution,
+        fov,
+        emission_model,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+        instrument=None,
+        cosmo=None,
+    ):
+        """Make line ImageCollections from fluxes.
+
+        For Parametric components, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the emission model. If any
+        of the necessary line data is missing for generating a particular
+        image, an exception will be raised.
+
+        The limit_to argument can be used if only a specific image is desired.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_images_fnu attribute. The line image
+        collection at the root of the emission model will also be returned.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the line images.
+            resolution (unyt_quantity of float):
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov (float):
+                The width of the image in image coordinates.
+            emission_model (EmissionModel):
+                The emission model to use to generate the line images.
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            limit_to (str):
+                The label of the image to limit to. If None, all images are
+                returned.
+            instrument (Instrument):
+                The instrument to use to generate the images.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict: A dictionary containing line ImageCollections keyed by
+                line_id.
+        """
+        # Ensure we aren't trying to make a histogram for a parametric
+        # component
+        if hasattr(self, "morphology") and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                f"Parametric {self.component_type} can only produce "
+                "smoothed images."
+            )
+
+        # If we haven't got an instrument create one
+        if instrument is None:
+            # Make the place holder instrument
+            instrument = Instrument(
+                "place-holder",
+                resolution=resolution,
+            )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Get the line images
+        line_images = emission_model._get_line_images(
+            line_ids=line_ids,
+            instrument=instrument,
+            fov=fov,
+            emitters={"stellar": self}
+            if self.component_type == "Stars"
+            else {"blackhole": self},
+            img_type=img_type,
+            mask=None,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            limit_to=limit_to,
+            do_flux=True,
+            cosmo=cosmo,
+        )
+
+        # Store the line images
+        self.line_images_fnu.update(line_images)
+
+        # If we are limiting to a specific image then return that
+        if limit_to is not None:
+            return line_images[limit_to]
+
+        # Return the line images at the root of the emission model
+        return line_images[emission_model.label]
 
     def apply_psf_to_images_lnu(
         self,
