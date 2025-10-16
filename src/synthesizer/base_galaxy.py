@@ -1299,7 +1299,7 @@ class BaseGalaxy:
 
             # Make the place holder instrument
             instrument = Instrument(
-                "place-holder",
+                "GenericInstrument",
                 resolution=resolution,
                 filters=filters,
             )
@@ -1501,7 +1501,9 @@ class BaseGalaxy:
                     emission_model.label
                 ].filters
             instrument = Instrument(
-                "place-holder", resolution=resolution, filters=filters
+                "GenericInstrument",
+                resolution=resolution,
+                filters=filters,
             )
 
         # Ensure we have a cosmology if we need it
