@@ -1,7 +1,7 @@
 """A module containing helper functions for cosmology calculations.
 
 This module mainly interfaces with astropy.cosmology and provide helpful
-wrappers and importantly cached functions for hot path cosmology calculations.
+wrappers and importantly cached functions for hot-path cosmology calculations.
 """
 
 import inspect
@@ -17,7 +17,7 @@ def _get_cosmo_key(cosmo):
 
     We need this because astropy cosmology objects are not hashable by default,
     but we want to use them as keys in a cache. This function extracts the key
-    parameters of the cosmology and returns them as a tuple whcih can be used
+    parameters of the cosmology and returns them as a tuple which can be used
     as a cache key and then used to reconstruct the cosmology object.
 
     Args:
