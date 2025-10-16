@@ -895,6 +895,7 @@ class Grid:
                         self._lam,
                         _spec,
                         fill=0,
+                        verbose=False,
                     )
 
                 del self.spectra[spectra_type]
@@ -906,6 +907,7 @@ class Grid:
                     self._lam,
                     self.spectra[spectra_type],
                     fill=0,
+                    verbose=False,
                 )
 
             # Update this spectra
@@ -1146,7 +1148,13 @@ class Grid:
 
         # Resample the filter transmissions onto the grid wavelength array
         transmissions_resampled = [
-            spectres(grid.lam.value, wavelengths.value, t, fill=0.0)
+            spectres(
+                grid.lam.value,
+                wavelengths.value,
+                t,
+                fill=0.0,
+                verbose=False,
+            )
             for t in transmissions
         ]
 
@@ -1215,7 +1223,13 @@ class Grid:
 
         # Resample the filter transmissions onto the grid wavelength array
         transmissions_resampled = [
-            spectres(grid.lam.value, rest_wavelengths.value, t, fill=0.0)
+            spectres(
+                grid.lam.value,
+                rest_wavelengths.value,
+                t,
+                fill=0.0,
+                verbose=False,
+            )
             for t in transmissions
         ]
 
@@ -1312,6 +1326,51 @@ class Grid:
         if not inplace:
             return grid
 
+    def _where_axis(self, axis_name):
+        """Return the dimension index of a given axis name."""
+        # Which axis is this? Handle the various cases
+        ind = 0
+        while ind < len(self.axes):
+            if self.axes[ind] == axis_name:
+                break
+            elif self.axes[ind] == pluralize(axis_name):
+                break
+            elif self.axes[ind] == depluralize(axis_name):
+                break
+            elif self.axes[ind] == f"log10{axis_name}":
+                break
+            elif self.axes[ind] == f"log10{pluralize(axis_name)}":
+                break
+            elif self.axes[ind] == f"log10{depluralize(axis_name)}":
+                break
+            elif self._extract_axes[ind] == axis_name:
+                break
+            elif self._extract_axes[ind] == pluralize(axis_name):
+                break
+            elif self._extract_axes[ind] == depluralize(axis_name):
+                break
+            elif self._extract_axes[ind] == f"log10{axis_name}":
+                break
+            elif self._extract_axes[ind] == f"log10{pluralize(axis_name)}":
+                break
+            elif self._extract_axes[ind] == f"log10{depluralize(axis_name)}":
+                break
+            ind += 1
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Axis {axis_name} not found in grid. Available axes: "
+                f"{self.axes} or {self._extract_axes}"
+            )
+        return ind
+
+    def _have_axis(self, axis_name):
+        """Check if the grid has a given axis name."""
+        try:
+            self._where_axis(axis_name)
+            return True
+        except exceptions.InconsistentArguments:
+            return False
+
     def reduce_axis(self, axis_low, axis_high, axis_name, inplace=False):
         """Limit a grid axis to a specified range.
 
@@ -1363,42 +1422,26 @@ class Grid:
         low_index = grid.get_nearest_index(axis_low, axis_values)
         high_index = grid.get_nearest_index(axis_high, axis_values) + 1
 
-        # Which axis is this?
-        axis_index = grid.axes.index(axis_name)
+        # Which axis is this? Note that this uses self.axes and
+        # self._extract_axes to get the correct index not grid but since
+        # grid.axis and grid._extract_axes are copies of self.axes and
+        # self._extract_axes this is fine.
+        axis_index = grid._where_axis(axis_name)
+
+        # Now we know the index get the keys without an naming nonsense
+        _axis_name = grid.axes[axis_index]
+        _extract_axis_name = grid._extract_axes[axis_index]
 
         # Limit the axis values
         setattr(
             grid,
-            axis_name,
+            _axis_name,
             axis_values[low_index:high_index],
         )
-        grid._axes_values[axis_name] = getattr(grid, axis_name)
-        if f"log10{axis_name}" in grid._extract_axes:
-            grid._extract_axes_values[f"log10{axis_name}"] = np.log10(
-                getattr(grid, axis_name)
-            )
-        elif pluralize(axis_name) in grid._extract_axes:
-            grid._extract_axes_values[pluralize(axis_name)] = getattr(
-                grid, pluralize(axis_name)
-            )
-        elif f"log10{pluralize(axis_name)}" in grid._extract_axes:
-            grid._extract_axes_values[f"log10{pluralize(axis_name)}"] = (
-                np.log10(getattr(grid, pluralize(axis_name)))
-            )
-        elif depluralize(axis_name) in grid._extract_axes:
-            grid._extract_axes_values[depluralize(axis_name)] = getattr(
-                grid, depluralize(axis_name)
-            )
-        elif f"log10{depluralize(axis_name)}" in grid._extract_axes:
-            grid._extract_axes_values[f"log10{depluralize(axis_name)}"] = (
-                np.log10(getattr(grid, depluralize(axis_name)))
-            )
-        else:
-            raise exceptions.InconsistentArguments(
-                f"Axis {axis_name} not found in extract axes. Available "
-                f"extract axes: {grid._extract_axes}. This should really "
-                "never happen... bad things are afoot."
-            )
+        grid._axes_values[_axis_name] = getattr(grid, _axis_name)
+        grid._extract_axes_values[_extract_axis_name] = (
+            grid._extract_axes_values[_extract_axis_name][low_index:high_index]
+        )
 
         # Limit all the spectra arrays
         for spectra_id in grid.available_spectra_emissions:
@@ -1542,7 +1585,7 @@ class Grid:
                 The function to use for marginalizing over the axis.
         """
         # Get the index of the axis to collapse
-        axis_index = self.axes.index(axis)
+        axis_index = self._where_axis(axis)
 
         for spectra_id in self.available_spectra_emissions:
             # Marginalize over the entire axis
@@ -1570,7 +1613,7 @@ class Grid:
                 A function to apply to the axis values before interpolation.
         """
         # Get the index of the axis to collapse
-        axis_index = self.axes.index(axis)
+        axis_index = self._where_axis(axis)
         axis_values = getattr(self, axis)
 
         # Check the value is provided
@@ -1662,7 +1705,7 @@ class Grid:
                 The value to collapse the grid at.
         """
         # Get the index of the axis to collapse
-        axis_index = self.axes.index(axis)
+        axis_index = self._where_axis(axis)
         axis_values = getattr(self, axis)
 
         # Check the value is provided
@@ -1748,7 +1791,7 @@ class Grid:
             grid = copy.deepcopy(self)
 
         # Check the axis is valid
-        if axis not in grid.axes:
+        if not self._have_axis(axis):
             raise exceptions.InconsistentParameter(
                 f"Axis {axis} is not a valid axis on the grid."
             )
@@ -1773,9 +1816,26 @@ class Grid:
             grid._collapse_grid_nearest(axis, value)
 
         # Update the grid metadata
-        grid.axes.pop(grid.axes.index(axis))
-        grid._axes_values.pop(axis)
-        grid._axes_units.pop(axis)
+        axis_index = self._where_axis(axis)
+        axis_name = grid.axes[axis_index]
+        extract_axis_name = grid._extract_axes[axis_index]
+        grid.axes.pop(axis_index)
+        grid._axes_values.pop(axis_name)
+        grid._axes_units.pop(axis_name)
+        grid._extract_axes.pop(axis_index)
+        grid._extract_axes_values.pop(extract_axis_name)
+        if hasattr(grid, axis_name):
+            delattr(grid, axis_name)
+        if hasattr(grid, pluralize(axis_name)):
+            delattr(grid, pluralize(axis_name))
+        if hasattr(grid, depluralize(axis_name)):
+            delattr(grid, depluralize(axis_name))
+        if hasattr(grid, f"log10{axis_name}"):
+            delattr(grid, f"log10{axis_name}")
+        if hasattr(grid, f"log10{pluralize(axis_name)}"):
+            delattr(grid, f"log10{pluralize(axis_name)}")
+        if hasattr(grid, f"log10{depluralize(axis_name)}"):
+            delattr(grid, f"log10{depluralize(axis_name)}")
         grid.naxes -= 1
 
         # Return the grid if not inplace
