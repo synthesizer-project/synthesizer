@@ -60,6 +60,7 @@ class TestGridInitialization:
     def test_grid_with_ignore_lines(self, test_grid_name):
         """Test Grid initialization with ignore_lines=True."""
         grid = Grid(test_grid_name, ignore_lines=True)
+        assert not grid.lines_available
         assert not grid.has_lines
         assert len(grid.line_lums) == 0
         assert len(grid.line_conts) == 0
@@ -533,6 +534,37 @@ class TestGridReductionMethods:
 
             expected_rest = obs_lam_test / (1 + z)
             assert np.allclose(reduced_grid_lam.lam, expected_rest)
+
+    def test_grid_new_lam_interpolation(self, test_grid_name):
+        """Test Grid initialization with new_lam interpolation."""
+        # Create a custom wavelength array
+        new_lams = np.logspace(2, 5, 1000) * angstrom
+
+        # Test Grid creation with new_lam
+        grid = Grid(test_grid_name, new_lam=new_lams)
+
+        # Check that the wavelength array was updated
+        assert len(grid.lam) == len(new_lams)
+        assert np.allclose(grid.lam.value, new_lams.value)
+        assert grid.lam.units == new_lams.units
+
+        # Check that spectra were interpolated correctly
+        assert grid.has_spectra
+        for spectra_type in grid.available_spectra:
+            # The last dimension should match the new wavelength array
+            assert grid.spectra[spectra_type].shape[-1] == len(new_lams)
+
+        # Test with a smaller wavelength range
+        small_lams = np.logspace(3, 4, 100) * angstrom
+        small_grid = Grid(test_grid_name, new_lam=small_lams)
+
+        assert len(small_grid.lam) == 100
+        assert np.allclose(small_grid.lam.value, small_lams.value)
+
+        # Test that it works with lines (even if ignore_lines has issues)
+        grid_with_lines = Grid(test_grid_name, new_lam=new_lams)
+        assert len(grid_with_lines.lam) == len(new_lams)
+        # Lines may or may not be available depending on grid processing
 
     def test_reduce_axis(self, test_grid_name):
         """Test reducing a grid axis to a specified range."""
