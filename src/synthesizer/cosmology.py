@@ -1,13 +1,27 @@
 """A module containing helper functions for cosmology calculations.
 
-This module mainly interfaces with astropy.cosmology and provide helpful
-wrappers and importantly cached functions for hot-path cosmology calculations.
+This module mainly interfaces with astropy.cosmology and provides helpful
+wrappers and importantly cached functions for hot path cosmology calculations.
+
+The module is explicitly tested against, and supports, the following
+astropy cosmology models:
+    - FLRW (base class)
+    - FlatLambdaCDM (flat ΛCDM model)
+    - wCDM (constant dark energy equation of state)
+    - FlatwCDM (flat version of wCDM)
+    - w0waCDM (time-varying dark energy equation of state)
+    - Flatw0waCDM (flat version of w0waCDM)
+    - wpwaCDM (pivot redshift parameterization)
+    - FlatwpwaCDM (flat version of wpwaCDM)
+    - w0wzCDM (redshift derivative parameterization)
+    - Flatw0wzCDM (flat version of w0wzCDM)
 """
 
 import inspect
 from functools import lru_cache
 
 import astropy.cosmology as cosmo_module
+import numpy as np
 from astropy import units as u
 from unyt import Mpc
 
@@ -32,36 +46,33 @@ def _get_cosmo_key(cosmo):
     # Extract all the key parameters needed to reconstruct the cosmology
     params = {}
 
-    # Always present parameters
-    params["H0"] = cosmo.H0.value
-    params["Om0"] = cosmo.Om0
-    params["name"] = cosmo.name
+    # Get the valid parameters for this cosmology class from its constructor
+    valid_params = set(
+        inspect.signature(cosmo.__class__.__init__).parameters.keys()
+    ).discard("self")  # Remove 'self'
 
-    # Optional parameters that may be present
-    if hasattr(cosmo, "Ode0") and cosmo.Ode0 is not None:
-        params["Ode0"] = cosmo.Ode0
+    # Dynamically extract all parameters that the constructor accepts
+    for param_name in valid_params:
+        if hasattr(cosmo, param_name):
+            value = getattr(cosmo, param_name)
 
-    if hasattr(cosmo, "Tcmb0") and cosmo.Tcmb0 is not None:
-        params["Tcmb0"] = cosmo.Tcmb0.value
+            # Only include non-None values that are hashable or convertible
+            if value is not None:
+                # Handle astropy Quantities explicitly
+                if isinstance(value, u.Quantity):
+                    # Arrays must be tuples, otherwise extract values
+                    if isinstance(value.value, np.ndarray):
+                        params[param_name] = tuple(value.value.tolist())
+                    else:
+                        params[param_name] = value.value
+                elif isinstance(value, (int, float, str)):
+                    # Simple hashable types
+                    params[param_name] = value
+                else:
+                    # Skip unhashable types, not needed for reconstruction
+                    pass
 
-    if hasattr(cosmo, "Neff") and cosmo.Neff is not None:
-        params["Neff"] = cosmo.Neff
-
-    if hasattr(cosmo, "m_nu") and cosmo.m_nu is not None:
-        # Convert astropy quantity array to list of values for hashability
-        params["m_nu"] = tuple(cosmo.m_nu.value.tolist())
-
-    if hasattr(cosmo, "Ob0") and cosmo.Ob0 is not None:
-        params["Ob0"] = cosmo.Ob0
-
-    if hasattr(cosmo, "w0") and cosmo.w0 is not None:
-        params["w0"] = cosmo.w0
-
-    if hasattr(cosmo, "wa") and cosmo.wa is not None:
-        params["wa"] = cosmo.wa
-
-    # Create a hashable representation
-    # Sort the params to ensure consistent ordering
+    # Create a sorted hashable representation
     param_items = tuple(sorted(params.items()))
 
     return (class_name, param_items)
@@ -86,8 +97,7 @@ def _reconstruct_cosmology(cosmo_key):
     # Get the valid parameters for this cosmology class and filter out the self
     valid_params = set(
         inspect.signature(cosmo_class.__init__).parameters.keys()
-    )
-    valid_params.discard("self")  # Remove 'self'
+    ).discard("self")  # Remove 'self'
 
     # What are the required parameters for this class?
     required_params = {
@@ -118,9 +128,11 @@ def _reconstruct_cosmology(cosmo_key):
             kwargs[key] = value * u.km / u.s / u.Mpc
         elif key == "Tcmb0":
             kwargs[key] = value * u.K
-        elif key == "m_nu":
+        elif isinstance(value, tuple):
+            # Reconstruct Quantity arrays
             kwargs[key] = u.Quantity(value, u.eV)
         else:
+            # All other parameters are plain floats/ints/strings
             kwargs[key] = value
 
     return cosmo_class(**kwargs)
