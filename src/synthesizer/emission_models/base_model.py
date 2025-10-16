@@ -3090,9 +3090,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # If we have no emitter, we can't generate an image. This is
             # relevant when the emitter is a galaxy. In this case the images
             # must be combined in the loop below.
-            if emitter == "galaxy":
+            if this_model.emitter == "galaxy" or emitter is None:
                 continue
-
             # Get the appropriate photometry (particle/integrated and
             # flux/luminosity)
             try:
