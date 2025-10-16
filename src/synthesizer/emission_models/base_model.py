@@ -257,7 +257,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 self.
             emitter (str):
                 The emitter this emission model acts on. Default is
-                "galaxy". Can be "stellar", "gas", "black_hole", or "galaxy".
+                "galaxy". Can be "stellar", "gas", "blackhole", or "galaxy".
             scale_by (str/list/tuple/EmissionModel):
                 Either a component attribute to scale the resultant spectra by,
                 a spectra key to scale by (based on the bolometric luminosity).
@@ -308,16 +308,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if emitter is None:
             raise exceptions.InconsistentArguments(
                 "Must specify an emitter, either 'stellar', 'gas', "
-                "'black_hole', or 'galaxy'."
+                "'blackhole', or 'galaxy'."
             )
 
         # Attach which emitter we are working with
         self._emitter = emitter.lower()
 
         # Ensure emitter is an acceptable value
-        if self._emitter not in ["stellar", "gas", "black_hole", "galaxy"]:
+        if self._emitter not in ["stellar", "gas", "blackhole", "galaxy"]:
             raise exceptions.InconsistentArguments(
-                "Emitter must be either 'stellar', 'gas', 'black_hole', or "
+                "Emitter must be either 'stellar', 'gas', 'blackhole', or "
                 f"'galaxy' (got {self._emitter})."
             )
         elif self._emitter == "gas":
