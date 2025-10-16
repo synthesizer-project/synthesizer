@@ -43,7 +43,6 @@ from unyt import (
     Hz,
     angstrom,
     c,
-    cm,
     erg,
     eV,
     h,
@@ -55,6 +54,7 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
+from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.extensions.timers import tic, toc
@@ -879,9 +879,7 @@ class LineCollection:
             return self.get_flux0()
 
         # Get the luminosity distance
-        luminosity_distance = (
-            cosmo.luminosity_distance(z).to("cm").value
-        ) * cm
+        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Compute flux and observed continuum
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
