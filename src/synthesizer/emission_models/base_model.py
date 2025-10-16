@@ -337,7 +337,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "Cannot make a per particle galaxy emission model."
             )
 
-            # Define the container which will hold mask information
+        # Define the container which will hold mask information
         self.masks = []
 
         # If we have been given a mask, add it
