@@ -49,7 +49,8 @@ def _get_cosmo_key(cosmo):
     # Get the valid parameters for this cosmology class from its constructor
     valid_params = set(
         inspect.signature(cosmo.__class__.__init__).parameters.keys()
-    ).discard("self")  # Remove 'self'
+    )
+    valid_params.discard("self")  # Remove 'self'
 
     # Dynamically extract all parameters that the constructor accepts
     for param_name in valid_params:
@@ -97,7 +98,8 @@ def _reconstruct_cosmology(cosmo_key):
     # Get the valid parameters for this cosmology class and filter out the self
     valid_params = set(
         inspect.signature(cosmo_class.__init__).parameters.keys()
-    ).discard("self")  # Remove 'self'
+    )
+    valid_params.discard("self")  # Remove 'self'
 
     # What are the required parameters for this class?
     required_params = {
