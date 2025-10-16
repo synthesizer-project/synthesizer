@@ -154,6 +154,7 @@ class Grid:
         # are first called to avoid reading the file too often.
         self._reprocessed = None
         self._lines_available = None
+        self._ignore_lines = ignore_lines
 
         # Set up spectra and lines dictionaries (if we don't read them they'll
         # just stay as empty dicts)
@@ -790,6 +791,10 @@ class Grid:
             bool:
                 True if lines are available, False otherwise.
         """
+        # If lines were explicitly ignored during initialization, return False
+        if self._ignore_lines:
+            return False
+
         if self._lines_available is None:
             with h5py.File(self.grid_filename, "r") as hf:
                 self._lines_available = True if "lines" in hf.keys() else False
@@ -962,17 +967,31 @@ class Grid:
 
     def _remove_lines_outside_lam(self):
         """Remove lines outside the wavelength range of the grid."""
-        if self.lines_available:
+        if (
+            self.lines_available
+            and hasattr(self, "line_lams")
+            and self.line_lams is not None
+        ):
+            # Ensure we have compatible units for comparison
+            lam_min = self.lam[0]
+            lam_max = self.lam[-1]
+
+            # Make sure both have the same units
+            if hasattr(self.line_lams, "units") and hasattr(lam_min, "units"):
+                # Convert line_lams to same units as lam if needed
+                line_lams = self.line_lams.to(lam_min.units)
+            else:
+                line_lams = self.line_lams
+
             lines_to_keep = np.where(
-                (self.line_lams >= self.lam[0])
-                & (self.line_lams <= self.lam[-1])
+                (line_lams >= lam_min) & (line_lams <= lam_max)
             )[0]
 
             if len(lines_to_keep) < len(self.line_lams):
                 warn(
-                    "Some lines are outside the wavelength range of the "
-                    "grid and will be removed: "
-                    f"{self.available_lines[~lines_to_keep]}."
+                    f"{len(self.line_lams) - len(lines_to_keep)} "
+                    "lines are outside the wavelength range of the "
+                    "grid and will be removed."
                 )
 
             self.available_lines = self.available_lines[lines_to_keep]
@@ -1334,7 +1353,8 @@ class Grid:
             )
         if axis_low < np.min(axis_values) or axis_high > np.max(axis_values):
             raise exceptions.InconsistentArguments(
-                f"axis_low and axis_high must be within the range of the "
+                f"axis_low ({axis_low}) and axis_high ({axis_high}) must be "
+                "within the range of the "
                 f"axis {axis_name}: ({np.min(axis_values)}, "
                 f"{np.max(axis_values)})"
             )
