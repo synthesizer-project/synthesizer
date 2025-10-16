@@ -305,7 +305,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self.fixed_parameters = fixed_parameters
 
         # Ensure we have been given an emitter
-        if self._emitter is None:
+        if emitter is None:
             raise exceptions.InconsistentArguments(
                 "Must specify an emitter, either 'stellar', 'gas', "
                 "'black_hole', or 'galaxy'."
@@ -3239,8 +3239,8 @@ class StellarEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a StellarEmissionModel instance."""
+        kwargs.setdefault("emitter", "stellar")
         EmissionModel.__init__(self, *args, **kwargs)
-        self._emitter = "stellar"
 
 
 class BlackHoleEmissionModel(EmissionModel):
@@ -3256,8 +3256,8 @@ class BlackHoleEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a BlackHoleEmissionModel instance."""
+        kwargs.setdefault("emitter", "blackhole")
         EmissionModel.__init__(self, *args, **kwargs)
-        self._emitter = "blackhole"
 
 
 class GalaxyEmissionModel(EmissionModel):
@@ -3274,8 +3274,8 @@ class GalaxyEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a GalaxyEmissionModel instance."""
+        kwargs.setdefault("emitter", "galaxy")
         EmissionModel.__init__(self, *args, **kwargs)
-        self._emitter = "galaxy"
 
         # Ensure we aren't extracting, this cannot be done for a galaxy.
         if self._is_extracting:
