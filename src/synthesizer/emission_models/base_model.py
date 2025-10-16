@@ -122,7 +122,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             fixed and thus ignore the value of the component attribute. This
             should take the form {<parameter_name>: <value>}.
         emitter (str):
-            The emitter this emission model acts on. Default is "stellar".
+            The emitter this emission model acts on.
         apply_to (EmissionModel):
             The model to apply the dust curve to.
         dust_curve (emission_models.attenuation.*):
@@ -257,7 +257,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 self.
             emitter (str):
                 The emitter this emission model acts on. Default is
-                "stellar".
+                "galaxy". Can be "stellar", "gas", "black_hole", or "galaxy".
             scale_by (str/list/tuple/EmissionModel):
                 Either a component attribute to scale the resultant spectra by,
                 a spectra key to scale by (based on the bolometric luminosity).
@@ -304,13 +304,40 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Store any fixed parameters
         self.fixed_parameters = fixed_parameters
 
+        # Ensure we have been given an emitter
+        if self._emitter is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify an emitter, either 'stellar', 'gas', "
+                "'black_hole', or 'galaxy'."
+            )
+
         # Attach which emitter we are working with
-        self._emitter = emitter
+        self._emitter = emitter.lower()
+
+        # Ensure emitter is an acceptable value
+        if self._emitter not in ["stellar", "gas", "black_hole", "galaxy"]:
+            raise exceptions.InconsistentArguments(
+                "Emitter must be either 'stellar', 'gas', 'black_hole', or "
+                f"'galaxy' (got {self._emitter})."
+            )
+        elif self._emitter == "gas":
+            raise exceptions.UnimplementedFunctionality(
+                "The 'gas' emitter is not yet implemented."
+            )
+        else:
+            # All good, as you were
+            pass
 
         # Are we making per particle emission?
         self._per_particle = per_particle
 
-        # Define the container which will hold mask information
+        # Make sure we aren't trying to be a per particle galaxy model
+        if self._per_particle and self._emitter == "galaxy":
+            raise exceptions.InconsistentArguments(
+                "Cannot make a per particle galaxy emission model."
+            )
+
+            # Define the container which will hold mask information
         self.masks = []
 
         # If we have been given a mask, add it
@@ -3063,7 +3090,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # If we have no emitter, we can't generate an image. This is
             # relevant when the emitter is a galaxy. In this case the images
             # must be combined in the loop below.
-            if emitter is None:
+            if emitter == "galaxy":
                 continue
 
             # Get the appropriate photometry (particle/integrated and
