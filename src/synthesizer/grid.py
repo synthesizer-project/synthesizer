@@ -758,7 +758,7 @@ class Grid:
 
         # If we have been given wavelength limtis truncate the grid
         elif len(lam_lims) > 0:
-            self.reduce_rest_frame_range(*lam_lims)
+            self.reduce_rest_frame_range(*lam_lims, inplace=True)
 
     @property
     def reprocessed(self):
