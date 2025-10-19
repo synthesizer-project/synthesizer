@@ -153,7 +153,7 @@ def bimodal_pacman_emission_model(test_grid):
 @pytest.fixture
 def template_emission_model_bh(test_template):
     """Return a TemplateEmission object."""
-    return TemplateEmission(test_template, "blackhole")
+    return TemplateEmission(test_template, emitter="blackhole")
 
 
 # ================================= IGMS ======================================
