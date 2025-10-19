@@ -1,7 +1,7 @@
 """A module for computing Intergalactic Medium (IGM) absorption.
 
 This module contains classes for computing IGM absorption from Inoue et al.
-(2014), Madau et al. (1996), and Asada et al. (2024) models.
+(2014), Madau et al. (1996), and Asada et al. (2025) models.
 
 These are used when observer frame fluxes are computed using Sed.get_fnu(...)
 and are not designed to be used directly by the user.
@@ -16,54 +16,10 @@ from unyt import angstrom
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.exceptions import UnimplementedFunctionality
 from synthesizer.units import accepts
+from synthesizer.utils import sigmoid
 
 # Define the path to the data files
 filepath = os.path.abspath(__file__)
-
-
-def sigmoid(x, A, a, c):
-    """Sigmoid function centered at x=6.
-
-    Args:
-        x (float): Input value (typically redshift).
-        A (float): Amplitude parameter.
-        a (float): Slope parameter.
-        c (float): Offset parameter.
-
-    Returns:
-        float: Sigmoid function value.
-    """
-    return A / (1 + np.exp(-a * (x - 6))) + c
-
-
-def sigma_a(nu_rest):
-    """Lyα absorption cross section for the restframe frequency.
-
-    Based on Totani+06, eqn (1) for CGM damping wing calculation.
-
-    Args:
-        nu_rest (float): Rest-frame frequency in Hz.
-
-    Returns:
-        float: Lyα absorption cross section at the restframe frequency [cm²].
-    """
-    Lam_a = 6.255486e8  # Hz
-    nu_lya = 2.46607e15  # Hz
-    C = 6.9029528e22  # Constant factor [Ang²/s²]
-
-    sig = (
-        C
-        * (nu_rest / nu_lya) ** 4
-        / (
-            4 * np.pi**2 * (nu_rest - nu_lya) ** 2
-            + Lam_a**2 * (nu_rest / nu_lya) ** 6 / 4
-        )
-    )
-
-    s = sig * 1e-16  # convert Å⁻² to cm⁻²
-
-    return s
-
 
 __all__ = ["Inoue14", "Madau96", "Asada25"]
 
@@ -563,6 +519,35 @@ class Madau96(IGMBase):
         return exp_teff
 
 
+def sigma_a(nu_rest):
+    """Lyα absorption cross section for the restframe frequency.
+
+    Based on Totani+06, eqn (1) for CGM damping wing calculation.
+
+    Args:
+        nu_rest (float): Rest-frame frequency in Hz.
+
+    Returns:
+        float: Lyα absorption cross section at the restframe frequency [cm²].
+    """
+    Lam_a = 6.255486e8  # Hz
+    nu_lya = 2.46607e15  # Hz
+    C = 6.9029528e22  # Constant factor [Ang²/s²]
+
+    sig = (
+        C
+        * (nu_rest / nu_lya) ** 4
+        / (
+            4 * np.pi**2 * (nu_rest - nu_lya) ** 2
+            + Lam_a**2 * (nu_rest / nu_lya) ** 6 / 4
+        )
+    )
+
+    s = sig * 1e-16  # convert Å⁻² to cm⁻²
+
+    return s
+
+
 class Asada25(IGMBase):
     r"""IGM+CGM absorption from Asada et al. 2025.
 
@@ -570,17 +555,17 @@ class Asada25(IGMBase):
     https://iopscience.iop.org/article/10.3847/2041-8213/adc388
 
     The IGM model is from Inoue+ (2014), with additional Lya damping
-    absorption at z>6 as described in Asada+24. This model includes both
+    absorption at z>6 as described in Asada+25. This model includes both
     Intergalactic Medium (IGM) and Circumgalactic Medium (CGM) effects.
 
     Attributes:
         sigmoid_params (tuple): Parameters that control the redshift evolution
             of the CGM HI gas column density (A, a, c). Default values are
-            from Asada et al. (2024): (3.5918, 1.8414, 18.001).
+            from Asada et al. (2025): (3.5918, 1.8414, 18.001).
         scale_tau (float): Scalar multiplied to tau_igm. I.e.,
             :math:`f_{\\mathrm{igm}} = e^{-\\mathrm{scale_\\tau} \\tau}`.
         add_cgm (bool): Add the additional LyA damping absorption at z>6 as
-            described in Asada+24. If False, the transmission will be
+            described in Asada+25. If False, the transmission will be
             identical to Inoue+2014.
         name (str): Name of the model.
         lam (array): Wavelengths for the model.
@@ -602,7 +587,7 @@ class Asada25(IGMBase):
         Args:
             sigmoid_params (tuple): Parameters that control the redshift
                 evolution of the CGM HI gas column density (A, a, c).
-                Default values are from Asada et al. (2024).
+                Default values are from Asada et al. (2025).
             scale_tau (float): Scalar multiplied to tau_igm.
             add_cgm (bool): Add the additional LyA damping absorption at z>6.
                 If False, the transmission will be identical to Inoue+2014.
@@ -862,7 +847,7 @@ class Asada25(IGMBase):
     def lgNHI_z(self, redshift):
         """HI column density as a function of redshift.
 
-        Calibrated in Asada+ 2024. Only valid at z>=6.
+        Calibrated in Asada+ 2025. Only valid at z>=6.
 
         Args:
             redshift (float): Redshift of the source.
@@ -875,6 +860,7 @@ class Asada25(IGMBase):
             self.sigmoid_params[0],
             self.sigmoid_params[1],
             self.sigmoid_params[2],
+            6,
         )
 
         return lgN_HI
