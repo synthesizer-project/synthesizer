@@ -258,7 +258,6 @@ class Stars(StarsComponent):
             self._get_sfzh(instant_sf, instant_metallicity)
 
         if np.any(~np.isfinite(self.sfzh)):
-            print(self.sf_hist_func.parameters)
             raise exceptions.InconsistentArguments(
                 "SFZH grid contains NaN or Inf values! "
                 "Please check the input parameters."
@@ -969,7 +968,17 @@ class Stars(StarsComponent):
         if age_points.size == 0:
             return unyt_quantity(0, units="Msun/yr")
 
+        # Support unyt quantities in t_range
         t_start, t_end = t_range
+        if hasattr(t_start, "to"):
+            t_start = t_start.to("yr").value
+        if hasattr(t_end, "to"):
+            t_end = t_end.to("yr").value
+        # Ensure consistent ordering
+        order = np.argsort(age_points)
+        age_points = age_points[order]
+        sfh_mass = sfh_mass[order]
+
         if t_start >= t_end:
             raise ValueError("Start of t_range must be less than its end.")
 

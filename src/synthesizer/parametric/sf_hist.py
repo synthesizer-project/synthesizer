@@ -97,7 +97,7 @@ class Common:
                 or an array for each age in age.
         """
         # If we have been handed an array we need to loop
-        if isinstance(age, (np.ndarray, list)):
+        if isinstance(age, (np.ndarray, list, tuple)) or hasattr(age, "ndim"):
             if hasattr(self, "_sfrs"):
                 # If the child has defined a vectorised version of _sfr
                 return self._sfrs(age)
@@ -248,18 +248,15 @@ class Common:
                 "Both must be instances of Common or its subclasses."
             )
 
-        # Create a new instance of CombinedSFH - if one of the models
-        # is a CombinedSFH, we can just add the other model to it
-
+        # Delegate to CombinedSFH while preserving weights when possible
+        if isinstance(other, CombinedSFH):
+            return other + self
         if isinstance(self, CombinedSFH):
-            new_sfh = self.sfh_models + [other]
-        elif isinstance(other, CombinedSFH):
-            new_sfh = other.sfh_models + [self]
-        else:
-            new_sfh = CombinedSFH([self, other])
-
-        # Return the new combined SFH
-        return new_sfh
+            return CombinedSFH(
+                self.sfh_models + [other],
+                weights=np.concatenate([self.weights, [1.0]]),
+            )
+        return CombinedSFH([self, other])
 
 
 class Constant(Common):
@@ -1373,7 +1370,7 @@ class Dirichlet(Common):
         if len(z_fraction) != nbins - 1:
             raise ValueError(
                 f"z_fraction must have {nbins - 1} elements"
-                "for {nbins} age bins"
+                f"for {nbins} age bins"
             )
 
         # Validate z_fraction values are in [0,1]
@@ -1817,6 +1814,9 @@ class CombinedSFH(Common):
             if weights is not None
             else np.ones(len(sfh_models)) / len(sfh_models)
         )
+
+        if self.weights.shape != (len(self.sfh_models),):
+            raise ValueError("weights must have same length as sfh_models")
 
         Common.__init__(self, name=name)
 
