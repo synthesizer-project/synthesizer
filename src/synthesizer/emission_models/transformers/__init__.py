@@ -13,7 +13,7 @@ from synthesizer.emission_models.transformers.escape_fraction import (
     ProcessedFraction,
     EscapingFraction,
 )
-from synthesizer.emission_models.transformers.igm import Inoue14, Madau96
+from synthesizer.emission_models.transformers.igm import Inoue14, Madau96, Asada25
 
 __all__ = [
     "ProcessedFraction",
@@ -22,4 +22,5 @@ __all__ = [
     "EscapingFraction",
     "Madau96",
     "Inoue14",
+    "Asada25",
 ]
