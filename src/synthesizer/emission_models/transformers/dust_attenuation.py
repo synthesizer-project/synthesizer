@@ -31,6 +31,8 @@ this_dir, this_filename = os.path.split(__file__)
 
 __all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLi08"]
 
+_RESET_SENTINEL = object()
+
 
 class AttenuationLaw(Transformer):
     """The base class for all attenuation laws.
@@ -42,20 +44,36 @@ class AttenuationLaw(Transformer):
     Attributes:
         description (str):
             A description of the type of model. Defined on children classes.
+        required_params (tuple):
+            The name of any required parameters needed by the transformer
+            when transforming an emission. These should either be
+            available from an emitter or from the EmissionModel itself.
+            If they are missing an exception will be raised.
     """
 
-    def __init__(self, description):
+    def __init__(self, description, required_params=("tau_v",)):
         """Initialise the parent and set common attributes.
 
         Args:
             description (str):
                 A description of the type of model.
+            required_params (tuple):
+                List of required model attributes.
         """
         # Store the description of the model.
         self.description = description
-
+        # Store user-supplied conversions between model arguments and parameter
+        # names, e.g. allows the user to set e.g. slope = 'slope_young' on the
+        # emitter or model and have that passed to the dust curve as slope
+        self._name_transforms = {}
+        # Stores overridden parameters temporarily
+        self._temp_params = {}
+        if "tau_v" not in required_params:
+            raise exceptions.InconsistentArguments(
+                "AttenuationLaw requires 'tau_v' as a parameter."
+            )
         # Call the parent constructor
-        Transformer.__init__(self, required_params=("tau_v",))
+        Transformer.__init__(self, required_params=required_params)
 
     def get_tau(self, *args):
         """Compute the V-band normalised optical depth."""
@@ -72,7 +90,7 @@ class AttenuationLaw(Transformer):
         )
 
     @accepts(lam=angstrom)
-    def get_transmission(self, tau_v, lam):
+    def get_transmission(self, tau_v, lam, **dust_curve_kwargs):
         """Compute the transmission curve.
 
         Returns the transmitted flux/luminosity fraction based on an optical
@@ -85,6 +103,9 @@ class AttenuationLaw(Transformer):
             lam (np.ndarray of float):
                 The wavelengths (with units) at which to calculate
                 transmission.
+            **dust_curve_kwargs (dict):
+                Additional keyword arguments to be passed to the dust curve
+                which have been defined on the emitter or model.
 
         Returns:
             np.ndarray of float:
@@ -92,8 +113,15 @@ class AttenuationLaw(Transformer):
                 shape for singular tau_v values or (tau_v.size, lam.size)
                 tau_v is an array.
         """
-        # Get the optical depth at each wavelength
-        tau_x_v = self.get_tau(lam)
+        # Set any additional parameters on the dust curve
+        self._set_params(**dust_curve_kwargs)
+
+        try:
+            # Get the optical depth at each wavelength
+            tau_x_v = self.get_tau(lam)
+        finally:
+            # Always restore previous state
+            self._reset_params()
 
         # Include the V band optical depth in the exponent
         # For a scalar we can just multiply but for an array we need to
@@ -107,6 +135,28 @@ class AttenuationLaw(Transformer):
                 exponent = tau_v[:, None] * tau_x_v
 
         return np.exp(-exponent)
+
+    def _check_required_params(self):
+        """Get the required parameters for the transformer.
+
+        Given the input params, this method will return the required
+        params by looking at required params which have been
+        set as strings or None.
+
+        """
+        param_values = [
+            getattr(self, param, None) for param in self._required_params
+        ]
+
+        required_params = []
+        for param, value in zip(self._required_params, param_values):
+            if value is None:
+                required_params.append(param)
+            elif isinstance(value, str):
+                required_params.append(value)
+                self._name_transforms[value] = param
+
+        self._required_params = required_params
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the dust attenuation to the emission.
@@ -135,10 +185,44 @@ class AttenuationLaw(Transformer):
 
         # Apply the transmission to the emission
         return emission.apply_attenuation(
-            tau_v=params["tau_v"],
             dust_curve=self,
             mask=mask,
+            **params,
         )
+
+    def _set_params(self, **params):
+        """Set the parameters of the dust curve.
+
+        This method will set any parameters defined in params as attributes
+        of the dust curve. This allows for parameters to be set on the
+        emitter or model and then used by the dust curve.
+
+        Args:
+            **params (dict):
+                The parameters to set.
+        """
+        # Save existing state of only the attributes we will override,
+        # then apply overrides mapped to the actual attribute names.
+        self._temp_params = {}
+        overrides = {}
+        for key, value in params.items():
+            attr = self._name_transforms.get(key, key)
+            overrides[attr] = value
+        for attr, value in overrides.items():
+            prev = getattr(self, attr, _RESET_SENTINEL)
+            self._temp_params[attr] = prev
+            setattr(self, attr, value)
+
+    def _reset_params(self):
+        """Reset the parameters of the dust curve to their previous state."""
+        for attr, prev in self._temp_params.items():
+            if prev is _RESET_SENTINEL:
+                # Attribute did not exist prior to override
+                if hasattr(self, attr):
+                    delattr(self, attr)
+            else:
+                setattr(self, attr, prev)
+        self._temp_params = {}
 
     @accepts(lam=angstrom)
     def plot_attenuation(
@@ -280,8 +364,12 @@ class PowerLaw(AttenuationLaw):
                 The slope of the power law dust curve.
         """
         description = "simple power law dust curve"
-        AttenuationLaw.__init__(self, description)
+        AttenuationLaw.__init__(
+            self, description, required_params=("tau_v", "slope")
+        )
         self.slope = slope
+
+        self._check_required_params()
 
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam):
@@ -451,13 +539,18 @@ class Calzetti2000(AttenuationLaw):
             "for the slope and UV-bump implemented"
             "in Noll et al. 2009"
         )
-        AttenuationLaw.__init__(self, description)
+
+        required_params = ("tau_v", "slope", "cent_lam", "ampl", "gamma")
+
+        AttenuationLaw.__init__(self, description, required_params)
 
         # Define the parameters of the model.
         self.slope = slope
         self.cent_lam = cent_lam
         self.ampl = ampl
         self.gamma = gamma
+
+        self._check_required_params()
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
@@ -819,7 +912,16 @@ class ParametricLi08(AttenuationLaw):
             "Empirical extinction/attenuation curves (MW, SMC, LMC, "
             "Calzetti) can be selected."
         )
-        AttenuationLaw.__init__(self, description)
+
+        required_params = (
+            "tau_v",
+            "UV_slope",
+            "OPT_NIR_slope",
+            "FUV_slope",
+            "bump",
+        )
+
+        AttenuationLaw.__init__(self, description, required_params)
 
         # Define the parameters of the model.
         self.UV_slope = UV_slope
@@ -838,6 +940,8 @@ class ParametricLi08(AttenuationLaw):
             self.model = "Calzetti"
         else:
             self.model = "Custom"
+
+        self._check_required_params()
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):

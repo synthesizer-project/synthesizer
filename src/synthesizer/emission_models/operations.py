@@ -280,15 +280,22 @@ class Extraction:
         if this_model._lam_mask is not None:
             # Get the indices that would bin the lines into the
             # spectra grid wavelength array
-            line_indices = np.digitize(
+            lam_grid = extractor._grid.lam
+            raw_indices = np.digitize(
                 extractor._line_lams,
-                extractor._grid.lam,
+                lam_grid,
+                right=False,
             )
 
             # Remove any lines which are masked out in the lam_mask
-            for ind in line_indices:
-                if not this_model._lam_mask[ind]:
-                    lam_mask[ind] = False
+            for i, raw in enumerate(raw_indices):
+                # Outside the lam grid -> leave this line as-is (no
+                # lam-based filtering)
+                if raw == 0 or raw == lam_grid.size:
+                    continue
+                grid_ix = raw - 1  # map to 0-based left-bin index
+                if not this_model._lam_mask[grid_ix]:
+                    lam_mask[i] = False
 
         # Get the spectra (note that result is a tuple containing the
         # particle line and the integrated line if per_particle is True,
@@ -662,6 +669,7 @@ class Transformation:
         particle_emissions,
         emitter,
         this_mask,
+        lam,
     ):
         """Transform an emission.
 
@@ -680,6 +688,8 @@ class Transformation:
                 The emitter to transform the spectra for.
             this_mask (dict):
                 The mask to apply to the spectra.
+            lam (unyt_array):
+                The wavelength grid corresponding to the lam_mask elements.
 
         Returns:
             dict:
@@ -691,13 +701,45 @@ class Transformation:
         else:
             apply_to = emissions[this_model.apply_to.label]
 
-        # Apply the transform to the spectra
+        # If we have a LineColleciton and a lam_mask, we need to translate
+        # the nlam lam_mask into an nlines lam_mask
+        if (
+            isinstance(apply_to, LineCollection)
+            and this_model._lam_mask is not None
+        ):
+            # Get the line wavelengths
+            line_lams = apply_to.lam
+
+            # Get the indices that would bin the lines into the
+            # spectra grid wavelength array
+            raw_indices = np.digitize(
+                line_lams,
+                lam,
+                right=False,
+            )
+
+            # Translate these indices into a mask
+            lam_mask = np.zeros(apply_to.nlines, dtype=bool)
+            for i, raw in enumerate(raw_indices):
+                # Skip lines outside the grid: raw == 0 (below first edge)
+                # or raw == nlam (at/above last edge)
+                if raw == 0 or raw == lam.size:
+                    continue
+                grid_ix = raw - 1
+                if this_model._lam_mask[grid_ix]:
+                    lam_mask[i] = True
+
+        else:
+            # Otherwise we can just use the lam_mask as is
+            lam_mask = this_model.lam_mask
+
+        # Apply the transform to the emission
         emission = self.transformer._transform(
             apply_to,
             emitter,
             this_model,
             this_mask if this_model.per_particle else None,
-            this_model.lam_mask,
+            lam_mask,
         )
 
         # Store the spectra in the right place (integrating if we need to)
