@@ -17,6 +17,7 @@ Example usage:
 
 """
 
+import inspect
 import io
 import sys
 
@@ -76,6 +77,60 @@ class Common:
 
         # Store the model parameters (defined as kwargs)
         self.parameters = kwargs
+
+    @classmethod
+    def init_from_prior(cls, **kwargs):
+        """Initialise the SFH from its prior distribution.
+
+        Expects each parameter either as a single value or a length 2
+        list/tuple/np.ndarray defining a uniform prior.
+
+        Args:
+            **kwargs (dict):
+                Additional keyword arguments to pass to the child class
+                initialiser.
+
+        Returns:
+            An instance of the child class.
+        """
+        # inspect the class to find the required arguments
+        signature = inspect.signature(cls.__init__)
+        init_args = {}
+        for param in signature.parameters.values():
+            if param.name == "self":
+                continue
+            if param.name in kwargs:
+                if isinstance(kwargs[param.name], (list, tuple)) or (
+                    isinstance(kwargs[param.name], np.ndarray)
+                    and kwargs[param.name].ndim == 1
+                ):
+                    # if length 2, assume it's a uniform prior
+                    if len(kwargs[param.name]) == 2:
+                        init_args[param.name] = np.random.uniform(
+                            kwargs[param.name][0], kwargs[param.name][1]
+                        )
+                        if isinstance(kwargs[param.name], unyt_array):
+                            # Convert to unyt quantity if needed
+                            init_args[param.name] = (
+                                init_args[param.name]
+                                * kwargs[param.name].units
+                            )
+                    else:
+                        raise exceptions.InconsistentArguments(
+                            f"Prior for parameter '{param.name}' must be "
+                            "a length 2 list/tuple defining a uniform prior."
+                        )
+                else:
+                    init_args[param.name] = kwargs[param.name]
+            elif param.default != inspect.Parameter.empty:
+                init_args[param.name] = param.default
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Missing required argument '{param.name}' "
+                    f"for {cls.__name__} initialisation."
+                )
+
+        return cls(**init_args)
 
     def _sfr(self, age):
         """Prototype for child defined SFR functions."""
@@ -142,6 +197,9 @@ class Common:
         """
         t, sfr = self.calculate_sfh(t_range=t_range, dt=dt)
         plt.plot(t, sfr)
+
+        plt.xlabel("age (yr)")
+        plt.ylabel(r"SFR (normalised)")
 
         if log:
             plt.xscale("log")
@@ -253,7 +311,7 @@ class Common:
             return other + self
         if isinstance(self, CombinedSFH):
             return CombinedSFH(
-                self.sfh_models + [other],
+                self.sfhs + [other],
                 weights=np.concatenate([self.weights, [1.0]]),
             )
         return CombinedSFH([self, other])
@@ -840,6 +898,53 @@ class DenseBasis(Common):
         # convert dense basis parameters (1db_tuple`) into SFH
         self._convert_db_to_sfh()
 
+    @classmethod
+    def init_from_prior(cls, N_tx, log_mass, log_sfr, redshift, tx_alpha=1.0):
+        """Initialise Dense Basis SFH from prior distributions.
+
+        Args:
+            N_tx (int):
+                Number of time parameters to use in the Dense Basis SFH.
+            log_mass (float | 2-component tuple):
+                log_10 of the total mass formed in the SFH.
+            log_sfr (float | 2-component tuple):
+                log_10 of the SFR at the time of observation.
+            redshift (float | 2-component tuple):
+                redshift at which to scale the SFH.
+            tx_alpha (float):
+                Concentration parameter for the Dirichlet prior on the
+                time parameters. Higher values produce more uniform time
+        """
+        if isinstance(log_mass, (list, tuple, np.ndarray)):
+            if len(log_mass) != 2:
+                raise exceptions.InconsistentArguments(
+                    "log_mass prior must be a length 2 list/tuple "
+                    "defining a uniform prior."
+                )
+            log_mass = np.random.uniform(log_mass[0], log_mass[1])
+        if isinstance(log_sfr, (list, tuple, np.ndarray)):
+            if len(log_sfr) != 2:
+                raise exceptions.InconsistentArguments(
+                    "log_sfr prior must be a length 2 list/tuple "
+                    "defining a uniform prior."
+                )
+            log_sfr = np.random.uniform(log_sfr[0], log_sfr[1])
+        if isinstance(redshift, (list, tuple, np.ndarray)):
+            if len(redshift) != 2:
+                raise exceptions.InconsistentArguments(
+                    "redshift prior must be a length 2 list/tuple "
+                    "defining a uniform prior."
+                )
+            redshift = np.random.uniform(redshift[0], redshift[1])
+
+        txs = np.cumsum(
+            np.random.dirichlet(np.ones((N_tx + 1,)) * tx_alpha, size=1),
+            axis=1,
+        )[0:, 0:-1][0]
+
+        db_tuple = (log_mass, log_sfr, N_tx, *txs)
+        return cls(db_tuple=db_tuple, redshift=redshift)
+
     def _convert_db_to_sfh(
         self, interpolator="gp_george", min_age=5, max_age=10.3
     ):
@@ -1005,7 +1110,7 @@ class Continuity(Common):
         if len(logsfr_ratios) != nbins - 1:
             raise ValueError(
                 f"logsfr_ratios must have {nbins - 1} elements"
-                f"for {nbins} age bins"
+                f" for {nbins} age bins"
             )
 
         # Initialize parent
@@ -1052,7 +1157,7 @@ class Continuity(Common):
     def _logsfr_ratios_to_masses(self):
         """Convert log SFR ratios to masses in each bin."""
         nbins = self.agebins.shape[0]
-        sratios = 10 ** np.clip(self.logsfr_ratios, -10, 10)
+        sratios = np.float_power(10, np.clip(self.logsfr_ratios, -10, 10))
         dt = 10 ** self.agebins[:, 1] - 10 ** self.agebins[:, 0]
         coeffs = np.array(
             [
@@ -1099,37 +1204,43 @@ class Continuity(Common):
 
 
 class ContinuityFlex(Common):
-    """Continuity Flex SFH model. See Leja et al. 2019 for details.
+    """Continuity Flex SFH model.
 
-    Parameters:
-    -----------------
-    logsfr_ratio_young (float):
-        Log SFR ratio for the youngest bin (default: 0.0).
-    logsfr_ratio_old (float):
-        Log SFR ratio for the oldest bin (default: 0.0).
-    logsfr_ratios (array-like, optional):
-        Array of log SFR ratios for flexible bins. If None, defaults to [0.
-        0].
-    fixed_young_bin (list, optional):
-        Fixed age bin for the youngest bin as [start, end] in log10 years.
-        If None, defaults to [0.0, 7.5] (log10 years).
-    fixed_old_bin (list, optional):
-        Fixed age bin for the oldest bin as [start, end] in log10 years.
-        If None, defaults to [9.7, 10.136] (log10 years).
-    min_age (unyt_quantity):
-        The minimum age for truncation (default: 0 yr).
-    max_age (unyt_quantity):
-        The maximum age for truncation (default: 1e11 yr).
-    -----------------
+    A non-parametric SFH model with fixed young and old bins, and flexible
+    intermediate bins. Uses log SFR ratios between adjacent bins with a
+    Student-t prior to ensure smoothness in the star formation history.
+    See Leja et al. 2019 for details.
+
+    Attributes:
+        logsfr_ratio_young (float):
+            Log SFR ratio for the youngest bin (default: 0.0).
+        logsfr_ratio_old (float):
+            Log SFR ratio for the oldest bin (default: 0.0).
+        logsfr_ratios (array-like, optional):
+            Array of log SFR ratios for flexible bins. If None,
+            defaults to [0.0, 0.0].
+        fixed_young_bin (list, optional):
+            Fixed age bin for the youngest bin as [start, end]
+            in log10 years.
+            If None, defaults to [0.0, 7.5] (log10 years).
+        fixed_old_bin (list, optional):
+            Fixed age bin for the oldest bin as [start, end] in
+            log10 years.
+            If None, defaults to [9.7, 10.136] (log10 years).
+        min_age (unyt_quantity):
+            The minimum age for truncation (default: 0 yr).
+        max_age (unyt_quantity):
+            The maximum age for truncation (default: 1e11 yr).
 
     Raises:
-    ValueError: If fixed_young_bin or fixed_old_bin are not lists
-                of length 2.
-    TypeError: If logsfr_ratios is not an array-like type or convertible
-                to an array.
-    AssertionError: If fixed_young_bin or fixed_old_bin are not lists of
-                    length 2.
-    TypeError: If fixed_young_bin or fixed_old_bin are not unyt_arrays or
+        ValueError: If fixed_young_bin or fixed_old_bin
+        are not lists of length 2.
+        TypeError: If logsfr_ratios is not an array-like type
+        or convertible to an array.
+        AssertionError: If fixed_young_bin or fixed_old_bin
+        are not lists of length 2.
+        TypeError: If fixed_young_bin or fixed_old_bin
+        are not unyt_arrays or convertible to unyt_arrays.
 
     """
 
@@ -1143,38 +1254,39 @@ class ContinuityFlex(Common):
         min_age=0 * yr,
         max_age=1e11 * yr,
     ):
-        """Initialize the Continuity Flexible SFH model.
+        """Initialize the Continuity Flex SFH model.
 
-        Parameters:
-        -----------------
-        logsfr_ratio_young (float):
-            Log SFR ratio for the youngest bin (default: 0.0).
-        logsfr_ratio_old (float):
-            Log SFR ratio for the oldest bin (default: 0.0).
-        logsfr_ratios (array-like, optional):
-            Array of log SFR ratios for flexible bins. If None, defaults to [0.
-            0].
-        fixed_young_bin (list, optional):
-            Fixed age bin for the youngest bin as [start, end] in log10 years.
-            If None, defaults to [0.0, 7.5] (log10 years).
-        fixed_old_bin (list, optional):
-            Fixed age bin for the oldest bin as [start, end] in log10 years.
-            If None, defaults to [9.7, 10.136] (log10 years).
-        min_age (unyt_quantity):
-            The minimum age for truncation (default: 0 yr).
-        max_age (unyt_quantity):
-            The maximum age for truncation (default: 1e11 yr).
-        -----------------
+        Args:
+            logsfr_ratio_young (float):
+                Log SFR ratio for the youngest bin (default: 0.0).
+            logsfr_ratio_old (float):
+                Log SFR ratio for the oldest bin (default: 0.0).
+            logsfr_ratios (array-like, optional):
+                Array of log SFR ratios for flexible bins. If None, defaults to
+                [0.0].
+                0].
+            fixed_young_bin (list, optional):
+                Fixed age bin for the youngest bin as [start, end]
+                in log10 years.
+                If None, defaults to [0.0, 7.5] (log10 years).
+            fixed_old_bin (list, optional):
+                Fixed age bin for the oldest bin as [start, end]
+                in log10 years.
+                If None, defaults to [9.7, 10.136] (log10 years).
+            min_age (unyt_quantity):
+                The minimum age for truncation (default: 0 yr).
+            max_age (unyt_quantity):
+                The maximum age for truncation (default: 1e11 yr).
 
         Raises:
-        ValueError: If fixed_young_bin or fixed_old_bin are not lists
-                    of length 2.
-        TypeError: If logsfr_ratios is not an array-like type or convertible
-                    to an array.
-        AssertionError: If fixed_young_bin or fixed_old_bin are not lists of
-                        length 2.
-        TypeError: If fixed_young_bin or fixed_old_bin are not unyt_arrays or
-
+            ValueError: If fixed_young_bin or fixed_old_bin are not lists
+                        of length 2.
+            TypeError: If logsfr_ratios is not an array-like type
+            or convertible to an array.
+            AssertionError: If fixed_young_bin or fixed_old_bin are not
+            lists of length 2.
+            TypeError: If fixed_young_bin or fixed_old_bin are not
+              unyt_arrays or convertible to unyt_arrays.
         """
         # Set defaults
 
@@ -1233,34 +1345,96 @@ class ContinuityFlex(Common):
         # Setup SFR interpolation
         self._setup_sfr_interpolation()
 
+    @classmethod
+    def init_from_prior(
+        cls,
+        N_flex_bins,
+        fixed_young_bin,
+        fixed_old_bin,
+        df=2,
+        scale=0.3,
+        min_age=0 * yr,
+        max_age=1e11 * yr,
+        limits=(-10, 10),
+    ):
+        """Initialize Continuity Flex SFH from a student t prior distribution.
+
+        Args:
+            N_flex_bins (int):
+                Number of flexible bins between fixed young and old bins.
+            fixed_young_bin (list):
+                Fixed age bin for the youngest bin as [start, end] in log10
+                years.
+            fixed_old_bin (list):
+                Fixed age bin for the oldest bin as [start, end] in log10
+                years.
+            df (int):
+                Degrees of freedom for the student t prior.
+            scale (float):
+                Scale parameter for the student t prior.
+            min_age (float):
+                Minimum age for the SFH in years.
+            max_age (float):
+                Maximum age for the SFH in years.
+            limits (tuple):
+                Limits for the student t prior (SFR ratio).
+
+        Returns:
+            ContinuityFlex: An instance of the ContinuityFlex class.
+        """
+        from scipy.stats import t
+
+        # generate uniform random variables between 0 and 1 of
+        # length N_flex_bins
+        value = np.random.uniform(size=N_flex_bins + 2)
+        uniform_min = t.cdf(limits[0], df=df, scale=scale)
+        uniform_max = t.cdf(limits[1], df=df, scale=scale)
+        value = (uniform_max - uniform_min) * value + uniform_min
+        value = t.ppf(value, df=df, scale=scale)
+        log_sfr_ratios = value[1:-1]
+
+        return cls(
+            logsfr_ratio_young=value[0],
+            logsfr_ratio_old=value[-1],
+            logsfr_ratios=log_sfr_ratios,
+            fixed_young_bin=fixed_young_bin,
+            fixed_old_bin=fixed_old_bin,
+            min_age=min_age,
+            max_age=max_age,
+        )
+
     def _logsfr_ratios_to_agebins(self):
         """Transform SFR ratios to age bins assuming constant mass per bin."""
         logsfr_ratios = np.clip(self.logsfr_ratios, -10, 10)
-        # Fixed bin times
-        lower_time = (
-            10 ** self.fixed_young_bin[1] - 10 ** self.fixed_young_bin[0]
-        )
-        upper_time = 10 ** self.fixed_old_bin[1] - 10 ** self.fixed_old_bin[0]
+        _, y1 = 10 ** self.fixed_young_bin[0], 10 ** self.fixed_young_bin[1]
+        o0, o1 = 10 ** self.fixed_old_bin[0], 10 ** self.fixed_old_bin[1]
+        if y1 >= o0:
+            raise ValueError("Young bin must end before start of old bin.")
 
-        # Total flexible time available
-        tflex = 10 ** self.fixed_old_bin[1] - upper_time - lower_time
-        # Calculate flexible bin widths
+        # Flexible region spans from end of young fixed bin to start of old
+        # fixed bin
+        tflex = o0 - y1
         n_ratio = len(logsfr_ratios)
         sfr_ratios = 10**logsfr_ratios
-        dt1 = tflex / (
-            1
-            + np.sum([np.prod(sfr_ratios[: (i + 1)]) for i in range(n_ratio)])
+        denom = 1.0 + np.sum(
+            [np.prod(sfr_ratios[: i + 1]) for i in range(n_ratio)]
         )
-        # Build age limits vector
-        agelims = [1, lower_time]
-        agelims.append(dt1 + lower_time)
+        dt1 = tflex / denom
+
+        # Build absolute age edges: [0, y1] (young), then flexible bins,
+        # then [o0, o1] (old)
+        edges = [0.0, y1]
+        last = y1 + dt1
+        edges.append(last)
         for i in range(n_ratio):
-            agelims.append(dt1 * np.prod(sfr_ratios[: (i + 1)]) + agelims[-1])
+            last = last + dt1 * np.prod(sfr_ratios[: i + 1])
+            edges.append(last)
+        # Ensure we end at the start of the old block,
+        # then append the old block end
+        edges[-1] = o0
+        edges.append(o1)
 
-        agelims.append(10 ** self.fixed_old_bin[1])
-        # Convert to log space age bins
-        agebins = np.log10([agelims[:-1], agelims[1:]]).T
-
+        agebins = np.log10(np.array([edges[:-1], edges[1:]]).T)
         return agebins
 
     def _logsfr_ratios_to_masses_flex(self):
@@ -1401,15 +1575,26 @@ class Dirichlet(Common):
         self._setup_sfr_interpolation()
 
     @classmethod
-    def init_from_prior(cls, agebins, **kwargs):
-        """Initialize Dirichlet SFH from a prior distribution."""
+    def init_from_prior(cls, agebins, loc=1.0, scale=1.0, **kwargs):
+        """Initialize Dirichlet SFH from a prior distribution.
+
+        Args:
+            agebins (unyt_array):
+                Array of shape (N, 2) with age bin edges in log(years).
+            loc (float):
+                Location parameter for the Beta distribution (default: 1.0).
+            scale (float):
+                Scale parameter for the Beta distribution (default: 1.0).
+            **kwargs:
+                Additional keyword arguments for the class constructor.
+        """
         from scipy.stats import beta
 
         # Generate uniform random variables between 0 and 1
         value = np.random.uniform(size=agebins.shape[0] - 1)
 
         # Transform to Beta(1,1) distribution
-        z_fraction = beta.ppf(value, a=1.0, b=1.0)
+        z_fraction = beta.ppf(value, a=loc, b=scale)
 
         return cls(agebins=agebins, z_fraction=z_fraction, **kwargs)
 
@@ -1532,12 +1717,12 @@ class ContinuityPSB(Common):
         logsfr_ratio_young: float = 0.0,
         logsfr_ratio_old: np.ndarray = None,
         logsfr_ratios: np.ndarray = None,
-        tlast: unyt_array = 0.2 * 1e9 * yr,
-        tflex: unyt_array = 2.0 * 1e9 * yr,
+        tlast: unyt_array = 0.2e9 * yr,
+        tflex: unyt_array = 2e9 * yr,
         nflex: int = 5,
         nfixed: int = 3,
         min_age: unyt_array = 0 * yr,
-        max_age: unyt_array = 13.8 * 1e9 * yr,
+        max_age: unyt_array = 13.8e9 * yr,
     ):
         """Initialise the ContinuityPSB SFH model.
 
@@ -1623,7 +1808,7 @@ class ContinuityPSB(Common):
         tflex: unyt_array = 2.0 * Gyr,
         max_age: unyt_array = 13.8 * Gyr,
         student_t_df: float = 2.0,
-        student_t_scale: float = 0.3,
+        student_t_scale: float = 1.0,
         tlast_limits_gyr: tuple = (0.01, 1.5),
         **kwargs,
     ):
@@ -1781,42 +1966,40 @@ class CombinedSFH(Common):
     It provides methods to calculate the SFR and mass formed in each bin.
 
     Attributes:
-        sfh_models (list):
+        sfhs (list):
             List of SFH model instances to combine.
         name (str):
             Name of the combined SFH model.
     """
 
-    def __init__(self, sfh_models, weights=None):
+    def __init__(self, sfhs, weights=None):
         """Initialize the CombinedSFH model.
 
         Args:
-            sfh_models (list):
+            sfhs (list):
                 List of SFH model instances to combine.
             weights (array-like, optional):
                 Weights for each model in the combination.
                 If None, equal weights are assigned to each model.
         """
-        if not isinstance(sfh_models, list):
-            raise TypeError("sfh_models must be a list of SFH model instances")
+        if not isinstance(sfhs, list):
+            raise TypeError("sfhs must be a list of SFH model instances")
 
-        for model in sfh_models:
+        for model in sfhs:
             if not isinstance(model, Common):
                 raise TypeError(
                     f"Model {model} is not a valid SFH model instance"
                 )
 
-        self.sfh_models = sfh_models
+        self.sfhs = sfhs
         name = "Combined"
 
         self.weights = (
-            weights
-            if weights is not None
-            else np.ones(len(sfh_models)) / len(sfh_models)
+            weights if weights is not None else np.ones(len(sfhs)) / len(sfhs)
         )
 
-        if self.weights.shape != (len(self.sfh_models),):
-            raise ValueError("weights must have same length as sfh_models")
+        if len(self.weights) != len(self.sfhs):
+            raise ValueError("weights must have same length as sfhs")
 
         Common.__init__(self, name=name)
 
@@ -1831,7 +2014,7 @@ class CombinedSFH(Common):
             float: The total SFR at the given age.
         """
         total_sfr = 0.0
-        for model, weight in zip(self.sfh_models, self.weights):
+        for model, weight in zip(self.sfhs, self.weights):
             total_sfr += model._sfr(age) * weight
         return total_sfr
 
@@ -1848,7 +2031,7 @@ class CombinedSFH(Common):
         return np.sum(
             [
                 model.get_sfr(age) * weight
-                for model, weight in zip(self.sfh_models, self.weights)
+                for model, weight in zip(self.sfhs, self.weights)
             ],
             axis=0,
         )
@@ -1856,13 +2039,13 @@ class CombinedSFH(Common):
     def __add__(self, other):
         """Combine two CombinedSFH instances."""
         if isinstance(other, CombinedSFH):
-            combined_models = self.sfh_models + other.sfh_models
+            combined_models = self.sfhs + other.sfhs
             combined_weights = np.concatenate([self.weights, other.weights])
             return CombinedSFH(combined_models, weights=combined_weights)
         elif isinstance(other, Common):
             # Add a single model to the combined SFH
             return CombinedSFH(
-                self.sfh_models + [other],
+                self.sfhs + [other],
                 weights=np.concatenate([self.weights, [1.0]]),
             )
         else:
