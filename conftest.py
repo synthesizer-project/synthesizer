@@ -694,8 +694,8 @@ def stars_with_fake_spectra(test_grid):
 
     # Add fake particle spectra for per-particle tests
     fake_particle_lnu = (
-        np.ones((10, len(test_grid.lam))) * erg / s / Hz
-    )  # 10 particles
+        np.ones((stars.nstars, len(test_grid.lam))) * erg / s / Hz
+    )
 
     stars.particle_spectra = {
         "intrinsic": Sed(test_grid.lam, lnu=fake_particle_lnu * 2.0),
@@ -703,5 +703,4 @@ def stars_with_fake_spectra(test_grid):
         "transmitted": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.8),
         "nebular": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.3),
     }
-
     return stars
