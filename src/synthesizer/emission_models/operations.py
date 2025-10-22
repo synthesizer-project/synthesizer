@@ -462,11 +462,15 @@ class Generation:
         if this_model._is_dust_emitting:
             # Get the right spectra
             if per_particle:
-                intrinsic = particle_spectra[self._lum_intrinsic_model_label]
-                attenuated = particle_spectra[self._lum_attenuated_model_label]
+                intrinsic = particle_spectra[
+                    this_model._lum_intrinsic_model_label
+                ]
+                attenuated = particle_spectra[
+                    this_model._lum_attenuated_model_label
+                ]
             else:
-                intrinsic = spectra[self._lum_intrinsic_model_label]
-                attenuated = spectra[self._lum_attenuated_model_label]
+                intrinsic = spectra[this_model._lum_intrinsic_model_label]
+                attenuated = spectra[this_model._lum_attenuated_model_label]
 
             # Apply the dust emission model
             sed = generator.get_spectra(
@@ -479,9 +483,9 @@ class Generation:
             # otherwise we are scaling by a single spectra
             sed = generator.get_spectra(
                 lam,
-                particle_spectra[self._lum_intrinsic_model_label]
+                particle_spectra[this_model._lum_intrinsic_model_label]
                 if per_particle
-                else spectra[self._lum_intrinsic_model_label],
+                else spectra[this_model._lum_intrinsic_model_label],
             )
         elif isinstance(generator, Template):
             # If we have a template we need to generate the spectra
@@ -549,13 +553,7 @@ class Generation:
                 "spectra must be generated first."
             )
 
-        # Get the previous line
-        if per_particle and self._lum_intrinsic_model_label in particle_lines:
-            prev_lines = particle_lines[this_model.lum_intrinsic_model.label]
-        elif self._lum_intrinsic_model_label in lines:
-            prev_lines = lines[this_model.lum_intrinsic_model.label]
-        else:
-            prev_lines = None
+        # Note: Previous line checking logic removed as prev_lines was unused
 
         # If the emitter is empty we can just return zeros. This is only
         # applicable when nparticles exists in the emitter
@@ -565,7 +563,7 @@ class Generation:
             conts = np.zeros((0, len(lams))) * erg / s / Hz
 
             zeroed_lines = LineCollection(
-                line_ids=prev_lines.line_ids,
+                line_ids=line_ids,
                 lam=lams,
                 lum=lums,
                 cont=conts,
@@ -583,7 +581,9 @@ class Generation:
         out_lines = LineCollection(
             line_ids=line_ids,
             lam=lams,
-            lum=np.zeros_like(prev_lines.luminosity),
+            lum=np.zeros((emitter.nparticles, len(lams))) * erg / s
+            if per_particle
+            else np.zeros(len(lams)) * erg / s,
             cont=spectra.get_lnu_at_lam(lams),
         )
 
@@ -711,9 +711,9 @@ class Transformation:
         """
         # Get the spectra to apply dust to
         if this_model.per_particle:
-            apply_to = particle_emissions[self._apply_to_label]
+            apply_to = particle_emissions[this_model._apply_to_label]
         else:
-            apply_to = emissions[self._apply_to_label]
+            apply_to = emissions[this_model._apply_to_label]
 
         # If we have a LineColleciton and a lam_mask, we need to translate
         # the nlam lam_mask into an nlines lam_mask
@@ -842,7 +842,7 @@ class Combination:
             out_spec = Sed(
                 emission_model.lam,
                 lnu=np.zeros_like(
-                    particle_spectra[self._combine_labels[0]]._lnu
+                    particle_spectra[this_model._combine_labels[0]]._lnu
                 )
                 * erg
                 / s
@@ -851,14 +851,14 @@ class Combination:
         else:
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(spectra[self._combine_labels[0]]._lnu)
+                lnu=np.zeros_like(spectra[this_model._combine_labels[0]]._lnu)
                 * erg
                 / s
                 / Hz,
             )
 
         # Combine the spectra
-        for combine_label in self._combine_labels:
+        for combine_label in this_model._combine_labels:
             if this_model.per_particle:
                 nan_mask = np.isnan(particle_spectra[combine_label]._lnu)
                 out_spec._lnu[~nan_mask] += particle_spectra[
@@ -910,15 +910,17 @@ class Combination:
         if this_model.per_particle:
             in_lines = particle_lines
             out_lines = LineCollection(
-                line_ids=particle_lines[self._combine_labels[0]].line_ids,
-                lam=particle_lines[self._combine_labels[0]].lam,
+                line_ids=particle_lines[
+                    this_model._combine_labels[0]
+                ].line_ids,
+                lam=particle_lines[this_model._combine_labels[0]].lam,
                 lum=np.zeros_like(
-                    particle_lines[self._combine_labels[0]].luminosity
+                    particle_lines[this_model._combine_labels[0]].luminosity
                 )
                 * erg
                 / s,
                 cont=np.zeros_like(
-                    particle_lines[self._combine_labels[0]].continuum
+                    particle_lines[this_model._combine_labels[0]].continuum
                 )
                 * erg
                 / s
@@ -927,12 +929,16 @@ class Combination:
         else:
             in_lines = lines
             out_lines = LineCollection(
-                line_ids=lines[self._combine_labels[0]].line_ids,
-                lam=lines[self._combine_labels[0]].lam,
-                lum=np.zeros_like(lines[self._combine_labels[0]].luminosity)
+                line_ids=lines[this_model._combine_labels[0]].line_ids,
+                lam=lines[this_model._combine_labels[0]].lam,
+                lum=np.zeros_like(
+                    lines[this_model._combine_labels[0]].luminosity
+                )
                 * erg
                 / s,
-                cont=np.zeros_like(lines[self._combine_labels[0]].continuum)
+                cont=np.zeros_like(
+                    lines[this_model._combine_labels[0]].continuum
+                )
                 * erg
                 / s
                 / Hz,
@@ -1005,7 +1011,7 @@ class Combination:
 
         # Get the image for each model we are combining
         combine_images = []
-        for combine_label in self._combine_labels:
+        for combine_label in this_model._combine_labels:
             combine_images.append(images[combine_label])
 
         # Get the first image to add to
