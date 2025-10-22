@@ -3047,7 +3047,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         lines,
                         particle_lines,
                         emitter,
-                        self.grid.line_lams,
+                        lines[list(lines.keys())[0]].lam,
                         line_ids,
                     )
                 except Exception as e:
