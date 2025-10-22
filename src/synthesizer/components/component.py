@@ -621,7 +621,7 @@ class Component(ABC):
 
             # Make the place holder instrument
             instrument = Instrument(
-                "place-holder",
+                "GenericInstrument",
                 resolution=resolution,
                 filters=filters,
             )
@@ -658,8 +658,31 @@ class Component(ABC):
             cosmo=cosmo,
         )
 
-        # Store the images
-        self.images_lnu.update(images)
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
+
+        # Unpack the images
+        for model in emission_model._models.values():
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label not in limit_to:
+                continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the images properly depending on whether we have a
+            # generic instrument or not
+            if instrument_name is not None:
+                self.images_lnu.setdefault(instrument_name, {})
+                self.images_lnu[instrument_name][model.label] = images[
+                    model.label
+                ]
+            else:
+                self.images_lnu[model.label] = images[model.label]
 
         # If we are limiting to a specific image then return that
         if limit_to is not None:
@@ -753,7 +776,7 @@ class Component(ABC):
 
             # Make the place holder instrument
             instrument = Instrument(
-                "place-holder",
+                "GenericInstrument",
                 resolution=resolution,
                 filters=filters,
             )
@@ -790,8 +813,31 @@ class Component(ABC):
             cosmo=cosmo,
         )
 
-        # Store the images
-        self.images_fnu.update(images)
+        # Get the instrument name if we have one
+        if instrument is not None:
+            instrument_name = instrument.label
+        else:
+            instrument_name = None
+
+        # Unpack the images
+        for model in emission_model._models.values():
+            # Are we limiting to a specific model?
+            if limit_to is not None and model.label not in limit_to:
+                continue
+
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+
+            # Attach the images properly depending on whether we have a
+            # generic instrument or not
+            if instrument_name is not None:
+                self.images_fnu.setdefault(instrument_name, {})
+                self.images_fnu[instrument_name][model.label] = images[
+                    model.label
+                ]
+            else:
+                self.images_fnu[model.label] = images[model.label]
 
         # If we are limiting to a specific image then return that
         if limit_to is not None:

@@ -31,7 +31,7 @@ from synthesizer.emission_models import (
     TemplateEmission,
     TransmittedEmission,
 )
-from synthesizer.emission_models.attenuation import Inoue14, Madau96
+from synthesizer.emission_models.attenuation import Asada25, Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid, Template
@@ -153,7 +153,7 @@ def bimodal_pacman_emission_model(test_grid):
 @pytest.fixture
 def template_emission_model_bh(test_template):
     """Return a TemplateEmission object."""
-    return TemplateEmission(test_template, "blackhole")
+    return TemplateEmission(test_template, emitter="blackhole")
 
 
 # ================================= IGMS ======================================
@@ -169,6 +169,12 @@ def i14():
 def m96():
     """Return a Madau96 IGM object."""
     return Madau96()
+
+
+@pytest.fixture
+def a24():
+    """Return an Asada25 IGM object."""
+    return Asada25()
 
 
 # ================================= STARS =====================================
