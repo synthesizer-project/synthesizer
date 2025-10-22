@@ -2354,7 +2354,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     raise exceptions.InconsistentArguments(
                         f"Can't reuse existing emission for {comp} since it "
                         "could not be found in "
-                        f"{emitter.__class__name__}.{emission_type}. "
+                        f"{emitter.__class__.__name__}.{emission_type}. "
                         f"Generate {comp} first or point combine to a model "
                         "not a string."
                     )
@@ -2379,11 +2379,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 ]
             elif isinstance(lum_intrinsic_model, str):
                 raise exceptions.InconsistentArguments(
-                    "Can't reuse existing lines for "
-                    f"{lum_intrinsic_model} since it is not present in the "
-                    "lines dictionary on "
-                    f"{this_model.emitter}. Generate the lines first or "
-                    "point lum_intrinsic_model to a model not a string."
+                    f"Can't reuse existing emission for {lum_intrinsic_model} "
+                    "since it could not be found in "
+                    f"{emitter.__class__.__name__}.{emission_type}. "
+                    f"Generate {lum_intrinsic_model} first or point "
+                    "lum_intrinsic_model to a model not a string."
                 )
             else:
                 # Not reusing existing emission
@@ -2401,11 +2401,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 ]
             elif isinstance(lum_attenuated_model, str):
                 raise exceptions.InconsistentArguments(
-                    "Can't reuse existing lines for "
-                    f"{lum_attenuated_model} since it is not present in the "
-                    "lines dictionary on "
-                    f"{this_model.emitter}. Generate the lines first or "
-                    "point lum_attenuated_model to a model not a string."
+                    "Can't reuse existing emission for "
+                    f"{lum_attenuated_model} since it could not be found in "
+                    f"{emitter.__class__.__name__}.{emission_type}. "
+                    f"Generate {lum_attenuated_model} first or point "
+                    "lum_attenuated_model to a model not a string."
                 )
             else:
                 # Not reusing existing emission
