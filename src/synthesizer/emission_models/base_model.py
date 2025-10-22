@@ -2868,6 +2868,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         lines,
                         particle_lines,
                         emitter,
+                        this_model.grid.line_lams,
+                        line_ids,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
