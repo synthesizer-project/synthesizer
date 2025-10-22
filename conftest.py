@@ -662,3 +662,46 @@ def kernel():
     """Return a Kernel object."""
     sph_kernel = Kernel()
     return sph_kernel.get_kernel()
+
+
+# ==================== STARS WITH EXISTING SPECTRA ===========================
+
+
+@pytest.fixture
+def stars_with_fake_spectra(test_grid):
+    """Create a mock Stars object with fake spectra for string label tests."""
+    # Create minimal Stars object
+    initial_masses = np.array([1e6]) * Msun
+    ages = np.array([10]) * Myr
+    metallicities = np.array([0.01])
+
+    stars = Stars(
+        initial_masses=initial_masses,
+        ages=ages,
+        metallicities=metallicities,
+    )
+
+    # Create fake spectra using the test grid wavelengths
+    fake_lnu = np.ones(len(test_grid.lam)) * erg / s / Hz
+
+    # Add fake spectra to the Stars object
+    stars.spectra = {
+        "intrinsic": Sed(test_grid.lam, lnu=fake_lnu * 2.0),
+        "attenuated": Sed(test_grid.lam, lnu=fake_lnu * 1.5),
+        "transmitted": Sed(test_grid.lam, lnu=fake_lnu * 0.8),
+        "nebular": Sed(test_grid.lam, lnu=fake_lnu * 0.3),
+    }
+
+    # Add fake particle spectra for per-particle tests
+    fake_particle_lnu = (
+        np.ones((10, len(test_grid.lam))) * erg / s / Hz
+    )  # 10 particles
+
+    stars.particle_spectra = {
+        "intrinsic": Sed(test_grid.lam, lnu=fake_particle_lnu * 2.0),
+        "attenuated": Sed(test_grid.lam, lnu=fake_particle_lnu * 1.5),
+        "transmitted": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.8),
+        "nebular": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.3),
+    }
+
+    return stars
