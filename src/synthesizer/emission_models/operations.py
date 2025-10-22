@@ -610,11 +610,11 @@ class Generation:
         ):
             summary.append(
                 f"  Dust luminosity: "
-                f"{self._lum_intrinsic_model.label} - "
-                f"{self._lum_attenuated_model.label}"
+                f"{self._lum_intrinsic_model_label} - "
+                f"{self._lum_attenuated_model_label}"
             )
         elif self.lum_intrinsic_model is not None:
-            summary.append(f"  Scale by: {self._lum_intrinsic_model.label}")
+            summary.append(f"  Scale by: {self._lum_intrinsic_model_label}")
 
         return summary
 
@@ -629,11 +629,15 @@ class Generation:
         # Save the dust luminosity models
         if self._lum_intrinsic_model is not None:
             group.attrs["lum_intrinsic_model"] = (
-                self._lum_intrinsic_model.label
+                self._lum_intrinsic_model_label
+                if self._lum_intrinsic_model_label is not None
+                else "None"
             )
         if self._lum_attenuated_model is not None:
             group.attrs["lum_attenuated_model"] = (
-                self._lum_attenuated_model.label
+                self._lum_attenuated_model_label
+                if self._lum_attenuated_model_label is not None
+                else "None"
             )
 
 
@@ -773,7 +777,7 @@ class Transformation:
         # Populate the list with the summary information
         summary.append("Transformer model:")
         summary.append(f"  Transformer: {type(self.transformer)}")
-        summary.append(f"  Apply to: {self._apply_to.label}")
+        summary.append(f"  Apply to: {self._apply_to_label}")
 
         return summary
 
@@ -786,7 +790,7 @@ class Transformation:
         group.attrs["transformer"] = str(type(self._transformer))
 
         # Save the model to apply the dust curve to
-        group.attrs["apply_to"] = self._apply_to.label
+        group.attrs["apply_to"] = self._apply_to_label
 
 
 class Combination:
@@ -1042,8 +1046,7 @@ class Combination:
         # Populate the list with the summary information
         summary.append("Combination model:")
         summary.append(
-            "  Combine models: "
-            f"{', '.join([model.label for model in self._combine])}"
+            f"  Combine models: {', '.join(list(self._combine_labels))}"
         )
 
         return summary
@@ -1054,4 +1057,4 @@ class Combination:
         group.attrs["type"] = "combination"
 
         # Save the models to combine
-        group.attrs["combine"] = [model.label for model in self._combine]
+        group.attrs["combine"] = list(self._combine_labels)
