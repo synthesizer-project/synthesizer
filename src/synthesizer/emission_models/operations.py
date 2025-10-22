@@ -920,15 +920,10 @@ class Combination:
                 lam=particle_lines[this_model._combine_labels[0]].lam,
                 lum=np.zeros_like(
                     particle_lines[this_model._combine_labels[0]].luminosity
-                )
-                * erg
-                / s,
+                ),
                 cont=np.zeros_like(
                     particle_lines[this_model._combine_labels[0]].continuum
-                )
-                * erg
-                / s
-                / Hz,
+                ),
             )
         else:
             in_lines = lines
@@ -937,15 +932,10 @@ class Combination:
                 lam=lines[this_model._combine_labels[0]].lam,
                 lum=np.zeros_like(
                     lines[this_model._combine_labels[0]].luminosity
-                )
-                * erg
-                / s,
+                ),
                 cont=np.zeros_like(
                     lines[this_model._combine_labels[0]].continuum
-                )
-                * erg
-                / s
-                / Hz,
+                ),
             )
 
         # Loop over combination models adding the lines
