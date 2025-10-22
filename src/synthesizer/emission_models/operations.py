@@ -939,7 +939,7 @@ class Combination:
             )
 
         # Loop over combination models adding the lines
-        for combine_label in self._combine_labels:
+        for combine_label in this_model._combine_labels:
             out_lines += in_lines[combine_label]
 
         # Store the lines in the right place (integrating if we need to)
