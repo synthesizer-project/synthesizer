@@ -998,7 +998,11 @@ class BaseGalaxy:
         """
         # Get the spectra
         spectra, particle_spectra = emission_model._get_spectra(
-            emitters={"stellar": self.stars, "blackhole": self.black_holes},
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
