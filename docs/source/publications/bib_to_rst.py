@@ -57,7 +57,7 @@ def convert_bib_to_rst(bib_file, output_rst):
     entries = bib_database.entries
     entries.sort(key=lambda x: x.get("author", ""))
 
-    rst_lines = ["References", "=" * 10, ""]
+    rst_lines = ["Publications", "=" * len("Publications"), ""]
 
     for i, entry in enumerate(entries, 1):
         formatted = format_entry(entry)
