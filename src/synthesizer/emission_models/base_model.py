@@ -1650,29 +1650,45 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Define the links
             if model._is_transforming:
                 links.setdefault(label, []).append(
-                    (model.apply_to.label, "--")
+                    (
+                        model.apply_to.label
+                        if isinstance(model.apply_to, EmissionModel)
+                        else model.apply_to,
+                        "--",
+                    )
                 )
             if model._is_combining:
                 links.setdefault(label, []).extend(
-                    [(child.label, "-") for child in model._combine]
-                )
-            if model._is_dust_emitting or model._is_generating:
-                links.setdefault(label, []).extend(
                     [
-                        (
-                            model._lum_intrinsic_model.label
-                            if model._lum_intrinsic_model is not None
-                            else None,
-                            "dotted",
-                        ),
-                        (
-                            model._lum_attenuated_model.label
-                            if model._lum_attenuated_model is not None
-                            else None,
-                            "dotted",
-                        ),
+                        (child.label, "-")
+                        if isinstance(child, EmissionModel)
+                        else (child, "-")
+                        for child in model._combine
                     ]
                 )
+            if model._is_dust_emitting or model._is_generating:
+                if model._lum_intrinsic_model is not None:
+                    links.setdefault(label, []).append(
+                        (
+                            model._lum_intrinsic_model.label
+                            if isinstance(
+                                model._lum_intrinsic_model, EmissionModel
+                            )
+                            else model._lum_intrinsic_model,
+                            "dotted",
+                        )
+                    )
+                if model._lum_attenuated_model is not None:
+                    links.setdefault(label, []).append(
+                        (
+                            model._lum_attenuated_model.label
+                            if isinstance(
+                                model._lum_attenuated_model, EmissionModel
+                            )
+                            else model._lum_attenuated_model,
+                            "dotted",
+                        ),
+                    )
 
             if model._is_masked:
                 masked_labels.append(label)
