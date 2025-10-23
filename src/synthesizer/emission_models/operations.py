@@ -21,7 +21,7 @@ from synthesizer.emission_models.extractors.extractor import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
-from synthesizer.imaging import ImageCollection
+from synthesizer.imaging import Image, ImageCollection
 from synthesizer.parametric import BlackHole
 
 
@@ -1013,7 +1013,12 @@ class Combination:
             resolution=combine_images[0].resolution,
             fov=combine_images[0].fov,
             imgs={
-                f: np.zeros_like(combine_images[0].imgs[f])
+                f: Image(
+                    resolution=combine_images[0].resolution,
+                    fov=combine_images[0].fov,
+                    img=np.zeros(combine_images[0].npix)
+                    * combine_images[0].imgs[f].units,
+                )
                 for f in combine_images[0].imgs
             },
         )

@@ -574,7 +574,7 @@ def _generate_image_parametric_smoothed(
     start = tic()
 
     # Multiply the density grid by the sed to get the image
-    img.arr = density_grid[:, :] * signal
+    img.arr = density_grid[:, :] * signal.value
     img.units = signal.units
 
     toc("Setting up smoothed image inputs", start)
