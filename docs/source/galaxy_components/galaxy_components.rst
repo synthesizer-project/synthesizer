@@ -46,3 +46,29 @@ In the examples below we demonstate how to instantiate a galaxy object using a f
    particle_parametric
    line_of_sight
 
+Parametric Star Formation Histories
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Synthesizer provides a set of parametric star formation histories (SFHs) that can be used to model the star formation history of galaxies. These SFHs are implemented as classes that can be instantiated with specific parameters. The available parametric SFHs include:
+
+- Constant
+- Gaussian
+- Exponential
+- TruncatedExponential
+- DecliningExponential
+- DelayedExponential
+- LogNormal
+- DoublePowerLaw
+- DenseBasis
+- Continuity
+- ContinuityFlex
+- Dirichlet
+- ContinuityPSB
+- CombinedSFH
+
+In the example below, we demonstrate how to instantiate and use these parametric SFHs to generate star formation histories.
+
+.. toctree::
+   :maxdepth: 1
+
+   parametric_sfh_example
