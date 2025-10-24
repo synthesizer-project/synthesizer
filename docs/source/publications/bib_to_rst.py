@@ -1,6 +1,6 @@
 """Process a .bib file into a .rst publication list.
 
-This script preserves your APA-like formatting, augments entries with inline
+This script preserves APA-like formatting, augments entries with inline
 hyperlinks (DOI, arXiv, URL/ADS/PDF), cleans author names and titles, and
 sorts by release date using `date` (preferred) or `year` + `month` (+`day`)
 when available.
