@@ -1,8 +1,13 @@
 """A suite of tests for the emission model operations."""
 
 import numpy as np
+import pytest
 
-from synthesizer.emission_models import StellarEmissionModel
+from synthesizer import exceptions
+from synthesizer.emission_models import (
+    AttenuatedEmission,
+    StellarEmissionModel,
+)
 from synthesizer.emission_models.transformers import PowerLaw
 
 
@@ -154,3 +159,42 @@ def test_combination_spectra(
         "The combined spectra are not the same as the explicit sum"
         f" (combined={combined_spec.lnu}, explicit={explicit_spectra})"
     )
+
+
+def test_transformation_with_string_label(stars_with_fake_spectra):
+    """Test transformation operations using string labels for apply_to."""
+    stars = stars_with_fake_spectra
+
+    # Test applying transformation using string label
+    att_model = AttenuatedEmission(
+        label="attenuated_string",
+        dust_curve=PowerLaw(slope=-1.0),
+        apply_to="intrinsic",  # String label instead of model
+        tau_v=0.5,
+        emitter="stellar",
+    )
+
+    # Get the attenuated spectra using string label
+    att_spec = stars.get_spectra(att_model)
+
+    # Ensure the string-based transformation is stored correctly
+    assert "attenuated_string" in stars.spectra
+    assert att_spec is not None
+    # Verify the result is properly attenuated (should be less than original)
+    assert np.all(att_spec.lnu <= stars.spectra["intrinsic"].lnu)
+
+
+def test_invalid_string_labels(stars_with_fake_spectra):
+    """Test error handling for invalid string labels."""
+    stars = stars_with_fake_spectra
+
+    # Test transformation with non-existent label
+    with pytest.raises(exceptions.InconsistentArguments):
+        invalid_model = AttenuatedEmission(
+            label="invalid_transform",
+            dust_curve=PowerLaw(slope=-1.0),
+            apply_to="nonexistent_spectrum",  # Invalid label
+            tau_v=0.5,
+            emitter="stellar",
+        )
+        stars.get_spectra(invalid_model)
