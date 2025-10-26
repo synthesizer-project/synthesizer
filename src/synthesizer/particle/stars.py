@@ -1163,7 +1163,7 @@ class Stars(Particles, StarsComponent):
         if self.sfzh is None:
             _stars = self.get_sfzh(
                 grid.log10ages,
-                grid.log10metallicities,
+                grid.metallicities,
                 grid_assignment_method=grid_assignment_method,
             )
         else:
