@@ -585,7 +585,7 @@ def test_masked_combination(
         set_all=True,
     )
 
-    # Generate the yound masked spectra
+    # Generate the young masked spectra
     young_spec = particle_stars_B.get_spectra(
         transmitted_emission_model,
         grid_assignment_method="ngp",
@@ -638,7 +638,7 @@ def test_param_stars_from_parts(
     )
     param_stars = stars.get_sfzh(
         log10ages=grid.log10age,
-        log10metallicities=grid.log10metallicity,
+        metallicities=grid.metallicity,
         grid_assignment_method="cic",
     )
     param_spectra = param_stars.get_spectra(incident, verbose=True)
