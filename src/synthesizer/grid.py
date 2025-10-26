@@ -756,7 +756,7 @@ class Grid:
             # Interpolate the spectra grid
             self.interp_spectra(new_lam)
 
-        # If we have been given wavelength limtis truncate the grid
+        # If we have been given wavelength limits truncate the grid
         elif len(lam_lims) > 0:
             self.reduce_rest_frame_range(*lam_lims, inplace=True)
 
