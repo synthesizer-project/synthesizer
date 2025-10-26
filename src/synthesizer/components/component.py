@@ -14,6 +14,10 @@ from abc import ABC, abstractmethod
 from unyt import arcsecond, kpc, pc
 
 from synthesizer import exceptions
+from synthesizer.cosmology import (
+    get_angular_diameter_distance,
+    get_luminosity_distance,
+)
 from synthesizer.emissions import plot_spectra
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
@@ -193,9 +197,7 @@ class Component(ABC):
 
         # At redshift > 0 we can calculate the luminosity distance explicitly
         if self.redshift > 0:
-            return (
-                cosmo.luminosity_distance(self.redshift).to("kpc").value * kpc
-            )
+            return get_luminosity_distance(cosmo, self.redshift).to("kpc")
 
         # At redshift 0 just place the component at 10 pc to
         # avoid any issues with 0s
@@ -235,10 +237,11 @@ class Component(ABC):
         # At redshift > 0 we can calculate the angular diameter distance
         # explicitly
         if self.redshift > 0:
-            return (
-                cosmo.angular_diameter_distance(self.redshift).to("kpc").value
-                * kpc
-            )
+            return get_angular_diameter_distance(
+                cosmo,
+                self.redshift,
+            ).to("kpc")
+
         # At redshift 0 just place the component at 10 pc to
         # avoid any issues with 0s
         return (10 * pc).to(kpc)
