@@ -122,7 +122,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             fixed and thus ignore the value of the component attribute. This
             should take the form {<parameter_name>: <value>}.
         emitter (str):
-            The emitter this emission model acts on. Default is "stellar".
+            The emitter this emission model acts on.
         apply_to (EmissionModel):
             The model to apply the dust curve to.
         dust_curve (emission_models.attenuation.*):
@@ -257,7 +257,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 self.
             emitter (str):
                 The emitter this emission model acts on. Default is
-                "stellar".
+                "galaxy". Can be "stellar", "gas", "blackhole", or "galaxy".
             scale_by (str/list/tuple/EmissionModel):
                 Either a component attribute to scale the resultant spectra by,
                 a spectra key to scale by (based on the bolometric luminosity).
@@ -304,11 +304,38 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Store any fixed parameters
         self.fixed_parameters = fixed_parameters
 
+        # Ensure we have been given an emitter
+        if emitter is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify an emitter, either 'stellar', 'gas', "
+                "'blackhole', or 'galaxy'."
+            )
+
         # Attach which emitter we are working with
-        self._emitter = emitter
+        self._emitter = emitter.lower()
+
+        # Ensure emitter is an acceptable value
+        if self._emitter not in ["stellar", "gas", "blackhole", "galaxy"]:
+            raise exceptions.InconsistentArguments(
+                "Emitter must be either 'stellar', 'gas', 'blackhole', or "
+                f"'galaxy' (got {self._emitter})."
+            )
+        elif self._emitter == "gas":
+            raise exceptions.UnimplementedFunctionality(
+                "The 'gas' emitter is not yet implemented."
+            )
+        else:
+            # All good, as you were
+            pass
 
         # Are we making per particle emission?
         self._per_particle = per_particle
+
+        # Make sure we aren't trying to be a per particle galaxy model
+        if self._per_particle and self._emitter == "galaxy":
+            raise exceptions.InconsistentArguments(
+                "Cannot make a per particle galaxy emission model."
+            )
 
         # Define the container which will hold mask information
         self.masks = []
@@ -716,7 +743,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             self._models[model.label] = model
         elif self._models[model.label] is model:
             # The model is already in the tree so nothing to do
-            pass
+            return
         else:
             # Ensure model has a unique name
             if len(model.masks) > 0:
@@ -739,33 +766,33 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # If we are applying a transform, store the key
         if model._is_transforming:
-            self._transformation[model.label] = (
-                model.apply_to,
-                model.dust_curve,
-            )
-            model._children.add(model.apply_to)
-            model.apply_to._parents.add(model)
+            # Nothing to do if apply_to is a string, then the model is a leaf
+            if not isinstance(model.apply_to, str):
+                model._children.add(model.apply_to)
+                model.apply_to._parents.add(model)
 
         # If we are applying a dust emission model, store the key
         if model._is_generating or model._is_dust_emitting:
-            self._generator_models[model.label] = model.generator
-            if model._lum_attenuated_model is not None:
+            # If we have lum models, add them as children (ignore strings
+            # as these reuse emissions and are thus leaves)
+            if model._lum_attenuated_model is not None and not isinstance(
+                model._lum_attenuated_model, str
+            ):
                 model._children.add(model._lum_attenuated_model)
                 model._lum_attenuated_model._parents.add(model)
-            if model._lum_intrinsic_model is not None:
+            if model._lum_intrinsic_model is not None and not isinstance(
+                model._lum_intrinsic_model, str
+            ):
                 model._children.add(model._lum_intrinsic_model)
                 model._lum_intrinsic_model._parents.add(model)
 
-        # If we are masking, store the key
-        if model._is_masked:
-            self._mask_keys[model.label] = model.masks
-
         # If we are combining spectra, store the key
         if model._is_combining:
-            self._combine_keys[model.label] = model.combine
             for child in model.combine:
-                model._children.add(child)
-                child._parents.add(model)
+                # Only add as a child if it's not a string (strings are leaves)
+                if not isinstance(child, str):
+                    model._children.add(child)
+                    child._parents.add(model)
 
         # Recurse over children
         for child in model._children:
@@ -787,10 +814,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Define the private containers we'll unpack everything into. These
         # are dictionaries of the form {<result_label>: <operation props>}
         self._extract_keys = {}
-        self._transformation = {}
-        self._generator_models = {}
-        self._combine_keys = {}
-        self._mask_keys = {}
         self._models = {}
 
         # Define the list to hold the model labels in order they need to be
@@ -1627,29 +1650,45 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Define the links
             if model._is_transforming:
                 links.setdefault(label, []).append(
-                    (model.apply_to.label, "--")
+                    (
+                        model.apply_to.label
+                        if isinstance(model.apply_to, EmissionModel)
+                        else model.apply_to,
+                        "--",
+                    )
                 )
             if model._is_combining:
                 links.setdefault(label, []).extend(
-                    [(child.label, "-") for child in model._combine]
-                )
-            if model._is_dust_emitting or model._is_generating:
-                links.setdefault(label, []).extend(
                     [
-                        (
-                            model._lum_intrinsic_model.label
-                            if model._lum_intrinsic_model is not None
-                            else None,
-                            "dotted",
-                        ),
-                        (
-                            model._lum_attenuated_model.label
-                            if model._lum_attenuated_model is not None
-                            else None,
-                            "dotted",
-                        ),
+                        (child.label, "-")
+                        if isinstance(child, EmissionModel)
+                        else (child, "-")
+                        for child in model._combine
                     ]
                 )
+            if model._is_dust_emitting or model._is_generating:
+                if model._lum_intrinsic_model is not None:
+                    links.setdefault(label, []).append(
+                        (
+                            model._lum_intrinsic_model.label
+                            if isinstance(
+                                model._lum_intrinsic_model, EmissionModel
+                            )
+                            else model._lum_intrinsic_model,
+                            "dotted",
+                        )
+                    )
+                if model._lum_attenuated_model is not None:
+                    links.setdefault(label, []).append(
+                        (
+                            model._lum_attenuated_model.label
+                            if isinstance(
+                                model._lum_attenuated_model, EmissionModel
+                            )
+                            else model._lum_attenuated_model,
+                            "dotted",
+                        ),
+                    )
 
             if model._is_masked:
                 masked_labels.append(label)
@@ -2238,6 +2277,158 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model._is_extracting:
                         model.set_vel_shift(vel_shift)
 
+    def _get_existing_emissions(
+        self,
+        emitters,
+        emissions,
+        particle_emissions,
+        emission_type="spectra",
+    ):
+        """Unpack any existing emissions from the emitters.
+
+        This method will populate the emissions and particle_emissions
+        dictionaries (either spectra or lines) with any existing emissions
+        that we are using as signalled on the emission model. Any of the
+        arguments which can take a model can also take a string to denote
+        reuse of existing emissions from the emitter.
+
+        If the emission is missing an error is raised.
+
+        Args:
+            emitters (dict):
+                The emitters we are generating emissions for.
+            emissions (dict):
+                The dictionary of emissions to populate.
+            particle_emissions (dict):
+                The dictionary of particle emissions to populate.
+            emission_type (str):
+                The type of emission to get. Either "spectra" or "lines".
+
+        Returns:
+            dict, dict
+                The updated emissions and particle_emissions dictionaries.
+        """
+        # Ensure we have a valid emission type
+        if emission_type not in ["spectra", "lines"]:
+            raise exceptions.InconsistentArguments(
+                f"Invalid emission_type {emission_type}. Must be "
+                "'spectra' or 'lines'."
+            )
+
+        for this_model in self._models.values():
+            # Skip extractions, these can't reuse existing lines by their
+            # nature
+            if this_model._is_extracting:
+                continue
+
+            # Skip models for a different emitters
+            if this_model.emitter not in emitters:
+                continue
+
+            # Get the emitter
+            emitter = emitters[this_model.emitter]
+
+            # Get the emitter emissions
+            emitter_emissions = getattr(emitter, emission_type)
+            emitter_particle_emissions = getattr(
+                emitter, f"particle_{emission_type}", None
+            )
+
+            # Check apply_to for strings (only applicable to Transformations)
+            if (
+                isinstance(this_model.apply_to, str)
+                and this_model.apply_to in emitter_emissions
+            ):
+                if this_model.per_particle:
+                    particle_emissions[this_model.apply_to] = (
+                        emitter_particle_emissions[this_model.apply_to]
+                    )
+                emissions[this_model.apply_to] = emitter_emissions[
+                    this_model.apply_to
+                ]
+            elif isinstance(this_model.apply_to, str):
+                raise exceptions.InconsistentArguments(
+                    f"Can't reuse existing emission for {this_model.apply_to} "
+                    "since it could not be found in "
+                    f"{emitter.__class__.__name__}.{emission_type}. "
+                    f"Generate {this_model.apply_to} first or point "
+                    "apply_to to a model not a string."
+                )
+            else:
+                # Not reusing existing emission
+                pass
+
+            # Check combine for strings (only applicable to Combinations)
+            for comp in this_model.combine:
+                if isinstance(comp, str) and comp in emitter_emissions:
+                    if this_model.per_particle:
+                        particle_emissions[comp] = emitter_particle_emissions[
+                            comp
+                        ]
+                    emissions[comp] = emitter_emissions[comp]
+                elif isinstance(comp, str):
+                    raise exceptions.InconsistentArguments(
+                        f"Can't reuse existing emission for {comp} since it "
+                        "could not be found in "
+                        f"{emitter.__class__.__name__}.{emission_type}. "
+                        f"Generate {comp} first or point combine to a model "
+                        "not a string."
+                    )
+                else:
+                    # Not reusing existing emission
+                    pass
+
+            # Check generator dependencies for strings (lum_intrinsic_model
+            # and lum_attenuated_model)
+            lum_intrinsic_model = this_model.lum_intrinsic_model
+            lum_attenuated_model = this_model.lum_attenuated_model
+            if (
+                isinstance(lum_intrinsic_model, str)
+                and lum_intrinsic_model in emitter_emissions
+            ):
+                if this_model.per_particle:
+                    particle_emissions[lum_intrinsic_model] = (
+                        emitter_particle_emissions[lum_intrinsic_model]
+                    )
+                emissions[lum_intrinsic_model] = emitter_emissions[
+                    lum_intrinsic_model
+                ]
+            elif isinstance(lum_intrinsic_model, str):
+                raise exceptions.InconsistentArguments(
+                    f"Can't reuse existing emission for {lum_intrinsic_model} "
+                    "since it could not be found in "
+                    f"{emitter.__class__.__name__}.{emission_type}. "
+                    f"Generate {lum_intrinsic_model} first or point "
+                    "lum_intrinsic_model to a model not a string."
+                )
+            else:
+                # Not reusing existing emission
+                pass
+            if (
+                isinstance(lum_attenuated_model, str)
+                and lum_attenuated_model in emitter_emissions
+            ):
+                if this_model.per_particle:
+                    particle_emissions[lum_attenuated_model] = (
+                        emitter_particle_emissions[lum_attenuated_model]
+                    )
+                emissions[lum_attenuated_model] = emitter_emissions[
+                    lum_attenuated_model
+                ]
+            elif isinstance(lum_attenuated_model, str):
+                raise exceptions.InconsistentArguments(
+                    "Can't reuse existing emission for "
+                    f"{lum_attenuated_model} since it could not be found in "
+                    f"{emitter.__class__.__name__}.{emission_type}. "
+                    f"Generate {lum_attenuated_model} first or point "
+                    "lum_attenuated_model to a model not a string."
+                )
+            else:
+                # Not reusing existing emission
+                pass
+
+        return emissions, particle_emissions
+
     def _get_spectra(
         self,
         emitters,
@@ -2359,9 +2550,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Before we do anything, check that we have the emitters we need
         for model in emission_model._models.values():
-            # Galaxy is always missing
-            if model.emitter == "galaxy":
-                continue
             if emitters.get(model.emitter, None) is None:
                 raise exceptions.InconsistentArguments(
                     f"Missing {model.emitter} in emitters."
@@ -2395,6 +2583,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "generating at the root if they are not saved. Maybe you "
                 "want to use a child model you are saving instead?"
             )
+
+        # Get any existing spectra we are reusing
+        start_existing = tic()
+        if not _is_related:
+            spectra, particle_spectra = self._get_existing_emissions(
+                emitters,
+                spectra,
+                particle_spectra,
+                emission_type="spectra",
+            )
+        toc("Getting existing emissions", start_existing)
 
         # Perform all extractions
         for label, spectra_key in emission_model._extract_keys.items():
@@ -2452,18 +2651,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     particle_spectra.update(rel_particle_spectra)
 
             # Skip models for a different emitters
-            if (
-                this_model.emitter not in emitters
-                and this_model.emitter != "galaxy"
-            ):
+            if this_model.emitter not in emitters:
                 continue
 
             # Get the emitter (as long as we aren't doing a combination for a
             # galaxy spectra
-            if this_model.emitter != "galaxy":
-                emitter = emitters[this_model.emitter]
-            else:
-                emitter = None
+            emitter = emitters[this_model.emitter]
 
             # Do we have to define a mask?
             this_mask = None
@@ -2751,6 +2944,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "want to use a child model you are saving instead?"
             )
 
+        # Get any existing lines we are reusing
+        if not _is_related:
+            lines, particle_lines = self._get_existing_emissions(
+                emitters,
+                lines,
+                particle_lines,
+                emission_type="lines",
+            )
+
         # Perform all extractions first
         for label in emission_model._extract_keys.keys():
             # Skip it if we happen to already have the lines
@@ -2805,18 +3007,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     particle_lines.update(rel_particle_lines)
 
             # Skip models for a different emitters
-            if (
-                this_model.emitter not in emitters
-                and this_model.emitter != "galaxy"
-            ):
+            if this_model.emitter not in emitters:
                 continue
 
-            # Get the emitter (as long as we aren't doing a combination for a
-            # galaxy spectra
-            if this_model.emitter != "galaxy":
-                emitter = emitters[this_model.emitter]
-            else:
-                emitter = None
+            # Get the emitter
+            emitter = emitters[this_model.emitter]
 
             # Do we have to define a mask?
             this_mask = None
@@ -2868,6 +3063,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         lines,
                         particle_lines,
                         emitter,
+                        lines[list(lines.keys())[0]].lam,
+                        line_ids,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -3063,9 +3260,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # If we have no emitter, we can't generate an image. This is
             # relevant when the emitter is a galaxy. In this case the images
             # must be combined in the loop below.
-            if emitter is None:
+            if this_model.emitter == "galaxy" or emitter is None:
                 continue
-
             # Get the appropriate photometry (particle/integrated and
             # flux/luminosity)
             try:
@@ -3212,8 +3408,8 @@ class StellarEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a StellarEmissionModel instance."""
+        kwargs.setdefault("emitter", "stellar")
         EmissionModel.__init__(self, *args, **kwargs)
-        self._emitter = "stellar"
 
 
 class BlackHoleEmissionModel(EmissionModel):
@@ -3229,8 +3425,8 @@ class BlackHoleEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a BlackHoleEmissionModel instance."""
+        kwargs.setdefault("emitter", "blackhole")
         EmissionModel.__init__(self, *args, **kwargs)
-        self._emitter = "blackhole"
 
 
 class GalaxyEmissionModel(EmissionModel):
@@ -3247,8 +3443,8 @@ class GalaxyEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a GalaxyEmissionModel instance."""
+        kwargs.setdefault("emitter", "galaxy")
         EmissionModel.__init__(self, *args, **kwargs)
-        self._emitter = "galaxy"
 
         # Ensure we aren't extracting, this cannot be done for a galaxy.
         if self._is_extracting:

@@ -876,7 +876,7 @@ class TestPipelineOperations:
         # Add dummy galaxies
         pipeline_with_galaxies.get_sfzh(
             log10ages=test_grid.log10ages,
-            log10metallicities=test_grid.log10metallicities,
+            metallicities=test_grid.metallicities,
         )
         pipeline_with_galaxies.run()
 

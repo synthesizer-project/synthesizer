@@ -31,7 +31,7 @@ from synthesizer.emission_models import (
     TemplateEmission,
     TransmittedEmission,
 )
-from synthesizer.emission_models.attenuation import Inoue14, Madau96
+from synthesizer.emission_models.attenuation import Asada25, Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid, Template
@@ -153,7 +153,7 @@ def bimodal_pacman_emission_model(test_grid):
 @pytest.fixture
 def template_emission_model_bh(test_template):
     """Return a TemplateEmission object."""
-    return TemplateEmission(test_template, "blackhole")
+    return TemplateEmission(test_template, emitter="blackhole")
 
 
 # ================================= IGMS ======================================
@@ -169,6 +169,12 @@ def i14():
 def m96():
     """Return a Madau96 IGM object."""
     return Madau96()
+
+
+@pytest.fixture
+def a24():
+    """Return an Asada25 IGM object."""
+    return Asada25()
 
 
 # ================================= STARS =====================================
@@ -662,3 +668,45 @@ def kernel():
     """Return a Kernel object."""
     sph_kernel = Kernel()
     return sph_kernel.get_kernel()
+
+
+# ==================== STARS WITH EXISTING SPECTRA ===========================
+
+
+@pytest.fixture
+def stars_with_fake_spectra(test_grid):
+    """Create a mock Stars object with fake spectra for string label tests."""
+    # Create minimal Stars object
+    initial_masses = np.array([1e6]) * Msun
+    ages = np.array([10]) * Myr
+    metallicities = np.array([0.01])
+
+    stars = Stars(
+        initial_masses=initial_masses,
+        ages=ages,
+        metallicities=metallicities,
+    )
+
+    # Create fake spectra using the test grid wavelengths
+    fake_lnu = np.ones(len(test_grid.lam)) * erg / s / Hz
+
+    # Add fake spectra to the Stars object
+    stars.spectra = {
+        "intrinsic": Sed(test_grid.lam, lnu=fake_lnu * 2.0),
+        "attenuated": Sed(test_grid.lam, lnu=fake_lnu * 1.5),
+        "transmitted": Sed(test_grid.lam, lnu=fake_lnu * 0.8),
+        "nebular": Sed(test_grid.lam, lnu=fake_lnu * 0.3),
+    }
+
+    # Add fake particle spectra for per-particle tests
+    fake_particle_lnu = (
+        np.ones((stars.nstars, len(test_grid.lam))) * erg / s / Hz
+    )
+
+    stars.particle_spectra = {
+        "intrinsic": Sed(test_grid.lam, lnu=fake_particle_lnu * 2.0),
+        "attenuated": Sed(test_grid.lam, lnu=fake_particle_lnu * 1.5),
+        "transmitted": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.8),
+        "nebular": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.3),
+    }
+    return stars
