@@ -20,7 +20,7 @@ def test_single_star_extraction(
     nebular_emission_model,
     reprocessed_emission_model,
 ):
-    """Test extraciton of a single star's emission.
+    """Test extraction of a single star's emission.
 
     This will use and compare a single star for a particle Stars object and a
     single SFZH bin for a parametric Stars object. These two descriptions
@@ -29,7 +29,7 @@ def test_single_star_extraction(
     # First ensure the sfzh's are equivalent
     single_star_particle.get_sfzh(
         test_grid.log10ages,
-        test_grid.log10metallicities,
+        test_grid.metallicity,
     )
     assert np.isclose(np.sum(single_star_particle.sfzh.sfzh), 1.0), (
         "The unit particle SFZH does not sum to 1"
