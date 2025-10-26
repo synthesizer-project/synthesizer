@@ -620,3 +620,26 @@ def test_masked_combination(
         f"(combined={np.sum(combined_spec._lnu)} vs"
         f" unmasked={np.sum(unmasked_spec._lnu)})."
     )
+
+
+def test_param_stars_from_parts(
+    random_param_stars,
+    incident_emission_model,
+):
+    """Test generating parametric stars from particle stars."""
+    incident = incident_emission_model
+    stars = random_param_stars
+    grid = incident.grid
+
+    spectra = stars.get_spectra(incident, verbose=True)
+    param_stars = stars.get_sfzh(
+        log10ages=grid.log10age,
+        log10metallicities=grid.log10metallicity,
+    )
+    param_spectra = param_stars.get_spectra(incident, verbose=True)
+
+    # Ensure the spectra are the same
+    assert np.allclose(
+        spectra._lnu,
+        param_spectra._lnu,
+    ), "The spectra from parametric and particle stars are not the same."
