@@ -1067,7 +1067,7 @@ class Stars(Particles, StarsComponent):
     def get_sfzh(
         self,
         log10ages,
-        log10metallicities,
+        metallicities,
         grid_assignment_method="cic",
         nthreads=0,
     ):
@@ -1082,8 +1082,8 @@ class Stars(Particles, StarsComponent):
         Args:
             log10ages (np.ndarray of float):
                 The log10 ages of the desired SFZH.
-            log10metallicities (np.ndarray of float):
-                The logged metallicities of the desired SFZH.
+            metallicities (np.ndarray of float):
+                The metallicities of the desired SFZH.
             grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1104,7 +1104,7 @@ class Stars(Particles, StarsComponent):
         # Prepare the arguments for the C function.
         args = self._prepare_sfzh_args(
             log10ages,
-            log10metallicities,
+            np.log10(metallicities),
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
@@ -1112,7 +1112,7 @@ class Stars(Particles, StarsComponent):
         # Get the SFZH and create the ParametricStars object
         self.sfzh = ParametricStars(
             log10ages,
-            10**log10metallicities,
+            metallicities,
             sfzh=compute_sfzh(*args),
         )
 
