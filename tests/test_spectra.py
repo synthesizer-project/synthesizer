@@ -631,10 +631,15 @@ def test_param_stars_from_parts(
     stars = random_part_stars
     grid = incident.grid
 
-    spectra = stars.get_spectra(incident, verbose=True)
+    spectra = stars.get_spectra(
+        incident,
+        grid_assignment_method="cic",
+        verbose=True,
+    )
     param_stars = stars.get_sfzh(
         log10ages=grid.log10age,
         log10metallicities=grid.log10metallicity,
+        grid_assignment_method="cic",
     )
     param_spectra = param_stars.get_spectra(incident, verbose=True)
 
