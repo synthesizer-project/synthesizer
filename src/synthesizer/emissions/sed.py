@@ -25,7 +25,6 @@ from unyt import (
     Hz,
     angstrom,
     c,
-    cm,
     erg,
     eV,
     h,
@@ -37,6 +36,7 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
+from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
@@ -1105,7 +1105,7 @@ class Sed:
         self.obsnu = self._nu / (1.0 + z)
 
         # Compute the luminosity distance
-        luminosity_distance = cosmo.luminosity_distance(z).to("cm").value * cm
+        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy

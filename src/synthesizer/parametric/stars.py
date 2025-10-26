@@ -41,7 +41,7 @@ class Stars(StarsComponent):
         ages (np.ndarray of float):
             The array of ages defining the age axis of the SFZH.
         metallicities (np.ndarray of float):
-            The array of metallicitities defining the metallicity axies of
+            The array of metallicitities defining the metallicity axes of
             the SFZH.
         initial_mass (unyt_quantity/float)
             The total initial stellar mass.
@@ -55,14 +55,14 @@ class Stars(StarsComponent):
         sf_hist (np.ndarray of float):
             An array describing the star formation history.
         metal_dist (np.ndarray of float):
-            An array describing the metallity distribution.
+            An array describing the metallicity distribution.
         sf_hist_func (SFH.*)
             An instance of one of the child classes of SFH. This will be
-            used to calculate sf_hist and takes precendence over a passed
+            used to calculate sf_hist and takes precedence over a passed
             sf_hist if both are present.
         metal_dist_func (ZH.*)
             An instance of one of the child classes of ZH. This will be
-            used to calculate metal_dist and takes precendence over a
+            used to calculate metal_dist and takes precedence over a
             passed metal_dist if both are present.
         instant_sf (float):
             An age at which to compute an instantaneous SFH, i.e. all
@@ -333,7 +333,7 @@ class Stars(StarsComponent):
             # Compute the SFZH grid
             self.sfzh = inst_stars.get_sfzh(
                 self.log10ages,
-                self.log10metallicities,
+                self.metallicities,
                 grid_assignment_method="cic",
             ).sfzh
 
