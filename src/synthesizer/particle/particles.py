@@ -240,7 +240,8 @@ class Particles:
             # Get the angular diameter distance
             ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-            # Combine the angular diameter distance with the line of sight distance
+            # Combine the angular diameter distance with the line of sight
+            # distance
             # (along the z-axis)
             los_dists = ang_diam_dist + cent_coords[:, 2]
 
@@ -318,7 +319,8 @@ class Particles:
             # Get the angular diameter distance
             ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-            # Combine the angular diameter distance with the line of sight distance
+            # Combine the angular diameter distance with the line of sight
+            # distance
             # (along the z-axis)
             los_dists = ang_diam_dist + cent_coords[:, 2]
 
