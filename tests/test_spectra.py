@@ -623,12 +623,12 @@ def test_masked_combination(
 
 
 def test_param_stars_from_parts(
-    random_param_stars,
+    random_part_stars,
     incident_emission_model,
 ):
     """Test generating parametric stars from particle stars."""
     incident = incident_emission_model
-    stars = random_param_stars
+    stars = random_part_stars
     grid = incident.grid
 
     spectra = stars.get_spectra(incident, verbose=True)
