@@ -183,8 +183,7 @@ def download_agn_test_grids(destination):
 
 
 def download_dust_grid(destination):
-    """Download the Draine and Li (2007) dust emission and extinction
-    grid for synthesizer.
+    """Download the Draine and Li dust grids for synthesizer.
 
     Args:
         destination (str):
@@ -192,8 +191,11 @@ def download_dust_grid(destination):
     """
     # Download the dust grid
     _download("draine_li_dust_emission_grid_MW_3p1.hdf5", destination)
-    _download("dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p005.hdf5", destination)
-    
+    _download(
+        "dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p005.hdf5",
+        destination,
+    )
+
 
 def download_camels_data(destination):
     """Download the CAMELS data.
@@ -390,7 +392,7 @@ def download():
     # Dust emission data?
     if dust_grid:
         download_dust_grid(dest if dest is not None else GRID_DIR)
-        
+
     # Camels data?
     if camels:
         download_camels_data(dest if dest is not None else TEST_DATA_DIR)
