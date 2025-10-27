@@ -3,6 +3,7 @@ from synthesizer.emission_models.transformers.dust_attenuation import (
     MWN18,
     Calzetti2000,
     GrainsWD01,
+    DraineLi_graincurves,
     ParametricLi08,
     PowerLaw,
 )
