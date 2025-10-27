@@ -20,9 +20,10 @@ import os
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from functools import lru_cache
 from dust_extinction.grain_models import WD01
 from scipy import interpolate
-from unyt import Msun, angstrom, cm, g, um
+from unyt import Msun, angstrom, cm, g, um, pc
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
@@ -36,7 +37,7 @@ __all__ = [
     "Calzetti2000",
     "GrainsWD01",
     "ParametricLi08",
-    "DraineLi_graincurves",
+    "DraineLiGrainCurves",
 ]
 
 _RESET_SENTINEL = object()
@@ -76,7 +77,8 @@ class AttenuationLaw(Transformer):
         self._name_transforms = {}
         # Stores overridden parameters temporarily
         self._temp_params = {}
-        if "tau_v" not in required_params:
+        if ("tau_v" not in required_params) \
+        and ("DraineLiGrainCurves" not in description):
             raise exceptions.InconsistentArguments(
                 "AttenuationLaw requires 'tau_v' as a parameter."
             )
@@ -996,7 +998,193 @@ class ParametricLi08(AttenuationLaw):
         )
 
 
-class DraineLi_graincurves(AttenuationLaw):
+# class DraineLi_graincurves(AttenuationLaw):
+#     """Draine and Li extinction curves.
+
+#     Draine and Li extinction curves obtained from pre-processing
+#     the extinction efficiencies for the required grain size
+#     distribution. This is done in grid-generation repo under
+#     'grid-generation/src/synthesizer_grids/dust/
+#     create_dustextcurve_draine_li.py' for the required dust
+#     parameters. Currently only implemented for 2 grain sizes
+#     of graphites and silicates, and 1 size of PAHs.
+
+#     Attributes:
+#         grid_name (string):
+#             Name of the extinction curve grid (without hdf5
+#             extension)
+#         grid_dir (string):
+#             Location of the grid
+#     """
+
+#     def __init__(self, grid_name, grid_dir):
+#         """Initialise the dust curve.
+
+#         Args:
+#             grid_name (string):
+#                 Name of the extinction curve grid (without hdf5
+#                 extension)
+#             grid_dir (string):
+#                 Location of the grid
+#         """
+#         self.grid_name = grid_name
+#         self.grid_dir = grid_dir
+#         description = """
+#         Draine and Li dust grain model for extinction curves
+#         obtained from pre-processing the extinction efficiencies
+#         for the required grain size distribution. This is done in
+#         grid-generation repo under 'grid-generation/src/
+#         synthesizer_grids/dust/create_dustextcurve_draine_li.py'
+#         for the required dust parameters.
+#         """
+
+#         AttenuationLaw.__init__(
+#             self,
+#             description=description,
+#         )
+
+#     @accepts(lam=angstrom)
+#     def get_tau_at_lam(
+#         self,
+#         lam,
+#         dtg_graphite_small=None,
+#         dtg_graphite_large=None,
+#         dtg_silicate_small=None,
+#         dtg_silicate_large=None,
+#         dtg_pahion=None,
+#         dtg_pahneutral=None,
+#     ):
+#         """Calculate optical depth at a wavelength.
+
+#         Args:
+#             lam (float/array-like, float):
+#                 An array of wavelengths or a single wavlength at which to
+#                 calculate optical depths (in AA, global unit).
+#             dtg_graphite_small (float, optional):
+#                 Dust-to-gas ratio of small graphite grains
+#             dtg_graphite_large (float, optional):
+#                 Dust-to-gas ratio of large graphite grains
+#             dtg_silicate_small (float, optional):
+#                 Dust-to-gas ratio of small silicate grains
+#             dtg_silicate_large (float, optional):
+#                 Dust-to-gas ratio of large silicate grains
+#             dtg_pahion (float, optional):
+#                 Dust-to-gas ratio of ionised PAH grains
+#             dtg_pahneutral (float, optional):
+#                 Dust-to-gas ratio of neutral PAH grains
+
+#         Returns:
+#             float/array-like, float
+#                 The optical depth per column density per H nucleus
+#                 in units of pc^2/Msun.
+#         """
+#         prefix = "extinction_curves"
+#         with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5") as grid:
+#             grid_dtg = np.array(grid["axes/dtg"])
+#             # Wavelength in AA
+#             _lam = np.array(grid[f"{prefix}/wavelength"]) * 1e4
+#             # In units of mag cm^2 Per H nucleus
+#             Alam_NH = np.zeros(len(_lam))
+#             if dtg_graphite_small is not None:
+#                 index = np.argmin(np.abs(grid_dtg - dtg_graphite_small))
+#                 Alam_NH += np.array(grid[f"{prefix}/graphite_small"])[index]
+#             if dtg_graphite_large is not None:
+#                 index = np.argmin(np.abs(grid_dtg - dtg_graphite_large))
+#                 Alam_NH += np.array(grid[f"{prefix}/graphite_large"])[index]
+#             if dtg_silicate_small is not None:
+#                 index = np.argmin(np.abs(grid_dtg - dtg_silicate_small))
+#                 Alam_NH += np.array(grid[f"{prefix}/silicate_small"])[index]
+#             if dtg_silicate_large is not None:
+#                 index = np.argmin(np.abs(grid_dtg - dtg_silicate_large))
+#                 Alam_NH += np.array(grid[f"{prefix}/silicate_large"])[index]
+#             if dtg_pahion is not None:
+#                 index = np.argmin(np.abs(grid_dtg - dtg_pahion))
+#                 Alam_NH += np.array(grid[f"{prefix}/pah_ionised"])[index]
+#             if dtg_pahneutral is not None:
+#                 index = np.argmin(np.abs(grid_dtg - dtg_pahneutral))
+#                 Alam_NH += np.array(grid[f"{prefix}/pah_neutral"])[index]
+#             if np.sum(Alam_NH) == 0:
+#                 exceptions.MissingArgument(
+#                     "Provide dust-to-gas ratio argument"
+#                 )
+
+#         func = interpolate.interp1d(
+#             _lam,
+#             Alam_NH,
+#             kind="slinear",
+#             fill_value="extrapolate",
+#         )
+
+#         # In units of cm^2 Per H nucleus
+#         tau_at_lam = func(lam.to("Angstrom").value) / 1.086
+#         tau_at_lam *= cm**2
+#         tau_at_lam = tau_at_lam.to("pc**2")
+#         # Gas mass per H (g) with helium correction
+#         MU = 1.4
+#         M_H = 1.6738e-24  # in grams
+#         GAS_MASS_PER_H = MU * M_H * g  # g per H
+#         GAS_MASS_PER_H = GAS_MASS_PER_H.to(Msun)
+#         # Convert to pc^2/Msun
+#         tau_at_lam = tau_at_lam / GAS_MASS_PER_H
+
+#         return tau_at_lam
+
+#     @accepts(lam=angstrom)
+#     def get_tau(
+#         self,
+#         lam,
+#         dtg_graphite_small=None,
+#         dtg_graphite_large=None,
+#         dtg_silicate_small=None,
+#         dtg_silicate_large=None,
+#         dtg_pahion=None,
+#         dtg_pahneutral=None,
+#     ):
+#         """Calculate V-band normalised optical depth.
+
+#         Args:
+#             lam (float/array-like, float):
+#                 An array of wavelengths or a single wavlength at which to
+#                 calculate optical depths (in AA, global unit).
+#             dtg_graphite_small (float, optional):
+#                 Dust-to-gas ratio of small graphite grains
+#             dtg_graphite_large (float, optional):
+#                 Dust-to-gas ratio of large graphite grains
+#             dtg_silicate_small (float, optional):
+#                 Dust-to-gas ratio of small silicate grains
+#             dtg_silicate_large (float, optional):
+#                 Dust-to-gas ratio of large silicate grains
+#             dtg_pahion (float, optional):
+#                 Dust-to-gas ratio of ionised PAH grains
+#             dtg_pahneutral (float, optional):
+#                 Dust-to-gas ratio of neutral PAH grains
+
+#         Returns:
+#             float/array-like, float
+#                 The optical depth.
+#         """
+#         return self.get_tau_at_lam(
+#             lam,
+#             dtg_graphite_small,
+#             dtg_graphite_large,
+#             dtg_silicate_small,
+#             dtg_silicate_large,
+#             dtg_pahion,
+#             dtg_pahneutral,
+#         ) / self.get_tau_at_lam(
+#             5500 * angstrom,
+#             dtg_graphite_small,
+#             dtg_graphite_large,
+#             dtg_silicate_small,
+#             dtg_silicate_large,
+#             dtg_pahion,
+#             dtg_pahneutral,
+#         )
+
+
+
+
+class DraineLiGrainCurves(AttenuationLaw):
     """Draine and Li extinction curves.
 
     Draine and Li extinction curves obtained from pre-processing
@@ -1014,37 +1202,64 @@ class DraineLi_graincurves(AttenuationLaw):
         grid_dir (string):
             Location of the grid
     """
-
-    def __init__(self, grid_name, grid_dir):
-        """Initialise the dust curve.
-
-        Args:
-            grid_name (string):
-                Name of the extinction curve grid (without hdf5
-                extension)
-            grid_dir (string):
-                Location of the grid
-        """
+    
+    def __init__(
+        self,
+        grid_name: str,
+        grid_dir: str
+    ):
         self.grid_name = grid_name
         self.grid_dir = grid_dir
-        description = """
-        Draine and Li dust grain model for extinction curves
-        obtained from pre-processing the extinction efficiencies
-        for the required grain size distribution. This is done in
-        grid-generation repo under 'grid-generation/src/
-        synthesizer_grids/dust/create_dustextcurve_draine_li.py'
-        for the required dust parameters.
-        """
-
+        description = """DraineLiGrainCurves: Draine and Li dust grain
+        model for extinction curves obtained from pre-processing the
+        extinction efficiencies for the required grain size
+        distribution. The different compenents have been interpolated
+        and LRU-cached"""
+        
+        required_params = (
+            "dtg_graphite_small",
+            "dtg_graphite_large",
+            "dtg_silicate_small",
+            "dtg_silicate_large",
+            "dtg_pah_ionised",
+            "dtg_pah_neutral",
+            "dust_los"
+        )
+        
         AttenuationLaw.__init__(
             self,
             description=description,
+            required_params=required_params
         )
+        
+    @lru_cache(maxsize=8)
+    def _get_component_interp(
+        self,
+        component_key: str
+    ):
+        """
+        Return an interp1d which maps dtg -> extinction curve (values at every grid wavelength).
+        Cached by (grid_dir, grid_name, component_key).
+        """
+        prefix = "extinction_curves"
+        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as grid:
+            grid_dtg = np.array(grid["axes/dtg"])                      # shape (G,)
+            comp_arr = np.array(grid[f"{prefix}/{component_key}"])     # shape (G, L)
+        # Interpolate along dtg axis (axis=0), so calling f(dtg_array) -> shape (N_dtg, L)
+        return interpolate.interp1d(
+            grid_dtg,
+            comp_arr,
+            axis=0,
+            kind="linear",
+            assume_sorted=True,
+        )
+
 
     @accepts(lam=angstrom)
     def get_tau_at_lam(
         self,
         lam,
+        dust_los=1*Msun/pc**2,
         dtg_graphite_small=None,
         dtg_graphite_large=None,
         dtg_silicate_small=None,
@@ -1052,12 +1267,16 @@ class DraineLi_graincurves(AttenuationLaw):
         dtg_pahion=None,
         dtg_pahneutral=None,
     ):
-        """Calculate optical depth at a wavelength.
-
+        """
+        Calculate optical depth at a wavelength for given dtg value.
+        
         Args:
             lam (float/array-like, float):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
+            dust_los (unyt array)
+                Line-of-sight dust density in units of
+                Msun/pc^2
             dtg_graphite_small (float, optional):
                 Dust-to-gas ratio of small graphite grains
             dtg_graphite_large (float, optional):
@@ -1074,63 +1293,107 @@ class DraineLi_graincurves(AttenuationLaw):
         Returns:
             float/array-like, float
                 The optical depth per column density per H nucleus
-                in units of pc^2/Msun.
+                in units of pc^2/Msun ((N_dtg, N_lambda) if any dtg
+                input is array-like, otherwise shape (N_lambda,)).
         """
         prefix = "extinction_curves"
-        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5") as grid:
-            grid_dtg = np.array(grid["axes/dtg"])
-            # Wavelength in AA
-            _lam = np.array(grid[f"{prefix}/wavelength"]) * 1e4
-            # In units of mag cm^2 Per H nucleus
-            Alam_NH = np.zeros(len(_lam))
-            if dtg_graphite_small is not None:
-                index = np.argmin(np.abs(grid_dtg - dtg_graphite_small))
-                Alam_NH += np.array(grid[f"{prefix}/graphite_small"])[index]
-            if dtg_graphite_large is not None:
-                index = np.argmin(np.abs(grid_dtg - dtg_graphite_large))
-                Alam_NH += np.array(grid[f"{prefix}/graphite_large"])[index]
-            if dtg_silicate_small is not None:
-                index = np.argmin(np.abs(grid_dtg - dtg_silicate_small))
-                Alam_NH += np.array(grid[f"{prefix}/silicate_small"])[index]
-            if dtg_silicate_large is not None:
-                index = np.argmin(np.abs(grid_dtg - dtg_silicate_large))
-                Alam_NH += np.array(grid[f"{prefix}/silicate_large"])[index]
-            if dtg_pahion is not None:
-                index = np.argmin(np.abs(grid_dtg - dtg_pahion))
-                Alam_NH += np.array(grid[f"{prefix}/pah_ionised"])[index]
-            if dtg_pahneutral is not None:
-                index = np.argmin(np.abs(grid_dtg - dtg_pahneutral))
-                Alam_NH += np.array(grid[f"{prefix}/pah_neutral"])[index]
-            if np.sum(Alam_NH) == 0:
-                exceptions.MissingArgument(
-                    "Provide dust-to-gas ratio argument"
+
+        # Read wavelengths and dtg from grid
+        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as grid:
+            grid_dtg = np.array(grid["axes/dtg"]) 
+            grid_lam = np.array(grid[f"{prefix}/wavelength"]) * 1e4  # convert to Angstrom
+        
+        # Check if the inputs are within the grids
+        dtg_min = np.min(grid_dtg)
+        dtg_max = np.max(grid_dtg)
+        # Map hdf5 components to inputs
+        dtg_inputs = {
+            "graphite_small": dtg_graphite_small,
+            "graphite_large": dtg_graphite_large,
+            "silicate_small": dtg_silicate_small,
+            "silicate_large": dtg_silicate_large,
+            "pah_ionised": dtg_pahion,
+            "pah_neutral": dtg_pahneutral,
+        }
+
+        # Convert dtg inputs to numpy arrays or None
+        # Determine number of samples
+        dtg_arrays = {}
+        lengths = []
+        for key, value in dtg_inputs.items():
+            if value is None:
+                dtg_arrays[key] = None
+            else:
+                not_within = np.logical_or(
+                    value <= dtg_min, 
+                    value >= dtg_max
                 )
+                if np.sum(not_within)>0:
+                    raise exceptions.InconsistentArguments(
+                        F"Given dust-to-gas ratio for {key} "
+                        "is outside the grid values"
+                    )
+                arr = np.atleast_1d(np.array(value, dtype=float))
+                dtg_arrays[key] = arr
+                lengths.append(arr.size)
+        N = max(lengths) if lengths else 1
 
-        func = interpolate.interp1d(
-            _lam,
+        # Build Alam_NH (N, L)
+        L = grid_lam.shape[0]
+        Alam_NH = np.zeros((N, L), dtype=float)
+
+        # For each provided component, get cached interp and
+        # evaluate at dtg array
+        for comp_key, dtg_arr in dtg_arrays.items():
+            if dtg_arr is None:
+                continue
+            # Get cached interpolator (will open HDF5 and build interp1d on first call for this key)
+            f_dtg = self._get_component_interp(comp_key)
+            # f_dtg accepts array-like dtg values and returns shape (N, L)
+            comp_vals = f_dtg(dtg_arr)
+            Alam_NH += comp_vals
+
+        if np.sum(Alam_NH)==0:
+            # No component was provided
+            raise exceptions.MissingArgument(
+                "Provide at least one dust-to-gas ratio argument"
+            )
+
+        # Interpolate along wavelength axis with the given 'lam'
+        lam_vals = np.atleast_1d(lam.to("Angstrom").value)  
+        f_lam = interpolate.interp1d(
+            grid_lam,
             Alam_NH,
-            kind="slinear",
+            axis=1,
+            kind="linear",
             fill_value="extrapolate",
+            assume_sorted=True,
         )
+        Alam_by_NH = f_lam(lam_vals)  # shape (N, M)
 
-        # In units of cm^2 Per H nucleus
-        tau_at_lam = func(lam.to("Angstrom").value) / 1.086
-        tau_at_lam *= cm**2
-        tau_at_lam = tau_at_lam.to("pc**2")
-        # Gas mass per H (g) with helium correction
+        # Convert from mag cm^2 per H nucleus to tau x pc^2 / Msun
+        tau_at_lam = Alam_by_NH / 1.086 
+        tau_at_lam = (tau_at_lam * cm**2).to(pc**2)   # attach units and convert to pc^2
         MU = 1.4
-        M_H = 1.6738e-24  # in grams
-        GAS_MASS_PER_H = MU * M_H * g  # g per H
-        GAS_MASS_PER_H = GAS_MASS_PER_H.to(Msun)
+        M_H = 1.6738e-24 * g # in grams per H
+        GAS_MASS_PER_H = (MU * M_H).to(Msun)
         # Convert to pc^2/Msun
-        tau_at_lam = tau_at_lam / GAS_MASS_PER_H
-
-        return tau_at_lam
+        tau_at_lam = tau_at_lam / GAS_MASS_PER_H 
+        
+        # Unitless after multplying by the
+        # line-of-sight dust column density
+        if N == 1:
+            tau_at_lam*=dust_los
+            return tau_at_lam[0]  # returns Quantity shape (M,)
+        else:
+            tau_at_lam*=dust_los[:, np.newaxis]
+        return tau_at_lam  # Quantity shape (N, M)
 
     @accepts(lam=angstrom)
     def get_tau(
         self,
         lam,
+        dust_los=1*Msun/pc**2,
         dtg_graphite_small=None,
         dtg_graphite_large=None,
         dtg_silicate_small=None,
@@ -1138,7 +1401,8 @@ class DraineLi_graincurves(AttenuationLaw):
         dtg_pahion=None,
         dtg_pahneutral=None,
     ):
-        """Calculate V-band normalised optical depth.
+        """
+        Calculate V-band normalised optical depth.
 
         Args:
             lam (float/array-like, float):
@@ -1161,16 +1425,29 @@ class DraineLi_graincurves(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        return self.get_tau_at_lam(
+        if all(
+            x is None
+            for x in (
+                dust_los,
+                dtg_graphite_small,
+                dtg_graphite_large,
+                dtg_silicate_small,
+                dtg_silicate_large,
+                dtg_pahion,
+                dtg_pahneutral,
+            )
+        ):
+            dust_los = getattr(self, "dust_los", None)
+            dtg_graphite_small = getattr(self, "dtg_graphite_small", None)
+            dtg_graphite_large = getattr(self, "dtg_graphite_large", None)
+            dtg_silicate_small = getattr(self, "dtg_silicate_small", None)
+            dtg_silicate_large = getattr(self, "dtg_silicate_large", None)
+            dtg_pahion = getattr(self, "dtg_pahion", None)
+            dtg_pahneutral = getattr(self, "dtg_pahneutral", None)
+            
+        tau_lam = self.get_tau_at_lam(
             lam,
-            dtg_graphite_small,
-            dtg_graphite_large,
-            dtg_silicate_small,
-            dtg_silicate_large,
-            dtg_pahion,
-            dtg_pahneutral,
-        ) / self.get_tau_at_lam(
-            5500 * angstrom,
+            dust_los,
             dtg_graphite_small,
             dtg_graphite_large,
             dtg_silicate_small,
@@ -1178,3 +1455,51 @@ class DraineLi_graincurves(AttenuationLaw):
             dtg_pahion,
             dtg_pahneutral,
         )
+
+        tau_V = self.get_tau_at_lam(
+            5500 * angstrom,
+            dust_los,
+            dtg_graphite_small,
+            dtg_graphite_large,
+            dtg_silicate_small,
+            dtg_silicate_large,
+            dtg_pahion,
+            dtg_pahneutral,
+        )
+
+        # tau_lam: (N, M) or (M,), tau_V: (N,) or scalar (M==1)
+        # Need to maintain the right shape of tau_v
+        if np.ndim(tau_V) == 0:
+            return tau_lam / tau_V
+        return tau_lam / tau_V[:, np.newaxis]
+
+    @accepts(lam=angstrom)
+    def get_transmission(self, lam, **dust_curve_kwargs):
+        """Compute the transmission curve.
+
+        Returns the transmitted flux/luminosity fraction based on an optical
+        depth at a range of wavelengths.
+
+        Args:
+            lam (np.ndarray of float):
+                The wavelengths (with units) at which to calculate
+                transmission.
+            **dust_curve_kwargs (dict):
+                Additional keyword arguments to be passed to the dust curve
+                which have been defined on the emitter or model.
+
+        Returns:
+            np.ndarray of float:
+                The transmission at each wavelength
+        """
+        # Set any additional parameters on the dust curve
+        self._set_params(**dust_curve_kwargs)
+
+        try:
+            # Get the optical depth at each wavelength
+            tau_lam = self.get_tau_at_lam(lam)
+        finally:
+            # Always restore previous state
+            self._reset_params()
+
+        return np.exp(-tau_lam)
