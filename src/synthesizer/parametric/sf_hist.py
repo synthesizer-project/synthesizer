@@ -1406,7 +1406,7 @@ class ContinuityFlex(Common):
     def _logsfr_ratios_to_agebins(self):
         """Transform SFR ratios to age bins assuming constant mass per bin."""
         logsfr_ratios = np.clip(self.logsfr_ratios, -10, 10)
-        _, y1 = 10 ** self.fixed_young_bin[0], 10 ** self.fixed_young_bin[1]
+        y0, y1 = 10 ** self.fixed_young_bin[0], 10 ** self.fixed_young_bin[1]
         o0, o1 = 10 ** self.fixed_old_bin[0], 10 ** self.fixed_old_bin[1]
         if y1 >= o0:
             raise ValueError("Young bin must end before start of old bin.")
@@ -1421,9 +1421,9 @@ class ContinuityFlex(Common):
         )
         dt1 = tflex / denom
 
-        # Build absolute age edges: [0, y1] (young), then flexible bins,
+        # Build absolute age edges: [y0, y1] (young), then flexible bins,
         # then [o0, o1] (old)
-        edges = [0.0, y1]
+        edges = [y0, y1]
         last = y1 + dt1
         edges.append(last)
         for i in range(n_ratio):

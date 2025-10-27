@@ -939,7 +939,7 @@ class Stars(StarsComponent):
 
         return weighted_mean(attr, weight)
 
-    def calculate_average_sfr(self, t_range: tuple[float, float] = (0, 1e8)):
+    def calculate_average_sfr(self, t_range: tuple = (0, 1e8)):
         """Calculate the average SFR over a given age range.
 
         This method assumes that stars form at discrete time points given by
