@@ -257,6 +257,12 @@ class Stars(StarsComponent):
             # Compute the SFZH grid
             self._get_sfzh(instant_sf, instant_metallicity)
 
+        if np.any(~np.isfinite(self.sfzh)):
+            raise exceptions.InconsistentArguments(
+                "SFZH grid contains NaN or Inf values! "
+                "Please check the input parameters."
+            )
+
         # Attach the morphology model
         self.morphology = morphology
 
@@ -932,6 +938,90 @@ class Stars(StarsComponent):
         attr = getattr(self, attr)
 
         return weighted_mean(attr, weight)
+
+    def calculate_average_sfr(self, t_range: tuple = (0, 1e8)):
+        """Calculate the average SFR over a given age range.
+
+        This method assumes that stars form at discrete time points given by
+        `self.ages`, with the mass in `self.get_sfh()`.
+        To calculate a continuous rate, it treats this mass as having
+        formed uniformly in bins constructed around each age point.
+
+        Args:
+            t_range (tuple[float, float]):
+                The lookback age limits (t_start, t_end) in years over which
+                to calculate the average SFR.
+
+        Returns:
+            unyt_quantity:
+                The average SFR over the specified time range in Msun/yr.
+        """
+        # --- Input Validation and Setup ---
+        sfh_mass = np.asarray(self.get_sfh())
+        age_points = np.asarray(self.ages)
+
+        if sfh_mass.size != age_points.size:
+            raise ValueError(
+                "Mass array and age points array must have the same size."
+            )
+
+        if age_points.size == 0:
+            return unyt_quantity(0, units="Msun/yr")
+
+        # Support unyt quantities in t_range
+        t_start, t_end = t_range
+        if hasattr(t_start, "to"):
+            t_start = t_start.to("yr").value
+        if hasattr(t_end, "to"):
+            t_end = t_end.to("yr").value
+        # Ensure consistent ordering
+        order = np.argsort(age_points)
+        age_points = age_points[order]
+        sfh_mass = sfh_mass[order]
+
+        if t_start >= t_end:
+            raise ValueError("Start of t_range must be less than its end.")
+
+        # --- Construct Bins from Age Points ---
+        if age_points.size == 1:
+            # For a single point, assume the bin is centered on it,
+            # starting from 0.
+            age_edges = np.array([0, 2 * age_points[0]])
+        else:
+            # Bin edges are the midpoints between age points.
+            internal_edges = (age_points[:-1] + age_points[1:]) / 2.0
+            # Extrapolate the first and last edges to define the outer bounds.
+            first_edge = age_points[0] - (age_points[1] - age_points[0]) / 2.0
+            last_edge = (
+                age_points[-1] + (age_points[-1] - age_points[-2]) / 2.0
+            )
+            age_edges = np.concatenate(
+                ([first_edge], internal_edges, [last_edge])
+            )
+
+        # Ensure the first edge isn't negative for lookback time.
+        age_edges[0] = max(0, age_edges[0])
+
+        bin_starts = age_edges[:-1]
+        bin_ends = age_edges[1:]
+        bin_widths = bin_ends - bin_starts
+
+        rates = np.divide(
+            sfh_mass,
+            bin_widths,
+            out=np.zeros_like(sfh_mass, dtype=float),
+            where=(bin_widths > 0),
+        )
+
+        overlap_starts = np.maximum(bin_starts, t_start)
+        overlap_ends = np.minimum(bin_ends, t_end)
+        overlap_durations = np.maximum(0, overlap_ends - overlap_starts)
+
+        total_mass_in_range = np.sum(rates * overlap_durations) * Msun
+        range_duration = (t_end - t_start) * yr
+        average_sfr = total_mass_in_range / range_duration
+
+        return average_sfr.to("Msun/yr")
 
     def calculate_surviving_mass(self, grid: Grid):
         """Calculate the surviving mass of the stellar population.
