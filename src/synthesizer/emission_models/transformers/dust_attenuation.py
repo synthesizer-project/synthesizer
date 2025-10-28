@@ -1123,6 +1123,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 (values at every grid wavelength). Cached by (grid_dir,
                 grid_name, component_key).
         """
+        # Check path
         if not os.path.exists(f"{self.grid_dir}/{self.grid_name}.hdf5"):
             raise exceptions.MissingArgument(
                 f"Grid file not found: {self.grid_dir}/{self.grid_name}.hdf5"
