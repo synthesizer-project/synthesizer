@@ -11,11 +11,12 @@ Example usage::
     stars.plot_spectra()
 """
 
+from copy import deepcopy
+
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from scipy.interpolate import RegularGridInterpolator
 from unyt import Hz, Msun, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
@@ -115,7 +116,7 @@ class Stars(StarsComponent):
             log10ages (np.ndarray of float):
                 The array of ages defining the log10(age) axis of the SFZH.
             metallicities (np.ndarray of float):
-                The array of metallicitities defining the metallicity axies of
+                The array of metallicitities defining the metallicity axes of
                 the SFZH.
             initial_mass (unyt_quantity/float):
                 The total initial stellar mass. If provided the SFZH grid will
@@ -138,7 +139,7 @@ class Stars(StarsComponent):
                 Either:
                     - A metallicity at which to compute an instantaneous
                       ZH, i.e. all stellar mass populating a single Z bin.
-                    - An array describing the metallity distribution.
+                    - An array describing the metallicity distribution.
                     - An instance of one of the child classes of ZH. This
                       will be used to calculate an array describing the
                       metallicity distribution.
@@ -678,60 +679,65 @@ class Stars(StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
     ):
-        """Generate the binned SFZH history of this stellar component.
+        """Get the binned SFZH at the provided axes.
 
-        In the parametric case this will resample the existing SFZH onto the
-        desired grid. For a particle based component the binned SFZH is
-        calculated by binning the particles onto the desired grid defined by
-        the input log10ages and metallicities.
+        This method remaps the parametric SFZH onto a new grid defined
+        by log10ages and metallicities. To do so, it first goes through a
+        particle Stars object to perform the remapping using a conservative
+        remap.
 
-
-        For a particle based galaxy the binned SFZH produced by this method
-        is equivalent to the weights used to extract spectra from the grid.
+        TODO: Along with spectra generation, this should be improved going
+        forward to use a "cookie cutter" approach based on the bins overlaid
+        on the existing grid.
 
         Args:
             log10ages (np.ndarray of float):
-                The log10 ages of the desired SFZH.
+                The log10 ages of the desired SFZH (bin centers, strictly
+                monotonic).
             metallicities (np.ndarray of float):
-                The metallicities of the desired SFZH.
+                The metallicities of the desired SFZH (bin centers, strictly
+                monotonic).
             grid_assignment_method (str):
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or their uppercase equivalents (CIC, NGP).
-                Defaults to cic. (particle only)
+                The grid assignment method to use when remapping from the
+                particle Stars to the parametric Stars. Options are:
+                    - "cic": Cloud-in-cell assignment.
+                    - "ngp": Nearest grid point assignment.
             nthreads (int):
-                The number of threads to use in the computation. If set to -1
-                all available threads will be used. (particle only)
+                The number of threads to use for the remapping. If -1 all
+                available threads are used.
 
         Returns:
-            numpy.ndarray:
-                Numpy array of containing the SFZH.
+            Stars: New Stars object on the requested grid.
         """
-        # Prepare an interpolator based on the existing SFZH
-        interp = RegularGridInterpolator(
-            (self.log10ages, self.metallicities),
-            self.sfzh,
-            bounds_error=False,
-            fill_value=0.0,
+        # If the axes are the same as our existing ones just return our SFZH
+        if np.array_equal(log10ages, self.log10ages) and np.array_equal(
+            metallicities, self.metallicities
+        ):
+            return deepcopy(self)
+
+        # Avoid cyclic imports
+        from synthesizer.particle import Stars as ParticleStars
+
+        # OK, we have different grids so we need to remap. For now, the best
+        # way to do this is use a particle Stars object to do the remapping
+        # for us
+        initial_masses = self.sfzh.flatten() * Msun
+        ages, metals = np.meshgrid(
+            self.ages,
+            self.metallicities,
+            indexing="ij",
+        )
+        part_stars = ParticleStars(
+            initial_masses=initial_masses,
+            ages=ages.flatten(),
+            metallicities=metals.flatten(),
         )
 
-        # Build a mesh containing the new grid points
-        age_mesh, metal_mesh = np.meshgrid(
-            log10ages, metallicities, indexing="ij"
-        )
-
-        # Interpolate the SFZH onto the new grid
-        points = np.column_stack([age_mesh.ravel(), metal_mesh.ravel()])
-        new_values = interp(points)  # shape is (N,)
-
-        # Reshape interpolated values onto the new grid shape
-        new_sfzh = new_values.reshape(len(log10ages), len(metallicities))
-
-        return Stars(
+        return part_stars.get_sfzh(
             log10ages,
             metallicities,
-            sfzh=new_sfzh,
-            initial_mass=self.initial_mass,
+            grid_assignment_method=grid_assignment_method,
+            nthreads=nthreads,
         )
 
     def plot_sfzh(
