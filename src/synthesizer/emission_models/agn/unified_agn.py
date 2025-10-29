@@ -432,7 +432,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        """Make the line region continuum."""
+        # Make the line region continuum
         full_nlr_continuum = BlackHoleEmissionModel(
             grid=nlr_grid,
             label="full_continuum_nlr",
