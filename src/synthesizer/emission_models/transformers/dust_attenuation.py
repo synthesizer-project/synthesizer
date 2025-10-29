@@ -1080,7 +1080,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         description = """DraineLiGrainCurves: Draine and Li dust grain
         model for extinction curves obtained from pre-processing the
         extinction efficiencies for the required grain size
-        distribution. The different compenents and their relationship
+        distribution. The different components and their relationship
         with the dust-to-gas ratio have been interpolated
         and LRU-cached"""
         required_params = [
@@ -1224,7 +1224,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         dtg_arrays = {}
         lengths = []
         for key, value in dtg_inputs.items():
-            not_within = np.logical_or(value <= dtg_min, value >= dtg_max)
+            not_within = np.logical_or(value < dtg_min, value > dtg_max)
             if np.sum(not_within) > 0:
                 raise exceptions.InconsistentArguments(
                     f"Given dust-to-gas ratio for {key} "
