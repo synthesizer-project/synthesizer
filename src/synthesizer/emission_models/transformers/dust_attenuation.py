@@ -29,7 +29,6 @@ from unyt import (
     Msun,
     angstrom,
     cm,
-    dimensionless,
     g,
     pc,
     um,
@@ -1184,12 +1183,12 @@ class DraineLiGrainCurves(AttenuationLaw):
                     in {key}!
                     """
                 )
-            elif isinstance(value, unyt_quantity):
-                if value.units / sigmalos_H.units == dimensionless:
+            elif isinstance(value, (unyt_quantity, unyt_array)):
+                try:
+                    _ = value.to(sigmalos_H.units)
+                except Exception:
                     raise exceptions.InconsistentArguments(
-                        f"""{key} does not have the right units of
-                        Msun/pc**2
-                        """
+                        f"{key} must have units compatible with mass/length^2"
                     )
             else:
                 raise exceptions.InconsistentArguments(
@@ -1240,14 +1239,24 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         # Build Alam_NH Dict componet: array of shape (N, L)
         Alam_by_NH = {}
+        # Ensure consistent lengths across components
+        max_len = max(lengths) if lengths else 1
+        for klen in lengths:
+            if klen not in (1, max_len):
+                raise exceptions.InconsistentArguments(
+                    "All dust components must be scalar or have the same "
+                    f"length ({max_len})."
+                )
         # For each provided component, get cached interp and
         # evaluate at dtg array
         for comp_key, dtg_arr in dtg_arrays.items():
             if dtg_arr is None:
                 continue
+            # Strip sigmalos_ from key
+            dataset_key = comp_key.split("sigmalos_", 1)[-1]
             # Get cached interpolator (will open HDF5 and
             # build interp1d on first call for this key)
-            f_dtg = self._get_component_interp(comp_key.replace("0p", "0."))
+            f_dtg = self._get_component_interp(dataset_key.replace("0p", "0."))
             # f_dtg accepts array-like dtg values and returns shape (N, L)
             comp_vals = f_dtg(dtg_arr)
             Alam_by_NH[comp_key] = comp_vals
@@ -1332,8 +1341,15 @@ class DraineLiGrainCurves(AttenuationLaw):
                 if sigmalos input is array-like, otherwise shape (N_lambda,)).
                 Dimensionless
         """
+        if sigmalos_H is None and len(sigmalos_dust) == 0:
+            sigmalos_H = getattr(self, "sigmalos_H", None)
+            # Collect any attributes starting with 'sigmalos_'
+            sigmalos_dust = {
+                key: getattr(self, key)
+                for key in vars(self)
+                if key.startswith("sigmalos_") and key != "sigmalos_H"
+            }
         tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
-
         tau_V = self.get_tau_at_lam(
             5500 * angstrom, sigmalos_H, **sigmalos_dust
         )
@@ -1343,13 +1359,15 @@ class DraineLiGrainCurves(AttenuationLaw):
         return tau_lam / tau_V[:, np.newaxis]
 
     @accepts(lam=angstrom)
-    def get_transmission(self, lam, **dust_curve_kwargs):
+    def get_transmission(self, tau_v=None, lam=None, **dust_curve_kwargs):
         """Compute the transmission curve.
 
-        Returns the transmitted flux/luminosity fraction based on an optical
+         Returns the transmitted flux/luminosity fraction based on an optical
         depth at a range of wavelengths.
 
         Args:
+            tau_v (None):
+                Optical depth at V-band, not required here.
             lam (np.ndarray of float):
                 The wavelengths (with units) at which to calculate
                 transmission.
@@ -1361,12 +1379,35 @@ class DraineLiGrainCurves(AttenuationLaw):
             np.ndarray of float:
                 The transmission at each wavelength
         """
+        if tau_v is not None:
+            print(
+                """
+                tau_v has been provided. However,
+                `DraineLiGrainCurves` does not use tau_v.
+                Ignoring tau_v in the calculation.
+                """
+            )
+
         # Set any additional parameters on the dust curve
         self._set_params(**dust_curve_kwargs)
 
         try:
-            # Get the optical depth at each wavelength
-            tau_lam = self.get_tau_at_lam(lam)
+            # Resolve parameters: prefer explicit kwargs, else attributes
+            sigmalos_H = dust_curve_kwargs.get(
+                "sigmalos_H", getattr(self, "sigmalos_H", None)
+            )
+            # Gather all sigmalos_* dust components from kwargs or attributes
+            sigmalos_dust = {
+                key: value
+                for key, value in (
+                    dust_curve_kwargs.items()
+                    if dust_curve_kwargs
+                    else vars(self).items()
+                )
+                if key.startswith("sigmalos_") and key != "sigmalos_H"
+            }
+            # Compute tau_lam directly (tau_v is not used for this model)
+            tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
         finally:
             # Always restore previous state
             self._reset_params()
