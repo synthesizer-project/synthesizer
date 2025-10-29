@@ -16,6 +16,7 @@ Example usage::
 """
 
 import os
+import warnings
 from functools import lru_cache
 from typing import Callable, Dict
 
@@ -1106,7 +1107,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         per column density along the dust-to-gas ratio axis. The function
         uses lru_cache to cache the interpolation instance.
 
-        Attribute
+        Args:
             component_key (str):
                 Dust grain dataset in the hdf5 to interpolate
             interp (str):
@@ -1242,7 +1243,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         N = max(lengths) if lengths else 1
         M = lam.size
 
-        # Build Alam_NH Dict componet: array of shape (N, L)
+        # Build Alam_NH Dict component: array of shape (N, L)
         Alam_by_NH = {}
         # Ensure consistent lengths across components
         max_len = max(lengths) if lengths else 1
@@ -1393,7 +1394,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 The transmission at each wavelength
         """
         if tau_v is not None:
-            print(
+            warnings.warn(
                 """
                 tau_v has been provided. However,
                 `DraineLiGrainCurves` does not use tau_v.
