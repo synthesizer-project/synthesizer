@@ -393,13 +393,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         disc_averaged = BlackHoleEmissionModel(
             label="disc_averaged",
             apply_to=disc_averaged_without_torus,
-            transformer=CoveringFraction(
-                covering_attrs=(
-                    "covering_fraction_nlr",
-                    "covering_fraction_blr",
-                )
-            ),
-            fesc="torus_fraction",
+            transformer=EscapingFraction(covering_attrs=("torus_fraction",)),
             **kwargs,
         )
 
