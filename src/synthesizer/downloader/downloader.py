@@ -183,7 +183,7 @@ def download_agn_test_grids(destination):
 
 
 def download_dust_grid(destination):
-    """Download the Drain and Li (2007) dust emission grid for synthesizer.
+    """Download the Draine and Li dust grids for synthesizer.
 
     Args:
         destination (str):
@@ -191,6 +191,10 @@ def download_dust_grid(destination):
     """
     # Download the dust grid
     _download("draine_li_dust_emission_grid_MW_3p1.hdf5", destination)
+    _download(
+        "dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p005.hdf5",
+        destination,
+    )
 
 
 def download_camels_data(destination):
@@ -260,7 +264,7 @@ def download():
         "--dust-grid",
         "-D",
         action="store_true",
-        help="Download the dust grid for the Drain & Li (2007) model",
+        help="Download the dust grid for the Draine & Li models",
     )
 
     # Add the flag for processed camels data
@@ -335,7 +339,7 @@ def download():
     test = args.test_grids
     stellar = args.stellar_test_grids
     agn = args.agn_test_grids
-    dust = args.dust_grid
+    dust_grid = args.dust_grid
     camels = args.camels_data
     everything = args.all
     dest = args.destination
@@ -385,8 +389,8 @@ def download():
     if all_instruments:
         download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
 
-    # Dust data?
-    if dust:
+    # Dust emission data?
+    if dust_grid:
         download_dust_grid(dest if dest is not None else GRID_DIR)
 
     # Camels data?
