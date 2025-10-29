@@ -264,15 +264,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # If disc_transmission == 'none' the emission seen by the observer is
         # simply the incident emission. This step also accounts for the torus.
         if disc_transmission == "none":
-            # disc_transmitted = BlackHoleEmissionModel(
-            #     label="disc_transmitted",
-            #     combine=(self.disc_incident,),
-            #     mask_attr="_torus_edgeon_cond",
-            #     mask_thresh=90 * deg,
-            #     mask_op="<",
-            #     **kwargs,
-            # )
-
             disc_transmitted = BlackHoleEmissionModel(
                 grid=nlr_grid,
                 label="disc_transmitted",
