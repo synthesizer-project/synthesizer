@@ -27,7 +27,10 @@ from synthesizer.emission_models.transformers import (
     CoveringFraction,
     EscapingFraction,
 )
-from synthesizer.exceptions import UnimplementedFunctionality
+from synthesizer.exceptions import (
+    InconsistentParameter,
+    UnimplementedFunctionality,
+)
 
 
 class UnifiedAGN(BlackHoleEmissionModel):
@@ -284,7 +287,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # If disc_transmission == 'nlr' the emission seen by the observer is
         # is the spectrum transmitted through the NLR. This step also accounts
         # for the torus.
-        if disc_transmission == "nlr":
+        elif disc_transmission == "nlr":
             disc_transmitted = BlackHoleEmissionModel(
                 label="disc_transmitted",
                 combine=(self.disc_transmitted_nlr,),
@@ -297,7 +300,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # If disc_transmission == 'blr' the emission seen by the observer is
         # is the spectrum transmitted through the BLR. This step also accounts
         # for the torus.
-        if disc_transmission == "blr":
+        elif disc_transmission == "blr":
             disc_transmitted = BlackHoleEmissionModel(
                 label="disc_transmitted",
                 combine=(self.disc_transmitted_blr,),
@@ -311,7 +314,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # includes contributions from all line of sight. This is effectively
         # the disc_averaged without including the torus but then masked for
         # the torus.
-        if disc_transmission == "combined":
+        elif disc_transmission == "combined":
             disc_transmitted = BlackHoleEmissionModel(
                 label="disc_transmitted",
                 combine=(self.disc_averaged_without_torus,),
@@ -323,10 +326,13 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # If disc_transmission == 'random' the emission seen by the observer is
         # chosen at random for each blackhole using covering fractions.
-        if disc_transmission == "random":
+        elif disc_transmission == "random":
             raise UnimplementedFunctionality(
                 "random disc transmission not yet implemented"
             )
+
+        else:
+            raise InconsistentParameter("disc_transmission not recognised")
 
         return disc_transmitted
 
