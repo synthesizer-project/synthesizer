@@ -252,13 +252,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
         Args:
             nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
             blr_grid (synthesizer.grid.Grid): The grid for the BLR.
-            torus_emission_model (synthesizer.dust.EmissionModel): The dust
-                emission model to use for the torus.
             covering_fraction_nlr (float): The covering fraction of the NLR.
             covering_fraction_blr (float): The covering fraction of the BLR.
-            covered_fraction (float): The covering fraction of the disc.
             disc_transmission (str): The disc transmission model.
-            label (str): The label for the model.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
