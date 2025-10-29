@@ -1108,7 +1108,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         Attribute
             component_key (str):
-                Dust grain dataest in the hdf5 to interpolate
+                Dust grain dataset in the hdf5 to interpolate
             interp (str):
                 The type of interpolation to use. Can be 'linear', 'nearest',
                 'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
@@ -1203,13 +1203,18 @@ class DraineLiGrainCurves(AttenuationLaw):
         # In Msun units
         GAS_MASS_PER_H = (MU * M_H).to(Msun)
         # Read wavelengths and dtg from grid
+        # Save all grain datasets
         prefix = "extinction_curves"
         with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as grid:
             grid_dtg = np.array(grid["axes/dtg"])
             grid_lam = (
                 np.array(grid[f"{prefix}/wavelength"]) * 1e4
             )  # convert to Angstrom
-
+            grid_dataset_names = [
+                name
+                for name, obj in grid[prefix].items()
+                if isinstance(obj, h5py.Dataset)
+            ]
         # Check if the inputs are within the grids
         dtg_min = np.min(grid_dtg)
         dtg_max = np.max(grid_dtg)
@@ -1254,9 +1259,17 @@ class DraineLiGrainCurves(AttenuationLaw):
                 continue
             # Strip sigmalos_ from key
             dataset_key = comp_key.split("sigmalos_", 1)[-1]
+            dataset_key = dataset_key.replace("0p", "0.")
+            if dataset_key not in grid_dataset_names:
+                raise exceptions.InconsistentArguments(
+                    f"""
+                    Grain type {dataset_key} not in the
+                    provided dust grid!
+                    """
+                )
             # Get cached interpolator (will open HDF5 and
             # build interp1d on first call for this key)
-            f_dtg = self._get_component_interp(dataset_key.replace("0p", "0."))
+            f_dtg = self._get_component_interp(dataset_key)
             # f_dtg accepts array-like dtg values and returns shape (N, L)
             comp_vals = f_dtg(dtg_arr)
             Alam_by_NH[comp_key] = comp_vals
@@ -1392,20 +1405,18 @@ class DraineLiGrainCurves(AttenuationLaw):
         self._set_params(**dust_curve_kwargs)
 
         try:
-            # Resolve parameters: prefer explicit kwargs, else attributes
             sigmalos_H = dust_curve_kwargs.get(
                 "sigmalos_H", getattr(self, "sigmalos_H", None)
             )
-            # Gather all sigmalos_* dust components from kwargs or attributes
-            sigmalos_dust = {
-                key: value
-                for key, value in (
-                    dust_curve_kwargs.items()
-                    if dust_curve_kwargs
-                    else vars(self).items()
-                )
-                if key.startswith("sigmalos_") and key != "sigmalos_H"
-            }
+            # Gather sigmalos_* dust components: start with attributes,
+            # then override with kwargs
+            sigmalos_dust = {}
+            for key in vars(self):
+                if key.startswith("sigmalos_") and key != "sigmalos_H":
+                    sigmalos_dust[key] = getattr(self, key)
+            for key, value in dust_curve_kwargs.items():
+                if key.startswith("sigmalos_") and key != "sigmalos_H":
+                    sigmalos_dust[key] = value
             # Compute tau_lam directly (tau_v is not used for this model)
             tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
         finally:
