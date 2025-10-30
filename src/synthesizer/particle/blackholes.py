@@ -238,7 +238,6 @@ class BlackHoles(Particles, BlackholesComponent):
             ("spin", "spins"),
             ("inclination", "inclinations"),
             ("epsilon", "epsilons"),
-            ("bb_temperature", "bb_temperatures"),
             ("bolometric_luminosity", "bolometric_luminosities"),
             ("accretion_rate_eddington", "accretion_rates_eddington"),
             ("epsilon", "epsilons"),
