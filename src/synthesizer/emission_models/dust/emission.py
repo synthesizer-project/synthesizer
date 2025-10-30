@@ -43,6 +43,7 @@ from unyt import (
 )
 
 from synthesizer import exceptions
+from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
@@ -50,8 +51,10 @@ from synthesizer.units import accepts
 from synthesizer.utils import planck
 
 
-class EmissionBase:
+class DustEmissionBase(Generator):
     """Dust emission base class for holding common methods.
+
+    This
 
     Attributes:
         temperature (float):
@@ -69,19 +72,29 @@ class EmissionBase:
         self,
         temperature: Optional[Union[unyt_quantity, float]] = None,
         cmb_factor: float = 1,
+        intrinsic: str = "intrinsic",
     ) -> None:
         """Initialise the base class for dust emission models.
 
         Args:
-            temperature (float):
-                The temperature of the dust.
+            temperature (unyt_array, optional):
+                The temperature of the dust. If not given we will extract this
+                from the component or model.
             cmb_factor (float):
-                The multiplicative factor to account for
-                CMB heating at high-redshift
+                The multiplicative factor to account for CMB heating at
+                high-redshift.
+            intrinsic (str):
+                The name of the intrinsic spectrum to scale with dust
+                emission.
         """
         # Attach the common attributes
         self.temperature = temperature
         self.cmb_factor = cmb_factor
+
+        # Call the parent init
+        Generator.__init__(
+            self, required_params=("temperature",), intrinsic=intrinsic
+        )
 
     def _lnu(
         self, *args: Optional[Union[unyt_array, NDArray[np.float64]]]
@@ -209,7 +222,7 @@ class EmissionBase:
         self.temperature_z = _temperature
 
 
-class Blackbody(EmissionBase):
+class Blackbody(DustEmissionBase):
     """A class to generate a blackbody emission spectrum.
 
     Attributes:
@@ -240,7 +253,7 @@ class Blackbody(EmissionBase):
             redshift (float):
                 Redshift of the galaxy
         """
-        EmissionBase.__init__(self, temperature)
+        DustEmissionBase.__init__(self, temperature)
 
         # Emissivity of true blackbody is 1
         emissivity = 1.0
@@ -269,7 +282,7 @@ class Blackbody(EmissionBase):
         return planck(nu, self.temperature)
 
 
-class Greybody(EmissionBase):
+class Greybody(DustEmissionBase):
     """A class to generate a greybody emission spectrum.
 
     Attributes:
@@ -318,7 +331,7 @@ class Greybody(EmissionBase):
             lam_0 (float):
                 Wavelength (in um) where the dust optical depth is unity
         """
-        EmissionBase.__init__(self, temperature)
+        DustEmissionBase.__init__(self, temperature)
 
         # Are we adding heating by the CMB?
         if cmb_heating:
@@ -356,7 +369,7 @@ class Greybody(EmissionBase):
             return optically_thick_factor * planck(nu, self.temperature)
 
 
-class Casey12(EmissionBase):
+class Casey12(DustEmissionBase):
     """A class to generate dust emission spectra using the Casey (2012) model.
 
     https://ui.adsabs.harvard.edu/abs/2012MNRAS.425.3094C/abstract
@@ -417,7 +430,7 @@ class Casey12(EmissionBase):
             redshift (float):
                 Redshift of the galaxy
         """
-        EmissionBase.__init__(self, temperature)
+        DustEmissionBase.__init__(self, temperature)
 
         # Are we adding heating by the CMB?
         if cmb_heating:
