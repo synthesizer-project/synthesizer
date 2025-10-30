@@ -247,7 +247,9 @@ class BlackHoles(Particles, BlackholesComponent):
             return
 
         # Ensure all arrays are the expected length
-        for key in self.attrs:
+        for key in self.__dict__.keys():
+            if not isinstance(getattr(self, key), np.ndarray):
+                continue
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
