@@ -21,190 +21,26 @@ Example usage:
 """
 
 from functools import partial
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import fsolve
 from unyt import (
     Hz,
-    K,
     Lsun,
     Msun,
     angstrom,
-    c,
     erg,
-    h,
-    kb,
     s,
-    um,
-    unyt_array,
     unyt_quantity,
 )
 
 from synthesizer import exceptions
-from synthesizer.emission_models.generators.dust import (
-    EnergyBalanceDustEmission,
-)
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
-
-
-class Casey12(EnergyBalanceDustEmission):
-    """A class to generate dust emission spectra using the Casey (2012) model.
-
-    https://ui.adsabs.harvard.edu/abs/2012MNRAS.425.3094C/abstract
-
-    Attributes:
-        emissivity (float):
-            The emissivity of the dust (dimensionless).
-        alpha (float):
-            The power-law slope (dimensionless)  [good value = 2.0].
-        n_bb (float):
-            Normalisation of the blackbody component [default 1.0].
-        lam_0 (float):
-            Wavelength where the dust optical depth is unity.
-        lam_c (float):
-            The power law turnover wavelength.
-        n_pl (float):
-            The power law normalisation.
-        cmb_heating (bool):
-                Option for adding heating by CMB
-        redshift (float):
-            Redshift of the galaxy
-    """
-
-    temperature: unyt_quantity
-    emissivity: float
-    alpha: float
-    N_bb: float
-    lam_0: unyt_quantity
-    cmb_heating: bool
-    redshift: float
-
-    @accepts(temperature=K, lam_0=angstrom)
-    def __init__(
-        self,
-        temperature: unyt_quantity,
-        emissivity: float,
-        alpha: float,
-        N_bb: float = 1.0,
-        lam_0: unyt_quantity = 200.0 * um,
-        cmb_heating: bool = False,
-        redshift: float = 0,
-    ) -> None:
-        """Initialise the dust emission model.
-
-        Args:
-            temperature (unyt_array):
-                The temperature of the dust.
-            emissivity (float):
-                The emissivity (dimensionless) [good value = 2.0].
-            alpha (float):
-                The power-law slope (dimensionless)  [good value = 2.0].
-            N_bb (float):
-                Normalisation of the blackbody component [default 1.0].
-            lam_0 (float):
-                Wavelength where the dust optical depth is unity.
-            cmb_heating (bool):
-                Option for adding heating by CMB
-            redshift (float):
-                Redshift of the galaxy
-        """
-        EnergyBalanceDustEmission.__init__(self, temperature)
-
-        # Are we adding heating by the CMB?
-        if cmb_heating:
-            # Calculate the factor by which the CMB boosts the
-            # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
-        else:
-            self.temperature_z = temperature
-
-        self.emissivity = emissivity
-        self.alpha = alpha
-        self.N_bb = N_bb
-        self.lam_0 = lam_0
-
-        # Calculate the power law turnover wavelength
-        b1 = 26.68
-        b2 = 6.246
-        b3 = 0.0001905
-        b4 = 0.00007243
-        lum = (
-            (b1 + b2 * alpha) ** -2
-            + (b3 + b4 * alpha) * self.temperature.to("K").value
-        ) ** -1
-
-        self.lam_c = (3.0 / 4.0) * lum * um
-
-        # Calculate normalisation of the power-law term
-
-        # See Casey+2012, Table 1 for the expression
-        # Missing factors of lam_c and c in some places
-        self.n_pl = (
-            self.N_bb
-            * (1 - np.exp(-((self.lam_0 / self.lam_c) ** emissivity)))
-            * (c / self.lam_c) ** 3
-            / (np.exp(h * c / (self.lam_c * kb * self.temperature)) - 1)
-        )
-
-    @accepts(nu=Hz)
-    def _lnu(self, nu: unyt_array) -> Union[NDArray[np.float64], unyt_array]:
-        """Generate unnormalised spectrum for given frequency (nu) grid.
-
-        Args:
-            nu (unyt_array):
-                The frequencies at which to calculate the spectral luminosity
-                density.
-
-        Returns:
-            lnu (unyt_array):
-                The unnormalised spectral luminosity density.
-
-        """
-
-        # Define a function to calculate the power-law component.
-        def _power_law(lam: unyt_array) -> float:
-            """Calculate the power-law component.
-
-            Args:
-                lam (unyt_array):
-                    The wavelengths at which to calculate lnu.
-            """
-            return (
-                (
-                    self.n_pl
-                    * ((lam / self.lam_c) ** (self.alpha))
-                    * np.exp(-((lam / self.lam_c) ** 2))
-                ).value
-                * erg
-                / s
-                / Hz
-            )
-
-        def _blackbody(lam: unyt_array) -> unyt_array:
-            """Calculate the blackbody component.
-
-            Args:
-                lam (unyt_array):
-                    The wavelengths at which to calculate lnu.
-            """
-            return (
-                (
-                    self.N_bb
-                    * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
-                    * (c / lam) ** 3
-                    / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
-                ).value
-                * erg
-                / s
-                / Hz
-            )
-
-        return _power_law(c / nu) + _blackbody(c / nu)
 
 
 class IR_templates:
