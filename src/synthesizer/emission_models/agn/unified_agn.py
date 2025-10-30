@@ -29,7 +29,6 @@ from synthesizer.emission_models.transformers import (
 )
 from synthesizer.exceptions import (
     InconsistentParameter,
-    UnimplementedFunctionality,
 )
 
 
@@ -299,10 +298,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
             # If disc_transmission == 'random' the emission seen by the
             # observer is chosen at random for each blackhole using covering
             # fractions.
-            elif disc_transmission == "random":
-                raise UnimplementedFunctionality(
-                    "random disc transmission not yet implemented"
-                )
+            # elif disc_transmission == "random":
+            #     disc_transmission_choices = ["none", "blr", "nlr"]
+
+            #     weights = []
+            #     disc_transmission_ = np.random([])
 
             self.disc_escaped_ = BlackHoleEmissionModel(
                 label="disc_escaped",
