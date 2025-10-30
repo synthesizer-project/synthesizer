@@ -20,6 +20,7 @@ Example usage::
 
 """
 
+import numpy as np
 from unyt import deg
 
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
@@ -30,6 +31,7 @@ from synthesizer.emission_models.transformers import (
 from synthesizer.exceptions import (
     InconsistentParameter,
 )
+from synthesizer.utils import scalar_to_array
 
 
 class UnifiedAGN(BlackHoleEmissionModel):
@@ -67,7 +69,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         torus_emission_model,
         covering_fraction_nlr="covering_fraction_nlr",
         covering_fraction_blr="covering_fraction_blr",
-        covered_fraction="covered_fraction",
         disc_transmission="combined",
         label="intrinsic",
         **kwargs,
@@ -118,8 +119,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # Get the transmitted disc emission models
         self.disc_transmitted = self._make_disc_transmitted(
-            nlr_grid,
-            blr_grid,
             covering_fraction_nlr,
             covering_fraction_blr,
             disc_transmission,
@@ -233,8 +232,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
     def _make_disc_transmitted(
         self,
-        nlr_grid,
-        blr_grid,
         covering_fraction_nlr,
         covering_fraction_blr,
         disc_transmission,
@@ -258,6 +255,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
+        print(covering_fraction_nlr)
+        print(covering_fraction_blr)
+
         # Calculate the average transmission. This is effectively the
         # disc_averaged without including the torus but then masked for
         # the torus.
@@ -298,11 +298,44 @@ class UnifiedAGN(BlackHoleEmissionModel):
             # If disc_transmission == 'random' the emission seen by the
             # observer is chosen at random for each blackhole using covering
             # fractions.
-            # elif disc_transmission == "random":
-            #     disc_transmission_choices = ["none", "blr", "nlr"]
+            elif disc_transmission == "random":
+                choices = ["blr", "nlr", "none"]
 
-            #     weights = []
-            #     disc_transmission_ = np.random([])
+                # convert to arrays
+                blr_covering_fraction = scalar_to_array(covering_fraction_nlr)
+                nlr_covering_fraction = scalar_to_array(covering_fraction_blr)
+
+                # calcualte length
+                N = len(blr_covering_fraction)
+
+                disc_transmission_ = np.empty(N, dtype="U10")
+                for i, (
+                    blr_covering_fraction_,
+                    nlr_covering_fraction_,
+                ) in enumerate(
+                    zip(blr_covering_fraction, nlr_covering_fraction)
+                ):
+                    probabilities = [
+                        blr_covering_fraction_,
+                        nlr_covering_fraction_,
+                        1.0 - blr_covering_fraction_ - nlr_covering_fraction_,
+                    ]
+
+                    disc_transmission_[i] = np.random.choice(
+                        choices, p=probabilities
+                    )
+
+                escape_transmission_fraction = np.zeros(N)
+                nlr_transmission_fraction = np.zeros(N)
+                blr_transmission_fraction = np.zeros(N)
+
+                escape_transmission_fraction[disc_transmission_ == "none"] = (
+                    1.0
+                )
+                nlr_transmission_fraction[disc_transmission_ == "nlr"] = 1.0
+                blr_transmission_fraction[disc_transmission_ == "blr"] = 1.0
+
+                print(disc_transmission_)
 
             self.disc_escaped_ = BlackHoleEmissionModel(
                 label="disc_escaped",
@@ -371,6 +404,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
     def _make_disc_averaged(
         self,
+        covering_fraction_nlr,
+        covering_fraction_blr,
         **kwargs,
     ):
         """Calculate the isotropic (inclination averaged) disc spectrum."""
@@ -383,6 +418,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                     "covering_fraction_nlr",
                 )
             ),
+            covering_fraction_nlr=covering_fraction_nlr,
+            covering_fraction_blr=covering_fraction_blr,
             **kwargs,
         )
 
@@ -392,6 +429,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_nlr",)
             ),
+            covering_fraction_nlr=covering_fraction_nlr,
             **kwargs,
         )
 
@@ -401,6 +439,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_blr",)
             ),
+            covering_fraction_blr=covering_fraction_blr,
             **kwargs,
         )
 
