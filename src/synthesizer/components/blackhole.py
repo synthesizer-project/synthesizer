@@ -193,7 +193,7 @@ class BlackholesComponent(Component):
         self.covering_fraction_nlr = covering_fraction_nlr
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
 
-        if self.covering_fraction_blr:
+        if self.covering_fraction_blr is not None:
             # define transmission scenario choices
             transmission_scenario_choices = ["blr", "nlr", "none"]
 
