@@ -11,10 +11,7 @@ appropriately.
 
 from typing import Optional, Union
 
-from unyt import (
-    K,
-    unyt_quantity,
-)
+from unyt import K, unyt_quantity
 
 from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
