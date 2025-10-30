@@ -50,94 +50,6 @@ from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
-from synthesizer.utils import planck
-
-
-class Greybody(EnergyBalanceDustEmission):
-    """A class to generate a greybody emission spectrum.
-
-    Attributes:
-        emissivity (float):
-            The emissivity of the dust (dimensionless).
-        apply_cmb_heating (bool):
-            Option for adding heating by CMB
-        temperature_z (unyt_quantity):
-            The temperature of the dust at redshift z.
-        optically_thin (bool):
-            If dust is optically thin
-        lam_0 (float):
-            Wavelength (in um) where the dust optical depth is unity
-    """
-
-    temperature: unyt_quantity
-    emissivity: float
-    cmb_heating: bool
-    redshift: float
-    optically_thin: bool
-    lam_0: float
-
-    @accepts(temperature=K)
-    def __init__(
-        self,
-        temperature: unyt_quantity,
-        emissivity: float,
-        cmb_heating: bool = False,
-        redshift: float = 0,
-        optically_thin: bool = True,
-        lam_0: float = 100.0 * um,
-    ) -> None:
-        """Initialise the dust emission model.
-
-        Args:
-            temperature (unyt_array):
-                The temperature of the dust.
-            emissivity (float):
-                The Emissivity (dimensionless).
-            cmb_heating (bool):
-                Option for adding heating by CMB
-            redshift (float):
-                Redshift of the galaxy
-            optically_thin (bool):
-                If dust is optically thin
-            lam_0 (float):
-                Wavelength (in um) where the dust optical depth is unity
-        """
-        EnergyBalanceDustEmission.__init__(self, temperature)
-
-        # Are we adding heating by the CMB?
-        if cmb_heating:
-            # Calculate the factor by which the CMB boosts the
-            # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
-        else:
-            self.temperature_z = temperature
-
-        self.emissivity = emissivity
-        self.optically_thin = optically_thin
-        self.lam_0 = lam_0
-
-    @accepts(nu=Hz)
-    def _lnu(self, nu: unyt_array) -> unyt_array:
-        """Generate unnormalised spectrum for given frequency (nu) grid.
-
-        Args:
-            nu (unyt_array):
-                The frequencies at which to calculate the spectral luminosity
-                density.
-
-        Returns:
-            lnu (unyt_array):
-                The unnormalised spectral luminosity density.
-
-        """
-        if self.optically_thin:
-            return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
-        else:
-            _nu_0 = self.lam_0 / c
-            optically_thick_factor = 1 - np.exp(
-                -((nu / _nu_0) ** self.emissivity)
-            )
-            return optically_thick_factor * planck(nu, self.temperature)
 
 
 class Casey12(EnergyBalanceDustEmission):
@@ -254,9 +166,9 @@ class Casey12(EnergyBalanceDustEmission):
 
         """
 
-        # Define a function to calcualate the power-law component.
+        # Define a function to calculate the power-law component.
         def _power_law(lam: unyt_array) -> float:
-            """Calcualate the power-law component.
+            """Calculate the power-law component.
 
             Args:
                 lam (unyt_array):
@@ -274,7 +186,7 @@ class Casey12(EnergyBalanceDustEmission):
             )
 
         def _blackbody(lam: unyt_array) -> unyt_array:
-            """Calcualate the blackbody component.
+            """Calculate the blackbody component.
 
             Args:
                 lam (unyt_array):
