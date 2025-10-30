@@ -94,7 +94,8 @@ class BlackHoles(Particles, BlackholesComponent):
     def __init__(
         self,
         masses,
-        accretion_rates,
+        accretion_rates=None,
+        accretion_rates_eddington=None,
         epsilons=0.1,
         inclinations=None,
         spins=None,
@@ -124,11 +125,15 @@ class BlackHoles(Particles, BlackholesComponent):
             masses (np.ndarray of float):
                 The mass of each particle in Msun.
             accretion_rates (np.ndarray of float):
-                The accretion rate of the/each black hole in Msun/yr.
+                The accretion rate of the/each black hole in Msun/yr. No need
+                to provide both this and accretion_rates_eddington.
+            accretion_rates_eddington (np.ndarray of float):
+                The accretion rate in terms of the Eddington accretion rate.
+                No need to provide both this and accretion_rates.
             epsilons (np.ndarray of float):
                 The radiative efficiency. By default set to 0.1.
             inclinations (np.ndarray of float):
-                The inclination of the blackhole. Necessary for many emission
+                The inclination of the black hole. Necessary for many emission
                 models.
             spins (np.ndarray of float):
                 The spin of the black hole. Necessary for many emission
@@ -220,7 +225,7 @@ class BlackHoles(Particles, BlackholesComponent):
             **kwargs,
         )
 
-        # Set a frontfacing clone of the number of particles with clearer
+        # Set a front facing clone of the number of particles with clearer
         # naming
         self.nbh = self.nparticles
 
