@@ -51,6 +51,7 @@ class BlackHole(BlackholesComponent):
         self,
         mass=None,
         accretion_rate=None,
+        accretion_rate_eddington=None,
         epsilon=0.1,
         inclination=None,
         spin=None,
@@ -75,16 +76,20 @@ class BlackHole(BlackholesComponent):
             mass (float):
                 The mass of each particle in Msun.
             accretion_rate (float):
-                The accretion rate of the/each black hole in Msun/yr.
+                The accretion rate of the black hole in Msun/yr. No need to
+                provide if accretion_rate_eddington is given.
+            accretion_rate_eddington (float):
+                The accretion rate of the black hole in terms of the Eddington
+                accretion rate. No need to provide if accretion_rate is given.
             epsilon (float):
                 The radiative efficiency. By default set to 0.1.
             inclination (float):
-                The inclination of the blackhole. Necessary for some disc
+                The inclination of the black hole. Necessary for some disc
                 models.
             spin (float):
-                The spin of the blackhole. Necessary for some disc models.
+                The spin of the black hole. Necessary for some disc models.
             offset (unyt_array):
-                The (x,y) offsets of the blackhole relative to the centre of
+                The (x,y) offsets of the black hole relative to the centre of
                 the image. Units can be length or angle but should be
                 consistent with the scene.
             bolometric_luminosity (float):

@@ -25,7 +25,6 @@ from unyt import (
     yr,
 )
 
-from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated
@@ -57,22 +56,6 @@ class BlackHoles(Particles, BlackholesComponent):
             particle spectra.
     """
 
-    # Define the allowed attributes
-    attrs = [
-        "_masses",
-        "_coordinates",
-        "_velocities",
-        "metallicities",
-        "nparticles",
-        "redshift",
-        "_accretion_rate",
-        "_bb_temperature",
-        "_bolometric_luminosity",
-        "_softening_lengths",
-        "_smoothing_lengths",
-        "nbh",
-    ]
-
     # Define quantities
     smoothing_lengths = Quantity("spatial")
 
@@ -94,7 +77,8 @@ class BlackHoles(Particles, BlackholesComponent):
     def __init__(
         self,
         masses,
-        accretion_rates,
+        accretion_rates=None,
+        accretion_rates_eddington=None,
         epsilons=0.1,
         inclinations=None,
         spins=None,
@@ -124,11 +108,15 @@ class BlackHoles(Particles, BlackholesComponent):
             masses (np.ndarray of float):
                 The mass of each particle in Msun.
             accretion_rates (np.ndarray of float):
-                The accretion rate of the/each black hole in Msun/yr.
+                The accretion rate of the/each black hole in Msun/yr. No need
+                to provide both this and accretion_rates_eddington.
+            accretion_rates_eddington (np.ndarray of float):
+                The accretion rate in terms of the Eddington accretion rate.
+                No need to provide both this and accretion_rates.
             epsilons (np.ndarray of float):
                 The radiative efficiency. By default set to 0.1.
             inclinations (np.ndarray of float):
-                The inclination of the blackhole. Necessary for many emission
+                The inclination of the black hole. Necessary for many emission
                 models.
             spins (np.ndarray of float):
                 The spin of the black hole. Necessary for many emission
@@ -220,7 +208,7 @@ class BlackHoles(Particles, BlackholesComponent):
             **kwargs,
         )
 
-        # Set a frontfacing clone of the number of particles with clearer
+        # Set a front facing clone of the number of particles with clearer
         # naming
         self.nbh = self.nparticles
 
@@ -232,43 +220,14 @@ class BlackHoles(Particles, BlackholesComponent):
             ("metallicity", "metallicities"),
             ("spin", "spins"),
             ("inclination", "inclinations"),
-            ("epsilon", "epsilons"),
-            ("bb_temperature", "bb_temperatures"),
             ("bolometric_luminosity", "bolometric_luminosities"),
             ("accretion_rate_eddington", "accretion_rates_eddington"),
             ("epsilon", "epsilons"),
-            ("eddington_ratio", "eddington_ratios"),
         ]:
             setattr(self, plural, getattr(self, singular))
 
         # Set the smoothing lengths
         self.smoothing_lengths = smoothing_lengths
-
-        # Check the arguments we've been given
-        self._check_bh_args()
-
-    def _check_bh_args(self):
-        """Sanitize the inputs ensuring all arguments agree and are compatible.
-
-        Raises:
-            InconsistentArguments
-                If any arguments are incompatible or not as expected an error
-                is thrown.
-        """
-        # Need an early exit if we have no black holes since any
-        # multidimensional  attributes will trigger the error below erroneously
-        if self.nbh == 0:
-            return
-
-        # Ensure all arrays are the expected length
-        for key in self.attrs:
-            attr = getattr(self, key)
-            if isinstance(attr, np.ndarray):
-                if attr.shape[0] != self.nparticles:
-                    raise exceptions.InconsistentArguments(
-                        "Inconsistent black hole array sizes! (nparticles=%d, "
-                        "%s=%d)" % (self.nparticles, key, attr.shape[0])
-                    )
 
     def calculate_random_inclination(self):
         """Calculate random inclinations to blackholes."""
