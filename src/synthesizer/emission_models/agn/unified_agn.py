@@ -114,6 +114,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             self.disc_averaged,
             self.disc_averaged_without_torus,
         ) = self._make_disc_averaged(
+            covering_fraction_nlr,
+            covering_fraction_blr,
             **kwargs,
         )
 
