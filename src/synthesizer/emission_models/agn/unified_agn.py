@@ -29,7 +29,6 @@ from synthesizer.emission_models.transformers import (
 )
 from synthesizer.exceptions import (
     InconsistentParameter,
-    UnimplementedFunctionality,
 )
 
 
@@ -68,7 +67,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         torus_emission_model,
         covering_fraction_nlr="covering_fraction_nlr",
         covering_fraction_blr="covering_fraction_blr",
-        disc_transmission="combined",
+        disc_transmission="random",
         label="intrinsic",
         **kwargs,
     ):
@@ -298,11 +297,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
             # If disc_transmission == 'random' the emission seen by the
             # observer is chosen at random for each blackhole using covering
-            # fractions. This is not yet implemented.
+            # fractions. This is only possible if the transmission fractions
+            # have been set on the component.
             elif disc_transmission == "random":
-                raise UnimplementedFunctionality(
-                    """random not yet implemented"""
-                )
+                escape_transmission_fraction = "escape_transmission_fraction"
+                nlr_transmission_fraction = "nlr_transmission_fraction"
+                blr_transmission_fraction = "blr_transmission_fraction"
 
             self.disc_escaped_ = BlackHoleEmissionModel(
                 label="disc_escaped",
