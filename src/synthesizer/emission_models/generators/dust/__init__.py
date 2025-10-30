@@ -7,6 +7,7 @@ from .dust_emission_base import (
 )
 from .blackbody import Blackbody
 from .casey12 import Casey12
+from .drainli07 import DrainLi07
 from .greybody import Greybody
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "get_cmb_heating_factor",
     "Blackbody",
     "Casey12",
+    "DrainLi07",
     "Greybody",
 ]
