@@ -16,7 +16,7 @@ from unyt import (
     unyt_quantity,
 )
 
-from synthesizer.components import Component
+from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.units import accepts
