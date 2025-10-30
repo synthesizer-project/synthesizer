@@ -573,7 +573,7 @@ class Stars(StarsComponent):
 
         Args:
             lum (unyt_quantity):
-                The desried luminosity in scale_filter.
+                The desired luminosity in scale_filter.
             scale_filter (Filter):
                 The filter in which lum is measured.
             spectra_type (str):
