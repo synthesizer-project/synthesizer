@@ -192,6 +192,7 @@ class BlackHoles(Particles, BlackholesComponent):
             fesc=fesc,
             mass=masses,
             accretion_rate=accretion_rates,
+            accretion_rate_eddington=accretion_rates_eddington,
             epsilon=epsilons,
             inclination=inclinations,
             spin=spins,
