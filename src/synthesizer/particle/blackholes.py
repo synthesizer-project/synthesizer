@@ -241,7 +241,6 @@ class BlackHoles(Particles, BlackholesComponent):
             ("bolometric_luminosity", "bolometric_luminosities"),
             ("accretion_rate_eddington", "accretion_rates_eddington"),
             ("epsilon", "epsilons"),
-            ("eddington_ratio", "eddington_ratios"),
         ]:
             setattr(self, plural, getattr(self, singular))
 
