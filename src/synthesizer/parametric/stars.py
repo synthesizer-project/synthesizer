@@ -622,7 +622,7 @@ class Stars(StarsComponent):
 
         Args:
             flux (unyt_quantity):
-                The desried flux in scale_filter.
+                The desired flux in scale_filter.
             scale_filter (Filter):
                 The filter in which flux is measured.
             spectra_type (str):
