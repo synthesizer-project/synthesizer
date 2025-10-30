@@ -20,7 +20,6 @@ Example usage::
 
 """
 
-import numpy as np
 from unyt import deg
 
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
@@ -30,8 +29,8 @@ from synthesizer.emission_models.transformers import (
 )
 from synthesizer.exceptions import (
     InconsistentParameter,
+    UnimplementedFunctionality,
 )
-from synthesizer.utils import scalar_to_array
 
 
 class UnifiedAGN(BlackHoleEmissionModel):
@@ -299,45 +298,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
             # If disc_transmission == 'random' the emission seen by the
             # observer is chosen at random for each blackhole using covering
-            # fractions.
+            # fractions. This is not yet implemented.
             elif disc_transmission == "random":
-                choices = ["blr", "nlr", "none"]
-
-                # convert to arrays
-                blr_covering_fraction = scalar_to_array(covering_fraction_nlr)
-                nlr_covering_fraction = scalar_to_array(covering_fraction_blr)
-
-                # calcualte length
-                N = len(blr_covering_fraction)
-
-                disc_transmission_ = np.empty(N, dtype="U10")
-                for i, (
-                    blr_covering_fraction_,
-                    nlr_covering_fraction_,
-                ) in enumerate(
-                    zip(blr_covering_fraction, nlr_covering_fraction)
-                ):
-                    probabilities = [
-                        blr_covering_fraction_,
-                        nlr_covering_fraction_,
-                        1.0 - blr_covering_fraction_ - nlr_covering_fraction_,
-                    ]
-
-                    disc_transmission_[i] = np.random.choice(
-                        choices, p=probabilities
-                    )
-
-                escape_transmission_fraction = np.zeros(N)
-                nlr_transmission_fraction = np.zeros(N)
-                blr_transmission_fraction = np.zeros(N)
-
-                escape_transmission_fraction[disc_transmission_ == "none"] = (
-                    1.0
+                raise UnimplementedFunctionality(
+                    """random not yet implemented"""
                 )
-                nlr_transmission_fraction[disc_transmission_ == "nlr"] = 1.0
-                blr_transmission_fraction[disc_transmission_ == "blr"] = 1.0
-
-                print(disc_transmission_)
 
             self.disc_escaped_ = BlackHoleEmissionModel(
                 label="disc_escaped",
