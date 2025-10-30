@@ -216,42 +216,6 @@ class Generator(ABC):
 
         return emissions
 
-    def get_spectra(self, *args, **kwargs):
-        """A public method to get generated spectra.
-
-        This method simply calls the private _generate_spectra method.
-        It is provided as a public interface to the generator.
-
-        Args:
-            *args:
-                Additional positional arguments.
-            **kwargs:
-                Additional keyword arguments.
-
-        Returns:
-            dict:
-                A dictionary of generated spectra.
-        """
-        return self._generate_spectra(*args, **kwargs)
-
-    def get_lines(self, *args, **kwargs):
-        """A public method to get generated lines.
-
-        This method simply calls the private _generate_lines method.
-        It is provided as a public interface to the generator.
-
-        Args:
-            *args:
-                Additional positional arguments.
-            **kwargs:
-                Additional keyword arguments.
-
-        Returns:
-            dict:
-                A dictionary of generated lines.
-        """
-        return self._generate_lines(*args, **kwargs)
-
     def _extract_lines(self, emitter, per_particle):
         """Extract the required emissions for the generation.
 
