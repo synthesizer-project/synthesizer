@@ -57,22 +57,6 @@ class BlackHoles(Particles, BlackholesComponent):
             particle spectra.
     """
 
-    # Define the allowed attributes
-    attrs = [
-        "_masses",
-        "_coordinates",
-        "_velocities",
-        "metallicities",
-        "nparticles",
-        "redshift",
-        "_accretion_rate",
-        "_bb_temperature",
-        "_bolometric_luminosity",
-        "_softening_lengths",
-        "_smoothing_lengths",
-        "nbh",
-    ]
-
     # Define quantities
     smoothing_lengths = Quantity("spatial")
 
