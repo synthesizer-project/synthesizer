@@ -174,9 +174,6 @@ class BlackholesComponent(Component):
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
 
-        print(accretion_rate_eddington)
-        print(self.accretion_rate_eddington)
-
         # Below we attach all the possible attributes that could be needed by
         # the emission models.
 
