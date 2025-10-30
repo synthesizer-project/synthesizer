@@ -138,7 +138,7 @@ class EmissionBase:
             )
 
         # Get the spectrum and normalise it properly (handling
-        # multidiensional arrays properly)
+        # multidimensional arrays properly)
         if bolometric_luminosity.value.ndim == 0:
             lnu = (
                 bolometric_luminosity.to("erg/s").value
@@ -242,7 +242,7 @@ class Blackbody(EmissionBase):
         """
         EmissionBase.__init__(self, temperature)
 
-        # Emmissivity of true blackbody is 1
+        # Emissivity of true blackbody is 1
         emissivity = 1.0
 
         # Are we adding heating by the CMB?
