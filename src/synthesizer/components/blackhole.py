@@ -115,7 +115,7 @@ class BlackholesComponent(Component):
         """Initialise the BlackholeComponent.
 
         Where they're not provided missing quantities are automatically
-        calcualted. Not all parameters need to be set for every emission model.
+        calculated. Not all parameters need to be set for every emission model.
 
         Args:
             fesc (float):
@@ -139,7 +139,7 @@ class BlackholesComponent(Component):
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
             ionisation_parameter_blr (np.ndarray of float):
-                The ionisation parameter of the broadline region.
+                The ionisation parameter of the broad line region.
             hydrogen_density_blr (np.ndarray of float):
                 The hydrogen density of the broad line region.
             covering_fraction_blr (np.ndarray of float):
