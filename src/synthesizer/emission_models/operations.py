@@ -373,7 +373,7 @@ class Generation:
             luminosity when computing dust emission.
     """
 
-    def __init__(self, generator, lum_intrinsic_model, lum_attenuated_model):
+    def __init__(self, generator):
         """Initialise the generation model.
 
         Args:
@@ -389,27 +389,6 @@ class Generation:
         """
         # Attach the emission generation model
         self._generator = generator
-
-        # Attach the keys for the intrinsic and attenuated spectra to use when
-        # computing the dust luminosity
-        self._lum_intrinsic_model = lum_intrinsic_model
-        self._lum_attenuated_model = lum_attenuated_model
-
-        # Convert the models into label strings for convenience
-        self._lum_intrinsic_model_label = None
-        self._lum_attenuated_model_label = None
-        if lum_intrinsic_model is not None:
-            self._lum_intrinsic_model_label = (
-                lum_intrinsic_model
-                if isinstance(lum_intrinsic_model, str)
-                else lum_intrinsic_model.label
-            )
-        if lum_attenuated_model is not None:
-            self._lum_attenuated_model_label = (
-                lum_attenuated_model
-                if isinstance(lum_attenuated_model, str)
-                else lum_attenuated_model.label
-            )
 
     def _generate_spectra(
         self,
@@ -458,43 +437,18 @@ class Generation:
                 )
             return spectra, particle_spectra
 
-        # Handle the dust emission case
-        if this_model._is_dust_emitting:
-            # Get the right spectra
-            if per_particle:
-                intrinsic = particle_spectra[
-                    this_model._lum_intrinsic_model_label
-                ]
-                attenuated = particle_spectra[
-                    this_model._lum_attenuated_model_label
-                ]
-            else:
-                intrinsic = spectra[this_model._lum_intrinsic_model_label]
-                attenuated = spectra[this_model._lum_attenuated_model_label]
-
-            # Apply the dust emission model
-            sed = generator.get_spectra(
-                lam,
-                intrinsic,
-                attenuated,
-            )
-
-        elif this_model.lum_intrinsic_model is not None:
-            # otherwise we are scaling by a single spectra
-            sed = generator.get_spectra(
-                lam,
-                particle_spectra[this_model._lum_intrinsic_model_label]
-                if per_particle
-                else spectra[this_model._lum_intrinsic_model_label],
-            )
-        elif isinstance(generator, Template):
+        # Special handling for templates
+        if isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model
             sed = generator.get_spectra(emitter.bolometric_luminosity)
-
         else:
-            # Otherwise we have a bog standard generation
-            sed = generator.get_spectra(lam)
+            # Generate the spectra
+            sed = generator._generate_spectra(
+                lam,
+                emitter,
+                this_model,
+            )
 
         # Store the spectra in the right place (integrating if we need to)
         if per_particle:
@@ -540,20 +494,8 @@ class Generation:
             dict:
                 The dictionary of lines.
         """
+        generator = this_model.generator
         per_particle = this_model.per_particle
-
-        # Do we already have the spectra?
-        if per_particle and this_model.label in emitter.particle_spectra:
-            spectra = emitter.particle_spectra[this_model.label]
-        elif this_model.label in emitter.spectra:
-            spectra = emitter.spectra[this_model.label]
-        else:
-            raise exceptions.MissingSpectraType(
-                "To generate a line using a generator the corresponding "
-                "spectra must be generated first."
-            )
-
-        # Note: Previous line checking logic removed as prev_lines was unused
 
         # If the emitter is empty we can just return zeros. This is only
         # applicable when nparticles exists in the emitter
@@ -577,15 +519,27 @@ class Generation:
 
             return lines, particle_lines
 
-        # Compute the new line
-        out_lines = LineCollection(
-            line_ids=line_ids,
-            lam=lams,
-            lum=np.zeros((emitter.nparticles, len(lams))) * erg / s
-            if per_particle
-            else np.zeros(len(lams)) * erg / s,
-            cont=spectra.get_lnu_at_lam(lams),
-        )
+        # Special handling for templates
+        if isinstance(generator, Template):
+            # If we have a template we need to generate the spectra
+            # for each model
+            spectra = generator.get_spectra(emitter.bolometric_luminosity)
+            out_lines = LineCollection(
+                line_ids=line_ids,
+                lam=lams,
+                lum=np.zeros((emitter.nparticles, len(lams))) * erg / s
+                if per_particle
+                else np.zeros(len(lams)) * erg / s,
+                cont=spectra.get_lnu_at_lam(lams),
+            )
+        else:
+            # Generate the spectra
+            out_lines = generator._generate_lines(
+                line_ids,
+                lams,
+                emitter,
+                this_model,
+            )
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:

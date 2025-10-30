@@ -56,14 +56,8 @@ class Generator(ABC):
         self._required_params = required_params
         self._required_emissions = required_emissions
 
-        # Simplify emissions to strings if models were passed
-        self._required_emissions = tuple(
-            emission if isinstance(emission, str) else emission.label
-            for emission in required_emissions
-        )
-
     @abstractmethod
-    def _generate_spectra(self, emitter, model, *args, **kwargs):
+    def _generate_spectra(self, lams, emitter, model, *args, **kwargs):
         """Generate spectra based on the emitter and model.
 
         This method must look for the required parameters in
@@ -80,6 +74,8 @@ class Generator(ABC):
         implemented using the _extract_spectra method.
 
         Args:
+            lams (unyt_array):
+                The wavelengths at which to generate the spectra.
             emitter (Emitter):
                 The emitter for which to generate the spectra.
             model (EmissionModel):
@@ -98,7 +94,7 @@ class Generator(ABC):
         )
 
     @abstractmethod
-    def _generate_lines(self, emitter, model, *args, **kwargs):
+    def _generate_lines(self, lams, emitter, model, *args, **kwargs):
         """Generate lines based on the emitter and model.
 
         This method must look for the required parameters in
@@ -115,6 +111,8 @@ class Generator(ABC):
         implemented using the _extract_lines method.
 
         Args:
+            lams (unyt_array):
+                The wavelengths at which to generate the lines.
             emitter (Emitter):
                 The emitter for which to generate the lines.
             model (EmissionModel):
