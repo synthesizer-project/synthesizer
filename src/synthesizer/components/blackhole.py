@@ -11,7 +11,11 @@ from unyt import Msun, c, cm, deg, erg, km, s, yr
 from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import (
+    TableFormatter,
+    array_to_scalar,
+    scalar_to_array,
+)
 
 
 class BlackholesComponent(Component):
@@ -188,6 +192,52 @@ class BlackholesComponent(Component):
         self.hydrogen_density_nlr = hydrogen_density_nlr
         self.covering_fraction_nlr = covering_fraction_nlr
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
+
+        if self.covering_fraction_blr:
+            # define transmission scenario choices
+            transmission_scenario_choices = ["blr", "nlr", "none"]
+
+            # convert to arrays
+            blr_covering_fraction = scalar_to_array(covering_fraction_nlr)
+            nlr_covering_fraction = scalar_to_array(covering_fraction_blr)
+
+            # calculate length
+            N = len(blr_covering_fraction)
+
+            disc_transmission_ = np.empty(N, dtype="U10")
+            for i, (
+                blr_covering_fraction_,
+                nlr_covering_fraction_,
+            ) in enumerate(zip(blr_covering_fraction, nlr_covering_fraction)):
+                probabilities = [
+                    blr_covering_fraction_,
+                    nlr_covering_fraction_,
+                    1.0 - blr_covering_fraction_ - nlr_covering_fraction_,
+                ]
+
+                disc_transmission_[i] = np.random.choice(
+                    transmission_scenario_choices, p=probabilities
+                )
+
+            escape_transmission_fraction = np.zeros(N)
+            nlr_transmission_fraction = np.zeros(N)
+            blr_transmission_fraction = np.zeros(N)
+
+            escape_transmission_fraction[disc_transmission_ == "none"] = 1.0
+            nlr_transmission_fraction[disc_transmission_ == "nlr"] = 1.0
+            blr_transmission_fraction[disc_transmission_ == "blr"] = 1.0
+
+            # convert to scalars if only one value
+            self.escape_transmission_fraction = array_to_scalar(
+                escape_transmission_fraction
+            )
+            self.nlr_transmission_fraction = array_to_scalar(
+                nlr_transmission_fraction
+            )
+            self.blr_transmission_fraction = array_to_scalar(
+                blr_transmission_fraction
+            )
+            self.disc_transmission = array_to_scalar(disc_transmission_)
 
         # The inclination of the black hole disc
         self.inclination = (
