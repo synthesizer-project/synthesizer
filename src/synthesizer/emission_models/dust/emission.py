@@ -111,6 +111,35 @@ class EnergyBalanceDustEmission(Generator):
             required_emissions=(intrinsic, attenuated),
         )
 
+    def _get_energy_balance_luminosity(
+        self,
+    ) -> unyt_quantity:
+        """Calculate the energy absorbed by dust.
+
+        Args:
+            intrinsic (Sed):
+                The intrinsic SED to scale with dust.
+            attenuated (Sed):
+                The attenuated SED to scale with dust.
+
+        Returns:
+            unyt_quantity:
+                The bolometric luminosity absorbed by dust.
+        """
+        # Extract the emissions
+        emissions = self._extract_spectra()
+
+        # For ease, unpack the intrinsic and attenuated emissions
+        intrinsic = emissions[self.required_emissions[0]]
+        attenuated = emissions[self.required_emissions[1]]
+
+        # Calculate the bolometric luminosity absorbed by dust
+        ldust = (
+            intrinsic.bolometric_luminosity - attenuated.bolometric_luminosity
+        )
+
+        return ldust
+
     @accepts(lam=angstrom)
     def _get_spectra(self, lam: unyt_array) -> Sed:
         """Return the normalised lnu for the provided wavelength grid.
