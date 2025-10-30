@@ -27,6 +27,8 @@ Example usage:
     )
 """
 
+import numpy as np
+
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
@@ -107,7 +109,7 @@ class ProcessedFraction(Transformer):
         fesc = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fesc <= 1:
+        if np.any((fesc < 0) | (fesc > 1)):
             raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
@@ -194,7 +196,7 @@ class EscapedFraction(Transformer):
         fesc = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fesc <= 1:
+        if np.any((fesc < 0) | (fesc > 1)):
             raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
@@ -282,7 +284,7 @@ class CoveringFraction(Transformer):
         fcov = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fcov <= 1:
+        if np.any((fcov < 0) | (fcov > 1)):
             raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
@@ -370,7 +372,7 @@ class EscapingFraction(Transformer):
         fcov = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fcov <= 1:
+        if np.any((fcov < 0) | (fcov > 1)):
             raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
