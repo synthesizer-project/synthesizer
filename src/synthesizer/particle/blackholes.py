@@ -25,7 +25,6 @@ from unyt import (
     yr,
 )
 
-from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated
@@ -229,34 +228,6 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Set the smoothing lengths
         self.smoothing_lengths = smoothing_lengths
-
-        # Check the arguments we've been given
-        self._check_bh_args()
-
-    def _check_bh_args(self):
-        """Sanitize the inputs ensuring all arguments agree and are compatible.
-
-        Raises:
-            InconsistentArguments
-                If any arguments are incompatible or not as expected an error
-                is thrown.
-        """
-        # Need an early exit if we have no black holes since any
-        # multidimensional  attributes will trigger the error below erroneously
-        if self.nbh == 0:
-            return
-
-        # Ensure all arrays are the expected length
-        for key in self.__dict__.keys():
-            if not isinstance(getattr(self, key), np.ndarray):
-                continue
-            attr = getattr(self, key)
-            if isinstance(attr, np.ndarray):
-                if attr.shape[0] != self.nparticles:
-                    raise exceptions.InconsistentArguments(
-                        "Inconsistent black hole array sizes! (nparticles=%d, "
-                        "%s=%d)" % (self.nparticles, key, attr.shape[0])
-                    )
 
     def calculate_random_inclination(self):
         """Calculate random inclinations to blackholes."""
