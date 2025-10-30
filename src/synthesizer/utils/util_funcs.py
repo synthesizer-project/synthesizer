@@ -143,6 +143,14 @@ def scalar_to_array(value):
     return arr
 
 
+def array_to_scalar(x):
+    """Convert a NumPy array of length 1 to a scalar."""
+    x = np.asanyarray(x)  # ensures we can handle lists, tuples, or scalars
+    if x.size == 1:
+        return x.item()  # extracts the Python scalar
+    return x
+
+
 def parse_grid_id(grid_id):
     """Parse a grid name for the properties of the grid.
 
