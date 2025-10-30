@@ -43,6 +43,7 @@ from unyt import (
 )
 
 from synthesizer import exceptions
+from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
@@ -64,6 +65,12 @@ class EnergyBalanceDustEmission(Generator):
         cmb_factor (float):
             The multiplicative factor to account for CMB heating at
             high-redshift.
+        intrinsic (str):
+            The name of the intrinsic spectrum defining the unattenuated
+            emission for energy balance.
+        attenuated (str):
+            The name of the attenuated spectrum defining the attenuated
+            emission for energy balance.
     """
 
     temperature: Optional[Union[unyt_quantity, float]]
@@ -74,7 +81,8 @@ class EnergyBalanceDustEmission(Generator):
         self,
         temperature: Optional[Union[unyt_quantity, float]] = None,
         cmb_factor: float = 1,
-        intrinsic: str = "intrinsic",
+        intrinsic: Union[str, EmissionModel] = "intrinsic",
+        attenuated: Union[str, EmissionModel] = "attenuated",
     ) -> None:
         """Initialise the base class for dust emission models.
 
@@ -86,8 +94,11 @@ class EnergyBalanceDustEmission(Generator):
                 The multiplicative factor to account for CMB heating at
                 high-redshift.
             intrinsic (str):
-                The name of the intrinsic spectrum to scale with dust
-                emission.
+                The name of the intrinsic spectrum defining the unattenuated
+                emission for energy balance.
+            attenuated (str):
+                The name of the attenuated spectrum defining the attenuated
+                emission for energy balance.
         """
         # Attach the common attributes
         self.temperature = temperature
@@ -95,80 +106,10 @@ class EnergyBalanceDustEmission(Generator):
 
         # Call the parent init
         Generator.__init__(
-            self, required_params=("temperature",), intrinsic=intrinsic
+            self,
+            required_params=("temperature",),
+            required_emissions=(intrinsic, attenuated),
         )
-
-    def _lnu(
-        self, *args: Optional[Union[unyt_array, NDArray[np.float64]]]
-    ) -> Optional[Union[unyt_array, NDArray[np.float64]]]:
-        """Generate the unnormalised spectrum."""
-        raise exceptions.UnimplementedFunctionality(
-            "EmissionBase should not be instantiated directly!"
-            " Instead use one to child models (Blackbody, Greybody, Casey12)."
-        )
-
-    accepts(lam=angstrom)
-
-    def get_spectra(
-        self,
-        lam,
-        intrinsic_sed=None,
-        attenuated_sed=None,
-    ):
-        """Return the normalised lnu for the provided wavelength grid.
-
-        Args:
-            lam (float/np.ndarray of float):
-                An array of wavelengths (expected in AA, global unit)
-            intrinsic_sed (Sed):
-                The intrinsic SED to scale with dust.
-            attenuated_sed (Sed):
-                The attenuated SED to scale with dust.
-        """
-        # If we haven't been given spectra to scale with dust just return the
-        # spectra
-        if intrinsic_sed is None and attenuated_sed is None:
-            return self._get_spectra(lam)
-
-        # If we have been given spectra to scale with dust, we need to scale
-        # the dust spectra to the bolometric luminosity of the input spectra
-        # and then add the input spectra to the dust spectra
-        elif intrinsic_sed is not None and attenuated_sed is not None:
-            # Calculate the bolometric dust luminosity as the difference
-            # between the intrinsic and attenuated
-            bolometric_luminosity = (
-                intrinsic_sed.bolometric_luminosity
-                - attenuated_sed.bolometric_luminosity
-            )
-
-        # If we only have the intrinsic SED, we can just scale the emission
-        elif intrinsic_sed is not None:
-            # Measure bolometric luminosity
-            bolometric_luminosity = intrinsic_sed.bolometric_luminosity
-
-        else:
-            raise exceptions.InvalidInput(
-                "Must provide either no scaling spectra, intrinsic_sed, or "
-                "intrinsic_sed and attenuated_sed"
-            )
-
-        # Get the spectrum and normalise it properly (handling
-        # multidimensional arrays properly)
-        if bolometric_luminosity.value.ndim == 0:
-            lnu = (
-                bolometric_luminosity.to("erg/s").value
-                * self._get_spectra(lam).lnu
-            )
-        else:
-            lnu = (
-                np.expand_dims(
-                    bolometric_luminosity.to("erg/s").value, axis=-1
-                )
-                * self._get_spectra(lam).lnu
-            )
-
-        # Create new Sed object containing dust emission spectra
-        return Sed(lam, lnu=lnu)
 
     @accepts(lam=angstrom)
     def _get_spectra(self, lam: unyt_array) -> Sed:
