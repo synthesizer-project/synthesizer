@@ -7,6 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import fsolve
 from unyt import (
+    Hz,
     Lsun,
     Msun,
     angstrom,
@@ -370,20 +371,24 @@ class DrainLi07(Generator):
 
         lnu_old = (
             (1.0 - self._calculated_gamma)
-            * self.grid.spectra["diffuse"][self.pah_frac_id, self.umin_id][0]
+            * self.grid.spectra["diffuse"][
+                tuple(self.pah_frac_id), tuple(self.umin_id)
+            ][0]
             * (self._calculated_hydrogen_mass / Msun).value
         )
 
         lnu_young = (
             self._calculated_gamma
             * self.grid.spectra["pdr"][
-                self.pah_frac_id, self.umin_id, self.alpha_id
+                tuple(self.pah_frac_id),
+                tuple(self.umin_id),
+                tuple(self.alpha_id),
             ][0]
             * (self._calculated_hydrogen_mass / Msun).value
         )
 
-        sed_old = Sed(lam=lams, lnu=lnu_old * (erg / s))
-        sed_young = Sed(lam=lams, lnu=lnu_young * (erg / s))
+        sed_old = Sed(lam=lams, lnu=lnu_old * (erg / s / Hz))
+        sed_young = Sed(lam=lams, lnu=lnu_young * (erg / s / Hz))
 
         # Replace NaNs with zero for wavelength regimes with no values given
         sed_old._lnu[np.isnan(sed_old._lnu)] = 0.0

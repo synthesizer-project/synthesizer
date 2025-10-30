@@ -593,7 +593,7 @@ class Greybody:
                 scaler=scaler,
             )
         else:
-            raise exceptions.InvalidInput(
+            raise exceptions.InconsistentArguments(
                 "Either intrinsic and attenuated emissions "
                 "or a scaler emission must be provided to "
                 "instantiate a Greybody dust emission model."

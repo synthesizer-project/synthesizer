@@ -702,7 +702,7 @@ class Casey12:
                 scaler=scaler,
             )
         else:
-            raise exceptions.InvalidInput(
+            raise exceptions.InconsistentArguments(
                 "Either intrinsic and attenuated emissions "
                 "or a scaler emission must be provided to "
                 "instantiate a Casey12 dust emission model."

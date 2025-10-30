@@ -304,7 +304,7 @@ class BlackbodyScaler(ScaledDustEmission, BlackbodyBase):
                 The name of the emission to scale the dust emission by.
         """
         BlackbodyBase.__init__(self, temperature, cmb_factor)
-        ScaledDustEmission.__init__(self, temperature, cmb_factor, scaler)
+        ScaledDustEmission.__init__(self, scaler)
 
     @accepts(lams=angstrom)
     def _generate_spectra(self, lams, emitter, model) -> Sed:
@@ -490,7 +490,7 @@ class Blackbody:
                 scaler=scaler,
             )
         else:
-            raise exceptions.InvalidInput(
+            raise exceptions.InconsistentArguments(
                 "Either intrinsic and attenuated emissions "
                 "or a scaler emission must be provided to "
                 "instantiate a Blackbody dust emission model."

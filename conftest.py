@@ -43,6 +43,126 @@ from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.pipeline import Pipeline
 
+# ============================= DUST GENERATORS ===============================
+
+
+@pytest.fixture
+def dust_wavelengths():
+    """Return a standard wavelength grid for dust emission testing."""
+    return np.logspace(3, 6, 100) * angstrom
+
+
+@pytest.fixture
+def dust_temperatures():
+    """Return a range of dust temperatures for testing."""
+    return np.array([10, 20, 50, 100]) * unyt_array([1, 1, 1, 1], "K")
+
+
+@pytest.fixture
+def mock_dust_grid():
+    """Return a mock dust grid for testing DrainLi07."""
+
+    class MockDustGrid:
+        def __init__(self):
+            # Grid parameters that DL07 expects
+            self.qpah = np.array([0.01, 0.025, 0.05, 0.1])
+            self.umin = np.array([0.5, 1.0, 2.0, 5.0])
+            self.alpha = np.array([1.5, 2.0, 2.5])
+
+            # Mock spectra data - create realistic dimensionality
+            n_lam = 100
+            n_qpah = len(self.qpah)
+            n_umin = len(self.umin)
+            n_alpha = len(self.alpha)
+
+            # Mock diffuse component (indexed by qpah, umin)
+            diffuse_data = {}
+            for i in range(n_qpah):
+                for j in range(n_umin):
+                    qpah_mask = np.zeros(n_qpah, dtype=bool)
+                    umin_mask = np.zeros(n_umin, dtype=bool)
+                    qpah_mask[i] = True
+                    umin_mask[j] = True
+                    key = (tuple(qpah_mask), tuple(umin_mask))
+                    # Create mock spectrum with some temperature dependence
+                    spec = np.exp(-np.linspace(0, 5, n_lam)) * 1e30
+                    diffuse_data[key] = [spec]
+
+            # Mock PDR component (indexed by qpah, umin, alpha)
+            pdr_data = {}
+            for i in range(n_qpah):
+                for j in range(n_umin):
+                    for k in range(n_alpha):
+                        qpah_mask = np.zeros(n_qpah, dtype=bool)
+                        umin_mask = np.zeros(n_umin, dtype=bool)
+                        alpha_mask = np.zeros(n_alpha, dtype=bool)
+                        qpah_mask[i] = True
+                        umin_mask[j] = True
+                        alpha_mask[k] = True
+                        key = (
+                            tuple(qpah_mask),
+                            tuple(umin_mask),
+                            tuple(alpha_mask),
+                        )
+                        # Create mock spectrum
+                        spec = np.exp(-np.linspace(1, 3, n_lam)) * 5e29
+                        pdr_data[key] = [spec]
+
+            self.spectra = {"diffuse": diffuse_data, "pdr": pdr_data}
+
+        def interp_spectra(self, new_lam):
+            """Mock interpolation - just ensure method exists."""
+            pass
+
+    return MockDustGrid()
+
+
+@pytest.fixture
+def mock_emitter():
+    """Return a mock emitter for testing dust generators."""
+
+    class MockEmitter:
+        def __init__(self):
+            self.redshift = 0.0
+            self.dust_mass = 1e6 * Msun
+            self.dust_to_gas = 0.01
+            self.hydrogen_mass = 0.74 * self.dust_mass / self.dust_to_gas
+
+    return MockEmitter()
+
+
+@pytest.fixture
+def mock_emission_model():
+    """Return a mock emission model for testing dust generators."""
+
+    class MockEmissionModel:
+        def __init__(self):
+            self.per_particle = False
+            self.fixed_parameters = {}
+
+    return MockEmissionModel()
+
+
+@pytest.fixture
+def mock_intrinsic_sed():
+    """Return a mock intrinsic SED for energy balance testing."""
+    lam = np.logspace(3, 6, 100) * angstrom
+    # Simple power law spectrum
+    lnu = 1e30 * (lam / (1000 * angstrom)) ** (-1.5) * erg / s / Hz
+    sed = Sed(lam=lam, lnu=lnu)
+    return sed
+
+
+@pytest.fixture
+def mock_attenuated_sed():
+    """Return a mock attenuated SED for energy balance testing."""
+    lam = np.logspace(3, 6, 100) * angstrom
+    # Attenuated version - reduced by factor of 2
+    lnu = 5e29 * (lam / (1000 * angstrom)) ** (-1.5) * erg / s / Hz
+    sed = Sed(lam=lam, lnu=lnu)
+    return sed
+
+
 # ================================== GRID =====================================
 
 
