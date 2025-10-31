@@ -5,7 +5,7 @@ This module contains tests for all dust generator functionality including:
 - Blackbody emission generators
 - Greybody emission generators
 - Casey12 emission generators
-- DrainLi07 emission generators
+- DraineLi07 emission generators
 - Integration and functionality tests
 """
 
@@ -30,7 +30,7 @@ from synthesizer.emission_models.generators.dust.casey12 import (
     Casey12Scaler,
 )
 from synthesizer.emission_models.generators.dust.drainli07 import (
-    DrainLi07,
+    DraineLi07,
     solve_umin,
     u_mean,
     u_mean_magdis12,
@@ -403,11 +403,11 @@ class TestCasey12Generators:
         assert isinstance(c12_scaler, Casey12Scaler)
 
 
-class TestDrainLi07Generators:
-    """Tests for DrainLi07 emission generators."""
+class TestDraineLi07Generators:
+    """Tests for DraineLi07 emission generators."""
 
     def test_drainli07_utility_functions(self):
-        """Test DrainLi07 utility functions."""
+        """Test DraineLi07 utility functions."""
         # Test u_mean_magdis12
         dust_mass = 1e6
         ldust = 1e10
@@ -429,10 +429,10 @@ class TestDrainLi07Generators:
         assert abs(result) < 1e-10  # Should be close to zero
 
     def test_drainli07_initialization(self, mock_dust_grid):
-        """Test DrainLi07 initialization."""
+        """Test DraineLi07 initialization."""
         dust_mass = 1e6 * Msun
 
-        dl07 = DrainLi07(
+        dl07 = DraineLi07(
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas=0.01,
@@ -450,11 +450,11 @@ class TestDrainLi07Generators:
         assert "hydrogen_mass" in dl07._required_params
 
     def test_drainli07_parameter_setup(self, mock_dust_grid):
-        """Test DrainLi07 parameter setup."""
+        """Test DraineLi07 parameter setup."""
         dust_mass = 1e6 * Msun
         ldust = 1e10 * Lsun
 
-        dl07 = DrainLi07(
+        dl07 = DraineLi07(
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas=0.01,
@@ -472,11 +472,11 @@ class TestDrainLi07Generators:
         assert dl07.alpha_id is not None
 
     def test_drainli07_get_spectra(self, mock_dust_grid, dust_wavelengths):
-        """Test DrainLi07 get_spectra method."""
+        """Test DraineLi07 get_spectra method."""
         dust_mass = 1e6 * Msun
         ldust = 1e10 * Lsun
 
-        dl07 = DrainLi07(
+        dl07 = DraineLi07(
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas=0.01,
@@ -496,11 +496,11 @@ class TestDrainLi07Generators:
         assert np.all(sed.lnu >= 0)  # Allow zero values
 
     def test_drainli07_dust_components(self, mock_dust_grid, dust_wavelengths):
-        """Test DrainLi07 dust component separation."""
+        """Test DraineLi07 dust component separation."""
         dust_mass = 1e6 * Msun
         ldust = 1e10 * Lsun
 
-        dl07 = DrainLi07(
+        dl07 = DraineLi07(
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas=0.01,
@@ -524,10 +524,10 @@ class TestDrainLi07Generators:
         assert len(sed_young.lam) == len(dust_wavelengths)
 
     def test_drainli07_variable_naming(self, mock_dust_grid):
-        """Test DrainLi07 uses improved variable names."""
+        """Test DraineLi07 uses improved variable names."""
         dust_mass = 1e6 * Msun
 
-        dl07 = DrainLi07(
+        dl07 = DraineLi07(
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas=0.01,
@@ -548,8 +548,8 @@ class TestDrainLi07Generators:
     def test_drainli07_missing_parameters(
         self, mock_dust_grid, dust_wavelengths
     ):
-        """Test DrainLi07 error handling for missing parameters."""
-        dl07 = DrainLi07(
+        """Test DraineLi07 error handling for missing parameters."""
+        dl07 = DraineLi07(
             grid=mock_dust_grid,
             dust_mass=None,  # No dust mass provided
             dust_to_gas=0.01,

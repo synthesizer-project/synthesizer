@@ -60,7 +60,7 @@ def dust_temperatures():
 
 @pytest.fixture
 def mock_dust_grid():
-    """Return a mock dust grid for testing DrainLi07."""
+    """Return a mock dust grid for testing DraineLi07."""
 
     class MockDustGrid:
         def __init__(self):
