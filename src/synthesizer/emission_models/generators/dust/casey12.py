@@ -348,28 +348,23 @@ class Casey12(DustEmission):
 
         # Recompute the Casey12 parameters if temperature changed due to CMB
         # heating
-        if cmb_factor != 1.0:
-            # Recalculate lam_c and n_pl with new temperature
-            b1 = 26.68
-            b2 = 6.246
-            b3 = 0.0001905
-            b4 = 0.00007243
-            lum = (
-                (b1 + b2 * self.alpha) ** -2
-                + (b3 + b4 * self.alpha) * temperature.to("K").value
-            ) ** -1
+        b1 = 26.68
+        b2 = 6.246
+        b3 = 0.0001905
+        b4 = 0.00007243
+        lum = (
+            (b1 + b2 * self.alpha) ** -2
+            + (b3 + b4 * self.alpha) * temperature.to("K").value
+        ) ** -1
 
-            lam_c = (3.0 / 4.0) * lum * um
+        lam_c = (3.0 / 4.0) * lum * um
 
-            n_pl = (
-                self.n_bb
-                * (1 - np.exp(-((self.lam_0 / lam_c) ** self.emissivity)))
-                * (c / lam_c) ** 3
-                / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
-            )
-        else:
-            lam_c = self.lam_c
-            n_pl = self.n_pl
+        n_pl = (
+            self.n_bb
+            * (1 - np.exp(-((self.lam_0 / lam_c) ** self.emissivity)))
+            * (c / lam_c) ** 3
+            / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
+        )
 
         # Store temporary values for _lnu calculation
         original_lam_c = self.lam_c
