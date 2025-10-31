@@ -130,6 +130,7 @@ class BlackHole(BlackholesComponent):
             bolometric_luminosity=bolometric_luminosity,
             mass=mass,
             accretion_rate=accretion_rate,
+            accretion_rate_eddington=accretion_rate_eddington,
             epsilon=epsilon,
             inclination=inclination,
             spin=spin,
