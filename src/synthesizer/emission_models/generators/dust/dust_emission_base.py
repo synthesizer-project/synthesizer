@@ -183,30 +183,21 @@ class DustEmission(Generator):
 
     def _get_energy_balance_luminosity(
         self,
-        emitter: Component,
-        model: EmissionModel,
+        emissions: dict,
     ) -> unyt_quantity:
         """Calculate the energy absorbed by dust.
 
         Args:
-            emitter (Stars/Gas/BlackHole):
-                The object emitting the emission.
-            model (EmissionModel):
-                The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
 
         Returns:
             unyt_quantity:
                 The bolometric luminosity absorbed by dust.
         """
-        # Extract the emissions
-        emissions = self._extract_spectra(
-            emitter=emitter,
-            per_particle=model.per_particle,
-        )
-
         # For ease, unpack the intrinsic and attenuated emissions
-        intrinsic = emissions[self._intrinsic.label]
-        attenuated = emissions[self._attenuated.label]
+        intrinsic = emissions[self._intrinsic]
+        attenuated = emissions[self._attenuated]
 
         # Calculate the bolometric luminosity absorbed by dust
         ldust = (
@@ -217,29 +208,20 @@ class DustEmission(Generator):
 
     def _get_scaling_luminosity(
         self,
-        emitter: Union[Component],
-        model: EmissionModel,
+        emissions: dict,
     ) -> unyt_quantity:
         """Extract the bolometric luminosity to scale the dust emission by.
 
         Args:
-            emitter (Stars/Gas/BlackHole):
-                The object emitting the emission.
-            model (EmissionModel):
-                The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
 
         Returns:
             unyt_quantity:
                 The bolometric luminosity to scale the dust emission by.
         """
-        # Extract the emissions
-        emissions = self._extract_spectra(
-            emitter=emitter,
-            per_particle=model.per_particle,
-        )
-
         # For ease, unpack the scaler emission
-        scaler = emissions[self._scaler.label]
+        scaler = emissions[self._scaler]
 
         # Get the bolometric luminosity to scale by
         lscale = scaler.bolometric_luminosity
@@ -250,6 +232,7 @@ class DustEmission(Generator):
         self,
         emitter: Union[Component],
         model: EmissionModel,
+        emissions: dict,
     ) -> unyt_quantity:
         """Get the bolometric luminosity to scale the dust emission by.
 
@@ -258,6 +241,8 @@ class DustEmission(Generator):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
 
         Returns:
             unyt_quantity:
@@ -266,13 +251,11 @@ class DustEmission(Generator):
         # Get the right scaling luminosity
         if self.is_energy_balance:
             return self._get_energy_balance_luminosity(
-                emitter=emitter,
-                model=model,
+                emissions=emissions,
             )
         elif self.is_scaled:
             return self._get_scaling_luminosity(
-                emitter=emitter,
-                model=model,
+                emissions=emissions,
             )
         else:
             return unyt_quantity(1.0, "Lsun")
@@ -301,4 +284,4 @@ class DustEmission(Generator):
         self.last_cmb_factor = cmb_factor
         self.last_effective_temperature = _temperature
 
-        return cmb_factor, temperature
+        return cmb_factor, _temperature

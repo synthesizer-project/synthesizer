@@ -171,7 +171,7 @@ class Generator(ABC):
 
         return params
 
-    def _extract_spectra(self, emitter, per_particle):
+    def _extract_emissions(self, emission_dict, per_particle):
         """Extract the required emissions for the generation.
 
         This method should look for the required emissions in
@@ -180,8 +180,9 @@ class Generator(ABC):
         emissions are missing an exception will be raised.
 
         Args:
-            emitter (Emitter):
-                The object emitting the emission.
+            emission_dict (dict):
+                The dictionary containing all emissions generated so far. These
+                can be spectra, particle_spectra, lines, or particle_lines.
             per_particle (bool):
                 Whether to extract from particle_spectra or spectra.
 
@@ -189,55 +190,6 @@ class Generator(ABC):
             dict
                 A dictionary containing the required emissions.
         """
-        # Determine which emission dictionary to use
-        if per_particle:
-            emission_dict = emitter.particle_spectra
-        else:
-            emission_dict = emitter.spectra
-
-        # Extract the emissions (Missing emissions will return None)
-        emissions = {}
-        for emission_name in self._required_emissions:
-            emissions[emission_name] = emission_dict.get(emission_name, None)
-
-        # Check if any of the required emissions are missing
-        missing_emissions = [
-            name for name, value in emissions.items() if value is None
-        ]
-        if len(missing_emissions) > 0:
-            missing_strs = [f"'{s}'" for s in missing_emissions]
-            raise exceptions.MissingAttribute(
-                f"{', '.join(missing_strs)} can't be "
-                "found on the emitter "
-                f"(required by {self.__class__.__name__})"
-            )
-
-        return emissions
-
-    def _extract_lines(self, emitter, per_particle):
-        """Extract the required emissions for the generation.
-
-        This method should look for the required emissions in
-        emitter.lines, or emitter.particle_lines (depending on whether the
-        model has per_particle set to True or False). If any of the required
-        emissions are missing an exception will be raised.
-
-        Args:
-            emitter (Emitter):
-                The object emitting the emission.
-            per_particle (bool):
-                Whether to extract from particle_lines or lines.
-
-        Returns:
-            dict
-                A dictionary containing the required emissions.
-        """
-        # Determine which emission dictionary to use
-        if per_particle:
-            emission_dict = emitter.particle_lines
-        else:
-            emission_dict = emitter.lines
-
         # Extract the emissions (Missing emissions will return None)
         emissions = {}
         for emission_name in self._required_emissions:

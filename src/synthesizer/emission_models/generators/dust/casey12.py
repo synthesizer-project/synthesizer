@@ -209,7 +209,8 @@ class Casey12(DustEmission):
         lams: unyt_array,
         emitter: Component,
         model: EmissionModel,
-        redshift: float,
+        emissions: dict,
+        redshift: float = 0,
     ) -> Sed:
         """Generate the dust emission spectra.
 
@@ -228,6 +229,8 @@ class Casey12(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -295,7 +298,7 @@ class Casey12(DustEmission):
         sed._lnu *= cmb_factor
 
         # Apply the scaling luminosity
-        sed._lnu *= self.get_scaling(emitter, model)
+        sed._lnu *= self.get_scaling(emitter, model, emissions)
 
         return sed
 
@@ -306,7 +309,8 @@ class Casey12(DustEmission):
         line_lams,
         emitter,
         model,
-        redshift,
+        emissions,
+        redshift=0,
     ) -> LineCollection:
         """Generate line emission spectra.
 
@@ -322,6 +326,8 @@ class Casey12(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -386,7 +392,7 @@ class Casey12(DustEmission):
         sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
 
         # Apply the scaling luminosity
-        sed._lnu *= self.get_scaling(emitter, model)
+        sed._lnu *= self.get_scaling(emitter, model, emissions)
 
         # Return as LineCollection with continuum only
         lines = LineCollection(

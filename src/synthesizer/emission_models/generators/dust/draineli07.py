@@ -487,7 +487,8 @@ class DraineLi07(DustEmission):
         lams: unyt_array,
         emitter: Component,
         model: EmissionModel,
-        redshift: float,
+        emissions: dict,
+        redshift: float = 0,
     ) -> Sed:
         """Generate the dust emission spectra.
 
@@ -498,6 +499,8 @@ class DraineLi07(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -513,7 +516,7 @@ class DraineLi07(DustEmission):
         dust_mass = params["dust_mass"]
 
         # Calculate the dust luminosity for scaling
-        ldust = self.get_scaling(emitter, model)
+        ldust = self.get_scaling(emitter, model, emissions)
 
         # Set up DL07 parameters using the dust luminosity
         self._setup_dl07_parameters(dust_mass, ldust)
@@ -536,7 +539,8 @@ class DraineLi07(DustEmission):
         line_lams,
         emitter,
         model,
-        redshift,
+        emissions,
+        redshift=0,
     ) -> LineCollection:
         """Generate line emission spectra.
 
@@ -552,6 +556,8 @@ class DraineLi07(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -567,7 +573,7 @@ class DraineLi07(DustEmission):
         dust_mass = params["dust_mass"]
 
         # Calculate the dust luminosity for scaling
-        ldust = self.get_scaling(emitter, model)
+        ldust = self.get_scaling(emitter, model, emissions)
 
         # Set up DL07 parameters using the dust luminosity
         self._setup_dl07_parameters(dust_mass, ldust)

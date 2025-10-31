@@ -133,7 +133,8 @@ class Greybody(DustEmission):
         lams: unyt_array,
         emitter: Component,
         model: EmissionModel,
-        redshift: float,
+        emissions: dict,
+        redshift: float = 0,
     ) -> Sed:
         """Generate the dust emission spectra.
 
@@ -152,6 +153,8 @@ class Greybody(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -189,7 +192,7 @@ class Greybody(DustEmission):
         sed._lnu *= cmb_factor
 
         # Apply the scaling luminosity
-        sed._lnu *= self.get_scaling(emitter, model)
+        sed._lnu *= self.get_scaling(emitter, model, emissions)
 
         return sed
 
@@ -200,7 +203,8 @@ class Greybody(DustEmission):
         line_lams,
         emitter,
         model,
-        redshift,
+        emissions,
+        redshift=0,
     ) -> LineCollection:
         """Generate line emission spectra.
 
@@ -216,6 +220,8 @@ class Greybody(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -253,7 +259,7 @@ class Greybody(DustEmission):
         sed._lnu *= cmb_factor
 
         # Apply the scaling luminosity
-        sed._lnu *= self.get_scaling(emitter, model)
+        sed._lnu *= self.get_scaling(emitter, model, emissions)
 
         # Return as LineCollection with continuum only
         lines = LineCollection(

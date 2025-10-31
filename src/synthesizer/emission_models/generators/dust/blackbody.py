@@ -79,7 +79,8 @@ class Blackbody(DustEmission):
         lams: unyt_array,
         emitter: Component,
         model: EmissionModel,
-        redshift: float,
+        emissions: dict,
+        redshift: float = 0,
     ) -> Sed:
         """Generate the dust emission spectra.
 
@@ -98,6 +99,8 @@ class Blackbody(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -135,7 +138,7 @@ class Blackbody(DustEmission):
         sed._lnu *= cmb_factor
 
         # Apply the energy balance scaling
-        sed._lnu *= self.get_scaling(emitter, model)
+        sed._lnu *= self.get_scaling(emitter, model, emissions)
 
         return sed
 
@@ -146,7 +149,8 @@ class Blackbody(DustEmission):
         line_lams,
         emitter,
         model,
-        redshift,
+        emissions,
+        redshift=0,
     ) -> LineCollection:
         """Generate line emission spectra.
 
@@ -162,6 +166,8 @@ class Blackbody(DustEmission):
                 The object emitting the emission.
             model (EmissionModel):
                 The emission model generating the emission.
+            emissions (dict):
+                Dictionary containing all emissions generated so far.
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -199,7 +205,7 @@ class Blackbody(DustEmission):
         sed._lnu *= cmb_factor
 
         # Apply the energy balance scaling
-        sed._lnu *= self.get_scaling(emitter, model)
+        sed._lnu *= self.get_scaling(emitter, model, emissions)
 
         # OK, now we have used the Sed magic lets return the LineCollection
         # the outside world expects. Note that the line luminosities are

@@ -322,7 +322,7 @@ class Extraction:
         # with any not asked for set to zero. We need to filter this
         # down to just the lines we want. Note that this will also
         # handle composite lines
-        if len(passed_line_ids) < lines[label].nlines:
+        if len(passed_line_ids) < lines[label].nines:
             lines[label] = lines[label][passed_line_ids]
             if this_model.per_particle:
                 particle_lines[label] = particle_lines[label][passed_line_ids]
@@ -448,6 +448,7 @@ class Generation:
                 lam,
                 emitter,
                 this_model,
+                particle_spectra if per_particle else spectra,
             )
 
         # Store the spectra in the right place (integrating if we need to)
@@ -539,6 +540,7 @@ class Generation:
                 lams,
                 emitter,
                 this_model,
+                particle_lines if per_particle else lines,
             )
 
         # Store the lines in the right place (integrating if we need to)
