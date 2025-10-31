@@ -289,4 +289,4 @@ class Greybody(DustEmission):
             Sed:
                 The generated dust emission SED.
         """
-        return self._generate_spectra(lams, None, None, redshift)
+        return self._generate_spectra(lams, None, None, {}, redshift)

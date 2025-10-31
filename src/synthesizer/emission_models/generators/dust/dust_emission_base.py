@@ -258,7 +258,7 @@ class DustEmission(Generator):
                 emissions=emissions,
             )
         else:
-            return unyt_quantity(1.0, "Lsun")
+            return 1.0
 
     def apply_cmb_heating(self, temperature, emissivity, redshift) -> Tuple:
         """Compute the cmb heating factor and modify the temperature.

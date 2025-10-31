@@ -211,6 +211,7 @@ class Blackbody(DustEmission):
         # the outside world expects. Note that the line luminosities are
         # by definition zero for generated lines and the contribution only
         # goes to the continuum.
+
         lines = LineCollection(
             line_ids,
             line_lams,
@@ -238,4 +239,4 @@ class Blackbody(DustEmission):
             Sed:
                 The generated dust emission SED.
         """
-        return self._generate_spectra(lams, None, None, redshift)
+        return self._generate_spectra(lams, None, None, {}, redshift)
