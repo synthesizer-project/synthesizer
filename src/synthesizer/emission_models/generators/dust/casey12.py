@@ -391,6 +391,9 @@ class Casey12(DustEmission):
         # Normalise the spectrum
         sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
 
+        # Apply the CMB factor (mirrors the continuum path)
+        sed._lnu *= cmb_factor
+
         # Apply the scaling luminosity
         sed._lnu *= self.get_scaling(emitter, model, emissions)
 
