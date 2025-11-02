@@ -322,7 +322,7 @@ class Extraction:
         # with any not asked for set to zero. We need to filter this
         # down to just the lines we want. Note that this will also
         # handle composite lines
-        if len(passed_line_ids) < lines[label].nines:
+        if len(passed_line_ids) < lines[label].nlines:
             lines[label] = lines[label][passed_line_ids]
             if this_model.per_particle:
                 particle_lines[label] = particle_lines[label][passed_line_ids]
@@ -561,10 +561,7 @@ class Generation:
                 f"{self.generator._attenuated.label}"
             )
         if self._generator._scaler is not None:
-            summary.append(
-                f"  Energy balance scaler model: "
-                f"{self.generator._scaler.label}"
-            )
+            summary.append(f"  Scaler model: {self.generator._scaler.label}")
 
         return summary
 

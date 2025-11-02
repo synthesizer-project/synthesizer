@@ -196,8 +196,20 @@ class DustEmission(Generator):
                 The bolometric luminosity absorbed by dust.
         """
         # For ease, unpack the intrinsic and attenuated emissions
-        intrinsic = emissions[self._intrinsic]
-        attenuated = emissions[self._attenuated]
+        # Handle both string labels and EmissionModel objects
+        intrinsic_key = (
+            self._intrinsic.label
+            if hasattr(self._intrinsic, "label")
+            else self._intrinsic
+        )
+        attenuated_key = (
+            self._attenuated.label
+            if hasattr(self._attenuated, "label")
+            else self._attenuated
+        )
+
+        intrinsic = emissions[intrinsic_key]
+        attenuated = emissions[attenuated_key]
 
         # Calculate the bolometric luminosity absorbed by dust
         ldust = (
@@ -221,7 +233,13 @@ class DustEmission(Generator):
                 The bolometric luminosity to scale the dust emission by.
         """
         # For ease, unpack the scaler emission
-        scaler = emissions[self._scaler]
+        # Handle both string labels and EmissionModel objects
+        scaler_key = (
+            self._scaler.label
+            if hasattr(self._scaler, "label")
+            else self._scaler
+        )
+        scaler = emissions[scaler_key]
 
         # Get the bolometric luminosity to scale by
         lscale = scaler.bolometric_luminosity

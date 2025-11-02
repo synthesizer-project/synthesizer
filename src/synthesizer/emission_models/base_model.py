@@ -752,11 +752,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     model.generator._intrinsic,
                     model.generator._attenuated,
                 )
-            if model.generator._scaler_model is not None:
-                child = model.generator._scaler_model
+            if model.generator._scaler is not None:
+                child = model.generator._scaler
                 model._children.add(child)
                 child._parents.add(model)
-                self._scaler_model = model.generator._scaler_model
+                self._scaler_model = model.generator._scaler
 
         # If we are combining spectra, store the key
         if model._is_combining:
@@ -2351,9 +2351,21 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     pass
 
             # Check generator dependencies for strings
-            intrinsic_model = this_model.generator._intrinsic
-            attenuated_model = this_model.generator._attenuated
-            scaler_model = this_model.generator._scaler
+            intrinsic_model = (
+                this_model.generator._intrinsic
+                if this_model.generator is not None
+                else None
+            )
+            attenuated_model = (
+                this_model.generator._attenuated
+                if this_model.generator is not None
+                else None
+            )
+            scaler_model = (
+                this_model.generator._scaler
+                if this_model.generator is not None
+                else None
+            )
             if (
                 isinstance(intrinsic_model, str)
                 and intrinsic_model in emitter_emissions

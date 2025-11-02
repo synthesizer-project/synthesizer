@@ -291,14 +291,13 @@ class Casey12(DustEmission):
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
 
-        # Normalise the spectrum
-        sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
+        # Normalise the spectrum and apply scaling with proper unit handling
+        # Get the bolometric luminosity with proper units
+        bol_lum = sed.bolometric_luminosity
+        scaling = self.get_scaling(emitter, model, emissions)
 
-        # Apply the CMB factor
-        sed._lnu *= cmb_factor
-
-        # Apply the scaling luminosity
-        sed._lnu *= self.get_scaling(emitter, model, emissions)
+        # Properly handle units: normalize then scale
+        sed._lnu = (sed.lnu / bol_lum * scaling * cmb_factor).value
 
         return sed
 
@@ -388,14 +387,13 @@ class Casey12(DustEmission):
         # Create an SED object for convenience
         sed = Sed(lam=line_lams, lnu=lnu)
 
-        # Normalise the spectrum
-        sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
+        # Normalise the spectrum and apply scaling with proper unit handling
+        # Get the bolometric luminosity with proper units
+        bol_lum = sed.bolometric_luminosity
+        scaling = self.get_scaling(emitter, model, emissions)
 
-        # Apply the CMB factor (mirrors the continuum path)
-        sed._lnu *= cmb_factor
-
-        # Apply the scaling luminosity
-        sed._lnu *= self.get_scaling(emitter, model, emissions)
+        # Properly handle units: normalize then scale
+        sed._lnu = (sed.lnu / bol_lum * scaling * cmb_factor).value
 
         # Return as LineCollection with continuum only
         lines = LineCollection(

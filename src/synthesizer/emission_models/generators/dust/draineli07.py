@@ -524,11 +524,12 @@ class DraineLi07(DustEmission):
         # Generate the base spectra
         sed = self._generate_dl07_spectra(lams)
 
-        # Normalise the spectrum
-        sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
+        # Normalise the spectrum and apply scaling with proper unit handling
+        # Get the bolometric luminosity with proper units
+        bol_lum = sed.bolometric_luminosity
 
-        # Apply the scaling
-        sed._lnu *= ldust
+        # Properly handle units: normalize then scale
+        sed._lnu = (sed.lnu / bol_lum * ldust).value
 
         return sed
 
@@ -581,11 +582,12 @@ class DraineLi07(DustEmission):
         # Generate the base spectra
         sed = self._generate_dl07_spectra(line_lams)
 
-        # Normalise the spectrum
-        sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
+        # Normalise the spectrum and apply scaling with proper unit handling
+        # Get the bolometric luminosity with proper units
+        bol_lum = sed.bolometric_luminosity
 
-        # Apply the scaling
-        sed._lnu *= ldust
+        # Properly handle units: normalize then scale
+        sed._lnu = (sed.lnu / bol_lum * ldust).value
 
         # Return as LineCollection with continuum only
         lines = LineCollection(
