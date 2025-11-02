@@ -439,7 +439,7 @@ class Pipeline:
             [
                 m
                 for m in self.emission_model._models.values()
-                if m._is_dust_emitting
+                if m._is_generating
             ]
         )
         self._print(
