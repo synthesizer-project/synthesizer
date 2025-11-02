@@ -149,7 +149,7 @@ class DustEmission(Generator):
         """The last processed cmb heating factor."""
         return self.last_cmb_factor
 
-    def _set_energy_balance(self, intrinsic, attenuated) -> None:
+    def set_energy_balance(self, intrinsic, attenuated) -> None:
         """Set the dust emission to be energy-balance.
 
         Args:
@@ -167,7 +167,7 @@ class DustEmission(Generator):
         self._attenuated = attenuated
         self._scaler = None
 
-    def _set_scaler(self, scaler) -> None:
+    def set_scaler(self, scaler) -> None:
         """Set the dust emission to be scaled.
 
         Args:

@@ -365,12 +365,6 @@ class Generation:
         generator (EmissionModel):
             The emission generation model. This must define a get_spectra
             method.
-        lum_intrinsic_model (EmissionModel):
-            The intrinsic model to use deriving the dust
-            luminosity when computing dust emission.
-        lum_attenuated_model (EmissionModel):
-            The attenuated model to use deriving the dust
-            luminosity when computing dust emission.
     """
 
     def __init__(self, generator):
@@ -380,12 +374,6 @@ class Generation:
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
-            lum_intrinsic_model (EmissionModel):
-                The intrinsic model to use deriving the dust
-                luminosity when computing dust emission.
-            lum_attenuated_model (EmissionModel):
-                The attenuated model to use deriving the dust
-                luminosity when computing dust emission.
         """
         # Attach the emission generation model
         self._generator = generator
@@ -560,17 +548,23 @@ class Generation:
         # Populate the list with the summary information
         summary.append("Generation model:")
         summary.append(f"  Emission generation model: {self._generator}")
-        if (
-            self.lum_intrinsic_model is not None
-            and self.lum_attenuated_model is not None
-        ):
+
+        # Do we have intrinsic/attenuated/scaler models?
+        if self._generator._intrinsic is not None:
             summary.append(
-                f"  Dust luminosity: "
-                f"{self._lum_intrinsic_model_label} - "
-                f"{self._lum_attenuated_model_label}"
+                f"  Intrinsic energy balance model: "
+                f"{self.generator._intrinsic.label}"
             )
-        elif self.lum_intrinsic_model is not None:
-            summary.append(f"  Scale by: {self._lum_intrinsic_model_label}")
+        if self._generator._attenuated is not None:
+            summary.append(
+                f"  Attenuated energy balance model: "
+                f"{self.generator._attenuated.label}"
+            )
+        if self._generator._scaler is not None:
+            summary.append(
+                f"  Energy balance scaler model: "
+                f"{self.generator._scaler.label}"
+            )
 
         return summary
 
@@ -582,19 +576,15 @@ class Generation:
         # Save the generator
         group.attrs["generator"] = str(type(self._generator))
 
-        # Save the dust luminosity models
-        if self._lum_intrinsic_model is not None:
-            group.attrs["lum_intrinsic_model"] = (
-                self._lum_intrinsic_model_label
-                if self._lum_intrinsic_model_label is not None
-                else "None"
-            )
-        if self._lum_attenuated_model is not None:
-            group.attrs["lum_attenuated_model"] = (
-                self._lum_attenuated_model_label
-                if self._lum_attenuated_model_label is not None
-                else "None"
-            )
+        # Save the energy balance models if they exist
+        if self._generator._intrinsic is not None:
+            group.attrs["intrinsic_model"] = self.generator._intrinsic.label
+        if self._generator._attenuated is not None:
+            group.attrs["attenuated_model"] = self.generator._attenuated.label
+
+        # And the same for the scaler
+        if self._generator._scaler is not None:
+            group.attrs["scaler_model"] = self.generator._scaler.label
 
 
 class Transformation:

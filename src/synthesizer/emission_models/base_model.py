@@ -214,11 +214,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The model to apply the transformer to.
             dust_curve (emission_models.attenuation.*):
                 The dust curve to apply (when doing a transformation). This
-                is a friendly alias arguement for the transformer argument.
+                is a friendly alias argument for the transformer argument.
                 Setting both will raise an exception.
             igm (emission_models.transformers.igm.*):
                 The IGM model to apply (when doing a transformation). This is
-                a friendly alias arguement for the transformer argument.
+                a friendly alias argument for the transformer argument.
                 Setting both will raise an exception.
             generator (Generator):
                 The emission generation model. This must inherit from a
@@ -240,8 +240,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             related_models (set/list/EmissionModel):
                 A set of related models to this model. A related model is a
                 model that is connected somewhere within the model tree but is
-                required in the construction of the "root" model encapulated by
-                self.
+                required in the construction of the "root" model encapsulated
+                by self.
             emitter (str):
                 The emitter this emission model acts on. Default is
                 "galaxy". Can be "stellar", "gas", "blackhole", or "galaxy".
@@ -353,7 +353,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             generator=generator,
         )
 
-        # Initilaise the corresponding operation (also checks we have a
+        # Initialise the corresponding operation (also checks we have a
         # valid set of arguments and also have everything we need for the
         # operation)
         self._init_operations(
@@ -376,7 +376,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self._children = set()
         self._parents = set()
 
-        # Store the arribute to scale the emission by
+        # Store the attribute to scale the emission by
         if isinstance(scale_by, (list, tuple)):
             self._scale_by = scale_by
             self._scale_by = [
@@ -391,6 +391,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Store the post processing functions
         self._post_processing = post_processing
+
+        # Friendly private pointers for generator dependencies
+        self._energy_balance_models = None
+        self._scaler_model = None
 
         # Attach the related models
         if related_models is None:
@@ -518,6 +522,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if self._is_transforming and apply_to is None:
             raise exceptions.InconsistentArguments(
                 "Must specify where to apply the dust curve."
+            )
+        if self._is_generating and generator is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify a generator to generate emission."
             )
 
         # Ensure the grid contains any keys we want to extract
@@ -730,9 +738,25 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # If we are generating an emission, store the key
         if model._is_generating:
             # Are there any models attached to the generator?
-            for child in model.generator._required_emissions:
+            if (
+                model.generator._intrinsic is not None
+                and model.generator._attenuated is not None
+            ):
+                child = model.generator._intrinsic
                 model._children.add(child)
                 child._parents.add(model)
+                child = model.generator._attenuated
+                model._children.add(child)
+                child._parents.add(model)
+                self._energy_balance_models = (
+                    model.generator._intrinsic,
+                    model.generator._attenuated,
+                )
+            if model.generator._scaler_model is not None:
+                child = model.generator._scaler_model
+                model._children.add(child)
+                child._parents.add(model)
+                self._scaler_model = model.generator._scaler_model
 
         # If we are combining spectra, store the key
         if model._is_combining:
@@ -980,8 +1004,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             self._set_attr("generator", generator)
         else:
             raise exceptions.InconsistentArguments(
-                "Cannot set a dust emission model on a model that is not "
-                "dust emitting."
+                "Cannot set a generator on a model that is not generating."
             )
 
         # Unpack the model now we're done
@@ -1088,7 +1111,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     "All models to combine must be EmissionModels."
                 )
 
-        # Set the models to combine ensurign the model we are setting on is
+        # Set the models to combine ensuring the model we are setting on is
         # a combination step
         if self._is_combining:
             self._combine = combine
@@ -1327,19 +1350,35 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 relations[parent.label] = "combine"
             if parent.apply_to == replace_model:
                 relations[parent.label] = "transform"
-            if parent.lum_intrinsic_model == replace_model:
-                relations[parent.label] = "dust_intrinsic"
-            if parent.lum_attenuated_model == replace_model:
-                relations[parent.label] = "dust_attenuated"
+            if (
+                parent._energy_balance_models is not None
+                and replace_model == parent._energy_balance_models[0]
+            ):
+                relations[parent.label] = "intrinsic"
+            if (
+                parent._energy_balance_models is not None
+                and replace_model == parent._energy_balance_models[1]
+            ):
+                relations[parent.label] = "attenuated"
+            if parent._scaler_model == replace_model:
+                relations[parent.label] = "scaler_model"
         for child in children:
             if child in replace_model.combine:
                 relations[child.label] = "combine"
             if child.apply_to == replace_model:
                 relations[child.label] = "transform"
-            if child.lum_intrinsic_model == replace_model:
+            if (
+                child._energy_balance_models is not None
+                and replace_model == child._energy_balance_models[0]
+            ):
                 relations[child.label] = "dust_intrinsic"
-            if child.lum_attenuated_model == replace_model:
+            if (
+                child._energy_balance_models is not None
+                and replace_model == child._energy_balance_models[1]
+            ):
                 relations[child.label] = "dust_attenuated"
+            if child._scaler_model == replace_model:
+                relations[child.label] = "scaler_model"
 
         # Remove the model we are replacing
         self._models.pop(replace_label)
@@ -1350,9 +1389,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if relations[parent.label] == "transform":
                 parent._apply_to = None
             if relations[parent.label] == "dust_intrinsic":
-                parent._lum_intrinsic_model = None
+                parent._energy_balance_models[0] = None
             if relations[parent.label] == "dust_attenuated":
-                parent._lum_attenuated_model = None
+                parent._energy_balance_models[1] = None
+            if relations[parent.label] == "scaler_model":
+                parent._scaler_model = None
         for child in children:
             child._parents.remove(replace_model)
 
@@ -1386,9 +1427,35 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if relations[parent.label] == "transform":
                 parent._apply_to = new_model
             if relations[parent.label] == "dust_intrinsic":
-                parent._lum_intrinsic_model = new_model
+                if parent._energy_balance_models is None:
+                    parent._energy_balance_models = (new_model, None)
+                else:
+                    parent._energy_balance_models = (
+                        new_model,
+                        parent._energy_balance_models[1],
+                    )
             if relations[parent.label] == "dust_attenuated":
-                parent._lum_attenuated_model = new_model
+                if parent._energy_balance_models is None:
+                    parent._energy_balance_models = (None, new_model)
+                else:
+                    parent._energy_balance_models = (
+                        parent._energy_balance_models[0],
+                        new_model,
+                    )
+            if relations[parent.label] == "scaler_model":
+                parent._scaler_model = new_model
+
+        # Make sure the generator agrees with the new model
+        for parent in parents:
+            if (
+                parent._is_generating
+                and parent._energy_balance_models is not None
+            ):
+                parent.generator.set_energy_balance(
+                    parent._energy_balance_models
+                )
+            if parent._is_generating and parent._scaler_model is not None:
+                parent.generator.set_scaler(parent._scaler_model)
 
         # Unpack now we're done
         self.unpack_model()
@@ -1565,28 +1632,35 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     ]
                 )
             if model._is_generating:
-                if model._lum_intrinsic_model is not None:
+                if model._scaler_model is not None:
                     links.setdefault(label, []).append(
                         (
-                            model._lum_intrinsic_model.label
-                            if isinstance(
-                                model._lum_intrinsic_model, EmissionModel
-                            )
-                            else model._lum_intrinsic_model,
+                            model._scaler_model.label
+                            if isinstance(model._scaler_model, EmissionModel)
+                            else model._scaler_model,
                             "dotted",
                         )
                     )
-                if model._lum_attenuated_model is not None:
-                    links.setdefault(label, []).append(
-                        (
-                            model._lum_attenuated_model.label
-                            if isinstance(
-                                model._lum_attenuated_model, EmissionModel
+                if model._energy_balance_models is not None:
+                    intrinsic, attenuated = model._energy_balance_models
+                    if intrinsic is not None:
+                        links.setdefault(label, []).append(
+                            (
+                                intrinsic.label
+                                if isinstance(intrinsic, EmissionModel)
+                                else intrinsic,
+                                "dotted",
                             )
-                            else model._lum_attenuated_model,
-                            "dotted",
-                        ),
-                    )
+                        )
+                    if attenuated is not None:
+                        links.setdefault(label, []).append(
+                            (
+                                attenuated.label
+                                if isinstance(attenuated, EmissionModel)
+                                else attenuated,
+                                "dotted",
+                            )
+                        )
 
             if model._is_masked:
                 masked_labels.append(label)
@@ -1920,7 +1994,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     [],
                     color="black",
                     linestyle="dotted",
-                    label="Dust Luminosity",
+                    label="Generator Scaling",
                 )
             )
 
@@ -2057,7 +2131,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emission_model (EmissionModel):
                 The emission model copy to apply the overrides to.
             dust_curves (dict):
-                An overide to the emission model dust curves. Either:
+                An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
                       models should be used.
                     - A single dust curve to apply to all emission models.
@@ -2066,7 +2140,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use a specific dust curve instance with particular
                       properties.
             tau_v (dict):
-                An overide to the dust model optical depth. Either:
+                An override to the dust model optical depth. Either:
                     - None, indicating the tau_v defined on the emission model
                         should be used.
                     - A float to use as the optical depth for all models.
@@ -2078,7 +2152,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use an attribute of the component as the optical
                       depth.
             fesc (dict):
-                An overide to the emission model escape fraction. Either:
+                An override to the emission model escape fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
                     - A float to use as the escape fraction for all models.
@@ -2090,7 +2164,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use an attribute of the component as the escape
                       fraction.
             covering_fraction (dict):
-                An overide to the emission model covering fraction. Either:
+                An override to the emission model covering fraction. Either:
                     - None, indicating the covering fraction defined on the
                       emission model should be used.
                     - A float to use as the covering fraction for all models.
@@ -2102,14 +2176,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use an attribute of the component as the covering
                       fraction.
             mask (dict):
-                An overide to the emission model mask. Either:
+                An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
                       should be used.
                     - A dictionary of the form:
                       {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
                       to add a specific mask to a particular model.
             vel_shift (dict/bool):
-                Overide the models flag for using peculiar velocities to apply
+                Override the models flag for using peculiar velocities to apply
                 doppler shift to the generated spectra. Only applicable for
                 particle spectra. Can be a boolean to apply to all models or a
                 dictionary of the form:
@@ -2276,50 +2350,68 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     # Not reusing existing emission
                     pass
 
-            # Check generator dependencies for strings (lum_intrinsic_model
-            # and lum_attenuated_model)
-            lum_intrinsic_model = this_model.lum_intrinsic_model
-            lum_attenuated_model = this_model.lum_attenuated_model
+            # Check generator dependencies for strings
+            intrinsic_model = this_model.generator._intrinsic
+            attenuated_model = this_model.generator._attenuated
+            scaler_model = this_model.generator._scaler
             if (
-                isinstance(lum_intrinsic_model, str)
-                and lum_intrinsic_model in emitter_emissions
+                isinstance(intrinsic_model, str)
+                and intrinsic_model in emitter_emissions
             ):
                 if this_model.per_particle:
-                    particle_emissions[lum_intrinsic_model] = (
-                        emitter_particle_emissions[lum_intrinsic_model]
+                    particle_emissions[intrinsic_model] = (
+                        emitter_particle_emissions[intrinsic_model]
                     )
-                emissions[lum_intrinsic_model] = emitter_emissions[
-                    lum_intrinsic_model
-                ]
-            elif isinstance(lum_intrinsic_model, str):
+                emissions[intrinsic_model] = emitter_emissions[intrinsic_model]
+            elif isinstance(intrinsic_model, str):
                 raise exceptions.InconsistentArguments(
-                    f"Can't reuse existing emission for {lum_intrinsic_model} "
+                    f"Can't reuse existing emission for {intrinsic_model} "
                     "since it could not be found in "
                     f"{emitter.__class__.__name__}.{emission_type}. "
-                    f"Generate {lum_intrinsic_model} first or point "
-                    "lum_intrinsic_model to a model not a string."
+                    f"Generate {intrinsic_model} first or point the "
+                    "Generator to a model not a string."
                 )
             else:
                 # Not reusing existing emission
                 pass
             if (
-                isinstance(lum_attenuated_model, str)
-                and lum_attenuated_model in emitter_emissions
+                isinstance(attenuated_model, str)
+                and attenuated_model in emitter_emissions
             ):
                 if this_model.per_particle:
-                    particle_emissions[lum_attenuated_model] = (
-                        emitter_particle_emissions[lum_attenuated_model]
+                    particle_emissions[attenuated_model] = (
+                        emitter_particle_emissions[attenuated_model]
                     )
-                emissions[lum_attenuated_model] = emitter_emissions[
-                    lum_attenuated_model
+                emissions[attenuated_model] = emitter_emissions[
+                    attenuated_model
                 ]
-            elif isinstance(lum_attenuated_model, str):
+            elif isinstance(attenuated_model, str):
                 raise exceptions.InconsistentArguments(
                     "Can't reuse existing emission for "
-                    f"{lum_attenuated_model} since it could not be found in "
+                    f"{attenuated_model} since it could not be found in "
                     f"{emitter.__class__.__name__}.{emission_type}. "
-                    f"Generate {lum_attenuated_model} first or point "
-                    "lum_attenuated_model to a model not a string."
+                    f"Generate {attenuated_model} first or point the "
+                    "Generator to a model not a string."
+                )
+            else:
+                # Not reusing existing emission
+                pass
+            if (
+                isinstance(scaler_model, str)
+                and scaler_model in emitter_emissions
+            ):
+                if this_model.per_particle:
+                    particle_emissions[scaler_model] = (
+                        emitter_particle_emissions[scaler_model]
+                    )
+                emissions[scaler_model] = emitter_emissions[scaler_model]
+            elif isinstance(scaler_model, str):
+                raise exceptions.InconsistentArguments(
+                    "Can't reuse existing emission for "
+                    f"{scaler_model} since it could not be found in "
+                    f"{emitter.__class__.__name__}.{emission_type}. "
+                    f"Generate {scaler_model} first or point the "
+                    "Generator to a model not a string."
                 )
             else:
                 # Not reusing existing emission
@@ -2347,7 +2439,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Generate stellar spectra as described by the emission model.
 
         NOTE: post processing methods defined on the model will be called
-        once all spectra are made (these models are preceeded by post_ and
+        once all spectra are made (these models are preceded by post_ and
         take the dictionary of lines/spectra as an argument).
 
         Args:
@@ -2355,7 +2447,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The emitters to generate the spectra for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
             dust_curves (dict):
-                An overide to the emisison model dust curves. Either:
+                An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
                       models should be used.
                     - A single dust curve to apply to all emission models.
@@ -2364,7 +2456,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use a specific dust curve instance with particular
                       properties.
             tau_v (dict):
-                An overide to the dust model optical depth. Either:
+                An override to the dust model optical depth. Either:
                     - None, indicating the tau_v defined on the emission model
                         should be used.
                     - A float to use as the optical depth for all models.
@@ -2376,7 +2468,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         to use an attribute of the component as the optical
                         depth.
             fesc (dict):
-                An overide to the emission model escape fraction. Either:
+                An override to the emission model escape fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
                     - A float to use as the escape fraction for all models.
@@ -2388,7 +2480,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use an attribute of the component as the escape
                       fraction.
             covering_fraction (dict):
-                An overide to the emission model covering fraction. Either:
+                An override to the emission model covering fraction. Either:
                     - None, indicating the covering fraction defined on the
                       emission model should be used.
                     - A float to use as the covering fraction for all models.
@@ -2400,7 +2492,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use an attribute of the component as the covering
                       fraction.
             mask (dict):
-                An overide to the emission model mask. Either:
+                An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
                       should be used.
                     - A dictionary of the form:
@@ -2415,7 +2507,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A dictionary of particle spectra to add to. This is used for
                 recursive calls to this function.
             vel_shift (bool):
-                Overide the models flag for using peculiar velocities to apply
+                override the models flag for using peculiar velocities to apply
                 doppler shift to the generated spectra. Only applicable for
                 particle spectra.
             _is_related (bool):
@@ -2453,7 +2545,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     f"Missing {model.emitter} in emitters."
                 )
 
-        # Apply any overides we have
+        # Apply any overrides we have
         start_overrides = tic()
         if not _is_related:
             self._apply_overrides(
@@ -2688,7 +2780,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     particle_spectra = func(particle_spectra, emitters, self)
 
             # Loop over all models and delete those spectra if we aren't saving
-            # them (we have to this after post processing incase the deleted
+            # them (we have to this after post processing in case the deleted
             # spectra are needed during post processing)
             for model in emission_model._models.values():
                 if not model.save and model.label in spectra:
@@ -2720,7 +2812,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Generate stellar lines as described by the emission model.
 
         NOTE: post processing methods defined on the model will be called
-        once all spectra are made (these models are preceeded by post_ and
+        once all spectra are made (these models are preceded by post_ and
         take the dictionary of lines/spectra as an argument).
 
         Args:
@@ -2730,7 +2822,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The emitters to generate the lines for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
             dust_curves (dict):
-                An overide to the emisison model dust curves. Either:
+                An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
                       models should be used.
                     - A single dust curve to apply to all emission models.
@@ -2739,7 +2831,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use a specific dust curve instance with particular
                       properties.
             tau_v (dict):
-                An overide to the dust model optical depth. Either:
+                An override to the dust model optical depth. Either:
                     - None, indicating the tau_v defined on the emission model
                         should be used.
                     - A float to use as the optical depth for all models.
@@ -2751,7 +2843,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         to use an attribute of the component as the optical
                         depth.
             fesc (dict):
-                An overide to the emission model escape fraction. Either:
+                An override to the emission model escape fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
                     - A float to use as the escape fraction for all models.
@@ -2763,7 +2855,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use an attribute of the component as the escape
                       fraction.
             covering_fraction (dict):
-                An overide to the emission model covering fraction. Either:
+                An override to the emission model covering fraction. Either:
                     - None, indicating the covering fraction defined on the
                       emission model should be used.
                     - A float to use as the covering fraction for all models.
@@ -2775,7 +2867,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                       to use an attribute of the component as the covering
                       fraction.
             mask (dict):
-                An overide to the emission model mask. Either:
+                An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
                       should be used.
                     - A dictionary of the form:
@@ -2816,7 +2908,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # only their reference)
         emission_model = copy.copy(self)
 
-        # Apply any overides we have
+        # Apply any overrides we have
         self._apply_overrides(
             emission_model,
             dust_curves=dust_curves,
@@ -3007,7 +3099,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     particle_lines = func(particle_lines, emitters, self)
 
             # Loop over all models and delete those lines if we aren't saving
-            # them (we have to this after post processing incase the deleted
+            # them (we have to this after post processing in case the deleted
             # lines are needed during post processing)
             for model in emission_model._models.values():
                 if not model.save and model.label in lines:
