@@ -20,6 +20,12 @@ from synthesizer.emission_models.base_model import (
     GalaxyEmissionModel,
     StellarEmissionModel,
 )
+from synthesizer.emission_models.generators.dust import (
+    Blackbody,
+    Casey12,
+    DraineLi07,
+    Greybody,
+)
 from synthesizer.emission_models.models import (
     AttenuatedEmission,
     DustEmission,
@@ -49,6 +55,14 @@ COMMON_MODELS = [
     "AttenuatedEmission",
     "DustEmission",
     "TemplateEmission",
+]
+
+# List of dust emission generators
+DUST_GENERATORS = [
+    "Blackbody",
+    "Casey12", 
+    "DraineLi07",
+    "Greybody",
 ]
 
 # List of premade models
