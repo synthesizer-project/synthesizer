@@ -269,7 +269,12 @@ class DraineLi07(DustEmission):
         self.hydrogen_mass_calculated = None
 
     def _setup_dl07_parameters(
-        self, dust_mass: unyt_quantity, ldust: unyt_quantity
+        self,
+        dust_mass: unyt_quantity,
+        ldust: unyt_quantity,
+        dust_to_gas_ratio: float = None,
+        hydrogen_mass: unyt_quantity = None,
+        pah_fraction: float = None,
     ) -> None:
         """Set up the DL07 model parameters and grid indices.
 
@@ -278,6 +283,12 @@ class DraineLi07(DustEmission):
                 The dust mass.
             ldust (unyt_quantity):
                 The dust luminosity for calculating mean radiation field.
+            dust_to_gas_ratio (float, optional):
+                The dust-to-gas ratio to use. If None, uses instance default.
+            hydrogen_mass (unyt_quantity, optional):
+                The hydrogen mass to use. If None, uses instance default.
+            pah_fraction (float, optional):
+                The PAH fraction to use. If None, uses instance default.
         """
         if self.template != "DL07":
             raise exceptions.UnimplementedFunctionality(
@@ -289,19 +300,32 @@ class DraineLi07(DustEmission):
         grid_umin_values: NDArray[np.float32] = self.grid.umin
         grid_alpha_values: NDArray[np.float32] = self.grid.alpha
 
+        # Use provided parameters or fall back to instance defaults
+        effective_dust_to_gas_ratio = (
+            dust_to_gas_ratio
+            if dust_to_gas_ratio is not None
+            else self.dust_to_gas_ratio
+        )
+        effective_hydrogen_mass = (
+            hydrogen_mass if hydrogen_mass is not None else self.hydrogen_mass
+        )
+        effective_pah_fraction = (
+            pah_fraction if pah_fraction is not None else self.pah_fraction
+        )
+
         # Default maximum radiation field intensity
         umax: float = 1e7
 
         # Calculate hydrogen mass if not provided
-        calculated_hydrogen_mass = self.hydrogen_mass
+        calculated_hydrogen_mass = effective_hydrogen_mass
         if calculated_hydrogen_mass is None:
             warn(
                 "No hydrogen gas mass provided, assuming a "
-                f"dust-to-gas ratio of {self.dust_to_gas_ratio}"
+                f"dust-to-gas ratio of {effective_dust_to_gas_ratio}"
             )
             # Calculate hydrogen mass from dust mass and dust-to-gas ratio
             calculated_hydrogen_mass = (
-                0.74 * dust_mass / self.dust_to_gas_ratio
+                0.74 * dust_mass / effective_dust_to_gas_ratio
             )
 
         if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
@@ -343,7 +367,7 @@ class DraineLi07(DustEmission):
         pah_fraction_indices = (
             grid_pah_fractions
             == grid_pah_fractions[
-                np.argmin(np.abs(grid_pah_fractions - self.pah_fraction))
+                np.argmin(np.abs(grid_pah_fractions - effective_pah_fraction))
             ]
         )
         umin_indices = (
@@ -403,8 +427,9 @@ class DraineLi07(DustEmission):
         diffuse_luminosity = (
             (1.0 - self.gamma_calculated)
             * self.grid.spectra["diffuse"][
-                tuple(self.pah_fraction_indices), tuple(self.umin_indices)
-            ][0]
+                np.where(self.pah_fraction_indices)[0][0],
+                np.where(self.umin_indices)[0][0],
+            ]
             * (self.hydrogen_mass_calculated / Msun).value
         )
 
@@ -412,10 +437,10 @@ class DraineLi07(DustEmission):
         pdr_luminosity = (
             self.gamma_calculated
             * self.grid.spectra["pdr"][
-                tuple(self.pah_fraction_indices),
-                tuple(self.umin_indices),
-                tuple(self.alpha_indices),
-            ][0]
+                np.where(self.pah_fraction_indices)[0][0],
+                np.where(self.umin_indices)[0][0],
+                np.where(self.alpha_indices)[0][0],
+            ]
             * (self.hydrogen_mass_calculated / Msun).value
         )
 
@@ -475,7 +500,7 @@ class DraineLi07(DustEmission):
             # This is just for parameter setup, not for final scaling
             ldust = 1e10 * (dust_mass / (1e6 * Msun)) * Lsun
 
-        # Set up DL07 parameters
+        # Set up DL07 parameters using instance defaults
         self._setup_dl07_parameters(dust_mass, ldust)
 
         # Generate the base spectra
@@ -512,14 +537,19 @@ class DraineLi07(DustEmission):
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the dust parameters
+        # Unpack all dust parameters
         dust_mass = params["dust_mass"]
+        dust_to_gas_ratio = params["dust_to_gas_ratio"]
+        hydrogen_mass = params["hydrogen_mass"]
+        pah_fraction = params["pah_fraction"]
 
         # Calculate the dust luminosity for scaling
         ldust = self.get_scaling(emitter, model, emissions)
 
-        # Set up DL07 parameters using the dust luminosity
-        self._setup_dl07_parameters(dust_mass, ldust)
+        # Set up DL07 parameters using the extracted parameters
+        self._setup_dl07_parameters(
+            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, pah_fraction
+        )
 
         # Generate the base spectra
         sed = self._generate_dl07_spectra(lams)
@@ -570,14 +600,19 @@ class DraineLi07(DustEmission):
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the dust parameters
+        # Unpack all dust parameters
         dust_mass = params["dust_mass"]
+        dust_to_gas_ratio = params["dust_to_gas_ratio"]
+        hydrogen_mass = params["hydrogen_mass"]
+        pah_fraction = params["pah_fraction"]
 
         # Calculate the dust luminosity for scaling
         ldust = self.get_scaling(emitter, model, emissions)
 
-        # Set up DL07 parameters using the dust luminosity
-        self._setup_dl07_parameters(dust_mass, ldust)
+        # Set up DL07 parameters using the extracted parameters
+        self._setup_dl07_parameters(
+            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, pah_fraction
+        )
 
         # Generate the base spectra
         sed = self._generate_dl07_spectra(line_lams)
