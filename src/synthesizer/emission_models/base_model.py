@@ -739,7 +739,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if model._is_generating:
             # Are there any models attached to the generator?
             if (
-                model.generator._intrinsic is not None
+                hasattr(model.generator, "_intrinsic")
+                and hasattr(model.generator, "_attenuated")
+                and model.generator._intrinsic is not None
                 and model.generator._attenuated is not None
             ):
                 child = model.generator._intrinsic
@@ -752,7 +754,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     model.generator._intrinsic,
                     model.generator._attenuated,
                 )
-            if model.generator._scaler is not None:
+            if (
+                hasattr(model.generator, "_scaler")
+                and model.generator._scaler is not None
+            ):
                 child = model.generator._scaler
                 model._children.add(child)
                 child._parents.add(model)
@@ -2354,16 +2359,19 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             intrinsic_model = (
                 this_model.generator._intrinsic
                 if this_model.generator is not None
+                and hasattr(this_model.generator, "_intrinsic")
                 else None
             )
             attenuated_model = (
                 this_model.generator._attenuated
                 if this_model.generator is not None
+                and hasattr(this_model.generator, "_attenuated")
                 else None
             )
             scaler_model = (
                 this_model.generator._scaler
                 if this_model.generator is not None
+                and hasattr(this_model.generator, "_scaler")
                 else None
             )
             if (
