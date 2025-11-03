@@ -719,7 +719,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     )
             else:
                 raise exceptions.InconsistentArguments(
-                    f"Label {model.label} is already in use."
+                    f"Label {model.label} is already in use by another model. "
+                    f"Existing model: \n{self._models[model.label]}, \n"
+                    f"New model: \n{model})"
                 )
 
             self._models[model.label] = model
@@ -1342,65 +1344,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Get the model we are replacing
-        replace_model = self._models[replace_label]
-
-        # Get the children and parents of this model
-        parents = replace_model._parents
-        children = replace_model._children
-
-        # Define the relation to all parents and children
-        relations = {}
-        for parent in parents:
-            if replace_model in parent.combine:
-                relations[parent.label] = "combine"
-            if parent.apply_to == replace_model:
-                relations[parent.label] = "transform"
-            if (
-                parent._energy_balance_models is not None
-                and replace_model == parent._energy_balance_models[0]
-            ):
-                relations[parent.label] = "intrinsic"
-            if (
-                parent._energy_balance_models is not None
-                and replace_model == parent._energy_balance_models[1]
-            ):
-                relations[parent.label] = "attenuated"
-            if parent._scaler_model == replace_model:
-                relations[parent.label] = "scaler_model"
-        for child in children:
-            if child in replace_model.combine:
-                relations[child.label] = "combine"
-            if child.apply_to == replace_model:
-                relations[child.label] = "transform"
-            if (
-                child._energy_balance_models is not None
-                and replace_model == child._energy_balance_models[0]
-            ):
-                relations[child.label] = "dust_intrinsic"
-            if (
-                child._energy_balance_models is not None
-                and replace_model == child._energy_balance_models[1]
-            ):
-                relations[child.label] = "dust_attenuated"
-            if child._scaler_model == replace_model:
-                relations[child.label] = "scaler_model"
-
-        # Remove the model we are replacing
-        self._models.pop(replace_label)
-        for parent in parents:
-            parent._children.remove(replace_model)
-            if relations[parent.label] == "combine":
-                parent._combine.remove(replace_model)
-            if relations[parent.label] == "transform":
-                parent._apply_to = None
-            if relations[parent.label] == "dust_intrinsic":
-                parent._energy_balance_models[0] = None
-            if relations[parent.label] == "dust_attenuated":
-                parent._energy_balance_models[1] = None
-            if relations[parent.label] == "scaler_model":
-                parent._scaler_model = None
-        for child in children:
-            child._parents.remove(replace_model)
+        replace_model = self._models.pop(replace_label)
 
         # Do we have more than 1 replacement?
         if len(replacements) > 1:
@@ -1420,51 +1364,40 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     "replacements are passed."
                 )
 
-        # Attach the new model/s to the children
-        for child in children:
-            child._parents.update(set(replacements))
-
-        # Attach the new model to the parents
-        for parent in parents:
-            parent._children.add(new_model)
-            if relations[parent.label] == "combine":
-                parent._combine.append(new_model)
-            if relations[parent.label] == "transform":
-                parent._apply_to = new_model
-            if relations[parent.label] == "dust_intrinsic":
-                if parent._energy_balance_models is None:
-                    parent._energy_balance_models = (new_model, None)
-                else:
-                    parent._energy_balance_models = (
-                        new_model,
-                        parent._energy_balance_models[1],
-                    )
-            if relations[parent.label] == "dust_attenuated":
-                if parent._energy_balance_models is None:
-                    parent._energy_balance_models = (None, new_model)
-                else:
-                    parent._energy_balance_models = (
-                        parent._energy_balance_models[0],
-                        new_model,
-                    )
-            if relations[parent.label] == "scaler_model":
-                parent._scaler_model = new_model
-
-        # Make sure the generator agrees with the new model
-        for parent in parents:
-            if (
-                parent._is_generating
-                and parent._energy_balance_models is not None
-            ):
-                parent.generator.set_energy_balance(
-                    *parent._energy_balance_models
+        # Remove the old model from everywhere
+        for model in self._models.values():
+            if replace_model in model._children:
+                model._children.remove(replace_model)
+            if replace_model in model._parents:
+                model._parents.remove(replace_model)
+            if model._is_combining and replace_model in model.combine:
+                model._combine = tuple(
+                    m for m in model.combine if m.label != replace_model.label
                 )
-            if parent._is_generating and parent._scaler_model is not None:
-                parent.generator.set_scaler(parent._scaler_model)
-
-        # Add the new model to _models if it's not already there
-        if new_model.label not in self._models:
-            self._models[new_model.label] = new_model
+            if model._is_transforming and model.apply_to == replace_model:
+                model._apply_to = new_model
+            if model._is_generating:
+                if (
+                    hasattr(model.generator, "_scaler")
+                    and model.generator._scaler == replace_model
+                ):
+                    model._generator._scaler = new_model
+                if (
+                    hasattr(model.generator, "_intrinsic")
+                    and model.generator._intrinsic == replace_model
+                ):
+                    model._generator.set_energy_balance(
+                        new_model, model.generator._attenuated
+                    )
+                if (
+                    hasattr(model.generator, "_attenuated")
+                    and model.generator._attenuated == replace_model
+                ):
+                    model._generator.set_energy_balance(
+                        model.generator._intrinsic, new_model
+                    )
+            if replace_label in model._models:
+                model._models.pop(replace_label)
 
         # Unpack now we're done
         self.unpack_model()
