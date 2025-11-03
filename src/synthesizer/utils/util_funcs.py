@@ -144,11 +144,21 @@ def scalar_to_array(value):
 
 
 def array_to_scalar(x):
-    """Convert a NumPy array of length 1 to a scalar."""
-    x = np.asanyarray(x)  # ensures we can handle lists, tuples, or scalars
-    if x.size == 1:
-        return x.item()  # extracts the Python scalar
-    return x
+    """Convert a NumPy array-like of length 1 to a scalar.
+
+    Raises a ValueError if the input does not contain exactly one element.
+
+    Args:
+        x (array or list):
+            array or list to be converted
+    """
+    x = np.asanyarray(x)
+    if x.size != 1:
+        raise ValueError(
+            f"Expected an array with exactly 1 element, got shape {x.shape}"
+            f"with {x.size} elements."
+        )
+    return x.item()
 
 
 def parse_grid_id(grid_id):
