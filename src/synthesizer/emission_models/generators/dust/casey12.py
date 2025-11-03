@@ -307,7 +307,8 @@ class Casey12(DustEmission):
             scaling = scaling[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        sed._lnu = (lnu * scaling * cmb_factor).value
+        result = lnu * scaling * cmb_factor
+        sed._lnu = result.value if hasattr(result, "value") else result
 
         return sed
 
@@ -427,7 +428,8 @@ class Casey12(DustEmission):
             scaling = scaling[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        lnu = (lnu * scaling * cmb_factor).value
+        result = lnu * scaling * cmb_factor
+        lnu = result.value if hasattr(result, "value") else result
 
         # Return as LineCollection with continuum only
         lines = LineCollection(

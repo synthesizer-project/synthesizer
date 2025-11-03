@@ -566,7 +566,8 @@ class DraineLi07(DustEmission):
             ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        sed._lnu = (lnu * ldust).value
+        result = lnu * ldust
+        sed._lnu = result.value if hasattr(result, "value") else result
 
         return sed
 
@@ -653,7 +654,8 @@ class DraineLi07(DustEmission):
             ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        lnu = (lnu * ldust).value
+        result = lnu * ldust
+        lnu = result.value if hasattr(result, "value") else result
 
         # Return as LineCollection with continuum only
         lines = LineCollection(

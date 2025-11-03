@@ -95,6 +95,7 @@ def mock_model():
         def __init__(self):
             self.fixed_parameters = {}
             self.per_particle = False
+            self.label = "test_model"
 
     return MockModel()
 
@@ -112,6 +113,7 @@ def mock_emissions():
         "intrinsic": Sed(lam=lams, lnu=lnu_intrinsic),
         "attenuated": Sed(lam=lams, lnu=lnu_attenuated),
         "scaler": Sed(lam=lams, lnu=lnu_scaler),
+        "test_model": Sed(lam=lams, lnu=lnu_scaler),
     }
 
 
@@ -233,6 +235,7 @@ class TestBlackbodyGenerator:
             emitter=mock_emitter,
             model=mock_model,
             emissions=mock_emissions,
+            spectra=mock_emissions,
             redshift=0.0,
         )
 
@@ -852,6 +855,7 @@ class TestDustGeneratorIntegration:
                 emitter=mock_emitter,
                 model=mock_model,
                 emissions=mock_emissions,
+                spectra=mock_emissions,
                 redshift=0.0,
             )
 
