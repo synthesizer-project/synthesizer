@@ -84,7 +84,7 @@ class BlackholesComponent(Component):
             NLR. Either 0.0 or 1.0 depending on the scenario.
         blr_transmission_fraction (np.ndarray of float):
             The fraction of the disc emission that is transmitted through the
-            NLR. Either 0.0 or 1.0 depending on the scenario.
+            BLR. Either 0.0 or 1.0 depending on the scenario.
     """
 
     # Define class level Quantity attributes
