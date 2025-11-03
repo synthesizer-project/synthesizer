@@ -550,17 +550,26 @@ class Generation:
         summary.append(f"  Emission generation model: {self._generator}")
 
         # Do we have intrinsic/attenuated/scaler models?
-        if self._generator._intrinsic is not None:
+        if (
+            hasattr(self._generator, "_intrinsic")
+            and self._generator._intrinsic is not None
+        ):
             summary.append(
                 f"  Intrinsic energy balance model: "
                 f"{self.generator._intrinsic.label}"
             )
-        if self._generator._attenuated is not None:
+        if (
+            hasattr(self._generator, "_attenuated")
+            and self._generator._attenuated is not None
+        ):
             summary.append(
                 f"  Attenuated energy balance model: "
                 f"{self.generator._attenuated.label}"
             )
-        if self._generator._scaler is not None:
+        if (
+            hasattr(self._generator, "_scaler")
+            and self._generator._scaler is not None
+        ):
             summary.append(f"  Scaler model: {self.generator._scaler.label}")
 
         return summary
@@ -574,13 +583,22 @@ class Generation:
         group.attrs["generator"] = str(type(self._generator))
 
         # Save the energy balance models if they exist
-        if self._generator._intrinsic is not None:
+        if (
+            hasattr(self._generator, "_intrinsic")
+            and self._generator._intrinsic is not None
+        ):
             group.attrs["intrinsic_model"] = self.generator._intrinsic.label
-        if self._generator._attenuated is not None:
+        if (
+            hasattr(self._generator, "_attenuated")
+            and self._generator._attenuated is not None
+        ):
             group.attrs["attenuated_model"] = self.generator._attenuated.label
 
         # And the same for the scaler
-        if self._generator._scaler is not None:
+        if (
+            hasattr(self._generator, "_scaler")
+            and self._generator._scaler is not None
+        ):
             group.attrs["scaler_model"] = self.generator._scaler.label
 
 

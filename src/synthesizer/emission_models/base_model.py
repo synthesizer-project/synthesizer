@@ -1457,10 +1457,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 and parent._energy_balance_models is not None
             ):
                 parent.generator.set_energy_balance(
-                    parent._energy_balance_models
+                    *parent._energy_balance_models
                 )
             if parent._is_generating and parent._scaler_model is not None:
                 parent.generator.set_scaler(parent._scaler_model)
+
+        # Add the new model to _models if it's not already there
+        if new_model.label not in self._models:
+            self._models[new_model.label] = new_model
 
         # Unpack now we're done
         self.unpack_model()
