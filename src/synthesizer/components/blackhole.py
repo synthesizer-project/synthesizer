@@ -230,7 +230,7 @@ class BlackholesComponent(Component):
                 blr_covering_fraction_,
                 nlr_covering_fraction_,
             ) in enumerate(zip(blr_covering_fraction, nlr_covering_fraction)):
-                # Define the probiliaities for each option based on the
+                # Define the probabilities for each option based on the
                 # covering fractions.
                 probabilities = [
                     blr_covering_fraction_,
