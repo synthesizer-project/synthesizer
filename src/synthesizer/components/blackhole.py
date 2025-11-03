@@ -73,6 +73,18 @@ class BlackholesComponent(Component):
             The angle of the torus.
         torus_fraction (np.ndarray of float):
             The fraction of the torus angle to 90 degrees.
+        disc_transmission (np.ndarray of str):
+            The disc transmission scenario used by UnifiedAGN. Can either be
+            "none", "blr", or "nlr".
+        escape_transmission_fraction (np.ndarray of float):
+            The fraction of the disc emission that escapes. Either 0.0 or 1.0
+            depending on the scenario.
+        nlr_transmission_fraction (np.ndarray of float):
+            The fraction of the disc emission that is transmitted through the
+            NLR. Either 0.0 or 1.0 depending on the scenario.
+        blr_transmission_fraction (np.ndarray of float):
+            The fraction of the disc emission that is transmitted through the
+            NLR. Either 0.0 or 1.0 depending on the scenario.
     """
 
     # Define class level Quantity attributes
@@ -193,36 +205,58 @@ class BlackholesComponent(Component):
         self.covering_fraction_nlr = covering_fraction_nlr
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
 
+        # If a covering_fraction_blr is set then randomly allocate a scenario
+        # for the disc transmission. This can either be that emission entirely
+        #  escapes (none), or is transmitted through the BLR (blr), or NLR
+        # (nlr). These are allocated based on the relative covering fractions
+        # of the BLR and NLR. These are used by the UnifiedAGN emission model.
         if self.covering_fraction_blr is not None:
-            # define transmission scenario choices
+            # Define transmission scenario choices
             transmission_scenario_choices = ["blr", "nlr", "none"]
 
-            # convert to arrays
+            # Convert the blr_covering_fraction and nlr_covering_fraction to
+            # arrays to allow us to use the same logic for both parametric and
+            # particle blackholes.
             blr_covering_fraction = scalar_to_array(covering_fraction_nlr)
             nlr_covering_fraction = scalar_to_array(covering_fraction_blr)
 
-            # calculate length
+            # Define number of blackholes.
             N = len(blr_covering_fraction)
 
+            # Loop over blackholes and decide whether the disc emission
+            # escapes (none), or is transmitted through the BLR (blr) or NLR
+            # (nlr).
             disc_transmission_ = np.empty(N, dtype="U10")
             for i, (
                 blr_covering_fraction_,
                 nlr_covering_fraction_,
             ) in enumerate(zip(blr_covering_fraction, nlr_covering_fraction)):
+                # Define the probiliaities for each option based on the
+                # covering fractions.
                 probabilities = [
                     blr_covering_fraction_,
                     nlr_covering_fraction_,
                     1.0 - blr_covering_fraction_ - nlr_covering_fraction_,
                 ]
 
+                # Randomly choose the scenario using these probabilities.
                 disc_transmission_[i] = np.random.choice(
                     transmission_scenario_choices, p=probabilities
                 )
 
+            # Initialise transmission fraction arrays. These determine the
+            # fraction of the disc emission that entirely escapes or is
+            # transmitted through the BLR and NLR. Since, in this context,
+            # the emission is only propagated through one component then one
+            # of these must be unity with the other two zero. It is however
+            # possible to use the average, but this is more clearly
+            # implemented at the emission model level.
             escape_transmission_fraction = np.zeros(N)
             nlr_transmission_fraction = np.zeros(N)
             blr_transmission_fraction = np.zeros(N)
 
+            # For each corresponding scenario set the transmission fraction to
+            # unity.
             escape_transmission_fraction[disc_transmission_ == "none"] = 1.0
             nlr_transmission_fraction[disc_transmission_ == "nlr"] = 1.0
             blr_transmission_fraction[disc_transmission_ == "blr"] = 1.0
