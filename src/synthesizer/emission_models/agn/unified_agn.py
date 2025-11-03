@@ -270,71 +270,82 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        if disc_transmission in ["none", "nlr", "blr", "random"]:
+        if disc_transmission in ["escaped", "none", "nlr", "blr", "random"]:
             # If disc_transmission == 'none' the emission seen by the observer
             # is simply the incident emission. This step also accounts for the
             # torus.
             if disc_transmission == "none":
-                escape_transmission_fraction = 1.0
-                nlr_transmission_fraction = 0.0
-                blr_transmission_fraction = 0.0
+                transmission_fraction_escape = 1.0
+                transmission_fraction_nlr = 0.0
+                transmission_fraction_blr = 0.0
+
+            if disc_transmission == "escaped":
+                transmission_fraction_escape = 1.0
+                transmission_fraction_nlr = 0.0
+                transmission_fraction_blr = 0.0
 
             # If disc_transmission == 'nlr' the emission seen by the observer
             # is the spectrum transmitted through the NLR. This step also
             # accounts for the torus.
             elif disc_transmission == "nlr":
-                escape_transmission_fraction = 0.0
-                nlr_transmission_fraction = 1.0
-                blr_transmission_fraction = 0.0
+                transmission_fraction_escape = 0.0
+                transmission_fraction_nlr = 1.0
+                transmission_fraction_blr = 0.0
 
             # If disc_transmission == 'blr' the emission seen by the observer
             # is the spectrum transmitted through the BLR. This step also
             # accounts for the torus.
             elif disc_transmission == "blr":
-                escape_transmission_fraction = 0.0
-                nlr_transmission_fraction = 0.0
-                blr_transmission_fraction = 1.0
+                transmission_fraction_escape = 0.0
+                transmission_fraction_nlr = 0.0
+                transmission_fraction_blr = 1.0
 
             # If disc_transmission == 'random' the emission seen by the
             # observer is chosen at random for each blackhole using covering
             # fractions. This is only possible if the transmission fractions
             # have been set on the component.
             elif disc_transmission == "random":
-                escape_transmission_fraction = "escape_transmission_fraction"
-                nlr_transmission_fraction = "nlr_transmission_fraction"
-                blr_transmission_fraction = "blr_transmission_fraction"
+                transmission_fraction_escape = "transmission_fraction_escape"
+                transmission_fraction_nlr = "transmission_fraction_nlr"
+                transmission_fraction_blr = "transmission_fraction_blr"
 
+            # Now calculate the disc_escaped emission using this transmission
+            # fraction.
             self.disc_escaped_ = BlackHoleEmissionModel(
                 label="disc_escaped",
                 apply_to=self.disc_incident,
                 transformer=CoveringFraction(
-                    covering_attrs=("escape_transmission_fraction",)
+                    covering_attrs=("transmission_fraction_escape",)
                 ),
-                escape_transmission_fraction=escape_transmission_fraction,
+                transmission_fraction_escape=transmission_fraction_escape,
                 **kwargs,
             )
 
+            # Now calculate the disc_transmitted_nlr emission using this
+            # transmission fraction.
             self.disc_transmitted_nlr_ = BlackHoleEmissionModel(
                 label="disc_transmitted_nlr_",
                 apply_to=self.disc_transmitted_nlr,
                 transformer=CoveringFraction(
-                    covering_attrs=("nlr_transmission_fraction",)
+                    covering_attrs=("transmission_fraction_nlr",)
                 ),
-                nlr_transmission_fraction=nlr_transmission_fraction,
+                transmission_fraction_nlr=transmission_fraction_nlr,
                 **kwargs,
             )
 
+            # Now calculate the disc_transmitted_blr emission using this
+            # transmission fraction.
             self.disc_transmitted_blr_ = BlackHoleEmissionModel(
                 label="disc_transmitted_blr_",
                 apply_to=self.disc_transmitted_blr,
                 transformer=CoveringFraction(
-                    covering_attrs=("blr_transmission_fraction",)
+                    covering_attrs=("transmission_fraction_blr",)
                 ),
-                blr_transmission_fraction=blr_transmission_fraction,
+                transmission_fraction_blr=transmission_fraction_blr,
                 **kwargs,
             )
 
-            # Now combine the different components
+            # Now combine the three different components to produce the total.
             disc_transmitted = BlackHoleEmissionModel(
                 label="disc_transmitted",
                 combine=(
