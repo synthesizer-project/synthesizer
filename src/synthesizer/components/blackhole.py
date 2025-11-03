@@ -217,9 +217,8 @@ class BlackholesComponent(Component):
             # Convert the blr_covering_fraction and nlr_covering_fraction to
             # arrays to allow us to use the same logic for both parametric and
             # particle blackholes.
-            blr_covering_fraction = scalar_to_array(covering_fraction_nlr)
-            nlr_covering_fraction = scalar_to_array(covering_fraction_blr)
-
+            blr_covering_fraction = scalar_to_array(covering_fraction_blr)
+            nlr_covering_fraction = scalar_to_array(covering_fraction_nlr)
             # Define number of blackholes.
             N = len(blr_covering_fraction)
 
