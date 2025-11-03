@@ -554,12 +554,19 @@ class DraineLi07(DustEmission):
         # Generate the base spectra
         sed = self._generate_dl07_spectra(lams)
 
-        # Normalise the spectrum and apply scaling with proper unit handling
         # Get the bolometric luminosity with proper units
-        bol_lum = sed.bolometric_luminosity
+        bol_lum = sed._bolometric_luminosity
+
+        # Normalise the DL07 spectrum
+        sed._lnu /= bol_lum
+        lnu = sed._lnu
+
+        # Handle per particle scaling (we need to expand the scaling shape)
+        if model.per_particle:
+            ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        sed._lnu = (sed.lnu / bol_lum * ldust).value
+        sed._lnu = (lnu * ldust).value
 
         return sed
 
@@ -571,6 +578,7 @@ class DraineLi07(DustEmission):
         emitter,
         model,
         emissions,
+        spectra,
         redshift=0,
     ) -> LineCollection:
         """Generate line emission spectra.
@@ -589,6 +597,9 @@ class DraineLi07(DustEmission):
                 The emission model generating the emission.
             emissions (dict):
                 Dictionary containing all emissions generated so far.
+            spectra (dict):
+                Dictionary containing all spectra generated so far
+                (used for scaling).
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -597,6 +608,16 @@ class DraineLi07(DustEmission):
             LineCollection:
                 The generated line collection.
         """
+        # If we are missing this spectra then we cannot generate lines
+        if model.label not in spectra:
+            raise exceptions.MissingSpectraType(
+                f"Cannot generate lines for {model.label} as spectra are "
+                "missing. Please generate spectra first or remove the "
+                "generation of lines."
+            )
+        else:
+            sed = spectra[model.label]
+
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
@@ -607,29 +628,39 @@ class DraineLi07(DustEmission):
         pah_fraction = params["pah_fraction"]
 
         # Calculate the dust luminosity for scaling
-        ldust = self.get_scaling(emitter, model, emissions)
+        ldust = self.get_scaling(emitter, model, spectra)
 
         # Set up DL07 parameters using the extracted parameters
         self._setup_dl07_parameters(
             dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, pah_fraction
         )
 
-        # Generate the base spectra
-        sed = self._generate_dl07_spectra(line_lams)
+        # Generate the DL07 function
+        lnu = self._generate_dl07_spectra(line_lams).lnu
+        norm_lnu = self._generate_dl07_spectra(sed.lam).lnu
 
-        # Normalise the spectrum and apply scaling with proper unit handling
+        # Create an SED object for convenience
+        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
+
         # Get the bolometric luminosity with proper units
-        bol_lum = sed.bolometric_luminosity
+        bol_lum = norm_sed._bolometric_luminosity
+
+        # Normalise the DL07 spectrum
+        lnu /= bol_lum
+
+        # Handle per particle scaling (we need to expand the scaling shape)
+        if model.per_particle:
+            ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        sed._lnu = (sed.lnu / bol_lum * ldust).value
+        lnu = (lnu * ldust).value
 
         # Return as LineCollection with continuum only
         lines = LineCollection(
             line_ids,
             line_lams,
-            lum=np.zeros(sed._lnu.shape) * erg / s,
-            cont=sed.lnu,
+            lum=np.zeros(lnu.shape) * erg / s,
+            cont=lnu * erg / s / Hz,
         )
 
         return lines

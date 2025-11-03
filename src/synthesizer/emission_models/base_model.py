@@ -2900,6 +2900,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 emission_type="lines",
             )
 
+        # Collect existing spectra from all emitters for scaling purposes
+        spectra = {}
+        particle_spectra = {}
+        for emitter_name, emitter in emitters.items():
+            if hasattr(emitter, "spectra"):
+                spectra.update(emitter.spectra)
+            if hasattr(emitter, "particle_spectra"):
+                particle_spectra.update(emitter.particle_spectra)
+
         # Perform all extractions first
         for label in emission_model._extract_keys.keys():
             # Skip it if we happen to already have the lines
@@ -3012,6 +3021,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         emitter,
                         lines[list(lines.keys())[0]].lam,
                         line_ids,
+                        spectra,
+                        particle_spectra,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):

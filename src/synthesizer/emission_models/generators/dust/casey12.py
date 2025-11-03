@@ -17,6 +17,7 @@ from unyt import (
     unyt_quantity,
 )
 
+from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
@@ -291,13 +292,22 @@ class Casey12(DustEmission):
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
 
-        # Normalise the spectrum and apply scaling with proper unit handling
         # Get the bolometric luminosity with proper units
-        bol_lum = sed.bolometric_luminosity
+        bol_lum = sed._bolometric_luminosity
+
+        # Normalise the Casey12 spectrum
+        sed._lnu /= bol_lum
+        lnu = sed._lnu
+
+        # Get the scaling we will need
         scaling = self.get_scaling(emitter, model, emissions)
 
+        # Handle per particle scaling (we need to expand the scaling shape)
+        if model.per_particle:
+            scaling = scaling[:, np.newaxis]
+
         # Properly handle units: normalize then scale
-        sed._lnu = (sed.lnu / bol_lum * scaling * cmb_factor).value
+        sed._lnu = (lnu * scaling * cmb_factor).value
 
         return sed
 
@@ -309,6 +319,7 @@ class Casey12(DustEmission):
         emitter,
         model,
         emissions,
+        spectra,
         redshift=0,
     ) -> LineCollection:
         """Generate line emission spectra.
@@ -327,6 +338,9 @@ class Casey12(DustEmission):
                 The emission model generating the emission.
             emissions (dict):
                 Dictionary containing all emissions generated so far.
+            spectra (dict):
+                Dictionary containing all spectra generated so far
+                (used for scaling).
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
@@ -335,6 +349,16 @@ class Casey12(DustEmission):
             LineCollection:
                 The generated line collection.
         """
+        # If we are missing this spectra then we cannot generate lines
+        if model.label not in spectra:
+            raise exceptions.MissingSpectraType(
+                f"Cannot generate lines for {model.label} as spectra are "
+                "missing. Please generate spectra first or remove the "
+                "generation of lines."
+            )
+        else:
+            sed = spectra[model.label]
+
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
@@ -343,6 +367,7 @@ class Casey12(DustEmission):
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
+        sed_nu = sed.nu
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
@@ -379,28 +404,37 @@ class Casey12(DustEmission):
 
         # Compute the Casey12 function
         lnu = self._lnu(nu, temperature)
+        norm_lnu = self._lnu(sed_nu, temperature)
 
         # Restore original values
         self.lam_c = original_lam_c
         self.n_pl = original_n_pl
 
         # Create an SED object for convenience
-        sed = Sed(lam=line_lams, lnu=lnu)
+        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
+
+        # Get the bolometric luminosity with proper units
+        bol_lum = norm_sed._bolometric_luminosity
+
+        # Normalise the Casey12 spectrum
+        lnu /= bol_lum
 
         # Normalise the spectrum and apply scaling with proper unit handling
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed.bolometric_luminosity
-        scaling = self.get_scaling(emitter, model, emissions)
+        scaling = self.get_scaling(emitter, model, spectra)
+
+        # Handle per particle scaling (we need to expand the scaling shape)
+        if model.per_particle:
+            scaling = scaling[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        sed._lnu = (sed.lnu / bol_lum * scaling * cmb_factor).value
+        lnu = (lnu * scaling * cmb_factor).value
 
         # Return as LineCollection with continuum only
         lines = LineCollection(
             line_ids,
             line_lams,
-            lum=np.zeros(sed._lnu.shape) * erg / s,
-            cont=sed.lnu,
+            lum=np.zeros(lnu.shape) * erg / s,
+            cont=lnu * erg / s / Hz,
         )
 
         return lines

@@ -457,6 +457,8 @@ class Generation:
         emitter,
         lams,
         line_ids,
+        spectra,
+        particle_spectra,
     ):
         """Generate the lines for a given model.
 
@@ -478,6 +480,11 @@ class Generation:
                 The line wavelengths to generate the lines at.
             line_ids (list):
                 The line ids to generate.
+            spectra (dict):
+                Dictionary of existing spectra from all emitters for scaling.
+            particle_spectra (dict):
+                Dictionary of existing particle spectra from all emitters for
+                scaling.
 
         Returns:
             dict:
@@ -529,6 +536,7 @@ class Generation:
                 emitter,
                 this_model,
                 particle_lines if per_particle else lines,
+                particle_spectra if per_particle else spectra,
             )
 
         # Store the lines in the right place (integrating if we need to)
