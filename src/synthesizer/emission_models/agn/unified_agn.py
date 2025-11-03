@@ -232,32 +232,34 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
     def _make_disc_transmitted(
         self,
-        covering_fraction_nlr,
-        covering_fraction_blr,
         disc_transmission,
         **kwargs,
     ):
         """Calculate the observed disc spectrum.
 
-        There are a few options here that are set by the disc_transmission
-        keyword. Either the disc emission escapes, goes through the NLR, goes
-        through the BLR, or is blocked entirely by the torus. These can be set
-        direction so that they apply to all blackholes or the keyword random
-        can be given. In the random case each blackhole is assigned a random
-        option based on the relative escape fractions of the NLR and BLR.
+        For an individual blackhole there are four options. Either the disc
+        emission escapes (disc_transmission='none'), is transmitted through
+        the NLR (disc_transmission='nlr'), is transmitted through the BLR
+        (disc_transmission='blr'), or is the inclination averaged
+        (disc_transmission='average').
+
+        The latter scenario is always calculated but is not used to calculate
+        the disc_transmitted spectrum unless explicitly asked for. At the
+        initialisation of the blackhole object one of the other three
+        scenarios is randomly assigned based on the nlr and blr covering
+        fractions. The default behaviour of UnifiedAGN is to use these
+        randomly assigned scenarios. However, by providing the
+        disc_transmission keyword argument to UnifiedAGN we can overide this
+        and force all blackholes to adopt the same transmission scenario.
+
+        Note: when the viewing angle (inlination) meets the torus criteria
+        it is always blocked.
 
         Args:
-            nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
-            blr_grid (synthesizer.grid.Grid): The grid for the BLR.
-            covering_fraction_nlr (float): The covering fraction of the NLR.
-            covering_fraction_blr (float): The covering fraction of the BLR.
-            disc_transmission (str): The disc transmission model.
+            disc_transmission (str): The disc transmission sceanrio.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
-        print(covering_fraction_nlr)
-        print(covering_fraction_blr)
-
         # Calculate the average transmission. This is effectively the
         # disc_averaged without including the torus but then masked for
         # the torus.
