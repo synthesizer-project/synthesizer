@@ -76,13 +76,13 @@ class BlackholesComponent(Component):
         disc_transmission (np.ndarray of str):
             The disc transmission scenario used by UnifiedAGN. Can either be
             "none", "blr", or "nlr".
-        escape_transmission_fraction (np.ndarray of float):
+        transmission_fraction_escape (np.ndarray of float):
             The fraction of the disc emission that escapes. Either 0.0 or 1.0
             depending on the scenario.
-        nlr_transmission_fraction (np.ndarray of float):
+        transmission_fraction_nlr (np.ndarray of float):
             The fraction of the disc emission that is transmitted through the
             NLR. Either 0.0 or 1.0 depending on the scenario.
-        blr_transmission_fraction (np.ndarray of float):
+        transmission_fraction_blr (np.ndarray of float):
             The fraction of the disc emission that is transmitted through the
             BLR. Either 0.0 or 1.0 depending on the scenario.
     """
@@ -205,6 +205,12 @@ class BlackholesComponent(Component):
         self.covering_fraction_nlr = covering_fraction_nlr
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
 
+        # Validate that covering fractions don't exceed unity
+        if np.any(covering_fraction_nlr + covering_fraction_blr > 1.0):
+            raise exceptions.InconsistentArguments(
+                "Sum of BLR and NLR covering fractions cannot exceed 1.0"
+            )
+
         # If a covering_fraction_blr is set then randomly allocate a scenario
         # for the disc transmission. This can either be that emission entirely
         #  escapes (none), or is transmitted through the BLR (blr), or NLR
@@ -214,13 +220,13 @@ class BlackholesComponent(Component):
             # Define transmission scenario choices
             transmission_scenario_choices = ["blr", "nlr", "none"]
 
-            # Convert the blr_covering_fraction and nlr_covering_fraction to
+            # Convert the covering_fraction_blr and covering_fraction_nlr to
             # arrays to allow us to use the same logic for both parametric and
             # particle blackholes.
-            blr_covering_fraction = scalar_to_array(covering_fraction_blr)
-            nlr_covering_fraction = scalar_to_array(covering_fraction_nlr)
+            covering_fraction_blr = scalar_to_array(covering_fraction_blr)
+            covering_fraction_nlr = scalar_to_array(covering_fraction_nlr)
             # Define number of blackholes.
-            N = len(blr_covering_fraction)
+            N = len(covering_fraction_blr)
 
             # Loop over blackholes and decide whether the disc emission
             # escapes (none), or is transmitted through the BLR (blr) or NLR
@@ -229,7 +235,7 @@ class BlackholesComponent(Component):
             for i, (
                 blr_covering_fraction_,
                 nlr_covering_fraction_,
-            ) in enumerate(zip(blr_covering_fraction, nlr_covering_fraction)):
+            ) in enumerate(zip(covering_fraction_blr, covering_fraction_nlr)):
                 # Define the probabilities for each option based on the
                 # covering fractions.
                 probabilities = [
@@ -250,25 +256,25 @@ class BlackholesComponent(Component):
             # of these must be unity with the other two zero. It is however
             # possible to use the average, but this is more clearly
             # implemented at the emission model level.
-            escape_transmission_fraction = np.zeros(N)
-            nlr_transmission_fraction = np.zeros(N)
-            blr_transmission_fraction = np.zeros(N)
+            transmission_fraction_escape = np.zeros(N)
+            transmission_fraction_nlr = np.zeros(N)
+            transmission_fraction_blr = np.zeros(N)
 
             # For each corresponding scenario set the transmission fraction to
             # unity.
-            escape_transmission_fraction[disc_transmission_ == "none"] = 1.0
-            nlr_transmission_fraction[disc_transmission_ == "nlr"] = 1.0
-            blr_transmission_fraction[disc_transmission_ == "blr"] = 1.0
+            transmission_fraction_escape[disc_transmission_ == "none"] = 1.0
+            transmission_fraction_nlr[disc_transmission_ == "nlr"] = 1.0
+            transmission_fraction_blr[disc_transmission_ == "blr"] = 1.0
 
             # convert to scalars if only one value
-            self.escape_transmission_fraction = array_to_scalar(
-                escape_transmission_fraction
+            self.transmission_fraction_escape = array_to_scalar(
+                transmission_fraction_escape
             )
-            self.nlr_transmission_fraction = array_to_scalar(
-                nlr_transmission_fraction
+            self.transmission_fraction_nlr = array_to_scalar(
+                transmission_fraction_nlr
             )
-            self.blr_transmission_fraction = array_to_scalar(
-                blr_transmission_fraction
+            self.transmission_fraction_blr = array_to_scalar(
+                transmission_fraction_blr
             )
             self.disc_transmission = array_to_scalar(disc_transmission_)
 
