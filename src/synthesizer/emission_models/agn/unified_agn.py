@@ -119,8 +119,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # Get the transmitted disc emission models
         self.disc_transmitted = self._make_disc_transmitted(
-            covering_fraction_nlr,
-            covering_fraction_blr,
             disc_transmission,
             **kwargs,
         )
