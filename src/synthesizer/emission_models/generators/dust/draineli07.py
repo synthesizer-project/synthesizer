@@ -562,7 +562,7 @@ class DraineLi07(DustEmission):
         lnu = sed._lnu
 
         # Handle per particle scaling (we need to expand the scaling shape)
-        if model.per_particle:
+        if model is not None and model.per_particle:
             ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale
@@ -649,7 +649,7 @@ class DraineLi07(DustEmission):
         lnu /= bol_lum
 
         # Handle per particle scaling (we need to expand the scaling shape)
-        if model.per_particle:
+        if model is not None and model.per_particle:
             ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale

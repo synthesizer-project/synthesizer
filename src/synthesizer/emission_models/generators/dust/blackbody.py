@@ -143,11 +143,12 @@ class Blackbody(DustEmission):
         scaling = self.get_scaling(emitter, model, emissions)
 
         # Handle per particle scaling (we need to expand the scaling shape)
-        if model.per_particle:
+        if model is not None and model.per_particle:
             scaling = scaling[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        sed._lnu = (lnu * scaling * cmb_factor).value
+        result = lnu * scaling * cmb_factor
+        sed._lnu = result.value if hasattr(result, "value") else result
 
         return sed
 
@@ -233,7 +234,7 @@ class Blackbody(DustEmission):
         scaling = self.get_scaling(emitter, model, spectra)
 
         # Handle per particle scaling (we need to expand the scaling shape)
-        if model.per_particle:
+        if model is not None and model.per_particle:
             scaling = scaling[:, np.newaxis]
 
         # Properly handle units: normalize then scale
