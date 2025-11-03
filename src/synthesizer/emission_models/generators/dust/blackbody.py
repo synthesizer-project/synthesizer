@@ -144,6 +144,9 @@ class Blackbody(DustEmission):
 
         # Handle per particle scaling (we need to expand the scaling shape)
         if model is not None and model.per_particle:
+            if not hasattr(scaling, "shape"):
+                # scaling is a float, need to convert to array
+                scaling = np.full(emitter.nparticles, scaling)
             scaling = scaling[:, np.newaxis]
 
         # Properly handle units: normalize then scale
@@ -235,6 +238,9 @@ class Blackbody(DustEmission):
 
         # Handle per particle scaling (we need to expand the scaling shape)
         if model is not None and model.per_particle:
+            if not hasattr(scaling, "shape"):
+                # scaling is a float, need to convert to array
+                scaling = np.full(emitter.nparticles, scaling)
             scaling = scaling[:, np.newaxis]
 
         # Properly handle units: normalize then scale

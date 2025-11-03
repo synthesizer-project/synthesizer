@@ -563,6 +563,9 @@ class DraineLi07(DustEmission):
 
         # Handle per particle scaling (we need to expand the scaling shape)
         if model is not None and model.per_particle:
+            if not hasattr(ldust, "shape"):
+                # ldust is a float, need to convert to array
+                ldust = np.full(emitter.nparticles, ldust)
             ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale
@@ -651,6 +654,9 @@ class DraineLi07(DustEmission):
 
         # Handle per particle scaling (we need to expand the scaling shape)
         if model is not None and model.per_particle:
+            if not hasattr(ldust, "shape"):
+                # ldust is a float, need to convert to array
+                ldust = np.full(emitter.nparticles, ldust)
             ldust = ldust[:, np.newaxis]
 
         # Properly handle units: normalize then scale
