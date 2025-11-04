@@ -5,7 +5,7 @@ used for sampling values in various contexts within the synthesizer framework.
 """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,6 +21,24 @@ class Distribution(ABC):
     sampled from. Subclasses must implement the `sample` method to provide
     an interface for generating random samples according to the specific
     distribution.
+
+    Attributes:
+        units (unyt.Unit):
+            The unyt units associated with the distribution's samples.
+        required_parameters (Tuple[str]):
+            A tuple of parameters that the distribution requires. Ensures
+            that these parameters are provided before sampling.
+
+    Methods:
+        _distribution() -> float:
+            Define the probability distribution function, returning a single
+            sample value.
+        sample(nsamples: int) -> Union[unyt_array, np.ndarray]:
+            Generate random samples from the distribution.
+        plot(fig: Optional[plt.Figure] = None,
+             ax: Optional[plt.Axes] = None,
+             show: bool = False, **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+            Plot the distribution function.
     """
 
     def __init__(
@@ -34,10 +52,8 @@ class Distribution(ABC):
             units (unyt.Unit):
                 The unyt units associated with the distribution's samples.
             required_parameters (Tuple[str]):
-                A tuple of parameters that the distribution requires. This
-                ensures that any caller provides these parameters when
-                sampling but can also be used to extract parameters from an
-                emitter object.
+                A tuple of parameters that the distribution requires. Ensures
+                that these parameters are provided before sampling.
         """
         # Attach the distribution properties
         self.units = units
@@ -78,7 +94,7 @@ class Distribution(ABC):
         """
         # Ensure all required parameters are provided
         for param in self.required_parameters:
-            if not hasattr(self, param):
+            if getattr(self, param, None) is None:
                 raise exceptions.MissingParameter(
                     f"Missing required parameter '{param}' for sampling "
                     f"from distribution."
@@ -96,9 +112,9 @@ class Distribution(ABC):
     @abstractmethod
     def plot(
         self,
-        fig=None,
-        ax=None,
-        show=False,
+        fig: Optional[plt.Figure] = None,
+        ax: Optional[plt.Axes] = None,
+        show: bool = False,
         **kwargs,
     ) -> Tuple[plt.Figure, plt.Axes]:
         """Plot the distribution function.
