@@ -5,9 +5,10 @@ used for sampling values in various contexts within the synthesizer framework.
 """
 
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Union
 
-from unyt import Unit
+import numpy as np
+from unyt import Unit, unyt_array
 
 from synthesizer import exceptions
 
@@ -106,7 +107,7 @@ class Distribution(ABC):
         self,
         size: int,
         **kwargs,
-    ) -> list:
+    ) -> Union[unyt_array, np.ndarray]:
         """Generate random samples from the distribution.
 
         This method generates random samples according to the defined
