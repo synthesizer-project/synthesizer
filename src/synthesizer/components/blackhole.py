@@ -439,7 +439,7 @@ class BlackholesComponent(Component):
         Calculates the ionising parameter (U) at radial_distance for the given
         hydrogen_density.
 
-        U = \frac{Q_{\\mathrm{H}}}{4\\pi r^{2} n_{\\mathrm{H}} c}
+        U = \frac{Q_{\mathrm{H}}}{4\pi r^{2} n_{\mathrm{H}} c}
 
         Args:
             radial_distance (np.ndarray of float):
