@@ -6,7 +6,7 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Msun, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -379,3 +379,80 @@ class BlackholesComponent(Component):
         formatter = TableFormatter(self)
 
         return formatter.get_table("Black Holes")
+
+    def calculate_circular_velocity(self, radial_distance):
+        r"""Calculate the circular velocity.
+
+        v_c(r) = \\sqrt{\frac{G M(<r)}{r}}.
+
+        Args:
+            radial_distance (np.ndarray of float):
+                The distance from the blackhole.
+
+        Returns:
+             unyt_array:
+                The circular velocity at the radial distance.
+        """
+        return np.sqrt(G * self.mass / radial_distance)
+
+    def calculate_schwarzschild_radius(self):
+        r"""Calculate the Schwarzschild radius of the blackhole(s).
+
+        R_{\rm s} = \frac{2GM}{c^2}
+
+        Returns:
+             unyt_array:
+                The Schwarzschild radius.
+        """
+        return 2 * G * self.mass / c**2
+
+    def calculate_ionising_luminosity(self):
+        """Calculates the ionising luminosity of the blackhole(s).
+
+        This requires that the disc_incident spectra be available.
+
+        Returns:
+             unyt_array:
+                The Schwarzschild radius.
+        """
+        # If there are multiple black holes:
+        if "disc_incident" in self.particle_spectra.keys():
+            return self.particle_spectra[
+                "disc_incident"
+            ].calculate_ionising_photon_production_rate()
+        # Else if there is only a single black hole:
+        elif "disc_incident" in self.spectra.keys():
+            return self.spectra[
+                "disc_incident"
+            ].calculate_ionising_photon_production_rate()
+        else:
+            raise exceptions.MissingSpectraType(
+                "It is necessary to first calculate the disc_incident spectra"
+                "before calculating the ionising luminosity"
+            )
+
+    def calculate_ionisation_parameter(
+        self, radial_distance, hydrogen_density
+    ):
+        r"""Calculate the ionisation parameter.
+
+        Calculates the ionising parameter (U) at radial_distance for the given
+        hydrogen_density.
+
+        U = \frac{Q_{\\mathrm{H}}}{4\\pi r^{2} n_{\\mathrm{H}} c}
+
+        Args:
+            radial_distance (np.ndarray of float):
+                The distance from the blackhole.
+            hydrogen_density (np.ndarray of float):
+                The hydrogen density at radial_distance.
+
+        Returns:
+             unyt_array:
+                The ionisation parameter.
+        """
+        ionising_luminosity = self.calculate_ionising_luminosity()
+
+        return ionising_luminosity / (
+            4 * np.pi * radial_distance**2 * hydrogen_density * c
+        )
