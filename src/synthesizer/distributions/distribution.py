@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Union
 
 import numpy as np
-from unyt import Unit, unyt_array
+from unyt import Unit, dimensionless, unyt_array
 
 from synthesizer import exceptions
 
@@ -88,7 +88,7 @@ class Distribution(ABC):
         self.required_parameters = required_parameters
 
     @abstractmethod
-    def distribution(self, **kwargs):
+    def distribution(self, **kwargs) -> float:
         """Define the probability distribution function.
 
         This method should be implemented by subclasses to define the
@@ -136,8 +136,11 @@ class Distribution(ABC):
                     f"from distribution."
                 )
 
-        # We have what we need, call the distribution function
-        return self.distribution(size, **kwargs)
+        # We have what we need, call the distribution function and attach
+        # units if appropriate
+        if self.units == dimensionless:
+            return self.distribution(size, **kwargs)
+        return self.distribution(size, **kwargs) * self.units
 
     def extract_parameters(self, *objs) -> dict:
         """Extract required parameters from an object or provided parameters.
