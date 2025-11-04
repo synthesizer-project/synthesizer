@@ -1007,7 +1007,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 None, sets the dust emission model on this model.
         """
         # Ensure model is a emission generation model and change the model
-        if self._models._is_generating:
+        if self._is_generating:
             self._set_attr("generator", generator)
         else:
             raise exceptions.InconsistentArguments(
