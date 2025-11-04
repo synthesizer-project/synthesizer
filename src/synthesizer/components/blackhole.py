@@ -267,16 +267,24 @@ class BlackholesComponent(Component):
             transmission_fraction_blr[disc_transmission_ == "blr"] = 1.0
 
             # convert to scalars if only one value
-            self.transmission_fraction_escape = array_to_scalar(
-                transmission_fraction_escape
-            )
-            self.transmission_fraction_nlr = array_to_scalar(
-                transmission_fraction_nlr
-            )
-            self.transmission_fraction_blr = array_to_scalar(
-                transmission_fraction_blr
-            )
-            self.disc_transmission = array_to_scalar(disc_transmission_)
+            if N == 1:
+                self.transmission_fraction_escape = array_to_scalar(
+                    transmission_fraction_escape
+                )
+                self.transmission_fraction_nlr = array_to_scalar(
+                    transmission_fraction_nlr
+                )
+                self.transmission_fraction_blr = array_to_scalar(
+                    transmission_fraction_blr
+                )
+                self.disc_transmission = array_to_scalar(disc_transmission_)
+            else:
+                self.transmission_fraction_escape = (
+                    transmission_fraction_escape
+                )
+                self.transmission_fraction_nlr = transmission_fraction_nlr
+                self.transmission_fraction_blr = transmission_fraction_blr
+                self.disc_transmission = disc_transmission_
 
         # The inclination of the black hole disc
         self.inclination = (
