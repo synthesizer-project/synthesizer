@@ -406,8 +406,8 @@ class BlackholesComponent(Component):
         """
         return 2 * G * self.mass / c**2
 
-    def calculate_ionising_luminosity(self):
-        """Calculates the ionising luminosity of the blackhole(s).
+    def calculate_integrated_ionising_luminosity(self):
+        """Calculates the integrated ionising luminosity of the blackhole(s).
 
         This requires that the disc_incident spectra be available.
 
@@ -415,13 +415,7 @@ class BlackholesComponent(Component):
              unyt_array:
                 The ionising photon production rate (s^-1).
         """
-        # If there are multiple black holes:
-        if "disc_incident" in self.particle_spectra.keys():
-            return self.particle_spectra[
-                "disc_incident"
-            ].calculate_ionising_photon_production_rate()
-        # Else if there is only a single black hole:
-        elif "disc_incident" in self.spectra.keys():
+        if "disc_incident" in self.spectra.keys():
             return self.spectra[
                 "disc_incident"
             ].calculate_ionising_photon_production_rate()
