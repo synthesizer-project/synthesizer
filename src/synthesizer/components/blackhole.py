@@ -205,18 +205,18 @@ class BlackholesComponent(Component):
         self.covering_fraction_nlr = covering_fraction_nlr
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
 
-        # Validate that covering fractions don't exceed unity
-        if np.any(covering_fraction_nlr + covering_fraction_blr > 1.0):
-            raise exceptions.InconsistentArguments(
-                "Sum of BLR and NLR covering fractions cannot exceed 1.0"
-            )
-
         # If a covering_fraction_blr is set then randomly allocate a scenario
         # for the disc transmission. This can either be that emission entirely
         #  escapes (none), or is transmitted through the BLR (blr), or NLR
         # (nlr). These are allocated based on the relative covering fractions
         # of the BLR and NLR. These are used by the UnifiedAGN emission model.
         if self.covering_fraction_blr is not None:
+            # Validate that covering fractions don't exceed unity
+            if np.any(covering_fraction_nlr + covering_fraction_blr > 1.0):
+                raise exceptions.InconsistentArguments(
+                    "Sum of BLR and NLR covering fractions cannot exceed 1.0"
+                )
+
             # Define transmission scenario choices
             transmission_scenario_choices = ["blr", "nlr", "none"]
 
