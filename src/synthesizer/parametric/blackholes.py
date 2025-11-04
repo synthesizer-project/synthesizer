@@ -214,3 +214,22 @@ class BlackHole(BlackholesComponent):
             "Parametric black holes are by definition singular "
             "making weighted attributes non-sensical."
         )
+
+    def calculate_ionising_luminosity(self):
+        """Calculates the ionising luminosity of the blackhole(s).
+
+        This requires that the disc_incident spectra be available.
+
+        Returns:
+             unyt_array:
+                The ionising photon production rate (s^-1).
+        """
+        if "disc_incident" in self.spectra.keys():
+            return self.spectra[
+                "disc_incident"
+            ].calculate_ionising_photon_production_rate()
+        else:
+            raise exceptions.MissingSpectraType(
+                "It is necessary to first calculate the disc_incident "
+                "spectra before calculating the ionising luminosity"
+            )
