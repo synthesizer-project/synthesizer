@@ -7,6 +7,7 @@ used for sampling values in various contexts within the synthesizer framework.
 from abc import ABC, abstractmethod
 from typing import Tuple, Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Unit, dimensionless, unyt_array
 
@@ -20,51 +21,6 @@ class Distribution(ABC):
     sampled from. Subclasses must implement the `sample` method to provide
     an interface for generating random samples according to the specific
     distribution.
-
-    Methods:
-        sample(size: int) -> list:
-            Generate random samples from the distribution.
-
-    Example:
-        >>> class NormalDistribution(Distribution):
-        ...     def __init__(self, mean: float, stddev: float):
-        ...         super().__init__(
-        ...             units=Unit("unitless"),
-        ...             required_parameters=("mean", "stddev"),
-        ...         )
-        ...         self.mean = mean
-        ...         self.stddev = stddev
-        ...     def distribution(self, x):
-        ...         # Define the normal distribution function here
-        ...         pass
-
-        >>> normal_dist = NormalDistribution(mean=0, stddev=1)
-        >>> samples = normal_dist.sample(size=1000)
-
-        >>> # Sample with parameters extracted from an object
-        >>> normal_dist = NormalDistribution(mean=None, stddev=None)
-        >>> stars = Stars(..., mean=10, stddev=3)
-        >>> extracted_params = normal_dist.extract_parameters(stars)
-        >>> samples = normal_dist.sample(size=1000, **extracted_params)
-
-        >>> # Mix fixed and extracted parameters
-        >>> normal_dist_fixed = NormalDistribution(mean=0, stddev=None)
-        >>> stars = Stars(..., stddev=2)
-        >>> extracted_params = normal_dist_fixed.extract_parameters(stars)
-        >>> samples = normal_dist_fixed.sample(size=1000, **extracted_params)
-
-        >>> # Extracting parameters from multiple objects
-        >>> normal_dist_multi = NormalDistribution(mean=None, stddev=None)
-        >>> stars = Stars(..., mean=5)
-        >>> m = EmissionModel(..., stddev=1)
-        >>> extracted_params = normal_dist_multi.extract_parameters(stars, m)
-
-        >>> # Extracting using list of objects with priority
-        >>> normal_dist = NormalDistribution(mean=None, stddev=None)
-        >>> s = Stars(..., mean=5)
-        >>> g = Gas(..., mean=10, stddev=2)
-        >>> extracted_params = normal_dist_priority.extract_parameters(s, g)
-        >>> samples = normal_dist.sample(size=1000, **extracted_params)
     """
 
     def __init__(
@@ -88,25 +44,21 @@ class Distribution(ABC):
         self.required_parameters = required_parameters
 
     @abstractmethod
-    def distribution(self, **kwargs) -> float:
+    def _distribution(self) -> float:
         """Define the probability distribution function.
 
         This method should be implemented by subclasses to define the
         specific probability distribution function.
 
-        Args:
-            **kwargs:
-                Keyword arguments required by the distribution.
-
         Returns:
-            The (unitless) value of the probability distribution function.
+            The (unitless) value of the probability distribution function
+            generated using the Distribution's attributes.
         """
         pass
 
     def sample(
         self,
-        size: int,
-        **kwargs,
+        nsamples: int,
     ) -> Union[unyt_array, np.ndarray]:
         """Generate random samples from the distribution.
 
@@ -114,7 +66,7 @@ class Distribution(ABC):
         probability distribution function.
 
         Args:
-            size (int):
+            nsamples (int):
                 The number of samples to generate.
             **kwargs:
                 Keyword arguments required by the distribution.
@@ -124,13 +76,9 @@ class Distribution(ABC):
                 An array of random samples drawn from the distribution,
                 with the appropriate units (or as an array if unitless).
         """
-        # If we have fixed parameters, override the kwargs with them
-        for param, value in self.fixed_parameters.items():
-            kwargs[param] = value
-
         # Ensure all required parameters are provided
         for param in self.required_parameters:
-            if param not in kwargs or kwargs[param] is None:
+            if not hasattr(self, param):
                 raise exceptions.MissingParameter(
                     f"Missing required parameter '{param}' for sampling "
                     f"from distribution."
@@ -139,40 +87,37 @@ class Distribution(ABC):
         # We have what we need, call the distribution function and attach
         # units if appropriate
         if self.units == dimensionless:
-            return self.distribution(size, **kwargs)
-        return self.distribution(size, **kwargs) * self.units
+            return np.array([self.distribution() for _ in range(nsamples)])
+        return unyt_array(
+            [self.distribution() for _ in range(nsamples)],
+            self.units,
+        )
 
-    def extract_parameters(self, *objs) -> dict:
-        """Extract required parameters from an object or provided parameters.
+    @abstractmethod
+    def plot(
+        self,
+        fig=None,
+        ax=None,
+        show=False,
+        **kwargs,
+    ) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot the distribution function.
 
-        This method attempts to extract the required parameters for the
-        distribution from the provided object. If a parameter is not found
-        in the object, it falls back to the provided parameters.
-
-        Note that sample will raise any error for missing parameters, here we
-        just want to return None.
-
+        This method generates a plot of the distribution function over a
+        specified range.
 
         Args:
-            *objs:
-                A list of objects to extract parameters from. The method will
-                prioritize earlier objects in the list.
+            fig (matplotlib.figure.Figure, optional):
+                The figure to plot on. If None, a new figure is created.
+            ax (matplotlib.axes.Axes, optional):
+                The axes to plot on. If None, new axes are created.
+            show (bool, optional):
+                Whether to display the plot immediately. Defaults to False.
+            **kwargs:
+                Additional keyword arguments to pass to the plot call.
 
         Returns:
-            dict:
-                A dictionary of extracted parameters.
+            fig, ax:
+                The figure and axes containing the plot.
         """
-        # Define the container for the extracted parameters
-        extracted_params = {}
-
-        # Loop over the required parameters
-        for param in self.required_parameters:
-            # Try to extract from the provided objects
-            for obj in objs:
-                if obj is not None and hasattr(obj, param):
-                    extracted_params[param] = getattr(obj, param)
-                    break
-            else:
-                extracted_params[param] = None
-
-        return extracted_params
+        pass
