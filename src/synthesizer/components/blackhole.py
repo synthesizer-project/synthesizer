@@ -225,6 +225,23 @@ class BlackholesComponent(Component):
             # particle blackholes.
             covering_fraction_blr = scalar_to_array(covering_fraction_blr)
             covering_fraction_nlr = scalar_to_array(covering_fraction_nlr)
+
+            # Validate both covering fractions are set and have matching
+            # lengths.
+            if covering_fraction_nlr is None:
+                raise exceptions.InconsistentArguments(
+                    "covering_fraction_nlr must be provided when "
+                    "covering_fraction_blr is set"
+                )
+            if len(covering_fraction_blr) != len(covering_fraction_nlr):
+                raise exceptions.InconsistentArguments(
+                    "covering_fraction_blr "
+                    f"(length {len(covering_fraction_blr)}) and "
+                    "covering_fraction_nlr "
+                    f"(length {len(covering_fraction_nlr)}) must have the"
+                    "same length"
+                )
+
             # Define number of blackholes.
             N = len(covering_fraction_blr)
 
