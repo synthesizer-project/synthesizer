@@ -427,7 +427,7 @@ class BlackholesComponent(Component):
             ].calculate_ionising_photon_production_rate()
         else:
             raise exceptions.MissingSpectraType(
-                "It is necessary to first calculate the disc_incident spectra"
+                "It is necessary to first calculate the disc_incident spectra "
                 "before calculating the ionising luminosity"
             )
 
