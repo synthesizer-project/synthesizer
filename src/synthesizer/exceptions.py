@@ -26,6 +26,31 @@ class MissingArgument(Exception):
         return "Missing argument"
 
 
+class MissingParameter(Exception):
+    """Generic exception class for when a 'parameter' is missing."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Missing parameter"
+
+
 class IncorrectUnits(Exception):
     """Generic exception class for when incorrect units are provided."""
 
