@@ -413,7 +413,7 @@ class BlackholesComponent(Component):
 
         Returns:
              unyt_array:
-                The Schwarzschild radius.
+                The ionising photon production rate (s^-1).
         """
         # If there are multiple black holes:
         if "disc_incident" in self.particle_spectra.keys():
