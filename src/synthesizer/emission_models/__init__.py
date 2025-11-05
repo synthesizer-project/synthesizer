@@ -26,6 +26,7 @@ from synthesizer.emission_models.models import (
     TemplateEmission,
 )
 from synthesizer.emission_models.stellar import STELLAR_MODELS
+from synthesizer.emission_models.stellar.los_model import LOSStellarEmission
 from synthesizer.emission_models.stellar.models import (
     EmergentEmission,
     IncidentEmission,
