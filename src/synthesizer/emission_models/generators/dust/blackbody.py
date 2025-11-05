@@ -168,7 +168,7 @@ class Blackbody(DustEmission):
     ) -> LineCollection:
         """Generate line emission spectra.
 
-        Blackbody emission only contributes to line continuum. Line 
+        Blackbody emission only contributes to line continuum. Line
         luminosities will always be zero.
 
         Args:
