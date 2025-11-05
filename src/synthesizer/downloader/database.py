@@ -100,7 +100,7 @@ def _get_files_recursive(folder, client, path=""):
     return all_files
 
 
-def _update_box_links_database(DATABASE_FILE='_data_ids.yml'):
+def _update_box_links_database(DATABASE_FILE="_data_ids.yml"):
     """Update the _data_ids.yml database of downloads.
 
     This function is used for maintenance of the package and the data

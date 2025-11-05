@@ -507,5 +507,6 @@ def copy_database_to_data_dir():
     dest = f"{TEST_DATA_DIR}/_data_ids.yml"
     shutil.copyfile(DATABASE_FILE, dest)
 
+
 if __name__ == "__main__":
     download()
