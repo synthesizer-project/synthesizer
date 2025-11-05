@@ -1,25 +1,32 @@
-"""A submodule for generating the _data_ids.yaml database of downloads.
+"""A submodule for generating the _data_ids.yml database of downloads.
 
-This submodule is used for maintenance of the package and the data availeble
-for download from Box, while it is included as part of the package, it is not
-intended to be used by the user. It is used to generate the _data_ids.yaml
+This submodule is used for maintenance of the package and the data available
+for download from Box. While it is included as part of the package, it is not
+intended to be used by the user. It is used to generate the _data_ids.yml
 file, which will be updated in new releases as and when new data is added to
 the database.
 
-This requires the Box SDK to be installed. You can install it with
-`pip install boxsdk`. You will also need to set the environment variables
-`SYNTH_BOX_ID` and `SYNTH_BOX_SECRET` to the client ID and secret of your
-Box application. You can create a Box application at
+This requires the Box SDK to be installed. You should install v3.0 of the
+SDK as newer versions have compatibility issues at present (see 
+https://github.com/box/box-python-sdk/issues/1072). You can install 
+it with `pip install boxsdk~=3.0`. You will also need to set the environment
+variables `SYNTH_BOX_ID` and `SYNTH_BOX_SECRET` to the client ID and secret
+of your Box application.
+
+You must then create a Box application at 
 https://developer.box.com/console/apps (assuming you have a Box account with
-edit permissions to the folder).
+edit permissions to the folder). You should create an OAuth 2.0 
+authentication application. Make sure that in the Configuration options you
+set a Redirect URI to "https://localhost", and that you give the application
+write access (this is necessary to allow URL generation), then save changes.
 
 Once you run this script, it will prompt you to visit a URL to authorize
-access to your Box account. After you authorize access, it will error, this
+access to your Box account. After you authorize access, it will error; this
 is a bit of a horrid hack. On the error page you will see a URL with
 `code=` in it. Copy the code and paste it into the prompt. This will
 generate an access token and refresh token, which will be used to
 authenticate the Box client. Now the script will run and generate the
-_data_ids.yaml file in the current directory.
+_data_ids.yml file in the current directory.
 """
 
 import os
@@ -34,6 +41,8 @@ except ImportError:
         "The Box SDK is not installed. Please install it with "
         "`pip install boxsdk`."
     )
+
+from synthesizer import DATABASE_FILE
 
 
 def _categorise_links(filepath: str) -> str:
@@ -59,6 +68,8 @@ def _categorise_links(filepath: str) -> str:
         return "InstrumentData"
     elif re.search(r"^generation_inputs", filepath):
         return "GenerationData"
+    elif re.search(r"^synference", filepath):
+        return "SynferenceData"
     else:
         raise ValueError(
             f"Unknown category for file {filepath}. Please check the "
@@ -91,12 +102,12 @@ def _get_files_recursive(folder, client, path=""):
     return all_files
 
 
-def _update_box_links_database():
-    """Update the _data_ids.yaml database of downloads.
+def _update_box_links_database(DATABASE_FILE=DATABASE_FILE):
+    """Update the _data_ids.yml database of downloads.
 
     This function is used for maintenance of the package and the data
     available for download from Box. It is used to generate the
-    _data_ids.yaml file, which will be updated in new releases as and when
+    _data_ids.yml file, which will be updated in new releases as and when
     new data is added to the database.
     """
     # Get the developer token and secret from the environment variables
@@ -110,7 +121,7 @@ def _update_box_links_database():
 
     # Define the name of the yaml file we will write to
     # Keep identical to the filename expected by downloader/_data_ids.yml
-    OUTPUT_YAML = "_data_ids.yml"
+    OUTPUT_YAML = DATABASE_FILE
     # Check if the environment variables are set
     if not CLIENT_ID or not CLIENT_SECRET:
         raise RuntimeError(
@@ -120,8 +131,8 @@ def _update_box_links_database():
     # Authenticate with Box using the ID and secret
     oauth = OAuth2(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
 
-    # Get an access token by a backdoor method...
-    auth_url, csrf_token = oauth.get_authorization_url("http://localhost")
+    # # Get an access token by a backdoor method...
+    auth_url, csrf_token = oauth.get_authorization_url("https://localhost")
     print(f"\n➡️  Visit this URL to authorize access:\n{auth_url}")
     auth_code = input("🔑 Paste the authorization code here: ").strip()
     access_token, refresh_token = oauth.authenticate(auth_code)
@@ -142,6 +153,7 @@ def _update_box_links_database():
         "InstrumentData": {},
         "GenerationData": {},
         "ProductionGrids": {},
+        "SynferenceData": {},
     }
 
     for file_obj, subfolder in all_files:
@@ -179,3 +191,7 @@ def _update_box_links_database():
     # Write the ouput to a yaml file
     with open(OUTPUT_YAML, "w") as f:
         yaml.dump(output, f, default_flow_style=False)
+
+
+if __name__ == "__main__":
+    _update_box_links_database()
