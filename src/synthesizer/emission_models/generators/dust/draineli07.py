@@ -121,7 +121,7 @@ class DraineLi07(DustEmission):
             Fraction of the dust mass that is associated with the
             power-law part of the starlight intensity distribution.
         pah_fraction (float):
-            Fraction of dust mass in the form of PAHs.
+            Fraction of dust mass in the form of PAHs (often called qpah).
         umin (float):
             Radiation field heating majority of the dust.
         alpha (float):
