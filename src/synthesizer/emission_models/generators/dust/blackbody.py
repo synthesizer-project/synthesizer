@@ -168,8 +168,8 @@ class Blackbody(DustEmission):
     ) -> LineCollection:
         """Generate line emission spectra.
 
-        Blackbody emission does not produce line emission, so this
-        method will simply return an empty Sed object.
+        Blackbody emission only contributes to line continuum. Line 
+        luminosities will always be zero.
 
         Args:
             line_ids (list):
