@@ -82,7 +82,7 @@ def mock_emitter():
             self.dust_mass = 1e6 * Msun
             self.dust_to_gas_ratio = 0.01
             self.hydrogen_mass = 1e8 * Msun
-            self.pah_fraction = 0.025
+            self.qpah = 0.025
 
     return MockEmitter()
 
@@ -473,7 +473,7 @@ class TestDraineLi07Generator:
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
-            pah_fraction=0.025,
+            qpah=0.025,
             intrinsic="intrinsic",
             attenuated="attenuated",
         )
@@ -481,11 +481,11 @@ class TestDraineLi07Generator:
         assert dl07.grid == mock_dust_grid
         assert dl07.dust_mass == dust_mass
         assert dl07.dust_to_gas_ratio == 0.01
-        assert dl07.pah_fraction == 0.025
+        assert dl07.qpah == 0.025
         assert "dust_mass" in dl07._required_params
         assert "dust_to_gas_ratio" in dl07._required_params
         assert "hydrogen_mass" in dl07._required_params
-        assert "pah_fraction" in dl07._required_params
+        assert "qpah" in dl07._required_params
 
     def test_draineli07_variable_naming(self, mock_dust_grid):
         """Test DraineLi07 uses improved variable names."""
@@ -495,13 +495,13 @@ class TestDraineLi07Generator:
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
-            pah_fraction=0.025,
+            qpah=0.025,
             intrinsic="intrinsic",
             attenuated="attenuated",
         )
 
         # Should use improved naming
-        assert hasattr(dl07, "pah_fraction")
+        assert hasattr(dl07, "qpah")
         assert hasattr(dl07, "dust_mass")
         assert hasattr(dl07, "dust_to_gas_ratio")
         assert hasattr(dl07, "hydrogen_mass")
@@ -515,7 +515,7 @@ class TestDraineLi07Generator:
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
-            pah_fraction=0.025,
+            qpah=0.025,
             verbose=False,
             intrinsic="intrinsic",
             attenuated="attenuated",
@@ -542,7 +542,7 @@ class TestDraineLi07Generator:
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
-            pah_fraction=0.025,
+            qpah=0.025,
             verbose=False,
             intrinsic="intrinsic",
             attenuated="attenuated",
@@ -568,7 +568,7 @@ class TestDraineLi07Generator:
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
-            pah_fraction=0.025,
+            qpah=0.025,
             verbose=False,
             intrinsic="intrinsic",
             attenuated="attenuated",
@@ -596,7 +596,7 @@ class TestDraineLi07Generator:
             grid=mock_dust_grid,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
-            pah_fraction=0.025,
+            qpah=0.025,
             verbose=False,
             intrinsic="intrinsic",
             attenuated="attenuated",
@@ -612,7 +612,7 @@ class TestDraineLi07Generator:
         assert "minimum_radiation_field" in params
         assert "gamma_parameter" in params
         assert "hydrogen_mass" in params
-        assert "pah_fraction_used" in params
+        assert "qpah_used" in params
 
 
 class TestDustGeneratorIntegration:
@@ -894,7 +894,7 @@ class TestDustGeneratorErrorHandling:
             grid=mock_dust_grid,
             dust_mass=1e6 * Msun,
             dust_to_gas_ratio=0.01,
-            pah_fraction=0.025,
+            qpah=0.025,
             template="InvalidTemplate",  # Invalid template
         )
 
