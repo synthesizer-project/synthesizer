@@ -59,9 +59,6 @@ class Casey12(DustEmission):
             The power law turnover wavelength.
         n_pl (unyt_quantity):
             The power law normalisation.
-        cmb_factor (float):
-            The multiplicative factor to account for CMB heating at
-            high-redshift.
     """
 
     temperature: unyt_quantity
