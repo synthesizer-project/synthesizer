@@ -13,7 +13,10 @@ from unyt import Myr
 
 from synthesizer.emission_models import (
     EmissionModel,
+    IncidentEmission,
+    NebularContinuumEmission,
     NebularEmission,
+    NebularLineEmission,
     ReprocessedEmission,
     StellarEmissionModel,
     TransmittedEmission,
@@ -30,7 +33,7 @@ class LOSStellarEmission(EmissionModel):
     https://ui.adsabs.harvard.edu/abs/2021MNRAS.501.3289V/abstract
 
     This model includes:
-    - Nebular emission for young stars (<=10 Myr)
+    - Nebular emission for young stars.
     - Stellar emission transmitted via Cloudy photoionisation through the ISM
       (split by age into young and old components).
     - Birth cloud attenuation for young stars (<=10 Myr) using a PowerLaw. This
@@ -76,19 +79,85 @@ class LOSStellarEmission(EmissionModel):
                 The slope of the power-law dust curve for ISM attenuation
                 (default: -1).
         """
-        # Define the nebular emission models
-        nebular = NebularEmission(
+        # Define the incident emission model
+        young_incident = IncidentEmission(
             grid=grid,
-            label="nebular",
+            label="young_incident",
             mask_attr="ages",
             mask_op="<=",
             mask_thresh=young_upper_limit,
+        )
+        old_incident = IncidentEmission(
+            grid=grid,
+            label="old_incident",
+            mask_attr="ages",
+            mask_op=">",
+            mask_thresh=young_upper_limit,
+        )
+        incident = StellarEmissionModel(
+            grid=grid,
+            label="incident",
+            combine=[young_incident, old_incident],
+        )
+
+        # Define the nebular emission models
+        young_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="young_nebular_line",
+            mask_attr="ages",
+            mask_op="<=",
+            mask_thresh=young_upper_limit,
+        )
+        young_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="young_nebular_continuum",
+            mask_attr="ages",
+            mask_op="<=",
+            mask_thresh=young_upper_limit,
+        )
+        young_nebular = NebularEmission(
+            grid=grid,
+            label="young_nebular",
+            nebular_line=young_nebular_line,
+            nebular_continuum=young_nebular_continuum,
+            mask_attr="ages",
+            mask_op="<=",
+            mask_thresh=young_upper_limit,
+        )
+        old_nebular_line = NebularLineEmission(
+            grid=grid,
+            label="old_nebular_line",
+            mask_attr="ages",
+            mask_op=">",
+            mask_thresh=young_upper_limit,
+        )
+        old_nebular_continuum = NebularContinuumEmission(
+            grid=grid,
+            label="old_nebular_continuum",
+            mask_attr="ages",
+            mask_op=">",
+            mask_thresh=young_upper_limit,
+        )
+        old_nebular = NebularEmission(
+            grid=grid,
+            label="old_nebular",
+            nebular_line=old_nebular_line,
+            nebular_continuum=old_nebular_continuum,
+            mask_attr="ages",
+            mask_op=">",
+            mask_thresh=young_upper_limit,
+        )
+        nebular = StellarEmissionModel(
+            grid=grid,
+            label="nebular",
+            combine=[young_nebular, old_nebular],
         )
 
         # Define the transmitted models
         young_transmitted = TransmittedEmission(
             grid=grid,
             label="young_transmitted",
+            incident=young_incident,
             mask_attr="ages",
             mask_op="<=",
             mask_thresh=young_upper_limit,
@@ -96,6 +165,7 @@ class LOSStellarEmission(EmissionModel):
         old_transmitted = TransmittedEmission(
             grid=grid,
             label="old_transmitted",
+            incident=old_incident,
             mask_attr="ages",
             mask_op=">",
             mask_thresh=young_upper_limit,
@@ -111,22 +181,31 @@ class LOSStellarEmission(EmissionModel):
             grid=grid,
             label="young_reprocessed",
             transmitted=young_transmitted,
-            nebular=nebular,
+            nebular=young_nebular,
             mask_attr="ages",
             mask_op="<=",
+            mask_thresh=young_upper_limit,
+        )
+        old_reprocessed = ReprocessedEmission(
+            grid=grid,
+            label="old_reprocessed",
+            transmitted=old_transmitted,
+            nebular=old_nebular,
+            mask_attr="ages",
+            mask_op=">",
             mask_thresh=young_upper_limit,
         )
         reprocessed = StellarEmissionModel(
             grid=grid,
             label="reprocessed",
-            combine=[young_reprocessed, old_transmitted],
+            combine=[young_reprocessed, old_reprocessed],
         )
 
         # Define the attenuated models
         young_attenuated_nebular = StellarEmissionModel(
             grid=grid,
             label="young_attenuated_nebular",
-            apply_dust_to=young_reprocessed,
+            apply_to=young_reprocessed,
             tau_v="young_tau_v",
             dust_curve=PowerLaw(slope=birth_cloud_slope),
             mask_attr="ages",
@@ -136,7 +215,7 @@ class LOSStellarEmission(EmissionModel):
         young_attenuated = StellarEmissionModel(
             grid=grid,
             label="young_attenuated",
-            apply_dust_to=young_attenuated_nebular,
+            apply_to=young_attenuated_nebular,
             tau_v="tau_v",
             dust_curve=PowerLaw(slope=ism_slope),
             mask_attr="ages",
@@ -146,7 +225,7 @@ class LOSStellarEmission(EmissionModel):
         old_attenuated = StellarEmissionModel(
             grid=grid,
             label="old_attenuated",
-            apply_dust_to=old_transmitted,
+            apply_to=old_reprocessed,
             tau_v="tau_v",
             dust_curve=PowerLaw(slope=ism_slope),
             mask_attr="ages",
@@ -161,6 +240,7 @@ class LOSStellarEmission(EmissionModel):
             label="stellar_total",
             combine=[young_attenuated, old_attenuated],
             related_models=[
+                incident,
                 nebular,
                 transmitted,
                 reprocessed,
