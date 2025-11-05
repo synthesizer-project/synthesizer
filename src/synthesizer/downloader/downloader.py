@@ -68,7 +68,12 @@ INSTRUMENT_FILES = load_instrument_data_links()
 SYNFERENCE_FILES = load_synference_data_links()
 
 # Combine everything into a nice single dict
-AVAILABLE_FILES = {**TEST_FILES, **DUST_FILES, **INSTRUMENT_FILES, **SYNFERENCE_FILES}
+AVAILABLE_FILES = {
+    **TEST_FILES,
+    **DUST_FILES,
+    **INSTRUMENT_FILES,
+    **SYNFERENCE_FILES,
+}
 
 # Define a translation between instrument file names and their class names
 # (remove the .hdf5 extension and remove underscores)
@@ -413,7 +418,6 @@ def download():
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
 
 
-
 def download_synference_test(destination):
     """Download the test data for synference.
 
@@ -494,7 +498,6 @@ def synference_download():
     # Test data?
     if test:
         download_synference_test(dest if dest is not None else TEST_DATA_DIR)
-
 
 
 if __name__ == "__main__":

@@ -7,15 +7,15 @@ file, which will be updated in new releases as and when new data is added to
 the database.
 
 This requires the Box SDK to be installed. You should install v3.0 of the
-SDK as newer versions have compatibility issues at present (see 
-https://github.com/box/box-python-sdk/issues/1072). You can install 
+SDK as newer versions have compatibility issues at present (see
+https://github.com/box/box-python-sdk/issues/1072). You can install
 it with `pip install boxsdk~=3.0`. You will also need to set the environment
 variables `SYNTH_BOX_ID` and `SYNTH_BOX_SECRET` to the client ID and secret
 of your Box application.
 
-You must then create a Box application at 
+You must then create a Box application at
 https://developer.box.com/console/apps (assuming you have a Box account with
-edit permissions to the folder). You should create an OAuth 2.0 
+edit permissions to the folder). You should create an OAuth 2.0
 authentication application. Make sure that in the Configuration options you
 set a Redirect URI to "https://localhost", and that you give the application
 write access (this is necessary to allow URL generation), then save changes.
