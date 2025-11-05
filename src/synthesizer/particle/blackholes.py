@@ -25,6 +25,7 @@ from unyt import (
     yr,
 )
 
+from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated
@@ -404,3 +405,22 @@ class BlackHoles(Particles, BlackholesComponent):
         )
         emission_model.set_per_particle(previous_per_part)
         return lines
+
+    def calculate_ionising_luminosity(self):
+        """Calculates the ionising luminosity of the blackhole(s).
+
+        This requires that the disc_incident spectra be available.
+
+        Returns:
+             unyt_array:
+                The ionising photon production rate (s^-1).
+        """
+        if "disc_incident" in self.particle_spectra.keys():
+            return self.particle_spectra[
+                "disc_incident"
+            ].calculate_ionising_photon_production_rate()
+        else:
+            raise exceptions.MissingSpectraType(
+                "It is necessary to first calculate the disc_incident "
+                "particle_spectra before calculating the ionising luminosity"
+            )
