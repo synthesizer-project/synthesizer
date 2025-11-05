@@ -500,5 +500,12 @@ def synference_download():
         download_synference_test(dest if dest is not None else TEST_DATA_DIR)
 
 
+def copy_database_to_data_dir():
+    """Copy the database yaml to the data directory for reference."""
+    import shutil
+
+    dest = f"{TEST_DATA_DIR}/_data_ids.yml"
+    shutil.copyfile(DATABASE_FILE, dest)
+
 if __name__ == "__main__":
     download()
