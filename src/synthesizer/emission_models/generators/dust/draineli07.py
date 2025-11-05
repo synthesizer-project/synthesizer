@@ -120,8 +120,8 @@ class DraineLi07(DustEmission):
         gamma (float):
             Fraction of the dust mass that is associated with the
             power-law part of the starlight intensity distribution.
-        pah_fraction (float):
-            Fraction of dust mass in the form of PAHs (often called qpah).
+        qpah (float):
+            Fraction of dust mass in the form of PAHs.
         umin (float):
             Radiation field heating majority of the dust.
         alpha (float):
@@ -130,8 +130,8 @@ class DraineLi07(DustEmission):
             Power absorbed per unit dust mass in a radiation field with U = 1.
         verbose (bool):
             Whether to print verbose output.
-        pah_fraction_indices (NDArray):
-            Grid indices for pah_fraction parameter.
+        qpah_indices (NDArray):
+            Grid indices for qpah parameter.
         umin_indices (NDArray):
             Grid indices for umin parameter.
         alpha_indices (NDArray):
@@ -154,12 +154,12 @@ class DraineLi07(DustEmission):
     hydrogen_mass: Optional[unyt_quantity]
     template: str
     gamma: Optional[float]
-    pah_fraction: float
+    qpah: float
     umin: Optional[float]
     alpha: float
     power_per_unit_mass: float
     verbose: bool
-    pah_fraction_indices: Optional[NDArray]
+    qpah_indices: Optional[NDArray]
     umin_indices: Optional[NDArray]
     alpha_indices: Optional[NDArray]
 
@@ -178,7 +178,7 @@ class DraineLi07(DustEmission):
         hydrogen_mass: Optional[unyt_quantity] = None,
         template: str = "DL07",
         gamma: Optional[float] = None,
-        pah_fraction: float = 0.025,
+        qpah: float = 0.025,
         umin: Optional[float] = None,
         alpha: float = 2.0,
         power_per_unit_mass: float = 125.0,
@@ -207,7 +207,7 @@ class DraineLi07(DustEmission):
                 Fraction of the dust mass that is associated with the
                 power-law part of the starlight intensity distribution.
                 Will be calculated if not provided.
-            pah_fraction (float):
+            qpah (float):
                 Fraction of dust mass in the form of PAHs.
             umin (float, optional):
                 Radiation field heating majority of the dust.
@@ -241,7 +241,7 @@ class DraineLi07(DustEmission):
                 "dust_mass",
                 "dust_to_gas_ratio",
                 "hydrogen_mass",
-                "pah_fraction",
+                "qpah",
             ),
         )
 
@@ -251,14 +251,14 @@ class DraineLi07(DustEmission):
         self.hydrogen_mass = hydrogen_mass
         self.template = template
         self.gamma = gamma
-        self.pah_fraction = pah_fraction
+        self.qpah = qpah
         self.umin = umin
         self.alpha = alpha
         self.power_per_unit_mass = power_per_unit_mass
         self.verbose = verbose
 
         # Initialize grid indices
-        self.pah_fraction_indices = None
+        self.qpah_indices = None
         self.umin_indices = None
         self.alpha_indices = None
 
@@ -274,7 +274,7 @@ class DraineLi07(DustEmission):
         ldust: unyt_quantity,
         dust_to_gas_ratio: float = None,
         hydrogen_mass: unyt_quantity = None,
-        pah_fraction: float = None,
+        qpah: float = None,
     ) -> None:
         """Set up the DL07 model parameters and grid indices.
 
@@ -287,7 +287,7 @@ class DraineLi07(DustEmission):
                 The dust-to-gas ratio to use. If None, uses instance default.
             hydrogen_mass (unyt_quantity, optional):
                 The hydrogen mass to use. If None, uses instance default.
-            pah_fraction (float, optional):
+            qpah (float, optional):
                 The PAH fraction to use. If None, uses instance default.
         """
         if self.template != "DL07":
@@ -296,7 +296,7 @@ class DraineLi07(DustEmission):
             )
 
         # Define the model parameters from grid
-        grid_pah_fractions: NDArray[np.float32] = self.grid.qpah
+        grid_qpahs: NDArray[np.float32] = self.grid.qpah
         grid_umin_values: NDArray[np.float32] = self.grid.umin
         grid_alpha_values: NDArray[np.float32] = self.grid.alpha
 
@@ -309,9 +309,7 @@ class DraineLi07(DustEmission):
         effective_hydrogen_mass = (
             hydrogen_mass if hydrogen_mass is not None else self.hydrogen_mass
         )
-        effective_pah_fraction = (
-            pah_fraction if pah_fraction is not None else self.pah_fraction
-        )
+        effective_qpah = qpah if qpah is not None else self.qpah
 
         # Default maximum radiation field intensity
         umax: float = 1e7
@@ -364,11 +362,9 @@ class DraineLi07(DustEmission):
             calculated_u_avg = u_mean(calculated_umin, umax, calculated_gamma)
 
         # Find nearest grid indices
-        pah_fraction_indices = (
-            grid_pah_fractions
-            == grid_pah_fractions[
-                np.argmin(np.abs(grid_pah_fractions - effective_pah_fraction))
-            ]
+        qpah_indices = (
+            grid_qpahs
+            == grid_qpahs[np.argmin(np.abs(grid_qpahs - effective_qpah))]
         )
         umin_indices = (
             grid_umin_values
@@ -388,7 +384,7 @@ class DraineLi07(DustEmission):
                 "No valid model templates found for the given values"
             )
 
-        self.pah_fraction_indices = pah_fraction_indices
+        self.qpah_indices = qpah_indices
         self.umin_indices = umin_indices
         self.alpha_indices = alpha_indices
 
@@ -414,7 +410,7 @@ class DraineLi07(DustEmission):
                 The generated dust emission SED(s).
         """
         # Ensure parameters are set up
-        if self.pah_fraction_indices is None:
+        if self.qpah_indices is None:
             raise exceptions.MissingAttribute(
                 "DL07 parameters not set up. Call "
                 "_setup_dl07_parameters first."
@@ -427,7 +423,7 @@ class DraineLi07(DustEmission):
         diffuse_luminosity = (
             (1.0 - self.gamma_calculated)
             * self.grid.spectra["diffuse"][
-                np.where(self.pah_fraction_indices)[0][0],
+                np.where(self.qpah_indices)[0][0],
                 np.where(self.umin_indices)[0][0],
             ]
             * (self.hydrogen_mass_calculated / Msun).value
@@ -437,7 +433,7 @@ class DraineLi07(DustEmission):
         pdr_luminosity = (
             self.gamma_calculated
             * self.grid.spectra["pdr"][
-                np.where(self.pah_fraction_indices)[0][0],
+                np.where(self.qpah_indices)[0][0],
                 np.where(self.umin_indices)[0][0],
                 np.where(self.alpha_indices)[0][0],
             ]
@@ -541,14 +537,14 @@ class DraineLi07(DustEmission):
         dust_mass = params["dust_mass"]
         dust_to_gas_ratio = params["dust_to_gas_ratio"]
         hydrogen_mass = params["hydrogen_mass"]
-        pah_fraction = params["pah_fraction"]
+        qpah = params["qpah"]
 
         # Calculate the dust luminosity for scaling
         ldust = self.get_scaling(emitter, model, emissions)
 
         # Set up DL07 parameters using the extracted parameters
         self._setup_dl07_parameters(
-            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, pah_fraction
+            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
         )
 
         # Generate the base spectra
@@ -629,14 +625,14 @@ class DraineLi07(DustEmission):
         dust_mass = params["dust_mass"]
         dust_to_gas_ratio = params["dust_to_gas_ratio"]
         hydrogen_mass = params["hydrogen_mass"]
-        pah_fraction = params["pah_fraction"]
+        qpah = params["qpah"]
 
         # Calculate the dust luminosity for scaling
         ldust = self.get_scaling(emitter, model, spectra)
 
         # Set up DL07 parameters using the extracted parameters
         self._setup_dl07_parameters(
-            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, pah_fraction
+            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
         )
 
         # Generate the DL07 function
@@ -699,7 +695,7 @@ class DraineLi07(DustEmission):
             "minimum_radiation_field": self.umin_calculated,
             "gamma_parameter": self.gamma_calculated,
             "hydrogen_mass": self.hydrogen_mass_calculated,
-            "pah_fraction_used": self.pah_fraction,
+            "qpah_used": self.qpah,
             "alpha_parameter": self.alpha,
             "power_per_unit_mass": self.power_per_unit_mass,
         }
