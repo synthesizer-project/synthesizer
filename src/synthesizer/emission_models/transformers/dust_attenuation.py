@@ -762,14 +762,12 @@ class GrainModels(AttenuationLaw):
         self.model = model
         # Get the correct model string if model is WD01
         if model == "WD01":
-            if "MW" in submodel:
-                self.submodel = "MWRV31"
-            elif "LMC" in submodel:
-                self.submodel = "LMCAvg"
-            elif "SMC" in submodel:
-                self.submodel = "SMCBar"
-            else:
-                self.submodel = submodel
+            alias_map = {
+                "MW": "MWRV31",
+                "LMC": "LMCAvg",
+                "SMC": "SMCBar",
+            }
+            self.submodel = alias_map.get(submodel.upper(), submodel)
         else:
             self.submodel = submodel
 
