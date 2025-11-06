@@ -785,10 +785,9 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
             escaped=escaped,
             **kwargs,
         )
+        dust_emission_model.set_energy_balance(reprocessed, attenuated)
         dust_emission = DustEmission(
             dust_emission_model=dust_emission_model,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="stellar",
             **kwargs,
         )
@@ -876,10 +875,9 @@ class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
             emitter="stellar",
             **kwargs,
         )
+        dust_emission_model.set_energy_balance(reprocessed, attenuated)
         dust_emission = DustEmission(
             dust_emission_model=dust_emission_model,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="stellar",
             **kwargs,
         )

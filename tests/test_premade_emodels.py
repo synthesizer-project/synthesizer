@@ -11,7 +11,7 @@ from synthesizer.emission_models import (
     PacmanEmission,
     ScreenEmission,
 )
-from synthesizer.emission_models.dust.emission import Greybody
+from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emission_models.transformers import Calzetti2000, PowerLaw
 from synthesizer.emission_models.utils import get_param
 
