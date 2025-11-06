@@ -712,12 +712,14 @@ class MWN18(AttenuationLaw):
 
 
 class GrainModels(AttenuationLaw):
-    """These models are based on dust grain size, composition, and shape
+    """Grain model dust attenuation curves.
+
+    These models are based on dust grain size, composition, and shape
     distributions constrained by observations of extinction, abundances,
     emission, and polarization. Some of these models can be used to
     estimate extinction at wavelengths inaccessible to observations
     (e.g., extreme UV below 912 Å). These models are taken from the
-    astropy affiliated dust-extinction package 
+    astropy affiliated dust-extinction package
     (https://dust-extinction.readthedocs.io/en/latest/ for details).
     By default, we will use the Weingarter & Draine 2001 (WD01) models,
     and the submodel for the SMC bar.)
@@ -729,11 +731,7 @@ class GrainModels(AttenuationLaw):
             The function that describes the model from WD01 imported above.
     """
 
-    def __init__(
-        self,
-        model: str = "WD01",
-        submodel: str = "SMCBar"
-    ):
+    def __init__(self, model: str = "WD01", submodel: str = "SMCBar"):
         """Initialise the dust curve.
 
         Args:
@@ -746,7 +744,7 @@ class GrainModels(AttenuationLaw):
             self,
             "Dust grain models from dust-extinciton package",
         )
-        available_models =  {
+        available_models = {
             "DBP90": ["MWRV31"],
             "WD01": ["MWRV31", "MWRV40", "MWRV55", "LMCAvg", "LMC2", "SMCBar"],
             "D03": ["MWRV31", "MWRV40", "MWRV55"],
@@ -754,8 +752,8 @@ class GrainModels(AttenuationLaw):
             "C11": ["MWRV31"],
             "J13": ["MWRV31"],
             "HD23": ["MWRV31"],
-            "Y24": ["MWRV31"]
-            }
+            "Y24": ["MWRV31"],
+        }
         if model not in available_models:
             raise exceptions.InconsistentArguments(
                 f"Model '{model}' not recognized. Available models are: "
@@ -774,14 +772,14 @@ class GrainModels(AttenuationLaw):
                 self.submodel = submodel
         else:
             self.submodel = submodel
-            
+
         if self.submodel not in available_models[model]:
             raise exceptions.InconsistentArguments(
                 f"Submodel '{submodel}' not recognized for model '{model}'. "
                 f"Available submodels are: "
                 f"{', '.join(available_models[model])}"
             )
-            
+
         self.extmodel = getattr(grain_models, self.model)(self.submodel)
 
     @accepts(lam=angstrom)
@@ -804,8 +802,9 @@ class GrainModels(AttenuationLaw):
             float/np.ndarray of float: The optical depth.
         """
         lam_v = 5500 * angstrom  # V-band wavelength
-        out = self.get_tau_at_lam(lam, interp=interp) \
-            / self.get_tau_at_lam(lam_v, interp=interp)
+        out = self.get_tau_at_lam(lam, interp=interp) / self.get_tau_at_lam(
+            lam_v, interp=interp
+        )
 
         return out
 
@@ -829,11 +828,11 @@ class GrainModels(AttenuationLaw):
                 The optical depth.
         """
         # Inverse wavelength range in 1/um
-        _inverse_lam_range = self.extmodel.data_x * 1/um
-        _lam_range = (1 / _inverse_lam_range).to('angstrom')
+        _inverse_lam_range = self.extmodel.data_x * 1 / um
+        _lam_range = (1 / _inverse_lam_range).to("angstrom")
         # Change to increasing order
         _lam_range = np.unique(_lam_range[::-1])
-        _lam = np.atleast_1d(lam.to('angstrom').value) * angstrom
+        _lam = np.atleast_1d(lam.to("angstrom").value) * angstrom
         if np.any((_lam < np.min(_lam_range)) | (_lam > np.max(_lam_range))):
             warnings.warn(
                 f"Wavelengths outside the range "
@@ -845,16 +844,16 @@ class GrainModels(AttenuationLaw):
             lower = self.extmodel(_lam_range[0].to_astropy())
             upper = self.extmodel(_lam_range[-1].to_astropy())
             func = interpolate.interp1d(
-                _lam_range.to('Angstrom').value,
+                _lam_range.to("Angstrom").value,
                 self.extmodel(_lam_range.to_astropy()),
                 kind=interp,
                 bounds_error=False,
                 fill_value=(lower, upper),
             )
-            out = func(_lam.to('Angstrom').value)
+            out = func(_lam.to("Angstrom").value)
         else:
             out = self.extmodel(lam.to_astropy())
-        
+
         return out
 
 
