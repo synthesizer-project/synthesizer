@@ -34,18 +34,9 @@ params = [
         "gamma": 0.0356 * um,
     },
     {},
-    {
-        "model": "WD01",
-        "submodel": "MW"
-    },
-    {
-        "model": "WD01",
-        "submodel": "SMC"
-    },
-    {
-        "model": "WD01",
-        "submodel": "LMC"
-    },
+    {"model": "WD01", "submodel": "MW"},
+    {"model": "WD01", "submodel": "SMC"},
+    {"model": "WD01", "submodel": "LMC"},
     {"model": "MW"},
     {"model": "LMC"},
     {"model": "SMC"},
