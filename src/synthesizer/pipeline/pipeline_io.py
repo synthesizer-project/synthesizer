@@ -127,7 +127,9 @@ class PipelineIO:
             # the rank.
             if not self.is_collective:
                 ext = filepath.split(".")[-1]
-                self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
+                self.filepath = filepath.replace(
+                    f".{ext}", f"_{self.rank}.{ext}"
+                )
 
         # Report some useful information
         if self.is_collective:
