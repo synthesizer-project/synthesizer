@@ -123,8 +123,8 @@ class PipelineIO:
             self._took(start, "Waiting for all ranks to get to I/O")
 
             # If we are writing in parallel but not using collective I/O we
-            # need write a file per rank. Modify the file path to include the
-            # rank.
+            # need to write a file per rank. Modify the file path to include
+            # the rank.
             ext = filepath.split(".")[-1]
             self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
 
