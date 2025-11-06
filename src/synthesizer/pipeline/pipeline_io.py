@@ -125,8 +125,9 @@ class PipelineIO:
             # If we are writing in parallel but not using collective I/O we
             # need to write a file per rank. Modify the file path to include
             # the rank.
-            ext = filepath.split(".")[-1]
-            self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
+            if not self.is_collective:
+                ext = filepath.split(".")[-1]
+                self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
 
         # Report some useful information
         if self.is_collective:
