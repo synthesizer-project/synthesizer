@@ -44,6 +44,8 @@ from synthesizer.emission_models.stellar.pacman_model import (
     ScreenEmission,
 )
 
+from synthesizer.emission_models.stellar.los_model import LOSStellarEmission  # isort: skip
+
 # List of premade common models
 COMMON_MODELS = [
     "AttenuatedEmission",
