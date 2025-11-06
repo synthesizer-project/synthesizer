@@ -13,13 +13,14 @@ from synthesizer.utils import (
 _NO_DEFAULT = object()
 
 
-def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
-    """Extract a parameter from a model, emission, and emitter.
+def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
+    """Extract a parameter from a model, emission, emitter, or object.
 
     The priority of extraction is:
         1. Model (EmissionModel)
         2. Emission (Sed/LineCollection)
         3. Emitter (Stars/Gas/Galaxy)
+        4. Object (any object)
 
     If we find a string value this should mean the parameter points to another
     attribute, so we will recursively look for that attribute.
@@ -33,6 +34,8 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
             The emission object.
         emitter (Stars/Gas/Galaxy):
             The emitter object.
+        obj (object, optional):
+            An optional additional object to look for the parameter on last.
         default (object, optional):
             The default value to return if the parameter is not found.
 
@@ -63,9 +66,13 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
     elif emission is not None and hasattr(emission, param):
         value = get_attr_c_compatible_double(emission, param)
 
-    # Finally check the emitter
+    # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
         value = get_attr_c_compatible_double(emitter, param)
+
+    # Finally, if we have an additional object, check that
+    elif obj is not None and hasattr(obj, param):
+        value = get_attr_c_compatible_double(obj, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
@@ -83,6 +90,7 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
             model,
             emission,
             emitter,
+            obj,
             default=default,
         )
         if value is not None:
@@ -102,6 +110,7 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
             model,
             emission,
             emitter,
+            obj,
             default=None,
         )
         if value is None:
@@ -110,6 +119,7 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
                 model,
                 emission,
                 emitter,
+                obj,
                 default=None,
             )
         if value is not None:
@@ -125,8 +135,8 @@ def get_param(param, model, emission, emitter, default=_NO_DEFAULT):
         )
 
 
-def get_params(params, model, emission, emitter):
-    """Extract a list of parameters from a model, emission, and emitter.
+def get_params(params, model, emission, emitter, obj=None):
+    """Extract a list of parameters from a model, emission, emitter, or object.
 
     Missing parameters will return None.
 
@@ -134,6 +144,7 @@ def get_params(params, model, emission, emitter):
         1. Model (EmissionModel)
         2. Emission (Sed/LineCollection)
         3. Emitter (Stars/Gas/Galaxy)
+        4. Object (any object)
 
     Args:
         params (list):
@@ -144,6 +155,8 @@ def get_params(params, model, emission, emitter):
             The emission object.
         emitter (Stars/BlackHoles/Gas/Galaxy):
             The emitter object.
+        obj (object, optional):
+            An optional additional object to look for parameters on last.
 
     Returns:
         values (dict):
@@ -157,6 +170,7 @@ def get_params(params, model, emission, emitter):
             model,
             emission,
             emitter,
+            obj,
         )
 
     return values
