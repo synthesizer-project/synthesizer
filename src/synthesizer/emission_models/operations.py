@@ -850,24 +850,26 @@ class Combination:
                 f"wavelength grid, got {lam_mask.size} and "
                 f"{out_spec.lam.size}."
             )
+
+        # Initialize mask with particle mask if present
         if part_mask is not None:
             mask = part_mask[:, np.newaxis]
+        else:
+            mask = None
+
+        # Combine with or set wavelength mask
         if lam_mask is not None and mask is not None:
             mask = mask & lam_mask[np.newaxis, :]
         elif lam_mask is not None and this_model.per_particle:
             mask = lam_mask[np.newaxis, :]
         elif lam_mask is not None and not this_model.per_particle:
             mask = lam_mask
-        else:
-            mask = None
 
         # Combine the spectra
         for combine_label in this_model._combine_labels:
             if this_model.per_particle:
                 # Handle NaNs in the spectra by ignoring them
-                nan_mask = ~np.isnan(particle_spectra[combine_label]._lnu)[
-                    :, np.newaxis
-                ]
+                nan_mask = ~np.isnan(particle_spectra[combine_label]._lnu)
 
                 # Fold in mask
                 if mask is not None:
@@ -989,21 +991,28 @@ class Combination:
                 f"wavelength grid, got {lam_mask.size} and "
                 f"{in_lines[this_model.combine[0].label].shape[-1]}."
             )
+
+        # Initialize mask with particle mask if present
         if part_mask is not None:
             mask = part_mask[:, np.newaxis]
+        else:
+            mask = None
+
+        # Combine with or set wavelength mask
         if lam_mask is not None and mask is not None:
             mask = mask & lam_mask[np.newaxis, :]
         elif lam_mask is not None and this_model.per_particle:
             mask = lam_mask[np.newaxis, :]
         elif lam_mask is not None and not this_model.per_particle:
             mask = lam_mask
-        else:
-            mask = None
 
         # Loop over combination models adding the lines
         out_lines = in_lines[this_model.combine[0].label]
         for combine_model in this_model.combine[1:]:
-            out_lines[mask] += in_lines[combine_model.label][mask]
+            if mask is not None:
+                out_lines[mask] += in_lines[combine_model.label][mask]
+            else:
+                out_lines += in_lines[combine_model.label]
 
         # If we have more than one lines to combine then we need to set
         # the masked values to the first of the combined lines like a
@@ -1018,7 +1027,7 @@ class Combination:
             else:
                 first_lines = lines[this_model.combine[0].label].luminosity
 
-            out_lines.luminosity[~mask] += first_lines[~mask]
+            out_lines.luminosity[~mask] = first_lines[~mask]
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:

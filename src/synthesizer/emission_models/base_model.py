@@ -2618,6 +2618,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         spectra,
                         particle_spectra,
                         this_model,
+                        this_mask,
+                        this_model._lam_mask,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -2982,6 +2984,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         lines,
                         particle_lines,
                         this_model,
+                        this_mask,
+                        this_model._lam_mask,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
