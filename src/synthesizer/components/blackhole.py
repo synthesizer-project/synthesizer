@@ -320,7 +320,6 @@ class BlackholesComponent(Component):
         # The angle of the torus
         self.theta_torus = theta_torus
         self.torus_fraction = (self.theta_torus / (90 * deg)).value
-        self._torus_edgeon_cond = self.inclination + self.theta_torus
 
         # Check to make sure that both accretion rate and bolometric luminosity
         # haven't been provided because that could be confusing.
@@ -405,6 +404,11 @@ class BlackholesComponent(Component):
             self.cosine_inclination = np.cos(
                 self.inclination.to("radian").value
             )
+
+    @property
+    def _torus_edgeon_cond(self):
+        """When this is > 90 deg the torus obscures the disc."""
+        return self.inclination + self.theta_torus
 
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.
