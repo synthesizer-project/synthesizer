@@ -242,6 +242,7 @@ class TestParticlesProjection:
             return np.array([10.0, 10.0]) * Mpc
 
         sp.get_luminosity_distance = fake_ld
+        sp.get_angular_diameter_distance = fake_ld
         return sp
 
     def test_get_projected_angular_coordinates_requires_input(

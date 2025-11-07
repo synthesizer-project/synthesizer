@@ -180,6 +180,9 @@ def _wrap_with_prefix(message, stacklevel, category):
     # Subtract some padding for the warning
     width -= 4
 
+    # Ensure width is > 0
+    width = max(1, width)
+
     # Wrap the message
     wrapped = textwrap.fill(
         str(message),

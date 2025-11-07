@@ -11,8 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Msun, deg, kelvin, yr
 
-from synthesizer.emission_models import UnifiedAGN
-from synthesizer.emission_models.dust.emission import Greybody
+from synthesizer.emission_models import Greybody, UnifiedAGN
 from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.parametric import BlackHole

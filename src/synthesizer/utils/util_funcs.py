@@ -548,3 +548,19 @@ def get_attr_c_compatible_double(obj, attr):
 
     # Also return the array
     return arr
+
+
+def sigmoid(x, A, a, c, center):
+    """Sigmoid function.
+
+    Args:
+        x (float): Input value.
+        A (float): Amplitude parameter.
+        a (float): Slope parameter.
+        c (float): Offset parameter.
+        center (float): Center of the sigmoid function.
+
+    Returns:
+        float: Sigmoid function value.
+    """
+    return A / (1 + np.exp(-a * (x - center))) + c

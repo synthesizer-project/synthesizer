@@ -1783,7 +1783,8 @@ class Filter:
 
         # Warn and exit if there are no array elements in this band
         if arr_in_band.size == 0:
-            warn(f"{self.filter_code} outside of emission array.")
+            if arr.shape[0] > 0:
+                warn(f"{self.filter_code} outside of emission array.")
             return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
 
         # Multiply the array by the filter transmission curve

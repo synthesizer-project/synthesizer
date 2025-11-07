@@ -264,6 +264,7 @@ class TransmittedEmission:
         fesc="fesc",
         incident=None,
         related_models=(),
+        escaped_label="escaped",
         **kwargs,
     ):
         """Initialise and return the correct TransmittedEmission object.
@@ -279,6 +280,8 @@ class TransmittedEmission:
             related_models (list): A list of related models to combine with.
                 This is used to combine the escaped and transmitted emission
                 models.
+            escaped_label (str): The label for the escaped emission model
+                created if fesc > 0.0.
             **kwargs: Additional keyword arguments.
         """
         # If fesc is None or 0.0 then we only need the transmitted
@@ -299,6 +302,7 @@ class TransmittedEmission:
                 fesc=fesc,
                 incident=incident,
                 related_models=related_models,
+                escaped_label=escaped_label,
                 **kwargs,
             )
 
@@ -727,10 +731,9 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
             escaped=escaped,
             **kwargs,
         )
+        dust_emission_model.set_energy_balance(reprocessed, attenuated)
         dust_emission = DustEmission(
             dust_emission_model=dust_emission_model,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="stellar",
             **kwargs,
         )
@@ -818,10 +821,9 @@ class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
             emitter="stellar",
             **kwargs,
         )
+        dust_emission_model.set_energy_balance(reprocessed, attenuated)
         dust_emission = DustEmission(
             dust_emission_model=dust_emission_model,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="stellar",
             **kwargs,
         )

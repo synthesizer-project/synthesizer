@@ -6,7 +6,7 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Msun, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -115,7 +115,7 @@ class BlackholesComponent(Component):
         """Initialise the BlackholeComponent.
 
         Where they're not provided missing quantities are automatically
-        calcualted. Not all parameters need to be set for every emission model.
+        calculated. Not all parameters need to be set for every emission model.
 
         Args:
             fesc (float):
@@ -139,7 +139,7 @@ class BlackholesComponent(Component):
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
             ionisation_parameter_blr (np.ndarray of float):
-                The ionisation parameter of the broadline region.
+                The ionisation parameter of the broad line region.
             hydrogen_density_blr (np.ndarray of float):
                 The hydrogen density of the broad line region.
             covering_fraction_blr (np.ndarray of float):
@@ -208,7 +208,6 @@ class BlackholesComponent(Component):
                 """Both accretion rate and bolometric luminosity provided but
                 that is confusing. Provide one or the other!"""
             )
-
         if (self.accretion_rate_eddington is not None) and (
             self.bolometric_luminosity is not None
         ):
@@ -217,6 +216,28 @@ class BlackholesComponent(Component):
                 luminosity provided but that is confusing. Provide one or
                 the other!"""
             )
+
+        # Ensure that both accretion_rate and accretion_rate_eddington are not
+        # provided, this is also confusing.
+        if (self.accretion_rate is not None) and (
+            self.accretion_rate_eddington is not None
+        ):
+            raise exceptions.InconsistentArguments(
+                """Both accretion rate and accretion rate in terms of
+                Eddington provided but that is confusing. Provide one or the
+                other!"""
+            )
+
+        # If mass calculate the Eddington luminosity.
+        if self.mass is not None:
+            self.calculate_eddington_luminosity()
+
+        # If accretion_rate_eddington provided calculate the accretion rate.
+        if (
+            self.accretion_rate_eddington is not None
+            and self.eddington_luminosity is not None
+        ):
+            self.calculate_accretion_rate()
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # bolometric luminosity.
@@ -235,10 +256,6 @@ class BlackholesComponent(Component):
             and self.epsilon is not None
         ):
             self.calculate_bb_temperature()
-
-        # If mass calculate the Eddington luminosity.
-        if self.mass is not None:
-            self.calculate_eddington_luminosity()
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # Eddington ratio.
@@ -265,6 +282,25 @@ class BlackholesComponent(Component):
             self.cosine_inclination = np.cos(
                 self.inclination.to("radian").value
             )
+
+    def calculate_accretion_rate(self):
+        """Calculate the black hole accretion rate from the eddington ratio.
+
+        This is used when accretion rate is provided in terms of the Eddington
+        ratio and not the explicit accretion rate.
+
+
+        Returns:
+            unyt_array:
+                The black hole accretion rate
+        """
+        self.accretion_rate = (
+            self.accretion_rate_eddington
+            * self.eddington_luminosity
+            / (self.epsilon * c**2)
+        )
+
+        return self.accretion_rate
 
     def calculate_bolometric_luminosity(self):
         """Calculate the black hole bolometric luminosity.
@@ -343,3 +379,74 @@ class BlackholesComponent(Component):
         formatter = TableFormatter(self)
 
         return formatter.get_table("Black Holes")
+
+    def calculate_circular_velocity(self, radial_distance):
+        r"""Calculate the circular velocity.
+
+        v_c(r) = \\sqrt{\frac{G M(<r)}{r}}.
+
+        Args:
+            radial_distance (np.ndarray of float):
+                The distance from the blackhole.
+
+        Returns:
+             unyt_array:
+                The circular velocity at the radial distance.
+        """
+        return np.sqrt(G * self.mass / radial_distance)
+
+    def calculate_schwarzschild_radius(self):
+        r"""Calculate the Schwarzschild radius of the blackhole(s).
+
+        R_{\rm s} = \frac{2GM}{c^2}
+
+        Returns:
+             unyt_array:
+                The Schwarzschild radius.
+        """
+        return 2 * G * self.mass / c**2
+
+    def calculate_integrated_ionising_luminosity(self):
+        """Calculates the integrated ionising luminosity of the blackhole(s).
+
+        This requires that the disc_incident spectra be available.
+
+        Returns:
+             unyt_array:
+                The ionising photon production rate (s^-1).
+        """
+        if "disc_incident" in self.spectra.keys():
+            return self.spectra[
+                "disc_incident"
+            ].calculate_ionising_photon_production_rate()
+        else:
+            raise exceptions.MissingSpectraType(
+                "It is necessary to first calculate the disc_incident spectra "
+                "before calculating the ionising luminosity"
+            )
+
+    def calculate_ionisation_parameter(
+        self, radial_distance, hydrogen_density
+    ):
+        r"""Calculate the ionisation parameter.
+
+        Calculates the ionising parameter (U) at radial_distance for the given
+        hydrogen_density.
+
+        U = \frac{Q_{\mathrm{H}}}{4\pi r^{2} n_{\mathrm{H}} c}
+
+        Args:
+            radial_distance (np.ndarray of float):
+                The distance from the blackhole.
+            hydrogen_density (np.ndarray of float):
+                The hydrogen density at radial_distance.
+
+        Returns:
+             unyt_array:
+                The ionisation parameter.
+        """
+        ionising_luminosity = self.calculate_ionising_luminosity()
+
+        return ionising_luminosity / (
+            4 * np.pi * radial_distance**2 * hydrogen_density * c
+        )

@@ -43,7 +43,6 @@ from unyt import (
     Hz,
     angstrom,
     c,
-    cm,
     erg,
     eV,
     h,
@@ -55,6 +54,7 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
+from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.extensions.timers import tic, toc
@@ -879,9 +879,7 @@ class LineCollection:
             return self.get_flux0()
 
         # Get the luminosity distance
-        luminosity_distance = (
-            cosmo.luminosity_distance(z).to("cm").value
-        ) * cm
+        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Compute flux and observed continuum
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
@@ -1302,10 +1300,7 @@ class LineCollection:
         return self
 
     def apply_attenuation(
-        self,
-        tau_v,
-        dust_curve,
-        mask=None,
+        self, tau_v, dust_curve, mask=None, **dust_curve_kwargs
     ):
         """Apply attenuation to this LineCollection.
 
@@ -1319,6 +1314,9 @@ class LineCollection:
                 A mask array with an entry for each line. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for multidimensional lines.
+            dust_curve_kwargs (dict):
+                A dictionary of extra parameters set at runtime on the
+                attenuation model.
 
         Returns:
                 LineCollection
@@ -1352,7 +1350,9 @@ class LineCollection:
                 )
 
         # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, self.lam)
+        transmission = dust_curve.get_transmission(
+            tau_v, self.lam, **dust_curve_kwargs
+        )
 
         # Apply the transmision
         att_lum = self.luminosity
