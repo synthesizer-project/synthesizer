@@ -211,8 +211,17 @@ class BlackholesComponent(Component):
         # (nlr). These are allocated based on the relative covering fractions
         # of the BLR and NLR. These are used by the UnifiedAGN emission model.
         if self.covering_fraction_blr is not None:
+            # Calculate the total covering fraction
+            self.covering_fraction = (
+                covering_fraction_blr + covering_fraction_nlr
+            )
+
+            # Calculate the escape fraction. This is equivalent to a covering
+            # fraction for escaping radiation.
+            self.escape_fraction = 1.0 - self.covering_fraction
+
             # Validate that covering fractions don't exceed unity
-            if np.any(covering_fraction_nlr + covering_fraction_blr > 1.0):
+            if np.any(self.covering_fraction > 1.0):
                 raise exceptions.InconsistentArguments(
                     "Sum of BLR and NLR covering fractions cannot exceed 1.0"
                 )
