@@ -1,6 +1,6 @@
 """A submodule containing the operations performed by an EmissionModel.
 
-An emission models inherits each of there opertaion classes but will only
+An emission models inherits each of there operation classes but will only
 ever instantiate one. This is because operations are isolated to one per
 model. The correct operation is instantiated in EmissionMode._init_operations.
 
