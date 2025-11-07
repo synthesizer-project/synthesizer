@@ -22,6 +22,7 @@ Example usage::
 
 from unyt import deg
 
+from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.emission_models.transformers import (
     CoveringFraction,
@@ -76,14 +77,19 @@ class UnifiedAGN(BlackHoleEmissionModel):
             blr_grid (synthesizer.grid.Grid): The grid for the BLR.
             torus_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use for the torus.
-            covering_fraction_nlr (float): The covering fraction of the NLR.
-            covering_fraction_blr (float): The covering fraction of the BLR.
-            covered_fraction (float): The covering fraction of the disc.
             disc_transmission (str): The disc transmission model.
             label (str): The label for the model.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
+        # Check that certain parameters are not provided as they would produce
+        # inconsistent results.
+        for arg_to_check in ["inclination", "theta_torus"]:
+            if arg_to_check in kwargs.keys():
+                raise exceptions.InconsistentArguments(
+                    "inclination must be set on the blackhole object."
+                )
+
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,
@@ -141,6 +147,16 @@ class UnifiedAGN(BlackHoleEmissionModel):
             )
         )
 
+        # Combined line region spectrum.
+        self.line_regions = BlackHoleEmissionModel(
+            label="line_regions",
+            combine=(
+                self.nlr,
+                self.blr,
+            ),
+            **kwargs,
+        )
+
         # Get the torus emission model
         self.torus = self._make_torus(torus_emission_model, **kwargs)
 
@@ -162,6 +178,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_transmitted,
                 self.disc_transmitted_averaged,
                 self.disc,
+                self.line_regions,
                 self.nlr_continuum,
                 self.blr_continuum,
             ),
