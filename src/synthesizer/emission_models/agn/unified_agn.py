@@ -392,12 +392,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             # If disc_transmission == 'none' the emission seen by the observer
             # is simply the incident emission. This step also accounts for the
             # torus.
-            if disc_transmission == "none":
-                transmission_fraction_escape = 1.0
-                transmission_fraction_nlr = 0.0
-                transmission_fraction_blr = 0.0
-
-            if disc_transmission == "escaped":
+            if disc_transmission in ["none", "escaped"]:
                 transmission_fraction_escape = 1.0
                 transmission_fraction_nlr = 0.0
                 transmission_fraction_blr = 0.0
