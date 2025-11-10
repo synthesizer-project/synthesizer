@@ -87,7 +87,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
         for arg_to_check in ["inclination", "theta_torus"]:
             if arg_to_check in kwargs.keys():
                 raise exceptions.InconsistentArguments(
-                    "inclination must be set on the blackhole object."
+                    f"{arg_to_check} must be set on the blackhole object, "
+                    "not passed as a keyword argument to the emission model."
                 )
 
         # Get the incident istropic disc emission model
