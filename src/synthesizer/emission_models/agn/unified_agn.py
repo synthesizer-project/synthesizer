@@ -117,7 +117,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Get the averaged disc spectrum
+        # Get the averaged disc spectrum with and without the torus
         (
             self.disc_averaged,
             self.disc_averaged_without_torus,
