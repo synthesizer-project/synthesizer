@@ -549,8 +549,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Now adjust for the torus. This essentially the averaged light
-        # recieved from the disc.
+        # Now adjust for the torus. This is essentially the averaged light
+        # received from the disc.
         disc_averaged = BlackHoleEmissionModel(
             label="disc_averaged",
             apply_to=disc_averaged_without_torus,
