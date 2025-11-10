@@ -853,7 +853,10 @@ class Combination:
 
         # Initialize mask with particle mask if present
         if part_mask is not None:
-            mask = part_mask[:, np.newaxis]
+            # Broadcast particle mask across all wavelengths
+            mask = np.broadcast_to(
+                part_mask[:, np.newaxis], (len(part_mask), out_spec.lam.size)
+            )
         else:
             mask = None
 
@@ -861,7 +864,13 @@ class Combination:
         if lam_mask is not None and mask is not None:
             mask = mask & lam_mask[np.newaxis, :]
         elif lam_mask is not None and this_model.per_particle:
-            mask = lam_mask[np.newaxis, :]
+            # Broadcast wavelength mask across all particles
+            npart = particle_spectra[this_model._combine_labels[0]]._lnu.shape[
+                0
+            ]
+            mask = np.broadcast_to(
+                lam_mask[np.newaxis, :], (npart, len(lam_mask))
+            )
         elif lam_mask is not None and not this_model.per_particle:
             mask = lam_mask
 
@@ -890,12 +899,11 @@ class Combination:
                     nan_mask
                 ]
 
-        # If we have more than one spectra to combine then we need to set
-        # the masked values to the first of the combined spectra like a
-        # normal masked addition would do
+        # If we have a mask we need to set the masked values to the first
+        # of the combined spectra like a normal masked addition would do
         # NOTE: This is to ensure a hack for masking a spectra via
         # combining a single model works as expected
-        if len(this_model.combine) > 1 and mask is not None:
+        if mask is not None:
             if this_model.per_particle:
                 first_spec = particle_spectra[this_model.combine[0].label]._lnu
             else:
@@ -994,7 +1002,11 @@ class Combination:
 
         # Initialize mask with particle mask if present
         if part_mask is not None:
-            mask = part_mask[:, np.newaxis]
+            # Broadcast particle mask across all lines
+            nlines = in_lines[this_model.combine[0].label].shape[-1]
+            mask = np.broadcast_to(
+                part_mask[:, np.newaxis], (len(part_mask), nlines)
+            )
         else:
             mask = None
 
@@ -1002,7 +1014,11 @@ class Combination:
         if lam_mask is not None and mask is not None:
             mask = mask & lam_mask[np.newaxis, :]
         elif lam_mask is not None and this_model.per_particle:
-            mask = lam_mask[np.newaxis, :]
+            # Broadcast wavelength mask across all particles
+            npart = in_lines[this_model.combine[0].label].luminosity.shape[0]
+            mask = np.broadcast_to(
+                lam_mask[np.newaxis, :], (npart, len(lam_mask))
+            )
         elif lam_mask is not None and not this_model.per_particle:
             mask = lam_mask
 
@@ -1014,12 +1030,11 @@ class Combination:
             else:
                 out_lines += in_lines[combine_model.label]
 
-        # If we have more than one lines to combine then we need to set
-        # the masked values to the first of the combined lines like a
-        # normal masked addition would do
+        # If we have a mask we need to set the masked values to the first
+        # of the combined lines like a normal masked addition would do
         # NOTE: This is to ensure a hack for masking a lines via
         # combining a single model works as expected
-        if len(this_model.combine) > 1 and mask is not None:
+        if mask is not None:
             if this_model.per_particle:
                 first_lines = particle_lines[
                     this_model.combine[0].label

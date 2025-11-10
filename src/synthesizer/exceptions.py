@@ -490,6 +490,31 @@ class WavelengthOutOfRange(Exception):
             return "The provided wavelength is out of the filter range!"
 
 
+class InvalidCombination(Exception):
+    """Exception class for invalid emission model combinations."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Invalid combination of emission models!"
+
+
 class SVOInaccessible(Exception):
     """Generic exception class for when SVO is inaccessible."""
 

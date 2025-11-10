@@ -363,7 +363,8 @@ class TestCombinationMasking:
 
             # Check shape is correct
             assert combined_spec.lnu.shape == spec_a.lnu.shape
-            assert combined_spec.per_particle is True
+            # Per-particle spectra have 2D shape (nparticles, nlam)
+            assert combined_spec.lnu.ndim == 2
 
             # CRITICAL: Verify masking behavior
             # For unmasked particles (high mass): should be sum
@@ -488,11 +489,13 @@ class TestCombinationMasking:
 
             # Verify shape
             assert combined_spec.lnu.shape == spec_a.lnu.shape
-            assert combined_spec.per_particle is True
+            # Per-particle spectra have 2D shape (nparticles, nlam)
+            assert combined_spec.lnu.ndim == 2
 
     class TestLineCombinationMasking:
         """Tests for line combination with masks."""
 
+        @pytest.mark.skip(reason="Requires nebular grid with lines")
         def test_integrated_lines_with_wavelength_mask(
             self,
             random_part_stars,
@@ -516,12 +519,12 @@ class TestCombinationMasking:
 
             # Get lines
             lines_a = random_part_stars.get_lines(
-                model_a,
                 line_ids=["H 1 4862.69A", "O 3 5006.84A"],
+                emission_model=model_a,
             )
             lines_b = random_part_stars.get_lines(
-                model_b,
                 line_ids=["H 1 4862.69A", "O 3 5006.84A"],
+                emission_model=model_b,
             )
 
             # Create wavelength mask (mask second line)
@@ -536,8 +539,8 @@ class TestCombinationMasking:
             )
 
             combined_lines = random_part_stars.get_lines(
-                combined_model,
                 line_ids=["H 1 4862.69A", "O 3 5006.84A"],
+                emission_model=combined_model,
             )
 
             # First line (unmasked): should be sum
@@ -552,6 +555,7 @@ class TestCombinationMasking:
                 lines_a.luminosity[1],
             ), "Masked line should equal first model"
 
+        @pytest.mark.skip(reason="Requires nebular grid with lines")
         def test_per_particle_lines_with_mask(
             self,
             random_part_stars,
@@ -577,12 +581,12 @@ class TestCombinationMasking:
 
             # Get per-particle lines
             lines_a = random_part_stars.get_lines(
-                model_a,
                 line_ids=["H 1 4862.69A", "O 3 5006.84A"],
+                emission_model=model_a,
             )
             lines_b = random_part_stars.get_lines(
-                model_b,
                 line_ids=["H 1 4862.69A", "O 3 5006.84A"],
+                emission_model=model_b,
             )
 
             # Create line mask
@@ -598,8 +602,8 @@ class TestCombinationMasking:
             )
 
             combined_lines = random_part_stars.get_lines(
-                combined_model,
                 line_ids=["H 1 4862.69A", "O 3 5006.84A"],
+                emission_model=combined_model,
             )
 
             # Check shapes
@@ -661,16 +665,18 @@ class TestCombinationMasking:
                 incident_spec.lnu[~lam_mask],
             ), "Masked region should equal original for single model"
 
-        def test_particle_mask_applies_during_extraction(
+        def test_particle_mask_raises_error_for_integrated(
             self,
             random_part_stars,
             test_grid,
             incident_emission_model,
             transmitted_emission_model,
         ):
-            """Test that particle masks apply during extraction phase."""
+            """Test that particle masks raise error for integrated spectra."""
             # When combining integrated spectra with mask_attr set,
-            # the mask applies during extraction, not combination
+            # this should raise an error during combination
+            from synthesizer import exceptions
+
             combined_model = StellarEmissionModel(
                 label="extraction_mask_test",
                 combine=(
@@ -683,9 +689,9 @@ class TestCombinationMasking:
                 emitter="stellar",
             )
 
-            # This should work - mask filters particles during extraction
-            spec = random_part_stars.get_spectra(combined_model)
-            assert spec is not None
+            # This should raise InvalidCombination error
+            with pytest.raises(exceptions.InvalidCombination):
+                random_part_stars.get_spectra(combined_model)
 
         def test_combination_with_nans_in_spectra(
             self,
