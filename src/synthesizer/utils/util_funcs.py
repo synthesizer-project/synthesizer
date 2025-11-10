@@ -143,6 +143,30 @@ def scalar_to_array(value):
     return arr
 
 
+def array_to_scalar(x):
+    """Convert a NumPy array-like of length 1 to a scalar.
+
+    Args:
+        x (array or list):
+            array or list to be converted
+
+    Returns:
+        scale:
+            A scalar value.
+
+    Raises:
+        InconsistentArguments
+            If the value has more than 1 element.
+    """
+    x = np.asanyarray(x)
+    if x.size != 1:
+        raise ValueError(
+            f"Expected an array with exactly 1 element, got shape {x.shape}"
+            f"with {x.size} elements."
+        )
+    return x.item()
+
+
 def parse_grid_id(grid_id):
     """Parse a grid name for the properties of the grid.
 

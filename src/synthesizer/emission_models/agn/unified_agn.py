@@ -22,6 +22,7 @@ Example usage::
 
 from unyt import deg
 
+from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.emission_models.transformers import (
     CoveringFraction,
@@ -29,7 +30,6 @@ from synthesizer.emission_models.transformers import (
 )
 from synthesizer.exceptions import (
     InconsistentParameter,
-    UnimplementedFunctionality,
 )
 
 
@@ -66,10 +66,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         nlr_grid,
         blr_grid,
         torus_emission_model,
-        covering_fraction_nlr="covering_fraction_nlr",
-        covering_fraction_blr="covering_fraction_blr",
-        covered_fraction="covered_fraction",
-        disc_transmission="combined",
+        disc_transmission="random",
         label="intrinsic",
         **kwargs,
     ):
@@ -80,14 +77,20 @@ class UnifiedAGN(BlackHoleEmissionModel):
             blr_grid (synthesizer.grid.Grid): The grid for the BLR.
             torus_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use for the torus.
-            covering_fraction_nlr (float): The covering fraction of the NLR.
-            covering_fraction_blr (float): The covering fraction of the BLR.
-            covered_fraction (float): The covering fraction of the disc.
             disc_transmission (str): The disc transmission model.
             label (str): The label for the model.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
+        # Check that certain parameters are not provided as they would produce
+        # inconsistent results.
+        for arg_to_check in ["inclination", "theta_torus"]:
+            if arg_to_check in kwargs.keys():
+                raise exceptions.InconsistentArguments(
+                    f"{arg_to_check} must be set on the blackhole object, "
+                    "not passed as a keyword argument to the emission model."
+                )
+
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,
@@ -95,51 +98,66 @@ class UnifiedAGN(BlackHoleEmissionModel):
         )
 
         # Get the incident disc emission model
-        self.disc_incident = self._make_disc_incident(
-            nlr_grid,
-            **kwargs,
-        )
-
-        # Get the emission transmitted through the BLR and NLR
-        (self.disc_transmitted_nlr, self.disc_transmitted_blr) = (
-            self._make_disc_transmitted_lr(
+        self.disc_incident, self.disc_incident_masked = (
+            self._make_disc_incident(
                 nlr_grid,
-                blr_grid,
                 **kwargs,
             )
         )
 
-        # Get the averaged disc emission
+        # Get the emission transmitted through the BLR and NLR
+        (
+            self.disc_transmitted_nlr_full,
+            self.disc_transmitted_blr_full,
+            self.disc_transmitted_nlr_isotropic_full,
+            self.disc_transmitted_blr_isotropic_full,
+        ) = self._make_disc_transmitted_lr_full(
+            nlr_grid,
+            blr_grid,
+            **kwargs,
+        )
+
+        # Get the averaged disc spectrum with and without the torus
         (
             self.disc_averaged,
             self.disc_averaged_without_torus,
         ) = self._make_disc_averaged(
-            covering_fraction_nlr,
-            covering_fraction_blr,
             **kwargs,
         )
 
-        # Get the transmitted disc emission models
+        # Get the weighted_combination transmitted disc spectrum
+        self.disc_transmitted_weighted_combination = (
+            self._make_disc_transmitted_weighted_combination(
+                **kwargs,
+            )
+        )
+
+        # Get the transmitted disc emission spectrum
         self.disc_transmitted = self._make_disc_transmitted(
-            nlr_grid,
-            blr_grid,
-            covering_fraction_nlr,
-            covering_fraction_blr,
             disc_transmission,
             **kwargs,
         )
 
+        # Create the disc spectrum
         self.disc = self._make_disc(**kwargs)
 
-        # Get the line regions
+        # Get the line region spectra
         self.nlr, self.nlr_continuum, self.blr, self.blr_continuum = (
             self._make_line_regions(
                 nlr_grid,
                 blr_grid,
-                covering_fraction_nlr,
-                covering_fraction_blr,
                 **kwargs,
             )
+        )
+
+        # Combined line region spectrum.
+        self.line_regions = BlackHoleEmissionModel(
+            label="line_regions",
+            combine=(
+                self.nlr,
+                self.blr,
+            ),
+            **kwargs,
         )
 
         # Get the torus emission model
@@ -160,7 +178,10 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_incident,
                 self.disc_averaged,
                 self.disc_averaged_without_torus,
+                self.disc_transmitted,
+                self.disc_transmitted_weighted_combination,
                 self.disc,
+                self.line_regions,
                 self.nlr_continuum,
                 self.blr_continuum,
             ),
@@ -187,7 +208,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
         **kwargs,
     ):
         """Make the disc spectra."""
-        model = BlackHoleEmissionModel(
+        # unmasked
+        disc_incident = BlackHoleEmissionModel(
             grid=grid,
             label="disc_incident",
             extract="incident",
@@ -196,9 +218,22 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        return model
+        # masked for the torus
+        disc_incident_masked = BlackHoleEmissionModel(
+            grid=grid,
+            label="disc_incident_masked",
+            extract="incident",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            **kwargs,
+        )
 
-    def _make_disc_transmitted_lr(
+        return disc_incident, disc_incident_masked
+
+    def _make_disc_transmitted_lr_full(
         self,
         nlr_grid,
         blr_grid,
@@ -214,114 +249,237 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
-        disc_transmitted_nlr = BlackHoleEmissionModel(
+        # Calculate the "full" spectrum transmitted through the line regions.
+        # This masks for the torus but does not yet include the covering
+        # fraction.
+        disc_transmitted_nlr_full = BlackHoleEmissionModel(
             grid=nlr_grid,
-            label="disc_transmitted_nlr",
+            label="disc_transmitted_nlr_full",
             extract="transmitted",
+            hydrogen_density="hydrogen_density_nlr",
+            ionisation_parameter="ionisation_parameter_nlr",
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            **kwargs,
+        )
+
+        disc_transmitted_blr_full = BlackHoleEmissionModel(
+            grid=blr_grid,
+            label="disc_transmitted_blr_full",
+            extract="transmitted",
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
+            **kwargs,
+        )
+
+        # Calculate the istropic spectrum transmitted through each of the line
+        # regions. This does not include masking of the spectrum.
+        disc_transmitted_nlr_isotropic_full = BlackHoleEmissionModel(
+            grid=nlr_grid,
+            label="disc_transmitted_nlr_isotropic_full",
+            extract="transmitted",
+            cosine_inclination=0.5,
             hydrogen_density="hydrogen_density_nlr",
             ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
 
-        disc_transmitted_blr = BlackHoleEmissionModel(
+        disc_transmitted_blr_isotropic_full = BlackHoleEmissionModel(
             grid=blr_grid,
-            label="disc_transmitted_blr",
+            label="disc_transmitted_blr_isotropic_full",
             extract="transmitted",
+            cosine_inclination=0.5,
             hydrogen_density="hydrogen_density_blr",
             ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
-        return disc_transmitted_nlr, disc_transmitted_blr
+        return (
+            disc_transmitted_nlr_full,
+            disc_transmitted_blr_full,
+            disc_transmitted_nlr_isotropic_full,
+            disc_transmitted_blr_isotropic_full,
+        )
+
+    def _make_disc_transmitted_weighted_combination(
+        self,
+        **kwargs,
+    ):
+        """Calculate the weighted_combination disc spectrum.
+
+        Note: when the viewing angle (inlination) meets the torus criteria
+        it is always blocked.
+        """
+        # Now calculate the disc_escaped emission using this transmission
+        # fraction.
+        disc_escaped_weighted = BlackHoleEmissionModel(
+            label="disc_escaped_weighted",
+            apply_to=self.disc_incident_masked,
+            transformer=CoveringFraction(covering_attrs=("escape_fraction",)),
+            **kwargs,
+        )
+
+        # Now calculate the disc_transmitted_nlr emission using this
+        # transmission fraction.
+        disc_transmitted_nlr_weighted = BlackHoleEmissionModel(
+            label="disc_transmitted_nlr_weighted",
+            apply_to=self.disc_transmitted_nlr_full,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_nlr",)
+            ),
+            **kwargs,
+        )
+
+        # Now calculate the disc_transmitted_blr emission using this
+        # transmission fraction.
+        disc_transmitted_blr_weighted = BlackHoleEmissionModel(
+            label="disc_transmitted_blr_weighted",
+            apply_to=self.disc_transmitted_blr_full,
+            transformer=CoveringFraction(
+                covering_attrs=("covering_fraction_blr",)
+            ),
+            **kwargs,
+        )
+
+        # Now combine the three different components to produce the total.
+        disc_transmitted_averaged = BlackHoleEmissionModel(
+            label="disc_transmitted_weighted_combination",
+            combine=(
+                disc_escaped_weighted,
+                disc_transmitted_nlr_weighted,
+                disc_transmitted_blr_weighted,
+            ),
+            **kwargs,
+        )
+
+        return disc_transmitted_averaged
 
     def _make_disc_transmitted(
         self,
-        nlr_grid,
-        blr_grid,
-        covering_fraction_nlr,
-        covering_fraction_blr,
         disc_transmission,
         **kwargs,
     ):
         """Calculate the observed disc spectrum.
 
-        There are a few options here that are set by the disc_transmission
-        keyword. Either the disc emission escapes, goes through the NLR, goes
-        through the BLR, or is blocked entirely by the torus. These can be set
-        direction so that they apply to all blackholes or the keyword random
-        can be given. In the random case each blackhole is assigned a random
-        option based on the relative escape fractions of the NLR and BLR.
+        For an individual blackhole there are four options. Either the disc
+        emission escapes (disc_transmission='none'), is transmitted through
+        the NLR (disc_transmission='nlr'), is transmitted through the BLR
+        (disc_transmission='blr'), or is the weighted combination
+        (disc_transmission='weighted_combination').
+
+        The latter scenario is always calculated but is not used to calculate
+        the disc_transmitted spectrum unless explicitly asked for. At the
+        initialisation of the blackhole object one of the other three
+        scenarios is randomly assigned based on the nlr and blr covering
+        fractions. The default behaviour of UnifiedAGN is to use these
+        randomly assigned scenarios. However, by providing the
+        disc_transmission keyword argument to UnifiedAGN we can overide this
+        and force all blackholes to adopt the same transmission scenario.
+
+        Note: when the viewing angle (inlination) meets the torus criteria
+        it is always blocked.
 
         Args:
-            nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
-            blr_grid (synthesizer.grid.Grid): The grid for the BLR.
-            covering_fraction_nlr (float): The covering fraction of the NLR.
-            covering_fraction_blr (float): The covering fraction of the BLR.
-            disc_transmission (str): The disc transmission model.
+            disc_transmission (str): The disc transmission sceanrio.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
-        # If disc_transmission == 'none' the emission seen by the observer is
-        # simply the incident emission. This step also accounts for the torus.
-        if disc_transmission == "none":
-            disc_transmitted = BlackHoleEmissionModel(
-                grid=nlr_grid,
-                label="disc_transmitted",
-                extract="incident",
-                hydrogen_density="hydrogen_density_blr",
-                ionisation_parameter="ionisation_parameter_blr",
-                mask_attr="_torus_edgeon_cond",
-                mask_thresh=90 * deg,
-                mask_op="<",
-                **kwargs,
-            )
-        # If disc_transmission == 'nlr' the emission seen by the observer is
-        # is the spectrum transmitted through the NLR. This step also accounts
-        # for the torus.
-        elif disc_transmission == "nlr":
-            disc_transmitted = BlackHoleEmissionModel(
-                label="disc_transmitted",
-                combine=(self.disc_transmitted_nlr,),
-                mask_attr="_torus_edgeon_cond",
-                mask_thresh=90 * deg,
-                mask_op="<",
-                **kwargs,
-            )
+        if disc_transmission in ["escaped", "none", "nlr", "blr", "random"]:
+            # If disc_transmission == 'none' the emission seen by the observer
+            # is simply the incident emission. This step also accounts for the
+            # torus.
+            if disc_transmission in ["none", "escaped"]:
+                transmission_fraction_escape = 1.0
+                transmission_fraction_nlr = 0.0
+                transmission_fraction_blr = 0.0
 
-        # If disc_transmission == 'blr' the emission seen by the observer is
-        # is the spectrum transmitted through the BLR. This step also accounts
-        # for the torus.
-        elif disc_transmission == "blr":
-            disc_transmitted = BlackHoleEmissionModel(
-                label="disc_transmitted",
-                combine=(self.disc_transmitted_blr,),
-                mask_attr="_torus_edgeon_cond",
-                mask_thresh=90 * deg,
-                mask_op="<",
-                **kwargs,
-            )
+            # If disc_transmission == 'nlr' the emission seen by the observer
+            # is the spectrum transmitted through the NLR. This step also
+            # accounts for the torus.
+            elif disc_transmission == "nlr":
+                transmission_fraction_escape = 0.0
+                transmission_fraction_nlr = 1.0
+                transmission_fraction_blr = 0.0
 
-        # If disc_transmission == 'combined' the emission seen by the observer
-        # includes contributions from all line of sight. This is effectively
-        # the disc_averaged without including the torus but then masked for
-        # the torus.
-        elif disc_transmission == "combined":
-            disc_transmitted = BlackHoleEmissionModel(
-                label="disc_transmitted",
-                combine=(self.disc_averaged_without_torus,),
-                mask_attr="_torus_edgeon_cond",
-                mask_thresh=90 * deg,
-                mask_op="<",
+            # If disc_transmission == 'blr' the emission seen by the observer
+            # is the spectrum transmitted through the BLR. This step also
+            # accounts for the torus.
+            elif disc_transmission == "blr":
+                transmission_fraction_escape = 0.0
+                transmission_fraction_nlr = 0.0
+                transmission_fraction_blr = 1.0
+
+            # If disc_transmission == 'random' the emission seen by the
+            # observer is chosen at random for each blackhole using covering
+            # fractions. This is only possible if the transmission fractions
+            # have been set on the component.
+            elif disc_transmission == "random":
+                transmission_fraction_escape = "transmission_fraction_escape"
+                transmission_fraction_nlr = "transmission_fraction_nlr"
+                transmission_fraction_blr = "transmission_fraction_blr"
+
+            # Now calculate the disc_escaped emission using this transmission
+            # fraction.
+            self.disc_escaped = BlackHoleEmissionModel(
+                label="disc_escaped",
+                apply_to=self.disc_incident_masked,
+                transformer=CoveringFraction(
+                    covering_attrs=("transmission_fraction_escape",)
+                ),
+                transmission_fraction_escape=transmission_fraction_escape,
                 **kwargs,
             )
 
-        # If disc_transmission == 'random' the emission seen by the observer is
-        # chosen at random for each blackhole using covering fractions.
-        elif disc_transmission == "random":
-            raise UnimplementedFunctionality(
-                "random disc transmission not yet implemented"
+            # Now calculate the disc_transmitted_nlr emission using this
+            # transmission fraction.
+            self.disc_transmitted_nlr = BlackHoleEmissionModel(
+                label="disc_transmitted_nlr",
+                apply_to=self.disc_transmitted_nlr_full,
+                transformer=CoveringFraction(
+                    covering_attrs=("transmission_fraction_nlr",)
+                ),
+                transmission_fraction_nlr=transmission_fraction_nlr,
+                **kwargs,
             )
 
+            # Now calculate the disc_transmitted_blr emission using this
+            # transmission fraction.
+            self.disc_transmitted_blr = BlackHoleEmissionModel(
+                label="disc_transmitted_blr",
+                apply_to=self.disc_transmitted_blr_full,
+                transformer=CoveringFraction(
+                    covering_attrs=("transmission_fraction_blr",)
+                ),
+                transmission_fraction_blr=transmission_fraction_blr,
+                **kwargs,
+            )
+
+            # Now combine the three different components to produce the total.
+            disc_transmitted = BlackHoleEmissionModel(
+                label="disc_transmitted",
+                combine=(
+                    self.disc_escaped,
+                    self.disc_transmitted_nlr,
+                    self.disc_transmitted_blr,
+                ),
+                **kwargs,
+            )
+
+        # If weighted_combination is selected the transmitted is simply the
+        # combination of the three scenarios weighted by the respective
+        # covering fractions.
+        elif disc_transmission == "weighted_combination":
+            disc_transmitted = BlackHoleEmissionModel(
+                label="disc_transmitted",
+                combine=(self.disc_transmitted_weighted_combination,),
+                **kwargs,
+            )
+
+        # Otherwise raise exception.
         else:
             raise InconsistentParameter("disc_transmission not recognised")
 
@@ -337,48 +495,46 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
     def _make_disc_averaged(
         self,
-        covering_fraction_nlr,
-        covering_fraction_blr,
         **kwargs,
     ):
         """Calculate the isotropic (inclination averaged) disc spectrum."""
+        # Calculate the total amount of disc emission which escapes the BLR
+        # and NLR, ignoring the torus
         disc_escaped_isotropic = BlackHoleEmissionModel(
             label="disc_escaped_isotropic",
-            apply_to=self.disc_incident,
+            apply_to=self.disc_incident_isotropic,
             transformer=EscapingFraction(
                 covering_attrs=(
                     "covering_fraction_blr",
                     "covering_fraction_nlr",
                 )
             ),
-            hydrogen_density="hydrogen_density_blr",
-            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
+        # Calculate the total amount of disc emission which is transmitted
+        # through the NLR ignoring the torus
         disc_transmitted_nlr_isotropic = BlackHoleEmissionModel(
             label="disc_transmitted_nlr_isotropic",
-            apply_to=self.disc_transmitted_nlr,
+            apply_to=self.disc_transmitted_nlr_isotropic_full,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_nlr",)
             ),
-            hydrogen_density="hydrogen_density_nlr",
-            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
 
+        # Calculate the total amount of disc emission which is transmitted
+        # through the BLR ignoring the torus
         disc_transmitted_blr_isotropic = BlackHoleEmissionModel(
             label="disc_transmitted_blr_isotropic",
-            apply_to=self.disc_transmitted_blr,
+            apply_to=self.disc_transmitted_blr_isotropic_full,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_blr",)
             ),
-            hydrogen_density="hydrogen_density_blr",
-            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
-        # Combine the models
+        # Combine these three
         disc_averaged_without_torus = BlackHoleEmissionModel(
             label="disc_averaged_without_torus",
             combine=(
@@ -389,7 +545,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Now adjust for the torus
+        # Now adjust for the torus. This is essentially the averaged light
+        # received from the disc.
         disc_averaged = BlackHoleEmissionModel(
             label="disc_averaged",
             apply_to=disc_averaged_without_torus,
@@ -403,12 +560,18 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self,
         nlr_grid,
         blr_grid,
-        covering_fraction_nlr,
-        covering_fraction_blr,
         **kwargs,
     ):
-        """Make the line regions."""
-        # Make the line regions with fixed inclination
+        """Make the line regions.
+
+        These use the nebular spectra in the relevant grids but utilise the
+        isotropic emission (cosine_inclination=0.5) instead of taking account
+        of the observer inclination since the BLR are illuminated by a wider
+        range of lines-of-sight.
+        """
+        # Extract the NLR spectra from the grid. Here cosine_inclination=0.5
+        # because we are using the isotropic disc emission. No masking is
+        # applied for the NLR because it always assumed to be visible.
         full_nlr = BlackHoleEmissionModel(
             grid=nlr_grid,
             label="full_reprocessed_nlr",
@@ -419,6 +582,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
+        # Extract the BLR spectra from the grid. Here cosine_inclination=0.5
+        # because we are using the isotropic disc emission. Masking is
+        # applied for the BLR because it assumed to be blocked by the torus.
         full_blr = BlackHoleEmissionModel(
             grid=blr_grid,
             label="full_reprocessed_blr",
@@ -432,7 +598,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Make the line region continuum
+        # As above but for the continuum emission alone
         full_nlr_continuum = BlackHoleEmissionModel(
             grid=nlr_grid,
             label="full_continuum_nlr",
@@ -455,16 +621,13 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Applying covering fractions
+        # Now apply the relevant covering fractions to the different spectra
         nlr = BlackHoleEmissionModel(
             label="nlr",
             apply_to=full_nlr,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_nlr",)
             ),
-            fesc=covering_fraction_nlr,
-            hydrogen_density="hydrogen_density_nlr",
-            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
@@ -473,9 +636,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_blr",)
             ),
-            fesc=covering_fraction_blr,
-            hydrogen_density="hydrogen_density_blr",
-            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
         nlr_continuum = BlackHoleEmissionModel(
@@ -484,9 +644,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_nlr",)
             ),
-            fesc=covering_fraction_nlr,
-            hydrogen_density="hydrogen_density_nlr",
-            ionisation_parameter="ionisation_parameter_nlr",
             **kwargs,
         )
         blr_continuum = BlackHoleEmissionModel(
@@ -495,9 +652,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_blr",)
             ),
-            fesc=covering_fraction_blr,
-            hydrogen_density="hydrogen_density_blr",
-            ionisation_parameter="ionisation_parameter_blr",
             **kwargs,
         )
 
