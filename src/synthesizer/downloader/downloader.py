@@ -472,7 +472,7 @@ def synference_download():
             "The path to the destination directory. by default this is"
             f" {TEST_DATA_DIR}. This argument overrides these defaults."
         ),
-        default=None,
+        required=True,
     )
 
     # Parse the arguments
@@ -498,14 +498,6 @@ def synference_download():
     # Test data?
     if test:
         download_synference_test(dest if dest is not None else TEST_DATA_DIR)
-
-
-def copy_database_to_data_dir():
-    """Copy the database yaml to the data directory for reference."""
-    import shutil
-
-    dest = f"{TEST_DATA_DIR}/_data_ids.yml"
-    shutil.copyfile(DATABASE_FILE, dest)
 
 
 if __name__ == "__main__":

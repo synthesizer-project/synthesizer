@@ -100,7 +100,7 @@ def _get_files_recursive(folder, client, path=""):
     return all_files
 
 
-def _update_box_links_database(DATABASE_FILE="_data_ids.yml"):
+def _update_box_links_database():
     """Update the _data_ids.yml database of downloads.
 
     This function is used for maintenance of the package and the data
@@ -119,7 +119,7 @@ def _update_box_links_database(DATABASE_FILE="_data_ids.yml"):
 
     # Define the name of the yaml file we will write to
     # Keep identical to the filename expected by downloader/_data_ids.yml
-    OUTPUT_YAML = DATABASE_FILE
+    OUTPUT_YAML = "_data_ids.yml"
     # Check if the environment variables are set
     if not CLIENT_ID or not CLIENT_SECRET:
         raise RuntimeError(
