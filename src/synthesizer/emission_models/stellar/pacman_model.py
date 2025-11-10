@@ -49,6 +49,8 @@ Example::
     )
 """
 
+from copy import deepcopy
+
 from unyt import dimensionless
 
 from synthesizer.emission_models.attenuation import Calzetti2000, PowerLaw
@@ -74,10 +76,10 @@ from synthesizer.emission_models.stellar.models import (
 class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
     """A class defining the Pacman model without escape fraction.
 
-    This model defines both intrinsic and attenuated steller emission without
+    This model defines both intrinsic and attenuated stellar emission without
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce
@@ -175,10 +177,10 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
 class PacmanEmissionNoEscapedWithDust(EmissionModel):
     """A class defining the Pacman model with escape fraction + dust emission.
 
-    This model defines both intrinsic and attenuated steller emission with
+    This model defines both intrinsic and attenuated stellar emission with
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce:
@@ -276,11 +278,10 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             tau_v=tau_v,
             **kwargs,
         )
+        dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
             label="dust_emission",
             dust_emission_model=dust_emission,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -301,10 +302,10 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
 class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
     """A class defining the Pacman model with fesc and no dust emission.
 
-    This model defines both intrinsic and attenuated steller emission without
+    This model defines both intrinsic and attenuated stellar emission without
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce:
@@ -424,10 +425,10 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
 class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
     """A class defining the Pacman model with fesc and dust emission.
 
-    This model defines both intrinsic and attenuated steller emission with
+    This model defines both intrinsic and attenuated stellar emission with
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce:
@@ -553,11 +554,10 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             escaped=escaped,
             **kwargs,
         )
+        dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
             label="dust_emission",
             dust_emission_model=dust_emission,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -578,11 +578,11 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
 class PacmanEmission:
     """A class defining the Pacman model.
 
-    This model defines both intrinsic and attenuated steller emission with or
+    This model defines both intrinsic and attenuated stellar emission with or
     without dust emission. It also includes the option to include escaped
     emission for a given escape fraction. If a lyman alpha escape fraction is
     given, a more sophisticated nebular emission model is used, including line
-    and nebuluar continuum emission.
+    and nebular continuum emission.
 
     This model will always produce:
         - incident: the stellar emission incident onto the ISM.
@@ -1300,19 +1300,21 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
         emergent = attenuated
 
         # Create the dust emission models
+        dust_emission_birth.set_energy_balance(
+            young_reprocessed, young_attenuated_nebular
+        )
         young_dust_emission_birth = DustEmission(
             label="young_dust_emission_birth",
             dust_emission_model=dust_emission_birth,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_nebular,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
+        )
+        dust_emission_ism.set_energy_balance(
+            young_attenuated_nebular, young_attenuated_ism
         )
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
             dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_ism,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -1322,11 +1324,13 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
+        dust_emission_ism_old = deepcopy(dust_emission_ism)
+        dust_emission_ism_old.set_energy_balance(
+            old_reprocessed, old_attenuated
+        )
         old_dust_emission = DustEmission(
             label="old_dust_emission",
-            dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=old_intrinsic,
-            dust_lum_attenuated=old_attenuated,
+            dust_emission_model=dust_emission_ism_old,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -2102,19 +2106,21 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         )
 
         # Create the dust emission models
+        dust_emission_birth.set_energy_balance(
+            young_reprocessed, young_attenuated_nebular
+        )
         young_dust_emission_birth = DustEmission(
             label="young_dust_emission_birth",
             dust_emission_model=dust_emission_birth,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_nebular,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
+        )
+        dust_emission_ism.set_energy_balance(
+            young_attenuated_nebular, young_attenuated_ism
         )
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
             dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_ism,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -2124,11 +2130,13 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
+        dust_emission_ism_old = deepcopy(dust_emission_ism)
+        dust_emission_ism_old.set_energy_balance(
+            old_reprocessed, old_attenuated
+        )
         old_dust_emission = DustEmission(
             label="old_dust_emission",
-            dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=old_intrinsic,
-            dust_lum_attenuated=old_attenuated,
+            dust_emission_model=dust_emission_ism_old,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )

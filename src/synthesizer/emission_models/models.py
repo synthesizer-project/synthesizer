@@ -9,8 +9,6 @@ Example usage::
     # Create a simple emission model
     model = DustEmission(
         dust_emission_model=BlackBody(50 * K),
-        dust_lum_intrinsic=intrinsic,
-        dust_lum_attenuated=attenuated,
     )
 
     # Generate the spectra
@@ -39,9 +37,9 @@ class DustEmission(EmissionModel):
         self,
         dust_emission_model,
         emitter,
+        label="dust_emission",
         dust_lum_intrinsic=None,
         dust_lum_attenuated=None,
-        label="dust_emission",
         grid=None,
         **kwargs,
     ):
@@ -60,13 +58,17 @@ class DustEmission(EmissionModel):
             **kwargs (dict): Additional keyword arguments to pass to the
                 parent class.
         """
+        # Attach both models if they are not None to the dust emission
+        # generator
+        if dust_lum_intrinsic is not None and dust_lum_attenuated is not None:
+            dust_emission_model.set_energy_balance(
+                dust_lum_intrinsic, dust_lum_attenuated
+            )
         EmissionModel.__init__(
             self,
             grid=grid,
             label=label,
             generator=dust_emission_model,
-            lum_intrinsic_model=dust_lum_intrinsic,
-            lum_attenuated_model=dust_lum_attenuated,
             emitter=emitter,
             **kwargs,
         )

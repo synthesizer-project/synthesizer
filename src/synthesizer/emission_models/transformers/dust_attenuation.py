@@ -16,14 +16,13 @@ Example usage::
 """
 
 import os
-import warnings
 from functools import lru_cache
 from typing import Callable, Dict
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from dust_extinction.grain_models import WD01
+from dust_extinction import grain_models
 from numpy.typing import NDArray
 from scipy import interpolate
 from unyt import (
@@ -39,6 +38,7 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 
 this_dir, this_filename = os.path.split(__file__)
@@ -47,7 +47,7 @@ __all__ = [
     "PowerLaw",
     "MWN18",
     "Calzetti2000",
-    "GrainsWD01",
+    "GrainModels",
     "ParametricLi08",
     "DraineLiGrainCurves",
 ]
@@ -711,40 +711,116 @@ class MWN18(AttenuationLaw):
         return func(lam)
 
 
-class GrainsWD01(AttenuationLaw):
-    """Weingarter and Draine 2001 dust grain extinction model.
+class GrainModels(AttenuationLaw):
+    """Grain model dust attenuation curves.
 
-    Includes curves for MW, SMC and LMC or any available in WD01.
+    These models are based on dust grain size, composition, and shape
+    distributions constrained by observations of extinction, abundances,
+    emission, and polarization. Some of these models can be used to
+    estimate extinction at wavelengths inaccessible to observations
+    (e.g., extreme UV below 912 Å). These models are taken from the
+    astropy affiliated dust-extinction package
+    (https://dust-extinction.readthedocs.io/en/latest/ for details).
+    By default, we will use the Weingarter & Draine 2001 (WD01) models,
+    and the submodel for the SMC bar.)
 
     Attributes:
         model (str):
             The dust grain model used.
-        emodel (function)
-            The function that describes the model from WD01 imported above.
+            Available models are:
+                DBP90: Desert, Boulanger, & Puget 1990, A&A, 237, 215
+                WD01: Weingartner & Draine 2001, ApJ, 548, 296
+                D03: Draine 2003, ARA&A, 41, 241; Draine 2003, ApJ, 598, 1017
+                ZDA04: Zubko, Dwek, & Arendt 2004, ApJS, 152, 211
+                C11: Compiegne et al. 2011, A&A, 525, 103
+                J13: Jones et al. 2013, A&A, 558, 62
+                HD23: Hensley & Draine 2023, ApJ, 948, 55
+                Y24: Ysard et al. 2024, A&A, 684, 34
+        submodel (str):
+                The submodel to use within the main grain model.
+                The submodels available for the different models
+                listed below. All of them are self-explanatory with
+                the RV defining the normalisation of the extinction
+                curve, where RV = AV / E(B-V).
+                DBP90: MWRV31
+                WD01 MWRV31, MWRV40, MWRV55, LMCAvg, LMC2, SMCBar
+                D03: MWRV31, MWRV40, MWRV55
+                ZDA04: MWRV31
+                C11: MWRV31
+                J13: MWRV31
+                HD23: MWRV31
+                Y24: MWRV31
     """
 
-    def __init__(self, model="SMCBar"):
+    def __init__(self, model: str = "WD01", submodel: str = "SMCBar"):
         """Initialise the dust curve.
 
         Args:
             model (str):
                 The dust grain model to use.
+                Available models are:
+                DBP90: Desert, Boulanger, & Puget 1990, A&A, 237, 215
+                WD01: Weingartner & Draine 2001, ApJ, 548, 296
+                D03: Draine 2003, ARA&A, 41, 241; Draine 2003, ApJ, 598, 1017
+                ZDA04: Zubko, Dwek, & Arendt 2004, ApJS, 152, 211
+                C11: Compiegne et al. 2011, A&A, 525, 103
+                J13: Jones et al. 2013, A&A, 558, 62
+                HD23: Hensley & Draine 2023, ApJ, 948, 55
+                Y24: Ysard et al. 2024, A&A, 684, 34
+            submodel (str):
+                The submodel to use within the main grain model.
+                The submodels available for the different models
+                listed below. All of them are self-explanatory with
+                the RV defining the normalisation of the extinction
+                curve, where RV = AV / E(B-V).
+                DBP90: MWRV31
+                WD01 MWRV31, MWRV40, MWRV55, LMCAvg, LMC2, SMCBar
+                D03: MWRV31, MWRV40, MWRV55
+                ZDA04: MWRV31
+                C11: MWRV31
+                J13: MWRV31
+                HD23: MWRV31
+                Y24: MWRV31
         """
         AttenuationLaw.__init__(
             self,
-            "Weingarter and Draine 2001 dust grain model for MW, SMC, and LMC",
+            "Dust grain models from dust-extinction package",
         )
-
-        # Get the correct model string
-        if "MW" in model:
-            self.model = "MWRV31"
-        elif "LMC" in model:
-            self.model = "LMCAvg"
-        elif "SMC" in model:
-            self.model = "SMCBar"
+        available_models = {
+            "DBP90": ["MWRV31"],
+            "WD01": ["MWRV31", "MWRV40", "MWRV55", "LMCAvg", "LMC2", "SMCBar"],
+            "D03": ["MWRV31", "MWRV40", "MWRV55"],
+            "ZDA04": ["MWRV31"],
+            "C11": ["MWRV31"],
+            "J13": ["MWRV31"],
+            "HD23": ["MWRV31"],
+            "Y24": ["MWRV31"],
+        }
+        if model not in available_models:
+            raise exceptions.InconsistentArguments(
+                f"Model '{model}' not recognized. Available models are: "
+                f"{', '.join(available_models.keys())}"
+            )
+        self.model = model
+        # Get the correct model string if model is WD01
+        if model == "WD01":
+            alias_map = {
+                "MW": "MWRV31",
+                "LMC": "LMCAvg",
+                "SMC": "SMCBar",
+            }
+            self.submodel = alias_map.get(submodel.upper(), submodel)
         else:
-            self.model = model
-        self.emodel = WD01(self.model)
+            self.submodel = submodel
+
+        if self.submodel not in available_models[model]:
+            raise exceptions.InconsistentArguments(
+                f"Submodel '{submodel}' not recognized for model '{model}'. "
+                f"Available submodels are: "
+                f"{', '.join(available_models[model])}"
+            )
+        # Initialise the grain model and its submodel
+        self.extmodel = getattr(grain_models, self.model)(self.submodel)
 
     @accepts(lam=angstrom)
     def get_tau(self, lam, interp="slinear"):
@@ -765,21 +841,10 @@ class GrainsWD01(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        lam_lims = np.logspace(2, 8, 10000) * angstrom
         lam_v = 5500 * angstrom  # V-band wavelength
-        func = interpolate.interp1d(
-            lam_lims,
-            self.emodel(lam_lims.to_astropy()),
-            kind=interp,
-            fill_value="extrapolate",
+        out = self.get_tau_at_lam(lam, interp=interp) / self.get_tau_at_lam(
+            lam_v, interp=interp
         )
-        out = func(lam) / func(lam_v)
-
-        if np.isscalar(lam):
-            if lam > lam_lims[-1]:
-                out = func(lam_lims[-1])
-        elif np.sum(lam > lam_lims[-1]) > 0:
-            out[(lam > lam_lims[-1])] = func(lam_lims[-1])
 
         return out
 
@@ -802,20 +867,32 @@ class GrainsWD01(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        lam_lims = np.logspace(2, 8, 10000) * angstrom
-        func = interpolate.interp1d(
-            lam_lims,
-            self.emodel(lam_lims.to_astropy()),
-            kind=interp,
-            fill_value="extrapolate",
-        )
-        out = func(lam)
-
-        if np.isscalar(lam):
-            if lam > lam_lims[-1]:
-                out = func(lam_lims[-1])
-        elif np.sum(lam > lam_lims[-1]) > 0:
-            out[(lam > lam_lims[-1])] = func(lam_lims[-1])
+        # Inverse wavelength range in 1/um
+        _inverse_lam_range = self.extmodel.data_x * 1 / um
+        _lam_range = (1 / _inverse_lam_range).to("angstrom")
+        # Change to increasing order
+        _lam_range = np.unique(_lam_range[::-1])
+        _lam = np.atleast_1d(lam.to("angstrom").value) * angstrom
+        if np.any((_lam < np.min(_lam_range)) | (_lam > np.max(_lam_range))):
+            warn(
+                f"Wavelengths outside the range "
+                f"{np.min(_lam_range):.1f} - {np.max(_lam_range):.1f} "
+                f"Values are being extrapolated.",
+                RuntimeWarning,
+            )
+            # Remove the first and last points to avoid edge effects
+            lower = self.extmodel(_lam_range[0].to_astropy())
+            upper = self.extmodel(_lam_range[-1].to_astropy())
+            func = interpolate.interp1d(
+                _lam_range.to("Angstrom").value,
+                self.extmodel(_lam_range.to_astropy()),
+                kind=interp,
+                bounds_error=False,
+                fill_value=(lower, upper),
+            )
+            out = func(_lam.to("Angstrom").value)
+        else:
+            out = self.extmodel(lam.to_astropy())
 
         return out
 
@@ -1394,7 +1471,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 The transmission at each wavelength
         """
         if tau_v is not None:
-            warnings.warn(
+            warn(
                 """
                 tau_v has been provided. However,
                 `DraineLiGrainCurves` does not use tau_v.

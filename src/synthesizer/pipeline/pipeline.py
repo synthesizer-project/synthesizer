@@ -439,7 +439,7 @@ class Pipeline:
             [
                 m
                 for m in self.emission_model._models.values()
-                if m._is_generating or m._is_dust_emitting
+                if m._is_generating
             ]
         )
         self._print(
@@ -3548,12 +3548,12 @@ class Pipeline:
         self._say_goodbye()
 
     def combine_files(self):
-        """Combine inidividual rank files into a single file.
+        """Combine individual rank files into a single file.
 
         Only applicable to MPI runs.
 
         This will create a physical file on disk with all the data copied from
-        the inidivdual rank files. The rank files themselves will be deleted.
+        the individual rank files. The rank files themselves will be deleted.
         Once all data has been copied.
 
         This method is cleaner but has the potential to be very slow.
@@ -3582,7 +3582,7 @@ class Pipeline:
         self._took(start, "Combining files")
 
     def combine_files_virtual(self):
-        """Combine inidividual rank files into a single virtual file.
+        """Combine individual rank files into a single virtual file.
 
         Only applicable to MPI runs.
 
