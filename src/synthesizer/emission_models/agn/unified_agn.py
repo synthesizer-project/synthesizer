@@ -118,7 +118,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         )
 
         # Get the averaged disc spectrum with and without the torus
-        # This is stupid
         (
             self.disc_averaged,
             self.disc_averaged_without_torus,
