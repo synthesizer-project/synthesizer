@@ -24,6 +24,10 @@ from unyt import deg
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
+from synthesizer.emission_models.models import (
+    AttenuatedEmission,
+    DustEmission,
+)
 from synthesizer.emission_models.transformers import (
     CoveringFraction,
     EscapingFraction,
@@ -67,18 +71,25 @@ class UnifiedAGN(BlackHoleEmissionModel):
         blr_grid,
         torus_emission_model,
         disc_transmission="random",
-        label="intrinsic",
+        diffuse_dust_curve=None,
+        diffuse_dust_emission_model=None,
         **kwargs,
     ):
         """Initialize the UnifiedAGN model.
 
         Args:
-            nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
-            blr_grid (synthesizer.grid.Grid): The grid for the BLR.
-            torus_emission_model (synthesizer.dust.EmissionModel): The dust
-                emission model to use for the torus.
-            disc_transmission (str): The disc transmission model.
-            label (str): The label for the model.
+            nlr_grid (synthesizer.grid.Grid):
+                The grid for the NLR.
+            blr_grid (synthesizer.grid.Grid):
+                The grid for the BLR.
+            torus_emission_model (synthesizer.dust.EmissionModel):
+                The dust emission model to use for the torus.
+            disc_transmission (str):
+                The disc transmission model.
+            diffuse_dust_curve (synthesizer.emission_models.attenuation):
+                The dust attenuation curve for diffuse dust.
+            diffuse_dust_emission_model:
+                The diffuse dust emission model.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
@@ -160,30 +171,87 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Get the torus emission model
         self.torus = self._make_torus(torus_emission_model, **kwargs)
 
-        # Create the final model
-        BlackHoleEmissionModel.__init__(
-            self,
-            label=label,
-            combine=(
-                self.disc,
-                self.nlr,
-                self.blr,
-                self.torus,
-            ),
-            related_models=(
-                self.disc_incident_isotropic,
-                self.disc_incident,
-                self.disc_averaged,
-                self.disc_averaged_without_torus,
-                self.disc_transmitted,
-                self.disc_transmitted_averaged,
-                self.disc,
-                self.line_regions,
-                self.nlr_continuum,
-                self.blr_continuum,
-            ),
-            **kwargs,
-        )
+        # If diffuse_dust_curve and diffuse_dust_emission_model provided then
+        # include these
+        if diffuse_dust_curve and diffuse_dust_emission_model:
+            # Calculate the intrinsic emission
+            self.intrinsic = BlackHoleEmissionModel(
+                label="intrinsic",
+                combine=(
+                    self.disc,
+                    self.nlr,
+                    self.blr,
+                    self.torus,
+                ),
+                **kwargs,
+            )
+
+            # Include attenuation from diffuse dust
+            # self.attenuated = self._add_diffuse_dust_attenuation(
+            # diffuse_dust_curve, **kwargs)
+            self.attenuated = AttenuatedEmission(
+                dust_curve=diffuse_dust_curve,
+                apply_to=self.intrinsic,
+                tau_v="tau_v",
+                emitter="blackhole",
+                label="attenuated",
+                **kwargs,
+            )
+
+            # Add emission from diffuse dust
+            self.diffuse_dust_emission = self._make_diffuse_dust_emission(
+                diffuse_dust_emission_model, **kwargs
+            )
+
+            # Finally make the emergent model, this is attenuated +
+            # diffuse_dust_emission
+            BlackHoleEmissionModel.__init__(
+                self,
+                label="total",
+                combine=(self.attenuated, self.diffuse_dust_emission),
+                related_models=(
+                    self.disc_incident_isotropic,
+                    self.disc_incident,
+                    self.disc_averaged,
+                    self.disc_averaged_without_torus,
+                    self.disc_transmitted,
+                    self.disc_transmitted_averaged,
+                    self.disc,
+                    self.line_regions,
+                    self.nlr_continuum,
+                    self.blr_continuum,
+                    self.intrinsic,
+                    self.attenuated,
+                    self.diffuse_dust_emission,
+                ),
+                **kwargs,
+            )
+
+        else:
+            # Create only intrinsic spectrum
+            self.intrinsic = BlackHoleEmissionModel.__init__(
+                self,
+                label="intrinsic",
+                combine=(
+                    self.disc,
+                    self.nlr,
+                    self.blr,
+                    self.torus,
+                ),
+                related_models=(
+                    self.disc_incident_isotropic,
+                    self.disc_incident,
+                    self.disc_averaged,
+                    self.disc_averaged_without_torus,
+                    self.disc_transmitted,
+                    self.disc_transmitted_averaged,
+                    self.disc,
+                    self.line_regions,
+                    self.nlr_continuum,
+                    self.blr_continuum,
+                ),
+                **kwargs,
+            )
 
     def _make_disc_incident_isotropic(self, grid, **kwargs):
         """Make the disc spectra assuming isotropic emission."""
@@ -665,5 +733,29 @@ class UnifiedAGN(BlackHoleEmissionModel):
             generator=torus_emission_model,
             lum_intrinsic_model=self.disc_incident_isotropic,
             scale_by="torus_fraction",
+            **kwargs,
+        )
+
+    def _add_diffuse_dust_attenuation(self, diffuse_dust_curve, **kwargs):
+        """Apply diffuse dust attenuation to the intrinsic spectra."""
+        return AttenuatedEmission(
+            dust_curve=diffuse_dust_curve,
+            apply_to=self.intrinsic,
+            tau_v="tau_v",
+            emitter="blackhole",
+            label="attenuated",
+            **kwargs,
+        )
+
+    def _make_diffuse_dust_emission(
+        self, diffuse_dust_emission_model, **kwargs
+    ):
+        """Make diffuse dust emission spectra."""
+        return DustEmission(
+            dust_emission_model=diffuse_dust_emission_model,
+            dust_lum_intrinsic=self.intrinsic,
+            dust_lum_attenuated=self.attenuated,
+            emitter="blackhole",
+            label="diffuse_dust_emission",
             **kwargs,
         )
