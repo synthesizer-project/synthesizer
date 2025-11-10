@@ -434,8 +434,8 @@ def download_synference_test(destination):
         "grid_BPASS_Chab_DenseBasis_SFH_0.01_z_14_logN_2.7_Calzetti_v3_multinode.hdf5",
         "jades_spec_catalogue_subset.fits",
         "sbi_test_data_BPASS_DenseBasis_v4_final.npz",
-        "sbi_test_grid.hdf5",
-        "synthesizer_pipeline_output.hdf5",
+        "sbi_test_library.hdf5",
+        "example_model_library.hdf5",
     ]:
         _download(f, destination)
 
