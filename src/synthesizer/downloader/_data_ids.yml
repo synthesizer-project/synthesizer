@@ -5,6 +5,9 @@ DustData:
   dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p005.hdf5:
     direct_link: https://sussex.box.com/shared/static/w87cufstfzvdpnscgovo57zkdhrbpoio.hdf5
     file: dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p005.hdf5
+  dust_extcurve_draine_li_mrn_asmall0p01_alarge0p1_apah0p005.hdf5:
+    direct_link: https://sussex.box.com/shared/static/sg9wrspbholx53triororvvfkhld4iol.hdf5
+    file: dust_extcurve_draine_li_mrn_asmall0p01_alarge0p1_apah0p005.hdf5
 GenerationData:
   sed.ssz0001.bhb:
     direct_link: https://sussex.box.com/shared/static/xo5zqjnjvl2pfrl2c8mt3p6dab9y5aqa.bhb
@@ -317,6 +320,9 @@ ProductionGrids:
   bpass-2.2.1-bin_chabrier03-0.1,300.0.hdf5:
     direct_link: https://sussex.box.com/shared/static/md0r2ru7vthr647jfjhhk3goolgp0smg.hdf5
     file: bpass-2.2.1-bin_chabrier03-0.1,300.0.hdf5
+  bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps-fixed_ionisation_parameter.hdf5:
+    direct_link: https://sussex.box.com/shared/static/u8vih4k9oi20044nxv7sq6pov9gxgj81.hdf5
+    file: bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps-fixed_ionisation_parameter.hdf5
   bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5:
     direct_link: https://sussex.box.com/shared/static/daicn138a8r9umfnpzx5pozi462motoa.hdf5
     file: bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5
@@ -635,6 +641,34 @@ ProductionGrids:
   relqso-test_cloudy-c23.01-nlr-test.hdf5:
     direct_link: https://sussex.box.com/shared/static/v75k2whcih0b958g3nyk3ouav6cwlvs1.hdf5
     file: relqso-test_cloudy-c23.01-nlr-test.hdf5
+SynferenceData:
+  BPASS_DenseBasis_v4_final_nsf_0_params.pkl:
+    direct_link: https://sussex.box.com/shared/static/nf2dlrt8qu82aew7w642t8775k7aep3b.pkl
+    file: BPASS_DenseBasis_v4_final_nsf_0_params.pkl
+  BPASS_DenseBasis_v4_final_nsf_0_params_empirical_noise_models.h5:
+    direct_link: https://sussex.box.com/shared/static/apvrczb3225rhzkrakvzmjbwl82wa581.h5
+    file: BPASS_DenseBasis_v4_final_nsf_0_params_empirical_noise_models.h5
+  BPASS_DenseBasis_v4_final_nsf_0_posterior.pkl:
+    direct_link: https://sussex.box.com/shared/static/658joomqbs5h5s37udxcoes95u2mbt1j.pkl
+    file: BPASS_DenseBasis_v4_final_nsf_0_posterior.pkl
+  BPASS_DenseBasis_v4_final_nsf_0_summary.json:
+    direct_link: https://sussex.box.com/shared/static/bx4skjnlnr5xdpkbyjnq022hmosx9vgv.json
+    file: BPASS_DenseBasis_v4_final_nsf_0_summary.json
+  example_model_library.hdf5:
+    direct_link: https://sussex.box.com/shared/static/s1e7imd0ox1wh2ec119v26tuqs0oep4u.hdf5
+    file: example_model_library.hdf5
+  grid_BPASS_Chab_DenseBasis_SFH_0.01_z_14_logN_2.7_Calzetti_v3_multinode.hdf5:
+    direct_link: https://sussex.box.com/shared/static/dj6uilvwf9jhqnt8bd678ubaopqabg6o.hdf5
+    file: grid_BPASS_Chab_DenseBasis_SFH_0.01_z_14_logN_2.7_Calzetti_v3_multinode.hdf5
+  jades_spec_catalogue_subset.fits:
+    direct_link: https://sussex.box.com/shared/static/wcd22isoc52otbqz1nva3f5dsaw9lo9d.fits
+    file: jades_spec_catalogue_subset.fits
+  sbi_test_data_BPASS_DenseBasis_v4_final.npz:
+    direct_link: https://sussex.box.com/shared/static/7pxj2eklwfc3ryxubkqors24kvb92qv7.npz
+    file: sbi_test_data_BPASS_DenseBasis_v4_final.npz
+  sbi_test_library.hdf5:
+    direct_link: https://sussex.box.com/shared/static/sy1p6n06kivkge0smurnkyjb6te9kk0v.hdf5
+    file: sbi_test_library.hdf5
 TestData:
   bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5:
     direct_link: https://sussex.box.com/shared/static/likxc5lhv7qgyqdg5cz8pb40hh834qrz.hdf5

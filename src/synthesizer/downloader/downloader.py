@@ -56,13 +56,24 @@ def load_instrument_data_links():
     return load_database_yaml()["InstrumentData"]
 
 
+def load_synference_data_links():
+    """Load the synference test data links from the yaml file."""
+    return load_database_yaml()["SynferenceData"]
+
+
 # Get the dicts contain the locations of the test and dust data
 TEST_FILES = load_test_data_links()
 DUST_FILES = load_dust_data_links()
 INSTRUMENT_FILES = load_instrument_data_links()
+SYNFERENCE_FILES = load_synference_data_links()
 
 # Combine everything into a nice single dict
-AVAILABLE_FILES = {**TEST_FILES, **DUST_FILES, **INSTRUMENT_FILES}
+AVAILABLE_FILES = {
+    **TEST_FILES,
+    **DUST_FILES,
+    **INSTRUMENT_FILES,
+    **SYNFERENCE_FILES,
+}
 
 # Define a translation between instrument file names and their class names
 # (remove the .hdf5 extension and remove underscores)
@@ -405,6 +416,88 @@ def download():
     if all_sim_data:
         download_camels_data(dest if dest is not None else TEST_DATA_DIR)
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
+
+
+def download_synference_test(destination):
+    """Download the test data for synference.
+
+    Args:
+        destination (str):
+            The path to the destination directory.
+    """
+    # Download each file
+    for f in [
+        "BPASS_DenseBasis_v4_final_nsf_0_params.pkl",
+        "BPASS_DenseBasis_v4_final_nsf_0_params_empirical_noise_models.h5",
+        "BPASS_DenseBasis_v4_final_nsf_0_posterior.pkl",
+        "BPASS_DenseBasis_v4_final_nsf_0_summary.json",
+        "grid_BPASS_Chab_DenseBasis_SFH_0.01_z_14_logN_2.7_Calzetti_v3_multinode.hdf5",
+        "jades_spec_catalogue_subset.fits",
+        "sbi_test_data_BPASS_DenseBasis_v4_final.npz",
+        "sbi_test_library.hdf5",
+        "example_model_library.hdf5",
+    ]:
+        _download(f, destination)
+
+
+def synference_download():
+    """Download different datasets based on command line args."""
+    # Create the parser
+    parser = argparse.ArgumentParser(
+        description="Download datasets for synference"
+    )
+
+    # Add a flag to handle the test data
+    parser.add_argument(
+        "--test",
+        "-t",
+        action="store_true",
+        help="Download the test data for synference",
+    )
+
+    # Add a flag to go ham and download everything
+    parser.add_argument(
+        "--all",
+        "-A",
+        action="store_true",
+        help="Download all available data",
+    )
+
+    # Add the destination argument (will not effect test data)
+    parser.add_argument(
+        "--destination",
+        "-d",
+        type=str,
+        help=(
+            "The path to the destination directory. by default this is"
+            f" {TEST_DATA_DIR}. This argument overrides these defaults."
+        ),
+        required=True,
+    )
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Extract flags
+    test = args.test
+    dest = args.destination
+    everything = args.all
+
+    # Check if the destination directory exists
+    if dest is not None and not os.path.exists(dest):
+        raise exceptions.DownloadError(
+            f"Destination directory {dest} does not exist. "
+            "Please create it before running this script."
+        )
+
+    # Are we just getting everything?
+    if everything:
+        download_synference_test(dest if dest is not None else TEST_DATA_DIR)
+        return
+
+    # Test data?
+    if test:
+        download_synference_test(dest if dest is not None else TEST_DATA_DIR)
 
 
 if __name__ == "__main__":
