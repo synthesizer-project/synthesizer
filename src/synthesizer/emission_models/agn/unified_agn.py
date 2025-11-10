@@ -124,7 +124,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Get the average transmitted disc spectrum
+        # Get the weighted_combination transmitted disc spectrum
         self.disc_transmitted_weighted_combination = (
             self._make_disc_transmitted_weighted_combination(
                 **kwargs,
