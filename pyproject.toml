@@ -145,6 +145,7 @@ synthesizer-init = "synthesizer.data.initialise:synth_initialise"
 synthesizer-clear = "synthesizer.data.initialise:synth_clear_data"
 synthesizer-download="synthesizer.downloader.downloader:download"
 synthesizer-report = "synthesizer.data.initialise:synth_report_config"
+synference-download="synthesizer.downloader.downloader:synference_download"
 
 # Package data
 [tool.setuptools.package-data]

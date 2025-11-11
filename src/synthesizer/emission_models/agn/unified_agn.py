@@ -98,7 +98,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
         for arg_to_check in ["inclination", "theta_torus"]:
             if arg_to_check in kwargs.keys():
                 raise exceptions.InconsistentArguments(
-                    "inclination must be set on the blackhole object."
+                    f"{arg_to_check} must be set on the blackhole object, "
+                    "not passed as a keyword argument to the emission model."
                 )
 
         # Get the incident istropic disc emission model
@@ -127,7 +128,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Get the averaged disc spectrum
+        # Get the averaged disc spectrum with and without the torus
         (
             self.disc_averaged,
             self.disc_averaged_without_torus,
@@ -135,9 +136,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Get the average transmitted disc spectrum
-        self.disc_transmitted_averaged = self._make_disc_transmitted_averaged(
-            **kwargs,
+        # Get the weighted_combination transmitted disc spectrum
+        self.disc_transmitted_weighted_combination = (
+            self._make_disc_transmitted_weighted_combination(
+                **kwargs,
+            )
         )
 
         # Get the transmitted disc emission spectrum
@@ -370,19 +373,19 @@ class UnifiedAGN(BlackHoleEmissionModel):
             disc_transmitted_blr_isotropic_full,
         )
 
-    def _make_disc_transmitted_averaged(
+    def _make_disc_transmitted_weighted_combination(
         self,
         **kwargs,
     ):
-        """Calculate the averaged disc spectrum.
+        """Calculate the weighted_combination disc spectrum.
 
         Note: when the viewing angle (inlination) meets the torus criteria
         it is always blocked.
         """
         # Now calculate the disc_escaped emission using this transmission
         # fraction.
-        disc_escaped_average = BlackHoleEmissionModel(
-            label="disc_escaped_average",
+        disc_escaped_weighted = BlackHoleEmissionModel(
+            label="disc_escaped_weighted",
             apply_to=self.disc_incident_masked,
             transformer=CoveringFraction(covering_attrs=("escape_fraction",)),
             **kwargs,
@@ -390,8 +393,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # Now calculate the disc_transmitted_nlr emission using this
         # transmission fraction.
-        disc_transmitted_nlr_average = BlackHoleEmissionModel(
-            label="disc_transmitted_nlr_average",
+        disc_transmitted_nlr_weighted = BlackHoleEmissionModel(
+            label="disc_transmitted_nlr_weighted",
             apply_to=self.disc_transmitted_nlr_full,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_nlr",)
@@ -401,8 +404,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # Now calculate the disc_transmitted_blr emission using this
         # transmission fraction.
-        disc_transmitted_blr_average = BlackHoleEmissionModel(
-            label="disc_transmitted_blr_average",
+        disc_transmitted_blr_weighted = BlackHoleEmissionModel(
+            label="disc_transmitted_blr_weighted",
             apply_to=self.disc_transmitted_blr_full,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_blr",)
@@ -412,11 +415,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # Now combine the three different components to produce the total.
         disc_transmitted_averaged = BlackHoleEmissionModel(
-            label="disc_transmitted_averaged",
+            label="disc_transmitted_weighted_combination",
             combine=(
-                disc_escaped_average,
-                disc_transmitted_nlr_average,
-                disc_transmitted_blr_average,
+                disc_escaped_weighted,
+                disc_transmitted_nlr_weighted,
+                disc_transmitted_blr_weighted,
             ),
             **kwargs,
         )
@@ -433,8 +436,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
         For an individual blackhole there are four options. Either the disc
         emission escapes (disc_transmission='none'), is transmitted through
         the NLR (disc_transmission='nlr'), is transmitted through the BLR
-        (disc_transmission='blr'), or is the inclination averaged
-        (disc_transmission='average').
+        (disc_transmission='blr'), or is the weighted combination
+        (disc_transmission='weighted_combination').
 
         The latter scenario is always calculated but is not used to calculate
         the disc_transmitted spectrum unless explicitly asked for. At the
@@ -457,12 +460,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             # If disc_transmission == 'none' the emission seen by the observer
             # is simply the incident emission. This step also accounts for the
             # torus.
-            if disc_transmission == "none":
-                transmission_fraction_escape = 1.0
-                transmission_fraction_nlr = 0.0
-                transmission_fraction_blr = 0.0
-
-            if disc_transmission == "escaped":
+            if disc_transmission in ["none", "escaped"]:
                 transmission_fraction_escape = 1.0
                 transmission_fraction_nlr = 0.0
                 transmission_fraction_blr = 0.0
@@ -539,12 +537,13 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 **kwargs,
             )
 
-        # If averaged is selected the transmitted is simply the averaged
-        # emission that we have already calculated.
-        elif disc_transmission == "average":
+        # If weighted_combination is selected the transmitted is simply the
+        # combination of the three scenarios weighted by the respective
+        # covering fractions.
+        elif disc_transmission == "weighted_combination":
             disc_transmitted = BlackHoleEmissionModel(
                 label="disc_transmitted",
-                combine=(self.disc_transmitted_averaged,),
+                combine=(self.disc_transmitted_weighted_combination,),
                 **kwargs,
             )
 
@@ -614,8 +613,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs,
         )
 
-        # Now adjust for the torus. This essentially the averaged light
-        # recieved from the disc.
+        # Now adjust for the torus. This is essentially the averaged light
+        # received from the disc.
         disc_averaged = BlackHoleEmissionModel(
             label="disc_averaged",
             apply_to=disc_averaged_without_torus,
