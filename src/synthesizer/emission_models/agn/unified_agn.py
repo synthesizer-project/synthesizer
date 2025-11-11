@@ -936,6 +936,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 diffuse_dust_curve=diffuse_dust_curve,
                 diffuse_dust_emission_model=diffuse_dust_emission_model,
                 label=label,
+                **kwargs,
             )
 
         # Otherwise if only the diffuse_dust_curve is provided:
@@ -947,6 +948,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 disc_transmission=disc_transmission,
                 diffuse_dust_curve=diffuse_dust_curve,
                 label=label,
+                **kwargs,
             )
 
         # Otherwise return the intrinsic emission
@@ -956,4 +958,5 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 blr_grid,
                 torus_emission_model,
                 label=label,
+                **kwargs,
             )
