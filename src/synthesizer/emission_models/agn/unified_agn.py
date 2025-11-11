@@ -923,15 +923,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
-        # Check that certain parameters are not provided as they would produce
-        # inconsistent results.
-        for arg_to_check in ["inclination", "theta_torus"]:
-            if arg_to_check in kwargs.keys():
-                raise exceptions.InconsistentArguments(
-                    f"{arg_to_check} must be set on the blackhole object, "
-                    "not passed as a keyword argument to the emission model."
-                )
-
         # If diffuse_dust_curve and diffuse_dust_emission_model provided then
         # include these
         if diffuse_dust_curve and diffuse_dust_emission_model:
