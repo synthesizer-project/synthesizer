@@ -73,6 +73,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         disc_transmission="random",
         diffuse_dust_curve=None,
         diffuse_dust_emission_model=None,
+        label=None,
         **kwargs,
     ):
         """Initialize the UnifiedAGN model.
@@ -90,6 +91,10 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 The dust attenuation curve for diffuse dust.
             diffuse_dust_emission_model:
                 The diffuse dust emission model.
+            label (str):
+                The label for the resulting spectra. When dust attenuation and
+                emission is included this defaults to "total" otherwise it
+                defaults to "intrinsic".
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
@@ -210,7 +215,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             # diffuse_dust_emission
             BlackHoleEmissionModel.__init__(
                 self,
-                label="total",
+                label=label if label is not None else "total",
                 combine=(self.attenuated, self.diffuse_dust_emission),
                 related_models=(
                     self.disc_incident_isotropic,
@@ -218,7 +223,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                     self.disc_averaged,
                     self.disc_averaged_without_torus,
                     self.disc_transmitted,
-                    self.disc_transmitted_averaged,
+                    self.disc_transmitted_weighted_combination,
                     self.disc,
                     self.line_regions,
                     self.nlr_continuum,
@@ -234,7 +239,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             # Create only intrinsic spectrum
             self.intrinsic = BlackHoleEmissionModel.__init__(
                 self,
-                label="intrinsic",
+                label=label if label is not None else "intrinsic",
                 combine=(
                     self.disc,
                     self.nlr,
@@ -247,7 +252,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                     self.disc_averaged,
                     self.disc_averaged_without_torus,
                     self.disc_transmitted,
-                    self.disc_transmitted_averaged,
+                    self.disc_transmitted_weighted_combination,
                     self.disc,
                     self.line_regions,
                     self.nlr_continuum,
