@@ -957,6 +957,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 nlr_grid,
                 blr_grid,
                 torus_emission_model,
+                disc_transmission=disc_transmission,
                 label=label,
                 **kwargs,
             )
