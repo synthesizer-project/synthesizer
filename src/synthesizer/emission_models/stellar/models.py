@@ -525,11 +525,38 @@ class IntrinsicEmission:
                 "different reprocessed model, please pass your own to the "
                 "reprocessed argument.",
             )
+            nebular_line = NebularLineEmission(
+                grid=grid,
+                fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
+            )
+            nebular_continuum = NebularContinuumEmission(
+                grid=grid,
+                **kwargs,
+            )
+            nebular = NebularEmission(
+                grid=grid,
+                nebular_line=nebular_line,
+                nebular_continuum=nebular_continuum,
+                **kwargs,
+            )
+            incident = IncidentEmission(
+                grid=grid,
+                **kwargs,
+            )
+            transmitted = TransmittedEmission(
+                grid=grid,
+                fesc=fesc,
+                incident=incident,
+                **kwargs,
+            )
             reprocessed = ReprocessedEmission(
                 grid=grid,
                 label="_" + label + "_reprocessed",
                 fesc_ly_alpha=fesc_ly_alpha,
                 fesc=fesc,
+                nebular=nebular,
+                transmitted=transmitted,
                 **kwargs,
             )
 
@@ -600,11 +627,38 @@ class EmergentEmission(StellarEmissionModel):
                 "different model, please pass your own to the "
                 "apply_to argument.",
             )
+            nebular_line = NebularLineEmission(
+                grid=grid,
+                fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
+            )
+            nebular_continuum = NebularContinuumEmission(
+                grid=grid,
+                **kwargs,
+            )
+            nebular = NebularEmission(
+                grid=grid,
+                nebular_line=nebular_line,
+                nebular_continuum=nebular_continuum,
+                **kwargs,
+            )
+            incident = IncidentEmission(
+                grid=grid,
+                **kwargs,
+            )
+            transmitted = TransmittedEmission(
+                grid=grid,
+                fesc=fesc,
+                incident=incident,
+                **kwargs,
+            )
             apply_to = ReprocessedEmission(
                 grid=grid,
                 label="_" + label + "_reprocessed",
                 fesc=fesc,
-                feac_ly_alpha=fesc_ly_alpha,
+                fesc_ly_alpha=fesc_ly_alpha,
+                nebular=nebular,
+                transmitted=transmitted,
                 **kwargs,
             )
 
