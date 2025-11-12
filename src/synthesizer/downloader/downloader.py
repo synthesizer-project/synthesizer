@@ -472,7 +472,7 @@ def synference_download():
             "The path to the destination directory. by default this is"
             f" {TEST_DATA_DIR}. This argument overrides these defaults."
         ),
-        required=True,
+        default=None,
     )
 
     # Parse the arguments
