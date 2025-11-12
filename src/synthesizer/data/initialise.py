@@ -2,7 +2,7 @@
 
 This module runs at first import or on-demand to:
   - Create the user data directory and subdirectories
-  - Copy default resource files (unit config, ID databases)
+  - Copy default resource files (unit config, etc.)
   - Set environment variables for easy access
   - Report status with colored symbols and ASCII art
 
@@ -153,24 +153,6 @@ def instrument_cache_exists() -> bool:
     return get_instrument_dir().exists()
 
 
-def get_database_dir() -> Path:
-    """Get the Synthesizer database directory path.
-
-    This function returns the path to the Synthesizer database directory,
-    which is a subdirectory of the Synthesizer data directory.
-    """
-    return get_data_dir() / "database"
-
-
-def database_dir_exists() -> bool:
-    """Check if the Synthesizer database directory exists.
-
-    This function checks if the Synthesizer database directory, as defined by
-    get_database_dir(), exists on the filesystem.
-    """
-    return get_database_dir().exists()
-
-
 class SynthesizerInitializer:
     """Encapsulates the initialisation of the Synthesizer data directory.
 
@@ -199,7 +181,6 @@ class SynthesizerInitializer:
         self.grids_dir = get_grids_dir()
         self.test_data_dir = get_test_data_dir()
         self.instrument_cache_dir = get_instrument_dir()
-        self.database_dir = get_database_dir()
 
         # Initialize status dictionary for each step
         keys = [
@@ -208,7 +189,6 @@ class SynthesizerInitializer:
             "grids",
             "instrument_cache",
             "test_data",
-            "database",
             "units_file",
             "ids_file",
         ]
@@ -292,7 +272,7 @@ class SynthesizerInitializer:
 
         This method performs the following steps:
             1) Create base and subdirectories
-            2) Copy default_units.yml and ID database
+            2) Copy default_units.yml
             3) Check the environment variable state.
         """
         # Create the data directory and all subdirectories, this is safe
@@ -302,21 +282,13 @@ class SynthesizerInitializer:
         self._make_dir(self.grids_dir, "grids")
         self._make_dir(self.instrument_cache_dir, "instrument_cache")
         self._make_dir(self.test_data_dir, "test_data")
-        self._make_dir(self.database_dir, "database")
 
-        # Copy the default units and database IDs to their user
-        # facing locations
+        # Copy the default units to their user facing location
         self._copy_resource(
             "synthesizer",
             "default_units.yml",
             self.base_dir / "default_units.yml",
             "units_file",
-        )
-        self._copy_resource(
-            "synthesizer.downloader",
-            "_data_ids.yml",
-            self.database_dir / "downloader_database.yml",
-            "ids_file",
         )
 
     def report(self) -> None:
@@ -342,7 +314,6 @@ class SynthesizerInitializer:
                 self.instrument_cache_dir,
             ),
             ("test_data", "Test data directory:", self.test_data_dir),
-            ("database", "Downloader database directory:", self.database_dir),
         ]
 
         # Prepare the file output
@@ -351,11 +322,6 @@ class SynthesizerInitializer:
                 "units_file",
                 "Default units file:",
                 self.base_dir / "default_units.yml",
-            ),
-            (
-                "ids_file",
-                "Downloaders IDs DB:",
-                self.database_dir / "downloader_database.yml",
             ),
         ]
 
@@ -426,14 +392,12 @@ def synth_initialise(verbose=True) -> None:
         and grids_dir_exists()
         and testdata_dir_exists()
         and instrument_cache_exists()
-        and database_dir_exists()
     )
 
     # Have the files already been copied?
     if all_exist:
         default_units_file = get_base_dir() / "default_units.yml"
-        ids_file = get_database_dir() / "downloader_database.yml"
-        all_exist = default_units_file.exists() and ids_file.exists()
+        all_exist = default_units_file.exists()
 
     # Just exit if the data directory already exists
     if all_exist:
@@ -456,7 +420,7 @@ def synth_report_config() -> None:
 
     This function prints the current Synthesizer configuration, including
     the base directory, data directory, grids directory, instrument cache,
-    test data directory, and database directory.
+    and test data directory.
     """
     initializer = SynthesizerInitializer()
     initializer.report()
@@ -490,7 +454,3 @@ def synth_clear_data() -> None:
         initializer._remove_dir(initializer.instrument_cache_dir)
     except Exception as e:
         print(f"Failed to clear Synthesizer instrument cache directory: {e}")
-    try:
-        initializer._remove_dir(initializer.database_dir)
-    except Exception as e:
-        print(f"Failed to clear Synthesizer database directory: {e}")
