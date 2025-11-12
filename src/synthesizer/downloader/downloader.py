@@ -347,8 +347,6 @@ def download():
     # Parse the arguments
     args = parser.parse_args()
 
-    print(DATABASE_FILE)
-
     # Extract flags
     test = args.test_grids
     stellar = args.stellar_test_grids
