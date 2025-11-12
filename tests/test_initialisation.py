@@ -270,8 +270,6 @@ class TestInitializerMethods:
         assert (init.base_dir / "default_units.yml").exists()
         assert init.status["units_file"] in {"created", "exists"}
 
-        assert init.status["ids_file"] in {"created", "exists"}
-
     def test_report_prints(self, capsys, monkeypatch):
         """Test report() prints status messages."""
         # minimal test to exercise report() without errors
@@ -322,7 +320,7 @@ class TestTopLevelFlows:
         (base / "grids").mkdir()
         (base / "data" / "test").mkdir(parents=True)
         (base / "inst").mkdir()
-        # default_units.yml and ids file
+        # default_units.yml
         (base / "default_units.yml").write_text("")
         # should return immediately and not error
         synth_initialise()
