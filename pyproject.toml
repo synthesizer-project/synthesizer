@@ -48,6 +48,7 @@ authors = [
   {name = "T. Harvey", email = "thomas.harvey-3@manchester.ac.uk" },
   {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
   {name = "K. Iyer", email = "kartheikiyer@gmail.com" },
+  {name = "C. S. Fournier", email = "connor.sant.17@um.edu.mt"},
 ]
 
 # Synthesizer maintainers
@@ -207,7 +208,7 @@ indent-width = 4
 
 
 # Assume Python 3.8 by default regardless
-target-version = "py38"
+target-version = "py310"
 
 
 [tool.ruff.lint]
