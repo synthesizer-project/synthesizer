@@ -117,7 +117,7 @@ class FilterCollection:
         fill_gaps=True,
         verbose=False,
     ):
-        """Intialise the FilterCollection.
+        """Initialise the FilterCollection.
 
         Args:
             filter_codes  (list, string):
@@ -253,7 +253,7 @@ class FilterCollection:
             warn(
                 "Synthesizer versions differ between the code and "
                 "FilterCollection file! This is probably fine but there "
-                "is no gaurantee it won't cause errors."
+                "is no guarantee it won't cause errors."
             )
 
         # Get the wavelength units
@@ -300,7 +300,7 @@ class FilterCollection:
             warn(
                 "Synthesizer versions differ between the code and "
                 "FilterCollection file! This is probably fine but there "
-                "is no gaurantee it won't cause errors."
+                "is no guarantee it won't cause errors."
             )
 
         # Get the wavelength units
@@ -487,7 +487,7 @@ class FilterCollection:
         # Now resample the filters onto the filter collection's wavelength
         # array,
         # NOTE: If the new filter extends beyond the filter collection's
-        # wavlength array a warning is given and that filter curve will
+        # wavelength array a warning is given and that filter curve will
         # truncated at the limits. This is because we can't have the
         # filter collection's wavelength array modified, if that were
         # to happen it could become inconsistent with Sed wavelength arrays
@@ -502,7 +502,7 @@ class FilterCollection:
         Returns:
             str: A string representation of the FilterCollection.
         """
-        # Intialise the table formatter
+        # Initialise the table formatter
         formatter = TableFormatter(self)
 
         return formatter.get_table("FilterCollection")
@@ -555,7 +555,8 @@ class FilterCollection:
         if self.nfilters != other_filters.nfilters:
             return True
 
-        # Ok they do, so do they have the same filter codes? (elementwise test)
+        # Ok they do, so do they have the same filter codes? (element-wise
+        # test)
         not_equal = False
         for n in range(self.nfilters):
             if self.filter_codes[n] != other_filters.filter_codes[n]:
@@ -583,7 +584,8 @@ class FilterCollection:
         if self.nfilters != other_filters.nfilters:
             return False
 
-        # Ok they do, so do they have the same filter codes? (elementwise test)
+        # Ok they do, so do they have the same filter codes? (element-wise
+        # test)
         equal = True
         for n in range(self.nfilters):
             if self.filter_codes[n] != other_filters.filter_codes[n]:
@@ -814,7 +816,7 @@ class FilterCollection:
                 )
 
         # Loop over filters unifying them onto this wavelength array
-        # NOTE: Filters already on self.lam will be uneffected but doing a
+        # NOTE: Filters already on self.lam will be unaffected but doing a
         # np.all condition to check for matches and skip them is more expensive
         # than just doing the interpolation for all filters
         for fcode in self.filters:
@@ -886,7 +888,7 @@ class FilterCollection:
             fig (matplotlib.Figure)
                 The matplotlib figure object containing the plot.
             ax obj (matplotlib.axis)
-                The matplotlib axis object containg the plot.
+                The matplotlib axis object containing the plot.
         """
         # Set up figure
         if fig is None:
@@ -1038,7 +1040,7 @@ class FilterCollection:
 
         else:
             raise exceptions.InconsistentArguments(
-                "Method not recognised! Can be either 'pivot', "
+                "Method not recognized! Can be either 'pivot', "
                 "'mean'' or 'transmission'"
             )
 
@@ -1110,7 +1112,7 @@ class FilterCollection:
         # Include the Synthesizer version
         head.attrs["synthesizer_version"] = __version__
 
-        # Wrtie the FilterCollection attributes
+        # Write the FilterCollection attributes
         head.attrs["nfilters"] = self.nfilters
 
         # Write the wavelengths
@@ -1326,7 +1328,7 @@ class Filter:
         else:
             raise exceptions.InconsistentArguments(
                 "Invalid combination of filter inputs. \n For a generic "
-                "filter provide a transimision and wavelength array. \nFor "
+                "filter provide a transmission and wavelength array. \nFor "
                 "a filter from the SVO database provide a filter code of the "
                 "form Observatory/Instrument.Filter that matches the database."
                 " \nFor a top hat provide either a minimum and maximum "
@@ -1399,7 +1401,7 @@ class Filter:
         self.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
 
         # For SVO filters we don't want to send a request to the
-        # database so instead instatiate it as a generic filter and
+        # database so instead instantiate it as a generic filter and
         # overwrite some attributes after the fact
         if filter_type == "SVO":
             # Set the SVO specific attributes
@@ -1454,7 +1456,7 @@ class Filter:
         """Clip transmission curve between 0 and 1.
 
         Some transmission curves from SVO can come with strange
-        upper limits, the way we use them requires the maxiumum of a
+        upper limits, the way we use them requires the maximum of a
         transmission curve is at most 1. So for one final check lets
         clip the transmission curve between 0 and 1
         """
@@ -1478,7 +1480,7 @@ class Filter:
             self.lam_min = self.lam_eff - (self.lam_fwhm / 2.0)
             self.lam_max = self.lam_eff + (self.lam_fwhm / 2.0)
 
-        # Otherwise, use the explict min and max
+        # Otherwise, use the explicit min and max
 
         # Define this top hat filters wavelength array (+/- 1000 Angstrom)
         # if it hasn't been provided
@@ -1639,7 +1641,11 @@ class Filter:
 
         # Perform interpolation
         self.t = np.interp(
-            self._lam, self._original_lam, self.original_t, left=0.0, right=0.0
+            self._lam,
+            self._original_lam,
+            self.original_t,
+            left=0.0,
+            right=0.0,
         )
 
         # Ensure we don't have 0 transmission
@@ -1722,7 +1728,7 @@ class Filter:
             original_xs = self._original_nu
 
         elif lam is not None:
-            # If we have lams we are intergrating over llam or flam
+            # If we have lams we are integrating over llam or flam
 
             # Ensure the passed wavelengths have units
             if not isinstance(lam, unyt_array):
