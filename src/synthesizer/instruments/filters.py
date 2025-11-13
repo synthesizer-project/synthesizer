@@ -1716,7 +1716,7 @@ class Filter:
         nu=None,
         verbose=True,
         nthreads=1,
-        integration_method="trapezoid",
+        integration_method="trapz",
     ):
         """Apply the transmission curve to any array.
 
@@ -1748,8 +1748,8 @@ class Filter:
                 The number of threads to use in the integration. If -1 then
                 all available threads are used. Defaults to 1.
             integration_method (str):
-                The method to use in the integration. Can be either "trapezoid"
-                or "simps". Defaults to "trapezoid".
+                The method to use in the integration. Can be either "trapz"
+                or "simps". Defaults to "trapz".
 
         Returns:
             float:
