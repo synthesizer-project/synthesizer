@@ -56,6 +56,12 @@ jobs:
           pytest -n auto
           # Test ipython notebooks
           pytest -n auto --nbmake docs/source/*/*.ipynb docs/source/*/*/*.ipynb
+      - name: Test grid-generation
+        run: |
+          git clone https://github.com/synthesizer-project/grid-generation.git
+          cd grid-generation
+          pip install .
+          pytest -n auto
       - name: Sphinx Build
         run: |
           # Test sphinx build (runs all notebooks)

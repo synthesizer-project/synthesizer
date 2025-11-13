@@ -5,7 +5,6 @@
 from synthesizer.data.initialise import (
     get_base_dir,
     get_data_dir,
-    get_database_dir,
     get_grids_dir,
     get_instrument_dir,
     get_test_data_dir,
@@ -20,7 +19,6 @@ synth_initialise(verbose=False)
 # Define all the directory paths we need throughout the package.
 BASE_DIR = get_base_dir()
 DATA_DIR = get_data_dir()
-DATABASE_FILE = get_database_dir() / "downloader_database.yml"
 GRID_DIR = get_grids_dir()
 TEST_DATA_DIR = get_test_data_dir()
 INSTRUMENT_CACHE_DIR = get_instrument_dir()
@@ -57,7 +55,6 @@ __all__ = [
     "__version__",
     "BASE_DIR",
     "DATA_DIR",
-    "DATABASE_FILE",
     "GRID_DIR",
     "TEST_DATA_DIR",
     "INSTRUMENT_CACHE_DIR",
