@@ -240,9 +240,10 @@ class SynthesizerInitializer:
             if dest.exists():
                 self.status[key] = "exists"
             else:
-                with resources.open_binary(
-                    package, resource_name
-                ) as src, open(dest, "wb") as dst:
+                with (
+                    resources.open_binary(package, resource_name) as src,
+                    open(dest, "wb") as dst,
+                ):
                     dst.write(src.read())
                 self.status[key] = "created"
         except Exception:
