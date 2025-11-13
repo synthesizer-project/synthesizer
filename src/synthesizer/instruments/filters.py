@@ -469,39 +469,79 @@ class FilterCollection:
         # Update the number of filters we have
         self.nfilters = len(self.filter_codes)
 
-        # Get a combined wavelength array (we resample filters before
-        # applying them to spectra so the actual resolution doesn't matter)
-        resample = True
-        if (
-            self.lam is not None
-            and other_filters.lam is None
-            and self._lam.size == other_filters._lam.size
-            and np.allclose(self._lam, other_filters._lam)
-        ):
-            resample = False
-        elif self.lam is not None and other_filters.lam is not None:
-            new_lam = np.linspace(
-                min(self.lam.min(), other_filters.lam.min()),
-                max(self.lam.max(), other_filters.lam.max()),
-                self.lam.size + other_filters.lam.size,
-            )
-        elif self.lam is not None:
-            new_lam = self.lam
-        elif other_filters.lam is not None:
-            new_lam = other_filters.lam
-        else:
+        # Determine the wavelength array for the combined FilterCollection
+        # We only create a new wavelength array when absolutely necessary
+        resample = False
+        new_lam = None
+
+        # Are both wavelength arrays None? -> Resample to derive a new one
+        if self.lam is None and other_filters.lam is None:
             new_lam = None
+            resample = True
+
+        # Only self has a wavelength array - use it
+        elif self.lam is not None and other_filters.lam is None:
+            new_lam = self.lam
+            resample = True
+
+        # Only other_filters has a wavelength array - use it
+        elif self.lam is None and other_filters.lam is not None:
+            new_lam = other_filters.lam
+            resample = True
+
+        # Both have wavelength arrays - see if they agree
+        else:
+            # Check if they're identical (same size and values)
+            if self._lam.size == other_filters._lam.size and np.allclose(
+                self._lam, other_filters._lam
+            ):
+                # Identical arrays - no resampling needed
+                new_lam = self.lam
+                resample = False
+
+            # Check if self's wavelength array covers other_filters
+            elif (
+                self.lam.min() <= other_filters.lam.min()
+                and self.lam.max() >= other_filters.lam.max()
+            ):
+                # self covers other_filters - use self's array
+                new_lam = self.lam
+                resample = True
+
+            # Check if other_filters' wavelength array covers self
+            elif (
+                other_filters.lam.min() <= self.lam.min()
+                and other_filters.lam.max() >= self.lam.max()
+            ):
+                # other_filters covers self - use other_filters' array
+                new_lam = other_filters.lam
+                resample = True
+
+            # Neither covers the other - create new combined array
+            else:
+                # Use logarithmic spacing for wavelength arrays that span
+                # many orders of magnitude (e.g., grids)
+                min_lam = min(self.lam.min(), other_filters.lam.min())
+                max_lam = max(self.lam.max(), other_filters.lam.max())
+                new_lam = (
+                    np.logspace(
+                        np.log10(min_lam),
+                        np.log10(max_lam),
+                        self.lam.size + other_filters.lam.size,
+                    )
+                    * self.lam.units
+                )
+                resample = True
 
         # Now resample the filters onto the filter collection's wavelength
         # array, but there's no need if they already agree.
         # NOTE: If the new filter extends beyond the filter collection's
-        # wavelength array a warning is given and that filter curve will
+        # wavelength array a warning is given and that filter curve will be
         # truncated at the limits. This is because we can't have the
         # filter collection's wavelength array modified, if that were
         # to happen it could become inconsistent with Sed wavelength arrays
         # and photometry would be impossible.
         if resample:
-            print("Resampling filters onto a common wavelength array...")
             self.resample_filters(new_lam=new_lam)
 
         return self
@@ -1626,7 +1666,6 @@ class Filter:
             array-like (float):
                 Transmission curve interpolated onto the new wavelength array.
         """
-        print(new_lam)
         # If we've been handed a wavelength array we must overwrite the
         # current one
         if new_lam is not None:
@@ -1649,24 +1688,6 @@ class Filter:
                 )
 
             self.lam = new_lam
-
-        print(
-            self.filter_code,
-            self._lam.size,
-            self._original_lam.size,
-            self._lam.min(),
-            self._lam.max(),
-            self._original_lam.min()
-            if self._original_lam is not None
-            else None,
-            self._original_lam.max()
-            if self._original_lam is not None
-            else None,
-            np.sum(self.original_t > 0)
-            if self.original_t is not None
-            else None,
-            np.sum(self.t > 0) if self.t is not None else None,
-        )
 
         # Perform interpolation
         self.t = np.interp(
