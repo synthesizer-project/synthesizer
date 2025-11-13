@@ -471,7 +471,15 @@ class FilterCollection:
 
         # Get a combined wavelength array (we resample filters before
         # applying them to spectra so the actual resolution doesn't matter)
-        if self.lam is not None and other_filters.lam is not None:
+        resample = True
+        if (
+            self.lam is not None
+            and other_filters.lam is None
+            and self._lam.size == other_filters._lam.size
+            and np.allclose(self._lam, other_filters._lam)
+        ):
+            resample = False
+        elif self.lam is not None and other_filters.lam is not None:
             new_lam = np.linspace(
                 min(self.lam.min(), other_filters.lam.min()),
                 max(self.lam.max(), other_filters.lam.max()),
@@ -485,14 +493,16 @@ class FilterCollection:
             new_lam = None
 
         # Now resample the filters onto the filter collection's wavelength
-        # array,
+        # array, but there's no need if they already agree.
         # NOTE: If the new filter extends beyond the filter collection's
         # wavelength array a warning is given and that filter curve will
         # truncated at the limits. This is because we can't have the
         # filter collection's wavelength array modified, if that were
         # to happen it could become inconsistent with Sed wavelength arrays
         # and photometry would be impossible.
-        self.resample_filters(new_lam=new_lam)
+        if resample:
+            print("Resampling filters onto a common wavelength array...")
+            self.resample_filters(new_lam=new_lam)
 
         return self
 
@@ -1616,6 +1626,7 @@ class Filter:
             array-like (float):
                 Transmission curve interpolated onto the new wavelength array.
         """
+        print(new_lam)
         # If we've been handed a wavelength array we must overwrite the
         # current one
         if new_lam is not None:
@@ -1638,6 +1649,24 @@ class Filter:
                 )
 
             self.lam = new_lam
+
+        print(
+            self.filter_code,
+            self._lam.size,
+            self._original_lam.size,
+            self._lam.min(),
+            self._lam.max(),
+            self._original_lam.min()
+            if self._original_lam is not None
+            else None,
+            self._original_lam.max()
+            if self._original_lam is not None
+            else None,
+            np.sum(self.original_t > 0)
+            if self.original_t is not None
+            else None,
+            np.sum(self.t > 0) if self.t is not None else None,
+        )
 
         # Perform interpolation
         self.t = np.interp(
@@ -1666,7 +1695,7 @@ class Filter:
         nu=None,
         verbose=True,
         nthreads=1,
-        integration_method="trapz",
+        integration_method="trapezoid",
     ):
         """Apply the transmission curve to any array.
 
@@ -1698,8 +1727,8 @@ class Filter:
                 The number of threads to use in the integration. If -1 then
                 all available threads are used. Defaults to 1.
             integration_method (str):
-                The method to use in the integration. Can be either "trapz"
-                or "simps". Defaults to "trapz".
+                The method to use in the integration. Can be either "trapezoid"
+                or "simps". Defaults to "trapezoid".
 
         Returns:
             float:
@@ -1830,10 +1859,10 @@ class Filter:
         """
         return (
             np.sqrt(
-                np.trapz(
+                np.trapezoid(
                     self._original_lam * self.original_t, x=self._original_lam
                 )
-                / np.trapz(
+                / np.trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1866,13 +1895,13 @@ class Filter:
         """
         return (
             np.exp(
-                np.trapz(
+                np.trapezoid(
                     np.log(self._original_lam)
                     * self.original_t
                     / self._original_lam,
                     x=self._original_lam,
                 )
-                / np.trapz(
+                / np.trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1891,7 +1920,7 @@ class Filter:
         """
         # Calculate the left and right hand side.
         A = np.sqrt(
-            np.trapz(
+            np.trapezoid(
                 (np.log(self._original_lam / self.meanwv().value) ** 2)
                 * self.original_t
                 / self._original_lam,
@@ -1900,7 +1929,7 @@ class Filter:
         )
 
         B = np.sqrt(
-            np.trapz(
+            np.trapezoid(
                 self.original_t / self._original_lam, x=self._original_lam
             )
         )
@@ -1940,7 +1969,9 @@ class Filter:
             float
                 The rectangular width.
         """
-        return np.trapz(self.original_t, x=self._original_lam) / self.Tpeak()
+        return (
+            np.trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
+        )
 
     def max(self):
         """Calculate the longest wavelength with transmission >0.01.
