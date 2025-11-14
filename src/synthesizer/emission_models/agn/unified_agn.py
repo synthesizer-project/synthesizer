@@ -24,6 +24,10 @@ from unyt import deg
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
+from synthesizer.emission_models.models import (
+    AttenuatedEmission,
+    DustEmission,
+)
 from synthesizer.emission_models.transformers import (
     CoveringFraction,
     EscapingFraction,
@@ -33,12 +37,12 @@ from synthesizer.exceptions import (
 )
 
 
-class UnifiedAGN(BlackHoleEmissionModel):
-    """An emission model that defines the Unified AGN model.
+class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
+    """An emission model that defines the Unified AGN model with no dust.
 
     The UnifiedAGN model includes a disc, nlr, blr and torus component and
-    combines these components taking into accountgeometry of the disc
-    and torus.
+    combines these components taking into account geometry of the disc
+    and torus. This model does not include diffuse dust emission.
 
     Attributes:
         disc_incident_isotropic (BlackHoleEmissionModel):
@@ -67,18 +71,22 @@ class UnifiedAGN(BlackHoleEmissionModel):
         blr_grid,
         torus_emission_model,
         disc_transmission="random",
-        label="intrinsic",
+        label=None,
         **kwargs,
     ):
         """Initialize the UnifiedAGN model.
 
         Args:
-            nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
-            blr_grid (synthesizer.grid.Grid): The grid for the BLR.
-            torus_emission_model (synthesizer.dust.EmissionModel): The dust
-                emission model to use for the torus.
-            disc_transmission (str): The disc transmission model.
-            label (str): The label for the model.
+            nlr_grid (synthesizer.grid.Grid):
+                The grid for the NLR.
+            blr_grid (synthesizer.grid.Grid):
+                The grid for the BLR.
+            torus_emission_model (synthesizer.dust.EmissionModel):
+                The dust emission model to use for the torus.
+            disc_transmission (str):
+                The disc transmission model.
+            label (str):
+                The label for the resulting spectra. Defaults to "intrinsic".
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
@@ -163,10 +171,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Get the torus emission model
         self.torus = self._make_torus(torus_emission_model, **kwargs)
 
-        # Create the final model
-        BlackHoleEmissionModel.__init__(
+        return BlackHoleEmissionModel.__init__(
             self,
-            label=label,
+            label=label if label is not None else "intrinsic",
             combine=(
                 self.disc,
                 self.nlr,
@@ -666,3 +673,291 @@ class UnifiedAGN(BlackHoleEmissionModel):
             scale_by="torus_fraction",
             **kwargs,
         )
+
+
+class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
+    """An emission model that defines the Unified AGN model.
+
+    The UnifiedAGN model includes a disc, nlr, blr and torus component and
+    combines these components taking into account geometry of the disc
+    and torus. This variant includes dust attenuation.
+
+    Attributes:
+        disc_incident_isotropic (BlackHoleEmissionModel):
+            The disc emission model assuming isotropic emission.
+        disc_incident (BlackHoleEmissionModel):
+            The disc emission model accounting for the geometry but unmasked.
+        nlr_transmitted (BlackHoleEmissionModel):
+            The NLR transmitted emission
+        blr_transmitted (BlackHoleEmissionModel):
+            The BLR transmitted emission
+        disc_transmitted (BlackHoleEmissionModel):
+            The disc transmitted emission
+        disc (BlackHoleEmissionModel):
+            The disc emission model
+        nlr (BlackHoleEmissionModel):
+            The NLR emission model
+        blr (BlackHoleEmissionModel):
+            The BLR emission model
+        torus (BlackHoleEmissionModel):
+            The torus emission model
+    """
+
+    def __init__(
+        self,
+        nlr_grid,
+        blr_grid,
+        torus_emission_model,
+        disc_transmission="random",
+        diffuse_dust_curve=None,
+        label=None,
+        **kwargs,
+    ):
+        """Initialize the UnifiedAGN model.
+
+        Args:
+            nlr_grid (synthesizer.grid.Grid):
+                The grid for the NLR.
+            blr_grid (synthesizer.grid.Grid):
+                The grid for the BLR.
+            torus_emission_model (synthesizer.dust.EmissionModel):
+                The dust emission model to use for the torus.
+            disc_transmission (str):
+                The disc transmission model.
+            diffuse_dust_curve (synthesizer.emission_models.attenuation):
+                The dust attenuation curve for diffuse dust.
+            label (str):
+                The label for the resulting spectra. This defaults to
+                "attenuated".
+            **kwargs: Any additional keyword arguments to pass to the
+                BlackHoleEmissionModel.
+        """
+        # Calculate the intrinsic emission
+        self.intrinsic = UnifiedAGNIntrinsic(
+            nlr_grid,
+            blr_grid,
+            torus_emission_model,
+            disc_transmission=disc_transmission,
+            **kwargs,
+        )
+
+        # Include attenuation from diffuse dust
+        # self.attenuated = self._add_diffuse_dust_attenuation(
+        # diffuse_dust_curve, **kwargs)
+        AttenuatedEmission.__init__(
+            self,
+            dust_curve=diffuse_dust_curve,
+            apply_to=self.intrinsic,
+            tau_v="tau_v",
+            emitter="blackhole",
+            label=label if label is not None else "attenuated",
+            **kwargs,
+        )
+
+
+class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
+    """An emission model that defines the Unified AGN model.
+
+    The UnifiedAGN model includes a disc, nlr, blr and torus component and
+    combines these components taking into account geometry of the disc
+    and torus. This variant includes dust attenuation and emission.
+
+    Attributes:
+        disc_incident_isotropic (BlackHoleEmissionModel):
+            The disc emission model assuming isotropic emission.
+        disc_incident (BlackHoleEmissionModel):
+            The disc emission model accounting for the geometry but unmasked.
+        nlr_transmitted (BlackHoleEmissionModel):
+            The NLR transmitted emission
+        blr_transmitted (BlackHoleEmissionModel):
+            The BLR transmitted emission
+        disc_transmitted (BlackHoleEmissionModel):
+            The disc transmitted emission
+        disc (BlackHoleEmissionModel):
+            The disc emission model
+        nlr (BlackHoleEmissionModel):
+            The NLR emission model
+        blr (BlackHoleEmissionModel):
+            The BLR emission model
+        torus (BlackHoleEmissionModel):
+            The torus emission model
+    """
+
+    def __init__(
+        self,
+        nlr_grid,
+        blr_grid,
+        torus_emission_model,
+        disc_transmission="random",
+        diffuse_dust_curve=None,
+        diffuse_dust_emission_model=None,
+        label=None,
+        **kwargs,
+    ):
+        """Initialize the UnifiedAGN model.
+
+        Args:
+            nlr_grid (synthesizer.grid.Grid):
+                The grid for the NLR.
+            blr_grid (synthesizer.grid.Grid):
+                The grid for the BLR.
+            torus_emission_model (synthesizer.dust.EmissionModel):
+                The dust emission model to use for the torus.
+            disc_transmission (str):
+                The disc transmission model.
+            diffuse_dust_curve (synthesizer.emission_models.attenuation):
+                The dust attenuation curve for diffuse dust.
+            diffuse_dust_emission_model:
+                The diffuse dust emission model.
+            label (str):
+                The label for the resulting spectra. When dust attenuation and
+                emission is included this defaults to "total" otherwise it
+                defaults to "intrinsic".
+            **kwargs: Any additional keyword arguments to pass to the
+                BlackHoleEmissionModel.
+        """
+        # Calculate the intrinsic emission
+        self.intrinsic = UnifiedAGNIntrinsic(
+            nlr_grid,
+            blr_grid,
+            torus_emission_model,
+            disc_transmission=disc_transmission,
+            **kwargs,
+        )
+
+        # Include attenuation from diffuse dust
+        # self.attenuated = self._add_diffuse_dust_attenuation(
+        # diffuse_dust_curve, **kwargs)
+        self.attenuated = AttenuatedEmission(
+            dust_curve=diffuse_dust_curve,
+            apply_to=self.intrinsic,
+            tau_v="tau_v",
+            emitter="blackhole",
+            label="attenuated",
+            **kwargs,
+        )
+
+        # Add diffuse dust emission
+        self.diffuse_dust_emission = DustEmission(
+            dust_emission_model=diffuse_dust_emission_model,
+            dust_lum_intrinsic=self.intrinsic,
+            dust_lum_attenuated=self.attenuated,
+            emitter="blackhole",
+            label="diffuse_dust_emission",
+            **kwargs,
+        )
+
+        # Finally make the total model, this is attenuated +
+        # diffuse_dust_emission
+        BlackHoleEmissionModel.__init__(
+            self,
+            label=label if label is not None else "total",
+            combine=(self.attenuated, self.diffuse_dust_emission),
+            related_models=(
+                self.intrinsic,
+                self.attenuated,
+                self.diffuse_dust_emission,
+            ),
+            **kwargs,
+        )
+
+
+class UnifiedAGN(BlackHoleEmissionModel):
+    """An emission model that defines the Unified AGN model.
+
+    The UnifiedAGN model includes a disc, nlr, blr and torus component and
+    combines these components taking into account geometry of the disc
+    and torus. This variant includes dust attenuation.
+
+    Attributes:
+        disc_incident_isotropic (BlackHoleEmissionModel):
+            The disc emission model assuming isotropic emission.
+        disc_incident (BlackHoleEmissionModel):
+            The disc emission model accounting for the geometry but unmasked.
+        nlr_transmitted (BlackHoleEmissionModel):
+            The NLR transmitted emission
+        blr_transmitted (BlackHoleEmissionModel):
+            The BLR transmitted emission
+        disc_transmitted (BlackHoleEmissionModel):
+            The disc transmitted emission
+        disc (BlackHoleEmissionModel):
+            The disc emission model
+        nlr (BlackHoleEmissionModel):
+            The NLR emission model
+        blr (BlackHoleEmissionModel):
+            The BLR emission model
+        torus (BlackHoleEmissionModel):
+            The torus emission model
+    """
+
+    def __new__(
+        cls,
+        nlr_grid,
+        blr_grid,
+        torus_emission_model,
+        disc_transmission="random",
+        diffuse_dust_curve=None,
+        diffuse_dust_emission_model=None,
+        label=None,
+        **kwargs,
+    ):
+        """Initialize the UnifiedAGN model.
+
+        Args:
+            nlr_grid (synthesizer.grid.Grid):
+                The grid for the NLR.
+            blr_grid (synthesizer.grid.Grid):
+                The grid for the BLR.
+            torus_emission_model (synthesizer.dust.EmissionModel):
+                The dust emission model to use for the torus.
+            disc_transmission (str):
+                The disc transmission model.
+            diffuse_dust_curve (synthesizer.emission_models.attenuation):
+                The dust attenuation curve for diffuse dust.
+            diffuse_dust_emission_model:
+                The diffuse dust emission model.
+            label (str):
+                The label for the resulting spectra. When dust attenuation and
+                emission is included this defaults to "total" otherwise it
+                defaults to "intrinsic".
+            **kwargs: Any additional keyword arguments to pass to the
+                BlackHoleEmissionModel.
+        """
+        # If diffuse_dust_curve and diffuse_dust_emission_model provided then
+        # include these
+        if diffuse_dust_curve and diffuse_dust_emission_model:
+            # Calculate the intrinsic emission
+
+            return UnifiedAGNWithDiffuseDustAttenuationAndEmission(
+                nlr_grid,
+                blr_grid,
+                torus_emission_model,
+                disc_transmission=disc_transmission,
+                diffuse_dust_curve=diffuse_dust_curve,
+                diffuse_dust_emission_model=diffuse_dust_emission_model,
+                label=label,
+                **kwargs,
+            )
+
+        # Otherwise if only the diffuse_dust_curve is provided:
+        elif diffuse_dust_curve:
+            return UnifiedAGNWithDiffuseDustAttenuation(
+                nlr_grid,
+                blr_grid,
+                torus_emission_model,
+                disc_transmission=disc_transmission,
+                diffuse_dust_curve=diffuse_dust_curve,
+                label=label,
+                **kwargs,
+            )
+
+        # Otherwise return the intrinsic emission
+        else:
+            return UnifiedAGNIntrinsic(
+                nlr_grid,
+                blr_grid,
+                torus_emission_model,
+                disc_transmission=disc_transmission,
+                label=label,
+                **kwargs,
+            )
