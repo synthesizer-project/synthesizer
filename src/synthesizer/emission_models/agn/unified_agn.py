@@ -704,9 +704,10 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
         nlr_grid,
         blr_grid,
         torus_emission_model,
+        diffuse_dust_curve,
         disc_transmission="random",
-        diffuse_dust_curve=None,
         label=None,
+        tau_v="tau_v",
         **kwargs,
     ):
         """Initialize the UnifiedAGN model.
@@ -718,13 +719,15 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
                 The grid for the BLR.
             torus_emission_model (synthesizer.dust.EmissionModel):
                 The dust emission model to use for the torus.
-            disc_transmission (str):
-                The disc transmission model.
             diffuse_dust_curve (synthesizer.emission_models.attenuation):
                 The dust attenuation curve for diffuse dust.
+            disc_transmission (str):
+                The disc transmission model.
             label (str):
                 The label for the resulting spectra. This defaults to
                 "attenuated".
+            tau_v (str):
+                The attribute on the emitter to use for tau_v
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
@@ -744,7 +747,7 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
             self,
             dust_curve=diffuse_dust_curve,
             apply_to=self.intrinsic,
-            tau_v="tau_v",
+            tau_v=tau_v,
             emitter="blackhole",
             label=label if label is not None else "attenuated",
             **kwargs,
@@ -772,9 +775,10 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
         nlr_grid,
         blr_grid,
         torus_emission_model,
+        diffuse_dust_curve,
+        diffuse_dust_emission_model,
+        tau_v="tau_v",
         disc_transmission="random",
-        diffuse_dust_curve=None,
-        diffuse_dust_emission_model=None,
         label=None,
         **kwargs,
     ):
@@ -793,6 +797,8 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
                 The dust attenuation curve for diffuse dust.
             diffuse_dust_emission_model:
                 The diffuse dust emission model.
+            tau_v (str):
+                The attribute on the emitter to use for tau_v
             label (str):
                 The label for the resulting spectra. When dust attenuation and
                 emission is included this defaults to "total" otherwise it
@@ -815,7 +821,7 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
         self.attenuated = AttenuatedEmission(
             dust_curve=diffuse_dust_curve,
             apply_to=self.intrinsic,
-            tau_v="tau_v",
+            tau_v=tau_v,
             emitter="blackhole",
             label="attenuated",
             **kwargs,
@@ -894,9 +900,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 nlr_grid,
                 blr_grid,
                 torus_emission_model,
+                diffuse_dust_curve,
+                diffuse_dust_emission_model,
                 disc_transmission=disc_transmission,
-                diffuse_dust_curve=diffuse_dust_curve,
-                diffuse_dust_emission_model=diffuse_dust_emission_model,
                 label=label,
                 **kwargs,
             )
@@ -907,8 +913,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 nlr_grid,
                 blr_grid,
                 torus_emission_model,
+                diffuse_dust_curve,
                 disc_transmission=disc_transmission,
-                diffuse_dust_curve=diffuse_dust_curve,
                 label=label,
                 **kwargs,
             )
