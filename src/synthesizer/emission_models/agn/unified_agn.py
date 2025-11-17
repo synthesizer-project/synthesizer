@@ -890,8 +890,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # If diffuse_dust_curve and diffuse_dust_emission_model provided then
         # include these
         if diffuse_dust_curve and diffuse_dust_emission_model:
-            # Calculate the intrinsic emission
-
             return UnifiedAGNWithDiffuseDustAttenuationAndEmission(
                 nlr_grid,
                 blr_grid,
