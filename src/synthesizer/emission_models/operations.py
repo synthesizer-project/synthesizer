@@ -644,9 +644,13 @@ class Transformation:
         # Attach the model to apply the transformer to
         self._apply_to = apply_to
 
-        # Convert the models we are applying to into strings for easier looping
-        self._apply_to_label = (
-            apply_to if isinstance(apply_to, str) else apply_to.label
+    @property
+    def _apply_to_label(self):
+        """Return the label of the model to apply the transformation to."""
+        return (
+            self._apply_to
+            if isinstance(self._apply_to, str)
+            else self._apply_to.label
         )
 
     def _transform_emission(
@@ -780,8 +784,10 @@ class Combination:
         # Attach the models to combine
         self._combine = list(combine) if combine is not None else combine
 
-        # Convert combination list to strings for easier looping and extraction
-        self._combine_labels = [
+    @property
+    def _combine_labels(self):
+        """Return the labels of the models to combine."""
+        return [
             model if isinstance(model, str) else model.label
             for model in self._combine
         ]
