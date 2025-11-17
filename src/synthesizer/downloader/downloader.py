@@ -23,7 +23,6 @@ import yaml
 from tqdm import tqdm
 
 from synthesizer import (
-    DATABASE_FILE,
     GRID_DIR,
     INSTRUMENT_CACHE_DIR,
     TEST_DATA_DIR,
@@ -31,6 +30,8 @@ from synthesizer import (
 )
 from synthesizer.instruments import AVAILABLE_INSTRUMENTS
 from synthesizer.synth_warnings import warn
+
+DATABASE_FILE = os.path.join(os.path.dirname(__file__), "_data_ids.yml")
 
 
 def load_database_yaml():
@@ -472,7 +473,7 @@ def synference_download():
             "The path to the destination directory. by default this is"
             f" {TEST_DATA_DIR}. This argument overrides these defaults."
         ),
-        required=True,
+        default=None,
     )
 
     # Parse the arguments
