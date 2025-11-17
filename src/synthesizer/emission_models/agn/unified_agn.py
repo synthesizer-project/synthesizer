@@ -49,18 +49,30 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             The disc emission model assuming isotropic emission.
         disc_incident (BlackHoleEmissionModel):
             The disc emission model accounting for the geometry but unmasked.
+        disc_averaged (BlackHoleEmissionModel):
+            The inclination averaged observed disc emission.
+        disc_averaged_without_torus (BlackHoleEmissionModel):
+            The inclination averaged observed disc ignoring the torus.
         nlr_transmitted (BlackHoleEmissionModel):
             The NLR transmitted emission
         blr_transmitted (BlackHoleEmissionModel):
             The BLR transmitted emission
         disc_transmitted (BlackHoleEmissionModel):
             The disc transmitted emission
+        disc_transmitted_weighted_combination (BlackHoleEmissionModel):
+            The disc transmitted weighted combination emission
         disc (BlackHoleEmissionModel):
             The disc emission model
         nlr (BlackHoleEmissionModel):
             The NLR emission model
         blr (BlackHoleEmissionModel):
             The BLR emission model
+        line_regions (BlackHoleEmissionModel):
+            The combined BLR and NLR emission
+        nlr_continuum (BlackHoleEmissionModel):
+            The NLR continuum emission
+        blr_continuum (BlackHoleEmissionModel):
+            The BLR continuum emission
         torus (BlackHoleEmissionModel):
             The torus emission model
     """
@@ -683,24 +695,8 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
     and torus. This variant includes dust attenuation.
 
     Attributes:
-        disc_incident_isotropic (BlackHoleEmissionModel):
-            The disc emission model assuming isotropic emission.
-        disc_incident (BlackHoleEmissionModel):
-            The disc emission model accounting for the geometry but unmasked.
-        nlr_transmitted (BlackHoleEmissionModel):
-            The NLR transmitted emission
-        blr_transmitted (BlackHoleEmissionModel):
-            The BLR transmitted emission
-        disc_transmitted (BlackHoleEmissionModel):
-            The disc transmitted emission
-        disc (BlackHoleEmissionModel):
-            The disc emission model
-        nlr (BlackHoleEmissionModel):
-            The NLR emission model
-        blr (BlackHoleEmissionModel):
-            The BLR emission model
-        torus (BlackHoleEmissionModel):
-            The torus emission model
+        intrinsinc (BlackHoleEmissionModel):
+            The intrinsic emission
     """
 
     def __init__(
@@ -763,24 +759,12 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
     and torus. This variant includes dust attenuation and emission.
 
     Attributes:
-        disc_incident_isotropic (BlackHoleEmissionModel):
-            The disc emission model assuming isotropic emission.
-        disc_incident (BlackHoleEmissionModel):
-            The disc emission model accounting for the geometry but unmasked.
-        nlr_transmitted (BlackHoleEmissionModel):
-            The NLR transmitted emission
-        blr_transmitted (BlackHoleEmissionModel):
-            The BLR transmitted emission
-        disc_transmitted (BlackHoleEmissionModel):
-            The disc transmitted emission
-        disc (BlackHoleEmissionModel):
-            The disc emission model
-        nlr (BlackHoleEmissionModel):
-            The NLR emission model
-        blr (BlackHoleEmissionModel):
-            The BLR emission model
-        torus (BlackHoleEmissionModel):
-            The torus emission model
+        intrinsinc (BlackHoleEmissionModel):
+            The intrinsic emission
+        attenuated (BlackHoleEmissionModel):
+            The attenuated emission
+        diffuse_dust_emission (BlackHoleEmissionModel):
+            The diffuse dust emission
     """
 
     def __init__(
@@ -868,26 +852,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
     The UnifiedAGN model includes a disc, nlr, blr and torus component and
     combines these components taking into account geometry of the disc
     and torus. This variant includes dust attenuation.
-
-    Attributes:
-        disc_incident_isotropic (BlackHoleEmissionModel):
-            The disc emission model assuming isotropic emission.
-        disc_incident (BlackHoleEmissionModel):
-            The disc emission model accounting for the geometry but unmasked.
-        nlr_transmitted (BlackHoleEmissionModel):
-            The NLR transmitted emission
-        blr_transmitted (BlackHoleEmissionModel):
-            The BLR transmitted emission
-        disc_transmitted (BlackHoleEmissionModel):
-            The disc transmitted emission
-        disc (BlackHoleEmissionModel):
-            The disc emission model
-        nlr (BlackHoleEmissionModel):
-            The NLR emission model
-        blr (BlackHoleEmissionModel):
-            The BLR emission model
-        torus (BlackHoleEmissionModel):
-            The torus emission model
     """
 
     def __new__(
