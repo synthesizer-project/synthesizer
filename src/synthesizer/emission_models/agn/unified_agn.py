@@ -695,7 +695,7 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
     and torus. This variant includes dust attenuation.
 
     Attributes:
-        intrinsinc (BlackHoleEmissionModel):
+        intrinsic (BlackHoleEmissionModel):
             The intrinsic emission
     """
 
@@ -762,7 +762,7 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
     and torus. This variant includes dust attenuation and emission.
 
     Attributes:
-        intrinsinc (BlackHoleEmissionModel):
+        intrinsic (BlackHoleEmissionModel):
             The intrinsic emission
         attenuated (BlackHoleEmissionModel):
             The attenuated emission
