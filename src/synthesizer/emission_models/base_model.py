@@ -3352,6 +3352,25 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return images
 
+    def add_label_prefix(self, prefix):
+        """Re-labels spectra by adding a prefix.
+
+        This will relable all spectra in the model by adding a prefix.
+
+        Args:
+            prefix (str):
+                The prefix to use when relabelling.
+        """
+        # Get list of origianl labels since relabelling changes the key in
+        # self._models
+        original_labels = list(self._models.keys())
+
+        for original_label in original_labels:
+            # Get new label
+            new_label = f"{prefix}_{original_label}"
+            # Relabel. Note: this also updates the self._models dictionary.
+            self.relabel(original_label, new_label)
+
 
 class StellarEmissionModel(EmissionModel):
     """An emission model for stellar components.
