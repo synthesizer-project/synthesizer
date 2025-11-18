@@ -899,6 +899,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # If diffuse_dust_curve and diffuse_dust_emission_model provided then
         # include these
         if diffuse_dust_curve and diffuse_dust_emission_model:
+            if label is None:
+                label = "total"
             return UnifiedAGNWithDiffuseDustAttenuationAndEmission(
                 nlr_grid,
                 blr_grid,
@@ -911,7 +913,10 @@ class UnifiedAGN(BlackHoleEmissionModel):
             )
 
         # Otherwise if only the diffuse_dust_curve is provided:
+
         elif diffuse_dust_curve:
+            if label is None:
+                label = "attenuated"
             return UnifiedAGNWithDiffuseDustAttenuation(
                 nlr_grid,
                 blr_grid,
@@ -924,6 +929,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # Otherwise return the intrinsic emission
         else:
+            if label is None:
+                label = "intrinsic"
             return UnifiedAGNIntrinsic(
                 nlr_grid,
                 blr_grid,
