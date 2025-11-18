@@ -747,7 +747,7 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
             apply_to=self.intrinsic,
             tau_v=tau_v,
             emitter="blackhole",
-            label="attenuated",
+            label=label,
             **kwargs,
         )
 
