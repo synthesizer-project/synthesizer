@@ -893,6 +893,13 @@ class UnifiedAGN(BlackHoleEmissionModel):
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
+        # Validate that dust emission model is not provided without a curve
+        if diffuse_dust_emission_model and not diffuse_dust_curve:
+            raise exceptions.InconsistentArguments(
+                "diffuse_dust_emission_model requires diffuse_dust_curve to "
+                "be specified."
+            )
+
         # If diffuse_dust_curve and diffuse_dust_emission_model provided then
         # include these
         if diffuse_dust_curve and diffuse_dust_emission_model:
