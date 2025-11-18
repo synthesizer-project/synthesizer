@@ -741,8 +741,6 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
         )
 
         # Include attenuation from diffuse dust
-        # self.attenuated = self._add_diffuse_dust_attenuation(
-        # diffuse_dust_curve, **kwargs)
         AttenuatedEmission.__init__(
             self,
             dust_curve=diffuse_dust_curve,
@@ -816,8 +814,6 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
         )
 
         # Include attenuation from diffuse dust
-        # self.attenuated = self._add_diffuse_dust_attenuation(
-        # diffuse_dust_curve, **kwargs)
         self.attenuated = AttenuatedEmission(
             dust_curve=diffuse_dust_curve,
             apply_to=self.intrinsic,
