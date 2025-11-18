@@ -23,10 +23,11 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Mpc, Msun, Myr, km, s, yr
+from unyt import Mpc, Msun, Myr, km, s, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
+from synthesizer.grid import Grid
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
@@ -1066,7 +1067,7 @@ class Stars(Particles, StarsComponent):
     def get_sfzh(
         self,
         log10ages,
-        log10metallicities,
+        metallicities,
         grid_assignment_method="cic",
         nthreads=0,
     ):
@@ -1081,8 +1082,8 @@ class Stars(Particles, StarsComponent):
         Args:
             log10ages (np.ndarray of float):
                 The log10 ages of the desired SFZH.
-            log10metallicities (np.ndarray of float):
-                The logged metallicities of the desired SFZH.
+            metallicities (np.ndarray of float):
+                The metallicities of the desired SFZH.
             grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1103,7 +1104,7 @@ class Stars(Particles, StarsComponent):
         # Prepare the arguments for the C function.
         args = self._prepare_sfzh_args(
             log10ages,
-            log10metallicities,
+            np.log10(metallicities),
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
@@ -1111,7 +1112,7 @@ class Stars(Particles, StarsComponent):
         # Get the SFZH and create the ParametricStars object
         self.sfzh = ParametricStars(
             log10ages,
-            10**log10metallicities,
+            metallicities,
             sfzh=compute_sfzh(*args),
         )
 
@@ -1137,6 +1138,40 @@ class Stars(Particles, StarsComponent):
                 "The SFZH has not been calculated. Run get_sfzh() first."
             )
         return self.sfzh.plot_sfzh(show=show)
+
+    def calculate_surviving_mass(
+        self, grid: Grid, grid_assignment_method: str = "cic"
+    ) -> unyt_quantity:
+        """Calculate the surviving mass of the stellar population.
+
+        This is the total mass of stars that have survived to the present day
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving mass.
+                This is used to get the stellar fraction at each SFZH bin.
+            grid_assignment_method (str):
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp).
+
+        Returns:
+            unyt_quantity: The total surviving mass of the stellar
+            population in Msun.
+        """
+        if self.sfzh is None:
+            _stars = self.get_sfzh(
+                grid.log10ages,
+                grid.metallicities,
+                grid_assignment_method=grid_assignment_method,
+            )
+        else:
+            _stars = self.sfzh
+
+        surviving_mass = np.sum(_stars.sfzh * grid.stellar_fraction)
+
+        return surviving_mass * Msun
 
     def _prepare_sfh_args(
         self,
@@ -1534,8 +1569,8 @@ class Stars(Particles, StarsComponent):
     )
     def get_particle_lines(
         self,
-        line_ids,
         emission_model,
+        line_ids=None,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -1549,11 +1584,13 @@ class Stars(Particles, StarsComponent):
         knowing which lines should be per particle.
 
         Args:
-            line_ids (list):
-                A list of line_ids. Doublets can be specified as a nested
-                list or using a comma (e.g., 'OIII4363,OIII4959').
             emission_model (EmissionModel):
                 The emission model to use.
+            line_ids (list, optional):
+                A list of line_ids. Doublets can be specified as a nested
+                list or using a comma (e.g., 'OIII4363,OIII4959').
+                If None, all available lines from the emission model grid
+                will be returned.
             dust_curves (dict):
                 An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission

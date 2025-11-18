@@ -10,6 +10,8 @@ Example:
 
 import os
 
+import numpy as np
+
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
 
@@ -61,5 +63,10 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     yscale = _ys.max()
     _xs /= xscale
     _ys /= yscale
+
+    # If the maximum is zero, we return zero
+    if xscale == 0 or yscale == 0:
+        ndim = ys.ndim - 1
+        return np.zeros(ndim) if ndim > 0 else 0.0
 
     return integration_function(_xs, _ys, nthreads) * xscale * yscale

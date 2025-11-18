@@ -22,6 +22,8 @@ Example usage:
     print(grid.spectra)
 """
 
+import copy
+
 import cmasher as cmr
 import h5py
 import matplotlib as mpl
@@ -104,8 +106,9 @@ class Grid:
         self,
         grid_name,
         grid_dir=None,
+        ignore_spectra=False,
         spectra_to_read=None,
-        read_lines=True,
+        ignore_lines=False,
         new_lam=None,
         lam_lims=(),
     ):
@@ -120,12 +123,13 @@ class Grid:
                 hdf5 is assumed).
             grid_dir (str):
                 The file path to the directory containing the grid file.
+            ignore_spectra (bool):
+                Should we ignore spectra (i.e. not load them into the Grid)?
             spectra_to_read (list):
                 A list of spectra to read in. If None then all available
                 spectra will be read. Default is None.
-            read_lines (bool):
-                Should we read lines? If a list then a subset of lines will be
-                read.
+            ignore_lines (bool):
+                Should we ignore lines  (i.e. not load them into the Grid)?
             new_lam (np.ndarray of float):
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
@@ -140,21 +144,28 @@ class Grid:
         self.grid_ext = "hdf5"  # can be updated if grid_name has an extension
         self._parse_grid_path(grid_dir, grid_name)
 
-        # Prepare lists of available lines and spectra
+        # Prepare lists of available lines, spectra, and emissions
         self.available_lines = []
-        self.available_spectra = []
+        self.available_spectra_emissions = []
+        self.available_line_emissions = []
+        self.available_emissions = []
 
         # Set up property flags. These will be set when their property methods
         # are first called to avoid reading the file too often.
         self._reprocessed = None
         self._lines_available = None
+        self._ignore_lines = ignore_lines
 
         # Set up spectra and lines dictionaries (if we don't read them they'll
         # just stay as empty dicts)
+        self.lam = None
         self.spectra = {}
         self.line_lams = None
         self.line_lums = {}
         self.line_conts = {}
+
+        # Set up cache for stellar fraction
+        self._stellar_frac = None
 
         # Get the axes of the grid from the HDF5 file
         self.axes = []  # axes names
@@ -172,22 +183,40 @@ class Grid:
         # Get the ionising luminosity (if available)
         self._get_ionising_luminosity()
 
-        # We always read spectra, but can read a subset if requested
-        self.lam = None
-        self.available_spectra = None
-        self._get_spectra_grid(spectra_to_read)
+        # Read in spectra
+        if not ignore_spectra:
+            self._get_spectra_grid(spectra_to_read)
 
-        # Prepare lines attributes
-        self.available_lines = []
+            # Save the spectra keys as available emissions
+            self.available_spectra_emissions = list(self.spectra.keys())
 
-        # Read in lines
-        if read_lines or isinstance(read_lines, list):
-            self._get_lines_grid(read_lines)
+            # Prepare the wavelength axis (if new_lam and lam_lims are
+            # all None, this will do nothing, leaving the grid's wavelength
+            # array as it is in the HDF5 file)
+            self._prepare_lam_axis(new_lam, lam_lims)
 
-        # Prepare the wavelength axis (if new_lam and lam_lims are
-        # all None, this will do nothing, leaving the grid's wavelength array
-        # as it is in the HDF5 file)
-        self._prepare_lam_axis(new_lam, lam_lims)
+        # Read in lines but only if the grid has been reprocessed
+        if not ignore_lines and self.reprocessed:
+            self._get_lines_grid()
+
+            # Save the line lums keys as available emissions
+            self.available_line_emissions = list(self.line_lums.keys())
+
+        # Combine the two emissions lists and remove repeats
+        self.available_emissions = list(
+            set(
+                self.available_line_emissions
+                + self.available_spectra_emissions
+            )
+        )
+
+    @property
+    def available_spectra(self):
+        """Return a list of available emission types.
+
+        For spectra, these are the available spectra.
+        """
+        return self.available_spectra_emissions
 
     def _parse_grid_path(self, grid_dir, grid_name):
         """Parse the grid path and set the grid directory and filename."""
@@ -247,6 +276,12 @@ class Grid:
         # First up, do we just have the attribute and it isn't an axis?
         if name in self.__dict__:
             return self.__dict__[name]
+
+        # Check if axes attribute exists to avoid recursion
+        if "axes" not in self.__dict__:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
 
         # Now, do some silly pluralisation checks to handle old naming
         # conventions. We do this now so everything works, we can grumble
@@ -442,12 +477,40 @@ class Grid:
                         :
                     ]
 
+    @property
+    def stellar_fraction(self):
+        """Get the stellar fraction from the HDF5 file.
+
+        This is a two-dimensional array with the first axis being age and
+        the second axis being metallicity.
+
+        Args:
+            key (str): The key to use for retrieving the stellar fraction.
+
+        Returns:
+            np.ndarray of float:
+                The stellar fraction array from the grid.
+
+        Raises:
+            GridError: If the grid does not contain a stellar fraction
+                array with the specified key.
+        """
+        if self._stellar_frac is None:
+            with h5py.File(self.grid_filename, "r") as hf:
+                if "star_fraction" in hf.keys():
+                    self._stellar_frac = hf["star_fraction"][:]
+                else:
+                    raise exceptions.GridError(
+                        f"Grid {self.grid_name} does not contain a stellar "
+                        f"fraction array with key 'star_fraction'."
+                    )
+        return self._stellar_frac
+
     def _get_spectra_grid(self, spectra_to_read):
         """Get the spectra grid from the HDF5 file.
 
         If using a cloudy reprocessed grid this method will automatically
-        calculate 2 spectra not native to the grid file:
-            total = transmitted + nebular
+        calculate the nebular continuum spectra not native to the grid file:
             nebular_continuum = nebular - linecont
 
         Args:
@@ -458,10 +521,9 @@ class Grid:
         with h5py.File(self.grid_filename, "r") as hf:
             # Are we reading everything?
             if spectra_to_read is None:
-                self.available_spectra = self._get_spectra_ids_from_file()
+                spectra_to_read = self._get_spectra_ids_from_file()
             elif isinstance(spectra_to_read, list):
                 all_spectra = self._get_spectra_ids_from_file()
-                self.available_spectra = spectra_to_read
 
                 # Check the requested spectra are available
                 missing_spectra = set(spectra_to_read) - set(all_spectra)
@@ -481,34 +543,20 @@ class Grid:
             self.lam = hf["spectra/wavelength"][:]
 
             # Get all our spectra
-            for spectra_id in self.available_spectra:
+            for spectra_id in spectra_to_read:
                 self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
-        if self.reprocessed:
-            # The total emission (ignoring any dust reprocessing) is just
-            # the transmitted plus the nebular
-            self.spectra["total"] = (
-                self.spectra["transmitted"] + self.spectra["nebular"]
-            )
-            self.available_spectra.append("total")
-
+        if self.reprocessed is True:
             # The nebular continuum is the nebular emission with the line
             # contribution removed
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
-            self.available_spectra.append("nebular_continuum")
 
-    def _get_lines_grid(self, read_lines):
-        """Get the lines grid from the HDF5 file.
-
-        Args:
-            read_lines (bool/list):
-                Flag for whether to read all available lines or subset of
-                lines to read.
-        """
+    def _get_lines_grid(self):
+        """Get the lines grid from the HDF5 file."""
         # Double check we actually have lines to read
         if not self.lines_available:
             if not self.reprocessed:
@@ -536,25 +584,6 @@ class Grid:
             lams = hf["lines"]["wavelength"][...]
             lam_units = hf["lines"]["wavelength"].attrs.get("Units")
             self.line_lams = unyt_array(lams, lam_units).to(angstrom)
-
-            # Check the lines are within the wavelength range of the grid. Its
-            # not a big issue if any are outside the range but we should warn
-            # the user since it could lead to confusion.
-            lines_outside_lam = []
-            for ind, line in enumerate(self.available_lines):
-                if (
-                    self.line_lams[ind] < self.lam[0]
-                    or self.line_lams[ind] > self.lam[-1]
-                ):
-                    lines_outside_lam.append(line)
-
-            # If we have lines outside the wavelength range of the grid
-            # warn the user
-            if len(lines_outside_lam) > 0:
-                warn(
-                    "The following lines are outside the wavelength "
-                    f"range of the grid: {lines_outside_lam}"
-                )
 
             # Get the units, we only do this once since all the
             # luminosities and continuums will have the same units
@@ -605,45 +634,71 @@ class Grid:
             )
 
             # Now that we have read the line data itself we need to populate
-            # the other spectra entries. the line luminosities for all entries
-            # other than nebular are 0 but the continuums need to be sampled
-            # from the spectra.
-            for spectra in self.available_spectra:
-                # Define the extraction key
-                extract = spectra
+            # the other spectra entries, if any exist. the line luminosities
+            # for all entries other than nebular are 0 but the continuums
+            # need to be sampled from the spectra.
 
-                # Skip those we have already read
-                if extract in self.line_conts:
-                    continue
+            # Before doing this though, we need to check the lines are within
+            # the wavelength range of the grid. Its not a big issue if any are
+            # outside the range but we should warn the user since it could lead
+            # to confusion.
 
-                # Create an interpolation function for this spectra
-                interp_func = interp1d(
-                    self._lam,
-                    self.spectra[extract],
-                    axis=-1,
-                    kind="linear",
-                    fill_value=0.0,
-                    bounds_error=False,
-                )
+            if self.available_spectra_emissions:
+                lines_outside_lam = []
+                for ind, line in enumerate(self.available_lines):
+                    if (
+                        self.line_lams[ind] < self.lam[0]
+                        or self.line_lams[ind] > self.lam[-1]
+                    ):
+                        lines_outside_lam.append(line)
 
-                # Get the continuum luminosities by interpolating the to get
-                # the continuum at the line wavelengths (we use scipy here
-                # because spectres can't handle single value interpolation).
-                # The linecont continuum is explicitly 0 and set above.
-                self.line_conts[spectra] = unyt_array(
-                    interp_func(self.line_lams),
-                    cont_units,
-                )
+                # If we have lines outside the wavelength range of the grid
+                # warn the user
+                if len(lines_outside_lam) > 0:
+                    warn(
+                        "The following lines are outside the wavelength "
+                        f"range of the grid: {lines_outside_lam}"
+                    )
 
-                # Set the line luminosities to 0 as long as they haven't
-                # already been set
-                self.line_lums[spectra] = unyt_array(
-                    np.zeros((*self.spectra[spectra].shape[:-1], self.nlines)),
-                    lum_units,
-                )
+                for spectra in self.available_spectra_emissions:
+                    # Define the extraction key
+                    extract = spectra
+
+                    # Skip those we have already read
+                    if extract in self.line_conts:
+                        continue
+
+                    # Create an interpolation function for this spectra
+                    interp_func = interp1d(
+                        self._lam,
+                        self.spectra[extract],
+                        axis=-1,
+                        kind="linear",
+                        fill_value=0.0,
+                        bounds_error=False,
+                    )
+
+                    # Get the continuum luminosities by interpolating the to
+                    # get the continuum at the line wavelengths (we use scipy
+                    # here because spectres can't handle single value
+                    # interpolation). The linecont continuum is explicitly 0
+                    # and set above.
+                    self.line_conts[spectra] = unyt_array(
+                        interp_func(self.line_lams),
+                        cont_units,
+                    )
+
+                    # Set the line luminosities to 0 as long as they haven't
+                    # already been set
+                    self.line_lums[spectra] = unyt_array(
+                        np.zeros(
+                            (*self.spectra[spectra].shape[:-1], self.nlines)
+                        ),
+                        lum_units,
+                    )
 
             # Ensure the line luminosities and continuums are contiguous
-            for spectra in self.available_spectra:
+            for spectra in self.line_lums.keys():
                 lum_units = self.line_lums[spectra].units
                 cont_units = self.line_conts[spectra].units
                 self.line_lums[spectra] = (
@@ -701,9 +756,9 @@ class Grid:
             # Interpolate the spectra grid
             self.interp_spectra(new_lam)
 
-        # If we have been given wavelength limtis truncate the grid
-        if len(lam_lims) > 0 and new_lam is None:
-            self.truncate_grid_lam(*lam_lims)
+        # If we have been given wavelength limits truncate the grid
+        elif len(lam_lims) > 0:
+            self.reduce_rest_frame_range(*lam_lims, inplace=True)
 
     @property
     def reprocessed(self):
@@ -736,6 +791,10 @@ class Grid:
             bool:
                 True if lines are available, False otherwise.
         """
+        # If lines were explicitly ignored during initialization, return False
+        if self._ignore_lines:
+            return False
+
         if self._lines_available is None:
             with h5py.File(self.grid_filename, "r") as hf:
                 self._lines_available = True if "lines" in hf.keys() else False
@@ -824,7 +883,7 @@ class Grid:
                 intensive, but slower. Defaults to False.
         """
         # Loop over spectra to interpolate
-        for spectra_type in self.available_spectra:
+        for spectra_type in self.available_spectra_emissions:
             # Are we doing the look up in one go, or looping?
             if loop_grid:
                 new_spectra = [None] * len(self.spectra[spectra_type])
@@ -836,6 +895,7 @@ class Grid:
                         self._lam,
                         _spec,
                         fill=0,
+                        verbose=False,
                     )
 
                 del self.spectra[spectra_type]
@@ -847,6 +907,7 @@ class Grid:
                     self._lam,
                     self.spectra[spectra_type],
                     fill=0,
+                    verbose=False,
                 )
 
             # Update this spectra
@@ -854,6 +915,10 @@ class Grid:
 
         # Update wavelength array
         self.lam = new_lam
+
+        # Remove any lines outside the new wavelength range
+        if self.lines_available:
+            self._remove_lines_outside_lam()
 
     def __str__(self):
         """Return a string representation of the particle object.
@@ -875,7 +940,17 @@ class Grid:
     @property
     def shape(self):
         """Return the shape of the grid."""
-        return self.spectra[self.available_spectra[0]].shape
+        # Check to see if there are spectra associated with the grid...
+        if self.available_spectra_emissions:
+            return self.spectra[self.available_spectra_emissions[0]].shape
+        # ... if not, check lines...
+        elif self.available_line_emissions:
+            return self.line_lums[self.available_line_emissions[0]].shape
+        # ...otherwise raise an exception.
+        else:
+            raise exceptions.UnrecognisedOption(
+                "The grid has neither spectra or lines associated with it."
+            )
 
     @property
     def ndim(self):
@@ -892,11 +967,514 @@ class Grid:
         """Return the number of lines in the grid."""
         return len(self.available_lines)
 
+    def _remove_lines_outside_lam(self):
+        """Remove lines outside the wavelength range of the grid."""
+        if (
+            self.lines_available
+            and hasattr(self, "line_lams")
+            and self.line_lams is not None
+        ):
+            # Ensure we have compatible units for comparison
+            lam_min = self.lam[0]
+            lam_max = self.lam[-1]
+
+            # Make sure both have the same units
+            if hasattr(self.line_lams, "units") and hasattr(lam_min, "units"):
+                # Convert line_lams to same units as lam if needed
+                line_lams = self.line_lams.to(lam_min.units)
+            else:
+                line_lams = self.line_lams
+
+            lines_to_keep = np.where(
+                (line_lams >= lam_min) & (line_lams <= lam_max)
+            )[0]
+
+            if len(lines_to_keep) < len(self.line_lams):
+                warn(
+                    f"{len(self.line_lams) - len(lines_to_keep)} "
+                    "lines are outside the wavelength range of the "
+                    "grid and will be removed."
+                )
+
+            self.available_lines = self.available_lines[lines_to_keep]
+            self.line_lams = self.line_lams[lines_to_keep]
+
+            for spectra_id in self.available_line_emissions:
+                self.line_lums[spectra_id] = self.line_lums[spectra_id][
+                    ..., lines_to_keep
+                ]
+                self.line_conts[spectra_id] = self.line_conts[spectra_id][
+                    ..., lines_to_keep
+                ]
+
+    @accepts(lam_min=angstrom, lam_max=angstrom)
+    def reduce_rest_frame_range(self, lam_min, lam_max, inplace=False):
+        """Limit the wavelength range of the grid.
+
+        Args:
+            lam_min (unyt_quantity/float):
+                The minimum wavelength to limit the grid to.
+            lam_max (unyt_quantity/float):
+                The maximum wavelength to limit the grid to.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with the reduced
+                wavelength range. If inplace=True, returns None and modifies
+                the current grid.
+        """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
+        # Check the limits are valid
+        if lam_min >= lam_max:
+            raise exceptions.InconsistentArguments(
+                "lam_min must be less than lam_max"
+            )
+
+        # Find the indices of the wavelength limits
+        min_index = grid.get_nearest_index(lam_min, grid.lam)
+        max_index = grid.get_nearest_index(lam_max, grid.lam) + 1
+
+        # Limit the wavelength array
+        grid.lam = grid.lam[min_index:max_index]
+
+        # Limit all the spectra arrays
+        for spectra_id in grid.available_spectra_emissions:
+            grid.spectra[spectra_id] = grid.spectra[spectra_id][
+                ..., min_index:max_index
+            ]
+
+        # Remove lines outside the new wavelength range
+        if grid.lines_available:
+            grid._remove_lines_outside_lam()
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
+
+    @accepts(lam_min=angstrom, lam_max=angstrom)
+    def reduce_observed_range(self, lam_min, lam_max, redshift, inplace=False):
+        """Limit the wavelength range of the grid to observer frame limits.
+
+        Args:
+            lam_min (unyt_quantity/float):
+                The minimum observed wavelength to limit the grid to.
+            lam_max (unyt_quantity/float):
+                The maximum observed wavelength to limit the grid to.
+            redshift (float):
+                The redshift to use for converting the observed wavelengths
+                to rest frame.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with the reduced
+                wavelength range. If inplace=True, returns None and modifies
+                the current grid.
+        """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
+        # Check the limits are valid
+        if lam_min >= lam_max:
+            raise exceptions.InconsistentArguments(
+                "lam_min must be less than lam_max"
+            )
+
+        # Convert to rest frame
+        rest_lam_min = lam_min / (1 + redshift)
+        rest_lam_max = lam_max / (1 + redshift)
+
+        # Find the indices of the wavelength limits
+        min_index = grid.get_nearest_index(rest_lam_min, grid.lam)
+        max_index = grid.get_nearest_index(rest_lam_max, grid.lam) + 1
+
+        # Limit the wavelength array
+        grid.lam = grid.lam[min_index:max_index]
+
+        # Limit all the spectra arrays
+        for spectra_id in grid.available_spectra_emissions:
+            grid.spectra[spectra_id] = grid.spectra[spectra_id][
+                ..., min_index:max_index
+            ]
+
+        # Remove lines outside the new wavelength range
+        if grid.lines_available:
+            grid._remove_lines_outside_lam()
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
+
+    def reduce_rest_frame_filters(self, filters, inplace=False):
+        """Limit the wavelength range of the grid to the range of filters.
+
+        Args:
+            filters (FilterCollection):
+                A list of Filter objects to use for determining the
+                wavelength range to limit the grid to.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with the reduced
+                wavelength range. If inplace=True, returns None and modifies
+                the current grid.
+        """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
+        # Unpack the transmission and wavelengths of the filters so we can
+        # resample onto the grid wavelength array
+        transmissions = [f.transmission for f in filters]
+        wavelengths = filters.lam
+
+        # Resample the filter transmissions onto the grid wavelength array
+        transmissions_resampled = [
+            spectres(
+                grid.lam.value,
+                wavelengths.value,
+                t,
+                fill=0.0,
+                verbose=False,
+            )
+            for t in transmissions
+        ]
+
+        # Find all non-zero transmission wavelengths in the filters
+        lam_mask = np.zeros(grid.lam.shape, dtype=bool)
+        for t in transmissions_resampled:
+            lam_mask |= t > 0.0
+
+        # If no filters overlap the grid wavelength range, raise an error
+        if not np.any(lam_mask):
+            raise exceptions.InconsistentArguments(
+                "None of the provided filters overlap the wavelength range "
+                f"of the grid: filter_range {np.min(wavelengths)}, "
+                f"{np.max(wavelengths)}, "
+                f"grid_range {(grid.lam[0], grid.lam[-1])}"
+            )
+
+        # Remove wavelengths and spectra outside the filter range
+        grid.lam = grid.lam[lam_mask]
+        for spectra_id in grid.available_spectra_emissions:
+            grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
+
+        # Remove lines outside the new wavelength range this will leave lines
+        # that don't lie within non-zero transmission regions of the filters
+        # but we can at least get rid of ones fully outside the range.
+        if grid.lines_available:
+            grid._remove_lines_outside_lam()
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
+
+    def reduce_observed_filters(self, filters, redshift, inplace=False):
+        """Limit the wavelength range of the grid to the range of filters.
+
+        Args:
+            filters (FilterCollection):
+                A list of Filter objects to use for determining the
+                wavelength range to limit the grid to.
+            redshift (float):
+                The redshift to use for converting the observed wavelengths
+                to rest frame.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with the reduced
+                wavelength range. If inplace=True, returns None and modifies
+                the current grid.
+        """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
+        # Unpack the transmission and wavelengths of the filters so we can
+        # resample onto the grid wavelength array
+        transmissions = [f.transmission for f in filters]
+        wavelengths = filters.lam
+
+        # Convert filter wavelengths to rest frame
+        rest_wavelengths = wavelengths / (1 + redshift)
+
+        # Resample the filter transmissions onto the grid wavelength array
+        transmissions_resampled = [
+            spectres(
+                grid.lam.value,
+                rest_wavelengths.value,
+                t,
+                fill=0.0,
+                verbose=False,
+            )
+            for t in transmissions
+        ]
+
+        # Find all non-zero transmission wavelengths in the filters
+        lam_mask = np.zeros(grid.lam.shape, dtype=bool)
+        for t in transmissions_resampled:
+            lam_mask |= t > 0.0
+
+        # If no filters overlap the grid wavelength range, raise an error
+        if not np.any(lam_mask):
+            raise exceptions.InconsistentArguments(
+                "None of the provided filters overlap the wavelength range "
+                f"of the grid: filter_range {np.min(wavelengths)}, "
+                f"{np.max(wavelengths)}, "
+                f"grid_range {(grid.lam[0], grid.lam[-1])}"
+            )
+
+        # Remove wavelengths and spectra outside the filter range
+        grid.lam = grid.lam[lam_mask]
+        for spectra_id in grid.available_spectra_emissions:
+            grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
+
+        # Remove lines outside the new wavelength range this will leave lines
+        # that don't lie within non-zero transmission regions of the filters
+        # but we can at least get rid of ones fully outside the range.
+        if grid.lines_available:
+            grid._remove_lines_outside_lam()
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
+
+    @accepts(lam=angstrom)
+    def reduce_rest_frame_lam(self, lam, inplace=False):
+        """Limit the wavelength range of the grid to the range of a new lam.
+
+        Args:
+            lam (unyt_array):
+                The rest frame wavelength array to resample the grid to.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with the reduced
+                wavelength range. If inplace=True, returns None and modifies
+                the current grid.
+        """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
+        grid.interp_spectra(lam)
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
+
+    @accepts(lam=angstrom)
+    def reduce_observed_lam(self, lam, redshift, inplace=False):
+        """Limit the wavelength range of the grid to the range of a new lam.
+
+        Args:
+            lam (unyt_array):
+                The observer wavelength array to resample the grid to.
+            redshift (float):
+                The redshift to use for converting the observed wavelengths
+                to rest frame.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with the reduced
+                wavelength range. If inplace=True, returns None and modifies
+                the current grid.
+        """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
+        # Convert to rest frame
+        rest_lam = lam / (1 + redshift)
+
+        grid.interp_spectra(rest_lam)
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
+
+    def _where_axis(self, axis_name):
+        """Return the dimension index of a given axis name."""
+        # Which axis is this? Handle the various cases
+        ind = 0
+        while ind < len(self.axes):
+            if self.axes[ind] == axis_name:
+                break
+            elif self.axes[ind] == pluralize(axis_name):
+                break
+            elif self.axes[ind] == depluralize(axis_name):
+                break
+            elif self.axes[ind] == f"log10{axis_name}":
+                break
+            elif self.axes[ind] == f"log10{pluralize(axis_name)}":
+                break
+            elif self.axes[ind] == f"log10{depluralize(axis_name)}":
+                break
+            elif self._extract_axes[ind] == axis_name:
+                break
+            elif self._extract_axes[ind] == pluralize(axis_name):
+                break
+            elif self._extract_axes[ind] == depluralize(axis_name):
+                break
+            elif self._extract_axes[ind] == f"log10{axis_name}":
+                break
+            elif self._extract_axes[ind] == f"log10{pluralize(axis_name)}":
+                break
+            elif self._extract_axes[ind] == f"log10{depluralize(axis_name)}":
+                break
+            ind += 1
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Axis {axis_name} not found in grid. Available axes: "
+                f"{self.axes} or {self._extract_axes}"
+            )
+        return ind
+
+    def _have_axis(self, axis_name):
+        """Check if the grid has a given axis name."""
+        try:
+            self._where_axis(axis_name)
+            return True
+        except exceptions.InconsistentArguments:
+            return False
+
+    def reduce_axis(self, axis_low, axis_high, axis_name, inplace=False):
+        """Limit a grid axis to a specified range.
+
+        Args:
+            axis_low (unyt_quantity):
+                The lower limit of the axis to limit the grid to.
+            axis_high (unyt_quantity):
+                The upper limit of the axis to limit the grid to.
+            axis_name (str):
+                The name of the axis to limit.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with the reduced
+                axis. If inplace=True, returns None and modifies the current
+                grid.
+        """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
+        # Get the current axis values (and ensure the axis exists)
+        axis_values = getattr(grid, axis_name, None)
+        if axis_values is None:
+            raise exceptions.InconsistentArguments(
+                f"Axis {axis_name} not found in grid. Available axes: "
+                f"{grid.axes}"
+            )
+
+        # Check the limits are valid
+        if axis_low >= axis_high:
+            raise exceptions.InconsistentArguments(
+                "axis_low must be less than axis_high"
+            )
+        if axis_low < np.min(axis_values) or axis_high > np.max(axis_values):
+            raise exceptions.InconsistentArguments(
+                f"axis_low ({axis_low}) and axis_high ({axis_high}) must be "
+                "within the range of the "
+                f"axis {axis_name}: ({np.min(axis_values)}, "
+                f"{np.max(axis_values)})"
+            )
+
+        # Find the indices of the axis limits
+        low_index = grid.get_nearest_index(axis_low, axis_values)
+        high_index = grid.get_nearest_index(axis_high, axis_values) + 1
+
+        # Which axis is this? Note that this uses self.axes and
+        # self._extract_axes to get the correct index not grid but since
+        # grid.axis and grid._extract_axes are copies of self.axes and
+        # self._extract_axes this is fine.
+        axis_index = grid._where_axis(axis_name)
+
+        # Now we know the index get the keys without an naming nonsense
+        _axis_name = grid.axes[axis_index]
+        _extract_axis_name = grid._extract_axes[axis_index]
+
+        # Limit the axis values
+        setattr(
+            grid,
+            _axis_name,
+            axis_values[low_index:high_index],
+        )
+        grid._axes_values[_axis_name] = getattr(grid, _axis_name)
+        grid._extract_axes_values[_extract_axis_name] = (
+            grid._extract_axes_values[_extract_axis_name][low_index:high_index]
+        )
+
+        # Limit all the spectra arrays
+        for spectra_id in grid.available_spectra_emissions:
+            grid.spectra[spectra_id] = np.take(
+                grid.spectra[spectra_id],
+                indices=range(low_index, high_index),
+                axis=axis_index,
+            )
+
+        # Limit all the line luminosity and continuum arrays
+        for spectra_id in grid.available_line_emissions:
+            grid.line_lums[spectra_id] = np.take(
+                grid.line_lums[spectra_id],
+                indices=range(low_index, high_index),
+                axis=axis_index,
+            )
+            grid.line_conts[spectra_id] = np.take(
+                grid.line_conts[spectra_id],
+                indices=range(low_index, high_index),
+                axis=axis_index,
+            )
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
+
     @staticmethod
     def get_nearest_index(value, array):
         """Calculate the closest index in an array for a given value.
 
-        TODO: What is this doing here!?
+        TODO: What is this doing here!? [circa 2023]
+        Found this years later and its still here [Will 2025-10-15]
+        This should be a standalone function somewhere.
 
         Args:
             value (float/unyt_quantity):
@@ -1007,9 +1585,9 @@ class Grid:
                 The function to use for marginalizing over the axis.
         """
         # Get the index of the axis to collapse
-        axis_index = self.axes.index(axis)
+        axis_index = self._where_axis(axis)
 
-        for spectra_id in self.available_spectra:
+        for spectra_id in self.available_spectra_emissions:
             # Marginalize over the entire axis
             self.spectra[spectra_id] = marginalize_function(
                 self.spectra[spectra_id], axis=axis_index
@@ -1035,7 +1613,7 @@ class Grid:
                 A function to apply to the axis values before interpolation.
         """
         # Get the index of the axis to collapse
-        axis_index = self.axes.index(axis)
+        axis_index = self._where_axis(axis)
         axis_values = getattr(self, axis)
 
         # Check the value is provided
@@ -1061,7 +1639,7 @@ class Grid:
         # Adopt pre-interpolation function if provided
         pre_interp_function = pre_interp_function or (lambda x: x)
 
-        for spectra_id in self.available_spectra:
+        for spectra_id in self.available_spectra_emissions:
             # Interpolate the spectra
             i0 = np.argmax(axis_values[axis_values <= value])
             i1 = i0 + 1
@@ -1127,7 +1705,7 @@ class Grid:
                 The value to collapse the grid at.
         """
         # Get the index of the axis to collapse
-        axis_index = self.axes.index(axis)
+        axis_index = self._where_axis(axis)
         axis_values = getattr(self, axis)
 
         # Check the value is provided
@@ -1142,7 +1720,7 @@ class Grid:
                 f"Value {value} is outside the bounds of the axis {axis}."
             )
 
-        for spectra_id in self.available_spectra:
+        for spectra_id in self.available_spectra_emissions:
             # Extract the nearest value in the axis
             self.spectra[spectra_id] = np.take(
                 self.spectra[spectra_id],
@@ -1169,8 +1747,9 @@ class Grid:
         value=None,
         marginalize_function=np.average,
         pre_interp_function=None,
+        inplace=False,
     ):
-        """Collapse the grid in place along a specified axis.
+        """Collapse the grid along a specified axis.
 
         Reduces the dimensionality of the grid by collapsing along the
         specified axis, using the specified method. The method can be
@@ -1195,13 +1774,24 @@ class Grid:
                 A function to apply to the axis values before interpolation.
                 Can be used to interpolate in logarithmic space, for example.
                 Defaults to None, i.e., interpolation in linear space.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                modified grid. Defaults to False.
 
         Returns:
-            None
-                Collapses the grid in-place over the specified axis.
+            Grid/None:
+                If inplace=False, returns a new Grid object with the collapsed
+                axis. If inplace=True, returns None and modifies the current
+                grid.
         """
+        # Decide which grid to work on
+        if inplace:
+            grid = self
+        else:
+            grid = copy.deepcopy(self)
+
         # Check the axis is valid
-        if axis not in self.axes:
+        if not self._have_axis(axis):
             raise exceptions.InconsistentParameter(
                 f"Axis {axis} is not a valid axis on the grid."
             )
@@ -1215,21 +1805,42 @@ class Grid:
         # Collapse the spectra based on the method
         if method == "marginalize":
             # Marginalize over the entire axis
-            self._collapse_grid_marginalize(axis, marginalize_function)
+            grid._collapse_grid_marginalize(axis, marginalize_function)
 
         elif method == "interpolate":
             # Interpolate the grid at the given value
-            self._collapse_grid_interpolate(axis, value, pre_interp_function)
+            grid._collapse_grid_interpolate(axis, value, pre_interp_function)
 
         elif method == "nearest":
             # Extract the nearest value in the axis
-            self._collapse_grid_nearest(axis, value)
+            grid._collapse_grid_nearest(axis, value)
 
         # Update the grid metadata
-        self.axes.pop(self.axes.index(axis))
-        self._axes_values.pop(axis)
-        self._axes_units.pop(axis)
-        self.naxes -= 1
+        axis_index = self._where_axis(axis)
+        axis_name = grid.axes[axis_index]
+        extract_axis_name = grid._extract_axes[axis_index]
+        grid.axes.pop(axis_index)
+        grid._axes_values.pop(axis_name)
+        grid._axes_units.pop(axis_name)
+        grid._extract_axes.pop(axis_index)
+        grid._extract_axes_values.pop(extract_axis_name)
+        if hasattr(grid, axis_name):
+            delattr(grid, axis_name)
+        if hasattr(grid, pluralize(axis_name)):
+            delattr(grid, pluralize(axis_name))
+        if hasattr(grid, depluralize(axis_name)):
+            delattr(grid, depluralize(axis_name))
+        if hasattr(grid, f"log10{axis_name}"):
+            delattr(grid, f"log10{axis_name}")
+        if hasattr(grid, f"log10{pluralize(axis_name)}"):
+            delattr(grid, f"log10{pluralize(axis_name)}")
+        if hasattr(grid, f"log10{depluralize(axis_name)}"):
+            delattr(grid, f"log10{depluralize(axis_name)}")
+        grid.naxes -= 1
+
+        # Return the grid if not inplace
+        if not inplace:
+            return grid
 
     def get_sed_at_grid_point(self, grid_point, spectra_type="incident"):
         """Create an Sed object for a specific grid point.
@@ -1608,32 +2219,6 @@ class Grid:
         }
 
         return flattened_axes_values
-
-    @accepts(min_lam=angstrom, max_lam=angstrom)
-    def truncate_grid_lam(self, min_lam, max_lam):
-        """Truncate the grid to a specific wavelength range.
-
-        If out of range wavlengths are requested, the grid will be
-        truncated to the nearest wavelength within the grid.
-
-        Args:
-            min_lam (unyt_quantity):
-                The minimum wavelength to truncate the grid to.
-
-            max_lam (unyt_quantity):
-                The maximum wavelength to truncate the grid to.
-        """
-        # Get the indices of the wavelengths to keep
-        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
-
-        # Apply the mask to the grid wavelengths
-        self.lam = self.lam[okinds]
-
-        # Apply the mask to the spectra
-        for spectra_type in self.available_spectra:
-            self.spectra[spectra_type] = np.ascontiguousarray(
-                self.spectra[spectra_type][..., okinds]
-            )
 
     def animate_grid(
         self,

@@ -37,6 +37,7 @@ def los_surface_density_strong_scaling(
     ngas,
     average_over,
     low_thresh,
+    paper_style,
 ):
     """Profile the cpu time usage of the LOS surface density calculation."""
     # Define the grid
@@ -140,6 +141,7 @@ def los_surface_density_strong_scaling(
         },
         total_msg="Calculating LOS surface density",
         low_thresh=low_thresh,
+        paper_style=paper_style,
     )
 
 
@@ -198,6 +200,13 @@ if __name__ == "__main__":
         "be included in the scaling test plot.",
     )
 
+    args.add_argument(
+        "--paper_style",
+        action="store_true",
+        help="Use the paper style for the plot (legend below the plot and "
+        "smaller proportions).",
+    )
+
     args = args.parse_args()
 
     los_surface_density_strong_scaling(
@@ -208,4 +217,5 @@ if __name__ == "__main__":
         args.ngas,
         args.average_over,
         args.low_thresh,
+        args.paper_style,
     )

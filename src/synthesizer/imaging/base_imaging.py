@@ -12,7 +12,7 @@ properties and methods.
 from abc import ABC, abstractmethod
 
 import numpy as np
-from unyt import arcsecond, kpc, unyt_array, unyt_quantity
+from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
@@ -63,7 +63,7 @@ class ImagingBase(ABC):
     cart_fov = Quantity("spatial")
     ang_fov = Quantity("angle")
 
-    @accepts(resolution=(kpc, arcsecond), fov=(kpc, arcsecond))
+    @accepts(resolution=(kpc, arcsecond), fov=(kpc, degree))
     def __init__(
         self,
         resolution,
@@ -81,6 +81,15 @@ class ImagingBase(ABC):
                 The width of the image. If a single value is given then the
                 image is assumed to be square.
         """
+        # Ensure that the resolution and fov are compatible (i.e. both
+        # are angular or both are Cartesian)
+        if not unit_is_compatible(resolution, fov.units):
+            raise exceptions.InconsistentArguments(
+                "The resolution and FOV must be in compatible units. "
+                f"Found resolution={resolution.units}, "
+                f"and fov={fov.units}."
+            )
+
         # Ensure the fov has an entry for each axis if it doesn't already
         # (e.g. if it is a single value)
         if fov.size == 1:
@@ -101,15 +110,6 @@ class ImagingBase(ABC):
             self.cart_fov = None
             self.ang_fov = fov
 
-        # Ensure that the resolution and fov are compatible (i.e. both
-        # are angular or both are Cartesian)
-        if not unit_is_compatible(self.resolution, self.fov.units):
-            raise exceptions.InconsistentArguments(
-                "The resolution and FOV must be in compatible units. "
-                f"Found resolution={self.resolution.units}, "
-                f"and fov={self.fov.units}."
-            )
-
         # Compute the number of pixels in the FOV
         self._compute_npix()
 
@@ -126,7 +126,9 @@ class ImagingBase(ABC):
                 resolution and new npix. Defaults to True.
         """
         # Compute how many pixels fall in the FOV
-        self.npix = np.int32(self.fov / self.resolution)
+        self.npix = np.round(self.fov / self.resolution + 1e-10).astype(
+            np.int32
+        )
 
         # Ensure that the npix is an array of 2 values
         if self.npix.size == 1:

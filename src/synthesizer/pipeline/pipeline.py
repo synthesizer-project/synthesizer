@@ -439,7 +439,7 @@ class Pipeline:
             [
                 m
                 for m in self.emission_model._models.values()
-                if m._is_generating or m._is_dust_emitting
+                if m._is_generating
             ]
         )
         self._print(
@@ -1210,7 +1210,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
 
-    def get_sfzh(self, log10ages, log10metallicities):
+    def get_sfzh(self, log10ages, metallicities):
         """Flag that the Pipeline should compute the SFZH grid.
 
         This will signal the Pipeline to compute the SFZH grid when the run
@@ -1221,13 +1221,13 @@ class Pipeline:
         Args:
             log10ages (array-like):
                 The log10 age axis of the SFZH grid.
-            log10metallicities (array-like):
-                The log10 metallicity axis of the SFZH grid.
+            metallicities (array-like):
+                The metallicity axis of the SFZH grid.
         """
         # Store the arguments for the operation
         self._operation_kwargs["get_sfzh"] = {
             "log10ages": log10ages,
-            "log10metallicities": log10metallicities,
+            "metallicities": metallicities,
         }
 
         # Flag that we will compute the SFZH grid
@@ -1257,8 +1257,8 @@ class Pipeline:
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=self._operation_kwargs["get_sfzh"]["log10ages"],
-                log10metallicities=self._operation_kwargs["get_sfzh"][
-                    "log10metallicities"
+                metallicities=self._operation_kwargs["get_sfzh"][
+                    "metallicities"
                 ],
                 nthreads=self.nthreads,
             )
@@ -1269,9 +1269,7 @@ class Pipeline:
                     (
                         len(self._operation_kwargs["get_sfzh"]["log10ages"]),
                         len(
-                            self._operation_kwargs["get_sfzh"][
-                                "log10metallicities"
-                            ]
+                            self._operation_kwargs["get_sfzh"]["metallicities"]
                         ),
                     )
                 )
@@ -3550,12 +3548,12 @@ class Pipeline:
         self._say_goodbye()
 
     def combine_files(self):
-        """Combine inidividual rank files into a single file.
+        """Combine individual rank files into a single file.
 
         Only applicable to MPI runs.
 
         This will create a physical file on disk with all the data copied from
-        the inidivdual rank files. The rank files themselves will be deleted.
+        the individual rank files. The rank files themselves will be deleted.
         Once all data has been copied.
 
         This method is cleaner but has the potential to be very slow.
@@ -3584,7 +3582,7 @@ class Pipeline:
         self._took(start, "Combining files")
 
     def combine_files_virtual(self):
-        """Combine inidividual rank files into a single virtual file.
+        """Combine individual rank files into a single virtual file.
 
         Only applicable to MPI runs.
 

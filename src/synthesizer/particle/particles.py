@@ -12,8 +12,8 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, pc, rad, s
 
 from synthesizer import exceptions
-from synthesizer.particle.utils import rotate
-from synthesizer.synth_warnings import deprecation
+from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
@@ -237,12 +237,13 @@ class Particles:
 
         # If we don't have the LOS distances then we need to calculate them
         if los_dists is None:
-            # Get the luminosity distance
-            lum_dist = self.get_luminosity_distance(cosmo)
+            # Get the angular diameter distance
+            ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-            # Combine the luminosity distance with the line of sight distance
+            # Combine the angular diameter distance with the line of sight
+            # distance
             # (along the z-axis)
-            los_dists = lum_dist + cent_coords[:, 2]
+            los_dists = ang_diam_dist + cent_coords[:, 2]
 
             # If we are at redshift 0.0 then we need to shift things to
             # put the closest particle at 10 pc
@@ -315,12 +316,13 @@ class Particles:
 
         # If we don't have the LOS distances then we need to calculate them
         if los_dists is None:
-            # Get the luminosity distance
-            lum_dist = self.get_luminosity_distance(cosmo)
+            # Get the angular diameter distance
+            ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-            # Combine the luminosity distance with the line of sight distance
+            # Combine the angular diameter distance with the line of sight
+            # distance
             # (along the z-axis)
-            los_dists = lum_dist + cent_coords[:, 2]
+            los_dists = ang_diam_dist + cent_coords[:, 2]
 
             # If we are at redshift 0.0 then we need to shift things to
             # put the closest particle at 10 pc
@@ -375,12 +377,12 @@ class Particles:
         # Get the centered coordinates
         cent_coords = self.centered_coordinates
 
-        # Get the luminosity distance
-        lum_dist = self.get_luminosity_distance(cosmo)
+        # Get the angular diameter distance
+        ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-        # Combine the luminosity distance with the line of sight distance
+        # Combine the angular diameter distance with the line of sight distance
         # (along the z-axis)
-        los_dists = lum_dist + cent_coords[:, 2]
+        los_dists = ang_diam_dist + cent_coords[:, 2]
 
         # If we are at redshift 0.0 then we need to shift things to
         # put the closest particle at 10 pc
@@ -565,6 +567,17 @@ class Particles:
 
         self.center = com
 
+    def calculate_smoothing_lengths(self, **kwargs):
+        """Calculate smoothing lengths of particles and assign.
+
+        Calls utility function directly, see
+        `synthesizer.particle.utils.calculate_smoothing_lengths`
+        for a full list of accepted arguments.
+        """
+        self.smoothing_lengths = calculate_smoothing_lengths(
+            coordinates=self.coordinates, **kwargs
+        )
+
     def get_radii(self):
         """Calculate the radii of the particles.
 
@@ -615,21 +628,27 @@ class Particles:
             radius (float):
                 The radius of the particle distribution.
         """
-        # Handle special cases
-        if frac == 0:
-            return 0 * self.radii.units
-        elif frac == 1:
-            return np.max(self.radii.value) * self.radii.units
-        elif self.nparticles == 0:
-            return 0 * self.radii.units
-        elif self.nparticles == 1:
-            return self.radii[0].value * frac * self.radii.units
-        elif np.sum(weights) == 0:
-            return 0 * self.radii.units
+        # If we have no particles then return 0 with a warning
+        if self.nparticles == 0:
+            warn(
+                f"Trying to calculate radius for {self.__class__.__name__}"
+                " with no particles. Returning 0."
+            )
+            return 0 * self.coordinates.units
 
         # Get the radii if not already set
         if self.radii is None:
             self.get_radii()
+
+        # Handle special cases
+        if frac == 0:
+            return 0 * self.radii.units
+        elif frac == 1:
+            return np.max(self.radii.value) * self.coordinates.units
+        elif self.nparticles == 1:
+            return self.radii[0].value * frac * self.coordinates.units
+        elif np.sum(weights) == 0:
+            return 0 * self.coordinates.units
 
         # Strip units off the weights if they have them
         if hasattr(weights, "units"):
