@@ -634,7 +634,7 @@ def _raise_or_convert(expected_unit, name, value):
             # Are we missing units on the passed argument?
             if not has_units(v):
                 raise exceptions.MissingUnits(
-                    f"{name} is missing units! Expected"
+                    f"{name} is missing units! Expected "
                     f"to be in {expected_unit} "
                     "(or equivalent)."
                 )

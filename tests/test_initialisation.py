@@ -13,10 +13,8 @@ from synthesizer.data.initialise import (
     SynthesizerInitializer,
     base_dir_exists,
     data_dir_exists,
-    database_dir_exists,
     get_base_dir,
     get_data_dir,
-    get_database_dir,
     get_grids_dir,
     get_instrument_dir,
     get_test_data_dir,
@@ -73,12 +71,6 @@ class TestEnvAndPaths:
         )
         base = get_base_dir()
 
-        # database always under <base>/data/database
-        assert get_database_dir() == base / "data" / "database", (
-            f"Database dir should be under {base}/data/database not "
-            f"{get_database_dir()}"
-        )
-
         # data dir
         assert get_data_dir() == base / "data", (
             "Default data dir should be base/data"
@@ -133,9 +125,6 @@ class TestEnvAndPaths:
         monkeypatch.setattr(
             init_mod, "get_instrument_dir", lambda: tmp_path / "inst"
         )
-        monkeypatch.setattr(
-            init_mod, "get_database_dir", lambda: tmp_path / "db"
-        )
 
         # Import here to avoid the testdata directory exists function from
         # being treated a test
@@ -149,16 +138,14 @@ class TestEnvAndPaths:
         assert not grids_dir_exists()
         assert not testdata_dir_exists()
         assert not instrument_cache_exists()
-        assert not database_dir_exists()
         # create them
-        for d in ("base", "data", "grids", "test", "inst", "db"):
+        for d in ("base", "data", "grids", "test", "inst"):
             (tmp_path / d).mkdir()
         assert base_dir_exists()
         assert data_dir_exists()
         assert grids_dir_exists()
         assert testdata_dir_exists()
         assert instrument_cache_exists()
-        assert database_dir_exists()
 
 
 class DummyResource(BytesIO):
@@ -274,7 +261,6 @@ class TestInitializerMethods:
             ("grids_dir", "grids"),
             ("instrument_cache_dir", "instrument_cache"),
             ("test_data_dir", "test_data"),
-            ("database_dir", "database"),
         ]:
             path = getattr(init, attr)
             assert path.exists()
@@ -283,9 +269,6 @@ class TestInitializerMethods:
         # verify files copied
         assert (init.base_dir / "default_units.yml").exists()
         assert init.status["units_file"] in {"created", "exists"}
-
-        assert (init.database_dir / "downloader_database.yml").exists()
-        assert init.status["ids_file"] in {"created", "exists"}
 
     def test_report_prints(self, capsys, monkeypatch):
         """Test report() prints status messages."""
@@ -301,7 +284,6 @@ class TestInitializerMethods:
             "grids_dir",
             "test_data_dir",
             "instrument_cache_dir",
-            "database_dir",
         ):
             p = getattr(init, attr)
             p.mkdir(parents=True, exist_ok=True)
@@ -338,10 +320,8 @@ class TestTopLevelFlows:
         (base / "grids").mkdir()
         (base / "data" / "test").mkdir(parents=True)
         (base / "inst").mkdir()
-        (base / "data" / "database").mkdir(parents=True)
-        # default_units.yml and ids file
+        # default_units.yml
         (base / "default_units.yml").write_text("")
-        (base / "data" / "database" / "downloader_database.yml").write_text("")
         # should return immediately and not error
         synth_initialise()
 
@@ -395,11 +375,10 @@ class TestTopLevelFlows:
         grids = Path(os.environ["SYNTHESIZER_GRID_DIR"])
         inst = Path(os.environ["SYNTHESIZER_INSTRUMENT_CACHE"])
         testd = Path(os.environ["SYNTHESIZER_TEST_DATA_DIR"])
-        db = data / "database"
-        for p in (base, data, grids, inst, testd, db):
+        for p in (base, data, grids, inst, testd):
             p.mkdir(parents=True, exist_ok=True)
             (p / "f.txt").write_text("x")
         synth_clear_data()
         # none should exist anymore
-        for p in (base, data, grids, inst, testd, db):
+        for p in (base, data, grids, inst, testd):
             assert not p.exists()

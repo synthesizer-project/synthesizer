@@ -23,13 +23,15 @@ from synthesizer.emission_models import (
     BimodalPacmanEmission,
     IncidentEmission,
     IntrinsicEmission,
+    NebularContinuumEmission,
     NebularEmission,
+    NebularLineEmission,
     PacmanEmission,
     ReprocessedEmission,
     TemplateEmission,
     TransmittedEmission,
 )
-from synthesizer.emission_models.attenuation import Inoue14, Madau96
+from synthesizer.emission_models.attenuation import Asada25, Inoue14, Madau96
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid, Template
@@ -40,6 +42,126 @@ from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.pipeline import Pipeline
+
+# ============================= DUST GENERATORS ===============================
+
+
+@pytest.fixture
+def dust_wavelengths():
+    """Return a standard wavelength grid for dust emission testing."""
+    return np.logspace(3, 6, 100) * angstrom
+
+
+@pytest.fixture
+def dust_temperatures():
+    """Return a range of dust temperatures for testing."""
+    return np.array([10, 20, 50, 100]) * unyt_array([1, 1, 1, 1], "K")
+
+
+@pytest.fixture
+def mock_dust_grid():
+    """Return a mock dust grid for testing DraineLi07."""
+
+    class MockDustGrid:
+        def __init__(self):
+            # Grid parameters that DL07 expects
+            self.qpah = np.array([0.01, 0.025, 0.05, 0.1])
+            self.umin = np.array([0.5, 1.0, 2.0, 5.0])
+            self.alpha = np.array([1.5, 2.0, 2.5])
+
+            # Mock spectra data - create realistic dimensionality
+            n_lam = 100
+            n_qpah = len(self.qpah)
+            n_umin = len(self.umin)
+            n_alpha = len(self.alpha)
+
+            # Mock diffuse component (indexed by qpah, umin)
+            diffuse_data = {}
+            for i in range(n_qpah):
+                for j in range(n_umin):
+                    qpah_mask = np.zeros(n_qpah, dtype=bool)
+                    umin_mask = np.zeros(n_umin, dtype=bool)
+                    qpah_mask[i] = True
+                    umin_mask[j] = True
+                    key = (tuple(qpah_mask), tuple(umin_mask))
+                    # Create mock spectrum with some temperature dependence
+                    spec = np.exp(-np.linspace(0, 5, n_lam)) * 1e30
+                    diffuse_data[key] = [spec]
+
+            # Mock PDR component (indexed by qpah, umin, alpha)
+            pdr_data = {}
+            for i in range(n_qpah):
+                for j in range(n_umin):
+                    for k in range(n_alpha):
+                        qpah_mask = np.zeros(n_qpah, dtype=bool)
+                        umin_mask = np.zeros(n_umin, dtype=bool)
+                        alpha_mask = np.zeros(n_alpha, dtype=bool)
+                        qpah_mask[i] = True
+                        umin_mask[j] = True
+                        alpha_mask[k] = True
+                        key = (
+                            tuple(qpah_mask),
+                            tuple(umin_mask),
+                            tuple(alpha_mask),
+                        )
+                        # Create mock spectrum
+                        spec = np.exp(-np.linspace(1, 3, n_lam)) * 5e29
+                        pdr_data[key] = [spec]
+
+            self.spectra = {"diffuse": diffuse_data, "pdr": pdr_data}
+
+        def interp_spectra(self, new_lam):
+            """Mock interpolation - just ensure method exists."""
+            pass
+
+    return MockDustGrid()
+
+
+@pytest.fixture
+def mock_emitter():
+    """Return a mock emitter for testing dust generators."""
+
+    class MockEmitter:
+        def __init__(self):
+            self.redshift = 0.0
+            self.dust_mass = 1e6 * Msun
+            self.dust_to_gas = 0.01
+            self.hydrogen_mass = 0.74 * self.dust_mass / self.dust_to_gas
+
+    return MockEmitter()
+
+
+@pytest.fixture
+def mock_emission_model():
+    """Return a mock emission model for testing dust generators."""
+
+    class MockEmissionModel:
+        def __init__(self):
+            self.per_particle = False
+            self.fixed_parameters = {}
+
+    return MockEmissionModel()
+
+
+@pytest.fixture
+def mock_intrinsic_sed():
+    """Return a mock intrinsic SED for energy balance testing."""
+    lam = np.logspace(3, 6, 100) * angstrom
+    # Simple power law spectrum
+    lnu = 1e30 * (lam / (1000 * angstrom)) ** (-1.5) * erg / s / Hz
+    sed = Sed(lam=lam, lnu=lnu)
+    return sed
+
+
+@pytest.fixture
+def mock_attenuated_sed():
+    """Return a mock attenuated SED for energy balance testing."""
+    lam = np.logspace(3, 6, 100) * angstrom
+    # Attenuated version - reduced by factor of 2
+    lnu = 5e29 * (lam / (1000 * angstrom)) ** (-1.5) * erg / s / Hz
+    sed = Sed(lam=lam, lnu=lnu)
+    return sed
+
 
 # ================================== GRID =====================================
 
@@ -80,7 +202,17 @@ def lam():
 def nebular_emission_model(test_grid):
     """Return a NebularEmission object."""
     # First need a grid to pass to the NebularEmission object
-    return NebularEmission(grid=test_grid)
+    nebular_line = NebularLineEmission(
+        grid=test_grid,
+    )
+    nebular_continuum = NebularContinuumEmission(
+        grid=test_grid,
+    )
+    return NebularEmission(
+        grid=test_grid,
+        nebular_line=nebular_line,
+        nebular_continuum=nebular_continuum,
+    )
 
 
 @pytest.fixture
@@ -91,17 +223,28 @@ def incident_emission_model(test_grid):
 
 
 @pytest.fixture
-def transmitted_emission_model(test_grid):
+def transmitted_emission_model(test_grid, incident_emission_model):
     """Return a TransmittedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    return TransmittedEmission(grid=test_grid)
+    return TransmittedEmission(
+        grid=test_grid,
+        incident=incident_emission_model,
+    )
 
 
 @pytest.fixture
-def reprocessed_emission_model(test_grid):
+def reprocessed_emission_model(
+    test_grid,
+    nebular_emission_model,
+    transmitted_emission_model,
+):
     """Return a ReprocessedEmission object."""
     # First need a grid to pass to the IncidentEmission object
-    return ReprocessedEmission(grid=test_grid)
+    return ReprocessedEmission(
+        grid=test_grid,
+        nebular=nebular_emission_model,
+        transmitted=transmitted_emission_model,
+    )
 
 
 @pytest.fixture
@@ -130,7 +273,7 @@ def bimodal_pacman_emission_model(test_grid):
 @pytest.fixture
 def template_emission_model_bh(test_template):
     """Return a TemplateEmission object."""
-    return TemplateEmission(test_template, "blackhole")
+    return TemplateEmission(test_template, emitter="blackhole")
 
 
 # ================================= IGMS ======================================
@@ -146,6 +289,12 @@ def i14():
 def m96():
     """Return a Madau96 IGM object."""
     return Madau96()
+
+
+@pytest.fixture
+def a24():
+    """Return an Asada25 IGM object."""
+    return Asada25()
 
 
 # ================================= STARS =====================================
@@ -226,7 +375,7 @@ def unit_emission_stars():
 def random_part_stars():
     """Return a particle Stars object with velocities."""
     # Randomly generate the attribute we'll need for the stars
-    nstars = np.random.randint(5, 10)
+    nstars = np.random.randint(10, 100)
     initial_masses = np.random.uniform(0.1, 10, nstars) * 1e6 * Msun
     ages = np.random.uniform(4, 7, nstars) * Myr
     metallicities = np.random.uniform(0.01, 0.1, nstars)
@@ -234,8 +383,8 @@ def random_part_stars():
     tau_v = np.random.uniform(0.1, 0.9, nstars)
     coordinates = (
         np.random.normal(
-            0.1,
-            np.random.rand(1) * 100,
+            0.0,
+            np.random.rand(1) * 0.01,
             (nstars, 3),
         )
         * Mpc
@@ -249,7 +398,7 @@ def random_part_stars():
         * km
         / s
     )
-    smls = np.random.uniform(0.1, 1, nstars) * Mpc
+    smls = np.random.uniform(0.005, 0.001, nstars) * Mpc
 
     return Stars(
         initial_masses=initial_masses,
@@ -639,3 +788,45 @@ def kernel():
     """Return a Kernel object."""
     sph_kernel = Kernel()
     return sph_kernel.get_kernel()
+
+
+# ==================== STARS WITH EXISTING SPECTRA ===========================
+
+
+@pytest.fixture
+def stars_with_fake_spectra(test_grid):
+    """Create a mock Stars object with fake spectra for string label tests."""
+    # Create minimal Stars object
+    initial_masses = np.array([1e6]) * Msun
+    ages = np.array([10]) * Myr
+    metallicities = np.array([0.01])
+
+    stars = Stars(
+        initial_masses=initial_masses,
+        ages=ages,
+        metallicities=metallicities,
+    )
+
+    # Create fake spectra using the test grid wavelengths
+    fake_lnu = np.ones(len(test_grid.lam)) * erg / s / Hz
+
+    # Add fake spectra to the Stars object
+    stars.spectra = {
+        "intrinsic": Sed(test_grid.lam, lnu=fake_lnu * 2.0),
+        "attenuated": Sed(test_grid.lam, lnu=fake_lnu * 1.5),
+        "transmitted": Sed(test_grid.lam, lnu=fake_lnu * 0.8),
+        "nebular": Sed(test_grid.lam, lnu=fake_lnu * 0.3),
+    }
+
+    # Add fake particle spectra for per-particle tests
+    fake_particle_lnu = (
+        np.ones((stars.nstars, len(test_grid.lam))) * erg / s / Hz
+    )
+
+    stars.particle_spectra = {
+        "intrinsic": Sed(test_grid.lam, lnu=fake_particle_lnu * 2.0),
+        "attenuated": Sed(test_grid.lam, lnu=fake_particle_lnu * 1.5),
+        "transmitted": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.8),
+        "nebular": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.3),
+    }
+    return stars

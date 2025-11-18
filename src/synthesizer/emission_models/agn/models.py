@@ -492,11 +492,11 @@ class TorusEmission(BlackHoleEmissionModel):
                 label="disc_incident",
                 **kwargs,
             )
+        torus_emission_model.set_scaler(disc_incident)
         BlackHoleEmissionModel.__init__(
             self,
             label=label,
             generator=torus_emission_model,
-            lum_intrinsic_model=disc_incident,
             scale_by="torus_fraction",
             **kwargs,
         )

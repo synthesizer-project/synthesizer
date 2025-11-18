@@ -26,6 +26,7 @@ from unyt import (
     s,
 )
 
+from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.units import accepts
 
 
@@ -57,7 +58,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
             If units are missing an error is raised.
     """
     # Calculate the luminosity distance (need to convert from astropy to unyt)
-    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
+    lum_dist = get_luminosity_distance(cosmo, redshift).to("cm")
 
     # Calculate the luminosity in interim units
     lum = flux * 4 * np.pi * lum_dist**2
@@ -96,7 +97,7 @@ def fnu_to_lnu(fnu, cosmo, redshift):
             If units are missing an error is raised.
     """
     # Calculate the luminosity distance (need to convert from astropy to unyt)
-    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
+    lum_dist = get_luminosity_distance(cosmo, redshift).to("cm")
 
     # Calculate the luminosity in interim units
     lnu = fnu * 4 * np.pi * lum_dist**2
@@ -135,7 +136,7 @@ def lnu_to_fnu(lnu, cosmo, redshift):
             If units are missing an error is raised.
     """
     # Calculate the luminosity distance (need to convert from astropy to unyt)
-    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
+    lum_dist = get_luminosity_distance(cosmo, redshift).to("cm")
 
     # Calculate the flux in interim units
     fnu = lnu * (1 + redshift) / 4 / np.pi / lum_dist**2

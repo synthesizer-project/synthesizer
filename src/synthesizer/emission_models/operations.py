@@ -21,6 +21,7 @@ from synthesizer.emission_models.extractors.extractor import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
+from synthesizer.imaging import Image, ImageCollection
 from synthesizer.parametric import BlackHole
 
 
@@ -53,10 +54,13 @@ class Extraction:
         self._extract = extract
 
         # Ensure the grid has the right key
-        if extract not in grid.spectra and extract not in grid.lines:
+        if extract not in grid.spectra and extract not in grid.line_lums:
             raise exceptions.MissingSpectraType(
-                f"The Grid does not contain the key '{extract}' "
-                f"(available types are {grid.available_spectra}."
+                f"The Grid does not contain the key '{extract}'."
+                f"Available types for spectra:"
+                f"{grid.available_spectra_emissions}"
+                f"Available types for lines: "
+                f"{grid.available_line_emissions}"
             )
 
         # Should the emission take into account the velocity shift due to
@@ -206,9 +210,14 @@ class Extraction:
         # passed are split into their constituent parts
         passed_line_ids = line_ids
         line_ids = []
-        for lid in passed_line_ids:
-            for ljd in lid.split(","):
-                line_ids.append(ljd.strip())
+
+        # If line_ids is None, use all available lines from the grid
+        if passed_line_ids is None:
+            line_ids = list(this_model.grid.available_lines)
+        else:
+            for lid in passed_line_ids:
+                for ljd in lid.split(","):
+                    line_ids.append(ljd.strip())
 
         # Remove any duplicated lines, will give the user exactly what they
         # asked for, but there's not point doing extra work!
@@ -272,15 +281,22 @@ class Extraction:
         if this_model._lam_mask is not None:
             # Get the indices that would bin the lines into the
             # spectra grid wavelength array
-            line_indices = np.digitize(
+            lam_grid = extractor._grid.lam
+            raw_indices = np.digitize(
                 extractor._line_lams,
-                extractor._grid.lam,
+                lam_grid,
+                right=False,
             )
 
             # Remove any lines which are masked out in the lam_mask
-            for ind in line_indices:
-                if not this_model._lam_mask[ind]:
-                    lam_mask[ind] = False
+            for i, raw in enumerate(raw_indices):
+                # Outside the lam grid -> leave this line as-is (no
+                # lam-based filtering)
+                if raw == 0 or raw == lam_grid.size:
+                    continue
+                grid_ix = raw - 1  # map to 0-based left-bin index
+                if not this_model._lam_mask[grid_ix]:
+                    lam_mask[i] = False
 
         # Get the spectra (note that result is a tuple containing the
         # particle line and the integrated line if per_particle is True,
@@ -349,35 +365,18 @@ class Generation:
         generator (EmissionModel):
             The emission generation model. This must define a get_spectra
             method.
-        lum_intrinsic_model (EmissionModel):
-            The intrinsic model to use deriving the dust
-            luminosity when computing dust emission.
-        lum_attenuated_model (EmissionModel):
-            The attenuated model to use deriving the dust
-            luminosity when computing dust emission.
     """
 
-    def __init__(self, generator, lum_intrinsic_model, lum_attenuated_model):
+    def __init__(self, generator):
         """Initialise the generation model.
 
         Args:
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
-            lum_intrinsic_model (EmissionModel):
-                The intrinsic model to use deriving the dust
-                luminosity when computing dust emission.
-            lum_attenuated_model (EmissionModel):
-                The attenuated model to use deriving the dust
-                luminosity when computing dust emission.
         """
         # Attach the emission generation model
         self._generator = generator
-
-        # Attach the keys for the intrinsic and attenuated spectra to use when
-        # computing the dust luminosity
-        self._lum_intrinsic_model = lum_intrinsic_model
-        self._lum_attenuated_model = lum_attenuated_model
 
     def _generate_spectra(
         self,
@@ -426,46 +425,18 @@ class Generation:
                 )
             return spectra, particle_spectra
 
-        # Handle the dust emission case
-        if this_model._is_dust_emitting:
-            # Get the right spectra
-            if per_particle:
-                intrinsic = particle_spectra[
-                    this_model.lum_intrinsic_model.label
-                ]
-                attenuated = particle_spectra[
-                    this_model.lum_attenuated_model.label
-                ]
-            else:
-                intrinsic = spectra[this_model.lum_intrinsic_model.label]
-                attenuated = spectra[this_model.lum_attenuated_model.label]
-
-            # Apply the dust emission model
-            sed = generator.get_spectra(
-                lam,
-                intrinsic,
-                attenuated,
-            )
-
-        elif this_model.lum_intrinsic_model is not None:
-            # otherwise we are scaling by a single spectra
-            sed = generator.get_spectra(
-                lam,
-                particle_spectra[this_model.lum_intrinsic_model.label]
-                if per_particle
-                else spectra[this_model.lum_intrinsic_model.label],
-            )
-        elif isinstance(generator, Template):
+        # Special handling for templates
+        if isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model
-            sed = generator.get_spectra(
-                emitter.bolometric_luminosity,
-            )
-
+            sed = generator.get_spectra(emitter.bolometric_luminosity)
         else:
-            # Otherwise we have a bog standard generation
-            sed = generator.get_spectra(
+            # Generate the spectra
+            sed = generator._generate_spectra(
                 lam,
+                emitter,
+                this_model,
+                particle_spectra if per_particle else spectra,
             )
 
         # Store the spectra in the right place (integrating if we need to)
@@ -484,6 +455,10 @@ class Generation:
         lines,
         particle_lines,
         emitter,
+        lams,
+        line_ids,
+        spectra,
+        particle_spectra,
     ):
         """Generate the lines for a given model.
 
@@ -501,37 +476,22 @@ class Generation:
                 The dictionary of particle lines.
             emitter (Stars/BlackHoles/Galaxy):
                 The emitter to generate the lines for.
+            lams (unyt_array):
+                The line wavelengths to generate the lines at.
+            line_ids (list):
+                The line ids to generate.
+            spectra (dict):
+                Dictionary of existing spectra from all emitters for scaling.
+            particle_spectra (dict):
+                Dictionary of existing particle spectra from all emitters for
+                scaling.
 
         Returns:
             dict:
                 The dictionary of lines.
         """
+        generator = this_model.generator
         per_particle = this_model.per_particle
-
-        # Do we already have the spectra?
-        if per_particle and this_model.label in emitter.particle_spectra:
-            spectra = emitter.particle_spectra[this_model.label]
-        elif this_model.label in emitter.spectra:
-            spectra = emitter.spectra[this_model.label]
-        else:
-            raise exceptions.MissingSpectraType(
-                "To generate a line using a generator the corresponding "
-                "spectra must be generated first."
-            )
-
-        # Get the  previous line
-        if (
-            per_particle
-            and this_model.lum_intrinsic_model.label in particle_lines
-        ):
-            prev_lines = particle_lines[this_model.lum_intrinsic_model.label]
-        elif this_model.lum_intrinsic_model.label in lines:
-            prev_lines = lines[this_model.lum_intrinsic_model.label]
-        else:
-            prev_lines = None
-
-        # Get the wavelength of each line
-        lams = prev_lines.lam
 
         # If the emitter is empty we can just return zeros. This is only
         # applicable when nparticles exists in the emitter
@@ -541,7 +501,7 @@ class Generation:
             conts = np.zeros((0, len(lams))) * erg / s / Hz
 
             zeroed_lines = LineCollection(
-                line_ids=prev_lines.line_ids,
+                line_ids=line_ids,
                 lam=lams,
                 lum=lums,
                 cont=conts,
@@ -555,13 +515,29 @@ class Generation:
 
             return lines, particle_lines
 
-        # Compute the new line
-        out_lines = LineCollection(
-            line_ids=prev_lines.line_ids,
-            lam=lams,
-            lum=np.zeros_like(prev_lines.luminosity),
-            cont=spectra.get_lnu_at_lam(lams),
-        )
+        # Special handling for templates
+        if isinstance(generator, Template):
+            # If we have a template we need to generate the spectra
+            # for each model
+            spectra = generator.get_spectra(emitter.bolometric_luminosity)
+            out_lines = LineCollection(
+                line_ids=line_ids,
+                lam=lams,
+                lum=np.zeros((emitter.nparticles, len(lams))) * erg / s
+                if per_particle
+                else np.zeros(len(lams)) * erg / s,
+                cont=spectra.get_lnu_at_lam(lams),
+            )
+        else:
+            # Generate the spectra
+            out_lines = generator._generate_lines(
+                line_ids,
+                lams,
+                emitter,
+                this_model,
+                particle_lines if per_particle else lines,
+                particle_spectra if per_particle else spectra,
+            )
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
@@ -580,17 +556,29 @@ class Generation:
         # Populate the list with the summary information
         summary.append("Generation model:")
         summary.append(f"  Emission generation model: {self._generator}")
+
+        # Do we have intrinsic/attenuated/scaler models?
         if (
-            self.lum_intrinsic_model is not None
-            and self.lum_attenuated_model is not None
+            hasattr(self._generator, "_intrinsic")
+            and self._generator._intrinsic is not None
         ):
             summary.append(
-                f"  Dust luminosity: "
-                f"{self._lum_intrinsic_model.label} - "
-                f"{self._lum_attenuated_model.label}"
+                f"  Intrinsic energy balance model: "
+                f"{self.generator._intrinsic.label}"
             )
-        elif self.lum_intrinsic_model is not None:
-            summary.append(f"  Scale by: {self._lum_intrinsic_model.label}")
+        if (
+            hasattr(self._generator, "_attenuated")
+            and self._generator._attenuated is not None
+        ):
+            summary.append(
+                f"  Attenuated energy balance model: "
+                f"{self.generator._attenuated.label}"
+            )
+        if (
+            hasattr(self._generator, "_scaler")
+            and self._generator._scaler is not None
+        ):
+            summary.append(f"  Scaler model: {self.generator._scaler.label}")
 
         return summary
 
@@ -602,15 +590,24 @@ class Generation:
         # Save the generator
         group.attrs["generator"] = str(type(self._generator))
 
-        # Save the dust luminosity models
-        if self._lum_intrinsic_model is not None:
-            group.attrs["lum_intrinsic_model"] = (
-                self._lum_intrinsic_model.label
-            )
-        if self._lum_attenuated_model is not None:
-            group.attrs["lum_attenuated_model"] = (
-                self._lum_attenuated_model.label
-            )
+        # Save the energy balance models if they exist
+        if (
+            hasattr(self._generator, "_intrinsic")
+            and self._generator._intrinsic is not None
+        ):
+            group.attrs["intrinsic_model"] = self.generator._intrinsic.label
+        if (
+            hasattr(self._generator, "_attenuated")
+            and self._generator._attenuated is not None
+        ):
+            group.attrs["attenuated_model"] = self.generator._attenuated.label
+
+        # And the same for the scaler
+        if (
+            hasattr(self._generator, "_scaler")
+            and self._generator._scaler is not None
+        ):
+            group.attrs["scaler_model"] = self.generator._scaler.label
 
 
 class Transformation:
@@ -647,6 +644,15 @@ class Transformation:
         # Attach the model to apply the transformer to
         self._apply_to = apply_to
 
+    @property
+    def _apply_to_label(self):
+        """Return the label of the model to apply the transformation to."""
+        return (
+            self._apply_to
+            if isinstance(self._apply_to, str)
+            else self._apply_to.label
+        )
+
     def _transform_emission(
         self,
         this_model,
@@ -654,6 +660,7 @@ class Transformation:
         particle_emissions,
         emitter,
         this_mask,
+        lam,
     ):
         """Transform an emission.
 
@@ -672,6 +679,8 @@ class Transformation:
                 The emitter to transform the spectra for.
             this_mask (dict):
                 The mask to apply to the spectra.
+            lam (unyt_array):
+                The wavelength grid corresponding to the lam_mask elements.
 
         Returns:
             dict:
@@ -679,17 +688,49 @@ class Transformation:
         """
         # Get the spectra to apply dust to
         if this_model.per_particle:
-            apply_to = particle_emissions[this_model.apply_to.label]
+            apply_to = particle_emissions[this_model._apply_to_label]
         else:
-            apply_to = emissions[this_model.apply_to.label]
+            apply_to = emissions[this_model._apply_to_label]
 
-        # Apply the transform to the spectra
+        # If we have a LineColleciton and a lam_mask, we need to translate
+        # the nlam lam_mask into an nlines lam_mask
+        if (
+            isinstance(apply_to, LineCollection)
+            and this_model._lam_mask is not None
+        ):
+            # Get the line wavelengths
+            line_lams = apply_to.lam
+
+            # Get the indices that would bin the lines into the
+            # spectra grid wavelength array
+            raw_indices = np.digitize(
+                line_lams,
+                lam,
+                right=False,
+            )
+
+            # Translate these indices into a mask
+            lam_mask = np.zeros(apply_to.nlines, dtype=bool)
+            for i, raw in enumerate(raw_indices):
+                # Skip lines outside the grid: raw == 0 (below first edge)
+                # or raw == nlam (at/above last edge)
+                if raw == 0 or raw == lam.size:
+                    continue
+                grid_ix = raw - 1
+                if this_model._lam_mask[grid_ix]:
+                    lam_mask[i] = True
+
+        else:
+            # Otherwise we can just use the lam_mask as is
+            lam_mask = this_model.lam_mask
+
+        # Apply the transform to the emission
         emission = self.transformer._transform(
             apply_to,
             emitter,
             this_model,
             this_mask if this_model.per_particle else None,
-            this_model.lam_mask,
+            lam_mask,
         )
 
         # Store the spectra in the right place (integrating if we need to)
@@ -709,7 +750,7 @@ class Transformation:
         # Populate the list with the summary information
         summary.append("Transformer model:")
         summary.append(f"  Transformer: {type(self.transformer)}")
-        summary.append(f"  Apply to: {self._apply_to.label}")
+        summary.append(f"  Apply to: {self._apply_to_label}")
 
         return summary
 
@@ -722,7 +763,7 @@ class Transformation:
         group.attrs["transformer"] = str(type(self._transformer))
 
         # Save the model to apply the dust curve to
-        group.attrs["apply_to"] = self._apply_to.label
+        group.attrs["apply_to"] = self._apply_to_label
 
 
 class Combination:
@@ -742,6 +783,14 @@ class Combination:
         """
         # Attach the models to combine
         self._combine = list(combine) if combine is not None else combine
+
+    @property
+    def _combine_labels(self):
+        """Return the labels of the models to combine."""
+        return [
+            model if isinstance(model, str) else model.label
+            for model in self._combine
+        ]
 
     def _combine_spectra(
         self,
@@ -772,7 +821,7 @@ class Combination:
             out_spec = Sed(
                 emission_model.lam,
                 lnu=np.zeros_like(
-                    particle_spectra[this_model.combine[0].label]._lnu
+                    particle_spectra[this_model._combine_labels[0]]._lnu
                 )
                 * erg
                 / s
@@ -781,22 +830,22 @@ class Combination:
         else:
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu)
+                lnu=np.zeros_like(spectra[this_model._combine_labels[0]]._lnu)
                 * erg
                 / s
                 / Hz,
             )
 
         # Combine the spectra
-        for combine_model in this_model.combine:
+        for combine_label in this_model._combine_labels:
             if this_model.per_particle:
-                nan_mask = np.isnan(particle_spectra[combine_model.label]._lnu)
+                nan_mask = np.isnan(particle_spectra[combine_label]._lnu)
                 out_spec._lnu[~nan_mask] += particle_spectra[
-                    combine_model.label
+                    combine_label
                 ]._lnu[~nan_mask]
             else:
-                nan_mask = np.isnan(spectra[combine_model.label]._lnu)
-                out_spec._lnu[~nan_mask] += spectra[combine_model.label]._lnu[
+                nan_mask = np.isnan(spectra[combine_label]._lnu)
+                out_spec._lnu[~nan_mask] += spectra[combine_label]._lnu[
                     ~nan_mask
                 ]
 
@@ -836,16 +885,37 @@ class Combination:
         # Get the right out lines dict and create the right entry
         out_lines = {}
 
-        # Get the right exist lines dict
+        # Get the right exist lines dict and create the output lines
         if this_model.per_particle:
             in_lines = particle_lines
+            out_lines = LineCollection(
+                line_ids=particle_lines[
+                    this_model._combine_labels[0]
+                ].line_ids,
+                lam=particle_lines[this_model._combine_labels[0]].lam,
+                lum=np.zeros_like(
+                    particle_lines[this_model._combine_labels[0]].luminosity
+                ),
+                cont=np.zeros_like(
+                    particle_lines[this_model._combine_labels[0]].continuum
+                ),
+            )
         else:
             in_lines = lines
+            out_lines = LineCollection(
+                line_ids=lines[this_model._combine_labels[0]].line_ids,
+                lam=lines[this_model._combine_labels[0]].lam,
+                lum=np.zeros_like(
+                    lines[this_model._combine_labels[0]].luminosity
+                ),
+                cont=np.zeros_like(
+                    lines[this_model._combine_labels[0]].continuum
+                ),
+            )
 
         # Loop over combination models adding the lines
-        out_lines = in_lines[this_model.combine[0].label]
-        for combine_model in this_model.combine[1:]:
-            out_lines += in_lines[combine_model.label]
+        for combine_label in this_model._combine_labels:
+            out_lines += in_lines[combine_label]
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
@@ -909,21 +979,31 @@ class Combination:
             )
 
         # Get the image for each model we are combining
-        combine_labels = []
         combine_images = []
-        for model in this_model.combine:
-            combine_labels.append(model.label)
-            combine_images.append(images[model.label])
+        for combine_label in this_model._combine_labels:
+            combine_images.append(images[combine_label])
 
         # Get the first image to add to
-        out_image = combine_images[0]
+        out_image = ImageCollection(
+            resolution=combine_images[0].resolution,
+            fov=combine_images[0].fov,
+            imgs={
+                f: Image(
+                    resolution=combine_images[0].resolution,
+                    fov=combine_images[0].fov,
+                    img=np.zeros(combine_images[0].npix)
+                    * combine_images[0].imgs[f].units,
+                )
+                for f in combine_images[0].imgs
+            },
+        )
 
         # Combine the images
         # Again, we have a problem if any don't exist
-        for img in combine_images[1:]:
+        for img in combine_images:
             out_image += img
 
-        # Store the image
+        # Store the combined image
         images[this_model.label] = out_image
 
         return images
@@ -936,8 +1016,7 @@ class Combination:
         # Populate the list with the summary information
         summary.append("Combination model:")
         summary.append(
-            "  Combine models: "
-            f"{', '.join([model.label for model in self._combine])}"
+            f"  Combine models: {', '.join(list(self._combine_labels))}"
         )
 
         return summary
@@ -948,4 +1027,4 @@ class Combination:
         group.attrs["type"] = "combination"
 
         # Save the models to combine
-        group.attrs["combine"] = [model.label for model in self._combine]
+        group.attrs["combine"] = list(self._combine_labels)

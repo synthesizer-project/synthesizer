@@ -9,6 +9,7 @@ from unyt import Mpc, arcsecond
 from synthesizer import exceptions
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.grid import Grid
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import accepts, unit_is_compatible
@@ -112,6 +113,17 @@ class BaseGalaxy:
                 self.gas.centre = self.centre
             if self.black_holes is not None:
                 self.black_holes.centre = self.centre
+
+        # if not set already, assign redshift to each component
+        if self.stars is not None:
+            if getattr(self.stars, "redshift", None) is None:
+                self.stars.redshift = redshift
+        if self.gas is not None:
+            if getattr(self.gas, "redshift", None) is None:
+                self.gas.redshift = redshift
+        if self.black_holes is not None:
+            if getattr(self.black_holes, "redshift", None) is None:
+                self.black_holes.redshift = redshift
 
     @property
     def photo_fluxes(self):
@@ -534,6 +546,28 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
             )
+
+    def get_surviving_mass(self, grid: Grid, **kwargs):
+        """Calculate the surviving mass of the stellar population.
+
+        This is the total mass of stars that have survived to the present day
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving mass.
+                This is used to get the stellar fraction at each SFZH bin.
+            **kwargs (dict):
+                Additional keyword arguments to pass to the stars
+                calculate_surviving_mass method.
+                Only keyword used is 'grid_assignment_method',
+                which is only used for particle galaxies.
+
+        Returns:
+            unyt_quantity: The total surviving mass of the stellar
+            population in Msun.
+        """
+        return self.stars.calculate_surviving_mass(grid, **kwargs)
 
     @deprecated(
         "The `get_photo_fluxes` method is deprecated. Use "
@@ -964,7 +998,11 @@ class BaseGalaxy:
         """
         # Get the spectra
         spectra, particle_spectra = emission_model._get_spectra(
-            emitters={"stellar": self.stars, "blackhole": self.black_holes},
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -1095,7 +1133,11 @@ class BaseGalaxy:
         # Get the lines
         lines, particle_lines = emission_model._get_lines(
             line_ids=line_ids,
-            emitters={"stellar": self.stars, "blackhole": self.black_holes},
+            emitters={
+                "stellar": self.stars,
+                "blackhole": self.black_holes,
+                "galaxy": self,
+            },
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -1152,15 +1194,15 @@ class BaseGalaxy:
 
     def get_images_luminosity(
         self,
-        resolution,
-        fov,
         emission_model,
         img_type="smoothed",
+        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
-        instrument=None,
+        resolution=None,
+        fov=None,
         cosmo=None,
     ):
         """Make an ImageCollection from luminosities.
@@ -1244,6 +1286,12 @@ class BaseGalaxy:
         # TODO: we need to eventually fully pivot to taking only an instrument
         # this will be done when we introduced some premade instruments
         if instrument is None:
+            if resolution is None or fov is None:
+                raise ValueError(
+                    "If instrument not provided, a resolution and fov must "
+                    "be specified."
+                )
+
             # Get the filters from the emitters
             if len(self.photo_lnu) > 0:
                 filters = self.photo_lnu[emission_model.label].filters
@@ -1259,7 +1307,7 @@ class BaseGalaxy:
 
             # Make the place holder instrument
             instrument = Instrument(
-                "place-holder",
+                "GenericInstrument",
                 resolution=resolution,
                 filters=filters,
             )
@@ -1358,15 +1406,15 @@ class BaseGalaxy:
 
     def get_images_flux(
         self,
-        resolution,
         fov,
         emission_model,
         img_type="smoothed",
+        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
-        instrument=None,
+        resolution=None,
         cosmo=None,
     ):
         """Make an ImageCollection from fluxes.
@@ -1445,6 +1493,12 @@ class BaseGalaxy:
         # TODO: we need to eventually fully pivot to taking only an instrument
         # this will be done when we introduced some premade instruments
         if instrument is None:
+            if resolution is None:
+                raise ValueError(
+                    "If instrument not provided, a resolution must be "
+                    "specified."
+                )
+
             # Get the filters from the emitters
             if len(self.photo_fnu) > 0:
                 filters = self.photo_fnu[emission_model.label].filters
@@ -1455,7 +1509,9 @@ class BaseGalaxy:
                     emission_model.label
                 ].filters
             instrument = Instrument(
-                "place-holder", resolution=resolution, filters=filters
+                "GenericInstrument",
+                resolution=resolution,
+                filters=filters,
             )
 
         # Ensure we have a cosmology if we need it

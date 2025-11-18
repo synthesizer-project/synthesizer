@@ -80,7 +80,7 @@ if __name__ == "__main__":
     galaxy.stars.get_spectra(model)
 
     for _spec in [
-        "intrinsic",
+        "reprocessed",
         "transmitted",
         "nebular",
     ]:
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
     for _spec in [
         "nebular_line",
-        "intrinsic",
+        "reprocessed",
         "nebular_continuum",
         "transmitted",
         "nebular",

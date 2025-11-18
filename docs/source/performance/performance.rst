@@ -60,9 +60,9 @@ Particle Spectra Scaling
 
 .. code-block:: bash
 
-    python strong_scaling_part_spectra.py --basename docs --nstars 100000 --max_threads=32 --average_over 10 --low_thresh 0.01
+    python strong_scaling_part_spectra.py --basename docs --nstars 10000 --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/docs_part_spectra_cic_totThreads32_nstars100000.png
+.. image:: plots/docs_part_spectra_cic_totThreads32_nstars10000.png
    :width: 75%
    :align: center
 
@@ -78,6 +78,18 @@ Line-Of-Sight (LOS) Column Density Scaling
 .. image:: plots/docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
    :width: 75%
    :align: center 
+
+
+Smoothed Imaging Scaling
+------------------------
+
+.. code-block:: bash 
+
+    python strong_scaling_images.py --basename docs --nstars 1000r --max_threads=32 --average_over 10 --low_thresh 0.01
+
+.. image:: plots/test_images_totThreads32_nstars10000.png
+   :width: 75%
+   :align: center
 
 
 
