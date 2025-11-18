@@ -83,7 +83,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         blr_grid,
         torus_emission_model,
         disc_transmission="random",
-        label=None,
+        label="intrinsic",
         **kwargs,
     ):
         """Initialize the UnifiedAGN model.
@@ -185,7 +185,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
 
         return BlackHoleEmissionModel.__init__(
             self,
-            label=label if label is not None else "intrinsic",
+            label=label,
             combine=(
                 self.disc,
                 self.nlr,
@@ -706,7 +706,7 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
         torus_emission_model,
         diffuse_dust_curve,
         disc_transmission="random",
-        label=None,
+        label="attenuated",
         tau_v="tau_v",
         **kwargs,
     ):
@@ -747,7 +747,7 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
             apply_to=self.intrinsic,
             tau_v=tau_v,
             emitter="blackhole",
-            label=label if label is not None else "attenuated",
+            label="attenuated",
             **kwargs,
         )
 
@@ -777,7 +777,7 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
         diffuse_dust_emission_model,
         tau_v="tau_v",
         disc_transmission="random",
-        label=None,
+        label="total",
         **kwargs,
     ):
         """Initialize the UnifiedAGN model.
@@ -837,7 +837,7 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
         # diffuse_dust_emission
         BlackHoleEmissionModel.__init__(
             self,
-            label=label if label is not None else "total",
+            label=label,
             combine=(self.attenuated, self.diffuse_dust_emission),
             related_models=(
                 self.intrinsic,
