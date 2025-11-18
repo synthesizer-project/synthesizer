@@ -53,10 +53,10 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             The inclination averaged observed disc emission.
         disc_averaged_without_torus (BlackHoleEmissionModel):
             The inclination averaged observed disc ignoring the torus.
-        nlr_transmitted (BlackHoleEmissionModel):
-            The NLR transmitted emission
-        blr_transmitted (BlackHoleEmissionModel):
-            The BLR transmitted emission
+        disc_transmitted_nlr (BlackHoleEmissionModel):
+            The disc spectrum transmitted through the NLR
+        disc_transmitted_blr (BlackHoleEmissionModel):
+            The disc spectrum transmitted through the BLR
         disc_transmitted (BlackHoleEmissionModel):
             The disc transmitted emission
         disc_transmitted_weighted_combination (BlackHoleEmissionModel):
@@ -111,7 +111,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
                     "not passed as a keyword argument to the emission model."
                 )
 
-        # Get the incident istropic disc emission model
+        # Get the incident isotropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,
             **kwargs,
