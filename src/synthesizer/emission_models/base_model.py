@@ -1431,6 +1431,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self._models[new_label] = model
         del self._models[old_label]
 
+        # Unpack now we're done
+        self.unpack_model()
+
     def fix_parameters(self, **kwargs):
         """Fix parameters of the model.
 
@@ -2547,6 +2550,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Skip if we don't need to extract this spectra
             if label in spectra:
                 continue
+            print(f"Extracting spectra for model: {label}")
+            print(self._models.keys())
             try:
                 spectra, particle_spectra = self._extract_spectra(
                     emission_model[label],
@@ -3355,19 +3360,21 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
     def add_label_prefix(self, prefix):
         """Re-labels spectra by adding a prefix.
 
-        This will relable all spectra in the model by adding a prefix.
+        This will relabel all spectra in the model by adding a prefix.
 
         Args:
             prefix (str):
                 The prefix to use when relabelling.
         """
-        # Get list of origianl labels since relabelling changes the key in
+        # Get list of original labels since relabelling changes the key in
         # self._models
         original_labels = list(self._models.keys())
 
+        # Loop over all original labels and relabel
         for original_label in original_labels:
             # Get new label
             new_label = f"{prefix}_{original_label}"
+
             # Relabel. Note: this also updates the self._models dictionary.
             self.relabel(original_label, new_label)
 
