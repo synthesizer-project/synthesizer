@@ -174,3 +174,7 @@ def get_params(params, model, emission, emitter, obj=None):
         )
 
     return values
+
+
+class ParameterFunction:
+    """A class for wrapping functions that compute parameters for emitters."""

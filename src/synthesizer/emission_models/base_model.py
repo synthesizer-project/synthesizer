@@ -185,7 +185,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         save=True,
         per_particle=False,
         vel_shift=False,
-        emitter_prep_func=None,
         **fixed_parameters,
     ):
         """Initialise the emission model.
@@ -272,12 +271,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A flag for whether the emission produced by this model should
                 take into account the velocity shift due to peculiar
                 velocities. Default is False.
-            emitter_prep_func (function):
-                A function which takes in an emitter and an emission model as
-                arguments and prepares the emitter for use in this emission
-                model. This can be used to precompute arbitrary quantities or
-                call arbitrary methods needed for the emission model. This
-                function must follow the signature.
             fixed_parameters (dict):
                 Any extra keyword arguments will be treated as fixed parameters
                 and stored in a dictionary. When the model looks to extract
