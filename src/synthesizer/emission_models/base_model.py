@@ -2550,8 +2550,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Skip if we don't need to extract this spectra
             if label in spectra:
                 continue
-            print(f"Extracting spectra for model: {label}")
-            print(self._models.keys())
             try:
                 spectra, particle_spectra = self._extract_spectra(
                     emission_model[label],
