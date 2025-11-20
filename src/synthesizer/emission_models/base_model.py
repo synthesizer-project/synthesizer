@@ -1438,6 +1438,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self._models[new_label] = model
         del self._models[old_label]
 
+        # Unpack now we're done
+        self.unpack_model()
+
     def fix_parameters(self, **kwargs):
         """Fix parameters of the model.
 
@@ -3358,6 +3361,27 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         toc("Generating all images", start)
 
         return images
+
+    def add_label_prefix(self, prefix):
+        """Re-labels spectra by adding a prefix.
+
+        This will relabel all spectra in the model by adding a prefix.
+
+        Args:
+            prefix (str):
+                The prefix to use when relabelling.
+        """
+        # Get list of original labels since relabelling changes the key in
+        # self._models
+        original_labels = list(self._models.keys())
+
+        # Loop over all original labels and relabel
+        for original_label in original_labels:
+            # Get new label
+            new_label = f"{prefix}_{original_label}"
+
+            # Relabel. Note: this also updates the self._models dictionary.
+            self.relabel(original_label, new_label)
 
 
 class StellarEmissionModel(EmissionModel):
