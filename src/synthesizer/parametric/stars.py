@@ -17,10 +17,21 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import Hz, Msun, erg, nJy, s, unyt_array, unyt_quantity, yr
+from unyt import (
+    Hz,
+    Msun,
+    erg,
+    nJy,
+    s,
+    unyt_array,
+    unyt_quantity,
+    yr,
+)
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
+from synthesizer.emission_models.utils import get_param
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
@@ -435,11 +446,20 @@ class Stars(StarsComponent):
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
-    def get_mask(self, attr, thresh, op, mask=None):
-        """Create a mask using a threshold and attribute on which to mask.
+    def get_mask(
+        self,
+        attr_str,
+        thresh,
+        op,
+        mask=None,
+        attr_override_obj=None,
+    ):
+        """Return a mask based on the attribute and threshold.
+
+        Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         Args:
-            attr (str):
+            attr_str (str):
                 The attribute to derive the mask from.
             thresh (float):
                 The threshold value.
@@ -448,13 +468,19 @@ class Stars(StarsComponent):
                 or "!=".
             mask (np.ndarray):
                 Optionally, a mask to combine with the new mask.
+            attr_override_obj (object):
+                An alternative object to check from the attribute. This
+                is specifically used when an EmissionModel may have a
+                fixed parameter override, but can be used more generally.
 
         Returns:
             mask (np.ndarray):
                 The mask array.
         """
+        start = tic()
+
         # Get the attribute
-        attr = getattr(self, attr)
+        attr = get_param(attr_str, attr_override_obj, None, self)
 
         # Apply the operator
         if op == ">":
@@ -503,6 +529,8 @@ class Stars(StarsComponent):
                     f"or an axis (mask.shape={new_mask.shape}, "
                     f"sfzh.shape={self.sfzh.shape})"
                 )
+
+        toc("Generating parametric mask", start)
 
         return new_mask
 

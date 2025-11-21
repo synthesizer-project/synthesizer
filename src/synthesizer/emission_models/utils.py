@@ -29,6 +29,9 @@ def cache_param(
     This function stores a computed parameter value in the emitter's
     model_param_cache under the specified model label.
 
+    NOTE: This does not duplicate the value, it simply stores a reference to
+    it. Under the hood this just increases the reference count by one.
+
     Args:
         param (str):
             The name of the parameter to cache.
@@ -136,7 +139,9 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
             default=default,
         )
         if value is not None:
+            # Attach this to the emitter so we don't have to do this again
             value = np.log10(value)
+            setattr(emitter, param, value)
 
     # Lets just check we don't have the singular/plural version of the
     # parameter if we still have nothing
