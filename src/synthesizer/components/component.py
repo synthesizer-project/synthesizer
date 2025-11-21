@@ -79,7 +79,7 @@ class Component(ABC):
         self.photo_fnu = {}
 
         # Define the dictionaries to hold the images (we carry 3 different
-        # distionaries for both lnu and fnu images to draw a distinction
+        # dictionaries for both lnu and fnu images to draw a distinction
         # between images with and without a PSF and/or noise)
         self.images_lnu = {}
         self.images_fnu = {}
@@ -101,6 +101,9 @@ class Component(ABC):
 
         # A container for any grid weights we already computed
         self._grid_weights = {"cic": {}, "ngp": {}}
+
+        # A container for caching parameters calculated by emission models
+        self.model_param_cache = {}
 
     @property
     def photo_fluxes(self):
