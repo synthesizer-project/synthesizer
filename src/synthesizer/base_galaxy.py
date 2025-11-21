@@ -70,7 +70,7 @@ class BaseGalaxy:
         self.photo_fnu = {}
 
         # Define the dictionaries to hold the images (we carry 3 different
-        # distionaries for both lnu and fnu images to draw a distinction
+        # dictionaries for both lnu and fnu images to draw a distinction
         # between images with and without a PSF and/or noise)
         self.images_lnu = {}
         self.images_fnu = {}
@@ -124,6 +124,9 @@ class BaseGalaxy:
         if self.black_holes is not None:
             if getattr(self.black_holes, "redshift", None) is None:
                 self.black_holes.redshift = redshift
+
+        # A container for caching parameters calculated by emission models
+        self.model_param_cache = {}
 
     @property
     def photo_fluxes(self):
