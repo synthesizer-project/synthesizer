@@ -91,7 +91,16 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
     if model is not None and param in model.fixed_parameters:
         value = (
             ensure_array_c_compatible_double(model.fixed_parameters[param])
-            if not isinstance(model.fixed_parameters[param], str)
+            if (
+                not isinstance(
+                    model.fixed_parameters[param],
+                    str,
+                )
+                and not isinstance(
+                    model.fixed_parameters[param],
+                    ParameterFunction,
+                )
+            )
             else model.fixed_parameters[param]
         )
 
@@ -118,12 +127,15 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
 
     # If we found a value, return it (early exit chance to avoid extra logic)
     if value is not None:
-        cache_param(
-            param=param,
-            emitter=emitter,
-            model_label=model.label,
-            value=value,
-        )
+        # Only cache if we are in a cacheable context (have a model
+        # and emitter)
+        if model is not None and emitter is not None:
+            cache_param(
+                param=param,
+                emitter=emitter,
+                model_label=model.label,
+                value=value,
+            )
         return value
 
     # If we were finding a logged parameter but failed, try the non-logged
@@ -174,12 +186,15 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
 
     # If we found a value, return it
     if value is not None:
-        cache_param(
-            param=param,
-            emitter=emitter,
-            model_label=model.label,
-            value=value,
-        )
+        # Only cache if we are in a cacheable context (have a model
+        # and emitter)
+        if model is not None and emitter is not None:
+            cache_param(
+                param=param,
+                emitter=emitter,
+                model_label=model.label,
+                value=value,
+            )
         return value
 
     # Otherwise raise an exception
@@ -308,6 +323,7 @@ class ParameterFunction:
 
         self.func = func
         self.func_args = func_args
+        self.sets = sets
 
         # Ensure the function signature matches the func_args
         sig = inspect.signature(func)
