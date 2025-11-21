@@ -354,7 +354,13 @@ class ParameterFunction:
             )
 
         # Call the function with the extracted parameters
-        val = self.func(**func_kwargs)
+        try:
+            val = self.func(**func_kwargs)
+        except Exception as e:
+            raise exceptions.ParameterFunctionError(
+                f"Error calling ParameterFunction "
+                f"'{self.func.__name__}': {str(e)}"
+            ) from e
 
         # Cache the computed value on the emitter for later use
         cache_param(
