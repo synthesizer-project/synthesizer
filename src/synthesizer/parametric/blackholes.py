@@ -22,6 +22,8 @@ from unyt import Msun, cm, deg, erg, km, kpc, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
+from synthesizer.emission_models.utils import get_param
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.units import accepts
 
@@ -156,11 +158,20 @@ class BlackHole(BlackholesComponent):
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
 
-    def get_mask(self, attr, thresh, op, mask=None):
-        """Create a mask using a threshold and attribute on which to mask.
+    def get_mask(
+        self,
+        attr_str,
+        thresh,
+        op,
+        mask=None,
+        attr_override_obj=None,
+    ):
+        """Return a mask based on the attribute and threshold.
+
+        Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         Args:
-            attr (str):
+            attr_str (str):
                 The attribute to derive the mask from.
             thresh (float):
                 The threshold value.
@@ -169,13 +180,19 @@ class BlackHole(BlackholesComponent):
                 or "!=".
             mask (np.ndarray):
                 Optionally, a mask to combine with the new mask.
+            attr_override_obj (object):
+                An alternative object to check from the attribute. This
+                is specifically used when an EmissionModel may have a
+                fixed parameter override, but can be used more generally.
 
         Returns:
             mask (np.ndarray):
                 The mask array.
         """
+        start = tic()
+
         # Get the attribute
-        attr = getattr(self, attr)
+        attr = get_param(attr_str, attr_override_obj, None, self)
 
         # Apply the operator
         if op == ">":
@@ -199,6 +216,8 @@ class BlackHole(BlackholesComponent):
         # Combine with the existing mask
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
+
+        toc("Generating parametric mask", start)
 
         return new_mask
 
