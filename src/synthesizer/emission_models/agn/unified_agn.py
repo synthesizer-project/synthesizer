@@ -41,6 +41,9 @@ from synthesizer.exceptions import (
 def torus_edgeon_condition(inclination, theta_torus):
     """When this is > 90 deg the torus obscures the disc.
 
+    We will wrap this function in a ParameterFunction to use for masking
+    within the UnifiedAGN model.
+
     Args:
         inclination (unyt_array):
             The inclination of the black hole.
@@ -50,6 +53,7 @@ def torus_edgeon_condition(inclination, theta_torus):
     return inclination + theta_torus
 
 
+# Wrap the torus_edgeon_condition in a ParameterFunction
 torus_edgeon_handler = ParameterFunction(
     func=torus_edgeon_condition,
     sets="torus_edgeon_cond",
