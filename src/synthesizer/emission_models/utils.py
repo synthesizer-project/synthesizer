@@ -1,10 +1,12 @@
 """A submodule containing utility functions for the emission models."""
 
 import inspect
+from typing import Any
 
 import numpy as np
 
 from synthesizer import exceptions
+from synthesizer.components.component import Component
 from synthesizer.utils import (
     depluralize,
     ensure_array_c_compatible_double,
@@ -12,7 +14,33 @@ from synthesizer.utils import (
     pluralize,
 )
 
+# A sentinel object for detecting if a default value was provided
 _NO_DEFAULT = object()
+
+
+def cache_param(
+    param: str,
+    emitter: Component,
+    model_label: str,
+    value: Any,
+) -> None:
+    """Cache a parameter value on an emitter for a given model.
+
+    This function stores a computed parameter value in the emitter's
+    model_param_cache under the specified model label.
+
+    Args:
+        param (str):
+            The name of the parameter to cache.
+        emitter (Stars/Gas/BlackHoles/Galaxy):
+            The emitter object where the parameter will be cached.
+        model_label (str):
+            The label of the model associated with the parameter.
+        value:
+            The value to cache for the parameter.
+    """
+    # Cache the parameter value on the emitter
+    emitter.model_param_cache.setdefault(model_label, {})[param] = value
 
 
 def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
@@ -79,19 +107,25 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
     if value is not None and isinstance(value, str):
-        return get_param(value, None, None, emitter, default=default)
+        value = get_param(value, None, None, emitter, default=default)
 
     # If we found a ParameterFunction, call it to get the value
     elif value is not None and isinstance(value, ParameterFunction):
-        return value(model, emission, emitter, obj)
+        value = value(model, emission, emitter, obj)
 
-    # If we found a value, return it
-    elif value is not None:
+    # If we found a value, return it (early exit chance to avoid extra logic)
+    if value is not None:
+        cache_param(
+            param=param,
+            emitter=emitter,
+            model_label=model.label,
+            value=value,
+        )
         return value
 
     # If we were finding a logged parameter but failed, try the non-logged
     # version and log it
-    if logged:
+    if logged and value is None:
         logless_param = param.replace("log10", "")
         value = get_param(
             logless_param,
@@ -102,17 +136,12 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
             default=default,
         )
         if value is not None:
-            return np.log10(value)
+            value = np.log10(value)
 
-    # If we got here the parameter is missing, raise an exception or return
-    # the default
-    if default is not _NO_DEFAULT:
-        return default
-    else:
-        # Before we raise an exception, lets just check we don't have the
-        # singular/plural version of the parameter
+    # Lets just check we don't have the singular/plural version of the
+    # parameter if we still have nothing
+    if value is None:
         singular_param = depluralize(param)
-        plural_param = pluralize(param)
         value = get_param(
             singular_param,
             model,
@@ -121,18 +150,35 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
             obj,
             default=None,
         )
-        if value is None:
-            value = get_param(
-                plural_param,
-                model,
-                emission,
-                emitter,
-                obj,
-                default=None,
-            )
-        if value is not None:
-            return value
+    if value is None:
+        plural_param = pluralize(param)
+        value = get_param(
+            plural_param,
+            model,
+            emission,
+            emitter,
+            obj,
+            default=None,
+        )
 
+    # OK, if we found nothing an have a default, now is the time to use it
+    # NOTE: we can't use None as a default value because None could be a valid
+    # parameter value, so we use a sentinel object instead.
+    if value is None and default is not _NO_DEFAULT:
+        value = default
+
+    # If we found a value, return it
+    if value is not None:
+        cache_param(
+            param=param,
+            emitter=emitter,
+            model_label=model.label,
+            value=value,
+        )
+        return value
+
+    # Otherwise raise an exception
+    else:
         raise exceptions.MissingAttribute(
             f"{param} can't be found on the model "
             f"({model.label if model is not None else None}),"
@@ -311,6 +357,11 @@ class ParameterFunction:
         val = self.func(**func_kwargs)
 
         # Cache the computed value on the emitter for later use
-        emitter.model_param_cache.setdefault(model.label, {})[self.sets] = val
+        cache_param(
+            param=self.sets,
+            emitter=emitter,
+            model_label=model.label,
+            value=val,
+        )
 
         return val
