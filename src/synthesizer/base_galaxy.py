@@ -33,6 +33,26 @@ class BaseGalaxy:
             The Gas object holding information about the gas distribution.
         black_holes (particle.BlackHoles/parametric.BlackHole):
             The BlackHole/s object holding information about the black hole/s.
+        redshift (float):
+            The redshift of the galaxy.
+        photo_lnu (dict):
+            The dictionary containing the photometry luminosities in
+            spectral luminosity density units for each spectrum in
+            Galaxy.spectra.
+        photo_fnu (dict):
+            The dictionary containing the photometry fluxes in spectral
+            flux density units for each spectrum in Galaxy.spectra.
+        images_lnu (dict):
+            The dictionary containing the images in spectral luminosity
+            density units.
+        images_fnu (dict):
+            The dictionary containing the images in spectral flux density
+            units.
+        images_psf_lnu (dict):
+            The dictionary containing the images in spectral luminosity
+            density units with a PSF applied.
+        model_param_cache (dict):
+            A cache for parameters calculated by emission models.
     """
 
     @accepts(centre=Mpc)

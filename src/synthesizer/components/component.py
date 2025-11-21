@@ -47,6 +47,8 @@ class Component(ABC):
             A dictionary to hold the images in flux units
         fesc (float):
             The escape fraction of the component.
+        model_param_cache (dict):
+            A cache for parameters calculated by emission models.
     """
 
     def __init__(
