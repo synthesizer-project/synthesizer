@@ -190,20 +190,17 @@ def get_param(
 
     # Check the model's fixed parameters first
     if model is not None and param in model.fixed_parameters:
-        value = (
-            ensure_array_c_compatible_double(model.fixed_parameters[param])
-            if (
-                not isinstance(
-                    model.fixed_parameters[param],
-                    str,
-                )
-                and not isinstance(
-                    model.fixed_parameters[param],
-                    ParameterFunction,
-                )
+        if not isinstance(
+            model.fixed_parameters[param], str
+        ) and not isinstance(
+            model.fixed_parameters[param],
+            ParameterFunction,
+        ):
+            value = ensure_array_c_compatible_double(
+                model.fixed_parameters[param]
             )
-            else model.fixed_parameters[param]
-        )
+        else:
+            value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
@@ -220,37 +217,14 @@ def get_param(
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
     if value is not None and isinstance(value, str):
-        # Check for cycles before following this alias
-        if value in _visited:
-            # We've seen this alias before - there's a cycle
-            if default is not _NO_DEFAULT:
-                return default
-            raise exceptions.MissingAttribute(
-                f"Cyclic alias detected while resolving parameter '{param}'. "
-                f"Alias chain: {' -> '.join(_visited)} -> {value}"
-            )
-        # Add current alias to visited set and follow it
-        new_visited = _visited | {param}
-        value = get_param(
-            value,
-            None,
-            None,
-            emitter,
-            default=default,
-            _visited=new_visited,
-        )
+        return get_param(value, None, None, emitter, default=default)
 
-    # If we found a value, return it (early exit chance to avoid extra logic)
-    if value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
+    # If we found a ParameterFunction, call it to get the value
+    elif value is not None and isinstance(value, ParameterFunction):
+        return value(model, emission, emitter, obj)
+
+    # If we found a value, return it
+    elif value is not None:
         return value
 
     # If we were finding a logged parameter but failed, try the non-logged
