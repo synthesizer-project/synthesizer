@@ -1401,7 +1401,7 @@ class Component(ABC):
         if hasattr(self, "_grid_weights"):
             self._grid_weights = {"cic": {}, "ngp": {}}
 
-    def print_used_parameters(self):
+    def print_used_parameters(self, *models):
         """Print the parameters used by emission models in a formatted table.
 
         This method displays all parameters that have been cached during
@@ -1410,6 +1410,12 @@ class Component(ABC):
 
         The output is formatted using TableFormatter to match the style
         of other print methods in synthesizer.
+
+        Args:
+            *models (str):
+                Optional model labels to print. If provided, only the
+                specified models will be printed. If not provided, all
+                cached models will be printed.
         """
         # Check if cache is empty
         if not self.model_param_cache:
@@ -1418,8 +1424,32 @@ class Component(ABC):
             )
             return
 
+        # Determine which models to print
+        if len(models) > 0:
+            # Filter to only the requested models
+            models_to_print = {
+                label: params
+                for label, params in self.model_param_cache.items()
+                if label in models
+            }
+            # Warn about any requested models that don't exist
+            missing = set(models) - set(self.model_param_cache.keys())
+            if len(missing) > 0:
+                print(
+                    f"The following models were not found in "
+                    f"the cache: {', '.join(missing)}"
+                )
+        else:
+            # Print all models
+            models_to_print = self.model_param_cache
+
+        # Check if we have any models to print after filtering
+        if not models_to_print:
+            print("No matching models found in cache.")
+            return
+
         # Loop over each model in the cache
-        for model_label, params in self.model_param_cache.items():
+        for model_label, params in models_to_print.items():
             # Create a simple object to hold the parameters for this model
             class ModelParams:
                 def __init__(self, params_dict):
