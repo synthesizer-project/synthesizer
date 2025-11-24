@@ -46,7 +46,16 @@ def cache_param(
     emitter.model_param_cache.setdefault(model_label, {})[param] = value
 
 
-def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
+def get_param(
+    param,
+    model,
+    emission,
+    emitter,
+    obj=None,
+    default=_NO_DEFAULT,
+    _singular_attempted=False,
+    _plural_attempted=False,
+):
     """Extract a parameter from a model, emission, emitter, or object.
 
     The priority of extraction is:
@@ -71,6 +80,10 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
             An optional additional object to look for the parameter on last.
         default (object, optional):
             The default value to return if the parameter is not found.
+        _singular_attempted (bool, optional):
+            Internal flag to track if singular version has been attempted.
+        _plural_attempted (bool, optional):
+            Internal flag to track if plural version has been attempted.
 
     Returns:
         value
@@ -157,26 +170,32 @@ def get_param(param, model, emission, emitter, obj=None, default=_NO_DEFAULT):
 
     # Lets just check we don't have the singular/plural version of the
     # parameter if we still have nothing
-    if value is None:
+    if value is None and not _singular_attempted:
         singular_param = depluralize(param)
-        value = get_param(
-            singular_param,
-            model,
-            emission,
-            emitter,
-            obj,
-            default=None,
-        )
-    if value is None:
+        if singular_param != param:
+            value = get_param(
+                singular_param,
+                model,
+                emission,
+                emitter,
+                obj,
+                default=None,
+                _singular_attempted=True,
+                _plural_attempted=_plural_attempted,
+            )
+    if value is None and not _plural_attempted:
         plural_param = pluralize(param)
-        value = get_param(
-            plural_param,
-            model,
-            emission,
-            emitter,
-            obj,
-            default=None,
-        )
+        if plural_param != param:
+            value = get_param(
+                plural_param,
+                model,
+                emission,
+                emitter,
+                obj,
+                default=None,
+                _singular_attempted=_singular_attempted,
+                _plural_attempted=True,
+            )
 
     # OK, if we found nothing an have a default, now is the time to use it
     # NOTE: we can't use None as a default value because None could be a valid
