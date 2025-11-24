@@ -1562,6 +1562,7 @@ class LineCollection:
             cont=blended_line_conts * self.continuum.units,
         )
 
+    @accepts(sed_lam=angstrom)
     def create_sed(self, sed_lam):
         """Create a synthesizer.sed.Sed object from the LineCollection.
 
@@ -1574,11 +1575,6 @@ class LineCollection:
                 synthesizer.sed.Sed object.
 
         """
-        if not isinstance(sed_lam, unyt_array):
-            raise exceptions.MissingUnits(
-                """The wavelength must be a unyt_array with units length."""
-            )
-
         # create empty spectra with correct units
         sed_lnu = np.zeros(len(sed_lam)) * erg / s / Hz
 
