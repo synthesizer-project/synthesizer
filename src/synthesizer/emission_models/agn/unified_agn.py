@@ -357,7 +357,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
     ):
         """Calculate the weighted_combination disc spectrum.
 
-        Note: when the viewing angle (inlination) meets the torus criteria
+        Note: when the viewing angle (inclination) meets the torus criteria
         it is always blocked.
         """
         # Now calculate the disc_escaped emission using this transmission
@@ -423,14 +423,14 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         scenarios is randomly assigned based on the nlr and blr covering
         fractions. The default behaviour of UnifiedAGN is to use these
         randomly assigned scenarios. However, by providing the
-        disc_transmission keyword argument to UnifiedAGN we can overide this
+        disc_transmission keyword argument to UnifiedAGN we can override this
         and force all blackholes to adopt the same transmission scenario.
 
-        Note: when the viewing angle (inlination) meets the torus criteria
+        Note: when the viewing angle (inclination) meets the torus criteria
         it is always blocked.
 
         Args:
-            disc_transmission (str): The disc transmission sceanrio.
+            disc_transmission (str): The disc transmission scenario.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
