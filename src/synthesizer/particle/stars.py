@@ -1673,7 +1673,12 @@ def sample_sfzh(
         nstar (int):
             The number of stellar particles to produce.
         initial_mass (int):
-            The intial mass of the fake stellar particles.
+            The initial mass of the fake stellar particles. If None, the
+            initial mass is set such that the total mass of the SFZH is
+            split equally among the nstar particles. If set, this mass will
+            override the parametric mass implied by the SFZH, instead using
+            the SFZH as a normalised probability distribution function for
+            sampling ages and metallicities.
         **kwargs:
             Any additional keyword arguments to pass to the Stars
             constructor.
