@@ -137,49 +137,8 @@ class Component(ABC):
         return self.photo_lnu
 
     @abstractmethod
-    def get_mask(
-        self,
-        attr,
-        thresh,
-        op,
-        mask=None,
-        attr_override_obj=None,
-    ):
-        """Return a mask based on the attribute and threshold.
-
-        Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
-
-        Overloading functions should use
-        synthesizer.emission_models.utils.get_param instead of getattr to
-        allow for attribute overrides, e.g.:
-            from synthesizer.emission_models.utils import get_param
-            attr_values = get_param(
-                attr,
-                override_obj,
-                None,
-                self
-            )
-            # then use attr_values to derive the mask
-
-        Args:
-            attr (str):
-                The attribute to derive the mask from.
-            thresh (float):
-                The threshold value.
-            op (str):
-                The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (np.ndarray):
-                Optionally, a mask to combine with the new mask.
-            attr_override_obj (object):
-                An alternative object to check from the attribute. This
-                is specifically used when an EmissionModel may have a
-                fixed parameter override, but can be used more generally.
-
-        Returns:
-            mask (np.ndarray):
-                The mask array.
-        """
+    def get_mask(self, attr, thresh, op, mask=None):
+        """Return a mask based on the attribute and threshold."""
         pass
 
     @abstractmethod

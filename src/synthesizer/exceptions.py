@@ -798,28 +798,3 @@ class MissingGridProperty(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Grid is missing a required property."
-
-
-class ParameterFunctionError(Exception):
-    """Exception class for errors in parameter functions."""
-
-    def __init__(self, *args):
-        """Initialise the exception with an optional message.
-
-        Args:
-            *args: Optional message to include in the exception.
-        """
-        if args:
-            self.message = args[0]
-        else:
-            self.message = None
-
-    def __str__(self):
-        """Return the string representation of the exception.
-
-        Returns:
-            str: The string representation of the exception.
-        """
-        if self.message:
-            return "{0} ".format(self.message)
-        return "There was an error in the parameter function."
