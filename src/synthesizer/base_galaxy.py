@@ -2564,3 +2564,44 @@ class BaseGalaxy:
             fig=fig,
             ax=ax,
         )
+
+    def print_used_parameters(self):
+        """Print the parameters used by emission models in a formatted table.
+
+        This method displays all parameters that have been cached during
+        emission model calculations, organized by model label. Each model's
+        parameters are shown with their computed values.
+
+        The output is formatted using TableFormatter to match the style
+        of other print methods in synthesizer.
+        """
+        # Print stars used parameters if available
+        if self.stars is not None:
+            self.stars.print_used_parameters()
+
+        # Print black holes used parameters if available
+        if self.black_holes is not None:
+            self.black_holes.print_used_parameters()
+
+        # Print galaxy model parameters
+        print("Galaxy Model Parameters:")
+
+        # Check if cache is empty
+        if len(self.model_param_cache) == 0:
+            print("No cached model parameters on Galaxy.")
+            return
+
+        # Loop over each model in the cache
+        for model_label, params in self.model_param_cache.items():
+            # Create a simple object to hold the parameters for this model
+            class ModelParams:
+                def __init__(self, params_dict):
+                    for key, value in params_dict.items():
+                        setattr(self, key, value)
+
+            # Create the object and format it
+            param_obj = ModelParams(params)
+            formatter = TableFormatter(param_obj)
+
+            # Print the table for this model
+            print(formatter.get_table(f"Model: {model_label}"))

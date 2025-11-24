@@ -22,6 +22,7 @@ from synthesizer.emissions import plot_spectra
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import unit_is_compatible
+from synthesizer.utils.ascii_table import TableFormatter
 
 
 class Component(ABC):
@@ -1440,3 +1441,35 @@ class Component(ABC):
         """
         if hasattr(self, "_grid_weights"):
             self._grid_weights = {"cic": {}, "ngp": {}}
+
+    def print_used_parameters(self):
+        """Print the parameters used by emission models in a formatted table.
+
+        This method displays all parameters that have been cached during
+        emission model calculations, organized by model label. Each model's
+        parameters are shown with their computed values.
+
+        The output is formatted using TableFormatter to match the style
+        of other print methods in synthesizer.
+        """
+        # Check if cache is empty
+        if not self.model_param_cache:
+            print(
+                f"No cached model parameters found for {self.component_type}."
+            )
+            return
+
+        # Loop over each model in the cache
+        for model_label, params in self.model_param_cache.items():
+            # Create a simple object to hold the parameters for this model
+            class ModelParams:
+                def __init__(self, params_dict):
+                    for key, value in params_dict.items():
+                        setattr(self, key, value)
+
+            # Create the object and format it
+            param_obj = ModelParams(params)
+            formatter = TableFormatter(param_obj)
+
+            # Print the table for this model
+            print("\n" + formatter.get_table(f"Model: {model_label}"))
