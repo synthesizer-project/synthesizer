@@ -1,4 +1,4 @@
-"""Comprehensive test suite for get_param and cache_model_params."""
+"""Comprehensive test suite for get_param, cache and ParameterFunction."""
 
 import numpy as np
 import pytest
@@ -166,6 +166,60 @@ class TestGetParamStringIndirection:
 
         with pytest.raises(exceptions.MissingAttribute):
             get_param("alias", model, None, emitter)
+
+
+class TestGetParamParameterFunction:
+    """Test ParameterFunction handling in get_param."""
+
+    def test_get_param_with_parameter_function(self):
+        """Test that ParameterFunction is called correctly."""
+
+        def compute_value(test_emitter_attr):
+            return test_emitter_attr * 2
+
+        model = MockModel()
+        func = ParameterFunction(
+            compute_value, "computed", ["test_emitter_attr"]
+        )
+        model.fixed_parameters["computed"] = func
+        emitter = MockEmitter()
+
+        result = get_param("computed", model, None, emitter)
+        assert result == 200.0
+
+    def test_get_param_parameter_function_with_multiple_args(self):
+        """Test ParameterFunction with multiple arguments."""
+
+        def compute_sum(test_emitter_attr, test_emission_attr):
+            return test_emitter_attr + test_emission_attr
+
+        model = MockModel()
+        func = ParameterFunction(
+            compute_sum, "sum", ["test_emitter_attr", "test_emission_attr"]
+        )
+        model.fixed_parameters["sum"] = func
+        emission = MockEmission()
+        emitter = MockEmitter()
+
+        result = get_param("sum", model, emission, emitter)
+        assert result == 142.0
+
+    def test_get_param_parameter_function_with_fixed_params(self):
+        """Test ParameterFunction accessing other fixed_parameters."""
+
+        def compute_scaled(test_emitter_attr, scale):
+            return test_emitter_attr * scale
+
+        model = MockModel()
+        model.fixed_parameters["scale"] = 3.0
+        func = ParameterFunction(
+            compute_scaled, "scaled", ["test_emitter_attr", "scale"]
+        )
+        model.fixed_parameters["scaled"] = func
+        emitter = MockEmitter()
+
+        result = get_param("scaled", model, None, emitter)
+        assert result == 300.0
 
 
 class TestGetParamLogged:
