@@ -56,6 +56,7 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
+from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
@@ -1560,3 +1561,45 @@ class LineCollection:
             lum=blended_line_lums * self.luminosity.units,
             cont=blended_line_conts * self.continuum.units,
         )
+
+    def create_sed(self, sed_lam):
+        """Create a synthesizer.sed.Sed object from the LineCollection.
+
+        Arguments:
+            sed_lam (unyt_array):
+                Wavelength grid.
+
+        Returns:
+            sed (synthesizer.sed.Sed):
+                synthesizer.sed.Sed object.
+
+        """
+        if not isinstance(sed_lam, unyt_array):
+            raise exceptions.MissingUnits(
+                """The wavelength must be a unyt_array with units length."""
+            )
+
+        # create empty spectra
+        sed_lnu = (np.zeros(len(sed_lam)) + 1) * erg / s / Hz
+
+        # loop over the lines in the collection and add them to the spectra
+        for lam, lum in zip(self.lam, self.lum):
+            # identify the element to place the line's luminosity
+            lam_index = (np.abs(sed_lam - lam)).argmin()
+
+            # the wavelength resolution at this wavelength
+            delta_lambda = 0.5 * (
+                sed_lam[lam_index + 1] - sed_lam[lam_index - 1]
+            )
+
+            # frequency of the line
+            nu = c / lam
+
+            # calculate the luminosity of the line in units of lnu
+            lnu_ = lam * (lum / nu) / delta_lambda
+
+            # add into the spectrum
+            sed_lnu[lam_index] += lnu_
+
+        # Return synthesizer.sed.Sed object
+        return Sed(lam=sed_lam, lnu=sed_lnu)
