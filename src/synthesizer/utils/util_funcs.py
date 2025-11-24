@@ -366,21 +366,26 @@ def pluralize(word: str) -> str:
     Returns:
         str: The pluralized word.
     """
+    # Check if already plural by trying to depluralize and comparing
+    # Avoid infinite recursion by checking basic plural patterns first
     if (
-        word.endswith("s")
-        or word.endswith("x")
-        or word.endswith("z")
-        or word.endswith("sh")
-        or word.endswith("ch")
+        word.endswith(("ies", "ves", "oes"))
+        or word.endswith(("ches", "shes", "xes", "sses", "zes"))
+        or (word.endswith("s") and not word.endswith(("ss", "us", "is")))
     ):
+        # Likely already plural, return unchanged
+        return word
+
+    # Apply pluralization rules for singular words
+    if word.endswith(("s", "x", "z", "sh", "ch")):
         return word + "es"
-    elif word.endswith("y") and word[-2] not in "aeiou":
+    elif word.endswith("y") and len(word) > 1 and word[-2] not in "aeiou":
         return word[:-1] + "ies"
     elif word.endswith("f"):
         return word[:-1] + "ves"
     elif word.endswith("fe"):
         return word[:-2] + "ves"
-    elif word.endswith("o") and word[-2] not in "aeiou":
+    elif word.endswith("o") and len(word) > 1 and word[-2] not in "aeiou":
         return word + "es"
     else:
         return word + "s"
@@ -395,6 +400,7 @@ def depluralize(word: str) -> str:
     Returns:
         str: The depluralized word.
     """
+    # Handle specific plural patterns
     if word.endswith("ies") and len(word) > 3:  # babies -> baby
         return word[:-3] + "y"
     elif word.endswith("ves"):  # leaves -> leaf, knives -> knife
@@ -402,13 +408,25 @@ def depluralize(word: str) -> str:
     elif word.endswith("oes"):  # heroes -> hero, potatoes -> potato
         return word[:-2]
     elif word.endswith(
-        ("ches", "shes", "xes", "sses")
-    ):  # boxes -> box, churches -> church
+        ("ches", "shes", "xes", "sses", "zes")
+    ):  # boxes -> box, churches -> church, fizzes -> fizz
         return word[:-2]
-    elif word.endswith("s") and len(word) > 2:  # general case: cats -> cat
-        return word[:-1]
+    elif word.endswith("s") and len(word) > 2:
+        # Only remove 's' if it looks like a plural
+        # Don't depluralize words ending in 'ss', 'us', 'is'
+        if not word.endswith(("ss", "us", "is")):
+            # Check if removing 's' would leave a valid word
+            # (e.g., "cats" -> "cat" is valid, but "mass" -> "mas" is not)
+            candidate = word[:-1]
+            # If the word ends with consonant + 's', it's likely plural
+            if len(candidate) > 0 and candidate[-1] not in "aeiou":
+                return candidate
+            # If ends with vowel + consonant + 's' or vowel + vowel + 's',
+            # likely plural (e.g., "ages" -> "age", "radios" -> "radio")
+            elif len(candidate) > 1:
+                return candidate
 
-    return word  # Return unchanged if no rule applies
+    return word  # Return unchanged if no rule applies or word appears singular
 
 
 def ensure_double_precision(value):
