@@ -1582,8 +1582,10 @@ class LineCollection:
         # create empty spectra with correct units
         sed_lnu = np.zeros(len(sed_lam)) * erg / s / Hz
 
+        vacuum_wavelengths = self.vacuum_wavelengths
+
         # loop over the lines in the collection and add them to the spectra
-        for lam, lum in zip(self.lam, self.lum):
+        for lam, lum in zip(vacuum_wavelengths, self.lum):
             # identify the element to place the line's luminosity
             lam_index = (np.abs(sed_lam - lam)).argmin()
 
