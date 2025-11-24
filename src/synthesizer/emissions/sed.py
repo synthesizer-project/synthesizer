@@ -1617,17 +1617,17 @@ class Sed:
         x = np.log(self.lam)
 
         # Regrid to uniform log-lambda spacing
-        x_uniform = np.linspace(x.min(), x.max(), len(x))
-        F_interp = interp1d(
+        x_uniform = np.linspace(x.min(), x.max(), 100000)
+        interpolation_function = interp1d(
             x, self.lnu, kind="linear", fill_value="extrapolate"
         )
-        F_uniform = F_interp(x_uniform)
+        lnu_uniform = interpolation_function(x_uniform)
 
         # Convert velocity sigma to log-lambda sigma
         # Δx = ln(λ) gives Δv = c*Δx
         sigma_x = sigma_v / c
 
-        # Gaussian kernel in log-lambda ---
+        # Gaussian kernel in log-lambda
         dx = x_uniform[1] - x_uniform[0]
         N = len(x_uniform)
         half = N // 2
@@ -1636,15 +1636,15 @@ class Sed:
         kernel = np.exp(-(kernel_x**2) / (2 * sigma_x**2))
         kernel /= kernel.sum()
 
-        # Convolution in velocity/log-lambda space ---
-        F_broad = fftconvolve(F_uniform, kernel, mode="same")
+        # Convolution in velocity/log-lambda space
+        lnu_broad = fftconvolve(lnu_uniform, kernel, mode="same")
 
-        # Interpolate back to original wavelength grid ---
-        F_back_interp = interp1d(
-            x_uniform, F_broad, kind="linear", fill_value="extrapolate"
+        # Interpolate back to original wavelength grid
+        lnu_back_interp = interp1d(
+            x_uniform, lnu_broad, kind="linear", fill_value="extrapolate"
         )
 
-        return Sed(self.lam, F_back_interp(x) * self.lnu.units)
+        return Sed(self.lam, lnu_back_interp(x) * self.lnu.units)
 
     def add_thermal_broadening(self, temperature, mu=1.0 * amu):
         """Calculate the thermally broadened spectrum.
