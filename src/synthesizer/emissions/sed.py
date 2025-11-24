@@ -264,10 +264,12 @@ class Sed:
                 f"({self._lnu.shape} != {second_sed._lnu.shape})"
             )
 
-        # They're compatible, add them and make a new Sed
+        # They're compatible, subtract the second_sed from the first and make
+        # a new Sed
         new_sed = Sed(self.lam, lnu=self.lnu - second_sed.lnu)
 
-        # If fnu exists on both then we need to add those too
+        # If fnu exists on both then we need to subtract the second from the
+        # original too
         if (self.fnu is not None) and (second_sed.fnu is not None):
             new_sed.fnu = self.fnu - second_sed.fnu
             new_sed.obsnu = self.obsnu
