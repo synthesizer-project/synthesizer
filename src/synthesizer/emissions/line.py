@@ -1579,13 +1579,17 @@ class LineCollection:
                 """The wavelength must be a unyt_array with units length."""
             )
 
-        # create empty spectra
-        sed_lnu = (np.zeros(len(sed_lam)) + 1) * erg / s / Hz
+        # create empty spectra with correct units
+        sed_lnu = np.zeros(len(sed_lam)) * erg / s / Hz
 
         # loop over the lines in the collection and add them to the spectra
         for lam, lum in zip(self.lam, self.lum):
             # identify the element to place the line's luminosity
             lam_index = (np.abs(sed_lam - lam)).argmin()
+
+            # Skip lines outside the wavelength range (at boundaries)
+            if lam_index == 0 or lam_index == len(sed_lam) - 1:
+                continue
 
             # the wavelength resolution at this wavelength
             delta_lambda = 0.5 * (
