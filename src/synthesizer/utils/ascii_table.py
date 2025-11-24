@@ -342,20 +342,6 @@ class TableFormatter:
             for col in zip(*rows, ("Property", "Value"))
         ]
 
-        # Calculate minimum width needed for the title (uppercased)
-        # The title needs: "| " + title + " |" = title + 4
-        # The content needs: col_widths[0] + " | " + col_widths[1] + " |"
-        #                  = col_widths[0] + col_widths[1] + 5
-        title_text_upper = title_text.upper()
-        min_content_width = len(title_text_upper) + 4 - 5  # -5 for separators
-        current_content_width = col_widths[0] + col_widths[1]
-
-        # If title is wider than content, expand columns proportionally
-        if min_content_width > current_content_width:
-            extra_width = min_content_width - current_content_width
-            # Add extra width to the second column (usually the values)
-            col_widths[1] += extra_width
-
         def format_row(row):
             return f"| {row[0]:<{col_widths[0]}} | {row[1]:<{col_widths[1]}} |"
 
@@ -365,7 +351,9 @@ class TableFormatter:
         )
 
         # Define the title
-        title = f"| {title_text_upper:^{col_widths[0] + col_widths[1] + 3}} |"
+        title = (
+            f"| {title_text:^{col_widths[0] + col_widths[1] + 3}} |".upper()
+        )
 
         lines = [
             "+" + "-" * (col_widths[0] + col_widths[1] + 5) + "+",

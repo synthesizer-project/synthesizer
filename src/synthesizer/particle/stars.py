@@ -1657,7 +1657,7 @@ def sample_sfzh(
     log10ages,
     log10metallicities,
     nstar,
-    initial_mass=None,
+    initial_mass=1 * Msun,
     **kwargs,
 ):
     """Create "fake" stellar particles by sampling a SFZH.
@@ -1673,12 +1673,7 @@ def sample_sfzh(
         nstar (int):
             The number of stellar particles to produce.
         initial_mass (int):
-            The initial mass of the fake stellar particles. If None, the
-            initial mass is set such that the total mass of the SFZH is
-            split equally among the nstar particles. If set, this mass will
-            override the parametric mass implied by the SFZH, instead using
-            the SFZH as a normalised probability distribution function for
-            sampling ages and metallicities.
+            The intial mass of the fake stellar particles.
         **kwargs:
             Any additional keyword arguments to pass to the Stars
             constructor.
@@ -1687,13 +1682,7 @@ def sample_sfzh(
         stars (Stars)
             An instance of Stars containing the fake stellar particles.
     """
-    # If we have an initial_mass of None, use the existing one
-    if initial_mass is None:
-        initial_mass = np.sum(sfzh) / nstar * Msun.in_base("galactic")
-    else:
-        initial_mass = initial_mass.in_base("galactic")
-
-    # Normalise the sfzh to produce a histogram (binned in time) between 0
+    # Normalise the sfhz to produce a histogram (binned in time) between 0
     # and 1.
     hist = sfzh / np.sum(sfzh)
 
@@ -1710,7 +1699,7 @@ def sample_sfzh(
         value_bins, (len(log10ages), len(log10metallicities))
     )
 
-    # Extract the sampled ages and metallicities and create an array
+    # Extract the sampled ages and metallicites and create an array
     random_from_cdf = np.column_stack(
         (log10ages[x_idx], log10metallicities[y_idx])
     )
