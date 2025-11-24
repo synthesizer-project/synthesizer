@@ -447,14 +447,18 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                                     f"Depth units must be compatible with "
                                     f"{expected_unit}. Got {depth_val.units} "
                                     f"for filter {filt} in instrument "
-                                    f"{inst.label}."
+                                    f"{inst.label}. Are you using a "
+                                    "rest-frame or observed-frame instrument "
+                                    "with the wrong image type?"
                                 )
                 elif isinstance(inst.depth, unyt_quantity):
                     if not unit_is_compatible(inst.depth, expected_unit):
                         raise exceptions.InconsistentArguments(
                             f"Depth units must be compatible with "
                             f"{expected_unit}. Got {inst.depth.units} "
-                            f"in instrument {inst.label}."
+                            f"in instrument {inst.label}. Are you using a "
+                            "rest-frame or observed-frame instrument with "
+                            "the wrong image type?"
                         )
 
             # Check noise_maps units if using noise maps
@@ -469,7 +473,9 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                                     f"Noise map units must be compatible "
                                     f"with {expected_unit}. Got "
                                     f"{noise_map.units} for filter {filt} "
-                                    f"in instrument {inst.label}."
+                                    f"in instrument {inst.label}. Are you "
+                                    "using a rest-frame or observed-frame "
+                                    "instrument with the wrong image type?"
                                 )
                 elif isinstance(inst.noise_maps, unyt_array):
                     if not unit_is_compatible(inst.noise_maps, expected_unit):
@@ -477,5 +483,7 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                             f"Noise map units must be compatible with "
                             f"{expected_unit}. Got "
                             f"{inst.noise_maps.units} in instrument "
-                            f"{inst.label}."
+                            f"{inst.label}. Are you using a rest-frame or "
+                            "observed-frame instrument with the wrong image "
+                            "type?"
                         )
