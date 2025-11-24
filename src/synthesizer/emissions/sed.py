@@ -223,6 +223,59 @@ class Sed:
 
         return Sed(self.lam, new_lnu * self.lnu.units)
 
+    def __sub__(self, second_sed):
+        """Subtract one Sed from another.
+
+        Overloads the subtraction operator to allow one Sed to be subtracted
+        from the other.
+
+        Args:
+            second_sed (object, Sed):
+                The Sed object to subtract from self.
+
+        Returns:
+            Sed
+                A new instance of Sed with subtracted lnu and fnu arrays.
+
+        Raises:
+            InconsistentAddition
+                If wavelength arrays or lnu arrays are incompatible an error
+                is raised.
+        """
+        # Ensure the wavelength arrays are compatible
+        if not (
+            self._lam[0] == second_sed._lam[0]
+            and self._lam[-1] == second_sed._lam[-1]
+        ):
+            raise exceptions.InconsistentAddition(
+                "Wavelength grids must be identical "
+                f"({self.lam.min()} -> {self.lam.max()} "
+                f"with shape {self._lam.shape} != "
+                f"{second_sed.lam.min()} -> {second_sed.lam.max()} "
+                f"with shape {second_sed._lam.shape})"
+            )
+
+        # Ensure the lnu arrays are compatible
+        # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
+        # not erroneously error. Nor is it expensive.
+        if self._lnu.shape[0] != second_sed._lnu.shape[0]:
+            raise exceptions.InconsistentAddition(
+                "SEDs must have same dimensions "
+                f"({self._lnu.shape} != {second_sed._lnu.shape})"
+            )
+
+        # They're compatible, add them and make a new Sed
+        new_sed = Sed(self.lam, lnu=self.lnu - second_sed.lnu)
+
+        # If fnu exists on both then we need to add those too
+        if (self.fnu is not None) and (second_sed.fnu is not None):
+            new_sed.fnu = self.fnu - second_sed.fnu
+            new_sed.obsnu = self.obsnu
+            new_sed.obslam = self.obslam
+            new_sed.redshift = self.redshift
+
+        return new_sed
+
     def __add__(self, second_sed):
         """Add two Sed objects together.
 
