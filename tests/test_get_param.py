@@ -541,6 +541,23 @@ class TestParameterFunction:
         )
         assert np.isclose(result, expected)
 
+    def test_parameter_function_repr(self):
+        """Test ParameterFunction has a nice string representation."""
+
+        def my_test_function(param1, param2):
+            return param1 + param2
+
+        param_func = ParameterFunction(
+            my_test_function, "result_param", ["param1", "param2"]
+        )
+
+        repr_str = repr(param_func)
+        assert "ParameterFunction" in repr_str
+        assert "my_test_function" in repr_str
+        assert "result_param" in repr_str
+        assert "param1" in repr_str
+        assert "param2" in repr_str
+
 
 class TestGetParamEdgeCases:
     """Test edge cases and error conditions."""

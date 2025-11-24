@@ -411,3 +411,16 @@ class ParameterFunction:
         )
 
         return val
+
+    def __repr__(self):
+        """Return a string representation of the ParameterFunction.
+
+        Returns:
+            str:
+                A string representation of the ParameterFunction.
+        """
+        return (
+            f"ParameterFunction({self.func.__name__}, "
+            f"sets='{self.sets}', "
+            f"args={self.func_args})"
+        )
