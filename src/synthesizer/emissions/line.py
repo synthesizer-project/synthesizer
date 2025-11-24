@@ -1575,31 +1575,32 @@ class LineCollection:
                 synthesizer.sed.Sed object.
 
         """
-        # create empty spectra with correct units
+        # Create empty spectra with correct units
         sed_lnu = np.zeros(len(sed_lam)) * erg / s / Hz
 
-        # loop over the lines in the collection and add them to the spectra
+        # Loop over the vacuum wavelengths and luminosities in the collection
+        # and add them to the spectra
         for lam, lum in zip(self.vacuum_wavelengths, self.lum):
-            # identify the element to place the line's luminosity
+            # Identify the element to place the line's luminosity
             lam_index = (np.abs(sed_lam - lam)).argmin()
 
             # Skip lines outside the wavelength range (at boundaries)
             if lam_index == 0 or lam_index == len(sed_lam) - 1:
                 continue
 
-            # the wavelength resolution at this wavelength
+            # The wavelength resolution at this wavelength
             delta_lambda = 0.5 * (
                 sed_lam[lam_index + 1] - sed_lam[lam_index - 1]
             )
 
-            # frequency of the line
+            # Frequency of the line
             nu = c / lam
 
-            # calculate the luminosity of the line in units of lnu
+            # Calculate the luminosity of the line in units of lnu
             lnu_ = lam * (lum / nu) / delta_lambda
 
-            # add into the spectrum
+            # Add into the spectrum
             sed_lnu[lam_index] += lnu_
 
-        # Return synthesizer.sed.Sed object
+        # Create and return new synthesizer.sed.Sed object
         return Sed(lam=sed_lam, lnu=sed_lnu)
