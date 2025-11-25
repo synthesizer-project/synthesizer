@@ -6,7 +6,7 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import G, Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Lsun, Msun, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -445,11 +445,13 @@ class BlackholesComponent(Component):
 
         Returns:
             unyt_array
-                The black hole eddington luminosity
+                The black hole eddington luminosity in solar luminosities
         """
-        # Note: the factor 1.257E38 comes from:
-        # 4*pi*G*mp*c*Msun/sigma_thompson
-        self.eddington_luminosity = 1.257e38 * self._mass
+        # The Eddington luminosity is given by:
+        # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
+        # Converting to solar luminosities:
+        # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
+        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
 
         return self.eddington_luminosity
 
