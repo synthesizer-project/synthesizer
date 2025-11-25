@@ -1647,6 +1647,44 @@ class Sed:
 
         return Sed(self.lam, lnu_back * self.lnu.units)
 
+    @accepts(sigma_v=km / s)
+    def doppler_broaden_sed(self, sigma_v):
+        """Doppler broaden the spectra in place.
+
+        Args:
+            sigma_v (unyt_array):
+                The velocity dispersion to broaden the spectra by.
+        """
+        # Convert wavelength grid to log-lambda space
+        x = np.log(self.lam)
+
+        # Regrid to uniform log-lambda spacing, using a very fine grid
+        x_uniform = np.linspace(x.min(), x.max(), 100000)
+        lnu_uniform = spectres(x_uniform, x, self.lnu, fill=0.0, verbose=False)
+
+        # Convert velocity sigma to log-lambda sigma
+        # Δx = ln(λ) gives Δv = c*Δx
+        sigma_x = sigma_v / c
+
+        # Gaussian kernel in log-lambda
+        dx = x_uniform[1] - x_uniform[0]
+        N = len(x_uniform)
+        half = N // 2
+
+        kernel_x = (np.arange(N) - half) * dx
+        kernel = np.exp(-(kernel_x**2) / (2 * sigma_x**2))
+        kernel /= kernel.sum()
+
+        # Convolution in velocity/log-lambda space
+        lnu_broad = fftconvolve(lnu_uniform, kernel, mode="same")
+
+        # Re-interpolate back onto original wavelength grid and update the sed
+        new_lnu = (
+            spectres(x, x_uniform, lnu_broad, fill=0.0, verbose=False)
+            * self.lnu.units
+        )
+        self.lnu = new_lnu
+
     @accepts(temperature=K, mu=amu)
     def create_thermally_broadened_sed(self, temperature, mu=1.0 * amu):
         """Create a spectra including the thermal broadening.
@@ -1669,7 +1707,26 @@ class Sed:
         # calculate the velocity dispersion
         sigma_v = np.sqrt(2 * kb * temperature / mu)
 
-        return self.add_doppler_broadening(sigma_v)
+        return self.create_doppler_broadened_sed(sigma_v)
+
+    @accepts(temperature=K, mu=amu)
+    def thermally_broaden_sed(self, temperature, mu=1.0 * amu):
+        """Thermally broaden the spectra in place.
+
+        This simply calculates the velocity dispersion from the temperature
+        and mean molecular weight.
+
+        Args:
+            temperature (unyt_array):
+                The temperature to broaden the spectra by.
+            mu (unyt_array):
+                The mean molecular weight of the gas. By default assumed to be
+                1 amu.
+        """
+        # calculate the velocity dispersion
+        sigma_v = np.sqrt(2 * kb * temperature / mu)
+
+        self.doppler_broaden_sed(sigma_v)
 
     def plot_spectra(self, **kwargs):
         """Plot the spectra.
