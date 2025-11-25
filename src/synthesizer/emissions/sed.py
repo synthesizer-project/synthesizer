@@ -1604,8 +1604,11 @@ class Sed:
         return ion_photon_prod_rate
 
     @accepts(sigma_v=km / s)
-    def add_doppler_broadening(self, sigma_v):
-        """Calculate the doppler broadened spectrum.
+    def create_doppler_broadened_sed(self, sigma_v):
+        """Create a spectra including the doppler broadening.
+
+        Creates a new Sed object with the spectra broadened by the provided
+        velocity dispersion using a convolution in log-lambda space.
 
         Args:
             sigma_v (unyt_array):
@@ -1645,8 +1648,8 @@ class Sed:
         return Sed(self.lam, lnu_back * self.lnu.units)
 
     @accepts(temperature=K, mu=amu)
-    def add_thermal_broadening(self, temperature, mu=1.0 * amu):
-        """Calculate the thermally broadened spectrum.
+    def create_thermally_broadened_sed(self, temperature, mu=1.0 * amu):
+        """Create a spectra including the thermal broadening.
 
         This simply calculates the velocity dispersion from the temperature
         and mean molecular weight.
