@@ -1190,9 +1190,12 @@ class TestValidateNoiseUnitCompatibility:
         from unyt import Unit
 
         from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
 
-        # Create instrument with correct units (test that no error is raised)
-        _inst = Instrument(
+        # Create instrument with correct units
+        inst = Instrument(
             label="test_inst",
             filters=None,
             resolution=1.0 * kpc,
@@ -1201,6 +1204,7 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
 
     def test_validate_depth_units_correct_flux(self):
         """Test validation passes with correct depth units for flux."""
@@ -1228,12 +1232,15 @@ class TestValidateNoiseUnitCompatibility:
         from unyt import Unit
 
         from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
 
         # Create noise map with correct units
         noise_map = np.random.randn(10, 10) * Unit("erg/s/Hz")
 
-        # Create instrument with correct units (test that no error is raised)
-        _inst = Instrument(
+        # Create instrument with correct units
+        inst = Instrument(
             label="test_inst",
             filters=None,
             resolution=1.0 * kpc,
@@ -1241,15 +1248,19 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
 
     def test_validate_with_dict_depth(self, nircam_instrument_no_psf):
         """Test validation with dictionary depth values."""
         from unyt import Unit
 
         from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
 
-        # Create instrument with dict depth (test that no error is raised)
-        _inst = Instrument(
+        # Create instrument with dict depth
+        inst = Instrument(
             label="test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
@@ -1264,15 +1275,19 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
 
     def test_validate_with_dict_noise_maps(self, nircam_instrument_no_psf):
         """Test validation with dictionary noise_maps values."""
         from unyt import Unit
 
         from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
 
         # Create instrument with dict noise_maps
-        _inst = Instrument(
+        inst = Instrument(
             label="test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
@@ -1285,6 +1300,167 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_apparent_magnitude_depth_scalar(self):
+        """Test validation passes with apparent magnitude depth (float)."""
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with apparent magnitude depth (plain float)
+        inst = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=1.0 * kpc,
+            depth=25.0,  # Apparent magnitude (dimensionless)
+            snrs=5.0,
+        )
+
+        # Should not raise for both luminosity and flux
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+        validate_noise_unit_compatibility([inst], "nJy")
+
+    def test_validate_apparent_magnitude_depth_int(self):
+        """Test validation passes with int apparent magnitude depth."""
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with int apparent magnitude depth
+        inst = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=1.0 * kpc,
+            depth=25,  # Integer apparent magnitude
+            snrs=5.0,
+        )
+
+        # Should not raise for both luminosity and flux
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+        validate_noise_unit_compatibility([inst], "nJy")
+
+    def test_validate_apparent_magnitude_depth_dict(
+        self, nircam_instrument_no_psf
+    ):
+        """Test validation with apparent magnitude depths (dict of floats)."""
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with apparent magnitude depths
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            depth={
+                "JWST/NIRCam.F090W": 27.5,  # Apparent magnitudes
+                "JWST/NIRCam.F150W": 28.0,
+            },
+            snrs={
+                "JWST/NIRCam.F090W": 5.0,
+                "JWST/NIRCam.F150W": 5.0,
+            },
+        )
+
+        # Should not raise for both luminosity and flux
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+        validate_noise_unit_compatibility([inst], "nJy")
+
+    def test_validate_invalid_depth_type_scalar(self):
+        """Test validation fails with invalid depth type (scalar)."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid depth type
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = "invalid"  # String instead of float or unyt_quantity
+        inst.noise_maps = None
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Depth must be a float.*or unyt_quantity",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_invalid_depth_type_dict(self, nircam_instrument_no_psf):
+        """Test validation fails with invalid depth type in dict."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid depth type in dict
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = {"JWST/NIRCam.F090W": "invalid"}  # String value
+        inst.noise_maps = None
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Depth must be a float.*or unyt_quantity",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_invalid_noise_map_type_scalar(self):
+        """Test validation fails with invalid noise_map type (scalar)."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid noise_map type
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = None
+        inst.noise_maps = "invalid"  # String instead of unyt_array
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Noise map must be a unyt_array",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_invalid_noise_map_type_dict(
+        self, nircam_instrument_no_psf
+    ):
+        """Test validation fails with invalid noise_map type in dict."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid noise_map type in dict
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = None
+        inst.noise_maps = {
+            "JWST/NIRCam.F090W": "invalid"  # String instead of unyt_array
+        }
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Noise map must be a unyt_array",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
 
 
 class TestPipelineUtilsEdgeCases:
