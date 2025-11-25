@@ -1697,7 +1697,7 @@ def sample_sfzh(
     # and 1.
     hist = sfzh / np.sum(sfzh)
 
-    # Compute the cumaltive distribution function
+    # Compute the cumulative distribution function
     cdf = np.cumsum(hist.flatten())
     cdf = cdf / cdf[-1]
 
