@@ -1678,7 +1678,7 @@ class Sed:
                 in_place is False.
         """
         # calculate the velocity dispersion
-        sigma_v = np.sqrt(2 * kb * temperature / mu)
+        sigma_v = np.sqrt(kb * temperature / mu)
 
         return self.doppler_broaden(sigma_v, in_place=in_place)
 
