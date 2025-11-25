@@ -24,6 +24,7 @@ from scipy.stats import linregress
 from spectres import spectres
 from unyt import (
     Hz,
+    K,
     amu,
     angstrom,
     c,
@@ -31,6 +32,7 @@ from unyt import (
     eV,
     h,
     kb,
+    km,
     pc,
     s,
     unyt_array,
@@ -1601,6 +1603,7 @@ class Sed:
 
         return ion_photon_prod_rate
 
+    @accepts(sigma_v=km / s)
     def add_doppler_broadening(self, sigma_v):
         """Calculate the doppler broadened spectrum.
 
@@ -1618,7 +1621,7 @@ class Sed:
 
         # Regrid to uniform log-lambda spacing, using a very fine grid
         x_uniform = np.linspace(x.min(), x.max(), 100000)
-        lnu_uniform = spectres(x_uniform, x, self.lnu)
+        lnu_uniform = spectres(x_uniform, x, self.lnu, fill=0.0, verbose=False)
 
         # Convert velocity sigma to log-lambda sigma
         # Δx = ln(λ) gives Δv = c*Δx
@@ -1637,10 +1640,11 @@ class Sed:
         lnu_broad = fftconvolve(lnu_uniform, kernel, mode="same")
 
         # Re-interpolate back onto original wavelength grid
-        lnu_back = spectres(x, x_uniform, lnu_broad)
+        lnu_back = spectres(x, x_uniform, lnu_broad, fill=0.0, verbose=False)
 
         return Sed(self.lam, lnu_back * self.lnu.units)
 
+    @accepts(temperature=K, mu=amu)
     def add_thermal_broadening(self, temperature, mu=1.0 * amu):
         """Calculate the thermally broadened spectrum.
 
