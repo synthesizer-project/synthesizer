@@ -366,14 +366,23 @@ def pluralize(word: str) -> str:
     Returns:
         str: The pluralized word.
     """
-    # Check if already plural by trying to depluralize and comparing
-    # Avoid infinite recursion by checking basic plural patterns first
-    if (
-        word.endswith(("ies", "ves", "oes"))
-        or word.endswith(("ches", "shes", "xes", "sses", "zes"))
-        or (word.endswith("s") and not word.endswith(("ss", "us", "is")))
+    # Handle known special cases explicitly
+    special_cases = {
+        "mass": "masses",
+        "gas": "gases",
+        "class": "classes",
+        "axis": "axes",
+        "ellipsis": "ellipses",
+    }
+    if word in special_cases:
+        return special_cases[word]
+
+    # Check if already plural by checking reliable plural patterns
+    # Only return early for suffixes that are definitively plural
+    if word.endswith(("ies", "ves", "oes")) or word.endswith(
+        ("ches", "shes", "xes", "sses", "zes")
     ):
-        # Likely already plural, return unchanged
+        # Definitively plural, return unchanged
         return word
 
     # Apply pluralization rules for singular words
@@ -400,31 +409,74 @@ def depluralize(word: str) -> str:
     Returns:
         str: The depluralized word.
     """
+    # Handle known special cases explicitly
+    special_cases = {
+        "masses": "mass",
+        "gases": "gas",
+        "classes": "class",
+        "axes": "axis",
+        "ellipses": "ellipsis",
+    }
+    if word in special_cases:
+        return special_cases[word]
+
     # Handle specific plural patterns
     if word.endswith("ies") and len(word) > 3:  # babies -> baby
         return word[:-3] + "y"
-    elif word.endswith("ves"):  # leaves -> leaf, knives -> knife
-        return word[:-3] + "f"
+    elif word.endswith(
+        "ves"
+    ):  # leaves -> leaf, knives -> knife, wives -> wife
+        # Handle known f/fe -> ves transformations
+        base = word[:-3]
+        # Check if it's a "fe" word (knife, wife, life)
+        if base.endswith(("kni", "wi", "li")):
+            return base + "fe"
+        # Otherwise assume it's an "f" word (leaf,elf, self, shelf, etc.)
+        return base + "f"
     elif word.endswith("oes"):  # heroes -> hero, potatoes -> potato
         return word[:-2]
     elif word.endswith(
         ("ches", "shes", "xes", "sses", "zes")
     ):  # boxes -> box, churches -> church, fizzes -> fizz
         return word[:-2]
+    elif word.endswith("ses") and len(word) > 3:
+        # buses -> bus, bonuses -> bonus, but not "gases" -> "gase"
+        # Check patterns where we should strip "es" not just "s"
+        if not word.endswith(("sses", "ases", "oses", "ises")):
+            # For "uses" endings, check if stripping "es" is valid
+            # buses -> bus (valid), bonuses -> bonus (valid)
+            if word.endswith("uses"):
+                candidate = word[:-2]
+                # If candidate ends with consonant, it's likely correct
+                if candidate and candidate[-1] not in "aeiou":
+                    return candidate
+            else:
+                return word[:-2]
     elif word.endswith("s") and len(word) > 2:
         # Only remove 's' if it looks like a plural
-        # Don't depluralize words ending in 'ss', 'us', 'is'
-        if not word.endswith(("ss", "us", "is")):
-            # Check if removing 's' would leave a valid word
-            # (e.g., "cats" -> "cat" is valid, but "mass" -> "mas" is not)
+        # Avoid depluralizin' mass nouns and common exceptions
+        if not word.endswith(("ss", "us", "is", "as", "news")):
+            # Additional check for known mass nouns
+            if word in ("gas", "mass", "class", "brass", "glass"):
+                return word
+            # Check if removing 's' would leave a plausible singular
             candidate = word[:-1]
-            # If the word ends with consonant + 's', it's likely plural
-            if len(candidate) > 0 and candidate[-1] not in "aeiou":
+            # If ends with consonant+s, likely plural (cats -> cat)
+            if len(candidate) >= 2 and candidate[-1] not in "aeiou":
                 return candidate
-            # If ends with vowel + consonant + 's' or vowel + vowel + 's',
-            # likely plural (e.g., "ages" -> "age", "radios" -> "radio")
-            elif len(candidate) > 1:
-                return candidate
+            # If ends with vowel+s, check for common patterns
+            # radios -> radio, videos -> video, ages -> age
+            elif len(candidate) >= 2:
+                # Handle "os" endings: radios, videos, but not "chaos"
+                if word.endswith("ios") or word.endswith("eos"):
+                    return candidate
+                # Handle vowel+consonant+vowel+s: ages, homes, etc.
+                if (
+                    len(candidate) >= 3
+                    and candidate[-1] in "aeiou"
+                    and candidate[-2] not in "aeiou"
+                ):
+                    return candidate
 
     return word  # Return unchanged if no rule applies or word appears singular
 
