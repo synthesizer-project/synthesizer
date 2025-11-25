@@ -1616,12 +1616,9 @@ class Sed:
         # Convert wavelength grid to log-lambda space
         x = np.log(self.lam)
 
-        # Regrid to uniform log-lambda spacing
+        # Regrid to uniform log-lambda spacing, using a very fine grid
         x_uniform = np.linspace(x.min(), x.max(), 100000)
-        interpolation_function = interp1d(
-            x, self.lnu, kind="linear", fill_value="extrapolate"
-        )
-        lnu_uniform = interpolation_function(x_uniform)
+        lnu_uniform = spectres(x_uniform, x, self.lnu)
 
         # Convert velocity sigma to log-lambda sigma
         # Δx = ln(λ) gives Δv = c*Δx
@@ -1639,12 +1636,10 @@ class Sed:
         # Convolution in velocity/log-lambda space
         lnu_broad = fftconvolve(lnu_uniform, kernel, mode="same")
 
-        # Interpolate back to original wavelength grid
-        lnu_back_interp = interp1d(
-            x_uniform, lnu_broad, kind="linear", fill_value="extrapolate"
-        )
+        # Re-interpolate back onto original wavelength grid
+        lnu_back = spectres(x, x_uniform, lnu_broad)
 
-        return Sed(self.lam, lnu_back_interp(x) * self.lnu.units)
+        return Sed(self.lam, lnu_back * self.lnu.units)
 
     def add_thermal_broadening(self, temperature, mu=1.0 * amu):
         """Calculate the thermally broadened spectrum.
