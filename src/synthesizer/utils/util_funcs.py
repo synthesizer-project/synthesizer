@@ -370,9 +370,7 @@ def pluralize(word: str) -> str:
     special_cases = {
         "mass": "masses",
         "gas": "gases",
-        "class": "classes",
         "axis": "axes",
-        "ellipsis": "ellipses",
     }
     if word in special_cases:
         return special_cases[word]
@@ -413,9 +411,7 @@ def depluralize(word: str) -> str:
     special_cases = {
         "masses": "mass",
         "gases": "gas",
-        "classes": "class",
         "axes": "axis",
-        "ellipses": "ellipsis",
     }
     if word in special_cases:
         return special_cases[word]
