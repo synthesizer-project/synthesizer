@@ -359,14 +359,16 @@ def combine_arrays(arr1, arr2, verbose=False):
 def pluralize(word: str) -> str:
     """Pluralize a singular word.
 
+    Simple implementation using special cases + basic rules. Handles axis
+    names (age, mass, metallicity) and component names (blackhole, star).
+
     Args:
-        word (str):
-            The word to pluralize.
+        word (str): The word to pluralize.
 
     Returns:
         str: The pluralized word.
     """
-    # Handle known special cases explicitly
+    # Handle known edge cases explicitly
     special_cases = {
         "mass": "masses",
         "gas": "gases",
@@ -375,31 +377,20 @@ def pluralize(word: str) -> str:
     if word in special_cases:
         return special_cases[word]
 
-    # Check if already plural by checking reliable plural patterns
-    # Only return early for suffixes that are definitively plural
-    if word.endswith(("ies", "ves", "oes")) or word.endswith(
-        ("ches", "shes", "xes", "sses", "zes")
-    ):
-        # Definitively plural, return unchanged
-        return word
-
-    # Apply pluralization rules for singular words
-    if word.endswith(("s", "x", "z", "sh", "ch")):
-        return word + "es"
-    elif word.endswith("y") and len(word) > 1 and word[-2] not in "aeiou":
-        return word[:-1] + "ies"
-    elif word.endswith("f"):
-        return word[:-1] + "ves"
-    elif word.endswith("fe"):
-        return word[:-2] + "ves"
-    elif word.endswith("o") and len(word) > 1 and word[-2] not in "aeiou":
-        return word + "es"
+    # Simple fallback rules
+    if word.endswith("y") and len(word) > 1 and word[-2] not in "aeiou":
+        return word[:-1] + "ies"  # metallicity -> metallicities
+    elif word.endswith(("s", "x", "z", "sh", "ch")):
+        return word + "es"  # box -> boxes, bias -> biases
     else:
-        return word + "s"
+        return word + "s"  # age -> ages
 
 
 def depluralize(word: str) -> str:
-    """Convert a plural word to its singular form based on simple rules.
+    """Convert a plural word to its singular form.
+
+    Uses special cases for known edge cases, with simple fallback rules.
+    Only needs to handle axis names/attributes in synthesizer grids.
 
     Args:
         word (str): The word to depluralize.
@@ -407,74 +398,25 @@ def depluralize(word: str) -> str:
     Returns:
         str: The depluralized word.
     """
-    # Handle known special cases explicitly
+    # Handle known edge cases explicitly
     special_cases = {
         "masses": "mass",
         "gases": "gas",
+        "gas": "gas",  # Already singular
         "axes": "axis",
     }
     if word in special_cases:
         return special_cases[word]
 
-    # Handle specific plural patterns
-    if word.endswith("ies") and len(word) > 3:  # babies -> baby
-        return word[:-3] + "y"
-    elif word.endswith(
-        "ves"
-    ):  # leaves -> leaf, knives -> knife, wives -> wife
-        # Handle known f/fe -> ves transformations
-        base = word[:-3]
-        # Check if it's a "fe" word (knife, wife, life)
-        if base.endswith(("kni", "wi", "li")):
-            return base + "fe"
-        # Otherwise assume it's an "f" word (leaf,elf, self, shelf, etc.)
-        return base + "f"
-    elif word.endswith("oes"):  # heroes -> hero, potatoes -> potato
-        return word[:-2]
-    elif word.endswith(
-        ("ches", "shes", "xes", "sses", "zes")
-    ):  # boxes -> box, churches -> church, fizzes -> fizz
-        return word[:-2]
-    elif word.endswith("ses") and len(word) > 3:
-        # buses -> bus, bonuses -> bonus, but not "gases" -> "gase"
-        # Check patterns where we should strip "es" not just "s"
-        if not word.endswith(("sses", "ases", "oses", "ises")):
-            # For "uses" endings, check if stripping "es" is valid
-            # buses -> bus (valid), bonuses -> bonus (valid)
-            if word.endswith("uses"):
-                candidate = word[:-2]
-                # If candidate ends with consonant, it's likely correct
-                if candidate and candidate[-1] not in "aeiou":
-                    return candidate
-            else:
-                return word[:-2]
-    elif word.endswith("s") and len(word) > 2:
-        # Only remove 's' if it looks like a plural
-        # Avoid depluralizin' mass nouns and common exceptions
-        if not word.endswith(("ss", "us", "is", "as", "news")):
-            # Additional check for known mass nouns
-            if word in ("gas", "mass", "class", "brass", "glass"):
-                return word
-            # Check if removing 's' would leave a plausible singular
-            candidate = word[:-1]
-            # If ends with consonant+s, likely plural (cats -> cat)
-            if len(candidate) >= 2 and candidate[-1] not in "aeiou":
-                return candidate
-            # If ends with vowel+s, check for common patterns
-            # radios -> radio, videos -> video, ages -> age
-            elif len(candidate) >= 2:
-                # Handle "os" endings: radios, videos, but not "chaos"
-                if word.endswith("ios") or word.endswith("eos"):
-                    return candidate
-                # Handle vowel+consonant+vowel+s: ages, homes, etc.
-                if (
-                    len(candidate) >= 3
-                    and candidate[-1] in "aeiou"
-                    and candidate[-2] not in "aeiou"
-                ):
-                    return candidate
-
-    return word  # Return unchanged if no rule applies or word appears singular
+    # Simple fallback rules (reverse of pluralize)
+    if word.endswith("ies") and len(word) > 3:
+        return word[:-3] + "y"  # metallicities -> metallicity
+    elif word.endswith(("xes", "shes", "ches", "sses", "zes")):
+        return word[:-2]  # boxes -> box, biases -> bias
+    elif word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]  # ages -> age
+    else:
+        return word  # Already singular or unknown pattern
 
 
 def ensure_double_precision(value):

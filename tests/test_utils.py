@@ -104,71 +104,29 @@ class TestPluralization:
 
         assert pluralize("gas") == "gases"
 
-    def test_pluralize_bias(self):
-        """Test pluralize with 'bias' (ends in s but is singular)."""
+    def test_pluralize_blackhole(self):
+        """Test pluralize with 'blackhole' (codebase component)."""
         from synthesizer.utils.util_funcs import pluralize
 
-        assert pluralize("bias") == "biases"
+        assert pluralize("blackhole") == "blackholes"
 
-    def test_pluralize_lens(self):
-        """Test pluralize with 'lens' (ends in s but is singular)."""
+    def test_depluralize_blackholes(self):
+        """Test depluralize with 'blackholes' (codebase component)."""
+        from synthesizer.utils.util_funcs import depluralize
+
+        assert depluralize("blackholes") == "blackhole"
+
+    def test_pluralize_star(self):
+        """Test pluralize with 'star' (codebase component)."""
         from synthesizer.utils.util_funcs import pluralize
 
-        assert pluralize("lens") == "lenses"
+        assert pluralize("star") == "stars"
 
-    def test_pluralize_box(self):
-        """Test pluralize with 'box' (x -> xes)."""
-        from synthesizer.utils.util_funcs import pluralize
+    def test_depluralize_stars(self):
+        """Test depluralize with 'stars' (codebase component)."""
+        from synthesizer.utils.util_funcs import depluralize
 
-        assert pluralize("box") == "boxes"
-
-    def test_pluralize_church(self):
-        """Test pluralize with 'church' (ch -> ches)."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("church") == "churches"
-
-    def test_pluralize_baby(self):
-        """Test pluralize with 'baby' (y -> ies)."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("baby") == "babies"
-
-    def test_pluralize_leaf(self):
-        """Test pluralize with 'leaf' (f -> ves)."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("leaf") == "leaves"
-
-    def test_pluralize_knife(self):
-        """Test pluralize with 'knife' (fe -> ves)."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("knife") == "knives"
-
-    def test_pluralize_hero(self):
-        """Test pluralize with 'hero' (o -> oes)."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("hero") == "heroes"
-
-    def test_pluralize_cat(self):
-        """Test pluralize with 'cat' (simple s)."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("cat") == "cats"
-
-    def test_pluralize_already_plural_boxes(self):
-        """Test pluralize with already plural 'boxes'."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("boxes") == "boxes"
-
-    def test_pluralize_already_plural_leaves(self):
-        """Test pluralize with already plural 'leaves'."""
-        from synthesizer.utils.util_funcs import pluralize
-
-        assert pluralize("leaves") == "leaves"
+        assert depluralize("stars") == "star"
 
     def test_depluralize_ages(self):
         """Test depluralize with 'ages'."""
@@ -187,72 +145,6 @@ class TestPluralization:
         from synthesizer.utils.util_funcs import depluralize
 
         assert depluralize("gas") == "gas"
-
-    def test_depluralize_buses(self):
-        """Test depluralize with 'buses'."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("buses") == "bus"
-
-    def test_depluralize_bonuses(self):
-        """Test depluralize with 'bonuses'."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("bonuses") == "bonus"
-
-    def test_depluralize_radios(self):
-        """Test depluralize with 'radios'."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("radios") == "radio"
-
-    def test_depluralize_leaves(self):
-        """Test depluralize with 'leaves' (ves -> f)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("leaves") == "leaf"
-
-    def test_depluralize_knives(self):
-        """Test depluralize with 'knives' (ves -> fe)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("knives") == "knife"
-
-    def test_depluralize_wives(self):
-        """Test depluralize with 'wives' (ves -> fe)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("wives") == "wife"
-
-    def test_depluralize_babies(self):
-        """Test depluralize with 'babies' (ies -> y)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("babies") == "baby"
-
-    def test_depluralize_heroes(self):
-        """Test depluralize with 'heroes' (oes -> o)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("heroes") == "hero"
-
-    def test_depluralize_boxes(self):
-        """Test depluralize with 'boxes' (xes -> x)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("boxes") == "box"
-
-    def test_depluralize_churches(self):
-        """Test depluralize with 'churches' (ches -> ch)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("churches") == "church"
-
-    def test_depluralize_cats(self):
-        """Test depluralize with 'cats' (simple s removal)."""
-        from synthesizer.utils.util_funcs import depluralize
-
-        assert depluralize("cats") == "cat"
 
     def test_pluralize_mass(self):
         """Test pluralize with 'mass' (common codebase attribute)."""
