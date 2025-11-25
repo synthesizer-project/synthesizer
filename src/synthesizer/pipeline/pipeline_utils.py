@@ -418,6 +418,12 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
     depth and noise_maps attributes with units compatible with the expected
     unit for the image type (luminosity or flux).
 
+    Note: depth can be specified as:
+        - Plain float/dict of floats: apparent magnitudes (dimensionless,
+          valid for both luminosity and flux images)
+        - unyt_quantity/dict of unyt_quantity: flux/luminosity with units
+          (must match image type)
+
     Args:
         instruments (list):
             A list of Instrument objects to validate.
@@ -439,6 +445,10 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
             if inst.depth is not None:
                 if isinstance(inst.depth, dict):
                     for filt, depth_val in inst.depth.items():
+                        # Skip plain floats/ints (apparent magnitudes)
+                        if isinstance(depth_val, (float, int)):
+                            continue
+                        # Validate unyt quantities
                         if isinstance(depth_val, unyt_quantity):
                             if not unit_is_compatible(
                                 depth_val, expected_unit
@@ -451,6 +461,17 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                                     "rest-frame or observed-frame instrument "
                                     "with the wrong image type?"
                                 )
+                        else:
+                            raise exceptions.InconsistentArguments(
+                                f"Depth must be a float (apparent magnitude) "
+                                f"or unyt_quantity with units. Got "
+                                f"{type(depth_val)} for filter {filt} in "
+                                f"instrument {inst.label}."
+                            )
+                # Skip plain floats/ints (apparent magnitudes)
+                elif isinstance(inst.depth, (float, int)):
+                    pass  # Apparent magnitudes are valid for both types
+                # Validate unyt quantities
                 elif isinstance(inst.depth, unyt_quantity):
                     if not unit_is_compatible(inst.depth, expected_unit):
                         raise exceptions.InconsistentArguments(
@@ -460,6 +481,12 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                             "rest-frame or observed-frame instrument with "
                             "the wrong image type?"
                         )
+                else:
+                    raise exceptions.InconsistentArguments(
+                        f"Depth must be a float (apparent magnitude) or "
+                        f"unyt_quantity with units. Got {type(inst.depth)} "
+                        f"in instrument {inst.label}."
+                    )
 
             # Check noise_maps units if using noise maps
             if inst.noise_maps is not None:
@@ -477,6 +504,12 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                                     "using a rest-frame or observed-frame "
                                     "instrument with the wrong image type?"
                                 )
+                        else:
+                            raise exceptions.InconsistentArguments(
+                                f"Noise map must be a unyt_array with units. "
+                                f"Got {type(noise_map)} for filter {filt} in "
+                                f"instrument {inst.label}."
+                            )
                 elif isinstance(inst.noise_maps, unyt_array):
                     if not unit_is_compatible(inst.noise_maps, expected_unit):
                         raise exceptions.InconsistentArguments(
@@ -487,3 +520,8 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                             "observed-frame instrument with the wrong image "
                             "type?"
                         )
+                else:
+                    raise exceptions.InconsistentArguments(
+                        f"Noise map must be a unyt_array with units. Got "
+                        f"{type(inst.noise_maps)} in instrument {inst.label}."
+                    )
