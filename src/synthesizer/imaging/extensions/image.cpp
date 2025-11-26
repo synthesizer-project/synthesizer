@@ -363,10 +363,10 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
           /* Compute the impact parameter in terms of the smoothing length. */
           double q = b / part->sml;
 
-          /* Early skip if the pixel is outside the kernel threshold. */
-          if (q > threshold) {
-            continue;
-          }
+          // /* Early skip if the pixel is outside the kernel threshold. */
+          // if (q > threshold) {
+          //   continue;
+          // }
 
           /* Get the kernel value at this pixel position. */
           double kvalue_interpolated =
