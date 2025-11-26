@@ -306,6 +306,8 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
        * to the nearest pixel in our local buffer. */
       if (part->sml < res / 2.0) {
 
+        printf("We are in small smoothing length handler\n");
+
         /* Check if this pixel falls within our local region. */
         if (i >= i_min && i < i_max && j >= j_min && j < j_max) {
 
