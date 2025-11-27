@@ -48,6 +48,7 @@ def _validate_centered_coordinates(cent_coords, *, warn_only=False):
         return
 
     # Determine the tolerance for centering based on the span of the
+    # coordinates to allow for relative precision in the centering check.
     coord_min = cent_coords.min(axis=0)
     coord_max = cent_coords.max(axis=0)
     span = np.max(np.abs(coord_max - coord_min))
