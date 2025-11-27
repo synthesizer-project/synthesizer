@@ -100,19 +100,6 @@ def get_param(
     if _visited is None:
         _visited = set()
 
-    # Check for cycles in string alias resolution
-    if param in _visited:
-        # We've seen this parameter before - there's a cycle
-        if default is not _NO_DEFAULT:
-            return default
-        raise exceptions.MissingAttribute(
-            f"Cyclic alias detected while resolving parameter '{param}'. "
-            f"Alias chain: {' -> '.join(_visited)} -> {param}"
-        )
-
-    # Add current parameter to visited set for cycle detection
-    _visited.add(param)
-
     # Initialize the value to None
     value = None
 
@@ -147,8 +134,24 @@ def get_param(
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
     if value is not None and isinstance(value, str):
+        # Check for cycles before following this alias
+        if value in _visited:
+            # We've seen this alias before - there's a cycle
+            if default is not _NO_DEFAULT:
+                return default
+            raise exceptions.MissingAttribute(
+                f"Cyclic alias detected while resolving parameter '{param}'. "
+                f"Alias chain: {' -> '.join(_visited)} -> {value}"
+            )
+        # Add current alias to visited set and follow it
+        new_visited = _visited | {param}
         value = get_param(
-            value, None, None, emitter, default=default, _visited=_visited
+            value,
+            None,
+            None,
+            emitter,
+            default=default,
+            _visited=new_visited,
         )
 
     # If we found a value, return it (early exit chance to avoid extra logic)
