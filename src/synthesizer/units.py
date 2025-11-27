@@ -38,7 +38,6 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
-from synthesizer.data.initialise import synth_initialise
 from synthesizer.synth_warnings import warn
 
 # Define the path to your YAML file
@@ -457,14 +456,7 @@ class Quantity:
         # Get the unit based on the category passed at initialisation. This
         # can be overridden in __set_name__ if the user set a specific unit for
         # the attribute associated with this Quantity.
-        try:
-            self.unit = getattr(Units(), category)
-        except AttributeError:
-            # If we don't have this unit we may need to update the unit system
-            synth_initialise(verbose=False)
-
-            # Try again, this will error if we still don't have the unit
-            self.unit = getattr(Units(), category)
+        self.unit = getattr(Units(), category)
 
     def __set_name__(self, owner, name):
         """Store the name of the class variable when it is assigned a Quantity.
