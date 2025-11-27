@@ -283,6 +283,255 @@ class TestSpectralCube:
         assert basic_cube.cube.shape == (5, 5, 10)
         assert np.sum(basic_cube.cube) >= 0
 
+    def test_spectral_cube_flux_conservation_smoothed(self):
+        """Test flux conservation in smoothed spectral cubes.
+
+        Flux in each wavelength slice should be conserved when using SPH
+        smoothing.
+        """
+        from synthesizer.emissions.sed import Sed
+
+        # Create spectral cube
+        wavelengths = np.linspace(5000, 6000, 5) * angstrom
+        cube = SpectralCube(
+            resolution=0.2 * kpc, fov=2.0 * kpc, lam=wavelengths
+        )
+
+        # Create particles with known spectra
+        n_particles = 10
+        n_wavelengths = len(wavelengths)
+
+        # Simple constant SED per particle for easy flux tracking
+        spectra_values = np.ones((n_particles, n_wavelengths)) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        coords = unyt_array(
+            np.random.uniform(-0.8, 0.8, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0  # Keep z=0
+
+        smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
+
+        # Generate smoothed cube
+        kernel = Kernel().get_kernel()
+        cube.get_data_cube_smoothed(
+            sed, coords, smoothing_lengths, kernel=kernel
+        )
+
+        # Check flux conservation for each wavelength slice
+        expected_flux_per_wavelength = np.sum(spectra_values, axis=0)
+
+        for i in range(n_wavelengths):
+            wavelength_slice = cube.cube[:, :, i]
+            slice_flux = np.sum(wavelength_slice)
+
+            # FLUX MUST BE CONSERVED - 1% tolerance for numerical precision
+            assert np.isclose(
+                slice_flux, expected_flux_per_wavelength[i], rtol=0.01
+            ), (
+                f"Wavelength slice {i} flux {slice_flux} != expected "
+                f"{expected_flux_per_wavelength[i]} - FLUX MUST BE CONSERVED!"
+            )
+
+    def test_spectral_cube_very_small_smoothing_lengths(self):
+        """Test spectral cube with very small smoothing lengths.
+
+        When smoothing length << pixel size, flux should still be conserved.
+        """
+        from synthesizer.emissions.sed import Sed
+
+        # Create spectral cube
+        wavelengths = np.linspace(5000, 6000, 3) * angstrom
+        resolution = 0.5 * kpc
+        cube = SpectralCube(
+            resolution=resolution, fov=5.0 * kpc, lam=wavelengths
+        )
+
+        # Create particles with very small smoothing lengths
+        n_particles = 5
+        n_wavelengths = len(wavelengths)
+
+        spectra_values = np.ones((n_particles, n_wavelengths)) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        # Place particles slightly off pixel boundaries to avoid numerical
+        # issues. Spread particles around origin to satisfy centering
+        # requirement
+        coords = unyt_array(
+            [
+                [-0.02, -0.02, 0.0],
+                [-0.01, -0.01, 0.0],
+                [0.0, 0.03, 0.0],
+                [0.01, 0.01, 0.0],
+                [0.02, 0.02, 0.0],
+            ],
+            kpc,
+        )
+        smoothing_lengths = unyt_array(
+            [0.01] * n_particles, kpc
+        )  # 50x smaller
+
+        kernel = Kernel().get_kernel()
+        cube.get_data_cube_smoothed(
+            sed, coords, smoothing_lengths, kernel=kernel
+        )
+
+        # Check total flux conservation
+        expected_total_flux = np.sum(spectra_values)
+        actual_total_flux = np.sum(cube.cube)
+
+        # Flux must be conserved to within 1% (numerical precision)
+        assert np.isclose(actual_total_flux, expected_total_flux, rtol=0.01), (
+            f"Total flux {actual_total_flux} != expected {expected_total_flux}"
+            f" - more than 1% flux lost!"
+        )
+
+    def test_spectral_cube_large_smoothing_lengths(self):
+        """Test spectral cube with large smoothing lengths.
+
+        When smoothing length >> pixel size, flux should still be conserved.
+        """
+        from synthesizer.emissions.sed import Sed
+
+        # Create spectral cube with large FOV to contain kernel support
+        wavelengths = np.linspace(5000, 6000, 4) * angstrom
+        resolution = 0.2 * kpc
+        # FOV must be large enough to contain particles + kernel support
+        # Kernel radius = smoothing_length * threshold ≈ 0.6 * 1.825 = 1.1
+        # So FOV = 2 * (max_pos + kernel_radius) = 2 * (0.5 + 1.1) = 3.2
+        cube = SpectralCube(
+            resolution=resolution, fov=4.0 * kpc, lam=wavelengths
+        )
+
+        # Create particles with large smoothing lengths
+        n_particles = 8
+        n_wavelengths = len(wavelengths)
+
+        spectra_values = np.ones((n_particles, n_wavelengths)) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        # Keep particles well away from FOV edges
+        coords = unyt_array(
+            np.random.uniform(-0.5, 0.5, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0
+
+        # Use smoothing length that's large compared to pixels but fits in FOV
+        smoothing_lengths = unyt_array(
+            [0.6] * n_particles, kpc
+        )  # 3x larger than res
+
+        kernel = Kernel().get_kernel()
+        cube.get_data_cube_smoothed(
+            sed, coords, smoothing_lengths, kernel=kernel
+        )
+
+        # Check total flux conservation
+        expected_total_flux = np.sum(spectra_values)
+        actual_total_flux = np.sum(cube.cube)
+
+        # Flux must be conserved to within 1% (numerical precision)
+        assert np.isclose(actual_total_flux, expected_total_flux, rtol=0.01), (
+            f"Total flux {actual_total_flux} != expected {expected_total_flux}"
+            f" - more than 1% flux lost!"
+        )
+
+    def test_spectral_cube_threading_consistency(self):
+        """Test that spectral cubes are consistent with different threading.
+
+        Serial and parallel execution should give identical results.
+        """
+        from synthesizer.emissions.sed import Sed
+
+        # Create spectral cube
+        wavelengths = np.linspace(5000, 6000, 6) * angstrom
+        n_particles = 20
+        n_wavelengths = len(wavelengths)
+
+        # Create reproducible SED data
+        np.random.seed(42)
+        spectra_values = np.random.rand(n_particles, n_wavelengths) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        coords = unyt_array(
+            np.random.uniform(-0.8, 0.8, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0
+
+        smoothing_lengths = unyt_array(
+            np.random.uniform(0.1, 0.5, n_particles), kpc
+        )
+
+        kernel = Kernel().get_kernel()
+
+        # Test different thread counts
+        results = {}
+        for nthreads in [1, 2, 4]:
+            cube = SpectralCube(
+                resolution=0.15 * kpc, fov=2.0 * kpc, lam=wavelengths
+            )
+            cube.get_data_cube_smoothed(
+                sed,
+                coords,
+                smoothing_lengths,
+                kernel=kernel,
+                nthreads=nthreads,
+            )
+            results[nthreads] = cube.cube.copy()
+
+        # All thread counts should give identical results
+        for nthreads in [2, 4]:
+            assert np.allclose(results[1], results[nthreads], rtol=1e-10), (
+                f"Results with {nthreads} threads differ from serial"
+            )
+
+    def test_spectral_cube_wavelength_independence(self):
+        """Test that each wavelength slice is computed independently.
+
+        Different wavelength slices should not affect each other.
+        """
+        from synthesizer.emissions.sed import Sed
+
+        # Create spectral cube
+        wavelengths = np.linspace(5000, 6000, 3) * angstrom
+        cube = SpectralCube(
+            resolution=0.2 * kpc, fov=2.0 * kpc, lam=wavelengths
+        )
+
+        # Create particles with varying spectra
+        n_particles = 5
+        n_wavelengths = len(wavelengths)
+
+        # Different flux at each wavelength
+        spectra_values = np.zeros((n_particles, n_wavelengths))
+        spectra_values[:, 0] = 1e30  # Only first wavelength has flux
+        spectra_values[:, 1] = 2e30  # Only second wavelength has flux
+        spectra_values[:, 2] = 3e30  # Only third wavelength has flux
+
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        coords = unyt_array(
+            np.random.uniform(-0.8, 0.8, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0
+
+        smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
+
+        kernel = Kernel().get_kernel()
+        cube.get_data_cube_smoothed(
+            sed, coords, smoothing_lengths, kernel=kernel
+        )
+
+        # Check each wavelength slice independently
+        for i in range(n_wavelengths):
+            expected_flux = np.sum(spectra_values[:, i])
+            actual_flux = np.sum(cube.cube[:, :, i])
+
+            assert np.isclose(actual_flux, expected_flux, rtol=0.01), (
+                f"Wavelength {i} flux {actual_flux} != "
+                f"expected {expected_flux}"
+            )
+
 
 class TestImageIntegration:
     """Integration tests for complete workflows."""
