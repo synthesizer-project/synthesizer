@@ -678,10 +678,11 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
 
     def _make_torus(self, torus_emission_model, **kwargs):
         """Make the torus spectra."""
+        torus_emission_model.set_scaler(self.disc_incident_isotropic)
+
         return BlackHoleEmissionModel(
             label="torus",
             generator=torus_emission_model,
-            lum_intrinsic_model=self.disc_incident_isotropic,
             scale_by="torus_fraction",
             **kwargs,
         )

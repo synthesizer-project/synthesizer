@@ -96,10 +96,14 @@ class Instrument:
             lam (unyt_array, optional):
                 The wavelength array of the Instrument (with units). Default
                 is None.
-            depth (dict/float, optional):
-                The depth of the Instrument in apparent mags. If filters are
-                passed depth must be a dictionaries of depths with and entry
-                per filter. Default is None.
+            depth (dict/float/unyt_quantity, optional):
+                The depth of the Instrument. Can be specified as:
+                - float: apparent magnitude (dimensionless)
+                - unyt_quantity: flux or luminosity with units
+                - dict: mapping of filter names to depths (float or
+                  unyt_quantity)
+                If filters are passed, depth must be a dictionary with an
+                entry per filter. Default is None.
             depth_app_radius (unyt_quantity, optional):
                 The depth aperture radius of the Instrument (with units).
                 If this is omitted but SNRs and depths are provided, it is
@@ -113,12 +117,12 @@ class Instrument:
                 a dictionary of PSFs with an entry for each filter. If doing
                 resolved spectroscopy this should be an array.
                 Default is None.
-            noise_maps (unyt_array, optional):
-                The noise maps of the Instrument. If doing imaging this should
-                be a dictionary of noise maps with an entry for each filter.
-                If doing resolved spectroscopy this should be an array with
-                noise as a function of wavelength.
-                Default is None.
+            noise_maps (dict/unyt_array, optional):
+                The noise maps of the Instrument (must have units). Can be:
+                - unyt_array: noise as a function of wavelength (spectroscopy)
+                - dict: mapping of filter names to noise maps (imaging)
+                Units must be compatible with the image type (flux or
+                luminosity). Default is None.
         """
         # Set the label of the Instrument
         self.label = label

@@ -909,3 +909,936 @@ class TestPipelineOperations:
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
         ), "No SFH was calculated"
+
+
+class TestPipelineNewFeatures:
+    """Tests for new pipeline features."""
+
+    def test_get_images_luminosity_with_cosmo(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
+    ):
+        """Test that cosmo parameter is properly passed."""
+        # Add dummy galaxies with angular resolution
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            nircam_instrument_no_psf,
+            fov=100 * Mpc,
+            kernel=kernel,
+            cosmo=cosmo,
+        )
+
+        # Check that cosmo was stored
+        assert (
+            pipeline_with_galaxies_per_particle._operation_kwargs[
+                "get_images_luminosity"
+            ]["cosmo"]
+            is cosmo
+        ), "Cosmo parameter not stored correctly"
+
+        # Run the pipeline and ensure no errors
+        pipeline_with_galaxies_per_particle.run()
+        assert pipeline_with_galaxies_per_particle._analysis_complete
+
+    def test_get_images_luminosity_write_all_true(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument,
+    ):
+        """Test that write_all=True keeps intermediate images."""
+        # Add dummy galaxies with PSF and write_all=True
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            nircam_instrument,
+            fov=100 * Mpc,
+            kernel=kernel,
+            write_all=True,
+        )
+        pipeline_with_galaxies_per_particle.run()
+
+        # Check that both base and PSF images exist
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_lum
+            )
+            > 0
+        ), "Base images were removed despite write_all=True"
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_lum_psf
+            )
+            > 0
+        ), "PSF images not calculated"
+
+    def test_get_images_luminosity_write_all_false(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument,
+    ):
+        """Test that write_all=False removes intermediate images."""
+        # Add dummy galaxies with PSF and write_all=False (default)
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            nircam_instrument,
+            fov=100 * Mpc,
+            kernel=kernel,
+            write_all=False,
+        )
+        pipeline_with_galaxies_per_particle.run()
+
+        # Check that only PSF images exist
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_lum
+            )
+            == 0
+        ), "Base images were not removed"
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_lum_psf
+            )
+            > 0
+        ), "PSF images not calculated"
+
+    def test_get_images_flux_write_all_true(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument,
+    ):
+        """Test that write_all=True keeps intermediate flux images."""
+        # Add dummy galaxies with PSF and write_all=True
+        pipeline_with_galaxies_per_particle.get_images_flux(
+            nircam_instrument,
+            fov=100 * Mpc,
+            kernel=kernel,
+            cosmo=cosmo,
+            write_all=True,
+        )
+        pipeline_with_galaxies_per_particle.run()
+
+        # Check that both base and PSF images exist
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_flux
+            )
+            > 0
+        ), "Base flux images were removed despite write_all=True"
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_flux_psf
+            )
+            > 0
+        ), "PSF flux images not calculated"
+
+    def test_get_images_flux_write_all_false(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument,
+    ):
+        """Test that write_all=False removes intermediate flux images."""
+        # Add dummy galaxies with PSF and write_all=False (default)
+        pipeline_with_galaxies_per_particle.get_images_flux(
+            nircam_instrument,
+            fov=100 * Mpc,
+            kernel=kernel,
+            cosmo=cosmo,
+            write_all=False,
+        )
+        pipeline_with_galaxies_per_particle.run()
+
+        # Check that only PSF images exist
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_flux
+            )
+            == 0
+        ), "Base flux images were not removed"
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.images_flux_psf
+            )
+            > 0
+        ), "PSF flux images not calculated"
+
+    def test_noise_unit_validation_luminosity_depth_wrong_units(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
+    ):
+        """Test that wrong depth units for luminosity images raise error."""
+        from unyt import nJy
+
+        from synthesizer.instruments import Instrument
+
+        # Create instrument with wrong units (nJy instead of erg/s/Hz)
+        bad_instrument = Instrument(
+            label="bad_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=nircam_instrument_no_psf.resolution,
+            depth={"JWST/NIRCam.F090W": 1.0 * nJy},
+            snrs={"JWST/NIRCam.F090W": 5.0},
+        )
+
+        # Should raise error when trying to get luminosity images
+        with pytest.raises(exceptions.InconsistentArguments, match="erg"):
+            pipeline_with_galaxies_per_particle.get_images_luminosity(
+                bad_instrument,
+                fov=100 * Mpc,
+                kernel=kernel,
+            )
+
+    def test_noise_unit_validation_flux_depth_wrong_units(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
+    ):
+        """Test that wrong depth units for flux images raise error."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+
+        # Create instrument with wrong units (erg/s/Hz instead of nJy)
+        bad_instrument = Instrument(
+            label="bad_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=nircam_instrument_no_psf.resolution,
+            depth={"JWST/NIRCam.F090W": 1.0 * Unit("erg/s/Hz")},
+            snrs={"JWST/NIRCam.F090W": 5.0},
+        )
+
+        # Should raise error when trying to get flux images
+        with pytest.raises(exceptions.InconsistentArguments, match="nJy"):
+            pipeline_with_galaxies_per_particle.get_images_flux(
+                bad_instrument,
+                fov=100 * Mpc,
+                kernel=kernel,
+                cosmo=cosmo,
+            )
+
+    def test_noise_unit_validation_luminosity_noise_maps_wrong_units(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
+    ):
+        """Test wrong noise_maps units for luminosity images raise error."""
+        from unyt import nJy
+
+        from synthesizer.instruments import Instrument
+
+        # Create a dummy noise map with wrong units
+        noise_map = np.random.randn(100, 100) * nJy
+
+        # Create instrument with wrong units (nJy instead of erg/s/Hz)
+        bad_instrument = Instrument(
+            label="bad_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=nircam_instrument_no_psf.resolution,
+            noise_maps={"JWST/NIRCam.F090W": noise_map},
+        )
+
+        # Should raise error when trying to get luminosity images
+        with pytest.raises(exceptions.InconsistentArguments, match="erg"):
+            pipeline_with_galaxies_per_particle.get_images_luminosity(
+                bad_instrument,
+                fov=100 * Mpc,
+                kernel=kernel,
+            )
+
+    def test_noise_unit_validation_flux_noise_maps_wrong_units(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
+    ):
+        """Test that wrong noise_maps units for flux images raise error."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+
+        # Create a dummy noise map with wrong units
+        noise_map = np.random.randn(100, 100) * Unit("erg/s/Hz")
+
+        # Create instrument with wrong units (erg/s/Hz instead of nJy)
+        bad_instrument = Instrument(
+            label="bad_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=nircam_instrument_no_psf.resolution,
+            noise_maps={"JWST/NIRCam.F090W": noise_map},
+        )
+
+        # Should raise error when trying to get flux images
+        with pytest.raises(exceptions.InconsistentArguments, match="nJy"):
+            pipeline_with_galaxies_per_particle.get_images_flux(
+                bad_instrument,
+                fov=100 * Mpc,
+                kernel=kernel,
+                cosmo=cosmo,
+            )
+
+
+class TestValidateNoiseUnitCompatibility:
+    """Tests for the validate_noise_unit_compatibility utility function."""
+
+    def test_validate_depth_units_correct_luminosity(self):
+        """Test validation passes with correct depth units for luminosity."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with correct units
+        inst = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=1.0 * kpc,
+            depth=1.0 * Unit("erg/s/Hz"),
+            snrs=5.0,
+        )
+
+        # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_depth_units_correct_flux(self):
+        """Test validation passes with correct depth units for flux."""
+        from unyt import nJy
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with correct units
+        inst = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=1.0 * kpc,
+            depth=1.0 * nJy,
+            snrs=5.0,
+        )
+
+        # Should not raise
+        validate_noise_unit_compatibility([inst], "nJy")
+
+    def test_validate_noise_maps_units_correct(self):
+        """Test validation passes with correct noise_maps units."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create noise map with correct units
+        noise_map = np.random.randn(10, 10) * Unit("erg/s/Hz")
+
+        # Create instrument with correct units
+        inst = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=1.0 * kpc,
+            noise_maps=noise_map,
+        )
+
+        # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_with_dict_depth(self, nircam_instrument_no_psf):
+        """Test validation with dictionary depth values."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with dict depth
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            depth={
+                "JWST/NIRCam.F090W": 1.0 * Unit("erg/s/Hz"),
+                "JWST/NIRCam.F150W": 2.0 * Unit("erg/s/Hz"),
+            },
+            snrs={
+                "JWST/NIRCam.F090W": 5.0,
+                "JWST/NIRCam.F150W": 5.0,
+            },
+        )
+
+        # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_with_dict_noise_maps(self, nircam_instrument_no_psf):
+        """Test validation with dictionary noise_maps values."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with dict noise_maps
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            noise_maps={
+                "JWST/NIRCam.F090W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+                "JWST/NIRCam.F150W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+            },
+        )
+
+        # Should not raise
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_apparent_magnitude_depth_scalar(self):
+        """Test validation passes with apparent magnitude depth (float)."""
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with apparent magnitude depth (plain float)
+        inst = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=1.0 * kpc,
+            depth=25.0,  # Apparent magnitude (dimensionless)
+            snrs=5.0,
+        )
+
+        # Should not raise for both luminosity and flux
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+        validate_noise_unit_compatibility([inst], "nJy")
+
+    def test_validate_apparent_magnitude_depth_int(self):
+        """Test validation passes with int apparent magnitude depth."""
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with int apparent magnitude depth
+        inst = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=1.0 * kpc,
+            depth=25,  # Integer apparent magnitude
+            snrs=5.0,
+        )
+
+        # Should not raise for both luminosity and flux
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+        validate_noise_unit_compatibility([inst], "nJy")
+
+    def test_validate_apparent_magnitude_depth_dict(
+        self, nircam_instrument_no_psf
+    ):
+        """Test validation with apparent magnitude depths (dict of floats)."""
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create instrument with apparent magnitude depths
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            depth={
+                "JWST/NIRCam.F090W": 27.5,  # Apparent magnitudes
+                "JWST/NIRCam.F150W": 28.0,
+            },
+            snrs={
+                "JWST/NIRCam.F090W": 5.0,
+                "JWST/NIRCam.F150W": 5.0,
+            },
+        )
+
+        # Should not raise for both luminosity and flux
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+        validate_noise_unit_compatibility([inst], "nJy")
+
+    def test_validate_invalid_depth_type_scalar(self):
+        """Test validation fails with invalid depth type (scalar)."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid depth type
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = "invalid"  # String instead of float or unyt_quantity
+        inst.noise_maps = None
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Depth must be a float.*or unyt_quantity",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_invalid_depth_type_dict(self, nircam_instrument_no_psf):
+        """Test validation fails with invalid depth type in dict."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid depth type in dict
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = {"JWST/NIRCam.F090W": "invalid"}  # String value
+        inst.noise_maps = None
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Depth must be a float.*or unyt_quantity",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_invalid_noise_map_type_scalar(self):
+        """Test validation fails with invalid noise_map type (scalar)."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid noise_map type
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = None
+        inst.noise_maps = "invalid"  # String instead of unyt_array
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Noise map must be a unyt_array",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_invalid_noise_map_type_dict(
+        self, nircam_instrument_no_psf
+    ):
+        """Test validation fails with invalid noise_map type in dict."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create mock instrument with invalid noise_map type in dict
+        inst = MagicMock()
+        inst.label = "test_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = None
+        inst.noise_maps = {
+            "JWST/NIRCam.F090W": "invalid"  # String instead of unyt_array
+        }
+
+        # Should raise error about invalid type
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="Noise map must be a unyt_array",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+
+class TestPipelineUtilsEdgeCases:
+    """Tests for edge cases in pipeline_utils to achieve 100% coverage."""
+
+    def test_discover_attr_paths_with_property_error(self):
+        """Test discover_attr_paths_recursive with property error."""
+        from synthesizer.pipeline.pipeline_utils import (
+            discover_attr_paths_recursive,
+        )
+
+        class BrokenProperty:
+            @property
+            def broken(self):
+                raise RuntimeError("This property is broken")
+
+        obj = BrokenProperty()
+        output_set = set()
+        # Should not raise, should skip the broken property
+        result = discover_attr_paths_recursive(obj, output_set=output_set)
+        assert isinstance(result, set)
+
+    def test_discover_attr_paths_with_none_value(self):
+        """Test discover_attr_paths_recursive with None values."""
+        from synthesizer.pipeline.pipeline_utils import (
+            discover_attr_paths_recursive,
+        )
+
+        class HasNone:
+            def __init__(self):
+                self.none_attr = None
+
+        obj = HasNone()
+        output_set = set()
+        result = discover_attr_paths_recursive(obj, output_set=output_set)
+        # None values should be skipped
+        assert "" not in result
+
+    def test_discover_attr_paths_with_none_object(self):
+        """Test discover_attr_paths_recursive with None object."""
+        from synthesizer.pipeline.pipeline_utils import (
+            discover_attr_paths_recursive,
+        )
+
+        output_set = set()
+        result = discover_attr_paths_recursive(None, output_set=output_set)
+        assert result == output_set
+
+    def test_combine_list_of_dicts_empty(self):
+        """Test combine_list_of_dicts with empty list."""
+        from synthesizer.pipeline.pipeline_utils import combine_list_of_dicts
+
+        result = combine_list_of_dicts([])
+        assert result == {}
+
+    def test_unify_dict_structure_non_root_rank(self):
+        """Test unify_dict_structure_across_ranks on non-root rank."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            unify_dict_structure_across_ranks,
+        )
+
+        # Mock MPI communicator
+        comm = MagicMock()
+        comm.rank = 1  # Non-root rank
+        comm.gather.return_value = None
+        comm.bcast.return_value = set()
+
+        data = {"key": unyt_array([1, 2], "Msun")}
+        result = unify_dict_structure_across_ranks(data, comm, root=0)
+        assert result == data
+
+    def test_unify_dict_structure_different_paths(self):
+        """Test unify_dict_structure with different paths on ranks."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            unify_dict_structure_across_ranks,
+        )
+
+        # Mock MPI communicator simulating different structure
+        comm = MagicMock()
+        comm.rank = 0  # Root rank
+        comm.gather.return_value = [{"a"}, {"a", "b"}]
+        comm.bcast.return_value = {"a", "b"}
+
+        data = {"a": unyt_array([1], "Msun")}
+        # Should add missing keys
+        result = unify_dict_structure_across_ranks(data, comm, root=0)
+        assert "b" in result
+
+    def test_get_dataset_properties_non_root_rank(self):
+        """Test get_dataset_properties on non-root rank."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            get_dataset_properties,
+        )
+
+        # Mock MPI communicator
+        comm = MagicMock()
+        comm.rank = 1  # Non-root rank
+        comm.gather.return_value = None
+        comm.bcast.return_value = {"key"}
+
+        data = {"key": unyt_array([1, 2], "Msun")}
+        shapes, dtypes, units, paths = get_dataset_properties(
+            data, comm, root=0
+        )
+        assert "key" in shapes
+
+    def test_get_full_memory_with_slots(self):
+        """Test get_full_memory with object that has __slots__."""
+        from synthesizer.pipeline.pipeline_utils import get_full_memory
+
+        class SlottedClass:
+            __slots__ = ["value"]
+
+            def __init__(self):
+                self.value = 42
+
+        obj = SlottedClass()
+        size = get_full_memory(obj)
+        assert size > 0
+
+    def test_validate_noise_scalar_depth_wrong_units_with_mock(self):
+        """Test validation with scalar depth (wrong units) using mock."""
+        from unittest.mock import MagicMock
+
+        from unyt import nJy
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create a mock instrument with can_do_noisy_imaging=True
+        inst = MagicMock()
+        inst.label = "mock_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = 1.0 * nJy  # Wrong for luminosity (scalar)
+        inst.noise_maps = None
+
+        # Should raise with the "rest-frame or observed-frame" message
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="rest-frame or observed-frame",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_noise_scalar_noise_maps_wrong_units_with_mock(self):
+        """Test validation with scalar noise_maps (wrong units) using mock."""
+        from unittest.mock import MagicMock
+
+        from unyt import nJy
+
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        # Create a mock instrument with can_do_noisy_imaging=True
+        inst = MagicMock()
+        inst.label = "mock_inst"
+        inst.can_do_noisy_imaging = True
+        inst.depth = None
+        inst.noise_maps = np.random.randn(10, 10) * nJy  # Wrong (scalar)
+
+        # Should raise with the "rest-frame or observed-frame" message
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="rest-frame or observed-frame",
+        ):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_discover_attr_paths_none_branch(self):
+        """Test the None branch in discover_attr_paths_recursive."""
+        from synthesizer.pipeline.pipeline_utils import (
+            discover_attr_paths_recursive,
+        )
+
+        # Call with None object to hit line 101
+        output_set = set()
+        result = discover_attr_paths_recursive(
+            None, prefix="/test", output_set=output_set
+        )
+        # Should return the same set without modification
+        assert result is output_set
+
+    def test_unify_dict_structure_path_splitting(self):
+        """Test path splitting in unify_dict_structure_across_ranks."""
+        from unittest.mock import MagicMock
+
+        from synthesizer.pipeline.pipeline_utils import (
+            unify_dict_structure_across_ranks,
+        )
+
+        # Mock MPI communicator with different structure requiring path split
+        comm = MagicMock()
+        comm.rank = 0  # Root rank
+        # Simulate paths that need splitting (nested paths with dict)
+        comm.gather.return_value = [{"level1/data"}, {"level1/level2/data"}]
+        comm.bcast.return_value = {"level1/data", "level1/level2/data"}
+
+        # Data missing the nested structure
+        data = {"level1": {"data": unyt_array([1], "Msun")}}
+
+        # Should create nested structure via setdefault calls (line 308)
+        result = unify_dict_structure_across_ranks(data, comm, root=0)
+
+        # The function should have created the nested path
+        assert "level1" in result
+        assert "level2" in result["level1"]
+
+
+class TestAngularCoordinates:
+    """Tests for angular and cartesian coordinate handling with cosmo."""
+
+    def test_angular_resolution_with_cosmo(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_filters,
+    ):
+        """Test that angular resolution works with cosmo parameter.
+
+        This test verifies the fix for the issue where
+        Pipeline.get_images_luminosity() wasn't passing the cosmo
+        parameter to galaxy.get_images_luminosity(), causing errors
+        when using angular resolution/FOV.
+        """
+        from unyt import arcsec
+
+        from synthesizer.instruments import Instrument
+
+        # Create instrument with angular resolution
+        angular_inst = Instrument(
+            "JWST_Angular",
+            filters=nircam_filters,
+            resolution=0.1 * arcsec,  # Angular resolution
+        )
+
+        # Create pipeline with angular resolution and FOV
+        # This would previously fail without cosmo parameter
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            angular_inst,
+            fov=10 * arcsec,  # Angular FOV
+            kernel=kernel,
+            cosmo=cosmo,  # This is required for angular coordinates
+        )
+
+        # Verify cosmo is stored
+        assert (
+            pipeline_with_galaxies_per_particle._operation_kwargs[
+                "get_images_luminosity"
+            ]["cosmo"]
+            is cosmo
+        ), "Cosmo parameter not stored"
+
+        # Run the pipeline - should complete without errors
+        pipeline_with_galaxies_per_particle.run()
+
+        # Verify pipeline completed successfully
+        assert pipeline_with_galaxies_per_particle._analysis_complete
+
+        # Verify images were created
+        assert len(pipeline_with_galaxies_per_particle.images_lum) > 0
+
+    def test_cartesian_resolution_without_cosmo(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_instrument_no_psf,
+    ):
+        """Test that cartesian resolution works without cosmo parameter.
+
+        Cartesian coordinates (kpc, Mpc) should work without needing cosmo
+        for luminosity images.
+        """
+        # Create pipeline with cartesian resolution and FOV
+        # This should work without cosmo parameter for luminosity images
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            nircam_instrument_no_psf,
+            fov=100
+            * Mpc,  # Cartesian FOV matching instrument resolution units
+            kernel=kernel,
+            # No cosmo parameter needed for cartesian luminosity images
+        )
+
+        # Verify cosmo is None (not required)
+        assert (
+            pipeline_with_galaxies_per_particle._operation_kwargs[
+                "get_images_luminosity"
+            ]["cosmo"]
+            is None
+        ), "Cosmo should be None for cartesian coordinates"
+
+        # Run the pipeline - should complete without errors
+        pipeline_with_galaxies_per_particle.run()
+
+        # Verify pipeline completed successfully
+        assert pipeline_with_galaxies_per_particle._analysis_complete
+
+        # Verify images were created
+        assert len(pipeline_with_galaxies_per_particle.images_lum) > 0
+
+    def test_angular_resolution_missing_cosmo_raises_error(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_filters,
+    ):
+        """Test that angular resolution without cosmo raises an error.
+
+        This test verifies that using angular coordinates (arcsec, arcmin)
+        without providing a cosmo parameter raises an appropriate error.
+        """
+        from unyt import arcsec
+
+        from synthesizer.instruments import Instrument
+
+        # Create instrument with angular resolution
+        angular_inst = Instrument(
+            "JWST_Angular",
+            filters=nircam_filters,
+            resolution=0.1 * arcsec,  # Angular resolution
+        )
+
+        # Try to create pipeline with angular FOV but no cosmo
+        # This should raise an error during run()
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            angular_inst,
+            fov=10 * arcsec,  # Angular FOV requires cosmo
+            kernel=kernel,
+            # Deliberately omitting cosmo parameter
+        )
+
+        # Running the pipeline should raise an error about missing cosmo
+        with pytest.raises(
+            Exception
+        ):  # Will be a specific error from galaxy method
+            pipeline_with_galaxies_per_particle.run()
+
+    def test_cosmo_parameter_passed_to_galaxy_method(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        nircam_filters,
+    ):
+        """Test that cosmo parameter is passed through to galaxy method.
+
+        This test verifies that the cosmo parameter stored in operation_kwargs
+        matches what was provided, ensuring it will be passed correctly.
+        """
+        from unyt import arcsec
+
+        from synthesizer.instruments import Instrument
+
+        # Create instrument with angular resolution
+        angular_inst = Instrument(
+            "JWST_Angular",
+            filters=nircam_filters,
+            resolution=0.1 * arcsec,  # Angular resolution
+        )
+
+        # Set up the pipeline call
+        pipeline_with_galaxies_per_particle.get_images_luminosity(
+            angular_inst,
+            fov=10 * arcsec,
+            kernel=kernel,
+            cosmo=cosmo,
+        )
+
+        # Verify cosmo is stored correctly in operation_kwargs
+        stored_cosmo = pipeline_with_galaxies_per_particle._operation_kwargs[
+            "get_images_luminosity"
+        ]["cosmo"]
+        assert stored_cosmo is cosmo, "Cosmo parameter not stored correctly"
+
+        # The cosmo parameter will be passed from operation_kwargs to
+        # galaxy.get_images_luminosity() during run() - we've verified
+        # it's stored correctly which is what this fix addressed
