@@ -167,13 +167,17 @@ def default_units_exists() -> bool:
 
 
 def default_units_needs_update() -> bool:
-    """Check if the default units file is missing entries.
+    """Check if the default units file is missing entries or invalid.
 
     This function will compare the default_units.yml file in the source
     code with the one in the user's base directory, and determine if the
-    default units have been update with new entries.
+    user's file needs updating with new entries, is corrupted, or is missing.
 
-    We only add new entries, so we don't overwrite the users preferences.
+    We only add new entries, so we don't overwrite the user's preferences.
+
+    Returns:
+        True if the file needs updating (missing, invalid, or incomplete),
+        False if all default categories are present and file is valid.
     """
     # We need to update if the file doesn't exist
     if not default_units_exists():
@@ -187,11 +191,14 @@ def default_units_needs_update() -> bool:
 
         # Load the user's default units
         user_units_file = get_base_dir() / "default_units.yml"
-        if not user_units_file.exists():
-            return True  # File doesn't exist, needs update
-
         with open(user_units_file, "r") as f:
             user_units = yaml.safe_load(f)
+
+        # Handle case where file exists but is empty or invalid
+        if user_units is None or not isinstance(user_units, dict):
+            return True  # Invalid file, needs update
+        if "UnitCategories" not in user_units:
+            return True  # Missing UnitCategories, needs update
 
         # Check for missing keys in the user's units
         for key in default_units["UnitCategories"].keys():
@@ -200,8 +207,15 @@ def default_units_needs_update() -> bool:
 
         return False  # All keys present, no update needed
 
+    except yaml.YAMLError:
+        # Invalid YAML syntax - needs update
+        return True
+    except (OSError, IOError):
+        # File access issues - needs update
+        return True
     except Exception:
-        return True  # On any error, assume update is needed
+        # Unexpected error - needs update
+        return True
 
 
 class SynthesizerInitializer:
@@ -307,6 +321,10 @@ class SynthesizerInitializer:
         the default units with the user preference before writing it back out.
         This process will leave the users preferences intact while adding any
         new default units that may have been added since their last update.
+
+        Raises:
+            MissingUnits: If the default units file cannot be loaded or
+                the user's units file cannot be written.
         """
         try:
             # Load the default units from the package
@@ -318,6 +336,12 @@ class SynthesizerInitializer:
             if user_units_file.exists():
                 with open(user_units_file, "r") as f:
                     user_units = yaml.safe_load(f)
+
+                # Handle case where file exists but is empty or invalid
+                if user_units is None or not isinstance(user_units, dict):
+                    user_units = {"UnitCategories": {}}
+                elif "UnitCategories" not in user_units:
+                    user_units = {"UnitCategories": {}}
             else:
                 user_units = {"UnitCategories": {}}
 
@@ -333,6 +357,14 @@ class SynthesizerInitializer:
 
             self.status["units_file"] = "created"
 
+        except yaml.YAMLError as e:
+            raise exceptions.MissingUnits(
+                "Failed to parse YAML in default units file."
+            ) from e
+        except (OSError, IOError) as e:
+            raise exceptions.MissingUnits(
+                "Failed to read or write default units file."
+            ) from e
         except Exception as e:
             raise exceptions.MissingUnits(
                 "Failed to update default units file."
