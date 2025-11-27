@@ -54,6 +54,7 @@ def get_param(
     default=_NO_DEFAULT,
     _singular_attempted=False,
     _plural_attempted=False,
+    _visited=None,
 ):
     """Extract a parameter from a model, emission, emitter, or object.
 
@@ -83,6 +84,8 @@ def get_param(
             Internal flag to track if singular version has been attempted.
         _plural_attempted (bool, optional):
             Internal flag to track if plural version has been attempted.
+        _visited (set, optional):
+            Internal set to track visited parameters and detect cycles.
 
     Returns:
         value
@@ -93,6 +96,23 @@ def get_param(
             If the parameter is not found in the model, emission, or emitter.
             This is only raised if no default is passed.
     """
+    # Initialize the visited set to detect cycles in alias resolution
+    if _visited is None:
+        _visited = set()
+
+    # Check for cycles in string alias resolution
+    if param in _visited:
+        # We've seen this parameter before - there's a cycle
+        if default is not _NO_DEFAULT:
+            return default
+        raise exceptions.MissingAttribute(
+            f"Cyclic alias detected while resolving parameter '{param}'. "
+            f"Alias chain: {' -> '.join(_visited)} -> {param}"
+        )
+
+    # Add current parameter to visited set for cycle detection
+    _visited.add(param)
+
     # Initialize the value to None
     value = None
 
@@ -127,7 +147,9 @@ def get_param(
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
     if value is not None and isinstance(value, str):
-        value = get_param(value, None, None, emitter, default=default)
+        value = get_param(
+            value, None, None, emitter, default=default, _visited=_visited
+        )
 
     # If we found a value, return it (early exit chance to avoid extra logic)
     if value is not None:
@@ -153,6 +175,7 @@ def get_param(
             emitter,
             obj,
             default=default,
+            _visited=_visited,
         )
         if value is not None:
             # Attach this to the emitter so we don't have to do this again
@@ -173,6 +196,7 @@ def get_param(
                 default=None,
                 _singular_attempted=True,
                 _plural_attempted=_plural_attempted,
+                _visited=_visited,
             )
     if value is None and not _plural_attempted:
         plural_param = pluralize(param)
@@ -186,6 +210,7 @@ def get_param(
                 default=None,
                 _singular_attempted=_singular_attempted,
                 _plural_attempted=True,
+                _visited=_visited,
             )
 
     # OK, if we found nothing an have a default, now is the time to use it
