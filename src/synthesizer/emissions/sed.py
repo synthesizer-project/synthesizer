@@ -1604,7 +1604,7 @@ class Sed:
         return ion_photon_prod_rate
 
     @accepts(sigma_v=km / s)
-    def doppler_broaden(self, sigma_v, in_place=True):
+    def doppler_broaden(self, sigma_v, inplace=False):
         """Doppler broaden the spectra.
 
         Doppler broadens the spectra either in place or returning a new Sed.
@@ -1612,7 +1612,7 @@ class Sed:
         Args:
             sigma_v (unyt_array):
                 The velocity dispersion to broaden the spectra by.
-            in_place (bool):
+            inplace (bool):
                 Flag for whether to modify self or return a new Sed.
 
         Returns:
@@ -1637,6 +1637,7 @@ class Sed:
         N = len(x_uniform)
         half = N // 2
 
+        # Define and normalise the broadening kernel
         kernel_x = (np.arange(N) - half) * dx
         kernel = np.exp(-(kernel_x**2) / (2 * sigma_x**2))
         kernel /= kernel.sum()
@@ -1650,13 +1651,15 @@ class Sed:
             * self.lnu.units
         )
 
-        if in_place:
+        # Return new Sed or modify in place
+        if inplace:
             self.lnu = new_lnu
+            return self
         else:
             return Sed(self.lam, new_lnu)
 
     @accepts(temperature=K, mu=amu)
-    def thermally_broaden(self, temperature, mu=1.0 * amu, in_place=True):
+    def thermally_broaden(self, temperature, mu=1.0 * amu, inplace=False):
         """Create a spectra including the thermal broadening.
 
         This simply calculates the velocity dispersion from the temperature
@@ -1668,19 +1671,19 @@ class Sed:
             mu (unyt_array):
                 The mean molecular weight of the gas. By default assumed to be
                 1 amu.
-            in_place (bool):
+            inplace (bool):
                 Flag for whether to modify self or return a new Sed.
 
         Returns:
             Sed:
                 A new Sed containing the rest frame spectra of self
                 broadened by the provided velocity dispersion. Only returned if
-                in_place is False.
+                inplace is False.
         """
-        # calculate the velocity dispersion
+        # Calculate the velocity dispersion
         sigma_v = np.sqrt(kb * temperature / mu)
 
-        return self.doppler_broaden(sigma_v, in_place=in_place)
+        return self.doppler_broaden(sigma_v, inplace=inplace)
 
     def plot_spectra(self, **kwargs):
         """Plot the spectra.
