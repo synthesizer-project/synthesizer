@@ -14,7 +14,10 @@ import os
 from importlib import resources
 from pathlib import Path
 
+import yaml
 from platformdirs import user_data_dir
+
+from synthesizer import exceptions
 
 # ASCII art mirror of the galaxy logo (cannot import directly)
 galaxy = (
@@ -153,6 +156,54 @@ def instrument_cache_exists() -> bool:
     return get_instrument_dir().exists()
 
 
+def default_units_exists() -> bool:
+    """Check if the default units file exists.
+
+    This function checks if the default_units.yml file exists in the
+    Synthesizer base directory.
+    """
+    user_units_file = get_base_dir() / "default_units.yml"
+    return user_units_file.exists()
+
+
+def default_units_needs_update() -> bool:
+    """Check if the default units file is missing entries.
+
+    This function will compare the default_units.yml file in the source
+    code with the one in the user's base directory, and determine if the
+    default units have been update with new entries.
+
+    We only add new entries, so we don't overwrite the users preferences.
+    """
+    # We need to update if the file doesn't exist
+    if not default_units_exists():
+        return True
+
+    # Otherwise, see if we need to update the existing file
+    try:
+        # Load the default units from the package
+        with resources.open_text("synthesizer", "default_units.yml") as f:
+            default_units = yaml.safe_load(f)
+
+        # Load the user's default units
+        user_units_file = get_base_dir() / "default_units.yml"
+        if not user_units_file.exists():
+            return True  # File doesn't exist, needs update
+
+        with open(user_units_file, "r") as f:
+            user_units = yaml.safe_load(f)
+
+        # Check for missing keys in the user's units
+        for key in default_units["UnitCategories"].keys():
+            if key not in user_units["UnitCategories"]:
+                return True  # Missing key found, needs update
+
+        return False  # All keys present, no update needed
+
+    except Exception:
+        return True  # On any error, assume update is needed
+
+
 class SynthesizerInitializer:
     """Encapsulates the initialisation of the Synthesizer data directory.
 
@@ -249,6 +300,44 @@ class SynthesizerInitializer:
         except Exception:
             self.status[key] = "failed"
 
+    def _copy_units(self) -> None:
+        """Copy the units over respecting existing user file.
+
+        Instead of copying over the file blindly this will read both and update
+        the default units with the user preference before writing it back out.
+        This process will leave the users preferences intact while adding any
+        new default units that may have been added since their last update.
+        """
+        try:
+            # Load the default units from the package
+            with resources.open_text("synthesizer", "default_units.yml") as f:
+                default_units = yaml.safe_load(f)
+
+            # Load the user's default units
+            user_units_file = self.base_dir / "default_units.yml"
+            if user_units_file.exists():
+                with open(user_units_file, "r") as f:
+                    user_units = yaml.safe_load(f)
+            else:
+                user_units = {"UnitCategories": {}}
+
+            # Update the default units with the users to overwrite any
+            # old preferences
+            default_units["UnitCategories"].update(
+                user_units["UnitCategories"]
+            )
+
+            # Write the updated units back to the user's file
+            with open(user_units_file, "w") as f:
+                yaml.dump(default_units, f)
+
+            self.status["units_file"] = "created"
+
+        except Exception as e:
+            raise exceptions.MissingUnits(
+                "Failed to update default units file."
+            ) from e
+
     def _remove_dir(self, path: Path) -> None:
         """Recursively remove a directory and its contents.
 
@@ -285,12 +374,17 @@ class SynthesizerInitializer:
         self._make_dir(self.test_data_dir, "test_data")
 
         # Copy the default units to their user facing location
-        self._copy_resource(
-            "synthesizer",
-            "default_units.yml",
-            self.base_dir / "default_units.yml",
-            "units_file",
-        )
+        if not default_units_exists():
+            self._copy_resource(
+                "synthesizer",
+                "default_units.yml",
+                self.base_dir / "default_units.yml",
+                "units_file",
+            )
+
+        # Otherwise, we may need to update it
+        elif default_units_needs_update():
+            self._copy_units()
 
     def report(self) -> None:
         """Print a report of the initialisation."""
@@ -393,15 +487,20 @@ def synth_initialise(verbose=True) -> None:
         and grids_dir_exists()
         and testdata_dir_exists()
         and instrument_cache_exists()
+        and default_units_exists()
     )
 
-    # Have the files already been copied?
+    # Just exit if everything exists
     if all_exist:
-        default_units_file = get_base_dir() / "default_units.yml"
-        all_exist = default_units_file.exists()
+        # But hang on, do we need to update the default units file?
+        if default_units_needs_update():
+            initializer = SynthesizerInitializer()
+            initializer._copy_units()
+            if verbose:
+                print("  🟢 Default units file updated with new entries.")
+            return
 
-    # Just exit if the data directory already exists
-    if all_exist:
+        # OK, everything exists, nothing to do
         if verbose:
             print(
                 "  🟢 Synthesizer data directory already exists, "
