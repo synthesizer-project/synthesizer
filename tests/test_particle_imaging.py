@@ -785,6 +785,15 @@ class TestGalaxyImagingSingleParticle:
         hist_flux = np.sum(hist_image.arr)
         smoothed_flux = np.sum(smoothed_image.arr)
 
+        # Attach units if present and compare in the expected photometry units
+        if getattr(hist_image, "units", None) is not None:
+            hist_flux = hist_flux * hist_image.units
+        if getattr(smoothed_image, "units", None) is not None:
+            smoothed_flux = smoothed_flux * smoothed_image.units
+
+        hist_flux = hist_flux.to(expected_flux.units)
+        smoothed_flux = smoothed_flux.to(expected_flux.units)
+
         hist_diff = 100 * abs(hist_flux - expected_flux) / expected_flux
         assert np.isclose(hist_flux, expected_flux, rtol=0.02), (
             f"Histogram flux {hist_flux} != expected {expected_flux} "
