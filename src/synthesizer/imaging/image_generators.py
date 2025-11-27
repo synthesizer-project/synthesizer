@@ -650,7 +650,7 @@ def _generate_image_collection_generic(
         img_type (str):
             The type of image to create. Options are "hist" or "smoothed".
         kernel (str):
-            The array describing the kernel. This is dervied from the
+            The array describing the kernel. This is derived from the
             kernel_functions module. (Only applicable to particle imaging)
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
