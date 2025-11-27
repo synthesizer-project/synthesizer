@@ -91,7 +91,7 @@ class BlackholesComponent(Component):
     accretion_rate = Quantity("mass_rate")
     inclination = Quantity("angle")
     bolometric_luminosity = Quantity("luminosity")
-    eddington_luminosity = Quantity("luminosity")
+    eddington_luminosity = Quantity("luminosity_solar")
     bb_temperature = Quantity("temperature")
     mass = Quantity("mass")
 

@@ -39,6 +39,10 @@ UnitCategories:
   luminosity:
     unit: "erg / s"
 
+  # Alternative luminosity unit in terms of solar luminosity for larger values
+  luminosity_solar:
+    unit: "Lsun"
+
   # Luminosity per unit frequency
   luminosity_density_frequency:
     unit: "erg / s / Hz"
