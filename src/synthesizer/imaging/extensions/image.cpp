@@ -266,11 +266,6 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
       int i = (int)floor(part->pos[0] / res);
       int j = (int)floor(part->pos[1] / res);
 
-      /* Note: We removed the early escape for small smoothing lengths
-       * (sml < res/2) because it doesn't properly handle the kernel
-       * distribution. Instead, we always use the proper kernel integration
-       * below, which correctly handles all smoothing length regimes. */
-
       /* How many pixels do we need to walk out in the kernel? (with a
        * buffer of 1 pixel to ensure we cover the kernel). */
       int delta_pix = (int)ceil(part->sml * threshold / res) + 1;
@@ -418,9 +413,8 @@ void populate_smoothed_image_parallel(const double *pix_values,
                                       const int npix_x, const int npix_y,
                                       const int npart, const double threshold,
                                       const int kdim, double norm_factor,
-                                      double *img,
-                                      const int nimgs, struct cell *root,
-                                      const int nthreads) {
+                                      double *img, const int nimgs,
+                                      struct cell *root, const int nthreads) {
 
   /* Build a balanced work list. */
   std::vector<weighted_cell> work_list =
@@ -472,8 +466,8 @@ void populate_smoothed_image_serial(const double *pix_values,
                                     const int npix_x, const int npix_y,
                                     const int npart, const double threshold,
                                     const int kdim, double norm_factor,
-                                    double *img,
-                                    const int nimgs, struct cell *root) {
+                                    double *img, const int nimgs,
+                                    struct cell *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
    * but it keeps the code consistent with the parallel version and has
