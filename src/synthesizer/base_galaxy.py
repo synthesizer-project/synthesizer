@@ -7,6 +7,7 @@ only contains common attributes and methods to reduce boilerplate.
 from unyt import Mpc, arcsecond
 
 from synthesizer import exceptions
+from synthesizer.emission_models import EmissionModel
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
@@ -70,7 +71,7 @@ class BaseGalaxy:
         self.photo_fnu = {}
 
         # Define the dictionaries to hold the images (we carry 3 different
-        # distionaries for both lnu and fnu images to draw a distinction
+        # dictionaries for both lnu and fnu images to draw a distinction
         # between images with and without a PSF and/or noise)
         self.images_lnu = {}
         self.images_fnu = {}
@@ -616,22 +617,22 @@ class BaseGalaxy:
             combined_spectra (bool/list, string/string):
                 The specific combined galaxy spectra to plot. (e.g "total")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             stellar_spectra (bool/list, string/string):
                 The specific stellar spectra to plot. (e.g. "incident")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             gas_spectra (bool/list, string/string):
                 The specific gas spectra to plot. (e.g. "total")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             black_hole_spectra (bool/list, string/string):
                 The specific black hole spectra to plot. (e.g "blr")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             show (bool):
                 Flag for whether to show the plot or just return the
@@ -779,22 +780,22 @@ class BaseGalaxy:
             combined_spectra (bool/list, string/string):
                 The specific combined galaxy spectra to plot. (e.g "total")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             stellar_spectra (bool/list, string/string):
                 The specific stellar spectra to plot. (e.g. "incident")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             gas_spectra (bool/list, string/string):
                 The specific gas spectra to plot. (e.g. "total")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             black_hole_spectra (bool/list, string/string):
                 The specific black hole spectra to plot. (e.g "blr")
                     - If True all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
+                    - If a list of strings each specific spectra is plotted.
                     - If a single string then only that spectra is plotted.
             show (bool):
                 Flag for whether to show the plot or just return the
@@ -1194,7 +1195,7 @@ class BaseGalaxy:
 
     def get_images_luminosity(
         self,
-        emission_model,
+        *labels,
         img_type="smoothed",
         instrument=None,
         kernel=None,
@@ -1214,20 +1215,22 @@ class BaseGalaxy:
         histogram ("hist") or an image with particles smoothed over
         their SPH kernel.
 
-        Which images are produced is defined by the emission model. If any
+        Which images are produced is defined by the labels passed. If any
         of the necessary photometry is missing for generating a particular
         image, an exception will be raised.
-
-        The limit_to argument can be used if only a specific image is desired.
 
         Note that black holes will never be smoothed and only produce a
         histogram due to the point source nature of black holes.
 
         All images that are created will be stored on the emitter (Stars,
-        BlackHole/s, or galaxy) under the images_lnu attribute. The image
-        collection at the root of the emission model will also be returned.
+        BlackHole/s, or galaxy) under the images_lnu attribute.
 
         Args:
+            *labels (str):
+                The labels of the emission models to make images for. These
+                must be present in the photometry dicts of the components or
+                the galaxy. For particle components, these labels must be
+                present in the particle photometry dicts.
             resolution (unyt_quantity of float):
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
@@ -1252,9 +1255,6 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            limit_to (str/list):
-                Optionally pass a single model label to limit image generation
-                to only that model.
             instrument (Instrument):
                 The instrument to use for the image. This can be None but if
                 not it will be used to limit the included filters and label
@@ -1263,29 +1263,58 @@ class BaseGalaxy:
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            limit_to (str/list):
+                If not None, defines a specific model (or list of models) to
+                limit the image generation to. Otherwise, all models with saved
+                spectra will have images generated.
 
         Returns:
-            Image : array-like
-                A 2D array containing the image.
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
+
         """
+        # If limit_to is passed flag that this is deprecated
+        if limit_to is not None:
+            deprecation(
+                "The `limit_to` argument in `get_images_luminosity` is "
+                "deprecated and will be removed in v1.0.0. You now pass "
+                "the desired model label(s) as positional arguments."
+            )
+
+        # Similarly, if labels contain an emission_model raise a deprecation
+        # warning and extract that models label. We will make an image for
+        # that model only.
+        _labels = []
+        while len(labels) > 0:
+            label = labels.pop(0)
+            if isinstance(label, EmissionModel):
+                deprecation(
+                    "Passing an EmissionModel to `get_images_luminosity` is "
+                    "deprecated and will be removed in v1.0.0. You now pass "
+                    "the desired model label(s) as positional arguments. We'll"
+                    f" just make an image for the root model {label.label}."
+                )
+                _labels.append(label.label)
+            else:
+                _labels.append(label)
+        labels = _labels
+
         # Ensure we aren't trying to make a histogram for a parametric galaxy
         if self.galaxy_type == "Parametric" and img_type == "hist":
             raise exceptions.InconsistentArguments(
                 "Parametric Galaxies can only produce smoothed images."
             )
 
-        # Ensure we aren't trying to make an image for a particle galaxy
-        # without a per particle model
-        if self.galaxy_type == "Particle" and not emission_model.per_particle:
-            raise exceptions.InconsistentArguments(
-                "Particle Galaxies can only produce images from per particle "
-                "emission models."
-            )
-
         # If we haven't got an instrument create one
         # TODO: we need to eventually fully pivot to taking only an instrument
         # this will be done when we introduced some premade instruments
         if instrument is None:
+            deprecation(
+                "Not passing an Instrument to `get_images_luminosity` is "
+                "deprecated and will be removed in v1.0.0. Please create/load "
+                "and pass an Instrument instance."
+            )
             if resolution is None or fov is None:
                 raise ValueError(
                     "If instrument not provided, a resolution and fov must "
@@ -1294,16 +1323,14 @@ class BaseGalaxy:
 
             # Get the filters from the emitters
             if len(self.photo_lnu) > 0:
-                filters = self.photo_lnu[emission_model.label].filters
+                filters = self.photo_lnu[label].filters
             elif self.stars is not None and len(self.stars.photo_lnu) > 0:
-                filters = self.stars.photo_lnu[emission_model.label].filters
+                filters = self.stars.photo_lnu[label].filters
             elif (
                 self.black_holes is not None
                 and len(self.black_holes.photo_lnu) > 0
             ):
-                filters = self.black_holes.photo_lnu[
-                    emission_model.label
-                ].filters
+                filters = self.black_holes.photo_lnu[label].filters
 
             # Make the place holder instrument
             instrument = Instrument(
@@ -1327,82 +1354,56 @@ class BaseGalaxy:
                     "resolution and FOV."
                 )
 
-        # Convert `limit_to` to a list if it is a string
-        limit_to = [limit_to] if isinstance(limit_to, str) else limit_to
+        # Container for images we will make
+        out_images = {}
 
-        # Get the images
-        images = emission_model._get_images(
-            instrument=instrument,
-            fov=fov,
-            emitters={
-                "stellar": self.stars,
-                "blackhole": self.black_holes,
-                "galaxy": self,
-            },
-            img_type=img_type,
-            mask=None,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
-            nthreads=nthreads,
-            limit_to=limit_to,
-            do_flux=False,
-            cosmo=cosmo,
-        )
-
-        # Get the instrument name if we have one
-        if instrument is not None:
-            instrument_name = instrument.label
-        else:
-            instrument_name = None
-
-        # Unpack the images to the right component
-        for model in emission_model._models.values():
-            # Are we limiting to a specific model?
-            if limit_to is not None and model.label not in limit_to:
-                continue
-
-            # Skip models we aren't saving
-            if not model.save:
-                continue
-
-            # Attach the image to the right component
-            if model.emitter == "galaxy":
-                if instrument_name is not None:
-                    self.images_lnu.setdefault(instrument_name, {})
-                    self.images_lnu[instrument_name][model.label] = images[
-                        model.label
-                    ]
-                else:
-                    self.images_lnu[model.label] = images[model.label]
-            elif model.emitter == "stellar":
-                if instrument_name is not None:
-                    self.stars.images_lnu.setdefault(instrument_name, {})
-                    self.stars.images_lnu[instrument_name][model.label] = (
-                        images[model.label]
+        # Loop over labels
+        gal_labels = []
+        for label in labels:
+            # Are the labels actually on the components?
+            if label in self.stars.photo_lnu:
+                out_images.update(
+                    self.stars.get_images_luminosity(
+                        *labels,
+                        img_type=img_type,
+                        instrument=instrument,
+                        kernel=kernel,
+                        kernel_threshold=kernel_threshold,
+                        nthreads=nthreads,
+                        resolution=resolution,
+                        fov=fov,
+                        cosmo=cosmo,
                     )
-                else:
-                    self.stars.images_lnu[model.label] = images[model.label]
-            elif model.emitter == "blackhole":
-                if instrument_name is not None:
-                    self.black_holes.images_lnu.setdefault(instrument_name, {})
-                    self.black_holes.images_lnu[instrument_name][
-                        model.label
-                    ] = images[model.label]
-                else:
-                    self.black_holes.images_lnu[model.label] = images[
-                        model.label
-                    ]
-            else:
-                raise KeyError(
-                    f"Unknown emitter in emission model. ({model.emitter})"
                 )
+            elif label in self.black_holes.photo_lnu:
+                out_images.update(
+                    self.black_holes.get_images_luminosity(
+                        *labels,
+                        img_type=img_type,
+                        instrument=instrument,
+                        kernel=kernel,
+                        kernel_threshold=kernel_threshold,
+                        nthreads=nthreads,
+                        resolution=resolution,
+                        fov=fov,
+                        cosmo=cosmo,
+                    )
+                )
+            else:
+                # Ok, this is a galaxy level image. We will do this separately
+                # since galaxy images are all combinations and we can make
+                # use of the component images we made if they happen to feature
+                # in the combination.
+                gal_labels.append(label)
 
-        # If we are limiting to a specific image then return that
-        if limit_to is not None:
-            return images[limit_to[0]]  # return the first image in list
+        # OK, loop over the galaxy labels and make those images
+        for label in gal_labels:
+            out_images.update({})  # Call recursive galaxy specific func
 
-        # Return the image at the root of the emission model
-        return images[emission_model.label]
+        # Return either the single image or the dict of images
+        if len(labels) == 1:
+            return out_images[labels[0]]
+        return out_images
 
     def get_images_flux(
         self,
