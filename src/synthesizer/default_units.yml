@@ -1,68 +1,68 @@
 UnitCategories:
-  # Spatial lengths and positions
   spatial:
     unit: Mpc
+    description: "Spatial lengths and positions"
 
-  # Mass
   mass:
     unit: Msun
+    description: "Masses of astrophysical objects"
 
-  # Time (e.g. ages)
   time:
     unit: yr
+    description: "Time durations and ages"
 
-  # Velocities (e.g. km/s)
   velocity:
     unit: "km/s"
+    description: "Physical velocities"
 
-  # Temperature (e.g. blackbody temperature)
   temperature:
     unit: K
+    description: "Temperatures (e.g. blackbody temperature)"
 
-  # Angles (e.g. inclinations)
   angle:
     unit: degree
+    description: "Angular measurements (e.g. inclinations)"
 
-  # Angular resolution
   angular_resolution:
     unit: arcsecond
+    description: "Angular resolution (e.g. telescope resolution)"
 
-  # Wavelengths
   wavelength:
     unit: Angstrom
+    description: "Wavelengths of light"
 
-  # Frequencies
   frequency:
     unit: Hz
+    description: "Frequencies of light"
 
-  # Total luminosity (energy per unit time)
   luminosity:
     unit: "erg / s"
+    description: "Total energy output per unit time"
 
-  # Alternative luminosity unit in terms of solar luminosity for larger values
   luminosity_solar:
     unit: "Lsun"
+    description: "Luminosity in units of solar luminosity (useful for large luminosities)"
 
-  # Luminosity per unit frequency
   luminosity_density_frequency:
     unit: "erg / s / Hz"
+    description: "Luminosity density per unit frequency"
 
-  # Luminosity per unit wavelength
   luminosity_density_wavelength:
     unit: "erg / s / Angstrom"
+    description: "Luminosity density per unit wavelength"
 
-  # Flux (energy per unit time per area)
   flux:
     unit: "erg / s / cm**2"
+    description: "Flux received at a distance from a source"
 
-  # Flux density per unit frequency (e.g. nJy, photo_fnu)
   flux_density_frequency:
     unit: nJy
+    description: "Flux density per unit frequency"
 
-  # Flux density per unit wavelength
   flux_density_wavelength:
     unit: "erg / s / Angstrom / cm**2"
+    description: "Flux density per unit wavelength"
 
-  # Mass per unit time
   mass_rate:
     unit: "Msun/yr"
+    description: "Mass flow rates (e.g. accretion rates)"
