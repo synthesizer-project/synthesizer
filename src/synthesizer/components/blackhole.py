@@ -466,7 +466,7 @@ class BlackholesComponent(Component):
         # same units.
         bol_lum = self.bolometric_luminosity.to(
             self.eddington_luminosity.units
-        )
+        ).ndview
         edd_lum = self._eddington_luminosity
         self.eddington_ratio = bol_lum / edd_lum
 
