@@ -485,7 +485,13 @@ class SpectralCube(ImagingBase):
         if vmin is None:
             vmin = 0
         if vmax is None:
-            vmax = np.percentile(self.arr, 99.9)
+            # Use non-zero values for percentile calculation to handle
+            # sparse spectral cubes (e.g., single particle cubes)
+            non_zero = self.arr[self.arr > 0]
+            if len(non_zero) > 0:
+                vmax = np.percentile(non_zero, 99.9)
+            else:
+                vmax = np.max(self.arr)
 
         # Define the norm
         norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
