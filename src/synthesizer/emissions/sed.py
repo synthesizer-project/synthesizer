@@ -1671,7 +1671,7 @@ class Sed:
                 "magma".
             vmin (float):
                 The minimum value for the color scale. If None, then we will
-                use 3 orders of magntitude below the maximum value.
+                use 3 orders of magnitude below the maximum value.
             vmax (float):
                 The maximum value for the color scale. If None, then we will
                 use the maximum value of the spectra.
