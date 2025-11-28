@@ -462,9 +462,13 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        self.eddington_ratio = (
-            self._bolometric_luminosity / self._eddington_luminosity
+        # Compute the eddington ratio but ensure both luminosities are in the
+        # same units.
+        bol_lum = self.bolometric_luminosity.to(
+            self.eddington_luminosity.units
         )
+        edd_lum = self._eddington_luminosity
+        self.eddington_ratio = bol_lum / edd_lum
 
         return self.eddington_ratio
 
