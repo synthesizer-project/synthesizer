@@ -104,6 +104,33 @@ class Greybody(DustEmission):
             required_params=("temperature", "emissivity"),
         )
 
+    def __repr__(self):
+        """Return a string representation of the Greybody object."""
+        # Start with base class repr components
+        parts = []
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic}, attenuated={self._attenuated}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler}")
+
+        # Add Greybody specific parameters
+        parts.extend(
+            [
+                f"temperature={self.temperature}",
+                f"emissivity={self.emissivity}",
+                f"optically_thin={self.optically_thin}",
+                f"lam_0={self.lam_0}",
+            ]
+        )
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"Greybody({', '.join(parts)})"
+
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array, temperature: unyt_quantity) -> unyt_array:
         """Generate unnormalised spectrum for given frequency (nu) grid.

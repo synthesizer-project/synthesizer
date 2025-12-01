@@ -139,6 +139,24 @@ class DustEmission(Generator):
         # Store the last used cmb factor for convenience
         self.last_cmb_factor = None
 
+    def __repr__(self):
+        """Return a string representation of the DustEmission object."""
+        parts = [self.__class__.__name__]
+
+        # Add type information
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic}, attenuated={self._attenuated}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler}")
+
+        # Add CMB heating flag if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"{parts[0]}({', '.join(parts[1:])})"
+
     @property
     def temperature_z(self):
         """The last processed effective temperature."""

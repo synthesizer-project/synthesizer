@@ -268,6 +268,40 @@ class DraineLi07(DustEmission):
         self.gamma_calculated = None
         self.hydrogen_mass_calculated = None
 
+    def __repr__(self):
+        """Return a string representation of the DraineLi07 object."""
+        # Start with base class repr components
+        parts = []
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic}, attenuated={self._attenuated}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler}")
+
+        # Add DraineLi07 specific parameters
+        parts.extend(
+            [
+                f"template={self.template}",
+                f"qpah={self.qpah}",
+                f"alpha={self.alpha}",
+            ]
+        )
+
+        # Add optional parameters if set
+        if self.dust_mass is not None:
+            parts.append(f"dust_mass={self.dust_mass}")
+        if self.gamma is not None:
+            parts.append(f"gamma={self.gamma}")
+        if self.umin is not None:
+            parts.append(f"umin={self.umin}")
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"DraineLi07({', '.join(parts)})"
+
     def _setup_dl07_parameters(
         self,
         dust_mass: unyt_quantity,
