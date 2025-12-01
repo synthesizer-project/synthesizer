@@ -13,6 +13,8 @@ The functions in this module are not intended to be called directly by the
 user.
 """
 
+from copy import deepcopy
+
 import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
@@ -788,13 +790,24 @@ def _generate_image_collection_generic(
     return imgs
 
 
-def _combine_image_collections():
+def _combine_image_collections(emitter, images, label):
     """Combine multiple image collections into a single image collection.
 
     Returns:
         ImageCollection: The combined images.
     """
-    pass
+    # Find the images we need to combine from the emitter's param cache
+    combine_keys = emitter.model_param_cache[label]["combine"]
+
+    # Get all the images to add
+    combine_imgs = [images[key] for key in combine_keys]
+
+    # Combine the images
+    combined_img = deepcopy(combine_imgs[0])
+    for img in combine_imgs[1:]:
+        combined_img.arr += img.arr
+
+    return combined_img
 
 
 def _generate_ifu_particle_hist(
