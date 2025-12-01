@@ -814,6 +814,7 @@ class Combination:
         spectra,
         particle_spectra,
         this_model,
+        emitter,
     ):
         """Combine the extracted spectra.
 
@@ -827,6 +828,8 @@ class Combination:
                 The dictionary of particle spectra.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -866,7 +869,7 @@ class Combination:
                 ]
 
         # Cache the model on the emitter
-        cache_model_params(this_model, emission_model)
+        cache_model_params(this_model, emitter)
 
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
@@ -883,6 +886,7 @@ class Combination:
         lines,
         particle_lines,
         this_model,
+        emitter,
     ):
         """Combine the extracted lines.
 
@@ -896,6 +900,8 @@ class Combination:
                 The dictionary of particle lines.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -937,7 +943,7 @@ class Combination:
             out_lines += in_lines[combine_label]
 
         # Cache the model on the emitter
-        cache_model_params(this_model, emission_model)
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
