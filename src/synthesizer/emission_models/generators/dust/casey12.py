@@ -149,10 +149,11 @@ class Casey12(DustEmission):
         base_parts = []
         if self.is_energy_balance:
             base_parts.append(
-                f"intrinsic={self._intrinsic}, attenuated={self._attenuated}"
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
             )
         elif self.is_scaled:
-            base_parts.append(f"scaler={self._scaler}")
+            base_parts.append(f"scaler={self._scaler.label}")
 
         # Add Casey12 specific parameters
         parts = [

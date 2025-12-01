@@ -146,10 +146,11 @@ class DustEmission(Generator):
         # Add type information
         if self.is_energy_balance:
             parts.append(
-                f"intrinsic={self._intrinsic}, attenuated={self._attenuated}"
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
             )
         elif self.is_scaled:
-            parts.append(f"scaler={self._scaler}")
+            parts.append(f"scaler={self._scaler.label}")
 
         # Add CMB heating flag if enabled
         if self.do_cmb_heating:
