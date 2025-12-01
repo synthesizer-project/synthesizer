@@ -19,15 +19,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LogNorm
 from scipy.interpolate import interp1d
+from scipy.signal import fftconvolve
 from scipy.stats import linregress
 from spectres import spectres
 from unyt import (
     Hz,
+    K,
+    amu,
     angstrom,
     c,
     erg,
     eV,
     h,
+    kb,
+    km,
     pc,
     s,
     unyt_array,
@@ -1597,6 +1602,88 @@ class Sed:
         ion_photon_prod_rate = integrate_last_axis(x, y, nthreads=nthreads) / s
 
         return ion_photon_prod_rate
+
+    @accepts(sigma_v=km / s)
+    def doppler_broaden(self, sigma_v, inplace=False):
+        """Doppler broaden the spectra.
+
+        Doppler broadens the spectra either in place or returning a new Sed.
+
+        Args:
+            sigma_v (unyt_array):
+                The velocity dispersion to broaden the spectra by.
+            inplace (bool):
+                Flag for whether to modify self or return a new Sed.
+
+        Returns:
+            Sed:
+                A new Sed containing the rest frame spectra of self broadened
+                by the provided velocity dispersion. Only returned if
+                in_place is False.
+        """
+        # Convert wavelength grid to log-lambda space
+        x = np.log(self.lam)
+
+        # Regrid to uniform log-lambda spacing, using a very fine grid
+        x_uniform = np.linspace(x.min(), x.max(), 100000)
+        lnu_uniform = spectres(x_uniform, x, self.lnu, fill=0.0, verbose=False)
+
+        # Convert velocity sigma to log-lambda sigma
+        # Δx = ln(λ) gives Δv = c*Δx
+        sigma_x = sigma_v / c
+
+        # Gaussian kernel in log-lambda
+        dx = x_uniform[1] - x_uniform[0]
+        N = len(x_uniform)
+        half = N // 2
+
+        # Define and normalise the broadening kernel
+        kernel_x = (np.arange(N) - half) * dx
+        kernel = np.exp(-(kernel_x**2) / (2 * sigma_x**2))
+        kernel /= kernel.sum()
+
+        # Convolution in velocity/log-lambda space
+        lnu_broad = fftconvolve(lnu_uniform, kernel, mode="same")
+
+        # Re-interpolate back onto original wavelength grid and update the sed
+        new_lnu = (
+            spectres(x, x_uniform, lnu_broad, fill=0.0, verbose=False)
+            * self.lnu.units
+        )
+
+        # Return new Sed or modify in place
+        if inplace:
+            self.lnu = new_lnu
+            return self
+        else:
+            return Sed(self.lam, new_lnu)
+
+    @accepts(temperature=K, mu=amu)
+    def thermally_broaden(self, temperature, mu=1.0 * amu, inplace=False):
+        """Create a spectra including the thermal broadening.
+
+        This simply calculates the velocity dispersion from the temperature
+        and mean molecular weight.
+
+        Args:
+            temperature (unyt_array):
+                The temperature to broaden the spectra by.
+            mu (unyt_array):
+                The mean molecular weight of the gas. By default assumed to be
+                1 amu.
+            inplace (bool):
+                Flag for whether to modify self or return a new Sed.
+
+        Returns:
+            Sed:
+                A new Sed containing the rest frame spectra of self
+                broadened by the provided velocity dispersion. Only returned if
+                inplace is False.
+        """
+        # Calculate the velocity dispersion
+        sigma_v = np.sqrt(kb * temperature / mu)
+
+        return self.doppler_broaden(sigma_v, inplace=inplace)
 
     def plot_spectra(self, **kwargs):
         """Plot the spectra.

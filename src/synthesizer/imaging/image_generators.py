@@ -26,6 +26,54 @@ from synthesizer.utils import (
     ensure_array_c_compatible_double,
 )
 
+_CENTERING_TOLERANCE = 1e-6
+
+
+def _validate_centered_coordinates(cent_coords, *, warn_only=False):
+    """Ensure coordinates are centred on zero along each axis.
+
+    Args:
+        cent_coords (unyt_array, float):
+            The centred coordinates to validate.
+        warn_only (bool):
+            If True, only issue a warning if the coordinates are not centred.
+            If False, raise an exception.
+
+    Raises:
+        InconsistentArguments:
+            If the coordinates are not centred and warn_only is False.
+    """
+    # Nothing to do for empty coordinates
+    if cent_coords.size == 0:
+        return
+
+    # Determine the tolerance for centering based on the span of the
+    # coordinates to allow for relative precision in the centering check.
+    coord_min = cent_coords.min(axis=0)
+    coord_max = cent_coords.max(axis=0)
+    span = np.max(np.abs(coord_max - coord_min))
+    tolerance = (
+        span * _CENTERING_TOLERANCE if span != 0 else _CENTERING_TOLERANCE
+    )
+
+    # Coordinates should straddle zero (or sit very near zero) in every axis
+    spans_zero = np.all(
+        (coord_min <= tolerance) & (coord_max >= -tolerance)
+    ) or np.all(np.isclose(cent_coords, 0, atol=tolerance, rtol=0.0))
+    centred = spans_zero
+    if centred:
+        return
+
+    # Not centred, either warn or raise
+    msg = (
+        "Coordinates must be centered for imaging"
+        f" (got min={coord_min} and max={coord_max})."
+    )
+    if warn_only:
+        warn(msg)
+    else:
+        raise exceptions.InconsistentArguments(msg)
+
 
 def _generate_image_particle_hist(
     img,
@@ -74,13 +122,7 @@ def _generate_image_particle_hist(
         )
 
     # Ensure coordinates have been centred
-    if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
-        np.isclose(coordinates, 0)
-    ):
-        warn(
-            "Coordinates must be centered for imaging"
-            f" (got min={coordinates.min()} and max={coordinates.max()})."
-        )
+    _validate_centered_coordinates(coordinates, warn_only=True)
 
     # Strip off and store the units on the signal if they are present
     if isinstance(signal, (unyt_quantity, unyt_array)):
@@ -281,13 +323,7 @@ def _generate_image_particle_smoothed(
         )
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords)
 
     # Get the spatial units we'll work with
     spatial_units = img.resolution.units
@@ -460,13 +496,7 @@ def _generate_images_particle_smoothed(
         )
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        warn(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords, warn_only=True)
 
     # Get the spatial units we'll work with
     spatial_units = imgs.resolution.units
@@ -850,13 +880,7 @@ def _generate_ifu_particle_hist(
     _coords = cent_coords.to(spatial_units).value
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        warn(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords, warn_only=True)
 
     # Prepare the inputs, we need to make sure we are passing C contiguous
     # arrays.
@@ -992,13 +1016,7 @@ def _generate_ifu_particle_smoothed(
     _coords = cent_coords.to_value(spatial_units)
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords)
 
     # Shift the centred coordinates by half the FOV to lie in the
     # range [0, FOV]
