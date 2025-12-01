@@ -1196,6 +1196,7 @@ class BaseGalaxy:
     def get_images_luminosity(
         self,
         *labels,
+        fov,
         img_type="smoothed",
         instrument=None,
         kernel=None,
@@ -1203,7 +1204,6 @@ class BaseGalaxy:
         nthreads=1,
         limit_to=None,
         resolution=None,
-        fov=None,
         cosmo=None,
     ):
         """Make an ImageCollection from luminosities.
@@ -1231,23 +1231,14 @@ class BaseGalaxy:
                 must be present in the photometry dicts of the components or
                 the galaxy. For particle components, these labels must be
                 present in the particle photometry dicts.
-            resolution (unyt_quantity of float):
-                The size of a pixel.
-                (Ignoring any supersampling defined by psf_resample_factor)
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
-            emission_model (EmissionModel):
-                The emission model to use to generate the images.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            stellar_photometry (str):
-                The stellar spectra key from which to extract photometry
-                to use for the image.
-            blackhole_photometry (str):
-                The black hole spectra key from which to extract photometry
-                to use for the image.
+            instrument (Instrument):
+                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -1255,10 +1246,11 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            instrument (Instrument):
-                The instrument to use for the image. This can be None but if
-                not it will be used to limit the included filters and label
-                the images by instrument.
+            resolution (unyt_quantity of float):
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
@@ -1362,33 +1354,31 @@ class BaseGalaxy:
         for label in labels:
             # Are the labels actually on the components?
             if label in self.stars.photo_lnu:
-                out_images.update(
-                    self.stars.get_images_luminosity(
-                        *labels,
-                        img_type=img_type,
-                        instrument=instrument,
-                        kernel=kernel,
-                        kernel_threshold=kernel_threshold,
-                        nthreads=nthreads,
-                        resolution=resolution,
-                        fov=fov,
-                        cosmo=cosmo,
-                    )
+                self.stars.get_images_luminosity(
+                    *labels,
+                    img_type=img_type,
+                    instrument=instrument,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
+                    resolution=resolution,
+                    fov=fov,
+                    cosmo=cosmo,
                 )
+                out_images.update(self.stars.images_lnu)
             elif label in self.black_holes.photo_lnu:
-                out_images.update(
-                    self.black_holes.get_images_luminosity(
-                        *labels,
-                        img_type=img_type,
-                        instrument=instrument,
-                        kernel=kernel,
-                        kernel_threshold=kernel_threshold,
-                        nthreads=nthreads,
-                        resolution=resolution,
-                        fov=fov,
-                        cosmo=cosmo,
-                    )
+                self.black_holes.get_images_luminosity(
+                    *labels,
+                    img_type=img_type,
+                    instrument=instrument,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
+                    resolution=resolution,
+                    fov=fov,
+                    cosmo=cosmo,
                 )
+                out_images.update(self.black_holes.images_lnu)
             else:
                 # Ok, this is a galaxy level image. We will do this separately
                 # since galaxy images are all combinations and we can make
@@ -1398,7 +1388,7 @@ class BaseGalaxy:
 
         # OK, loop over the galaxy labels and make those images
         for label in gal_labels:
-            out_images.update({})  # Call recursive galaxy specific func
+            out_images.update({})  # TODO: Call recursive galaxy specific func
 
         # Return either the single image or the dict of images
         if len(labels) == 1:
