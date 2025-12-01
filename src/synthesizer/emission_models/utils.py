@@ -327,8 +327,6 @@ def get_param(
 def get_params(params, model, emission, emitter, obj=None):
     """Extract a list of parameters from a model, emission, emitter, or object.
 
-    Missing parameters will return None.
-
     The priority of extraction is:
         1. Model (EmissionModel)
         2. Emission (Sed/LineCollection)
