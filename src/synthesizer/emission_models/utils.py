@@ -1,6 +1,11 @@
 """A submodule containing utility functions for the emission models."""
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from synthesizer.emission_models.base_model import EmissionModel
 
 import numpy as np
 
@@ -43,6 +48,82 @@ def cache_param(
     """
     # Cache the parameter value on the emitter
     emitter.model_param_cache.setdefault(model_label, {})[param] = value
+
+
+def cache_model_params(
+    model: EmissionModel,
+    emitter: Component,
+) -> None:
+    """Cache all model specific parameters on to the emitter.
+
+    This function stores all predefined parameters from the model including:
+        - extract: The key that will extracted from the Grid.
+        - combine: The models that will be combined to create the emission.
+        - apply_to: The label of the model the transformation applies to.
+        - transformer: The transformer's repr.
+        - generator: The generator's repr.
+        - mask parameters: Any parameters used in masking.
+
+    Note that all fixed parameters that are used will automatically be
+    associated at the point of use via calls to get_param.
+
+    Args:
+        model (EmissionModel):
+            The model object containing the parameters to cache.
+        emitter (Stars/Gas/BlackHoles/Galaxy):
+            The emitter object where the parameters will be cached.
+    """
+    # Cache the predefined parameters on the emitter based on the type of model
+    if model._is_extracting:
+        cache_param(
+            param="extract",
+            emitter=emitter,
+            model_label=model.label,
+            value=model.extract,
+        )
+    elif model._is_combining:
+        cache_param(
+            param="combine",
+            emitter=emitter,
+            model_label=model.label,
+            value=[
+                m if isinstance(m, str) else m.label for m in model.combine
+            ],
+        )
+    elif model._is_transforming:
+        cache_param(
+            param="apply_to",
+            emitter=emitter,
+            model_label=model.label,
+            value=model.apply_to
+            if isinstance(model.apply_to, str)
+            else model.apply_to.label,
+        )
+        cache_param(
+            param="transformer",
+            emitter=emitter,
+            model_label=model.label,
+            value=repr(model.transformer),
+        )
+    elif model._is_generating:
+        cache_param(
+            param="generator",
+            emitter=emitter,
+            model_label=model.label,
+            value=repr(model.generator),
+        )
+
+    # Cache any mask parameters in the form of <attr> <op> <thresh> strings
+    masks = []
+    for mask in model.masks:
+        masks.append(f"{mask['attr']} {mask['op']} {mask['thresh']}")
+    if len(masks) > 0:
+        cache_param(
+            param="masks",
+            emitter=emitter,
+            model_label=model.label,
+            value="\n".join(masks),
+        )
 
 
 def get_param(
@@ -249,8 +330,6 @@ def get_param(
 
 def get_params(params, model, emission, emitter, obj=None):
     """Extract a list of parameters from a model, emission, emitter, or object.
-
-    Missing parameters will return None.
 
     The priority of extraction is:
         1. Model (EmissionModel)

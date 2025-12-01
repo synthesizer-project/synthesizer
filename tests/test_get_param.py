@@ -1,11 +1,11 @@
-"""Comprehensive test suite for get_param."""
+"""Comprehensive test suite for get_param and cache_model_params."""
 
 import numpy as np
 import pytest
 import unyt
 
 from synthesizer import exceptions
-from synthesizer.emission_models.utils import get_param
+from synthesizer.emission_models.utils import cache_model_params, get_param
 
 
 # Mock classes for testing
@@ -421,3 +421,396 @@ class TestGetParams:
 
         assert isinstance(result, dict)
         assert len(result) == 0
+
+
+class TestCacheModelParams:
+    """Test suite for the cache_model_params function."""
+
+    def test_cache_extracting_model(self, test_grid):
+        """Test caching parameters for an extracting emission model."""
+        from synthesizer.emission_models import IntrinsicEmission
+
+        # Create an extraction model
+        model = IntrinsicEmission(grid=test_grid)
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert model.label in emitter.model_param_cache
+        assert "extract" in emitter.model_param_cache[model.label]
+        assert emitter.model_param_cache[model.label]["extract"] == (
+            "intrinsic"
+        )
+
+    def test_cache_combining_model(self, test_grid):
+        """Test caching parameters for a combining emission model."""
+        from synthesizer.emission_models import (
+            IncidentEmission,
+            IntrinsicEmission,
+            StellarEmissionModel,
+        )
+
+        # Create sub-models
+        model1 = IntrinsicEmission(grid=test_grid)
+        model2 = IncidentEmission(grid=test_grid)
+
+        # Create a combination model
+        model = StellarEmissionModel(
+            label="test_combine",
+            combine=(model1, model2),
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert "test_combine" in emitter.model_param_cache
+        assert "combine" in emitter.model_param_cache["test_combine"]
+        assert len(emitter.model_param_cache["test_combine"]["combine"]) == 2
+
+    def test_cache_transforming_model_with_repr(self):
+        """Test caching transformer repr for a transforming emission model."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import PowerLaw
+
+        # Create a dust curve
+        dust_curve = PowerLaw(slope=-1.0)
+
+        # Create a transformation model
+        model = StellarEmissionModel(
+            label="test_transform",
+            apply_to="intrinsic",
+            transformer=dust_curve,
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert "test_transform" in emitter.model_param_cache
+        assert "apply_to" in emitter.model_param_cache["test_transform"]
+        assert "transformer" in emitter.model_param_cache["test_transform"]
+        assert emitter.model_param_cache["test_transform"]["apply_to"] == (
+            "intrinsic"
+        )
+        # Verify the transformer repr was cached
+        assert emitter.model_param_cache["test_transform"]["transformer"] == (
+            "PowerLaw(slope=-1.0)"
+        )
+
+    def test_cache_generating_model_with_repr(self):
+        """Test caching generator repr for a generating emission model."""
+        from unyt import K
+
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.generators.dust import Blackbody
+
+        # Create a generator
+        generator = Blackbody(temperature=100 * K)
+
+        # Create a generation model
+        model = StellarEmissionModel(
+            label="test_generate",
+            generator=generator,
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert "test_generate" in emitter.model_param_cache
+        assert "generator" in emitter.model_param_cache["test_generate"]
+        # Verify the generator repr was cached
+        assert emitter.model_param_cache["test_generate"]["generator"] == (
+            "Blackbody(temperature=100 K)"
+        )
+
+    def test_cache_model_with_masks(self, test_grid):
+        """Test caching mask parameters for a masked emission model."""
+        from synthesizer.emission_models import IntrinsicEmission
+
+        # Create a model with masks
+        model = IntrinsicEmission(
+            grid=test_grid,
+            mask={
+                "attr": "ages",
+                "op": ">",
+                "thresh": 1e7,
+            },
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert model.label in emitter.model_param_cache
+        assert "masks" in emitter.model_param_cache[model.label]
+        # Verify mask format is correct
+        assert emitter.model_param_cache[model.label]["masks"] == (
+            "ages > 10000000.0"
+        )
+
+    def test_cache_model_with_multiple_masks(self, test_grid):
+        """Test caching multiple mask parameters."""
+        from synthesizer.emission_models import IntrinsicEmission
+
+        # Create a model with multiple masks
+        model = IntrinsicEmission(
+            grid=test_grid,
+            mask=[
+                {"attr": "ages", "op": ">", "thresh": 1e7},
+                {"attr": "metallicities", "op": "<", "thresh": 0.02},
+            ],
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert model.label in emitter.model_param_cache
+        assert "masks" in emitter.model_param_cache[model.label]
+        # Verify masks are newline-separated
+        masks = emitter.model_param_cache[model.label]["masks"]
+        assert "\n" in masks
+        lines = masks.split("\n")
+        assert len(lines) == 2
+        assert "ages > 10000000.0" in lines[0]
+        assert "metallicities < 0.02" in lines[1]
+
+    def test_cache_no_duplication_of_values(self, test_grid):
+        """Test that cache stores references, not copies."""
+        from synthesizer.emission_models import IntrinsicEmission
+
+        # Create a model
+        model = IntrinsicEmission(grid=test_grid)
+        emitter = MockEmitter()
+
+        # Get initial reference count for the string
+        import sys
+
+        extract_value = "intrinsic"
+        initial_refcount = sys.getrefcount(extract_value)
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Reference count should increase by 1 (stored in cache)
+        # Note: exact value may vary but should be higher
+        assert sys.getrefcount(extract_value) > initial_refcount
+
+    def test_cache_multiple_models_on_same_emitter(self, test_grid):
+        """Test caching parameters from multiple models on same emitter."""
+        from synthesizer.emission_models import (
+            IncidentEmission,
+            IntrinsicEmission,
+        )
+
+        # Create multiple models
+        model1 = IntrinsicEmission(grid=test_grid)
+        model2 = IncidentEmission(grid=test_grid)
+        emitter = MockEmitter()
+
+        # Cache both models
+        cache_model_params(model1, emitter)
+        cache_model_params(model2, emitter)
+
+        # Verify both caches exist
+        assert model1.label in emitter.model_param_cache
+        assert model2.label in emitter.model_param_cache
+        assert emitter.model_param_cache[model1.label]["extract"] == (
+            "intrinsic"
+        )
+        assert emitter.model_param_cache[model2.label]["extract"] == (
+            "incident"
+        )
+
+
+class TestCacheModelParamsWithDifferentTransformers:
+    """Test caching with various transformer types."""
+
+    def test_cache_attenuation_law_transformers(self):
+        """Test caching different attenuation law transformer reprs."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import (
+            MWN18,
+            Calzetti2000,
+            PowerLaw,
+        )
+
+        emitter = MockEmitter()
+
+        # Test PowerLaw
+        model1 = StellarEmissionModel(
+            label="powerlaw",
+            apply_to="test",
+            transformer=PowerLaw(slope=-0.7),
+        )
+        cache_model_params(model1, emitter)
+        assert emitter.model_param_cache["powerlaw"]["transformer"] == (
+            "PowerLaw(slope=-0.7)"
+        )
+
+        # Test Calzetti2000
+        model2 = StellarEmissionModel(
+            label="calzetti",
+            apply_to="test",
+            transformer=Calzetti2000(),
+        )
+        cache_model_params(model2, emitter)
+        assert (
+            "Calzetti2000"
+            in emitter.model_param_cache["calzetti"]["transformer"]
+        )
+
+        # Test MWN18
+        model3 = StellarEmissionModel(
+            label="mwn18",
+            apply_to="test",
+            transformer=MWN18(),
+        )
+        cache_model_params(model3, emitter)
+        assert emitter.model_param_cache["mwn18"]["transformer"] == "MWN18()"
+
+    def test_cache_escape_fraction_transformers(self):
+        """Test caching escape fraction transformer reprs."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import (
+            EscapedFraction,
+            ProcessedFraction,
+        )
+
+        emitter = MockEmitter()
+
+        # Test ProcessedFraction
+        model1 = StellarEmissionModel(
+            label="processed",
+            apply_to="test",
+            transformer=ProcessedFraction(fesc_attrs=("fesc",)),
+        )
+        cache_model_params(model1, emitter)
+        assert (
+            "ProcessedFraction"
+            in emitter.model_param_cache["processed"]["transformer"]
+        )
+
+        # Test EscapedFraction
+        model2 = StellarEmissionModel(
+            label="escaped",
+            apply_to="test",
+            transformer=EscapedFraction(fesc_attrs=("fesc_ly_alpha",)),
+        )
+        cache_model_params(model2, emitter)
+        assert (
+            "EscapedFraction"
+            in emitter.model_param_cache["escaped"]["transformer"]
+        )
+
+    def test_cache_igm_transformers(self):
+        """Test caching IGM transformer reprs."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import (
+            Asada25,
+            Inoue14,
+            Madau96,
+        )
+
+        emitter = MockEmitter()
+
+        # Test Inoue14
+        model1 = StellarEmissionModel(
+            label="inoue14",
+            apply_to="test",
+            transformer=Inoue14(scale_tau=1.0),
+        )
+        cache_model_params(model1, emitter)
+        assert emitter.model_param_cache["inoue14"]["transformer"] == (
+            "Inoue14(scale_tau=1.0)"
+        )
+
+        # Test Madau96
+        model2 = StellarEmissionModel(
+            label="madau96",
+            apply_to="test",
+            transformer=Madau96(),
+        )
+        cache_model_params(model2, emitter)
+        assert emitter.model_param_cache["madau96"]["transformer"] == (
+            "Madau96()"
+        )
+
+        # Test Asada25
+        model3 = StellarEmissionModel(
+            label="asada25",
+            apply_to="test",
+            transformer=Asada25(scale_tau=1.0, add_cgm=True),
+        )
+        cache_model_params(model3, emitter)
+        assert "Asada25" in emitter.model_param_cache["asada25"]["transformer"]
+
+
+class TestCacheModelParamsWithDifferentGenerators:
+    """Test caching with various generator types."""
+
+    def test_cache_dust_emission_generators(self):
+        """Test caching different dust emission generator reprs."""
+        from unyt import K, um
+
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.generators.dust import (
+            Blackbody,
+            Greybody,
+        )
+
+        emitter = MockEmitter()
+
+        # Test Blackbody
+        model1 = StellarEmissionModel(
+            label="blackbody",
+            generator=Blackbody(temperature=100 * K),
+        )
+        cache_model_params(model1, emitter)
+        assert emitter.model_param_cache["blackbody"]["generator"] == (
+            "Blackbody(temperature=100 K)"
+        )
+
+        # Test Greybody
+        model2 = StellarEmissionModel(
+            label="greybody",
+            generator=Greybody(
+                temperature=50 * K,
+                emissivity=1.5,
+                optically_thin=True,
+                lam_0=100.0 * um,
+            ),
+        )
+        cache_model_params(model2, emitter)
+        assert "Greybody" in emitter.model_param_cache["greybody"]["generator"]
+
+    def test_cache_casey12_generator(self):
+        """Test caching Casey12 generator repr."""
+        from unyt import K, um
+
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.generators.dust import Casey12
+
+        emitter = MockEmitter()
+
+        model = StellarEmissionModel(
+            label="casey12",
+            generator=Casey12(
+                temperature=50 * K,
+                emissivity=2.0,
+                alpha=2.0,
+                n_bb=1.0,
+                lam_0=200.0 * um,
+            ),
+        )
+        cache_model_params(model, emitter)
+        assert "Casey12" in emitter.model_param_cache["casey12"]["generator"]

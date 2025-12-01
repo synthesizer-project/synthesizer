@@ -143,6 +143,37 @@ class Casey12(DustEmission):
             required_params=("temperature",),
         )
 
+    def __repr__(self):
+        """Return a string representation of the Casey12 object."""
+        # Start with base class repr components
+        base_parts = []
+        if self.is_energy_balance:
+            base_parts.append(
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
+            )
+        elif self.is_scaled:
+            base_parts.append(f"scaler={self._scaler.label}")
+
+        # Add Casey12 specific parameters
+        parts = [
+            f"temperature={self.temperature}",
+            f"emissivity={self.emissivity}",
+            f"alpha={self.alpha}",
+            f"n_bb={self.n_bb}",
+            f"lam_0={self.lam_0}",
+        ]
+
+        # Add base parts if present
+        if base_parts:
+            parts = base_parts + parts
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"Casey12({', '.join(parts)})"
+
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array, temperature: unyt_quantity) -> unyt_array:
         """Generate unnormalised spectrum for given frequency (nu) grid.
