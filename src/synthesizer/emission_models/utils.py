@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from synthesizer.components.component import Component
     from synthesizer.emission_models.base_model import EmissionModel
 
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.utils import (
     depluralize,
     ensure_array_c_compatible_double,
