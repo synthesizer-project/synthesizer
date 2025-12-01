@@ -86,14 +86,18 @@ def cache_model_params(
             param="combine",
             emitter=emitter,
             model_label=model.label,
-            value=model.combine,
+            value=[
+                m if isinstance(m, str) else m.label for m in model.combine
+            ],
         )
     elif model._is_transforming:
         cache_param(
             param="apply_to",
             emitter=emitter,
             model_label=model.label,
-            value=model.apply_to,
+            value=model.apply_to
+            if isinstance(model.apply_to, str)
+            else model.apply_to.label,
         )
         cache_param(
             param="transformer",
