@@ -758,6 +758,15 @@ def _generate_image_collection_generic(
     return imgs
 
 
+def _combine_image_collections():
+    """Combine multiple image collections into a single image collection.
+
+    Returns:
+        ImageCollection: The combined images.
+    """
+    pass
+
+
 def _generate_ifu_particle_hist(
     ifu,
     sed,
