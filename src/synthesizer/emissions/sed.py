@@ -9,7 +9,7 @@ Example usage:
 
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
-    sed.apply_attenutation(tau_v=0.7)
+    sed.apply_attenuation(tau_v=0.7)
     sed.get_photo_fnu(filters, nthreads=4)
 """
 
