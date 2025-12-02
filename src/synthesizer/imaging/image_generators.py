@@ -1285,6 +1285,7 @@ def _prepare_image_generation_labels(
     labels: list[str],
     model_cache: dict,
     ignore_labels: list[str] = [],
+    remove_missing: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Split image labels into combined and generated labels.
 
@@ -1301,6 +1302,10 @@ def _prepare_image_generation_labels(
             A list of labels to ignore when checking for combined images, e.g.
             models that are generated on another emitter and thus won't appear
             in the model cache.
+        remove_missing (bool):
+            Whether to remove labels missing from the model cache entirely.
+            This should be used when a list of labels could be passed that
+            include models generated elsewhere.
 
     Returns:
         tuple of list of str:
@@ -1313,11 +1318,19 @@ def _prepare_image_generation_labels(
 
     # Loop over the labels and check if they are combined images
     for label in labels:
-        if label not in model_cache and label not in ignore_labels:
+        if (
+            label not in model_cache
+            and label not in ignore_labels
+            and not remove_missing
+        ):
             raise exceptions.MissingModel(
                 f"Label {label} not found in model cache. "
                 "Have you generated the spectra and photometry?"
             )
+
+        # Skip labels not in the model cache if we are removing missing
+        if label not in model_cache and remove_missing:
+            continue
 
         # Get combine keys if any
         combine_keys = model_cache[label].get("combine", [])
