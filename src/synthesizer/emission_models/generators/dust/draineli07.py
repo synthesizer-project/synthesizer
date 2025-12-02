@@ -1,7 +1,9 @@
 """A submodule defining Draine & Li 2007 dust emission generators."""
 
+from __future__ import annotations
+
 from functools import partial
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,7 +20,6 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
@@ -27,6 +28,9 @@ from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 def u_mean_magdis12(dust_mass: float, ldust: float, p0: float) -> float:

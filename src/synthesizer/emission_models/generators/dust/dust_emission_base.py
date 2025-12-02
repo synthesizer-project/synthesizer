@@ -9,15 +9,19 @@ that generate the actual dust emission spectra and then scale them
 appropriately.
 """
 
-from typing import Tuple, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Tuple, Union
 
 from unyt import K, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.units import accepts
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 @accepts(temperature=K)
