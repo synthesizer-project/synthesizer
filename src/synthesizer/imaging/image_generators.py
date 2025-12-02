@@ -1279,3 +1279,55 @@ def _generate_ifu_generic(
         )
 
     return ifu
+
+
+def _prepare_image_generation_labels(
+    labels: list[str],
+    model_cache: dict,
+    ignore_labels: list[str] = [],
+) -> tuple[list[str], list[str]]:
+    """Split image labels into combined and generated labels.
+
+    This function uses the model parameter cache to determine which images
+    need to actually be generated (expensive), and which can be combined from
+    other images (cheap).
+
+    Args:
+        labels (list of str):
+            The original list of image labels.
+        model_cache (dict):
+            The model parameter cache from the emitter.
+        ignore_labels (list of str):
+            A list of labels to ignore when checking for combined images, e.g.
+            models that are generated on another emitter and thus won't appear
+            in the model cache.
+
+    Returns:
+        tuple of list of str:
+            The simplified lists of image labels including a combined image
+            list and the labels which must be generated individually.
+    """
+    # Set up sets we will populate for the combined and generated
+    combine_labels = set()
+    generate_labels = set(labels)
+
+    # Loop over the labels and check if they are combined images
+    for label in labels:
+        if label not in model_cache and label not in ignore_labels:
+            raise exceptions.MissingModel(
+                f"Label {label} not found in model cache. "
+                "Have you generated the spectra and photometry?"
+            )
+
+        # Get combine keys if any
+        combine_keys = model_cache[label].get("combine", [])
+
+        # Only add to combine labels if there are keys to combine
+        if len(combine_keys) > 0:
+            # Are the models we are combining all in the requested labels?
+            if all(key in labels for key in combine_keys):
+                combine_labels.add(label)
+                if label in generate_labels:
+                    generate_labels.remove(label)
+
+    return list(combine_labels), list(generate_labels)
