@@ -774,10 +774,17 @@ class Component(ABC):
         # Attach the images properly depending on whether we have a
         # generic instrument or not
         if instrument_name is not None:
-            self.images_lnu.setdefault(instrument_name, {})
-            self.images_lnu[instrument_name].update(out_images)
+            if phot_type == "lnu":
+                self.images_lnu.setdefault(instrument_name, {})
+                self.images_lnu[instrument_name].update(out_images)
+            else:
+                self.images_fnu.setdefault(instrument_name, {})
+                self.images_fnu[instrument_name].update(out_images)
         else:
-            self.images_lnu.update(out_images)
+            if phot_type == "lnu":
+                self.images_lnu.update(out_images)
+            else:
+                self.images_fnu.update(out_images)
 
         # Return either the single image or the dict of images
         if len(labels) == 1:
