@@ -584,24 +584,21 @@ class TestCacheModelParams:
 
     def test_cache_no_duplication_of_values(self, test_grid):
         """Test that cache stores references, not copies."""
-        from synthesizer.emission_models import IntrinsicEmission
+        from synthesizer.emission_models import IncidentEmission
 
-        # Create a model
-        model = IntrinsicEmission(grid=test_grid)
+        # Create an extracting model with a known attribute
+        model = IncidentEmission(
+            grid=test_grid,
+            label="incident_ref_cache",
+        )
         emitter = MockEmitter()
-
-        # Get initial reference count for the string
-        import sys
-
-        extract_value = "intrinsic"
-        initial_refcount = sys.getrefcount(extract_value)
 
         # Cache the parameters
         cache_model_params(model, emitter)
 
-        # Reference count should increase by 1 (stored in cache)
-        # Note: exact value may vary but should be higher
-        assert sys.getrefcount(extract_value) > initial_refcount
+        # Cached value should be the exact same object (no duplication)
+        cached_extract = emitter.model_param_cache[model.label]["extract"]
+        assert cached_extract is model.extract
 
     def test_cache_multiple_models_on_same_emitter(self, test_grid):
         """Test caching parameters from multiple models on same emitter."""
