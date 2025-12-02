@@ -954,7 +954,7 @@ def _generate_ifu_particle_smoothed(
             The smoothing lengths of the particles. These will be
             converted to the image resolution units.
         kernel (str):
-            The array describing the kernel. This is dervied from the
+            The array describing the kernel. This is derived from the
             kernel_functions module.
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
