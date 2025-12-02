@@ -1296,6 +1296,9 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
+        # Convert labels tuple to a list
+        labels = list(labels)
+
         # If limit_to is passed flag that this is deprecated
         if limit_to is not None:
             deprecation(
