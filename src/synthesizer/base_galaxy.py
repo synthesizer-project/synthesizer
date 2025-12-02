@@ -1377,7 +1377,6 @@ class BaseGalaxy:
         out_images = {}
 
         # Loop over labels
-        gal_labels = []
         for label in labels:
             # Are the labels actually on the components?
             if label in self.stars.photo_lnu:
@@ -1411,7 +1410,7 @@ class BaseGalaxy:
                 # since galaxy images are all combinations and we can make
                 # use of the component images we made if they happen to feature
                 # in the combination.
-                gal_labels.append(label)
+                pass
 
         # What models have we already generated images for?
         done_labels = list(out_images.keys())
@@ -1428,14 +1427,14 @@ class BaseGalaxy:
         # cannot proceed
         missing_labels = set(generated_labels) - set(done_labels)
         if len(missing_labels) > 0:
-            raise exceptions.MissingImages(
+            raise exceptions.MissingImage(
                 "Cannot generate galaxy images for the following labels as "
                 "the necessary component images are missing: "
                 f"{', '.join(missing_labels)}"
             )
 
-        # OK, loop over the galaxy labels and make those images
-        for label in gal_labels:
+        # OK, loop over the combination labels and make those images
+        for label in combine_labels:
             out_images.update(
                 {
                     label: _combine_image_collections(
