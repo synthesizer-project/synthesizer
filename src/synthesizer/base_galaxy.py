@@ -11,6 +11,10 @@ from synthesizer.emission_models import EmissionModel
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
+from synthesizer.imaging.image_generators import (
+    _combine_image_collections,
+    _prepare_image_generation_labels,
+)
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import accepts, unit_is_compatible
@@ -1409,9 +1413,38 @@ class BaseGalaxy:
                 # in the combination.
                 gal_labels.append(label)
 
+        # What models have we already generated images for?
+        done_labels = list(out_images.keys())
+
+        # Which labels do we now need to combine, and which should we have
+        # already have?
+        combine_labels, generated_labels = _prepare_image_generation_labels(
+            labels,
+            self.model_param_cache,
+            ignore_labels=done_labels,
+        )
+
+        # Ensure we have all the necessary images to combine, if not we
+        # cannot proceed
+        missing_labels = set(generated_labels) - set(done_labels)
+        if len(missing_labels) > 0:
+            raise exceptions.MissingImages(
+                "Cannot generate galaxy images for the following labels as "
+                "the necessary component images are missing: "
+                f"{', '.join(missing_labels)}"
+            )
+
         # OK, loop over the galaxy labels and make those images
         for label in gal_labels:
-            out_images.update({})  # TODO: Call recursive galaxy specific func
+            out_images.update(
+                {
+                    label: _combine_image_collections(
+                        emitter=self,
+                        images=out_images,
+                        label=label,
+                    )
+                }
+            )
 
         # Return either the single image or the dict of images
         if len(labels) == 1:
