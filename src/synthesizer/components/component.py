@@ -21,7 +21,9 @@ from synthesizer.cosmology import (
 from synthesizer.emission_models import EmissionModel
 from synthesizer.emissions import plot_spectra
 from synthesizer.imaging.image_generators import (
+    _combine_image_collections,
     _generate_image_collection_generic,
+    _prepare_image_generation_labels,
 )
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
@@ -696,6 +698,12 @@ class Component(ABC):
                     "resolution and FOV."
                 )
 
+        # Find which images must be generated and which can simply
+        # be combined
+        combine_labels, generate_labels = _prepare_image_generation_labels(
+            labels, self.model_param_cache, remove_missing=True
+        )
+
         # Define dictionary to hold the images we are generating
         out_images = {}
 
@@ -715,7 +723,7 @@ class Component(ABC):
             )
 
         # Get the images
-        for label in labels:
+        for label in generate_labels:
             # If label isn't in the photometry dict raise an exception
             if label not in photometry_dict:
                 raise exceptions.MissingPhotometryType(
@@ -733,6 +741,28 @@ class Component(ABC):
                 nthreads=nthreads,
                 emitter=self,
                 cosmo=cosmo,
+            )
+
+        # Ensure we have all the necessary images to combine, if not we
+        # cannot proceed
+        missing_labels = set(generate_labels) - set(out_images.keys())
+        if len(missing_labels) > 0:
+            raise exceptions.MissingImage(
+                "Cannot generate component images for the following labels as "
+                "the images to combine are missing: "
+                f"{', '.join(missing_labels)}"
+            )
+
+        # OK, loop over the combination labels and make those images
+        for label in combine_labels:
+            out_images.update(
+                {
+                    label: _combine_image_collections(
+                        emitter=self,
+                        images=out_images,
+                        label=label,
+                    )
+                }
             )
 
         # Get the instrument name if we have one
