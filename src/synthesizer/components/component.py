@@ -788,6 +788,10 @@ class Component(ABC):
             else:
                 self.images_fnu.update(out_images)
 
+        # If we generated nothing there's nothing to return
+        if len(out_images) == 0:
+            return out_images
+
         # Return either the single image or the dict of images
         if len(labels) == 1:
             return out_images[labels[0]]

@@ -16,7 +16,7 @@ from synthesizer.imaging.image_generators import (
     _prepare_image_generation_labels,
 )
 from synthesizer.instruments import Instrument
-from synthesizer.synth_warnings import deprecated, deprecation
+from synthesizer.synth_warnings import deprecated, deprecation, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 
@@ -1390,13 +1390,21 @@ class BaseGalaxy:
                     "resolution and FOV."
                 )
 
+        # Which labels do we now need to combine?
+        combine_labels, generated_labels = _prepare_image_generation_labels(
+            labels,
+            self.model_param_cache,
+            remove_missing=True,
+            enforce_combinations=True,
+        )
+
         # Container for images we will make
         out_images = {}
 
         # Should we check stars?
         if self.stars is not None:
             star_imgs = self.stars._get_images(
-                *labels,
+                *generated_labels,
                 img_type=img_type,
                 instrument=instrument,
                 kernel=kernel,
@@ -1413,7 +1421,7 @@ class BaseGalaxy:
         # Should we check black holes?
         if self.black_holes is not None:
             black_holes_imgs = self.black_holes._get_images(
-                *labels,
+                *generated_labels,
                 img_type=img_type,
                 instrument=instrument,
                 kernel=kernel,
@@ -1441,14 +1449,6 @@ class BaseGalaxy:
 
         # What models have we already generated images for?
         done_labels = list(out_images.keys())
-
-        # Which labels do we now need to combine, and which should we have
-        # already have?
-        combine_labels, generated_labels = _prepare_image_generation_labels(
-            labels,
-            self.model_param_cache,
-            ignore_labels=done_labels,
-        )
 
         # Ensure we have all the necessary images to combine, if not we
         # cannot proceed
@@ -1515,6 +1515,18 @@ class BaseGalaxy:
                         and label not in self.black_holes.images_fnu
                     ):
                         self.images_fnu[label] = out_images[label]
+
+        # Probably, very unliklely but if we generated no images just return
+        # an empty dict (in this eventuallity we almost certainly would
+        # have raised an exception earlier but just in case...)
+        if len(out_images) == 0:
+            warn(
+                "No images were generated for the requested labels. "
+                "An empty dict will be returned. (Note that this is very "
+                "unlikely to happen and should have raised an exception "
+                "earlier.)"
+            )
+            return {}
 
         # Return either the single image or the dict of images
         if len(labels) == 1:

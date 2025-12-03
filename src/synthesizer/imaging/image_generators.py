@@ -805,7 +805,7 @@ def _combine_image_collections(emitter, images, label):
     # Combine the images
     combined_img = deepcopy(combine_imgs[0])
     for img in combine_imgs[1:]:
-        combined_img.arr += img.arr
+        combined_img += img
 
     return combined_img
 
@@ -1284,8 +1284,9 @@ def _generate_ifu_generic(
 def _prepare_image_generation_labels(
     labels: list[str],
     model_cache: dict,
-    ignore_labels: list[str] = [],
     remove_missing: bool = False,
+    skip_missing: bool = False,
+    enforce_combinations: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Split image labels into combined and generated labels.
 
@@ -1298,14 +1299,19 @@ def _prepare_image_generation_labels(
             The original list of image labels.
         model_cache (dict):
             The model parameter cache from the emitter.
-        ignore_labels (list of str):
-            A list of labels to ignore when checking for combined images, e.g.
-            models that are generated on another emitter and thus won't appear
-            in the model cache.
         remove_missing (bool):
             Whether to remove labels missing from the model cache entirely.
             This should be used when a list of labels could be passed that
             include models generated elsewhere.
+        skip_missing (bool):
+            Like remove_missing, but raises no error or warning if labels
+            are missing from the model cache. This should only be used in
+            special circumstances where missing labels are expected.
+        enforce_combinations (bool):
+            Whether to enforce that combinations are used where possible.
+            If True, any label that can be combined from other labels will
+            be treated as a combined label, even if the user requested it
+            directly. This should be used for all galaxy level images.
 
     Returns:
         tuple of list of str:
@@ -1318,13 +1324,13 @@ def _prepare_image_generation_labels(
 
     # Loop over the labels and check if they are combined images
     for label in labels:
-        # Skip ignored labels
-        if label in ignore_labels:
-            continue
-
         # Skip labels not in the model cache if we are removing missing
         if label not in model_cache and remove_missing:
             generate_labels.remove(label)
+            continue
+
+        # Skip labels not in the model cache if we are skipping missing
+        if label not in model_cache and skip_missing:
             continue
 
         # OK, by here the label must be in the model cache
@@ -1337,12 +1343,59 @@ def _prepare_image_generation_labels(
         # Get combine keys if any
         combine_keys = model_cache[label].get("combine", [])
 
-        # Only add to combine labels if there are keys to combine
-        if len(combine_keys) > 0:
+        # If we are enforcing combinations, move labels to the combination
+        # list where possible and ensure their combination keys are in the
+        # generation list
+        if len(combine_keys) > 0 and enforce_combinations:
+            # Are the models we are combining all in the requested labels?
+            combine_labels.add(label)
+            if label in generate_labels:
+                generate_labels.remove(label)
+            generate_labels.update(combine_keys)
+            combine_labels.difference_update(set(combine_keys))
+
+        # If we are not enforcing combinations, only move models to the
+        # combination list if we are already generating all the combination
+        # keys
+        elif len(combine_keys) > 0:
             # Are the models we are combining all in the requested labels?
             if all(key in labels for key in combine_keys):
                 combine_labels.add(label)
                 if label in generate_labels:
                     generate_labels.remove(label)
+                generate_labels.update(combine_keys)
+                combine_labels.difference_update(set(combine_keys))
 
-    return list(combine_labels), list(generate_labels)
+    # Convert to lists
+    combine_labels = list(combine_labels)
+    generate_labels = list(generate_labels)
+
+    # If we are enforcing combinations, we need to recursively check
+    # that none of the generate labels can be combined
+    if enforce_combinations:
+        # Are any of the generate labels combinable?
+        combinable = False
+        for label in generate_labels:
+            if (
+                label in model_cache
+                and "combine" in model_cache[label]
+                and len(model_cache[label]["combine"]) > 0
+            ):
+                combinable = True
+                break
+
+        # If so we need to recurse
+        if combinable:
+            more_combine, more_generate = _prepare_image_generation_labels(
+                generate_labels,
+                model_cache,
+                remove_missing=False,
+                skip_missing=True,  # we can change emitter in recursion
+                enforce_combinations=True,
+            )
+
+            # Update our sets
+            combine_labels.extend(more_combine)
+            generate_labels = more_generate
+
+    return combine_labels, generate_labels
