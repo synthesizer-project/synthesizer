@@ -704,7 +704,9 @@ class Component(ABC):
         # Find which images must be generated and which can simply
         # be combined
         combine_labels, generate_labels = _prepare_image_generation_labels(
-            labels, self.model_param_cache, remove_missing=True
+            labels,
+            self.model_param_cache,
+            remove_missing=True,
         )
 
         # Define dictionary to hold the images we are generating
