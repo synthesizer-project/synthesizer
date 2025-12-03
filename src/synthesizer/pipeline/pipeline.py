@@ -1939,7 +1939,7 @@ class Pipeline:
                 "one to the fov argument of get_images_luminosity."
             )
 
-        # Check that we have instruments to computethe images for
+        # Check that we have instruments to compute the images for
         if len(instruments) == 0:
             raise exceptions.PipelineNotReady(
                 "Cannot generate images without instruments with filters! "
