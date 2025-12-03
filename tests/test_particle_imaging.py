@@ -705,6 +705,8 @@ class TestGalaxyImagingSingleParticle:
     ):
         """Test image generation for a galaxy with one particle."""
         # Define the image properties
+        from synthesizer.instruments import Instrument
+
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -712,12 +714,27 @@ class TestGalaxyImagingSingleParticle:
 
         kernel = Kernel().get_kernel()
 
+        # Create instrument with filters (matching one_part_galaxy fixture)
+        trans = np.zeros(1000)
+        trans[400:600] = 1.0
+        generic_dict = {"filter_r": trans}
+        new_lam = np.logspace(
+            np.log10(4000 * angstrom),
+            np.log10(7000 * angstrom),
+            1000,
+        )
+        filters = FilterCollection(
+            generic_dict=generic_dict,
+            new_lam=new_lam * angstrom,
+        )
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Create an image for the galaxy
         galaxy_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             kernel=kernel,
+            instrument=instrument,
         )["filter_r"]
 
         assert galaxy_image is not None, (

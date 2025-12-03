@@ -428,10 +428,10 @@ class TestCacheModelParams:
 
     def test_cache_extracting_model(self, test_grid):
         """Test caching parameters for an extracting emission model."""
-        from synthesizer.emission_models import IntrinsicEmission
+        from synthesizer.emission_models import IncidentEmission
 
         # Create an extraction model
-        model = IntrinsicEmission(grid=test_grid)
+        model = IncidentEmission(grid=test_grid, label="incident_extract")
         emitter = MockEmitter()
 
         # Cache the parameters
@@ -441,20 +441,19 @@ class TestCacheModelParams:
         assert model.label in emitter.model_param_cache
         assert "extract" in emitter.model_param_cache[model.label]
         assert emitter.model_param_cache[model.label]["extract"] == (
-            "intrinsic"
+            "incident"
         )
 
     def test_cache_combining_model(self, test_grid):
         """Test caching parameters for a combining emission model."""
         from synthesizer.emission_models import (
             IncidentEmission,
-            IntrinsicEmission,
             StellarEmissionModel,
         )
 
         # Create sub-models
-        model1 = IntrinsicEmission(grid=test_grid)
-        model2 = IncidentEmission(grid=test_grid)
+        model1 = IncidentEmission(grid=test_grid, label="incident_a")
+        model2 = IncidentEmission(grid=test_grid, label="incident_b")
 
         # Create a combination model
         model = StellarEmissionModel(
@@ -469,7 +468,10 @@ class TestCacheModelParams:
         # Verify cache was created
         assert "test_combine" in emitter.model_param_cache
         assert "combine" in emitter.model_param_cache["test_combine"]
-        assert len(emitter.model_param_cache["test_combine"]["combine"]) == 2
+        assert emitter.model_param_cache["test_combine"]["combine"] == [
+            "incident_a",
+            "incident_b",
+        ]
 
     def test_cache_transforming_model_with_repr(self):
         """Test caching transformer repr for a transforming emission model."""
@@ -532,17 +534,11 @@ class TestCacheModelParams:
 
     def test_cache_model_with_masks(self, test_grid):
         """Test caching mask parameters for a masked emission model."""
-        from synthesizer.emission_models import IntrinsicEmission
+        from synthesizer.emission_models import IncidentEmission
 
         # Create a model with masks
-        model = IntrinsicEmission(
-            grid=test_grid,
-            mask={
-                "attr": "ages",
-                "op": ">",
-                "thresh": 1e7,
-            },
-        )
+        model = IncidentEmission(grid=test_grid, label="incident_masked")
+        model.add_mask(attr="ages", op=">", thresh=1.0 * unyt.Myr)
         emitter = MockEmitter()
 
         # Cache the parameters
@@ -552,22 +548,22 @@ class TestCacheModelParams:
         assert model.label in emitter.model_param_cache
         assert "masks" in emitter.model_param_cache[model.label]
         # Verify mask format is correct
-        assert emitter.model_param_cache[model.label]["masks"] == (
-            "ages > 10000000.0"
-        )
+        mask_str = emitter.model_param_cache[model.label]["masks"]
+        assert "ages" in mask_str
+        assert ">" in mask_str
+        assert "Myr" in mask_str
 
     def test_cache_model_with_multiple_masks(self, test_grid):
         """Test caching multiple mask parameters."""
-        from synthesizer.emission_models import IntrinsicEmission
+        from synthesizer.emission_models import IncidentEmission
 
         # Create a model with multiple masks
-        model = IntrinsicEmission(
+        model = IncidentEmission(
             grid=test_grid,
-            mask=[
-                {"attr": "ages", "op": ">", "thresh": 1e7},
-                {"attr": "metallicities", "op": "<", "thresh": 0.02},
-            ],
+            label="incident_multiple_masks",
         )
+        model.add_mask(attr="ages", op=">", thresh=1.0 * unyt.Myr)
+        model.add_mask(attr="ages", op="<", thresh=5.0 * unyt.Myr)
         emitter = MockEmitter()
 
         # Cache the parameters
@@ -581,29 +577,28 @@ class TestCacheModelParams:
         assert "\n" in masks
         lines = masks.split("\n")
         assert len(lines) == 2
-        assert "ages > 10000000.0" in lines[0]
-        assert "metallicities < 0.02" in lines[1]
+        assert lines[0].startswith("ages > ")
+        assert "Myr" in lines[0]
+        assert lines[1].startswith("ages < ")
+        assert "Myr" in lines[1]
 
     def test_cache_no_duplication_of_values(self, test_grid):
         """Test that cache stores references, not copies."""
-        from synthesizer.emission_models import IntrinsicEmission
+        from synthesizer.emission_models import IncidentEmission
 
-        # Create a model
-        model = IntrinsicEmission(grid=test_grid)
+        # Create an extracting model with a known attribute
+        model = IncidentEmission(
+            grid=test_grid,
+            label="incident_ref_cache",
+        )
         emitter = MockEmitter()
-
-        # Get initial reference count for the string
-        import sys
-
-        extract_value = "intrinsic"
-        initial_refcount = sys.getrefcount(extract_value)
 
         # Cache the parameters
         cache_model_params(model, emitter)
 
-        # Reference count should increase by 1 (stored in cache)
-        # Note: exact value may vary but should be higher
-        assert sys.getrefcount(extract_value) > initial_refcount
+        # Cached value should be the exact same object (no duplication)
+        cached_extract = emitter.model_param_cache[model.label]["extract"]
+        assert cached_extract is model.extract
 
     def test_cache_multiple_models_on_same_emitter(self, test_grid):
         """Test caching parameters from multiple models on same emitter."""
@@ -624,12 +619,11 @@ class TestCacheModelParams:
         # Verify both caches exist
         assert model1.label in emitter.model_param_cache
         assert model2.label in emitter.model_param_cache
-        assert emitter.model_param_cache[model1.label]["extract"] == (
-            "intrinsic"
-        )
-        assert emitter.model_param_cache[model2.label]["extract"] == (
-            "incident"
-        )
+        assert emitter.model_param_cache[model1.label]["combine"] == [
+            "escaped",
+            "_intrinsic_reprocessed",
+        ]
+        assert emitter.model_param_cache[model2.label]["extract"] == "incident"
 
 
 class TestCacheModelParamsWithDifferentTransformers:

@@ -2026,7 +2026,7 @@ class Pipeline:
         instruments = self.instruments["get_images_luminosity"]
 
         # Which emissions are we working on?
-        spectra_type = self._operation_kwargs["get_images_flux"][
+        spectra_type = self._operation_kwargs["get_images_luminosity"][
             "spectra_type"
         ]
         if spectra_type is None:
