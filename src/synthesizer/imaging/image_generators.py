@@ -1324,6 +1324,7 @@ def _prepare_image_generation_labels(
 
         # Skip labels not in the model cache if we are removing missing
         if label not in model_cache and remove_missing:
+            generate_labels.remove(label)
             continue
 
         # OK, by here the label must be in the model cache
