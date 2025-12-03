@@ -1393,52 +1393,51 @@ class BaseGalaxy:
         # Container for images we will make
         out_images = {}
 
-        # Loop over labels
-        for label in labels:
-            # Are the labels actually on the components?
-            if label in self.stars.photo_lnu or label in self.stars.photo_fnu:
-                self.stars._get_images(
-                    *labels,
-                    img_type=img_type,
-                    instrument=instrument,
-                    kernel=kernel,
-                    kernel_threshold=kernel_threshold,
-                    nthreads=nthreads,
-                    resolution=resolution,
-                    fov=fov,
-                    cosmo=cosmo,
-                    phot_type=phot_type,
-                )
-                if phot_type == "lnu":
-                    out_images.update(self.stars.images_lnu)
-                else:
-                    out_images.update(self.stars.images_fnu)
-            elif (
-                label in self.black_holes.photo_lnu
-                or label in self.black_holes.photo_fnu
-            ):
-                self.black_holes._get_images(
-                    *labels,
-                    img_type=img_type,
-                    instrument=instrument,
-                    kernel=kernel,
-                    kernel_threshold=kernel_threshold,
-                    nthreads=nthreads,
-                    resolution=resolution,
-                    fov=fov,
-                    cosmo=cosmo,
-                    phot_type=phot_type,
-                )
-                if phot_type == "lnu":
-                    out_images.update(self.black_holes.images_lnu)
-                else:
-                    out_images.update(self.black_holes.images_fnu)
-            else:
-                # Ok, this is a galaxy level image. We will do this separately
-                # since galaxy images are all combinations and we can make
-                # use of the component images we made if they happen to feature
-                # in the combination.
-                pass
+        # Should we check stars?
+        if self.stars is not None:
+            star_imgs = self.stars._get_images(
+                *labels,
+                img_type=img_type,
+                instrument=instrument,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                resolution=resolution,
+                fov=fov,
+                cosmo=cosmo,
+                phot_type=phot_type,
+            )
+        else:
+            star_imgs = {}
+
+        # Should we check black holes?
+        if self.black_holes is not None:
+            black_holes_imgs = self.black_holes._get_images(
+                *labels,
+                img_type=img_type,
+                instrument=instrument,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                resolution=resolution,
+                fov=fov,
+                cosmo=cosmo,
+                phot_type=phot_type,
+            )
+        else:
+            black_holes_imgs = {}
+
+        # Combine black hole and star images into out_images
+        if not isinstance(star_imgs, dict):
+            star_imgs = {labels[0]: star_imgs}
+        elif instrument.label in star_imgs:
+            star_imgs = star_imgs[instrument.label]
+        if not isinstance(black_holes_imgs, dict):
+            black_holes_imgs = {labels[0]: black_holes_imgs}
+        elif instrument.label in black_holes_imgs:
+            black_holes_imgs = black_holes_imgs[instrument.label]
+        out_images.update(star_imgs)
+        out_images.update(black_holes_imgs)
 
         # What models have we already generated images for?
         done_labels = list(out_images.keys())
@@ -1473,11 +1472,8 @@ class BaseGalaxy:
                 }
             )
 
-        # Get the instrument name if we have one
-        if instrument is not None:
-            instrument_name = instrument.label
-        else:
-            instrument_name = None
+        # Get the instrument name
+        instrument_name = instrument.label
 
         # Attach the images to the right attribute
         if instrument_name is not None:
