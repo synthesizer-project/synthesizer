@@ -1217,12 +1217,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
-    def save_spectra(self, *args):
-        """Set the save flag to True for the given spectra.
+    def save_emission(self, *args):
+        """Set the save flag to True for the given emission.
 
         Args:
             args (str):
-                The spectra to save.
+                The emission to save.
         """
         # First set all models to not save
         self.set_save(False, set_all=True)
@@ -1230,6 +1230,33 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Now set the given spectra to save
         for arg in args:
             self[arg].set_save(True)
+
+    def save_spectra(self, *args):
+        """Set the save flag to True for the given spectra.
+
+        This is just a friendly alias for save_emission.
+
+        Args:
+            args (str):
+                The spectra to save.
+        """
+        self.save_emission(*args)
+
+    def save_lines(self, *args):
+        """Set the save flag to True for the given lines.
+
+        This is just a friendly alias for save_emission.
+
+        Args:
+            args (str):
+                The lines to save.
+        """
+        self.save_emission(*args)
+
+    @property
+    def saved_labels(self):
+        """Return a list of model labels that are set to be saved."""
+        return [label for label, model in self._models.items() if model.save]
 
     @property
     def lam_mask(self):
