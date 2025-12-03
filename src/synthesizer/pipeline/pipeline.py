@@ -2049,9 +2049,6 @@ class Pipeline:
                 ]["kernel_threshold"],
                 nthreads=self.nthreads,
                 instrument=inst,
-                limit_to=self._operation_kwargs["get_images_luminosity"][
-                    "spectra_type"
-                ],
                 cosmo=self._operation_kwargs["get_images_luminosity"]["cosmo"],
             )
 
