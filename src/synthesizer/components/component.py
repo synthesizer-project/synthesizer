@@ -768,11 +768,8 @@ class Component(ABC):
                 }
             )
 
-        # Get the instrument name if we have one
-        if instrument is not None:
-            instrument_name = instrument.label
-        else:
-            instrument_name = None
+        # Get the instrument name
+        instrument_name = instrument.label
 
         # Attach the images properly depending on whether we have a
         # generic instrument or not
