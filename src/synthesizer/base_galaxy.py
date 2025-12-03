@@ -1390,10 +1390,23 @@ class BaseGalaxy:
                     "resolution and FOV."
                 )
 
+        # Build a combined model_param_cache that includes the galaxy's cache
+        # and all component caches. This ensures we can find labels that were
+        # generated on components.
+        combined_cache = dict(self.model_param_cache)
+        if self.stars is not None and hasattr(self.stars, "model_param_cache"):
+            combined_cache.update(self.stars.model_param_cache)
+        if self.black_holes is not None and hasattr(
+            self.black_holes, "model_param_cache"
+        ):
+            combined_cache.update(self.black_holes.model_param_cache)
+        if self.gas is not None and hasattr(self.gas, "model_param_cache"):
+            combined_cache.update(self.gas.model_param_cache)
+
         # Which labels do we now need to combine?
         combine_labels, generated_labels = _prepare_image_generation_labels(
             labels,
-            self.model_param_cache,
+            combined_cache,
             remove_missing=True,
             enforce_combinations=True,
         )
