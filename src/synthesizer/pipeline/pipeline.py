@@ -2025,13 +2025,19 @@ class Pipeline:
         # Unpack the instruments for this operation
         instruments = self.instruments["get_images_luminosity"]
 
+        # Which emissions are we working on?
+        spectra_type = self._operation_kwargs["get_images_flux"][
+            "spectra_type"
+        ]
+        if spectra_type is None:
+            spectra_type = self.emission_model.saved_labels
+
         # Loop over instruments and perform any imaging they define
         for inst in instruments:
             # Get the basic images for the requested spectra types
             galaxy.get_images_luminosity(
-                resolution=inst.resolution,
+                *spectra_type,
                 fov=self._operation_kwargs["get_images_luminosity"]["fov"],
-                emission_model=self.emission_model,
                 img_type=self._operation_kwargs["get_images_luminosity"][
                     "img_type"
                 ],
@@ -2201,7 +2207,7 @@ class Pipeline:
                 attenuation is not needed. Default is None.
             spectra_type (list/str):
                 The type of spectra to generate images for. By default this
-                is None and all spectra types will be used. This can either
+                is None and all models will be used. This can either
                 be a list of strings or a single string.
             psf_resample_factor (int):
                 (Only applicable for instruments with a PSF.) The resample
@@ -2356,13 +2362,19 @@ class Pipeline:
         # Unpack the instruments for this operation
         instruments = self.instruments["get_images_flux"]
 
+        # Which emissions are we working on?
+        spectra_type = self._operation_kwargs["get_images_flux"][
+            "spectra_type"
+        ]
+        if spectra_type is None:
+            spectra_type = self.emission_model.saved_labels
+
         # Loop over instruments and perform any imaging they define
         for inst in instruments:
             # Get the basic images for the requested spectra types
             galaxy.get_images_flux(
-                resolution=inst.resolution,
+                *spectra_type,
                 fov=self._operation_kwargs["get_images_flux"]["fov"],
-                emission_model=self.emission_model,
                 img_type=self._operation_kwargs["get_images_flux"]["img_type"],
                 kernel=self._operation_kwargs["get_images_flux"]["kernel"],
                 kernel_threshold=self._operation_kwargs["get_images_flux"][
@@ -2370,9 +2382,6 @@ class Pipeline:
                 ],
                 nthreads=self.nthreads,
                 instrument=inst,
-                limit_to=self._operation_kwargs["get_images_flux"][
-                    "spectra_type"
-                ],
             )
 
             # Apply the PSF if applicable to the instrument
