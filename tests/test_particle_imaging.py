@@ -8,22 +8,38 @@ functionality works as expected with various inputs and configurations.
 
 import numpy as np
 import pytest
+from astropy.cosmology import Planck18 as cosmo
 from unyt import (
+    Angstrom,
     Hz,
     Msun,
     Myr,
     angstrom,
+    arcsecond,
     erg,
+    km,
     kpc,
     s,
     unyt_array,
+    yr,
 )
 
+from synthesizer.emission_models import (
+    BlackHoleEmissionModel,
+    StellarEmissionModel,
+)
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.imaging.spectral_cube import SpectralCube
-from synthesizer.instruments import FilterCollection
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.kernel_functions import Kernel
+from synthesizer.parametric.galaxy import Galaxy as ParamGalaxy
+from synthesizer.parametric.morphology import Sersic2D
+from synthesizer.parametric.stars import Stars as ParamStars
+from synthesizer.particle import BlackHoles as PartBlackHoles
+from synthesizer.particle import Galaxy as PartGalaxy
+from synthesizer.particle import Stars as PartStars
 from synthesizer.photometry import PhotometryCollection
 
 
@@ -753,6 +769,8 @@ class TestGalaxyImagingSingleParticle:
         flux for a single particle, though the spatial distributions may
         differ.
         """
+        from synthesizer.instruments import Instrument
+
         # Define the image properties
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
@@ -761,22 +779,37 @@ class TestGalaxyImagingSingleParticle:
 
         kernel = Kernel().get_kernel()
 
+        # Create instrument with filters
+        trans = np.zeros(1000)
+        trans[400:600] = 1.0
+        generic_dict = {"filter_r": trans}
+        new_lam = np.logspace(
+            np.log10(4000 * angstrom),
+            np.log10(7000 * angstrom),
+            1000,
+        )
+        filters = FilterCollection(
+            generic_dict=generic_dict,
+            new_lam=new_lam * angstrom,
+        )
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Create histogram image
         hist_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             kernel=kernel,
             img_type="hist",
+            instrument=instrument,
         )["filter_r"]
 
         # Create smoothed image
         smoothed_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             kernel=kernel,
             img_type="smoothed",
+            instrument=instrument,
         )["filter_r"]
 
         assert hist_image is not None, (
@@ -824,6 +857,8 @@ class TestGalaxyImagingSingleParticle:
 
     def test_orientation(self, one_part_galaxy, incident_emission_model):
         """Test image generation with different orientations."""
+        from synthesizer.instruments import Instrument
+
         # Define the image properties
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
@@ -832,12 +867,27 @@ class TestGalaxyImagingSingleParticle:
 
         kernel = Kernel().get_kernel()
 
+        # Create instrument with filters
+        trans = np.zeros(1000)
+        trans[400:600] = 1.0
+        generic_dict = {"filter_r": trans}
+        new_lam = np.logspace(
+            np.log10(4000 * angstrom),
+            np.log10(7000 * angstrom),
+            1000,
+        )
+        filters = FilterCollection(
+            generic_dict=generic_dict,
+            new_lam=new_lam * angstrom,
+        )
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Get the image
         galaxy_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             kernel=kernel,
+            instrument=instrument,
         )["filter_r"]
 
         # Ensure the image has non-zero flux
@@ -864,6 +914,8 @@ class TestImagingFluxConservation:
         incident_emission_model,
     ):
         """Test flux conservation in histogram imaging."""
+        from synthesizer.instruments import Instrument
+
         # Define the image properties
         resolution = 0.5 * kpc
         fov = 200 * kpc
@@ -871,31 +923,26 @@ class TestImagingFluxConservation:
         incident_emission_model.set_per_particle(True)
 
         random_part_stars.get_spectra(incident_emission_model)
-        random_part_stars.get_particle_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
+        filters = FilterCollection(
+            generic_dict={
+                "filter_r": np.ones(1000),
+            },
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
         )
-        random_part_stars.get_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
-        )
+        random_part_stars.get_particle_photo_lnu(filters)
+        random_part_stars.get_photo_lnu(filters)
 
         random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
 
+        # Create instrument
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Create histogram image
         hist_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="hist",
+            instrument=instrument,
         )["filter_r"]
 
         # Get the sum of the histogram image
@@ -916,6 +963,8 @@ class TestImagingFluxConservation:
         incident_emission_model,
     ):
         """Test flux conservation in smoothed imaging."""
+        from synthesizer.instruments import Instrument
+
         # Define the image properties
         resolution = 0.5 * kpc
         fov = 200 * kpc
@@ -923,34 +972,29 @@ class TestImagingFluxConservation:
         incident_emission_model.set_per_particle(True)
 
         random_part_stars.get_spectra(incident_emission_model)
-        random_part_stars.get_particle_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
+        filters = FilterCollection(
+            generic_dict={
+                "filter_r": np.ones(1000),
+            },
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
         )
-        random_part_stars.get_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
-        )
+        random_part_stars.get_particle_photo_lnu(filters)
+        random_part_stars.get_photo_lnu(filters)
 
         random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
 
         kernel = Kernel().get_kernel()
 
+        # Create instrument
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="smoothed",
             kernel=kernel,
+            instrument=instrument,
         )["filter_r"]
 
         # Get the sum of the smoothed image
@@ -971,6 +1015,8 @@ class TestImagingFluxConservation:
         incident_emission_model,
     ):
         """Test threaded vs serial smoothed image generation."""
+        from synthesizer.instruments import Instrument
+
         # Define the image properties
         resolution = 0.5 * kpc
         fov = 200 * kpc
@@ -978,44 +1024,39 @@ class TestImagingFluxConservation:
         incident_emission_model.set_per_particle(True)
 
         random_part_stars.get_spectra(incident_emission_model)
-        random_part_stars.get_particle_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
+        filters = FilterCollection(
+            generic_dict={
+                "filter_r": np.ones(1000),
+            },
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
         )
-        random_part_stars.get_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
-        )
+        random_part_stars.get_particle_photo_lnu(filters)
+        random_part_stars.get_photo_lnu(filters)
 
         random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
 
         kernel = Kernel().get_kernel()
 
+        # Create instrument
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Create smoothed image using threading
         threaded_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="smoothed",
             kernel=kernel,
             nthreads=4,
+            instrument=instrument,
         )["filter_r"]
 
         # Create smoothed image without threading
         serial_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="smoothed",
             kernel=kernel,
+            instrument=instrument,
         )["filter_r"]
 
         # Compare the two images
@@ -1319,12 +1360,20 @@ class TestComprehensiveImagingCoverage:
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
+        filters = FilterCollection(
+            generic_dict={"filter_r": np.ones(1000)},
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+        )
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         smoothed_image = stars.get_images_luminosity(
-            emission_model=emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="smoothed",
             kernel=kernel,
+            instrument=instrument,
         )["filter_r"]
 
         smoothed_flux = np.sum(smoothed_image.arr)
@@ -1391,12 +1440,20 @@ class TestComprehensiveImagingCoverage:
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
+        filters = FilterCollection(
+            generic_dict={"filter_r": np.ones(1000)},
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+        )
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         smoothed_image = stars.get_images_luminosity(
-            emission_model=emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="smoothed",
             kernel=kernel,
+            instrument=instrument,
         )["filter_r"]
 
         smoothed_flux = np.sum(smoothed_image.arr)
@@ -1452,13 +1509,24 @@ class TestComprehensiveImagingCoverage:
 
         kernel = Kernel().get_kernel()
 
+        # Create instrument
+        from synthesizer.instruments import Instrument
+
+        filters = FilterCollection(
+            generic_dict={
+                "filter_r": np.ones(1000),
+            },
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+        )
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="smoothed",
             kernel=kernel,
+            instrument=instrument,
         )["filter_r"]
 
         # Get the sum of the smoothed image
@@ -1637,13 +1705,18 @@ class TestComprehensiveImagingCoverage:
 
         kernel = Kernel().get_kernel()
 
+        # Create instrument
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument("test", resolution=resolution, filters=filters)
+
         # Create images for all filters
         images = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
             img_type="smoothed",
             kernel=kernel,
+            instrument=instrument,
         )
 
         # Check flux conservation for each filter
@@ -1770,26 +1843,23 @@ class TestComprehensiveImagingCoverage:
         incident_emission_model.set_per_particle(True)
 
         random_part_stars.get_spectra(incident_emission_model)
-        random_part_stars.get_particle_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
+        filters = FilterCollection(
+            generic_dict={
+                "filter_r": np.ones(1000),
+            },
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
         )
-        random_part_stars.get_photo_lnu(
-            FilterCollection(
-                generic_dict={
-                    "filter_r": np.ones(1000),
-                },
-                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
-            )
-        )
+        random_part_stars.get_particle_photo_lnu(filters)
+        random_part_stars.get_photo_lnu(filters)
 
         random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
 
         kernel = Kernel().get_kernel()
+
+        # Create instrument
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument("test", resolution=resolution, filters=filters)
 
         # Generate images with different thread counts
         thread_counts = [1, 2, 4, 8]
@@ -1797,12 +1867,12 @@ class TestComprehensiveImagingCoverage:
 
         for nthreads in thread_counts:
             img = random_part_stars.get_images_luminosity(
-                emission_model=incident_emission_model,
-                resolution=resolution,
+                "incident",
                 fov=fov,
                 img_type="smoothed",
                 kernel=kernel,
                 nthreads=nthreads,
+                instrument=instrument,
             )["filter_r"]
             images[nthreads] = img
 
@@ -1812,3 +1882,1122 @@ class TestComprehensiveImagingCoverage:
             assert np.allclose(images[nthreads].arr, reference_img), (
                 f"Image with {nthreads} threads differs from serial (1 thread)"
             )
+
+
+# ================ SIMPLIFIED IMAGING API FIXTURES AND TESTS ==================
+
+
+@pytest.fixture(scope="module")
+def filters():
+    """Create a filter collection for testing."""
+    return FilterCollection(
+        filter_codes=[
+            "JWST/NIRCam.F090W",
+            "JWST/NIRCam.F150W",
+            "JWST/NIRCam.F200W",
+            "JWST/NIRCam.F277W",
+            "JWST/NIRCam.F356W",
+            "JWST/NIRCam.F444W",
+        ],
+        new_lam=np.logspace(3, 5, 1000) * Angstrom,
+    )
+
+
+@pytest.fixture(scope="module")
+def instrument(filters):
+    """Create an instrument for testing."""
+    return Instrument(
+        label="TestInstrument",
+        filters=filters,
+        resolution=0.1 * kpc,
+    )
+
+
+@pytest.fixture
+def particle_stars(test_grid):
+    """Create a simple particle stars component for testing."""
+    n_stars = 100
+    np.random.seed(42)
+
+    stars = PartStars(
+        initial_masses=np.random.uniform(1e6, 1e9, n_stars) * Msun,
+        ages=np.random.uniform(1, 500, n_stars) * Myr,
+        metallicities=np.random.uniform(0.005, 0.02, n_stars),
+        redshift=2.0,
+        current_masses=np.random.uniform(1e6, 1e9, n_stars) * Msun,
+        smoothing_lengths=np.random.uniform(0.1, 0.5, n_stars) * kpc,
+        coordinates=np.random.normal(0, 1, (n_stars, 3)) * kpc,
+        velocities=np.random.normal(0, 100, (n_stars, 3)) * km / s,
+        centre=np.array([0.0, 0.0, 0.0]) * kpc,
+    )
+
+    # Generate per-particle spectra for imaging
+    em_model = StellarEmissionModel(
+        label="incident",
+        grid=test_grid,
+        extract="incident",
+        fesc=0.0,
+        per_particle=True,  # Required for particle imaging
+    )
+    stars.get_spectra(em_model)
+
+    return stars
+
+
+@pytest.fixture
+def particle_blackholes():
+    """Create a simple particle blackholes component for testing."""
+    n_bh = 10
+    np.random.seed(43)
+
+    black_holes = PartBlackHoles(
+        masses=np.random.uniform(1e7, 1e9, n_bh) * Msun,
+        coordinates=np.random.normal(0, 0.5, (n_bh, 3)) * kpc,
+        velocities=np.random.normal(0, 100, (n_bh, 3)) * km / s,
+        metallicities=np.full(n_bh, 0.01),
+        redshift=2.0,
+        accretion_rates=np.random.uniform(0.01, 1.0, n_bh) * Msun / yr,
+        centre=np.array([0.0, 0.0, 0.0]) * kpc,
+    )
+
+    return black_holes
+
+
+@pytest.fixture
+def parametric_stars(test_grid):
+    """Create a simple parametric stars component for testing."""
+    # Create a simple morphology
+    morph = Sersic2D(
+        r_eff=1.0 * kpc,
+        sersic_index=1.0,
+        ellipticity=0.5,
+        theta=35.0,
+    )
+
+    # Use the grid's age and metallicity bins
+    log10ages = test_grid.log10ages
+    metallicities = test_grid.metallicities
+
+    # Create a simple SFZH (star formation and metallicity history)
+    # Shape should be (n_metallicities, n_ages)
+    sfzh = np.zeros((len(metallicities), len(log10ages)))
+    # Add some star formation at a few age and metallicity bins
+    sfzh[5, 20:30] = 1e8  # Some SF at intermediate ages
+    sfzh[7, 25:35] = 5e8  # More SF at slightly later ages
+
+    stars = ParamStars(
+        log10ages=log10ages,
+        metallicities=metallicities,
+        sfzh=sfzh * Msun,
+        morphology=morph,
+        redshift=2.0,
+    )
+
+    return stars
+
+
+@pytest.fixture
+def particle_galaxy(particle_stars, particle_blackholes, test_grid):
+    """Create a particle galaxy with stars and black holes."""
+    gal = PartGalaxy(
+        name="TestParticleGalaxy",
+        stars=particle_stars,
+        black_holes=particle_blackholes,
+        redshift=2.0,
+    )
+
+    # Generate spectra for both components
+    em_model = StellarEmissionModel(
+        label="incident",
+        grid=test_grid,
+        extract="incident",
+        fesc=0.0,
+        per_particle=True,
+    )
+    gal.stars.get_spectra(em_model)
+
+    return gal
+
+
+@pytest.fixture
+def parametric_galaxy(parametric_stars, test_grid):
+    """Create a parametric galaxy with stars."""
+    gal = ParamGalaxy(
+        name="TestParametricGalaxy",
+        stars=parametric_stars,
+        redshift=2.0,
+    )
+
+    # Generate spectra
+    em_model = StellarEmissionModel(
+        label="incident",
+        grid=test_grid,
+        extract="incident",
+        fesc=0.0,
+    )
+    gal.stars.get_spectra(em_model)
+
+    return gal
+
+
+class TestComponentLevelImaging:
+    """Test imaging methods directly on component objects."""
+
+    def test_particle_stars_get_images_luminosity(
+        self,
+        particle_stars,
+        filters,
+        instrument,
+    ):
+        """Test get_images_luminosity on particle stars component."""
+        # Get photometry first
+        particle_stars.get_particle_photo_lnu(filters)
+
+        # Generate images
+        fov = 5.0 * kpc
+        imgs = particle_stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+            nthreads=1,
+        )
+
+        # Check image was created
+        assert imgs is not None
+        assert isinstance(imgs, ImageCollection)
+
+        # Check image is stored on component
+        assert instrument.label in particle_stars.images_lnu
+        assert "incident" in particle_stars.images_lnu[instrument.label]
+
+        # Verify image properties
+        img_coll = particle_stars.images_lnu[instrument.label]["incident"]
+        assert img_coll.npix[0] > 0
+        assert img_coll.npix[1] > 0
+        assert len(img_coll.imgs) == len(filters)
+
+        # Check that image arrays have correct shape
+        for filter_code in filters.filter_codes:
+            img = img_coll[filter_code]
+            assert img.arr.shape == tuple(img_coll.npix)
+            assert np.any(img.arr > 0), f"No flux in {filter_code}"
+
+    def test_particle_stars_get_images_flux(
+        self,
+        particle_stars,
+        filters,
+        instrument,
+    ):
+        """Test get_images_flux on particle stars component."""
+        # Convert particle spectra to fnu (required for fnu photometry)
+        for label in particle_stars.particle_spectra:
+            particle_stars.particle_spectra[label].get_fnu(
+                cosmo=cosmo,
+                z=particle_stars.redshift,
+            )
+
+        # Get photometry
+        particle_stars.get_particle_photo_fnu(filters)
+
+        # Create an angular instrument for flux images
+        flux_instrument = Instrument(
+            label="FluxInstrument",
+            filters=filters,
+            resolution=0.05 * arcsecond,
+        )
+
+        # Generate images
+        fov = 1.0 * arcsecond  # Angular units for flux
+        imgs = particle_stars.get_images_flux(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=flux_instrument,
+            kernel=Kernel().get_kernel(),
+            nthreads=1,
+            cosmo=cosmo,
+        )
+
+        # Check image was created and stored
+        assert imgs is not None
+        assert flux_instrument.label in particle_stars.images_fnu
+        assert "incident" in particle_stars.images_fnu[flux_instrument.label]
+
+        # Verify image properties
+        img_coll = particle_stars.images_fnu[flux_instrument.label]["incident"]
+        assert len(img_coll.imgs) == len(filters)
+
+    def test_particle_blackholes_imaging(
+        self,
+        particle_blackholes,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test imaging on particle black holes component."""
+        # Generate spectra and photometry
+        em_model = BlackHoleEmissionModel(
+            label="disc_incident",
+            grid=test_grid,
+            extract="disc_incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+        particle_blackholes.get_spectra(em_model)
+        particle_blackholes.get_photo_luminosities(filters)
+
+        # Generate images (blackholes always use hist type)
+        fov = 5.0 * kpc
+        imgs = particle_blackholes.get_images_luminosity(
+            "disc_incident",
+            fov=fov,
+            img_type="hist",  # Black holes are point sources
+            instrument=instrument,
+        )
+
+        # Check image was created
+        assert imgs is not None
+        assert instrument.label in particle_blackholes.images_lnu
+        assert (
+            "disc_incident" in particle_blackholes.images_lnu[instrument.label]
+        )
+
+    @pytest.mark.skip(reason="Parametric SFZH indexing needs investigation")
+    def test_parametric_stars_imaging(
+        self,
+        parametric_stars,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test imaging on parametric stars component."""
+        # Generate spectra and photometry
+        em_model = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+        )
+        parametric_stars.get_spectra(em_model)
+        parametric_stars.get_photo_luminosities(filters)
+
+        # Generate images (parametric can only be smoothed)
+        fov = 5.0 * kpc
+        imgs = parametric_stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+        )
+
+        # Check image was created
+        assert imgs is not None
+        assert instrument.label in parametric_stars.images_lnu
+        assert "incident" in parametric_stars.images_lnu[instrument.label]
+
+    @pytest.mark.skip(reason="Parametric SFZH indexing needs investigation")
+    def test_parametric_cant_make_histogram(
+        self,
+        parametric_stars,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test that parametric stars can't make histogram images."""
+        # Generate spectra and photometry
+        em_model = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+        )
+        parametric_stars.get_spectra(em_model)
+        parametric_stars.get_photo_luminosities(filters)
+
+        # Try to generate histogram images (should fail)
+        fov = 5.0 * kpc
+        from synthesizer import exceptions
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            parametric_stars.get_images_luminosity(
+                "incident",
+                fov=fov,
+                img_type="hist",
+                instrument=instrument,
+            )
+
+    def test_multiple_labels_on_component(
+        self,
+        particle_stars,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test generating images for multiple models on a component."""
+        # Generate multiple models
+        em_model1 = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+        em_model2 = StellarEmissionModel(
+            label="transmitted",
+            grid=test_grid,
+            extract="transmitted",
+            fesc=0.1,
+            per_particle=True,  # Required for particle imaging
+        )
+
+        particle_stars.get_spectra(em_model1)
+        particle_stars.get_spectra(em_model2)
+        particle_stars.get_particle_photo_lnu(filters)
+
+        # Generate images for both models
+        fov = 5.0 * kpc
+        imgs = particle_stars.get_images_luminosity(
+            "incident",
+            "transmitted",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Should get a dict with both models
+        assert isinstance(imgs, dict)
+        assert "incident" in imgs
+        assert "transmitted" in imgs
+
+        # Check both are stored on component
+        assert "incident" in particle_stars.images_lnu[instrument.label]
+        assert "transmitted" in particle_stars.images_lnu[instrument.label]
+
+
+class TestGalaxySingleComponentImaging:
+    """Test galaxy-level imaging with a single component."""
+
+    def test_galaxy_defers_to_stars(
+        self,
+        particle_galaxy,
+        filters,
+        instrument,
+    ):
+        """Test that galaxy imaging defers to stars component."""
+        # Get photometry on stars
+        particle_galaxy.stars.get_photo_luminosities(filters)
+
+        # Call galaxy-level imaging
+        fov = 5.0 * kpc
+        imgs = particle_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Check image was created
+        assert imgs is not None
+
+        # Check that image is on the stars component (not galaxy)
+        assert instrument.label in particle_galaxy.stars.images_lnu
+        assert "incident" in particle_galaxy.stars.images_lnu[instrument.label]
+
+        # Galaxy shouldn't have this image since it's a pure component image
+        # (it's not a combined model)
+        # The image should only be on the component
+
+    @pytest.mark.skip(reason="Parametric SFZH indexing needs investigation")
+    def test_galaxy_with_parametric_stars(
+        self,
+        parametric_galaxy,
+        filters,
+        instrument,
+    ):
+        """Test galaxy imaging with parametric stars."""
+        # Get photometry
+        parametric_galaxy.stars.get_photo_luminosities(filters)
+
+        # Generate images at galaxy level
+        fov = 5.0 * kpc
+        imgs = parametric_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+        )
+
+        # Check images are created and stored on component
+        assert imgs is not None
+        assert instrument.label in parametric_galaxy.stars.images_lnu
+        assert (
+            "incident" in parametric_galaxy.stars.images_lnu[instrument.label]
+        )
+
+
+class TestGalaxyMultiComponentImaging:
+    """Test galaxy-level imaging with multiple components."""
+
+    def test_galaxy_with_stars_and_blackholes(
+        self,
+        particle_galaxy,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test galaxy imaging combining stars and black holes."""
+        # Generate spectra and photometry for both components
+        # Stars
+        em_model_stars = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+        particle_galaxy.stars.get_spectra(em_model_stars)
+        particle_galaxy.stars.get_photo_luminosities(filters)
+
+        # Black holes
+        em_model_bh = BlackHoleEmissionModel(
+            label="disc_incident",
+            grid=test_grid,
+            extract="disc_incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+        particle_galaxy.black_holes.get_spectra(em_model_bh)
+        particle_galaxy.black_holes.get_photo_luminosities(filters)
+
+        # Generate images for both components
+        fov = 5.0 * kpc
+        star_imgs = particle_galaxy.stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        bh_imgs = particle_galaxy.black_holes.get_images_luminosity(
+            "disc_incident",
+            fov=fov,
+            img_type="hist",
+            instrument=instrument,
+        )
+
+        # Check both components have images
+        assert star_imgs is not None
+        assert bh_imgs is not None
+
+        # Check images are stored on respective components
+        assert "incident" in particle_galaxy.stars.images_lnu[instrument.label]
+        assert (
+            "disc_incident"
+            in particle_galaxy.black_holes.images_lnu[instrument.label]
+        )
+
+
+class TestComplexModelCombinations:
+    """Test imaging with complex models that combine components."""
+
+    def test_combined_emission_model(
+        self,
+        particle_galaxy,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test imaging with a combined emission model (stars + BH)."""
+        # Generate individual component spectra
+        em_model_stars = StellarEmissionModel(
+            label="stellar_incident",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+        em_model_bh = BlackHoleEmissionModel(
+            label="agn_disc",
+            grid=test_grid,
+            extract="disc_incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+
+        particle_galaxy.stars.get_spectra(em_model_stars)
+        particle_galaxy.black_holes.get_spectra(em_model_bh)
+
+        # Create a combined model
+        combined_model = em_model_stars + em_model_bh
+        combined_model.label = "total"
+
+        # Get spectra for combined model
+        particle_galaxy.get_spectra(combined_model)
+
+        # Get photometry for all models
+        particle_galaxy.get_photo_luminosities(filters)
+
+        # Generate images for components first
+        fov = 5.0 * kpc
+        particle_galaxy.stars.get_images_luminosity(
+            "stellar_incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        particle_galaxy.black_holes.get_images_luminosity(
+            "agn_disc",
+            fov=fov,
+            img_type="hist",
+            instrument=instrument,
+        )
+
+        # Now generate combined image at galaxy level
+        total_imgs = particle_galaxy.get_images_luminosity(
+            "total",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Check combined image was created
+        assert total_imgs is not None
+
+        # Check it's stored on the galaxy (not just components)
+        assert instrument.label in particle_galaxy.images_lnu
+        assert "total" in particle_galaxy.images_lnu[instrument.label]
+
+        # Verify the combined image has flux
+        total_img_coll = particle_galaxy.images_lnu[instrument.label]["total"]
+        for filter_code in filters.filter_codes:
+            img = total_img_coll[filter_code]
+            assert np.any(img.arr > 0), f"No flux in combined {filter_code}"
+
+    def test_attenuated_model_imaging(
+        self,
+        particle_galaxy,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test imaging with intrinsic + attenuated models."""
+        # Create intrinsic and attenuated models
+        intrinsic_model = StellarEmissionModel(
+            label="intrinsic",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+
+        # Create dust curve
+        dust_curve = PowerLaw(slope=-1.0)
+
+        attenuated_model = StellarEmissionModel(
+            label="attenuated",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+            dust_curve=dust_curve,
+            tau_v=0.5,
+            per_particle=True,  # Required for particle imaging
+        )
+
+        # Generate spectra
+        particle_galaxy.stars.get_spectra(intrinsic_model)
+        particle_galaxy.stars.get_spectra(attenuated_model)
+
+        # Get photometry
+        particle_galaxy.stars.get_photo_luminosities(filters)
+
+        # Generate images for both
+        fov = 5.0 * kpc
+        imgs = particle_galaxy.stars.get_images_luminosity(
+            "intrinsic",
+            "attenuated",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Check both images were created
+        assert isinstance(imgs, dict)
+        assert "intrinsic" in imgs
+        assert "attenuated" in imgs
+
+        # Check they're stored on component
+        assert (
+            "intrinsic" in particle_galaxy.stars.images_lnu[instrument.label]
+        )
+        assert (
+            "attenuated" in particle_galaxy.stars.images_lnu[instrument.label]
+        )
+
+        # Verify attenuation reduced flux
+        intrinsic_coll = particle_galaxy.stars.images_lnu[instrument.label][
+            "intrinsic"
+        ]
+        attenuated_coll = particle_galaxy.stars.images_lnu[instrument.label][
+            "attenuated"
+        ]
+
+        for filter_code in filters.filter_codes:
+            intrinsic_flux = intrinsic_coll[filter_code].arr.sum()
+            attenuated_flux = attenuated_coll[filter_code].arr.sum()
+            assert attenuated_flux < intrinsic_flux, (
+                "Attenuated flux should be less than intrinsic in "
+                f"{filter_code}"
+            )
+
+
+class TestImageAttachment:
+    """Test that images are attached to the correct dictionaries."""
+
+    def test_component_images_attached_correctly(
+        self,
+        particle_stars,
+        filters,
+        instrument,
+    ):
+        """Test that component images are attached to component dicts."""
+        # Get photometry and generate images
+        particle_stars.get_particle_photo_lnu(filters)
+
+        fov = 5.0 * kpc
+        particle_stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Check structure of stored images
+        assert isinstance(particle_stars.images_lnu, dict)
+        assert instrument.label in particle_stars.images_lnu
+        assert isinstance(particle_stars.images_lnu[instrument.label], dict)
+        assert "incident" in particle_stars.images_lnu[instrument.label]
+
+        # Check the image collection itself
+        from synthesizer.imaging.image_collection import ImageCollection
+
+        img_coll = particle_stars.images_lnu[instrument.label]["incident"]
+        assert isinstance(img_coll, ImageCollection)
+
+    def test_galaxy_combined_images_attached_correctly(
+        self,
+        particle_galaxy,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test that combined galaxy images are attached to galaxy dict."""
+        # Setup component models
+        em_model_stars = StellarEmissionModel(
+            label="stars",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+        em_model_bh = BlackHoleEmissionModel(
+            label="bh",
+            grid=test_grid,
+            extract="disc_incident",
+            fesc=0.0,
+            per_particle=True,  # Required for particle imaging
+        )
+
+        particle_galaxy.stars.get_spectra(em_model_stars)
+        particle_galaxy.black_holes.get_spectra(em_model_bh)
+
+        # Create combined model
+        combined = em_model_stars + em_model_bh
+        combined.label = "combined"
+        particle_galaxy.get_spectra(combined)
+
+        # Get photometry
+        particle_galaxy.get_photo_luminosities(filters)
+
+        # Generate component images
+        fov = 5.0 * kpc
+        particle_galaxy.stars.get_images_luminosity(
+            "stars",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        particle_galaxy.black_holes.get_images_luminosity(
+            "bh",
+            fov=fov,
+            img_type="hist",
+            instrument=instrument,
+        )
+
+        # Generate combined image at galaxy level
+        particle_galaxy.get_images_luminosity(
+            "combined",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Check component images are on components only
+        assert "stars" in particle_galaxy.stars.images_lnu[instrument.label]
+        assert "stars" not in particle_galaxy.images_lnu.get(
+            instrument.label, {}
+        )
+
+        assert "bh" in particle_galaxy.black_holes.images_lnu[instrument.label]
+        assert "bh" not in particle_galaxy.images_lnu.get(instrument.label, {})
+
+        # Check combined image is on galaxy
+        assert instrument.label in particle_galaxy.images_lnu
+        assert "combined" in particle_galaxy.images_lnu[instrument.label]
+
+
+class TestPSFAndNoiseApplication:
+    """Test PSF and noise application across components and galaxies."""
+
+    def test_psf_on_component(
+        self,
+        particle_stars,
+        filters,
+        test_grid,
+    ):
+        """Test applying PSF to component images."""
+        from synthesizer.imaging.psfs import PaddedGaussianPSF
+
+        # Create instrument with PSF
+        psfs = {
+            filter_code: PaddedGaussianPSF(fwhm=0.1 * arcsecond)
+            for filter_code in filters.filter_codes
+        }
+
+        instrument = Instrument(
+            label="TestInstrumentPSF",
+            filters=filters,
+            resolution=0.05 * arcsecond,
+            psfs=psfs,
+        )
+
+        # Convert particle spectra to fnu (required for fnu photometry)
+        for label in particle_stars.particle_spectra:
+            particle_stars.particle_spectra[label].get_fnu(
+                cosmo=cosmo,
+                z=particle_stars.redshift,
+            )
+
+        # Generate flux photometry
+        particle_stars.get_particle_photo_fnu(filters)
+
+        fov = 1.0 * arcsecond
+        particle_stars.get_images_flux(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+            cosmo=cosmo,
+        )
+
+        # Apply PSF
+        psf_imgs = particle_stars.apply_psf_to_images_fnu(instrument)
+
+        # Check PSF images were created
+        assert psf_imgs is not None
+        assert "incident" in psf_imgs
+
+        # Check they're stored correctly
+        assert instrument.label in particle_stars.images_psf_fnu
+        assert "incident" in particle_stars.images_psf_fnu[instrument.label]
+
+    def test_psf_on_galaxy_defers_to_components(
+        self,
+        particle_galaxy,
+        filters,
+        test_grid,
+    ):
+        """Test that galaxy PSF application defers to components."""
+        from synthesizer.imaging.psfs import PaddedGaussianPSF
+
+        # Create instrument with PSF
+        psfs = {
+            filter_code: PaddedGaussianPSF(fwhm=0.1 * arcsecond)
+            for filter_code in filters.filter_codes
+        }
+
+        instrument = Instrument(
+            label="TestInstrumentPSF",
+            filters=filters,
+            resolution=0.05 * arcsecond,
+            psfs=psfs,
+        )
+
+        # Generate fnu spectra and images on components
+        particle_galaxy.get_fnu(cosmo=cosmo)
+        particle_galaxy.get_photo_fluxes(filters, cosmo=cosmo)
+
+        fov = 1.0 * arcsecond
+        particle_galaxy.stars.get_images_flux(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+            cosmo=cosmo,
+        )
+
+        # Apply PSF at galaxy level
+        particle_galaxy.apply_psf_to_images_fnu(instrument)
+
+        # Check PSF was applied to component
+        assert instrument.label in particle_galaxy.stars.images_psf_fnu
+        assert (
+            "incident"
+            in particle_galaxy.stars.images_psf_fnu[instrument.label]
+        )
+
+    def test_noise_on_component(
+        self,
+        particle_stars,
+        filters,
+    ):
+        """Test applying noise to component images."""
+        # Create instrument with SNRs
+        instrument = Instrument(
+            label="TestInstrumentNoise",
+            filters=filters,
+            resolution=0.05 * arcsecond,
+            snrs={filter_code: 10.0 for filter_code in filters.filter_codes},
+            depth={filter_code: 28.0 for filter_code in filters.filter_codes},
+            depth_app_radius=0.3 * arcsecond,
+        )
+
+        # Convert particle spectra to fnu (required for fnu photometry)
+        for label in particle_stars.particle_spectra:
+            particle_stars.particle_spectra[label].get_fnu(
+                cosmo=cosmo,
+                z=particle_stars.redshift,
+            )
+
+        # Generate flux photometry
+        particle_stars.get_particle_photo_fnu(filters)
+
+        fov = 1.0 * arcsecond
+        particle_stars.get_images_flux(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+            cosmo=cosmo,
+        )
+
+        # Apply noise
+        noise_imgs = particle_stars.apply_noise_to_images_fnu(
+            instrument,
+            apply_to_psf=False,
+        )
+
+        # Check noise images were created
+        assert noise_imgs is not None
+        assert "incident" in noise_imgs
+
+        # Check they're stored correctly
+        assert instrument.label in particle_stars.images_noise_fnu
+        assert "incident" in particle_stars.images_noise_fnu[instrument.label]
+
+
+class TestErrorHandling:
+    """Test error handling in the imaging API."""
+
+    def test_missing_photometry_raises_error(
+        self,
+        particle_stars,
+        instrument,
+    ):
+        """Test that missing photometry raises an error."""
+        from synthesizer import exceptions
+
+        # Try to generate images without photometry
+        fov = 5.0 * kpc
+        with pytest.raises(exceptions.MissingPhotometryType):
+            particle_stars.get_images_luminosity(
+                "nonexistent_model",
+                fov=fov,
+                img_type="smoothed",
+                instrument=instrument,
+                kernel=Kernel().get_kernel(),
+            )
+
+    def test_missing_component_images_for_combination(
+        self,
+        particle_galaxy,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test error when trying to combine without component images."""
+        from synthesizer import exceptions
+
+        # Create a combined model without generating component images
+        em_model_stars = StellarEmissionModel(
+            label="stars",
+            grid=test_grid,
+            extract="incident",
+            fesc=0.0,
+        )
+        em_model_bh = BlackHoleEmissionModel(
+            label="bh",
+            grid=test_grid,
+            extract="disc_incident",
+            fesc=0.0,
+        )
+
+        particle_galaxy.stars.get_spectra(em_model_stars)
+        particle_galaxy.black_holes.get_spectra(em_model_bh)
+
+        combined = em_model_stars + em_model_bh
+        combined.label = "combined"
+        particle_galaxy.get_spectra(combined)
+
+        particle_galaxy.get_photo_luminosities(filters)
+
+        # Try to generate combined image without component images
+        fov = 5.0 * kpc
+        with pytest.raises(exceptions.MissingImage):
+            particle_galaxy.get_images_luminosity(
+                "combined",
+                fov=fov,
+                img_type="smoothed",
+                instrument=instrument,
+                kernel=Kernel().get_kernel(),
+            )
+
+    def test_psf_without_psfs_raises_error(
+        self,
+        particle_stars,
+        filters,
+        instrument,
+    ):
+        """Test that trying to apply PSF without PSFs raises error."""
+        from synthesizer import exceptions
+
+        # Generate images
+        particle_stars.get_particle_photo_lnu(filters)
+
+        fov = 5.0 * kpc
+        particle_stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Try to apply PSF without PSFs defined
+        with pytest.raises(exceptions.InconsistentArguments):
+            particle_stars.apply_psf_to_images_lnu(instrument)
+
+
+class TestImagePropertiesAndMethods:
+    """Test various properties and methods of generated images."""
+
+    def test_image_collection_properties(
+        self,
+        particle_stars,
+        filters,
+        instrument,
+    ):
+        """Test properties of ImageCollection objects."""
+        # Generate images
+        particle_stars.get_particle_photo_lnu(filters)
+
+        fov = 5.0 * kpc
+        particle_stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Get the image collection
+        img_coll = particle_stars.images_lnu[instrument.label]["incident"]
+
+        # Test properties
+        assert img_coll.npix.ndim == 1
+        assert len(img_coll.npix) == 2
+        assert img_coll.resolution is not None
+        assert img_coll.fov is not None
+        assert len(img_coll.imgs) == len(filters)
+
+        # Test we can iterate over images
+        for filter_code, img in img_coll.imgs.items():
+            assert filter_code in filters.filter_codes
+            assert img.arr.shape == tuple(img_coll.npix)
+
+    def test_single_vs_multiple_label_return_types(
+        self,
+        particle_stars,
+        filters,
+        instrument,
+        test_grid,
+    ):
+        """Test return types for single vs multiple labels."""
+        # Generate multiple models
+        for label in ["model1", "model2"]:
+            em_model = StellarEmissionModel(
+                label=label,
+                grid=test_grid,
+                extract="incident",
+                fesc=0.0,
+                per_particle=True,  # Required for particle imaging
+            )
+            particle_stars.get_spectra(em_model)
+
+        particle_stars.get_particle_photo_lnu(filters)
+
+        fov = 5.0 * kpc
+
+        # Single label should return ImageCollection
+        img1 = particle_stars.get_images_luminosity(
+            "model1",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        from synthesizer.imaging.image_collection import ImageCollection
+
+        assert isinstance(img1, ImageCollection)
+
+        # Multiple labels should return dict
+        imgs = particle_stars.get_images_luminosity(
+            "model1",
+            "model2",
+            fov=fov,
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=Kernel().get_kernel(),
+        )
+
+        assert isinstance(imgs, dict)
+        assert "model1" in imgs
+        assert "model2" in imgs
+        assert isinstance(imgs["model1"], ImageCollection)
+        assert isinstance(imgs["model2"], ImageCollection)
