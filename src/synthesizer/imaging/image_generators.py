@@ -1318,19 +1318,20 @@ def _prepare_image_generation_labels(
 
     # Loop over the labels and check if they are combined images
     for label in labels:
-        if (
-            label not in model_cache
-            and label not in ignore_labels
-            and not remove_missing
-        ):
-            raise exceptions.MissingModel(
-                f"Label {label} not found in model cache. "
-                "Have you generated the spectra and photometry?"
-            )
+        # Skip ignored labels
+        if label in ignore_labels:
+            continue
 
         # Skip labels not in the model cache if we are removing missing
         if label not in model_cache and remove_missing:
             continue
+
+        # OK, by here the label must be in the model cache
+        if label not in model_cache:
+            raise exceptions.MissingModel(
+                f"Label {label} not found in model cache. "
+                "Have you generated the spectra and photometry?"
+            )
 
         # Get combine keys if any
         combine_keys = model_cache[label].get("combine", [])
