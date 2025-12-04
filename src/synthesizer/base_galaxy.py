@@ -13,7 +13,7 @@ from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
-    _prepare_image_generation_labels,
+    _prepare_galaxy_image_labels,
 )
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation, warn
@@ -1403,21 +1403,35 @@ class BaseGalaxy:
         if self.gas is not None and hasattr(self.gas, "model_param_cache"):
             combined_cache.update(self.gas.model_param_cache)
 
-        # Which labels do we now need to combine?
-        combine_labels, generated_labels = _prepare_image_generation_labels(
-            labels,
-            combined_cache,
-            remove_missing=True,
-            enforce_combinations=True,
+        # Prepare galaxy-level image generation, routing to components
+        galaxy_combine_labels, component_labels_by_emitter = (
+            _prepare_galaxy_image_labels(
+                labels,
+                combined_cache,
+            )
         )
 
         # Container for images we will make
         out_images = {}
 
-        # Should we check stars?
-        if self.stars is not None:
-            star_imgs = self.stars._get_images(
-                *generated_labels,
+        # Generate images for each component based on the routing
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            # Get the appropriate component
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            # Skip if component doesn't exist
+            if component is None:
+                continue
+
+            # Generate images for this component
+            component_imgs = component._get_images(
+                *emitter_labels,
                 img_type=img_type,
                 instrument=instrument,
                 kernel=kernel,
@@ -1428,44 +1442,22 @@ class BaseGalaxy:
                 cosmo=cosmo,
                 phot_type=phot_type,
             )
-        else:
-            star_imgs = {}
 
-        # Should we check black holes?
-        if self.black_holes is not None:
-            black_holes_imgs = self.black_holes._get_images(
-                *generated_labels,
-                img_type=img_type,
-                instrument=instrument,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-                resolution=resolution,
-                fov=fov,
-                cosmo=cosmo,
-                phot_type=phot_type,
-            )
-        else:
-            black_holes_imgs = {}
+            # Component returns a dict if multiple labels, or bare
+            # ImageCollection if single label
+            if isinstance(component_imgs, dict):
+                out_images.update(component_imgs)
+            else:
+                # Single label case - wrap in dict
+                out_images[emitter_labels[0]] = component_imgs
 
-        # Combine black hole and star images into out_images
-        if not isinstance(star_imgs, dict):
-            star_imgs = {labels[0]: star_imgs}
-        elif instrument.label in star_imgs:
-            star_imgs = star_imgs[instrument.label]
-        if not isinstance(black_holes_imgs, dict):
-            black_holes_imgs = {labels[0]: black_holes_imgs}
-        elif instrument.label in black_holes_imgs:
-            black_holes_imgs = black_holes_imgs[instrument.label]
-        out_images.update(star_imgs)
-        out_images.update(black_holes_imgs)
+        # Collect all expected component labels
+        expected_labels = []
+        for emitter_labels in component_labels_by_emitter.values():
+            expected_labels.extend(emitter_labels)
 
-        # What models have we already generated images for?
-        done_labels = list(out_images.keys())
-
-        # Ensure we have all the necessary images to combine, if not we
-        # cannot proceed
-        missing_labels = set(generated_labels) - set(done_labels)
+        # Ensure we have all the necessary images to combine
+        missing_labels = set(expected_labels) - set(out_images.keys())
         if len(missing_labels) > 0:
             raise exceptions.MissingImage(
                 "Cannot generate galaxy images for the following labels as "
@@ -1473,8 +1465,8 @@ class BaseGalaxy:
                 f"{', '.join(missing_labels)}"
             )
 
-        # OK, loop over the combination labels and make those images
-        for label in combine_labels:
+        # OK, loop over the galaxy combination labels and make those images
+        for label in galaxy_combine_labels:
             out_images.update(
                 {
                     label: _combine_image_collections(
@@ -1555,8 +1547,8 @@ class BaseGalaxy:
                     if not in_stars and not in_bhs:
                         self.images_fnu[label] = out_images[label]
 
-        # Probably, very unliklely but if we generated no images just return
-        # an empty dict (in this eventuallity we almost certainly would
+        # Probably, very unlikely but if we generated no images just return
+        # an empty dict (in this eventuality we almost certainly would
         # have raised an exception earlier but just in case...)
         if len(out_images) == 0:
             warn(

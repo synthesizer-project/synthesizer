@@ -59,6 +59,7 @@ def cache_model_params(
     """Cache all model specific parameters on to the emitter.
 
     This function stores all predefined parameters from the model including:
+        - emitter: The emitter type for this model (stellar/blackhole/galaxy).
         - extract: The key that will extracted from the Grid.
         - combine: The models that will be combined to create the emission.
         - apply_to: The label of the model the transformation applies to.
@@ -114,6 +115,14 @@ def cache_model_params(
             model_label=model.label,
             value=repr(model.generator),
         )
+
+    # Cache the emitter for this model
+    cache_param(
+        param="emitter",
+        emitter=emitter,
+        model_label=model.label,
+        value=model.emitter,
+    )
 
     # Cache any mask parameters in the form of <attr> <op> <thresh> strings
     masks = []

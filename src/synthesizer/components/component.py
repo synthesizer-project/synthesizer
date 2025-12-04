@@ -23,7 +23,7 @@ from synthesizer.emissions import plot_spectra
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
     _generate_image_collection_generic,
-    _prepare_image_generation_labels,
+    _prepare_component_image_labels,
 )
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
@@ -744,7 +744,7 @@ class Component(ABC):
 
         # Find which images must be generated and which can simply
         # be combined
-        combine_labels, generate_labels = _prepare_image_generation_labels(
+        combine_labels, generate_labels = _prepare_component_image_labels(
             labels,
             self.model_param_cache,
             remove_missing=True,

@@ -1286,121 +1286,145 @@ def _generate_ifu_generic(
     return ifu
 
 
-def _prepare_image_generation_labels(
+def _prepare_component_image_labels(
     labels: list[str],
     model_cache: dict,
     remove_missing: bool = False,
-    skip_missing: bool = False,
-    enforce_combinations: bool = False,
 ) -> tuple[list[str], list[str]]:
-    """Split image labels into combined and generated labels.
+    """Split component image labels into combined and generated labels.
 
-    This function uses the model parameter cache to determine which images
-    need to actually be generated (expensive), and which can be combined from
-    other images (cheap).
+    This function checks if any of the requested labels can be combined
+    from other labels already in the request, avoiding unnecessary generation.
 
     Args:
         labels (list of str):
-            The original list of image labels.
+            The requested image labels (already fully expanded).
         model_cache (dict):
-            The model parameter cache from the emitter.
+            The model parameter cache from the component emitter.
         remove_missing (bool):
             Whether to remove labels missing from the model cache entirely.
-            This should be used when a list of labels could be passed that
-            include models generated elsewhere.
-        skip_missing (bool):
-            Like remove_missing, but raises no error or warning if labels
-            are missing from the model cache. This should only be used in
-            special circumstances where missing labels are expected.
-        enforce_combinations (bool):
-            Whether to enforce that combinations are used where possible.
-            If True, any label that can be combined from other labels will
-            be treated as a combined label, even if the user requested it
-            directly. This should be used for all galaxy level images.
 
     Returns:
         tuple of list of str:
-            The simplified lists of image labels including a combined image
-            list and the labels which must be generated individually.
+            - combine_labels: Labels that can be combined from others.
+            - generate_labels: Labels that must be generated directly.
     """
-    # Set up sets we will populate for the combined and generated
-    combine_labels = set()
-    generate_labels = set(labels)
+    combine_labels_set = set()
+    generate_labels = []
+    labels_set = set(labels)
 
-    # Loop over the labels and check if they are combined images
+    # Check each label to see if it can be combined from others already in
+    # the list
     for label in labels:
-        # Skip labels not in the model cache if we are removing missing
-        if label not in model_cache and remove_missing:
-            generate_labels.remove(label)
-            continue
-
-        # Skip labels not in the model cache if we are skipping missing
-        if label not in model_cache and skip_missing:
-            continue
-
-        # OK, by here the label must be in the model cache
+        # Skip if not in cache
         if label not in model_cache:
-            raise exceptions.MissingModel(
-                f"Label {label} not found in model cache. "
-                "Have you generated the spectra and photometry?"
-            )
+            if not remove_missing:
+                generate_labels.append(label)
+            continue
 
-        # Get combine keys if any
+        # Check if this label has combine keys
         combine_keys = model_cache[label].get("combine", [])
 
-        # If we are enforcing combinations, move labels to the combination
-        # list where possible and ensure their combination keys are in the
-        # generation list
-        if len(combine_keys) > 0 and enforce_combinations:
-            # Are the models we are combining all in the requested labels?
-            combine_labels.add(label)
-            if label in generate_labels:
-                generate_labels.remove(label)
-            generate_labels.update(combine_keys)
-            combine_labels.difference_update(set(combine_keys))
+        # If all combine keys are already in our list, we can combine instead
+        # of generate
+        if combine_keys and all(key in labels_set for key in combine_keys):
+            combine_labels_set.add(label)
+        else:
+            # Either no combine keys, or not all dependencies are in the list
+            generate_labels.append(label)
 
-        # If we are not enforcing combinations, only move models to the
-        # combination list if we are already generating all the combination
-        # keys
-        elif len(combine_keys) > 0:
-            # Are the models we are combining all in the requested labels?
-            if all(key in labels for key in combine_keys):
-                combine_labels.add(label)
-                if label in generate_labels:
-                    generate_labels.remove(label)
-                generate_labels.update(combine_keys)
-                combine_labels.difference_update(set(combine_keys))
+    # Sort combine_labels in dependency order (dependencies first)
+    combine_labels = []
+    added = set()
 
-    # Convert to lists
-    combine_labels = list(combine_labels)
-    generate_labels = list(generate_labels)
+    def add_in_order(label):
+        """Add label after its dependencies."""
+        if label in added or label not in model_cache:
+            return
+        # Add dependencies first
+        combine_keys = model_cache[label].get("combine", [])
+        for key in combine_keys:
+            if key in combine_labels_set:
+                add_in_order(key)
+        # Then add this label
+        if label not in added:
+            combine_labels.append(label)
+            added.add(label)
 
-    # If we are enforcing combinations, we need to recursively check
-    # that none of the generate labels can be combined
-    if enforce_combinations:
-        # Are any of the generate labels combinable?
-        combinable = False
-        for label in generate_labels:
-            if (
-                label in model_cache
-                and "combine" in model_cache[label]
-                and len(model_cache[label]["combine"]) > 0
-            ):
-                combinable = True
-                break
-
-        # If so we need to recurse
-        if combinable:
-            more_combine, more_generate = _prepare_image_generation_labels(
-                generate_labels,
-                model_cache,
-                remove_missing=False,
-                skip_missing=True,  # we can change emitter in recursion
-                enforce_combinations=True,
-            )
-
-            # Update our sets
-            combine_labels.extend(more_combine)
-            generate_labels = more_generate
+    # Add all combine labels in order to ensure dependencies are met before
+    # we try to combine them
+    for label in combine_labels_set:
+        add_in_order(label)
 
     return combine_labels, generate_labels
+
+
+def _prepare_galaxy_image_labels(
+    labels: list[str],
+    model_cache: dict,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Prepare galaxy-level image generation by routing to components.
+
+    This function takes the requested labels and recursively expands
+    galaxy-level combination models, routing component-level labels to
+    the appropriate emitters. Component labels are recursively expanded
+    until we get to the actual labels each component needs to handle.
+
+    Args:
+        labels (list of str):
+            The requested image labels.
+        model_cache (dict):
+            The combined model parameter cache from all components and galaxy.
+
+    Returns:
+        tuple:
+            - galaxy_combine_labels (list of str): Labels for galaxy-level
+              combinations.
+            - component_labels_by_emitter (dict): Dict mapping emitter type
+              to list of labels that emitter needs to handle.
+    """
+    # Track galaxy-level combinations and all labels needed
+    galaxy_combine_labels = []
+    all_component_labels = set()
+
+    # Recursively expand galaxy-level models
+    def expand_galaxy_label(label):
+        """Recursively expand a label."""
+        # Skip if not in cache
+        if label not in model_cache:
+            return
+
+        # Get the emitter for this model
+        emitter = model_cache[label].get("emitter", None)
+
+        # If this is a galaxy-level model, expand it
+        if emitter == "galaxy":
+            # Check if it's a combination model
+            combine_keys = model_cache[label].get("combine", [])
+            if combine_keys:
+                # Add to galaxy combinations
+                if label not in galaxy_combine_labels:
+                    galaxy_combine_labels.append(label)
+                # Recursively expand the combination keys
+                for key in combine_keys:
+                    expand_galaxy_label(key)
+        else:
+            # This is a component-level label
+            if label not in all_component_labels:
+                all_component_labels.add(label)
+
+    # Expand all requested labels
+    for label in labels:
+        expand_galaxy_label(label)
+
+    # Now route component labels to the appropriate emitters
+    component_labels_by_emitter = {}
+    for label in all_component_labels:
+        if label in model_cache:
+            emitter = model_cache[label].get("emitter", None)
+            if emitter is not None:
+                if emitter not in component_labels_by_emitter:
+                    component_labels_by_emitter[emitter] = []
+                component_labels_by_emitter[emitter].append(label)
+
+    return galaxy_combine_labels, component_labels_by_emitter
