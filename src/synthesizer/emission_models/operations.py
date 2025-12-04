@@ -1,6 +1,6 @@
 """A submodule containing the operations performed by an EmissionModel.
 
-An emission models inherits each of there opertaion classes but will only
+An emission models inherits each of there operation classes but will only
 ever instantiate one. This is because operations are isolated to one per
 model. The correct operation is instantiated in EmissionMode._init_operations.
 
@@ -100,7 +100,7 @@ class Extraction:
             dict:
                 The dictionary of extracted spectra.
         """
-        # Avoid cyclic imports
+        # Avoid circular imports
         from synthesizer.parametric import BlackHole
 
         # Extract the label for this model
@@ -117,7 +117,11 @@ class Extraction:
         mask_start = tic()
         this_mask = None
         for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+            this_mask = emitter.get_mask(
+                **mask_dict,
+                mask=this_mask,
+                attr_override_obj=this_model,
+            )
         toc("Getting the mask", mask_start)
 
         # Get the appropriate extractor
@@ -211,7 +215,7 @@ class Extraction:
             dict:
                 The dictionary of extracted lines.
         """
-        # Avoid cyclic imports
+        # Avoid circular imports
         from synthesizer.parametric import BlackHole
 
         # We need to be certain that any composite lines we have been
@@ -252,7 +256,11 @@ class Extraction:
         # Do we have to define a property mask?
         this_mask = None
         for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+            this_mask = emitter.get_mask(
+                **mask_dict,
+                mask=this_mask,
+                attr_override_obj=this_model,
+            )
 
         # Get the appropriate extractor
         if this_model.per_particle and this_model.vel_shift:

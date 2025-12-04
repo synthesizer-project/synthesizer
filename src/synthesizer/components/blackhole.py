@@ -405,11 +405,6 @@ class BlackholesComponent(Component):
                 self.inclination.to("radian").value
             )
 
-    @property
-    def _torus_edgeon_cond(self):
-        """When this is > 90 deg the torus obscures the disc."""
-        return self.inclination + self.theta_torus
-
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.
 
