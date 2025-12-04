@@ -2611,7 +2611,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Do we have to define a mask?
             this_mask = None
             for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+                this_mask = emitter.get_mask(
+                    **mask_dict,
+                    mask=this_mask,
+                    attr_override_obj=this_model,
+                )
 
             # Are we doing a combination?
             if this_model._is_combining:
@@ -2976,7 +2980,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Do we have to define a mask?
             this_mask = None
             for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+                this_mask = emitter.get_mask(
+                    **mask_dict,
+                    mask=this_mask,
+                    attr_override_obj=this_model,
+                )
 
             # Are we doing a combination?
             if this_model._is_combining:

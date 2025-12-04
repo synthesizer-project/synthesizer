@@ -12,6 +12,8 @@ from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, pc, rad, s
 
 from synthesizer import exceptions
+from synthesizer.emission_models.utils import get_param
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
@@ -452,8 +454,17 @@ class Particles:
 
         return self.particle_photo_fnu
 
-    def get_mask(self, attr, thresh, op, mask=None):
-        """Create a mask using a threshold and attribute on which to mask.
+    def get_mask(
+        self,
+        attr,
+        thresh,
+        op,
+        mask=None,
+        attr_override_obj=None,
+    ):
+        """Return a mask based on the attribute and threshold.
+
+        Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         Args:
             attr (str):
@@ -463,16 +474,27 @@ class Particles:
             op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
                 or "!=".
-            mask (array):
+            mask (np.ndarray):
                 Optionally, a mask to combine with the new mask.
+            attr_override_obj (object):
+                An alternative object to check from the attribute. This
+                is specifically used when an EmissionModel may have a
+                fixed parameter override, but can be used more generally.
 
         Returns:
             mask (np.ndarray):
                 The mask array.
         """
+        start = tic()
+
         # Get the attribute
         attr_str = attr
-        attr = getattr(self, attr_str)
+        try:
+            attr = get_param(attr_str, attr_override_obj, None, self)
+        except exceptions.MissingAttribute as e:
+            raise exceptions.MissingMaskAttribute(
+                f"Masking attribute ({attr_str}) not found on particle object."
+            ) from e
 
         # Strip dimensionless units since they are inconsequential
         if hasattr(attr, "units") and attr.units.is_dimensionless:
@@ -525,6 +547,8 @@ class Particles:
         # Combine with the existing mask
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
+
+        toc("Generating mask", start)
 
         return new_mask
 
