@@ -197,6 +197,10 @@ def get_param(
                     model.fixed_parameters[param],
                     str,
                 )
+                and not isinstance(
+                    model.fixed_parameters[param],
+                    ParameterFunction,
+                )
             )
             else model.fixed_parameters[param]
         )
