@@ -23,7 +23,6 @@ from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
 from synthesizer.imaging import Image, ImageCollection
-from synthesizer.parametric import BlackHole
 
 
 class Extraction:
@@ -102,6 +101,9 @@ class Extraction:
             dict:
                 The dictionary of extracted spectra.
         """
+        # Avoid circular imports
+        from synthesizer.parametric import BlackHole
+
         # Extract the label for this model
         label = this_model.label
 
@@ -214,6 +216,9 @@ class Extraction:
             dict:
                 The dictionary of extracted lines.
         """
+        # Avoid circular imports
+        from synthesizer.parametric import BlackHole
+
         # We need to be certain that any composite lines we have been
         # passed are split into their constituent parts
         passed_line_ids = line_ids
