@@ -1492,22 +1492,36 @@ class BaseGalaxy:
         if instrument_name is not None:
             if phot_type == "lnu":
                 for label in out_images:
-                    if (
-                        label not in self.stars.images_lnu[instrument_name]
+                    # Check if this label is already in component images
+                    in_stars = (
+                        self.stars is not None
                         and label
-                        not in self.black_holes.images_lnu[instrument_name]
-                    ):
+                        in self.stars.images_lnu.get(instrument_name, {})
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label
+                        in self.black_holes.images_lnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs:
                         self.images_lnu.setdefault(instrument_name, {})
                         self.images_lnu[instrument_name][label] = out_images[
                             label
                         ]
             else:
                 for label in out_images:
-                    if (
-                        label not in self.stars.images_fnu[instrument_name]
+                    # Check if this label is already in component images
+                    in_stars = (
+                        self.stars is not None
                         and label
-                        not in self.black_holes.images_fnu[instrument_name]
-                    ):
+                        in self.stars.images_fnu.get(instrument_name, {})
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label
+                        in self.black_holes.images_fnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs:
                         self.images_fnu.setdefault(instrument_name, {})
                         self.images_fnu[instrument_name][label] = out_images[
                             label
@@ -1516,17 +1530,29 @@ class BaseGalaxy:
         else:
             if phot_type == "lnu":
                 for label in out_images:
-                    if (
-                        label not in self.stars.images_lnu
-                        and label not in self.black_holes.images_lnu
-                    ):
+                    # Check if this label is already in component images
+                    in_stars = (
+                        self.stars is not None
+                        and label in self.stars.images_lnu
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label in self.black_holes.images_lnu
+                    )
+                    if not in_stars and not in_bhs:
                         self.images_lnu[label] = out_images[label]
             else:
                 for label in out_images:
-                    if (
-                        label not in self.stars.images_fnu
-                        and label not in self.black_holes.images_fnu
-                    ):
+                    # Check if this label is already in component images
+                    in_stars = (
+                        self.stars is not None
+                        and label in self.stars.images_fnu
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label in self.black_holes.images_fnu
+                    )
+                    if not in_stars and not in_bhs:
                         self.images_fnu[label] = out_images[label]
 
         # Probably, very unliklely but if we generated no images just return
