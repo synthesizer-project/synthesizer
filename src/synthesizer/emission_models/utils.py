@@ -506,13 +506,14 @@ class ParameterFunction:
                 f"'{self.func.__name__}': {str(e)}"
             ) from e
 
-        # Cache the computed value on the emitter for later use
-        cache_param(
-            param=self.sets,
-            emitter=emitter,
-            model_label=model.label,
-            value=val,
-        )
+        # Cache the computed value on the emitter for later use (if provided)
+        if emitter is not None:
+            cache_param(
+                param=self.sets,
+                emitter=emitter,
+                model_label=model.label,
+                value=val,
+            )
 
         return val
 
