@@ -1,11 +1,11 @@
-"""Comprehensive test suite for get_param and ParameterFunction."""
+"""Comprehensive test suite for get_param and cache_model_params."""
 
 import numpy as np
 import pytest
 import unyt
 
 from synthesizer import exceptions
-from synthesizer.emission_models.utils import ParameterFunction, get_param
+from synthesizer.emission_models.utils import cache_model_params, get_param
 
 
 # Mock classes for testing
@@ -162,60 +162,6 @@ class TestGetParamStringIndirection:
 
         with pytest.raises(exceptions.MissingAttribute):
             get_param("alias", model, None, emitter)
-
-
-class TestGetParamParameterFunction:
-    """Test ParameterFunction handling in get_param."""
-
-    def test_get_param_with_parameter_function(self):
-        """Test that ParameterFunction is called correctly."""
-
-        def compute_value(test_emitter_attr):
-            return test_emitter_attr * 2
-
-        model = MockModel()
-        func = ParameterFunction(
-            compute_value, "computed", ["test_emitter_attr"]
-        )
-        model.fixed_parameters["computed"] = func
-        emitter = MockEmitter()
-
-        result = get_param("computed", model, None, emitter)
-        assert result == 200.0
-
-    def test_get_param_parameter_function_with_multiple_args(self):
-        """Test ParameterFunction with multiple arguments."""
-
-        def compute_sum(test_emitter_attr, test_emission_attr):
-            return test_emitter_attr + test_emission_attr
-
-        model = MockModel()
-        func = ParameterFunction(
-            compute_sum, "sum", ["test_emitter_attr", "test_emission_attr"]
-        )
-        model.fixed_parameters["sum"] = func
-        emission = MockEmission()
-        emitter = MockEmitter()
-
-        result = get_param("sum", model, emission, emitter)
-        assert result == 142.0
-
-    def test_get_param_parameter_function_with_fixed_params(self):
-        """Test ParameterFunction accessing other fixed_parameters."""
-
-        def compute_scaled(test_emitter_attr, scale):
-            return test_emitter_attr * scale
-
-        model = MockModel()
-        model.fixed_parameters["scale"] = 3.0
-        func = ParameterFunction(
-            compute_scaled, "scaled", ["test_emitter_attr", "scale"]
-        )
-        model.fixed_parameters["scaled"] = func
-        emitter = MockEmitter()
-
-        result = get_param("scaled", model, None, emitter)
-        assert result == 300.0
 
 
 class TestGetParamLogged:
@@ -379,186 +325,6 @@ class TestGetParamArrayConversion:
         assert result.dtype == np.float64
 
 
-class TestParameterFunction:
-    """Test ParameterFunction class."""
-
-    def test_parameter_function_init(self):
-        """Test ParameterFunction initialization."""
-
-        def test_func(arg1, arg2):
-            return arg1 + arg2
-
-        param_func = ParameterFunction(test_func, "result", ["arg1", "arg2"])
-        assert param_func.func == test_func
-        assert param_func.func_args == ["arg1", "arg2"]
-        assert param_func.sets == "result"
-
-    def test_parameter_function_init_validates_signature(self):
-        """Test that ParameterFunction validates function signature."""
-
-        def test_func(arg1):
-            return arg1
-
-        # Should raise because func_args doesn't match function signature
-        with pytest.raises(exceptions.InconsistentArguments):
-            ParameterFunction(test_func, "test", ["wrong_arg"])
-
-    def test_parameter_function_init_validates_missing_args(self):
-        """Test that ParameterFunction validates all args are in func_args."""
-
-        def test_func(arg1, arg2):
-            return arg1 + arg2
-
-        # Should raise because arg2 is not in func_args
-        with pytest.raises(exceptions.InconsistentArguments):
-            ParameterFunction(test_func, "test", ["arg1"])
-
-    def test_parameter_function_call_basic(self):
-        """Test calling ParameterFunction with basic arguments."""
-
-        def test_func(arg1, arg2):
-            return arg1 * arg2
-
-        param_func = ParameterFunction(test_func, "result", ["arg1", "arg2"])
-        model = MockModel()
-        model.fixed_parameters["arg1"] = 5.0
-        model.fixed_parameters["arg2"] = 3.0
-        emitter = MockEmitter()
-
-        result = param_func(model, None, emitter, None)
-        assert result == 15.0
-
-    def test_parameter_function_call_from_emitter(self):
-        """Test ParameterFunction accessing emitter attributes."""
-
-        def test_func(test_emitter_attr):
-            return test_emitter_attr * 2
-
-        param_func = ParameterFunction(
-            test_func, "doubled", ["test_emitter_attr"]
-        )
-        model = MockModel()
-        emitter = MockEmitter()
-
-        result = param_func(model, None, emitter, None)
-        assert result == 200.0
-
-    def test_parameter_function_call_from_emission(self):
-        """Test ParameterFunction accessing emission attributes."""
-
-        def test_func(test_emission_attr):
-            return test_emission_attr + 10
-
-        param_func = ParameterFunction(
-            test_func, "modified", ["test_emission_attr"]
-        )
-        model = MockModel()
-        emission = MockEmission()
-        emitter = MockEmitter()
-
-        result = param_func(model, emission, emitter, None)
-        assert result == 52.0
-
-    def test_parameter_function_call_mixed_sources(self):
-        """Test ParameterFunction with arguments from multiple sources."""
-
-        def test_func(fixed_val, emitter_val, emission_val):
-            return fixed_val + emitter_val + emission_val
-
-        param_func = ParameterFunction(
-            test_func, "sum", ["fixed_val", "emitter_val", "emission_val"]
-        )
-        model = MockModel()
-        model.fixed_parameters["fixed_val"] = 10.0
-        emission = MockEmission()
-        emission.emitter_val = 20.0
-        emitter = MockEmitter()
-        emitter.emission_val = 30.0
-
-        result = param_func(model, emission, emitter, None)
-        assert result == 60.0
-
-    def test_parameter_function_with_obj(self):
-        """Test ParameterFunction with obj argument."""
-
-        def test_func(test_obj_attr):
-            return test_obj_attr / 2
-
-        param_func = ParameterFunction(test_func, "halved", ["test_obj_attr"])
-        model = MockModel()
-        # Put the value in model fixed_parameters instead
-        model.fixed_parameters["test_obj_attr"] = 200.0
-        obj = MockObject()
-        emitter = (
-            MockEmitter()
-        )  # ParameterFunction requires an emitter for caching
-
-        result = param_func(model, None, emitter, obj)
-        assert result == 100.0
-
-    def test_parameter_function_missing_argument(self):
-        """Test ParameterFunction with missing argument raises error."""
-
-        def test_func(nonexistent_arg):
-            return nonexistent_arg
-
-        param_func = ParameterFunction(test_func, "fail", ["nonexistent_arg"])
-        model = MockModel()
-        emitter = MockEmitter()
-
-        with pytest.raises(exceptions.MissingAttribute):
-            param_func(model, None, emitter, None)
-
-    def test_parameter_function_with_arrays(self):
-        """Test ParameterFunction with array operations."""
-
-        def test_func(ages):
-            return np.mean(ages)
-
-        param_func = ParameterFunction(test_func, "mean_age", ["ages"])
-        model = MockModel()
-        emitter = MockEmitter()
-
-        result = param_func(model, None, emitter, None)
-        assert result == 2.0
-
-    def test_parameter_function_complex_computation(self):
-        """Test ParameterFunction with complex computation."""
-
-        def test_func(ages, initial_masses):
-            # Compute mass-weighted age
-            return np.sum(ages * initial_masses) / np.sum(initial_masses)
-
-        param_func = ParameterFunction(
-            test_func, "mass_weighted_age", ["ages", "initial_masses"]
-        )
-        model = MockModel()
-        emitter = MockEmitter()
-
-        result = param_func(model, None, emitter, None)
-        expected = np.sum(emitter.ages * emitter.initial_masses) / np.sum(
-            emitter.initial_masses
-        )
-        assert np.isclose(result, expected)
-
-    def test_parameter_function_repr(self):
-        """Test ParameterFunction has a nice string representation."""
-
-        def my_test_function(param1, param2):
-            return param1 + param2
-
-        param_func = ParameterFunction(
-            my_test_function, "result_param", ["param1", "param2"]
-        )
-
-        repr_str = repr(param_func)
-        assert "ParameterFunction" in repr_str
-        assert "my_test_function" in repr_str
-        assert "result_param" in repr_str
-        assert "param1" in repr_str
-        assert "param2" in repr_str
-
-
 class TestGetParamEdgeCases:
     """Test edge cases and error conditions."""
 
@@ -657,48 +423,388 @@ class TestGetParams:
         assert len(result) == 0
 
 
-class TestParameterFunctionErrorHandling:
-    """Test suite for ParameterFunction error handling."""
+class TestCacheModelParams:
+    """Test suite for the cache_model_params function."""
 
-    def test_parameter_function_non_callable_raises(self):
-        """Test ParameterFunction raises ValueError for non-callable."""
-        not_a_function = "this is not a function"
+    def test_cache_extracting_model(self, test_grid):
+        """Test caching parameters for an extracting emission model."""
+        from synthesizer.emission_models import IncidentEmission
 
-        with pytest.raises(ValueError, match="func must be a callable"):
-            ParameterFunction(not_a_function, "test", [])
-
-    def test_parameter_function_call_error_propagates(self):
-        """Test that errors in wrapped function are caught, re-raised."""
-
-        def failing_func(some_param):
-            raise RuntimeError("Something went wrong in the function")
-
-        param_func = ParameterFunction(failing_func, "result", ["some_param"])
-        model = MockModel()
-        model.fixed_parameters["some_param"] = 42.0
+        # Create an extraction model
+        model = IncidentEmission(grid=test_grid, label="incident_extract")
         emitter = MockEmitter()
 
-        with pytest.raises(
-            exceptions.ParameterFunctionError,
-            match="Error calling ParameterFunction 'failing_func'",
-        ):
-            param_func(model, None, emitter, None)
+        # Cache the parameters
+        cache_model_params(model, emitter)
 
-    def test_parameter_function_call_error_preserves_original(self):
-        """Test that the original exception is chained properly."""
+        # Verify cache was created
+        assert model.label in emitter.model_param_cache
+        assert "extract" in emitter.model_param_cache[model.label]
+        assert emitter.model_param_cache[model.label]["extract"] == (
+            "incident"
+        )
 
-        def failing_func(some_param):
-            raise ValueError("Original error message")
+    def test_cache_combining_model(self, test_grid):
+        """Test caching parameters for a combining emission model."""
+        from synthesizer.emission_models import (
+            IncidentEmission,
+            StellarEmissionModel,
+        )
 
-        param_func = ParameterFunction(failing_func, "result", ["some_param"])
-        model = MockModel()
-        model.fixed_parameters["some_param"] = 42.0
+        # Create sub-models
+        model1 = IncidentEmission(grid=test_grid, label="incident_a")
+        model2 = IncidentEmission(grid=test_grid, label="incident_b")
+
+        # Create a combination model
+        model = StellarEmissionModel(
+            label="test_combine",
+            combine=(model1, model2),
+        )
         emitter = MockEmitter()
 
-        try:
-            param_func(model, None, emitter, None)
-        except exceptions.ParameterFunctionError as e:
-            # Check that the original exception is chained
-            assert e.__cause__ is not None
-            assert isinstance(e.__cause__, ValueError)
-            assert "Original error message" in str(e.__cause__)
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert "test_combine" in emitter.model_param_cache
+        assert "combine" in emitter.model_param_cache["test_combine"]
+        assert emitter.model_param_cache["test_combine"]["combine"] == [
+            "incident_a",
+            "incident_b",
+        ]
+
+    def test_cache_transforming_model_with_repr(self):
+        """Test caching transformer repr for a transforming emission model."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import PowerLaw
+
+        # Create a dust curve
+        dust_curve = PowerLaw(slope=-1.0)
+
+        # Create a transformation model
+        model = StellarEmissionModel(
+            label="test_transform",
+            apply_to="intrinsic",
+            transformer=dust_curve,
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert "test_transform" in emitter.model_param_cache
+        assert "apply_to" in emitter.model_param_cache["test_transform"]
+        assert "transformer" in emitter.model_param_cache["test_transform"]
+        assert emitter.model_param_cache["test_transform"]["apply_to"] == (
+            "intrinsic"
+        )
+        # Verify the transformer repr was cached
+        assert emitter.model_param_cache["test_transform"]["transformer"] == (
+            "PowerLaw(slope=-1.0)"
+        )
+
+    def test_cache_generating_model_with_repr(self):
+        """Test caching generator repr for a generating emission model."""
+        from unyt import K
+
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.generators.dust import Blackbody
+
+        # Create a generator
+        generator = Blackbody(temperature=100 * K)
+
+        # Create a generation model
+        model = StellarEmissionModel(
+            label="test_generate",
+            generator=generator,
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert "test_generate" in emitter.model_param_cache
+        assert "generator" in emitter.model_param_cache["test_generate"]
+        # Verify the generator repr was cached
+        assert emitter.model_param_cache["test_generate"]["generator"] == (
+            "Blackbody(temperature=100 K)"
+        )
+
+    def test_cache_model_with_masks(self, test_grid):
+        """Test caching mask parameters for a masked emission model."""
+        from synthesizer.emission_models import IncidentEmission
+
+        # Create a model with masks
+        model = IncidentEmission(grid=test_grid, label="incident_masked")
+        model.add_mask(attr="ages", op=">", thresh=1.0 * unyt.Myr)
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert model.label in emitter.model_param_cache
+        assert "masks" in emitter.model_param_cache[model.label]
+        # Verify mask format is correct
+        mask_str = emitter.model_param_cache[model.label]["masks"]
+        assert "ages" in mask_str
+        assert ">" in mask_str
+        assert "Myr" in mask_str
+
+    def test_cache_model_with_multiple_masks(self, test_grid):
+        """Test caching multiple mask parameters."""
+        from synthesizer.emission_models import IncidentEmission
+
+        # Create a model with multiple masks
+        model = IncidentEmission(
+            grid=test_grid,
+            label="incident_multiple_masks",
+        )
+        model.add_mask(attr="ages", op=">", thresh=1.0 * unyt.Myr)
+        model.add_mask(attr="ages", op="<", thresh=5.0 * unyt.Myr)
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Verify cache was created
+        assert model.label in emitter.model_param_cache
+        assert "masks" in emitter.model_param_cache[model.label]
+        # Verify masks are newline-separated
+        masks = emitter.model_param_cache[model.label]["masks"]
+        assert "\n" in masks
+        lines = masks.split("\n")
+        assert len(lines) == 2
+        assert lines[0].startswith("ages > ")
+        assert "Myr" in lines[0]
+        assert lines[1].startswith("ages < ")
+        assert "Myr" in lines[1]
+
+    def test_cache_no_duplication_of_values(self, test_grid):
+        """Test that cache stores references, not copies."""
+        from synthesizer.emission_models import IncidentEmission
+
+        # Create an extracting model with a known attribute
+        model = IncidentEmission(
+            grid=test_grid,
+            label="incident_ref_cache",
+        )
+        emitter = MockEmitter()
+
+        # Cache the parameters
+        cache_model_params(model, emitter)
+
+        # Cached value should be the exact same object (no duplication)
+        cached_extract = emitter.model_param_cache[model.label]["extract"]
+        assert cached_extract is model.extract
+
+    def test_cache_multiple_models_on_same_emitter(self, test_grid):
+        """Test caching parameters from multiple models on same emitter."""
+        from synthesizer.emission_models import (
+            IncidentEmission,
+            IntrinsicEmission,
+        )
+
+        # Create multiple models
+        model1 = IntrinsicEmission(grid=test_grid)
+        model2 = IncidentEmission(grid=test_grid)
+        emitter = MockEmitter()
+
+        # Cache both models
+        cache_model_params(model1, emitter)
+        cache_model_params(model2, emitter)
+
+        # Verify both caches exist
+        assert model1.label in emitter.model_param_cache
+        assert model2.label in emitter.model_param_cache
+        assert emitter.model_param_cache[model1.label]["combine"] == [
+            "escaped",
+            "_intrinsic_reprocessed",
+        ]
+        assert emitter.model_param_cache[model2.label]["extract"] == "incident"
+
+
+class TestCacheModelParamsWithDifferentTransformers:
+    """Test caching with various transformer types."""
+
+    def test_cache_attenuation_law_transformers(self):
+        """Test caching different attenuation law transformer reprs."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import (
+            MWN18,
+            Calzetti2000,
+            PowerLaw,
+        )
+
+        emitter = MockEmitter()
+
+        # Test PowerLaw
+        model1 = StellarEmissionModel(
+            label="powerlaw",
+            apply_to="test",
+            transformer=PowerLaw(slope=-0.7),
+        )
+        cache_model_params(model1, emitter)
+        assert emitter.model_param_cache["powerlaw"]["transformer"] == (
+            "PowerLaw(slope=-0.7)"
+        )
+
+        # Test Calzetti2000
+        model2 = StellarEmissionModel(
+            label="calzetti",
+            apply_to="test",
+            transformer=Calzetti2000(),
+        )
+        cache_model_params(model2, emitter)
+        assert (
+            "Calzetti2000"
+            in emitter.model_param_cache["calzetti"]["transformer"]
+        )
+
+        # Test MWN18
+        model3 = StellarEmissionModel(
+            label="mwn18",
+            apply_to="test",
+            transformer=MWN18(),
+        )
+        cache_model_params(model3, emitter)
+        assert emitter.model_param_cache["mwn18"]["transformer"] == "MWN18()"
+
+    def test_cache_escape_fraction_transformers(self):
+        """Test caching escape fraction transformer reprs."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import (
+            EscapedFraction,
+            ProcessedFraction,
+        )
+
+        emitter = MockEmitter()
+
+        # Test ProcessedFraction
+        model1 = StellarEmissionModel(
+            label="processed",
+            apply_to="test",
+            transformer=ProcessedFraction(fesc_attrs=("fesc",)),
+        )
+        cache_model_params(model1, emitter)
+        assert (
+            "ProcessedFraction"
+            in emitter.model_param_cache["processed"]["transformer"]
+        )
+
+        # Test EscapedFraction
+        model2 = StellarEmissionModel(
+            label="escaped",
+            apply_to="test",
+            transformer=EscapedFraction(fesc_attrs=("fesc_ly_alpha",)),
+        )
+        cache_model_params(model2, emitter)
+        assert (
+            "EscapedFraction"
+            in emitter.model_param_cache["escaped"]["transformer"]
+        )
+
+    def test_cache_igm_transformers(self):
+        """Test caching IGM transformer reprs."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import (
+            Asada25,
+            Inoue14,
+            Madau96,
+        )
+
+        emitter = MockEmitter()
+
+        # Test Inoue14
+        model1 = StellarEmissionModel(
+            label="inoue14",
+            apply_to="test",
+            transformer=Inoue14(scale_tau=1.0),
+        )
+        cache_model_params(model1, emitter)
+        assert emitter.model_param_cache["inoue14"]["transformer"] == (
+            "Inoue14(scale_tau=1.0)"
+        )
+
+        # Test Madau96
+        model2 = StellarEmissionModel(
+            label="madau96",
+            apply_to="test",
+            transformer=Madau96(),
+        )
+        cache_model_params(model2, emitter)
+        assert emitter.model_param_cache["madau96"]["transformer"] == (
+            "Madau96()"
+        )
+
+        # Test Asada25
+        model3 = StellarEmissionModel(
+            label="asada25",
+            apply_to="test",
+            transformer=Asada25(scale_tau=1.0, add_cgm=True),
+        )
+        cache_model_params(model3, emitter)
+        assert "Asada25" in emitter.model_param_cache["asada25"]["transformer"]
+
+
+class TestCacheModelParamsWithDifferentGenerators:
+    """Test caching with various generator types."""
+
+    def test_cache_dust_emission_generators(self):
+        """Test caching different dust emission generator reprs."""
+        from unyt import K, um
+
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.generators.dust import (
+            Blackbody,
+            Greybody,
+        )
+
+        emitter = MockEmitter()
+
+        # Test Blackbody
+        model1 = StellarEmissionModel(
+            label="blackbody",
+            generator=Blackbody(temperature=100 * K),
+        )
+        cache_model_params(model1, emitter)
+        assert emitter.model_param_cache["blackbody"]["generator"] == (
+            "Blackbody(temperature=100 K)"
+        )
+
+        # Test Greybody
+        model2 = StellarEmissionModel(
+            label="greybody",
+            generator=Greybody(
+                temperature=50 * K,
+                emissivity=1.5,
+                optically_thin=True,
+                lam_0=100.0 * um,
+            ),
+        )
+        cache_model_params(model2, emitter)
+        assert "Greybody" in emitter.model_param_cache["greybody"]["generator"]
+
+    def test_cache_casey12_generator(self):
+        """Test caching Casey12 generator repr."""
+        from unyt import K, um
+
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.generators.dust import Casey12
+
+        emitter = MockEmitter()
+
+        model = StellarEmissionModel(
+            label="casey12",
+            generator=Casey12(
+                temperature=50 * K,
+                emissivity=2.0,
+                alpha=2.0,
+                n_bb=1.0,
+                lam_0=200.0 * um,
+            ),
+        )
+        cache_model_params(model, emitter)
+        assert "Casey12" in emitter.model_param_cache["casey12"]["generator"]

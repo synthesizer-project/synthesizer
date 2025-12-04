@@ -18,10 +18,12 @@ from synthesizer.emission_models.extractors.extractor import (
     IntegratedParticleExtractor,
     ParticleExtractor,
 )
+from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
 from synthesizer.imaging import Image, ImageCollection
+from synthesizer.parametric import BlackHole
 
 
 class Extraction:
@@ -100,9 +102,6 @@ class Extraction:
             dict:
                 The dictionary of extracted spectra.
         """
-        # Avoid cyclic imports
-        from synthesizer.parametric.blackholes import BlackHole
-
         # Extract the label for this model
         label = this_model.label
 
@@ -117,11 +116,7 @@ class Extraction:
         mask_start = tic()
         this_mask = None
         for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(
-                **mask_dict,
-                mask=this_mask,
-                attr_override_obj=this_model,
-            )
+            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
         toc("Getting the mask", mask_start)
 
         # Get the appropriate extractor
@@ -165,6 +160,9 @@ class Extraction:
             nthreads=nthreads,
             do_grid_check=False,
         )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the spectra in the right place
         if this_model.per_particle:
@@ -212,9 +210,6 @@ class Extraction:
             dict:
                 The dictionary of extracted lines.
         """
-        # Avoid cyclic imports
-        from synthesizer.parametric.blackholes import BlackHole
-
         # We need to be certain that any composite lines we have been
         # passed are split into their constituent parts
         passed_line_ids = line_ids
@@ -253,11 +248,7 @@ class Extraction:
         # Do we have to define a property mask?
         this_mask = None
         for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(
-                **mask_dict,
-                mask=this_mask,
-                attr_override_obj=this_model,
-            )
+            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
         # Get the appropriate extractor
         if this_model.per_particle and this_model.vel_shift:
@@ -323,6 +314,9 @@ class Extraction:
             nthreads=nthreads,
             do_grid_check=False,
         )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place
         if this_model.per_particle:
@@ -452,6 +446,9 @@ class Generation:
                 particle_spectra if per_particle else spectra,
             )
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if per_particle:
             particle_spectra[this_model.label] = sed
@@ -551,6 +548,9 @@ class Generation:
                 particle_lines if per_particle else lines,
                 particle_spectra if per_particle else spectra,
             )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
@@ -746,6 +746,9 @@ class Transformation:
             lam_mask,
         )
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
@@ -811,6 +814,7 @@ class Combination:
         spectra,
         particle_spectra,
         this_model,
+        emitter,
     ):
         """Combine the extracted spectra.
 
@@ -824,6 +828,8 @@ class Combination:
                 The dictionary of particle spectra.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -862,6 +868,9 @@ class Combination:
                     ~nan_mask
                 ]
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_spectra[this_model.label] = out_spec
@@ -877,6 +886,7 @@ class Combination:
         lines,
         particle_lines,
         this_model,
+        emitter,
     ):
         """Combine the extracted lines.
 
@@ -890,6 +900,8 @@ class Combination:
                 The dictionary of particle lines.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -929,6 +941,9 @@ class Combination:
         # Loop over combination models adding the lines
         for combine_label in this_model._combine_labels:
             out_lines += in_lines[combine_label]
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:

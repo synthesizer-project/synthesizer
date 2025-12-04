@@ -137,49 +137,8 @@ class Component(ABC):
         return self.photo_lnu
 
     @abstractmethod
-    def get_mask(
-        self,
-        attr,
-        thresh,
-        op,
-        mask=None,
-        attr_override_obj=None,
-    ):
-        """Return a mask based on the attribute and threshold.
-
-        Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
-
-        Overloading functions should use
-        synthesizer.emission_models.utils.get_param instead of getattr to
-        allow for attribute overrides, e.g.:
-            from synthesizer.emission_models.utils import get_param
-            attr_values = get_param(
-                attr,
-                override_obj,
-                None,
-                self
-            )
-            # then use attr_values to derive the mask
-
-        Args:
-            attr (str):
-                The attribute to derive the mask from.
-            thresh (float):
-                The threshold value.
-            op (str):
-                The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (np.ndarray):
-                Optionally, a mask to combine with the new mask.
-            attr_override_obj (object):
-                An alternative object to check from the attribute. This
-                is specifically used when an EmissionModel may have a
-                fixed parameter override, but can be used more generally.
-
-        Returns:
-            mask (np.ndarray):
-                The mask array.
-        """
+    def get_mask(self, attr, thresh, op, mask=None):
+        """Return a mask based on the attribute and threshold."""
         pass
 
     @abstractmethod
@@ -1442,7 +1401,7 @@ class Component(ABC):
         if hasattr(self, "_grid_weights"):
             self._grid_weights = {"cic": {}, "ngp": {}}
 
-    def print_used_parameters(self):
+    def print_used_parameters(self, *models):
         """Print the parameters used by emission models in a formatted table.
 
         This method displays all parameters that have been cached during
@@ -1451,6 +1410,12 @@ class Component(ABC):
 
         The output is formatted using TableFormatter to match the style
         of other print methods in synthesizer.
+
+        Args:
+            *models (str):
+                Optional model labels to print. If provided, only the
+                specified models will be printed. If not provided, all
+                cached models will be printed.
         """
         # Check if cache is empty
         if not self.model_param_cache:
@@ -1459,8 +1424,32 @@ class Component(ABC):
             )
             return
 
+        # Determine which models to print
+        if len(models) > 0:
+            # Filter to only the requested models
+            models_to_print = {
+                label: params
+                for label, params in self.model_param_cache.items()
+                if label in models
+            }
+            # Warn about any requested models that don't exist
+            missing = set(models) - set(self.model_param_cache.keys())
+            if len(missing) > 0:
+                print(
+                    f"The following models were not found in "
+                    f"the cache: {', '.join(missing)}"
+                )
+        else:
+            # Print all models
+            models_to_print = self.model_param_cache
+
+        # Check if we have any models to print after filtering
+        if not models_to_print:
+            print("No matching models found in cache.")
+            return
+
         # Loop over each model in the cache
-        for model_label, params in self.model_param_cache.items():
+        for model_label, params in models_to_print.items():
             # Create a simple object to hold the parameters for this model
             class ModelParams:
                 def __init__(self, params_dict):

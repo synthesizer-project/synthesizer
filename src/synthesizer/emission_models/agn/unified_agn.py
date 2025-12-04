@@ -32,32 +32,8 @@ from synthesizer.emission_models.transformers import (
     CoveringFraction,
     EscapingFraction,
 )
-from synthesizer.emission_models.utils import ParameterFunction
 from synthesizer.exceptions import (
     InconsistentParameter,
-)
-
-
-def torus_edgeon_condition(inclination, theta_torus):
-    """When this is > 90 deg the torus obscures the disc.
-
-    We will wrap this function in a ParameterFunction to use for masking
-    within the UnifiedAGN model.
-
-    Args:
-        inclination (unyt_array):
-            The inclination of the black hole.
-        theta_torus (unyt_array):
-            The torus opening angle.
-    """
-    return inclination + theta_torus
-
-
-# Wrap the torus_edgeon_condition in a ParameterFunction
-torus_edgeon_handler = ParameterFunction(
-    func=torus_edgeon_condition,
-    sets="torus_edgeon_cond",
-    func_args=("inclination", "theta_torus"),
 )
 
 
@@ -268,8 +244,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             extract="incident",
             hydrogen_density="hydrogen_density_blr",
             ionisation_parameter="ionisation_parameter_blr",
-            mask_attr="torus_edgeon_cond",
-            torus_edgeon_cond=torus_edgeon_handler,
+            mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
             **kwargs,
@@ -302,8 +277,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             extract="transmitted",
             hydrogen_density="hydrogen_density_nlr",
             ionisation_parameter="ionisation_parameter_nlr",
-            mask_attr="torus_edgeon_cond",
-            torus_edgeon_cond=torus_edgeon_handler,
+            mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
             **kwargs,
@@ -315,8 +289,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             extract="transmitted",
             hydrogen_density="hydrogen_density_blr",
             ionisation_parameter="ionisation_parameter_blr",
-            mask_attr="torus_edgeon_cond",
-            torus_edgeon_cond=torus_edgeon_handler,
+            mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
             **kwargs,
@@ -357,7 +330,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
     ):
         """Calculate the weighted_combination disc spectrum.
 
-        Note: when the viewing angle (inclination) meets the torus criteria
+        Note: when the viewing angle (inlination) meets the torus criteria
         it is always blocked.
         """
         # Now calculate the disc_escaped emission using this transmission
@@ -423,14 +396,14 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         scenarios is randomly assigned based on the nlr and blr covering
         fractions. The default behaviour of UnifiedAGN is to use these
         randomly assigned scenarios. However, by providing the
-        disc_transmission keyword argument to UnifiedAGN we can override this
+        disc_transmission keyword argument to UnifiedAGN we can overide this
         and force all blackholes to adopt the same transmission scenario.
 
-        Note: when the viewing angle (inclination) meets the torus criteria
+        Note: when the viewing angle (inlination) meets the torus criteria
         it is always blocked.
 
         Args:
-            disc_transmission (str): The disc transmission scenario.
+            disc_transmission (str): The disc transmission sceanrio.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
@@ -635,8 +608,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             grid=blr_grid,
             label="full_reprocessed_blr",
             extract="nebular",
-            mask_attr="torus_edgeon_cond",
-            torus_edgeon_cond=torus_edgeon_handler,
+            mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
             cosine_inclination=0.5,
@@ -659,8 +631,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             grid=blr_grid,
             label="full_continuum_blr",
             extract="nebular_continuum",
-            mask_attr="torus_edgeon_cond",
-            torus_edgeon_cond=torus_edgeon_handler,
+            mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
             cosine_inclination=0.5,
