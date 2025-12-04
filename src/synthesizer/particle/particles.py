@@ -456,7 +456,7 @@ class Particles:
 
     def get_mask(
         self,
-        attr_str,
+        attr,
         thresh,
         op,
         mask=None,
@@ -467,7 +467,7 @@ class Particles:
         Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         Args:
-            attr_str (str):
+            attr (str):
                 The attribute to derive the mask from.
             thresh (float):
                 The threshold value.
@@ -488,6 +488,7 @@ class Particles:
         start = tic()
 
         # Get the attribute
+        attr_str = attr
         attr = get_param(attr_str, attr_override_obj, None, self)
 
         # Strip dimensionless units since they are inconsequential

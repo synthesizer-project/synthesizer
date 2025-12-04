@@ -139,7 +139,7 @@ class Component(ABC):
     @abstractmethod
     def get_mask(
         self,
-        attr_str,
+        attr,
         thresh,
         op,
         mask=None,
@@ -162,7 +162,7 @@ class Component(ABC):
             # then use attr_values to derive the mask
 
         Args:
-            attr_str (str):
+            attr (str):
                 The attribute to derive the mask from.
             thresh (float):
                 The threshold value.
