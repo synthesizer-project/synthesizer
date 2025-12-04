@@ -18,6 +18,7 @@ from synthesizer.emission_models.extractors.extractor import (
     IntegratedParticleExtractor,
     ParticleExtractor,
 )
+from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
@@ -159,6 +160,9 @@ class Extraction:
             nthreads=nthreads,
             do_grid_check=False,
         )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the spectra in the right place
         if this_model.per_particle:
@@ -311,6 +315,9 @@ class Extraction:
             do_grid_check=False,
         )
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the lines in the right place
         if this_model.per_particle:
             particle_lines[label] = result[0]
@@ -439,6 +446,9 @@ class Generation:
                 particle_spectra if per_particle else spectra,
             )
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if per_particle:
             particle_spectra[this_model.label] = sed
@@ -538,6 +548,9 @@ class Generation:
                 particle_lines if per_particle else lines,
                 particle_spectra if per_particle else spectra,
             )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
@@ -733,6 +746,9 @@ class Transformation:
             lam_mask,
         )
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
@@ -798,6 +814,7 @@ class Combination:
         spectra,
         particle_spectra,
         this_model,
+        emitter,
     ):
         """Combine the extracted spectra.
 
@@ -811,6 +828,8 @@ class Combination:
                 The dictionary of particle spectra.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -849,6 +868,9 @@ class Combination:
                     ~nan_mask
                 ]
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_spectra[this_model.label] = out_spec
@@ -864,6 +886,7 @@ class Combination:
         lines,
         particle_lines,
         this_model,
+        emitter,
     ):
         """Combine the extracted lines.
 
@@ -877,6 +900,8 @@ class Combination:
                 The dictionary of particle lines.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -916,6 +941,9 @@ class Combination:
         # Loop over combination models adding the lines
         for combine_label in this_model._combine_labels:
             out_lines += in_lines[combine_label]
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:

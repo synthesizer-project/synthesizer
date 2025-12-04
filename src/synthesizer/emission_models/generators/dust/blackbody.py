@@ -74,6 +74,27 @@ class Blackbody(DustEmission):
             required_params=("temperature",),
         )
 
+    def __repr__(self):
+        """Return a string representation of the Blackbody object."""
+        # Start with base class repr components
+        parts = []
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler.label}")
+
+        # Add temperature
+        parts.append(f"temperature={self.temperature}")
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"Blackbody({', '.join(parts)})"
+
     @accepts(lams=angstrom)
     def _generate_spectra(
         self,

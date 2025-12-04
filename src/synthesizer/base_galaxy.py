@@ -1,6 +1,6 @@
 """A module for common functionality in Parametric and Particle Galaxies.
 
-The class described in this module should never be directly instatiated. It
+The class described in this module should never be directly instantiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
@@ -33,6 +33,26 @@ class BaseGalaxy:
             The Gas object holding information about the gas distribution.
         black_holes (particle.BlackHoles/parametric.BlackHole):
             The BlackHole/s object holding information about the black hole/s.
+        redshift (float):
+            The redshift of the galaxy.
+        photo_lnu (dict):
+            The dictionary containing the photometry luminosities in
+            spectral luminosity density units for each spectrum in
+            Galaxy.spectra.
+        photo_fnu (dict):
+            The dictionary containing the photometry fluxes in spectral
+            flux density units for each spectrum in Galaxy.spectra.
+        images_lnu (dict):
+            The dictionary containing the images in spectral luminosity
+            density units.
+        images_fnu (dict):
+            The dictionary containing the images in spectral flux density
+            units.
+        images_psf_lnu (dict):
+            The dictionary containing the images in spectral luminosity
+            density units with a PSF applied.
+        model_param_cache (dict):
+            A cache for parameters calculated by emission models.
     """
 
     @accepts(centre=Mpc)
@@ -70,7 +90,7 @@ class BaseGalaxy:
         self.photo_fnu = {}
 
         # Define the dictionaries to hold the images (we carry 3 different
-        # distionaries for both lnu and fnu images to draw a distinction
+        # dictionaries for both lnu and fnu images to draw a distinction
         # between images with and without a PSF and/or noise)
         self.images_lnu = {}
         self.images_fnu = {}
@@ -124,6 +144,9 @@ class BaseGalaxy:
         if self.black_holes is not None:
             if getattr(self.black_holes, "redshift", None) is None:
                 self.black_holes.redshift = redshift
+
+        # A container for caching parameters calculated by emission models
+        self.model_param_cache = {}
 
     @property
     def photo_fluxes(self):
@@ -2541,3 +2564,77 @@ class BaseGalaxy:
             fig=fig,
             ax=ax,
         )
+
+    def print_used_parameters(self, *models):
+        """Print the parameters used by emission models in a formatted table.
+
+        This method displays all parameters that have been cached during
+        emission model calculations, organized by model label. Each model's
+        parameters are shown with their computed values.
+
+        The output is formatted using TableFormatter to match the style
+        of other print methods in synthesizer.
+
+        Args:
+            *models (str):
+                Optional model labels to print. If provided, only the
+                specified models will be printed. If not provided, all
+                cached models will be printed from all components
+                (stars, black holes, and galaxy).
+        """
+        from synthesizer.utils.ascii_table import TableFormatter
+
+        # Print stars used parameters if available
+        if self.stars is not None:
+            self.stars.print_used_parameters(*models)
+
+        # Print black holes used parameters if available
+        if self.black_holes is not None:
+            self.black_holes.print_used_parameters(*models)
+
+        # Print galaxy model parameters
+        print("Galaxy Model Parameters:")
+
+        # Check if cache is empty
+        if len(self.model_param_cache) == 0:
+            print("No cached model parameters on Galaxy.")
+            return
+
+        # Determine which models to print
+        if len(models) > 0:
+            # Filter to only the requested models
+            models_to_print = {
+                label: params
+                for label, params in self.model_param_cache.items()
+                if label in models
+            }
+            # Warn about any requested models that don't exist
+            missing = set(models) - set(self.model_param_cache.keys())
+            if len(missing) > 0:
+                print(
+                    f"The following models were not found in "
+                    f"the cache: {', '.join(missing)}"
+                )
+        else:
+            # Print all models
+            models_to_print = self.model_param_cache
+
+        # Check if we have any models to print after filtering
+        if not models_to_print:
+            print("No matching models found in Galaxy cache.")
+            return
+
+        # Loop over each model in the cache
+        for model_label, params in models_to_print.items():
+            # Create a simple object to hold the parameters for this model
+            class ModelParams:
+                def __init__(self, params_dict):
+                    for key, value in params_dict.items():
+                        setattr(self, key, value)
+
+            # Create the object and format it
+            param_obj = ModelParams(params)
+            formatter = TableFormatter(param_obj)
+
+            # Print the table for this model
+            print(formatter.get_table(f"Model: {model_label}"))
