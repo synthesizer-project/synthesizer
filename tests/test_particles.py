@@ -386,7 +386,7 @@ class TestParticlesMasking:
         """get_mask should raise if attribute is None."""
         sp = simple_parts
         sp.dummy = None
-        with pytest.raises(exceptions.MissingAttribute):
+        with pytest.raises(exceptions.MissingMaskAttribute):
             sp.get_mask("dummy", 1.0, "<")
 
     def test_get_mask_inconsistent_units_raises(self, simple_parts):

@@ -489,7 +489,12 @@ class Particles:
 
         # Get the attribute
         attr_str = attr
-        attr = get_param(attr_str, attr_override_obj, None, self)
+        try:
+            attr = get_param(attr_str, attr_override_obj, None, self)
+        except exceptions.MissingAttribute as e:
+            raise exceptions.MissingMaskAttribute(
+                f"Masking attribute ({attr_str}) not found on particle object."
+            ) from e
 
         # Strip dimensionless units since they are inconsequential
         if hasattr(attr, "units") and attr.units.is_dimensionless:
