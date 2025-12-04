@@ -763,9 +763,9 @@ class Component(ABC):
             out_images.update(
                 {
                     label: _combine_image_collections(
-                        emitter=self,
                         images=out_images,
                         label=label,
+                        model_cache=self.model_param_cache,
                     )
                 }
             )

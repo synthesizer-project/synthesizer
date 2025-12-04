@@ -790,14 +790,19 @@ def _generate_image_collection_generic(
     return imgs
 
 
-def _combine_image_collections(emitter, images, label):
+def _combine_image_collections(images, label, model_cache):
     """Combine multiple image collections into a single image collection.
+
+    Args:
+        images: Dictionary of existing images.
+        label: The label of the combined image to create.
+        model_cache: The model parameter cache to use for lookup.
 
     Returns:
         ImageCollection: The combined images.
     """
-    # Find the images we need to combine from the emitter's param cache
-    combine_keys = emitter.model_param_cache[label]["combine"]
+    # Find the images we need to combine from the provided model cache
+    combine_keys = model_cache[label]["combine"]
 
     # Get all the images to add
     combine_imgs = [images[key] for key in combine_keys]
