@@ -1276,8 +1276,6 @@ class BaseGalaxy:
                 The number of threads to use in the tree search. Default is 1.
             resolution (unyt_quantity of float):
                 [DEPRECATED] The size of a pixel.
-            fov (unyt_quantity of float):
-                The width of the image in image coordinates.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
@@ -1346,27 +1344,57 @@ class BaseGalaxy:
                     "be specified."
                 )
 
+            # Guard against empty labels list
+            if not labels:
+                raise ValueError(
+                    "No labels provided for instrument fallback. "
+                    "Please provide at least one label."
+                )
+
+            # Get the first label to extract filters for the fallback
+            # instrument
+            first_label = labels[0]
+
             # Get the filters from the emitters
+            filters = None
             if phot_type == "lnu":
-                if len(self.photo_lnu) > 0:
-                    filters = self.photo_lnu[label].filters
-                elif self.stars is not None and len(self.stars.photo_lnu) > 0:
-                    filters = self.stars.photo_lnu[label].filters
+                if first_label in self.photo_lnu:
+                    filters = self.photo_lnu[first_label].filters
+                elif (
+                    self.stars is not None
+                    and first_label in self.stars.photo_lnu
+                ):
+                    filters = self.stars.photo_lnu[first_label].filters
                 elif (
                     self.black_holes is not None
-                    and len(self.black_holes.photo_lnu) > 0
+                    and first_label in self.black_holes.photo_lnu
                 ):
-                    filters = self.black_holes.photo_lnu[label].filters
+                    filters = self.black_holes.photo_lnu[first_label].filters
             elif phot_type == "fnu":
-                if len(self.photo_fnu) > 0:
-                    filters = self.photo_fnu[label].filters
-                elif self.stars is not None and len(self.stars.photo_fnu) > 0:
-                    filters = self.stars.photo_fnu[label].filters
+                if first_label in self.photo_fnu:
+                    filters = self.photo_fnu[first_label].filters
+                elif (
+                    self.stars is not None
+                    and first_label in self.stars.photo_fnu
+                ):
+                    filters = self.stars.photo_fnu[first_label].filters
                 elif (
                     self.black_holes is not None
-                    and len(self.black_holes.photo_fnu) > 0
+                    and first_label in self.black_holes.photo_fnu
                 ):
-                    filters = self.black_holes.photo_fnu[label].filters
+                    filters = self.black_holes.photo_fnu[first_label].filters
+            else:
+                raise ValueError(
+                    f"Unknown phot_type '{phot_type}'. Must be 'lnu' or 'fnu'."
+                )
+
+            # Verify filters was found
+            if filters is None:
+                raise exceptions.MissingPhotometry(
+                    f"No photometry found for label '{first_label}' with "
+                    f"type '{phot_type}'. Ensure photometry has been "
+                    "generated before creating images."
+                )
 
             # Make the place holder instrument
             instrument = Instrument(
@@ -1706,8 +1734,6 @@ class BaseGalaxy:
                 The number of threads to use in the tree search. Default is 1.
             resolution (unyt_quantity of float):
                 [DEPRECATED] The size of a pixel.
-            fov (unyt_quantity of float):
-                The width of the image in image coordinates.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian

@@ -800,9 +800,33 @@ def _combine_image_collections(images, label, model_cache):
 
     Returns:
         ImageCollection: The combined images.
+
+    Raises:
+        MissingModel: If label not found in model_cache.
+        MissingImage: If any required component images are missing.
     """
+    # Validate label exists in model_cache
+    if label not in model_cache:
+        raise exceptions.MissingModel(
+            f"Label '{label}' not found in model cache."
+        )
+
+    # Validate that the model cache entry contains combine keys
+    if "combine" not in model_cache[label]:
+        raise exceptions.MissingModel(
+            f"Label '{label}' in model cache missing 'combine' key."
+        )
+
     # Find the images we need to combine from the provided model cache
     combine_keys = model_cache[label]["combine"]
+
+    # Validate all combine_keys exist in images
+    missing_keys = [key for key in combine_keys if key not in images]
+    if missing_keys:
+        raise exceptions.MissingImage(
+            f"Cannot combine images for '{label}': missing images for "
+            f"{', '.join(missing_keys)}"
+        )
 
     # Get all the images to add
     combine_imgs = [images[key] for key in combine_keys]

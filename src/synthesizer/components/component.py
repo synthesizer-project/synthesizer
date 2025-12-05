@@ -717,8 +717,37 @@ class Component(ABC):
                     "be specified."
                 )
 
-            # Get the filters from the emitters
-            filters = self.photo_lnu[label].filters
+            # Guard against empty labels list
+            if not labels:
+                raise ValueError(
+                    "No labels provided for instrument fallback. "
+                    "Please provide at least one label."
+                )
+
+            # Get the first label to extract filters for the fallback
+            # instrument
+            first_label = labels[0]
+
+            # Get the filters from the emitters based on photometry type
+            filters = None
+            if phot_type == "lnu":
+                if first_label in self.photo_lnu:
+                    filters = self.photo_lnu[first_label].filters
+            elif phot_type == "fnu":
+                if first_label in self.photo_fnu:
+                    filters = self.photo_fnu[first_label].filters
+            else:
+                raise ValueError(
+                    f"Unknown phot_type '{phot_type}'. Must be 'lnu' or 'fnu'."
+                )
+
+            # Verify filters was found
+            if filters is None:
+                raise exceptions.MissingPhotometry(
+                    f"No photometry found for label '{first_label}' with "
+                    f"type '{phot_type}'. Ensure photometry has been "
+                    "generated before creating images."
+                )
 
             # Make the place holder instrument
             instrument = Instrument(
@@ -787,16 +816,6 @@ class Component(ABC):
                 nthreads=nthreads,
                 emitter=self,
                 cosmo=cosmo,
-            )
-
-        # Ensure we have all the necessary images to combine, if not we
-        # cannot proceed
-        missing_labels = set(generate_labels) - set(out_images.keys())
-        if len(missing_labels) > 0:
-            raise exceptions.MissingImage(
-                "Cannot generate component images for the following labels as "
-                "the images to combine are missing: "
-                f"{', '.join(missing_labels)}"
             )
 
         # OK, loop over the combination labels and make those images
@@ -942,6 +961,10 @@ class Component(ABC):
         For Particle components, images can either be a simple
         histogram ("hist") or an image with particles smoothed over
         their SPH kernel.
+
+        Which images are produced is defined by the labels passed. If any
+        of the necessary photometry is missing for generating a particular
+        image, an exception will be raised.
 
         Note that black holes will never be smoothed and only produce a
         histogram due to the point source nature of black holes.
