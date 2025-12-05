@@ -1680,7 +1680,7 @@ class BaseGalaxy:
         histogram due to the point source nature of black holes.
 
         All images that are created will be stored on the emitter (Stars,
-        BlackHole/s, or galaxy) under the images_lnu attribute.
+        BlackHole/s, or galaxy) under the images_fnu attribute.
 
         Args:
             *labels (str):
