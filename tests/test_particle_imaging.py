@@ -400,6 +400,9 @@ class TestSpectralCube:
         """
         from synthesizer.emissions.sed import Sed
 
+        # Set random seed for reproducibility
+        np.random.seed(42)
+
         # Create spectral cube with large FOV to contain kernel support
         wavelengths = np.linspace(5000, 6000, 4) * angstrom
         resolution = 0.2 * kpc
@@ -422,6 +425,9 @@ class TestSpectralCube:
             np.random.uniform(-0.5, 0.5, (n_particles, 3)), kpc
         )
         coords[:, 2] = 0.0
+
+        # Center the coordinates to avoid validation issues
+        coords[:, :2] -= coords[:, :2].mean(axis=0)
 
         # Use smoothing length that's large compared to pixels but fits in FOV
         smoothing_lengths = unyt_array(
