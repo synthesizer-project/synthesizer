@@ -1410,13 +1410,21 @@ def _prepare_galaxy_image_labels(
     # Track galaxy-level combinations and all labels needed
     galaxy_combine_labels = []
     all_component_labels = set()
+    visited = set()
 
     # Recursively expand galaxy-level models
     def expand_galaxy_label(label):
-        """Recursively expand a label."""
+        """Recursively expand a label with cycle protection."""
+        # Skip if already visited (cycle protection)
+        if label in visited:
+            return
+
         # Skip if not in cache
         if label not in model_cache:
             return
+
+        # Mark as visited to prevent cycles
+        visited.add(label)
 
         # Get the emitter for this model
         emitter = model_cache[label].get("emitter", None)
