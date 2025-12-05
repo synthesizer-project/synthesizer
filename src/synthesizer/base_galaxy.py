@@ -1619,8 +1619,9 @@ class BaseGalaxy:
                 The number of threads to use in the tree search. Default is 1.
             resolution (unyt_quantity of float):
                 [DEPRECATED] The size of a pixel.
-            fov (unyt_quantity of float):
-                The width of the image in image coordinates.
+             resolution (unyt_quantity of float):
+                 [DEPRECATED] The size of a pixel.
+             cosmo (astropy.cosmology):
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
