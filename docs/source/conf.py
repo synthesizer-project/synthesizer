@@ -79,6 +79,9 @@ set_type_checking_flag = (
 )
 
 nbsphinx_allow_errors = True  # Continue through Jupyter errors
+os.environ["PYTHONWARNINGS"] = (
+    "ignore"  # Suppress warnings in notebook execution
+)
 
 templates_path = ["templates"]
 
