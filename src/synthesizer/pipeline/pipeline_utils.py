@@ -2,6 +2,7 @@
 
 import inspect
 import sys
+from collections import defaultdict
 from collections.abc import Mapping
 from functools import lru_cache
 
@@ -12,6 +13,11 @@ from synthesizer import exceptions
 from synthesizer.emissions import Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
+
+# Special model label for operations that are not tied to a specific model.
+# This can be used for operations such as SFZH / SFH with no relation to
+# an emission model.
+NO_MODEL_LABEL = "no_model_label"
 
 
 def discover_attr_paths_recursive(obj, prefix="", output_set=None):
@@ -525,3 +531,291 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                         f"Noise map must be a unyt_array with units. Got "
                         f"{type(inst.noise_maps)} in instrument {inst.label}."
                     )
+
+
+class OperationKwargsHandler:
+    """Container for Pipeline operation kwargs.
+
+    This handler enables the running of pipeline operation multiple times
+    with different parameters for different models in a clean, expandable and
+    organized manner.
+
+    This helper abstracts away the internal representation of operation kwargs
+    from the Pipeline. It stores kwargs dictionaries keyed by
+    (model_label, func_name) and provides a clean interface to loop over
+    each operations kwargs.
+
+    Internally it uses a nested defaultdict:
+
+        self._queues[model_label][func_name] -> list[dict]
+
+    where each list behaves as a FIFO queue of kwargs dicts.
+
+    Example usage:
+
+        handler = OperationKwargsHandler(
+            model_labels=list(emission_model._models.keys()) + [NO_MODEL_LABEL]
+        )
+
+        # During "Pipeline.get_*" signalling:
+        handler.add(
+            NO_MODEL_LABEL,
+            "get_images_flux",
+            fov=fov,
+            img_type="smoothed",
+            ...
+        )
+
+        # During "Pipeline._get*" operation execution:
+        for model_label, op_kwargs in handler["get_images_flux"]:
+            ... use op_kwargs ...
+
+    Attributes:
+        _allowed_models (set):
+            The models associated with the EmissionModel the pipeline is
+            using.
+        _queues (defaultdict):
+            Nested mapping of model_label -> func_name -> list[kwargs dict].
+            Each list is a FIFO (First In, First Out) queue of kwargs for that
+            (model, func) pair.
+    """
+
+    def __init__(self, model_labels):
+        """Initialise the OperationKwargsHandler.
+
+        Args:
+            model_labels (list or sea of str):
+                All the labels associated with the EmissionModel we
+                are working on.
+        """
+        # Convert the input model_labels to a set for efficient lookup.
+        self._allowed_models = set(model_labels)
+
+        # We can always use the special NO_MODEL_LABEL.
+        self._allowed_models.add(NO_MODEL_LABEL)
+
+        # Nested mapping: model_label -> func_name -> list[kwargs dict].
+        self._queues = defaultdict(lambda: defaultdict(list))
+
+    def _check_model_label(self, model_label):
+        """Validate that the provided model_label is allowed.
+
+        Args:
+            model_label (str):
+                Emission model label to validate.
+
+        Raises:
+            exceptions.InconsistentArguments:
+                If validation is enabled and model_label is not allowed.
+        """
+        if model_label in self._allowed_models:
+            return
+
+        raise exceptions.InconsistentArguments(
+            f"Model label {model_label} not found in the Pipeline's "
+            "EmissionModel."
+        )
+
+    def __getitem__(self, func_name):
+        """Return an iterator over (model_label, kwargs) for an operation.
+
+        This allows syntax like:
+
+            for model_label, op_kwargs in handler["get_images_flux"]:
+                ...
+
+        This is a non-consuming iterator: the internal queues are not
+        modified by iteration. To consume the queue, use iter_all with
+        consume=True.
+
+        Args:
+            func_name (str):
+                Operation / method name.
+        """
+        return self.iter_all(func_name, consume=False)
+
+    def __contains__(self, func_name):
+        """Return True if any kwargs are queued for this operation.
+
+        This allows syntax like:
+
+            if "get_images_flux" in handler:
+                ...
+
+        Args:
+            func_name (str):
+                Operation / method name.
+        """
+        return self.has(func_name)
+
+    def _get_from_queue(self, model_label, func_name):
+        """Internal helper to get the queue for a (model_label, func_name).
+
+        Args:
+            model_label (str):
+                Model label to get the queue for.
+            func_name (str):
+                Operation / method name.
+
+        Returns:
+            list:
+                The list of kwargs dicts for this (model_label, func_name).
+        """
+        self._check_model_label(model_label)
+        return self._queues[model_label][func_name]
+
+    def add(self, model_label, func_name, **kwargs):
+        """Add a kwargs dict for a given (model_label, func_name) pair.
+
+        Args:
+            model_label (str):
+                Emission model label or a special label such as NO_MODEL_LABEL
+                for operations that are not tied to a specific model.
+            func_name (str):
+                Operation / method name, e.g. "get_images_luminosity".
+            **kwargs:
+                Arbitrary keyword arguments to store for this (model, func).
+        """
+        self._get_from_queue(model_label, func_name).append(kwargs)
+
+    def has(self, func_name, model_label=None):
+        """Return True if any kwargs are queued for the given operation.
+
+        Args:
+            func_name (str):
+                Operation / method name.
+            model_label (str, optional):
+                If provided, restrict the check to this model. If omitted,
+                all models are searched.
+
+        Returns:
+            bool: True if at least one kwargs dict is present, False otherwise.
+        """
+        if model_label is not None:
+            return bool(self._get_from_queue(model_label, func_name))
+
+        # No model_label specified: search across all models.
+        for model_queues in self._queues.values():
+            if model_queues.get(func_name):
+                return True
+        return False
+
+    def pop_next(self, model_label, func_name):
+        """Pop and return the next kwargs dict for (model_label, func_name).
+
+        This provides single-step consumption of the queue associated with
+        a given (model, func) pair.
+
+        Args:
+            model_label (str):
+                Model label to pop from.
+            func_name (str):
+                Operation / method name.
+
+        Returns:
+            dict or None:
+                The next kwargs dict from the queue if available, otherwise
+                None.
+        """
+        queue = self._get_from_queue(model_label, func_name)
+        if len(queue) > 0:
+            return queue.pop(0)
+        return None
+
+    def iter_for(self, model_label, func_name, consume=False):
+        """Iterate over kwargs dicts for a single (model_label, func_name).
+
+        Args:
+            model_label (str):
+                Model label to iterate for.
+            func_name (str):
+                Operation / method name.
+            consume (bool, optional):
+                If True, entries are popped from the internal queue as they
+                are yielded. If False (default), the internal queue is left
+                unchanged.
+
+        Yields:
+            dict: Each kwargs dict stored for (model_label, func_name).
+        """
+        queue = self._get_from_queue(model_label, func_name)
+
+        if consume:
+            # FIFO consumption: pop until the queue is empty.
+            while queue:
+                yield queue.pop(0)
+        else:
+            # Non-consuming: iterate over a shallow copy.
+            for kw in list(queue):
+                yield kw
+
+    def iter_all(self, func_name, consume=False):
+        """Iterate over (model_label, kwargs) pairs for a given operation.
+
+        This is the main entry point for Pipeline methods that want to
+        process all configs for a given operation, regardless of model.
+
+        Args:
+            func_name (str):
+                Operation / method name.
+            consume (bool, optional):
+                If True, entries are popped from each queue as they are
+                yielded (consuming the queues). If False (default), the
+                internal queues are left unchanged.
+
+        Yields:
+            (model_label, dict):
+                Tuples of model label and kwargs dict.
+        """
+        if consume:
+            # Iterate over a snapshot of keys to avoid modifying while
+            # iterating.
+            for model_label in list(self._queues.keys()):
+                queue = self._queues[model_label].get(func_name, [])
+                while queue:
+                    yield model_label, queue.pop(0)
+        else:
+            # Non-consuming: iterate over shallow copies of the queues.
+            for model_label, model_queues in list(self._queues.items()):
+                queue = model_queues.get(func_name, [])
+                for kw in list(queue):
+                    yield model_label, kw
+
+    def clear(self, func_name=None, model_label=None):
+        """Clear queued kwargs for a given operation and/or model.
+
+        Args:
+            func_name (str, optional):
+                If provided, only clear this operation.
+            model_label (str, optional):
+                If provided, only clear for this model.
+
+        Behaviour:
+            - func_name is None and model_label is None:
+                Clear all queues.
+            - func_name is None and model_label is not None:
+                Clear all operations for that model.
+            - func_name is not None and model_label is None:
+                Clear that operation across all models.
+            - func_name is not None and model_label is not None:
+                Clear that single (model_label, func_name) queue.
+        """
+        # Clear everything.
+        if func_name is None and model_label is None:
+            self._queues.clear()
+            return
+
+        # Clear all operations for a specific model.
+        if func_name is None and model_label is not None:
+            self._check_model_label(model_label)
+            self._queues[model_label].clear()
+            return
+
+        # Clear a specific operation across all models.
+        if func_name is not None and model_label is None:
+            for m_lab in list(self._queues.keys()):
+                self._queues[m_lab].pop(func_name, None)
+            return
+
+        # Clear a specific (model_label, func_name) queue.
+        self._get_from_queue(model_label, func_name).clear()
