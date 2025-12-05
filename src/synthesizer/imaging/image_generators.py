@@ -13,6 +13,8 @@ The functions in this module are not intended to be called directly by the
 user.
 """
 
+from copy import deepcopy
+
 import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
@@ -680,7 +682,7 @@ def _generate_image_collection_generic(
         img_type (str):
             The type of image to create. Options are "hist" or "smoothed".
         kernel (str):
-            The array describing the kernel. This is dervied from the
+            The array describing the kernel. This is derived from the
             kernel_functions module. (Only applicable to particle imaging)
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
@@ -786,6 +788,55 @@ def _generate_image_collection_generic(
         )
 
     return imgs
+
+
+def _combine_image_collections(images, label, model_cache):
+    """Combine multiple image collections into a single image collection.
+
+    Args:
+        images: Dictionary of existing images.
+        label: The label of the combined image to create.
+        model_cache: The model parameter cache to use for lookup.
+
+    Returns:
+        ImageCollection: The combined images.
+
+    Raises:
+        MissingModel: If label not found in model_cache.
+        MissingImage: If any required component images are missing.
+    """
+    # Validate label exists in model_cache
+    if label not in model_cache:
+        raise exceptions.MissingModel(
+            f"Label '{label}' not found in model cache."
+        )
+
+    # Validate that the model cache entry contains combine keys
+    if "combine" not in model_cache[label]:
+        raise exceptions.MissingModel(
+            f"Label '{label}' in model cache missing 'combine' key."
+        )
+
+    # Find the images we need to combine from the provided model cache
+    combine_keys = model_cache[label]["combine"]
+
+    # Validate all combine_keys exist in images
+    missing_keys = [key for key in combine_keys if key not in images]
+    if missing_keys:
+        raise exceptions.MissingImage(
+            f"Cannot combine images for '{label}': missing images for "
+            f"{', '.join(missing_keys)}"
+        )
+
+    # Get all the images to add
+    combine_imgs = [images[key] for key in combine_keys]
+
+    # Combine the images
+    combined_img = deepcopy(combine_imgs[0])
+    for img in combine_imgs[1:]:
+        combined_img += img
+
+    return combined_img
 
 
 def _generate_ifu_particle_hist(
@@ -932,7 +983,7 @@ def _generate_ifu_particle_smoothed(
             The smoothing lengths of the particles. These will be
             converted to the image resolution units.
         kernel (str):
-            The array describing the kernel. This is dervied from the
+            The array describing the kernel. This is derived from the
             kernel_functions module.
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
@@ -1257,3 +1308,156 @@ def _generate_ifu_generic(
         )
 
     return ifu
+
+
+def _prepare_component_image_labels(
+    labels: list[str],
+    model_cache: dict,
+    remove_missing: bool = False,
+) -> tuple[list[str], list[str]]:
+    """Split component image labels into combined and generated labels.
+
+    This function checks if any of the requested labels can be combined
+    from other labels already in the request, avoiding unnecessary generation.
+
+    Args:
+        labels (list of str):
+            The requested image labels (already fully expanded).
+        model_cache (dict):
+            The model parameter cache from the component emitter.
+        remove_missing (bool):
+            Whether to remove labels missing from the model cache entirely.
+
+    Returns:
+        tuple of list of str:
+            - combine_labels: Labels that can be combined from others.
+            - generate_labels: Labels that must be generated directly.
+    """
+    combine_labels_set = set()
+    generate_labels = []
+    labels_set = set(labels)
+
+    # Check each label to see if it can be combined from others already in
+    # the list
+    for label in labels:
+        # Skip if not in cache
+        if label not in model_cache:
+            if not remove_missing:
+                generate_labels.append(label)
+            continue
+
+        # Check if this label has combine keys
+        combine_keys = model_cache[label].get("combine", [])
+
+        # If all combine keys are already in our list, we can combine instead
+        # of generate
+        if combine_keys and all(key in labels_set for key in combine_keys):
+            combine_labels_set.add(label)
+        else:
+            # Either no combine keys, or not all dependencies are in the list
+            generate_labels.append(label)
+
+    # Sort combine_labels in dependency order (dependencies first)
+    combine_labels = []
+    added = set()
+
+    def add_in_order(label):
+        """Add label after its dependencies."""
+        if label in added or label not in model_cache:
+            return
+        # Add dependencies first
+        combine_keys = model_cache[label].get("combine", [])
+        for key in combine_keys:
+            if key in combine_labels_set:
+                add_in_order(key)
+        # Then add this label
+        if label not in added:
+            combine_labels.append(label)
+            added.add(label)
+
+    # Add all combine labels in order to ensure dependencies are met before
+    # we try to combine them
+    for label in combine_labels_set:
+        add_in_order(label)
+
+    return combine_labels, generate_labels
+
+
+def _prepare_galaxy_image_labels(
+    labels: list[str],
+    model_cache: dict,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Prepare galaxy-level image generation by routing to components.
+
+    This function takes the requested labels and recursively expands
+    galaxy-level combination models, routing component-level labels to
+    the appropriate emitters. Component labels are recursively expanded
+    until we get to the actual labels each component needs to handle.
+
+    Args:
+        labels (list of str):
+            The requested image labels.
+        model_cache (dict):
+            The combined model parameter cache from all components and galaxy.
+
+    Returns:
+        tuple:
+            - galaxy_combine_labels (list of str): Labels for galaxy-level
+              combinations.
+            - component_labels_by_emitter (dict): Dict mapping emitter type
+              to list of labels that emitter needs to handle.
+    """
+    # Track galaxy-level combinations and all labels needed
+    galaxy_combine_labels = []
+    all_component_labels = set()
+    visited = set()
+
+    # Recursively expand galaxy-level models
+    def expand_galaxy_label(label):
+        """Recursively expand a label with cycle protection."""
+        # Skip if already visited (cycle protection)
+        if label in visited:
+            return
+
+        # Skip if not in cache
+        if label not in model_cache:
+            return
+
+        # Mark as visited to prevent cycles
+        visited.add(label)
+
+        # Get the emitter for this model
+        emitter = model_cache[label].get("emitter", None)
+
+        # If this is a galaxy-level model, expand it
+        if emitter == "galaxy":
+            # Check if it's a combination model
+            combine_keys = model_cache[label].get("combine", [])
+            if combine_keys:
+                # Recursively expand the combination keys first so that
+                # dependencies are combined before their parents
+                for key in combine_keys:
+                    expand_galaxy_label(key)
+                # Then add this label if not already present
+                if label not in galaxy_combine_labels:
+                    galaxy_combine_labels.append(label)
+        else:
+            # This is a component-level label
+            if label not in all_component_labels:
+                all_component_labels.add(label)
+
+    # Expand all requested labels
+    for label in labels:
+        expand_galaxy_label(label)
+
+    # Now route component labels to the appropriate emitters
+    component_labels_by_emitter = {}
+    for label in all_component_labels:
+        if label in model_cache:
+            emitter = model_cache[label].get("emitter", None)
+            if emitter is not None:
+                if emitter not in component_labels_by_emitter:
+                    component_labels_by_emitter[emitter] = []
+                component_labels_by_emitter[emitter].append(label)
+
+    return galaxy_combine_labels, component_labels_by_emitter

@@ -1,12 +1,13 @@
 """A submodule defining blackbody dust emission generators."""
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from unyt import Hz, angstrom, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
@@ -14,6 +15,9 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
 from synthesizer.utils import planck
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 class Blackbody(DustEmission):
