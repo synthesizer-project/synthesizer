@@ -603,7 +603,7 @@ class Component(ABC):
         cosmo=None,
         phot_type="lnu",
     ):
-        """Make an ImageCollection from component luminosities.
+        """Make an ImageCollection from component luminosities or fluxes.
 
         For Parametric components, images can only be smoothed. An
         exception will be raised if a histogram is requested.
@@ -620,7 +620,8 @@ class Component(ABC):
         histogram due to the point source nature of black holes.
 
         All images that are created will be stored on the emitter (Stars or
-        BlackHole/s) under the images_lnu attribute.
+        BlackHole/s) under the images_lnu attribute (for phot_type='lnu')
+        or images_fnu attribute (for phot_type='fnu').
 
         Args:
             *labels (str):
