@@ -10,9 +10,9 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.exceptions import InconsistentAddition
-from synthesizer.filters import FilterCollection as Filters
 from synthesizer.grid import Grid
 from synthesizer.imaging import Image, ImageCollection
+from synthesizer.instruments import FilterCollection as Filters
 from synthesizer.parametric import Stars
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import Sersic2D
