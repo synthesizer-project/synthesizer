@@ -1426,12 +1426,13 @@ def _prepare_galaxy_image_labels(
             # Check if it's a combination model
             combine_keys = model_cache[label].get("combine", [])
             if combine_keys:
-                # Add to galaxy combinations
-                if label not in galaxy_combine_labels:
-                    galaxy_combine_labels.append(label)
-                # Recursively expand the combination keys
+                # Recursively expand the combination keys first so that
+                # dependencies are combined before their parents
                 for key in combine_keys:
                     expand_galaxy_label(key)
+                # Then add this label if not already present
+                if label not in galaxy_combine_labels:
+                    galaxy_combine_labels.append(label)
         else:
             # This is a component-level label
             if label not in all_component_labels:
