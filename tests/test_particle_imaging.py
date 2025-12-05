@@ -400,6 +400,9 @@ class TestSpectralCube:
         """
         from synthesizer.emissions.sed import Sed
 
+        # Set random seed for reproducibility
+        np.random.seed(42)
+
         # Create spectral cube with large FOV to contain kernel support
         wavelengths = np.linspace(5000, 6000, 4) * angstrom
         resolution = 0.2 * kpc
@@ -422,6 +425,9 @@ class TestSpectralCube:
             np.random.uniform(-0.5, 0.5, (n_particles, 3)), kpc
         )
         coords[:, 2] = 0.0
+
+        # Center the coordinates to avoid validation issues
+        coords[:, :2] -= coords[:, :2].mean(axis=0)
 
         # Use smoothing length that's large compared to pixels but fits in FOV
         smoothing_lengths = unyt_array(
@@ -705,6 +711,8 @@ class TestGalaxyImagingSingleParticle:
     ):
         """Test image generation for a galaxy with one particle."""
         # Define the image properties
+        from synthesizer.instruments import Instrument
+
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -712,11 +720,18 @@ class TestGalaxyImagingSingleParticle:
 
         kernel = Kernel().get_kernel()
 
-        # Create an image for the galaxy
-        galaxy_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
             resolution=resolution,
+        )
+
+        # Create an image for the galaxy using the photometry label
+        galaxy_image = one_part_galaxy.get_images_luminosity(
+            "incident",  # Use the emission model label as positional argument
             fov=fov,
+            instrument=instrument,
             kernel=kernel,
         )["filter_r"]
 
@@ -737,6 +752,8 @@ class TestGalaxyImagingSingleParticle:
         differ.
         """
         # Define the image properties
+        from synthesizer.instruments import Instrument
+
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -744,20 +761,27 @@ class TestGalaxyImagingSingleParticle:
 
         kernel = Kernel().get_kernel()
 
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Create histogram image
         hist_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             kernel=kernel,
             img_type="hist",
         )["filter_r"]
 
         # Create smoothed image
         smoothed_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             kernel=kernel,
             img_type="smoothed",
         )["filter_r"]
@@ -808,6 +832,8 @@ class TestGalaxyImagingSingleParticle:
     def test_orientation(self, one_part_galaxy, incident_emission_model):
         """Test image generation with different orientations."""
         # Define the image properties
+        from synthesizer.instruments import Instrument
+
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -815,11 +841,18 @@ class TestGalaxyImagingSingleParticle:
 
         kernel = Kernel().get_kernel()
 
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Get the image
         galaxy_image = one_part_galaxy.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             kernel=kernel,
         )["filter_r"]
 
@@ -848,6 +881,8 @@ class TestImagingFluxConservation:
     ):
         """Test flux conservation in histogram imaging."""
         # Define the image properties
+        from synthesizer.instruments import Instrument
+
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -873,11 +908,18 @@ class TestImagingFluxConservation:
 
         random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
 
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Create histogram image
         hist_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="hist",
         )["filter_r"]
 
@@ -900,6 +942,8 @@ class TestImagingFluxConservation:
     ):
         """Test flux conservation in smoothed imaging."""
         # Define the image properties
+        from synthesizer.instruments import Instrument
+
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -927,11 +971,18 @@ class TestImagingFluxConservation:
 
         kernel = Kernel().get_kernel()
 
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="smoothed",
             kernel=kernel,
         )["filter_r"]
@@ -955,6 +1006,8 @@ class TestImagingFluxConservation:
     ):
         """Test threaded vs serial smoothed image generation."""
         # Define the image properties
+        from synthesizer.instruments import Instrument
+
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -982,11 +1035,18 @@ class TestImagingFluxConservation:
 
         kernel = Kernel().get_kernel()
 
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Create smoothed image using threading
         threaded_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="smoothed",
             kernel=kernel,
             nthreads=4,
@@ -994,9 +1054,9 @@ class TestImagingFluxConservation:
 
         # Create smoothed image without threading
         serial_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="smoothed",
             kernel=kernel,
         )["filter_r"]
@@ -1298,14 +1358,23 @@ class TestComprehensiveImagingCoverage:
         )
 
         # Create image with large pixels relative to smoothing length
+        from synthesizer.instruments import Instrument
+
         resolution = 0.5 * kpc
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
-        smoothed_image = stars.get_images_luminosity(
-            emission_model=emission_model,
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
             resolution=resolution,
+        )
+
+        smoothed_image = stars.get_images_luminosity(
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="smoothed",
             kernel=kernel,
         )["filter_r"]
@@ -1370,14 +1439,23 @@ class TestComprehensiveImagingCoverage:
         )
 
         # Create image
+        from synthesizer.instruments import Instrument
+
         resolution = 0.5 * kpc
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
-        smoothed_image = stars.get_images_luminosity(
-            emission_model=emission_model,
+        # Create an instrument for the image
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
             resolution=resolution,
+        )
+
+        smoothed_image = stars.get_images_luminosity(
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="smoothed",
             kernel=kernel,
         )["filter_r"]
@@ -1435,11 +1513,20 @@ class TestComprehensiveImagingCoverage:
 
         kernel = Kernel().get_kernel()
 
+        # Create an instrument for the image
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="smoothed",
             kernel=kernel,
         )["filter_r"]
@@ -1620,11 +1707,20 @@ class TestComprehensiveImagingCoverage:
 
         kernel = Kernel().get_kernel()
 
+        # Create an instrument for the image
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Create images for all filters
         images = random_part_stars.get_images_luminosity(
-            emission_model=incident_emission_model,
-            resolution=resolution,
+            "incident",
             fov=fov,
+            instrument=instrument,
             img_type="smoothed",
             kernel=kernel,
         )
@@ -1774,15 +1870,24 @@ class TestComprehensiveImagingCoverage:
 
         kernel = Kernel().get_kernel()
 
+        # Create an instrument for the image
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+
         # Generate images with different thread counts
         thread_counts = [1, 2, 4, 8]
         images = {}
 
         for nthreads in thread_counts:
             img = random_part_stars.get_images_luminosity(
-                emission_model=incident_emission_model,
-                resolution=resolution,
+                "incident",
                 fov=fov,
+                instrument=instrument,
                 img_type="smoothed",
                 kernel=kernel,
                 nthreads=nthreads,
@@ -1795,3 +1900,163 @@ class TestComprehensiveImagingCoverage:
             assert np.allclose(images[nthreads].arr, reference_img), (
                 f"Image with {nthreads} threads differs from serial (1 thread)"
             )
+
+
+class TestCombinedModelImaging:
+    """Test imaging with combined emission models (e.g., nebular).
+
+    This class tests the critical functionality of generating images for
+    models that combine multiple sub-models, ensuring the model_param_cache
+    is properly accessed across component boundaries.
+    """
+
+    def test_galaxy_nebular_imaging(
+        self, nebular_emission_model, random_part_stars
+    ):
+        """Test galaxy-level imaging with nebular (combined) model.
+
+        The nebular model combines nebular_line and nebular_continuum.
+        This tests that:
+        1. Component-level spectra/photometry are generated correctly
+        2. The combined_cache is built properly at galaxy level
+        3. _combine_image_collections can access the cache from components
+        4. Images are correctly combined
+        """
+        from synthesizer.instruments import Instrument
+        from synthesizer.particle.galaxy import Galaxy
+
+        # Set up the model
+        nebular_emission_model.set_per_particle(True)
+
+        # Create a galaxy with stellar component
+        galaxy = Galaxy(
+            name="test_galaxy",
+            stars=random_part_stars,
+            redshift=0.1,
+        )
+        galaxy.stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
+
+        # Generate spectra for all models (nebular_line, nebular_continuum)
+        galaxy.get_spectra(nebular_emission_model)
+
+        # Generate photometry
+        filters = FilterCollection(
+            generic_dict={
+                "filter_r": np.ones(1000),
+            },
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+        )
+        galaxy.get_photo_lnu(filters)
+
+        # Create instrument
+        resolution = 0.5 * kpc
+        fov = 200 * kpc
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+        kernel = Kernel().get_kernel()
+
+        # Generate images - this should combine nebular_line and
+        # nebular_continuum into nebular
+        nebular_img = galaxy.get_images_luminosity(
+            "nebular",  # Combined model (single label returns ImageCollection)
+            fov=fov,
+            instrument=instrument,
+            img_type="smoothed",
+            kernel=kernel,
+        )
+
+        # Verify the nebular image was created
+        assert nebular_img is not None, "Nebular image is None"
+
+        # Get filter names from the ImageCollection
+        filter_names = list(nebular_img.imgs.keys())
+        assert len(filter_names) > 0, "No filters in nebular ImageCollection"
+
+        # Use the first filter (should be filter_r)
+        filter_name = filter_names[0]
+        assert nebular_img[filter_name].arr is not None, (
+            "Nebular image array is None"
+        )
+
+        # Verify flux conservation - the combined image should have the
+        # sum of line and continuum photometry
+        nebular_line_phot = galaxy.stars.photo_lnu["nebular_line"][filter_name]
+        nebular_continuum_phot = galaxy.stars.photo_lnu["nebular_continuum"][
+            filter_name
+        ]
+        expected_total = nebular_line_phot + nebular_continuum_phot
+
+        image_flux = np.sum(nebular_img[filter_name].arr)
+
+        assert np.isclose(image_flux, expected_total, rtol=0.01), (
+            f"Nebular combined image flux {image_flux} does not match "
+            f"expected {expected_total} (line + continuum)"
+        )
+
+    def test_component_level_combined_imaging(
+        self, nebular_emission_model, random_part_stars
+    ):
+        """Test component-level imaging with combined model.
+
+        Components should be able to generate images for their own combined
+        models using their own model_param_cache.
+        """
+        from synthesizer.instruments import Instrument
+
+        nebular_emission_model.set_per_particle(True)
+
+        # Generate spectra and photometry on the component directly
+        random_part_stars.get_spectra(nebular_emission_model)
+        filters = FilterCollection(
+            generic_dict={
+                "filter_r": np.ones(1000),
+            },
+            new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+        )
+        random_part_stars.get_particle_photo_lnu(filters)
+        random_part_stars.get_photo_lnu(filters)
+        random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
+
+        # Create instrument
+        resolution = 0.5 * kpc
+        fov = 200 * kpc
+        instrument = Instrument(
+            label="test_inst",
+            filters=None,
+            resolution=resolution,
+        )
+        kernel = Kernel().get_kernel()
+
+        # Generate images at component level (single label returns
+        # ImageCollection)
+        nebular_img = random_part_stars._get_images(
+            "nebular",
+            img_type="smoothed",
+            instrument=instrument,
+            kernel=kernel,
+            fov=fov,
+            resolution=resolution,
+            phot_type="lnu",
+        )
+
+        # Verify the image was created and combined properly
+        assert nebular_img is not None, (
+            "Nebular image is None at component level"
+        )
+
+        # Get filter names from the ImageCollection
+        filter_names = list(nebular_img.imgs.keys())
+        assert len(filter_names) > 0, "No filters in nebular ImageCollection"
+
+        # Use the first filter
+        filter_name = filter_names[0]
+        image_flux = np.sum(nebular_img[filter_name].arr)
+        expected_flux = random_part_stars.photo_lnu["nebular"][filter_name]
+
+        assert np.isclose(image_flux, expected_flux, rtol=0.01), (
+            f"Component-level nebular image flux {image_flux} does not "
+            f"match expected {expected_flux}"
+        )

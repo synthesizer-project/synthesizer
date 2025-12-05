@@ -1,6 +1,8 @@
 """A submodule defining Casey12 dust emission generators."""
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from unyt import (
@@ -18,13 +20,15 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 class Casey12(DustEmission):

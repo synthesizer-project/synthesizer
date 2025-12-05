@@ -389,6 +389,32 @@ class MissingLines(Exception):
             return "Line not in grid!"
 
 
+class MissingPhotometryType(Exception):
+    """Exception class for when a photometry type is missing."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        else:
+            return "Photometry type not found!"
+
+
 class MissingImage(Exception):
     """Exception class for when an image has not yet been made."""
 
@@ -798,6 +824,31 @@ class MissingGridProperty(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Grid is missing a required property."
+
+
+class MissingModel(Exception):
+    """Exception class for when a model is missing."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Model is missing"
 
 
 class ParameterFunctionError(Exception):
