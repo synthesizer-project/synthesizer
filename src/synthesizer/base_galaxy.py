@@ -438,7 +438,7 @@ class BaseGalaxy:
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1, limit_to=None):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Photometry is calculated in spectral luminosity density units.
@@ -451,6 +451,10 @@ class BaseGalaxy:
             nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
+            limit_to (str/list, optional):
+                If None, then photometry is calculated for all spectra in the
+                galaxy. If a string or list of strings is provided, then
+                photometry is only calculated for the specified spectra.
 
         Returns:
             PhotometryCollection:
@@ -459,7 +463,9 @@ class BaseGalaxy:
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_lnu(filters, verbose, nthreads=nthreads)
+            self.stars.get_photo_lnu(
+                filters, verbose, nthreads=nthreads, limit_to=limit_to
+            )
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
@@ -468,11 +474,14 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
+                    limit_to=limit_to,
                 )
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_lnu(filters, verbose, nthreads=nthreads)
+            self.black_holes.get_photo_lnu(
+                filters, verbose, nthreads=nthreads, limit_to=limit_to
+            )
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
@@ -481,12 +490,16 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
+                    limit_to=limit_to,
                 )
 
+        # Get the labels
+        labels = self.spectra.keys() if limit_to is None else limit_to
+
         # Get the combined photometry
-        for spectra in self.spectra:
+        for label in labels:
             # Create the photometry collection and store it in the object
-            self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
+            self.photo_lnu[label] = self.spectra[label].get_photo_lnu(
                 filters,
                 verbose,
                 nthreads=nthreads,
@@ -516,7 +529,7 @@ class BaseGalaxy:
         """
         return self.get_photo_lnu(filters, verbose)
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
         """Calculate flux photometry using a FilterCollection object.
 
         Photometry is calculated in spectral flux density units.
@@ -529,6 +542,10 @@ class BaseGalaxy:
             nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
+            limit_to (str/list, optional):
+                If None, then photometry is calculated for all spectra in the
+                galaxy. If a string or list of strings is provided, then
+                photometry is only calculated for the specified spectra.
 
         Returns:
             PhotometryCollection:
@@ -537,7 +554,9 @@ class BaseGalaxy:
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_fnu(filters, verbose, nthreads=nthreads)
+            self.stars.get_photo_fnu(
+                filters, verbose, nthreads=nthreads, limit_to=limit_to
+            )
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
@@ -546,11 +565,14 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
+                    limit_to=limit_to,
                 )
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_fnu(filters, verbose, nthreads=nthreads)
+            self.black_holes.get_photo_fnu(
+                filters, verbose, nthreads=nthreads, limit_to=limit_to
+            )
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
@@ -559,12 +581,16 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
+                    limit_to=limit_to,
                 )
 
+        # Get the labels
+        labels = self.spectra.keys() if limit_to is None else limit_to
+
         # Get the combined photometry
-        for spectra in self.spectra:
+        for label in labels:
             # Create the photometry collection and store it in the object
-            self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
+            self.photo_fnu[label] = self.spectra[label].get_photo_fnu(
                 filters,
                 verbose,
                 nthreads=nthreads,
