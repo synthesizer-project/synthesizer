@@ -9,7 +9,7 @@ Example usage:
 
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
-    sed.apply_attenutation(tau_v=0.7)
+    sed.apply_attenuation(tau_v=0.7)
     sed.get_photo_fnu(filters, nthreads=4)
 """
 
@@ -1758,7 +1758,7 @@ class Sed:
                 "magma".
             vmin (float):
                 The minimum value for the color scale. If None, then we will
-                use 3 orders of magntitude below the maximum value.
+                use 3 orders of magnitude below the maximum value.
             vmax (float):
                 The maximum value for the color scale. If None, then we will
                 use the maximum value of the spectra.

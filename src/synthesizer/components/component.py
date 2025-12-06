@@ -18,7 +18,13 @@ from synthesizer.cosmology import (
     get_angular_diameter_distance,
     get_luminosity_distance,
 )
+from synthesizer.emission_models import EmissionModel
 from synthesizer.emissions import plot_spectra
+from synthesizer.imaging.image_generators import (
+    _combine_image_collections,
+    _generate_image_collection_generic,
+    _prepare_component_image_labels,
+)
 from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import unit_is_compatible
@@ -597,17 +603,286 @@ class Component(ABC):
             return self.particle_lines[emission_model.label]
         return self.lines[emission_model.label]
 
-    def get_images_luminosity(
+    def _get_images(
         self,
-        resolution,
+        *labels,
         fov,
-        emission_model,
         img_type="smoothed",
+        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
+        resolution=None,
+        cosmo=None,
+        phot_type="lnu",
+    ):
+        """Make an ImageCollection from component luminosities or fluxes.
+
+        For Parametric components, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the labels passed. If any
+        of the necessary photometry is missing for generating a particular
+        image, an exception will be raised.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
+
+        All images that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the images_lnu attribute (for phot_type='lnu')
+        or images_fnu attribute (for phot_type='fnu').
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make images for. These
+                must be present in the photometry dicts of the component. For
+                particle components, these labels must be present in the
+                particle photometry dicts.
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            instrument (Instrument):
+                The instrument to use for the image.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            resolution (unyt_quantity of float):
+                [DEPRECATED] The size of a pixel.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+            limit_to (str/list):
+                [DEPRECATED] If not None, defines a specific model (or list of
+                models) to limit the image generation to. Otherwise, all
+                models with saved spectra will have images generated.
+            phot_type (str):
+                The type of photometry to use, either 'lnu' for luminosity
+                units or 'fnu' for flux units.
+
+        Returns:
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
+        """
+        # Convert labels tuple to a list
+        labels = list(labels)
+
+        # If limit_to is passed flag that this is deprecated
+        if limit_to is not None:
+            deprecation(
+                "The `limit_to` argument in `get_images_luminosity` is "
+                "deprecated and will be removed in v1.0.0. You now pass "
+                "the desired model label(s) as positional arguments."
+            )
+
+        # Similarly, if labels contain an emission_model raise a deprecation
+        # warning and extract that models label. We will make an image for
+        # that model only.
+        _labels = []
+        while len(labels) > 0:
+            label = labels.pop(0)
+            if isinstance(label, EmissionModel):
+                deprecation(
+                    "Passing an EmissionModel to `get_images_luminosity` is "
+                    "deprecated and will be removed in v1.0.0. You now pass "
+                    "the desired model label(s) as positional arguments. We'll"
+                    f" just make an image for the root model {label.label}."
+                )
+                _labels.append(label.label)
+            else:
+                _labels.append(label)
+        labels = _labels
+
+        # Are we doing a parametric image?
+        is_param = hasattr(self, "morphology")
+
+        # Ensure we aren't trying to make a histogram for a parametric
+        # component
+        if is_param and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                f"Parametric {self.component_type} can only produce "
+                "smoothed images."
+            )
+
+        # If we haven't got an instrument create one
+        # TODO: we need to eventually fully pivot to taking only an instrument
+        # this will be done when we introduced some premade instruments
+        if instrument is None:
+            deprecation(
+                "Not passing an Instrument to `get_images_luminosity` is "
+                "deprecated and will be removed in v1.0.0. Please create/load "
+                "and pass an Instrument instance."
+            )
+            if resolution is None or fov is None:
+                raise ValueError(
+                    "If instrument not provided, a resolution and fov must "
+                    "be specified."
+                )
+
+            # Guard against empty labels list
+            if not labels:
+                raise ValueError(
+                    "No labels provided for instrument fallback. "
+                    "Please provide at least one label."
+                )
+
+            # Get the first label to extract filters for the fallback
+            # instrument
+            first_label = labels[0]
+
+            # Get the filters from the emitters based on photometry type
+            filters = None
+            if phot_type == "lnu":
+                if first_label in self.photo_lnu:
+                    filters = self.photo_lnu[first_label].filters
+            elif phot_type == "fnu":
+                if first_label in self.photo_fnu:
+                    filters = self.photo_fnu[first_label].filters
+            else:
+                raise ValueError(
+                    f"Unknown phot_type '{phot_type}'. Must be 'lnu' or 'fnu'."
+                )
+
+            # Verify filters was found
+            if filters is None:
+                raise exceptions.MissingPhotometry(
+                    f"No photometry found for label '{first_label}' with "
+                    f"type '{phot_type}'. Ensure photometry has been "
+                    "generated before creating images."
+                )
+
+            # Make the place holder instrument
+            instrument = Instrument(
+                "GenericInstrument",
+                resolution=resolution,
+                filters=filters,
+            )
+
+        # Ensure we have a cosmology if we need it
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            # Also ensure we have a redshift
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Find which images must be generated and which can simply
+        # be combined
+        combine_labels, generate_labels = _prepare_component_image_labels(
+            labels,
+            self.model_param_cache,
+            remove_missing=True,
+        )
+
+        # Define dictionary to hold the images we are generating
+        out_images = {}
+
+        # Get the appropriate photometry
+        if is_param and phot_type == "lnu":
+            photometry_dict = self.photo_lnu
+        elif is_param and phot_type == "fnu":
+            photometry_dict = self.photo_fnu
+        elif phot_type == "lnu":
+            photometry_dict = self.particle_photo_lnu
+        elif phot_type == "fnu":
+            photometry_dict = self.particle_photo_fnu
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Photometry type {phot_type} not recognised. Must be "
+                "'lnu' or 'fnu'."
+            )
+
+        # Get the images
+        for label in generate_labels:
+            # If label isn't in the photometry dict raise an exception
+            if label not in photometry_dict:
+                raise exceptions.MissingPhotometryType(
+                    f"Photometry for model {label} not found on the "
+                    f"{self.component_type} component."
+                )
+
+            out_images[label] = _generate_image_collection_generic(
+                instrument=instrument,
+                photometry=photometry_dict[label],
+                fov=fov,
+                img_type=img_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                emitter=self,
+                cosmo=cosmo,
+            )
+
+        # OK, loop over the combination labels and make those images
+        for label in combine_labels:
+            out_images.update(
+                {
+                    label: _combine_image_collections(
+                        images=out_images,
+                        label=label,
+                        model_cache=self.model_param_cache,
+                    )
+                }
+            )
+
+        # Get the instrument name
+        instrument_name = instrument.label
+
+        # Attach the images properly depending on whether we have a
+        # generic instrument or not
+        if instrument_name is not None:
+            if phot_type == "lnu":
+                self.images_lnu.setdefault(instrument_name, {})
+                self.images_lnu[instrument_name].update(out_images)
+            else:
+                self.images_fnu.setdefault(instrument_name, {})
+                self.images_fnu[instrument_name].update(out_images)
+        else:
+            if phot_type == "lnu":
+                self.images_lnu.update(out_images)
+            else:
+                self.images_fnu.update(out_images)
+
+        # If we generated nothing there's nothing to return
+        if len(out_images) == 0:
+            return out_images
+
+        # Return either the single image or the dict of images
+        if len(labels) == 1:
+            return out_images[labels[0]]
+        return out_images
+
+    def get_images_luminosity(
+        self,
+        *labels,
+        fov,
+        img_type="smoothed",
         instrument=None,
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        limit_to=None,
+        resolution=None,
         cosmo=None,
     ):
         """Make an ImageCollection from component luminosities.
@@ -619,31 +894,30 @@ class Component(ABC):
         histogram ("hist") or an image with particles smoothed over
         their SPH kernel.
 
-        Which images are produced is defined by the emission model. If any
+        Which images are produced is defined by the labels passed. If any
         of the necessary photometry is missing for generating a particular
         image, an exception will be raised.
-
-        The limit_to argument can be used if only a specific image is desired.
 
         Note that black holes will never be smoothed and only produce a
         histogram due to the point source nature of black holes.
 
         All images that are created will be stored on the emitter (Stars or
-        BlackHole/s) under the images_lnu attribute. The image
-        collection at the root of the emission model will also be returned.
+        BlackHole/s) under the images_lnu attribute.
 
         Args:
-            resolution (unyt_quantity of float):
-                The size of a pixel.
-                (Ignoring any supersampling defined by psf_resample_factor)
-            fov (float):
+            *labels (str):
+                The labels of the emission models to make images for. These
+                must be present in the photometry dicts of the component. For
+                particle components, these labels must be present in the
+                particle photometry dicts.
+            fov (unyt_quantity of float):
                 The width of the image in image coordinates.
-            emission_model (EmissionModel):
-                The emission model to use to generate the images.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
+            instrument (Instrument):
+                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -651,121 +925,50 @@ class Component(ABC):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            limit_to (str):
-                The label of the image to limit to. If None, all images are
-                returned.
-            instrument (Instrument):
-                The instrument to use to generate the images.
+            resolution (unyt_quantity of float):
+                [DEPRECATED] The size of a pixel.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            limit_to (str/list):
+                [DEPRECATED] If not None, defines a specific model (or list of
+                models) to limit the image generation to. Otherwise, all
+                models with saved spectra will have images generated.
 
         Returns:
-            Image : array-like
-                A 2D array containing the image.
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
         """
-        # Ensure we aren't trying to make a histogram for a parametric
-        # component
-        if hasattr(self, "morphology") and img_type == "hist":
-            raise exceptions.InconsistentArguments(
-                f"Parametric {self.component_type} can only produce "
-                "smoothed images."
-            )
-
-        # If we haven't got an instrument create one
-        # TODO: we need to eventually fully pivot to taking only an instrument
-        # this will be done when we introduced some premade instruments
-        if instrument is None:
-            # Get the filters from the emitters
-            filters = self.particle_photo_lnu[emission_model.label].filters
-
-            # Make the place holder instrument
-            instrument = Instrument(
-                "GenericInstrument",
-                resolution=resolution,
-                filters=filters,
-            )
-
-        # Ensure we have a cosmology if we need it
-        if unit_is_compatible(instrument.resolution, arcsecond):
-            if cosmo is None:
-                raise exceptions.InconsistentArguments(
-                    "Cosmology must be provided when using an angular "
-                    "resolution and FOV."
-                )
-
-            # Also ensure we have a redshift
-            if self.redshift is None:
-                raise exceptions.MissingAttribute(
-                    "Redshift must be set when using an angular "
-                    "resolution and FOV."
-                )
-
-        # Get the images
-        images = emission_model._get_images(
-            instrument=instrument,
+        return self._get_images(
+            *labels,
             fov=fov,
-            emitters={"stellar": self}
-            if self.component_type == "Stars"
-            else {"blackhole": self},
             img_type=img_type,
-            mask=None,
+            instrument=instrument,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             limit_to=limit_to,
-            do_flux=False,
+            resolution=resolution,
             cosmo=cosmo,
+            phot_type="lnu",
         )
-
-        # Get the instrument name if we have one
-        if instrument is not None:
-            instrument_name = instrument.label
-        else:
-            instrument_name = None
-
-        # Unpack the images
-        for model in emission_model._models.values():
-            # Are we limiting to a specific model?
-            if limit_to is not None and model.label not in limit_to:
-                continue
-
-            # Skip models we aren't saving
-            if not model.save:
-                continue
-
-            # Attach the images properly depending on whether we have a
-            # generic instrument or not
-            if instrument_name is not None:
-                self.images_lnu.setdefault(instrument_name, {})
-                self.images_lnu[instrument_name][model.label] = images[
-                    model.label
-                ]
-            else:
-                self.images_lnu[model.label] = images[model.label]
-
-        # If we are limiting to a specific image then return that
-        if limit_to is not None:
-            return images[limit_to]
-
-        # Return the image at the root of the emission model
-        return images[emission_model.label]
 
     def get_images_flux(
         self,
-        resolution,
+        *labels,
         fov,
-        emission_model,
         img_type="smoothed",
+        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
         limit_to=None,
-        instrument=None,
+        resolution=None,
         cosmo=None,
     ):
-        """Make an ImageCollection from fluxes.
+        """Make an ImageCollection from component fluxes.
 
         For Parametric components, images can only be smoothed. An
         exception will be raised if a histogram is requested.
@@ -774,31 +977,30 @@ class Component(ABC):
         histogram ("hist") or an image with particles smoothed over
         their SPH kernel.
 
-        Which images are produced is defined by the emission model. If any
+        Which images are produced is defined by the labels passed. If any
         of the necessary photometry is missing for generating a particular
         image, an exception will be raised.
-
-        The limit_to argument can be used if only a specific image is desired.
 
         Note that black holes will never be smoothed and only produce a
         histogram due to the point source nature of black holes.
 
         All images that are created will be stored on the emitter (Stars or
-        BlackHole/s) under the images_fnu attribute. The image
-        collection at the root of the emission model will also be returned.
+        BlackHole/s) under the images_fnu attribute.
 
         Args:
-            resolution (unyt_quantity of float):
-                The size of a pixel.
-                (Ignoring any supersampling defined by psf_resample_factor)
-            fov (float):
+            *labels (str):
+                The labels of the emission models to make images for. These
+                must be present in the photometry dicts of the component. For
+                particle components, these labels must be present in the
+                particle photometry dicts.
+            fov (unyt_quantity of float):
                 The width of the image in image coordinates.
-            emission_model (EmissionModel):
-                The emission model to use to generate the images.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
+            instrument (Instrument):
+                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -806,106 +1008,35 @@ class Component(ABC):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            limit_to (str):
-                The label of the image to limit to. If None, all images are
-                returned.
-            instrument (Instrument):
-                The instrument to use to generate the images.
+            resolution (unyt_quantity of float):
+                [DEPRECATED] The size of a pixel.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            limit_to (str/list):
+                [DEPRECATED] If not None, defines a specific model (or list of
+                models) to limit the image generation to. Otherwise, all
+                models with saved spectra will have images generated.
 
         Returns:
-            Image : array-like
-                A 2D array containing the image.
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
         """
-        # Ensure we aren't trying to make a histogram for a parametric
-        # component
-        if hasattr(self, "morphology") and img_type == "hist":
-            raise exceptions.InconsistentArguments(
-                f"Parametric {self.component_type} can only produce "
-                "smoothed images."
-            )
-
-        # If we haven't got an instrument create one
-        # TODO: we need to eventually fully pivot to taking only an instrument
-        # this will be done when we introduced some premade instruments
-        if instrument is None:
-            # Get the filters from the emitters
-            filters = self.particle_photo_lnu[emission_model.label].filters
-
-            # Make the place holder instrument
-            instrument = Instrument(
-                "GenericInstrument",
-                resolution=resolution,
-                filters=filters,
-            )
-
-        # Ensure we have a cosmology if we need it
-        if unit_is_compatible(instrument.resolution, arcsecond):
-            if cosmo is None:
-                raise exceptions.InconsistentArguments(
-                    "Cosmology must be provided when using an angular "
-                    "resolution and FOV."
-                )
-
-            # Also ensure we have a redshift
-            if self.redshift is None:
-                raise exceptions.MissingAttribute(
-                    "Redshift must be set when using an angular "
-                    "resolution and FOV."
-                )
-
-        # Get the images
-        images = emission_model._get_images(
-            instrument=instrument,
+        return self._get_images(
+            *labels,
             fov=fov,
-            emitters={"stellar": self}
-            if self.component_type == "Stars"
-            else {"blackhole": self},
             img_type=img_type,
-            mask=None,
+            instrument=instrument,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             limit_to=limit_to,
-            do_flux=True,
+            resolution=resolution,
             cosmo=cosmo,
+            phot_type="fnu",
         )
-
-        # Get the instrument name if we have one
-        if instrument is not None:
-            instrument_name = instrument.label
-        else:
-            instrument_name = None
-
-        # Unpack the images
-        for model in emission_model._models.values():
-            # Are we limiting to a specific model?
-            if limit_to is not None and model.label not in limit_to:
-                continue
-
-            # Skip models we aren't saving
-            if not model.save:
-                continue
-
-            # Attach the images properly depending on whether we have a
-            # generic instrument or not
-            if instrument_name is not None:
-                self.images_fnu.setdefault(instrument_name, {})
-                self.images_fnu[instrument_name][model.label] = images[
-                    model.label
-                ]
-            else:
-                self.images_fnu[model.label] = images[model.label]
-
-        # If we are limiting to a specific image then return that
-        if limit_to is not None:
-            return images[limit_to]
-
-        # Return the image at the root of the emission model
-        return images[emission_model.label]
 
     def apply_psf_to_images_lnu(
         self,

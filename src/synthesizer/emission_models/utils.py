@@ -5,10 +5,6 @@ from __future__ import annotations
 import inspect
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from synthesizer.components.component import Component
-    from synthesizer.emission_models.base_model import EmissionModel
-
 import numpy as np
 
 from synthesizer import exceptions
@@ -18,6 +14,11 @@ from synthesizer.utils import (
     get_attr_c_compatible_double,
     pluralize,
 )
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
+    from synthesizer.emission_models.base_model import EmissionModel
+
 
 # A sentinel object for detecting if a default value was provided
 _NO_DEFAULT = object()
@@ -58,6 +59,7 @@ def cache_model_params(
     """Cache all model specific parameters on to the emitter.
 
     This function stores all predefined parameters from the model including:
+        - emitter: The emitter type for this model (stellar/blackhole/galaxy).
         - extract: The key that will extracted from the Grid.
         - combine: The models that will be combined to create the emission.
         - apply_to: The label of the model the transformation applies to.
@@ -113,6 +115,14 @@ def cache_model_params(
             model_label=model.label,
             value=repr(model.generator),
         )
+
+    # Cache the emitter for this model
+    cache_param(
+        param="emitter",
+        emitter=emitter,
+        model_label=model.label,
+        value=model.emitter,
+    )
 
     # Cache any mask parameters in the form of <attr> <op> <thresh> strings
     masks = []
