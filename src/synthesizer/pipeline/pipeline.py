@@ -5,7 +5,7 @@ generation pipelines on a set of galaxies. To use this functionality the user
 needs to define the properties of the Pipeline and a function to load the
 galaxies. The user can then call the various methods to generate the mock
 data they need, simplifying a complex pipeline full of boilerplate code to a
-handfull of definitions and calls to the Pipeline object.
+handful of definitions and calls to the Pipeline object.
 
 Example usage:
 ```python
@@ -38,6 +38,8 @@ from synthesizer.emission_models.transformers import Inoue14
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
+    NO_MODEL_LABEL,
+    OperationKwargsHandler,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
     get_full_memory,
@@ -212,8 +214,12 @@ class Pipeline:
         self._do_sfh = False
 
         # Define the container for all the kwargs needed by each operation
-        # This will be a dict of dicts
-        self._operation_kwargs = {}
+        # This is a handler that manages kwargs for each
+        # (model_label, operation) pair. Each call to one of the signalling
+        # methods will add a set of kwargs to the relevant operation.
+        self._operation_kwargs = OperationKwargsHandler(
+            model_labels=list(emission_model._models.keys()) + [NO_MODEL_LABEL]
+        )
 
         # Define flags for what we will write out
         self._write_lnu_spectra = False
@@ -881,7 +887,7 @@ class Pipeline:
                 elapsed /= 60
                 units = "mins"
 
-            # Handle reporting (extra analysis and unpackign need some special
+            # Handle reporting (extra analysis and unpacking need some special
             # handling because they are not operations)
             if key == "Unpacking results":
                 self._print(f"{key} took {elapsed:.2f} {units}")
@@ -1129,7 +1135,7 @@ class Pipeline:
 
         LOS optical depths are computed first.
 
-        Note that the LOS calculation requries a galaxy has a gas component and
+        Note that the LOS calculation requires a galaxy has a gas component and
         either a stellar or black hole components emitting.
 
         Args:
@@ -1142,11 +1148,13 @@ class Pipeline:
                 is 0.0795.
         """
         # Store the arguments for the operation
-        self._operation_kwargs["get_los_optical_depths"] = {
-            "kernel": kernel,
-            "kernel_threshold": kernel_threshold,
-            "kappa": kappa,
-        }
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_los_optical_depths",
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            kappa=kappa,
+        )
 
         # Flag that we will compute the LOS optical depths
         self._do_los_optical_depths = True
@@ -1165,41 +1173,29 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Compute the optical depths for the present components.
-        if (
-            galaxy.stars is not None
-            and galaxy.gas is not None
-            and galaxy.stars.nstars > 0
-        ):
-            galaxy.get_stellar_los_tau_v(
-                kappa=self._operation_kwargs["get_los_optical_depths"][
-                    "kappa"
-                ],
-                kernel=self._operation_kwargs["get_los_optical_depths"][
-                    "kernel"
-                ],
-                threshold=self._operation_kwargs["get_los_optical_depths"][
-                    "kernel_threshold"
-                ],
-                nthreads=self.nthreads,
-            )
-        if (
-            galaxy.black_holes is not None
-            and galaxy.gas is not None
-            and galaxy.black_holes.nbh > 0
-        ):
-            galaxy.get_black_hole_los_tau_v(
-                kappa=self._operation_kwargs["get_los_optical_depths"][
-                    "kappa"
-                ],
-                kernel=self._operation_kwargs["get_los_optical_depths"][
-                    "kernel"
-                ],
-                threshold=self._operation_kwargs["get_los_optical_depths"][
-                    "kernel_threshold"
-                ],
-                nthreads=self.nthreads,
-            )
+        # Iterate over all queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_los_optical_depths"
+        ]:
+            # Compute the optical depths for the present components.
+            if (
+                galaxy.stars is not None
+                and galaxy.gas is not None
+                and galaxy.stars.nstars > 0
+            ):
+                galaxy.get_stellar_los_tau_v(
+                    **op_kwargs,
+                    nthreads=self.nthreads,
+                )
+            if (
+                galaxy.black_holes is not None
+                and galaxy.gas is not None
+                and galaxy.black_holes.nbh > 0
+            ):
+                galaxy.get_black_hole_los_tau_v(
+                    **op_kwargs,
+                    nthreads=self.nthreads,
+                )
 
         # Count how many optical depths we have generated (1 per particle) and
         # increment the total counts
@@ -1226,10 +1222,12 @@ class Pipeline:
                 The metallicity axis of the SFZH grid.
         """
         # Store the arguments for the operation
-        self._operation_kwargs["get_sfzh"] = {
-            "log10ages": log10ages,
-            "metallicities": metallicities,
-        }
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_sfzh",
+            log10ages=log10ages,
+            metallicities=metallicities,
+        )
 
         # Flag that we will compute the SFZH grid
         self._do_sfzh = True
@@ -1250,6 +1248,9 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Get the operation kwargs for this operation
+        op_kwargs = self._operation_kwargs.pop_next(NO_MODEL_LABEL, "get_sfzh")
+
         # Get the SFZH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfzh", None) is not None:
@@ -1257,10 +1258,7 @@ class Pipeline:
             return
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
-                log10ages=self._operation_kwargs["get_sfzh"]["log10ages"],
-                metallicities=self._operation_kwargs["get_sfzh"][
-                    "metallicities"
-                ],
+                **op_kwargs,
                 nthreads=self.nthreads,
             )
         else:
@@ -1268,10 +1266,8 @@ class Pipeline:
             self.sfzhs.append(
                 np.zeros(
                     (
-                        len(self._operation_kwargs["get_sfzh"]["log10ages"]),
-                        len(
-                            self._operation_kwargs["get_sfzh"]["metallicities"]
-                        ),
+                        len(op_kwargs["log10ages"]),
+                        len(op_kwargs["metallicities"]),
                     )
                 )
             )
@@ -1298,7 +1294,11 @@ class Pipeline:
                 The log10 age axis of the SFH grid.
         """
         # Store the arguments for the operation
-        self._operation_kwargs["get_sfh"] = {"log10ages": log10ages}
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_sfh",
+            log10ages=log10ages,
+        )
 
         # Flag that we will compute the SFH grid
         self._do_sfh = True
@@ -1316,6 +1316,9 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Get the operation kwargs for this operation
+        op_kwargs = self._operation_kwargs.pop_next(NO_MODEL_LABEL, "get_sfh")
+
         # Get the SFH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfh", None) is not None:
@@ -1323,14 +1326,12 @@ class Pipeline:
             return
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
-                log10ages=self._operation_kwargs["get_sfh"]["log10ages"],
+                **op_kwargs,
                 nthreads=self.nthreads,
             )
         else:
             # No stars, no SFH, store a zeroed grid
-            self.sfhs.append(
-                np.zeros(len(self._operation_kwargs["get_sfh"]["log10ages"]))
-            )
+            self.sfhs.append(np.zeros(len(op_kwargs["log10ages"])))
 
             return
 
@@ -1350,6 +1351,9 @@ class Pipeline:
         components.
 
         Spectral flux densities can be computed with get_observed_spectra.
+
+        Note that there are no kwargs for this method and all models flagged
+        to be saved by the emission model will be computed.
         """
         # Flag that we will compute the spectra
         self._do_lnu_spectra = True
@@ -1402,10 +1406,12 @@ class Pipeline:
                 The IGM model to use for the attenuation of the spectra.
         """
         # Store the cosmology for the operation
-        self._operation_kwargs["get_observed_spectra"] = {
-            "cosmo": cosmo,
-            "igm": igm,
-        }
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_observed_spectra",
+            cosmo=cosmo,
+            igm=igm,
+        )
 
         # Flag that we will compute the observed spectra
         self._do_fnu_spectra = True
@@ -1427,11 +1433,14 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Get the observed spectra
-        galaxy.get_observed_spectra(
-            cosmo=self._operation_kwargs["get_observed_spectra"]["cosmo"],
-            igm=self._operation_kwargs["get_observed_spectra"]["igm"],
+        # Get the operation kwargs for this operation
+        op_kwargs = self._operation_kwargs.pop_next(
+            NO_MODEL_LABEL,
+            "get_observed_spectra",
         )
+
+        # Get the observed spectra
+        galaxy.get_observed_spectra(**op_kwargs)
 
         # Count the number of observed spectra we have generated
         self._op_counts["Fnu Spectra"] += count_and_check_dict_recursive(
@@ -1449,7 +1458,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Fnu Spectra"] += time.perf_counter() - start
 
-    def get_photometry_luminosities(self, *instruments):
+    def get_photometry_luminosities(self, *instruments, labels=None):
         """Flag that the Pipeline should compute the photometric luminosities.
 
         This will signal the Pipeline to compute the photometric luminosities
@@ -1466,6 +1475,10 @@ class Pipeline:
                 This can be any number of instruments or instrument
                 collections, they will all be combined into a single
                 InstrumentCollection for this operation.
+            labels (str/list of str):
+                An optional label/set of labels for this set of instruments.
+                This is only needed if you want to apply different instrument
+                sets to different models. Default is None.
         """
         # Flag that we will compute the photometric luminosities
         self._do_luminosities = True
@@ -1501,11 +1514,12 @@ class Pipeline:
                     f"Cannot generate photometry with {inst.label}!"
                 )
 
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
+        # Add the instruments to the operation kwargs
+        self._operation_kwargs.add(
+            labels if labels is not None else NO_MODEL_LABEL,
             "get_photometry_luminosities",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
+            instruments=_instruments,
+        )
 
     def _get_photometry_luminosities(self, galaxy):
         """Compute the photometric luminosities from the generated spectra.
@@ -1516,14 +1530,21 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Unpack the instruments for this operation
-        instruments = self.instruments["get_photometry_luminosities"]
+        # Loop over all queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_photometry_luminosities"
+        ]:
+            # Unpack the instruments for this operation
+            instruments = op_kwargs["instruments"]
 
-        # Get the photometry.
-        galaxy.get_photo_lnu(
-            filters=instruments.all_filters,
-            nthreads=self.nthreads,
-        )
+            # Get the photometry.
+            galaxy.get_photo_lnu(
+                filters=instruments.all_filters,
+                nthreads=self.nthreads,
+                limit_to=model_label
+                if model_label != NO_MODEL_LABEL
+                else None,
+            )
 
         # Count the number of photometric luminosities we have generated
         self._op_counts["Luminosities"] += count_and_check_dict_recursive(
@@ -1546,6 +1567,7 @@ class Pipeline:
         *instruments,
         cosmo=None,
         igm=None,
+        labels=None,
     ):
         """Flag that the Pipeline should compute the photometric fluxes.
 
@@ -1570,6 +1592,10 @@ class Pipeline:
                 we will need the IGM model to compute the observed spectra
                 first. Unlike the cosmology, this is not required if IGM
                 attenuation is not needed. Default is None.
+            labels (str/list of str):
+                An optional label/set of labels for this set of instruments.
+                This is only needed if you want to apply different instrument
+                sets to different models. Default is None.
         """
         # Flag that we will compute the photometric fluxes
         self._do_fluxes = True
@@ -1579,23 +1605,6 @@ class Pipeline:
         # computed
         self._do_fnu_spectra = True
         self._do_lnu_spectra = True
-
-        # Ensure we have a cosmology if we need to compute the observed spectra
-        # and get_spectra_observed has not been called
-        if (
-            "get_observed_spectra" not in self._operation_kwargs
-            and cosmo is None
-        ):
-            raise exceptions.PipelineNotReady(
-                "Cannot generate fluxes without an astropy.cosmology object, "
-                "please pass one to the cosmo argument of "
-                "get_photometry_fluxes."
-            )
-        elif "get_observed_spectra" not in self._operation_kwargs:
-            self._operation_kwargs["get_observed_spectra"] = {
-                "cosmo": cosmo,
-                "igm": igm,
-            }
 
         # Flag that we will want to write out the photometric fluxes (calling
         # the get_photometry_fluxes method is considered the intent to write it
@@ -1624,11 +1633,14 @@ class Pipeline:
                     f"Cannot generate photometry with {inst.label}!"
                 )
 
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
+        # Add the instruments to the operation kwargs
+        self._operation_kwargs.add(
+            labels if labels is not None else NO_MODEL_LABEL,
             "get_photometry_fluxes",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
+            instruments=_instruments,
+            cosmo=cosmo,
+            igm=igm,
+        )
 
     def _get_photometry_fluxes(self, galaxy):
         """Compute the photometric fluxes from the generated spectra.
@@ -1639,14 +1651,22 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Unpack the instruments for this operation
-        instruments = self.instruments["get_photometry_fluxes"]
+        # Loop over all queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_photometry_fluxes"
+        ]:
+            # Unpack the instruments for this operation
+            instruments = op_kwargs.pop("instruments")
 
-        # Get the photometry.
-        galaxy.get_photo_fnu(
-            filters=instruments.all_filters,
-            nthreads=self.nthreads,
-        )
+            # Get the photometry.
+            galaxy.get_photo_fnu(
+                filters=instruments.all_filters,
+                **op_kwargs,
+                nthreads=self.nthreads,
+                limit_to=model_label
+                if model_label != NO_MODEL_LABEL
+                else None,
+            )
 
         # Count the number of photometric fluxes we have generated
         self._op_counts["Fluxes"] += count_and_check_dict_recursive(
@@ -1678,7 +1698,11 @@ class Pipeline:
                 The emission line IDs to generate.
         """
         # Store the line IDs for the operation
-        self._operation_kwargs["get_lines"] = {"line_ids": line_ids}
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_lines",
+            line_ids=line_ids,
+        )
 
         # Flag that we will compute the emission lines
         self._do_lum_lines = True
@@ -1708,10 +1732,16 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Get the operation kwargs for this operation
+        op_kwargs = self._operation_kwargs.pop_next(
+            NO_MODEL_LABEL,
+            "get_lines",
+        )
+
         # Loop over the galaxies and get the spectra
         galaxy.get_lines(
-            self._operation_kwargs["get_lines"]["line_ids"],
-            self.emission_model,
+            **op_kwargs,
+            emission_model=self.emission_model,
             nthreads=self.nthreads,
         )
 
@@ -1769,11 +1799,13 @@ class Pipeline:
                 If get_lines has not been called explicitly, then we will need
                 the line IDs to generate the emission lines. Default is None.
         """
-        # Store the cosmology for the operation
-        self._operation_kwargs["get_observed_lines"] = {
-            "cosmo": cosmo,
-            "igm": igm,
-        }
+        # Store the kwargs for the operation
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_observed_lines",
+            cosmo=cosmo,
+            igm=igm,
+        )
 
         # Flag that we will compute the observed emission lines
         self._do_flux_lines = True
@@ -1793,7 +1825,12 @@ class Pipeline:
                 "get_observed_lines."
             )
         elif "get_lines" not in self._operation_kwargs:
-            self._operation_kwargs["get_lines"] = {"line_ids": line_ids}
+            # Store the line IDs for the operation
+            self._operation_kwargs.add(
+                NO_MODEL_LABEL,
+                "get_lines",
+                line_ids=line_ids,
+            )
 
         # Flag that we will want to write out the observed emission lines
         # (calling the get_observed_lines method is considered the intent to
@@ -1809,11 +1846,14 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Get the observed emission lines
-        galaxy.get_observed_lines(
-            cosmo=self._operation_kwargs["get_observed_lines"]["cosmo"],
-            igm=self._operation_kwargs["get_observed_lines"]["igm"],
+        # Get the operation kwargs for this operation
+        op_kwargs = self._operation_kwargs.pop_next(
+            NO_MODEL_LABEL,
+            "get_observed_lines",
         )
+
+        # Get the observed emission lines
+        galaxy.get_observed_lines(**op_kwargs)
 
         # Store the observed line wavelengths for writing, we only do this once
         # since they are the same for all galaxies but we need to find them
@@ -1855,7 +1895,7 @@ class Pipeline:
         img_type="smoothed",
         kernel=None,
         kernel_threshold=1.0,
-        spectra_type=None,
+        labels=None,
         psf_resample_factor=1,
         cosmo=None,
         write_all=False,
@@ -1884,10 +1924,10 @@ class Pipeline:
                 Required for 'smoothed' images from a particle distribution.
             kernel_threshold (float):
                 The threshold of the kernel. Default is 1.0.
-            spectra_type (list/str):
+            labels (list/str):
                 The type of spectra to generate images for. By default this
-                is None and all spectra types will be used. This can either
-                be a list of strings or a single string.
+                is None and all saved spectra types will be used. This can
+                either be a list of strings or a single string.
             psf_resample_factor (int):
                 (Only applicable for instruments with a PSF.) The resample
                 factor for the PSF. This should be a value greater than 1.
@@ -1910,19 +1950,22 @@ class Pipeline:
                 only PSF images if PSF but no noise, or only base images
                 otherwise).
         """
+        # If we have no labels then use all saved models
+        if labels is None:
+            labels = self.emission_model.saved_models
+
         # Store the arguments for the operation
-        self._operation_kwargs["get_images_luminosity"] = {
-            "fov": fov,
-            "img_type": img_type,
-            "kernel": kernel,
-            "kernel_threshold": kernel_threshold,
-            "spectra_type": spectra_type
-            if isinstance(spectra_type, (list, tuple)) or spectra_type is None
-            else [spectra_type],
-            "psf_resample_factor": psf_resample_factor,
-            "cosmo": cosmo,
-            "write_all": write_all,
-        }
+        self._operation_kwargs.add(
+            labels,
+            "get_images_luminosity",
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            psf_resample_factor=psf_resample_factor,
+            cosmo=cosmo,
+            write_all=write_all,
+        )
 
         # Flag that we will compute the luminosity images
         self._do_images_lum = True
@@ -1939,7 +1982,7 @@ class Pipeline:
                 "one to the fov argument of get_images_luminosity."
             )
 
-        # Check that we have instruments to computethe images for
+        # Check that we have instruments to compute the images for
         if len(instruments) == 0:
             raise exceptions.PipelineNotReady(
                 "Cannot generate images without instruments with filters! "
