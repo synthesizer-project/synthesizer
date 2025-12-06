@@ -2188,6 +2188,7 @@ class BaseGalaxy:
     def get_spectroscopy(
         self,
         instrument,
+        limit_to=None,
     ):
         """Get spectroscopy for the galaxy based on a specific instrument.
 
@@ -2197,6 +2198,10 @@ class BaseGalaxy:
         Args:
             instrument (Instrument):
                 The instrument to use for the spectroscopy.
+            limit_to (str/list, optional):
+                If None, then spectroscopy is calculated for all spectra in
+                the galaxy. If a string or list of strings is provided, then
+                spectroscopy is only calculated for the specified spectra.
 
         Returns:
             dict
@@ -2222,20 +2227,26 @@ class BaseGalaxy:
         if instrument.label not in self.spectroscopy:
             self.spectroscopy[instrument.label] = {}
 
+        # Get the labels
+        labels = self.spectra.keys() if limit_to is None else limit_to
+
         # Do the galaxy level spectra
-        for key, sed in self.spectra.items():
+        for label in labels:
+            # Skip labels that don't exist on the galaxy
+            if label not in self.spectra:
+                continue
             # Get the spectroscopy
-            self.spectroscopy[instrument.label][key] = (
-                sed.apply_instrument_lams(instrument)
-            )
+            self.spectroscopy[instrument.label][label] = self.spectra[
+                label
+            ].apply_instrument_lams(instrument)
 
         # Do the stars level spectra
         if self.stars is not None:
-            self.stars.get_spectroscopy(instrument)
+            self.stars.get_spectroscopy(instrument, limit_to=limit_to)
 
         # Do the black holes level spectra
         if self.black_holes is not None:
-            self.black_holes.get_spectroscopy(instrument)
+            self.black_holes.get_spectroscopy(instrument, limit_to=limit_to)
 
         return self.spectroscopy[instrument.label]
 
