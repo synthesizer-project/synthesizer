@@ -2523,27 +2523,293 @@ class Pipeline:
         self._op_timing["Flux Images (With PSF)"] += psf_time
         self._op_timing["Flux Images (With Noise)"] += noise_time
 
-    def get_data_cubes_lnu(self):
-        """Compute the spectral luminosity density data cubes."""
-        start = time.perf_counter()
-        raise exceptions.NotImplemented(
-            "Data cubes are not yet implemented in Pipelines."
+    def get_data_cubes_lnu(
+        self,
+        resolution,
+        fov,
+        lam,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+        labels=None,
+    ):
+        """Flag that the Pipeline should compute luminosity data cubes.
+
+        This will signal the Pipeline to compute the spectral luminosity
+        density data cubes for each galaxy when the run method is called.
+
+        Args:
+            resolution (unyt_quantity):
+                The size of a pixel.
+            fov (unyt_quantity):
+                The width of the data cube in image coordinates.
+            lam (unyt_array):
+                The wavelength array to use for the data cube.
+            cube_type (str):
+                The type of data cube to make. Either "smoothed" to smooth
+                particle spectra over a kernel or "hist" to sort particle
+                spectra into individual spaxels. Default is "smoothed".
+            kernel (array-like):
+                The kernel to use for smoothing. Default is None.
+                Required for 'smoothed' cubes from a particle distribution.
+            kernel_threshold (float):
+                The threshold of the kernel. Default is 1.0.
+            labels (list/str, optional):
+                The type of spectra to generate data cubes for. By default
+                this is None and all saved spectra types will be used. This
+                can either be a list of strings or a single string.
+        """
+        # If we have no labels then use all saved models
+        if labels is None:
+            labels = self.emission_model.saved_labels
+
+        # Flag that we will compute the lnu data cubes
+        self._do_data_cubes_lnu = True
+
+        # To compute the lnu data cubes we need to have already
+        # computed the lnu spectra
+        self._do_lnu_spectra = True
+
+        # Flag that we will want to write out the lnu data cubes
+        self._write_data_cubes_lnu = True
+
+        # Ensure we have a field of view
+        if fov is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate data cubes without a field of view, "
+                "please pass one to the fov argument."
+            )
+
+        # Ensure we have a resolution
+        if resolution is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate data cubes without a resolution, "
+                "please pass one to the resolution argument."
+            )
+
+        # Ensure we have a wavelength array
+        if lam is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate data cubes without a wavelength array, "
+                "please pass one to the lam argument."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            labels,
+            "get_data_cubes_lnu",
+            resolution=resolution,
+            fov=fov,
+            lam=lam,
+            cube_type=cube_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
         )
 
-        # Done!
-        self._got_lnu_data_cubes = True
-        self._took(start, "Getting lnu data cubes")
+    def _get_data_cubes_lnu(self, galaxy):
+        """Compute the luminosity data cubes for the galaxy.
 
-    def get_data_cubes_fnu(self):
-        """Compute the Spectral flux density data cubes."""
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate data cubes for.
+        """
         start = time.perf_counter()
-        raise exceptions.NotImplemented(
-            "Data cubes are not yet implemented in Pipelines."
+
+        # Iterate over all queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_data_cubes_lnu"
+        ]:
+            # Get the data cube for these labels
+            # Note: model_label can be a list of labels
+            if not isinstance(model_label, (list, tuple)):
+                model_label = [model_label]
+
+            # Loop over each label and create a data cube
+            for label in model_label:
+                # Determine which component this label belongs to
+                # and call get_data_cube appropriately
+                cube = galaxy.get_data_cube(
+                    resolution=op_kwargs["resolution"],
+                    fov=op_kwargs["fov"],
+                    lam=op_kwargs["lam"],
+                    cube_type=op_kwargs.get("cube_type", "smoothed"),
+                    stellar_spectra=label
+                    if label in getattr(galaxy.stars, "spectra", {})
+                    or label in getattr(galaxy.stars, "particle_spectra", {})
+                    else None,
+                    blackhole_spectra=label
+                    if label in getattr(galaxy.black_holes, "spectra", {})
+                    or label
+                    in getattr(galaxy.black_holes, "particle_spectra", {})
+                    else None,
+                    kernel=op_kwargs.get("kernel"),
+                    kernel_threshold=op_kwargs.get("kernel_threshold", 1.0),
+                    quantity="lnu",
+                    nthreads=self.nthreads,
+                )
+
+                # Store the cube (we'll need to add a data_cubes_lnu
+                # attribute to galaxies)
+                if not hasattr(galaxy, "data_cubes_lnu"):
+                    galaxy.data_cubes_lnu = {}
+                galaxy.data_cubes_lnu[label] = cube
+
+        # Count the number of data cubes we have generated
+        if hasattr(galaxy, "data_cubes_lnu"):
+            self._op_counts["Data Cubes Lnu"] += len(galaxy.data_cubes_lnu)
+
+        # Record the time taken
+        self._op_timing["Data Cubes Lnu"] += time.perf_counter() - start
+
+    def get_data_cubes_fnu(
+        self,
+        resolution,
+        fov,
+        lam,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+        cosmo=None,
+        igm=None,
+        labels=None,
+    ):
+        """Flag that the Pipeline should compute flux density data cubes.
+
+        This will signal the Pipeline to compute the spectral flux density
+        data cubes for each galaxy when the run method is called.
+
+        Args:
+            resolution (unyt_quantity):
+                The size of a pixel.
+            fov (unyt_quantity):
+                The width of the data cube in image coordinates.
+            lam (unyt_array):
+                The wavelength array to use for the data cube.
+            cube_type (str):
+                The type of data cube to make. Either "smoothed" to smooth
+                particle spectra over a kernel or "hist" to sort particle
+                spectra into individual spaxels. Default is "smoothed".
+            kernel (array-like):
+                The kernel to use for smoothing. Default is None.
+                Required for 'smoothed' cubes from a particle distribution.
+            kernel_threshold (float):
+                The threshold of the kernel. Default is 1.0.
+            cosmo (astropy.cosmology):
+                The cosmology object to use for the redshift conversion.
+                Default is None.
+            igm (str):
+                The IGM model to use for the attenuation. Default is None,
+                meaning no IGM attenuation is applied.
+            labels (list/str, optional):
+                The type of spectra to generate data cubes for. By default
+                this is None and all saved spectra types will be used. This
+                can either be a list of strings or a single string.
+        """
+        # If we have no labels then use all saved models
+        if labels is None:
+            labels = self.emission_model.saved_labels
+
+        # Flag that we will compute the fnu data cubes
+        self._do_data_cubes_fnu = True
+
+        # To compute the fnu data cubes we need to have already
+        # computed the fnu spectra, which require lnu spectra
+        self._do_fnu_spectra = True
+        self._do_lnu_spectra = True
+
+        # Flag that we will want to write out the fnu data cubes
+        self._write_data_cubes_fnu = True
+
+        # Ensure we have a field of view
+        if fov is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate data cubes without a field of view, "
+                "please pass one to the fov argument."
+            )
+
+        # Ensure we have a resolution
+        if resolution is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate data cubes without a resolution, "
+                "please pass one to the resolution argument."
+            )
+
+        # Ensure we have a wavelength array
+        if lam is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate data cubes without a wavelength array, "
+                "please pass one to the lam argument."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            labels,
+            "get_data_cubes_fnu",
+            resolution=resolution,
+            fov=fov,
+            lam=lam,
+            cube_type=cube_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            cosmo=cosmo,
+            igm=igm,
         )
 
-        # Done!
-        self._got_fnu_data_cubes = True
-        self._took(start, "Getting fnu data cubes")
+    def _get_data_cubes_fnu(self, galaxy):
+        """Compute the flux density data cubes for the galaxy.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate data cubes for.
+        """
+        start = time.perf_counter()
+
+        # Iterate over all queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_data_cubes_fnu"
+        ]:
+            # Get the data cube for these labels
+            # Note: model_label can be a list of labels
+            if not isinstance(model_label, (list, tuple)):
+                model_label = [model_label]
+
+            # Loop over each label and create a data cube
+            for label in model_label:
+                # Determine which component this label belongs to
+                # and call get_data_cube appropriately
+                cube = galaxy.get_data_cube(
+                    resolution=op_kwargs["resolution"],
+                    fov=op_kwargs["fov"],
+                    lam=op_kwargs["lam"],
+                    cube_type=op_kwargs.get("cube_type", "smoothed"),
+                    stellar_spectra=label
+                    if label in getattr(galaxy.stars, "spectra", {})
+                    or label in getattr(galaxy.stars, "particle_spectra", {})
+                    else None,
+                    blackhole_spectra=label
+                    if label in getattr(galaxy.black_holes, "spectra", {})
+                    or label
+                    in getattr(galaxy.black_holes, "particle_spectra", {})
+                    else None,
+                    kernel=op_kwargs.get("kernel"),
+                    kernel_threshold=op_kwargs.get("kernel_threshold", 1.0),
+                    quantity="fnu",
+                    cosmo=op_kwargs.get("cosmo"),
+                    igm=op_kwargs.get("igm"),
+                    nthreads=self.nthreads,
+                )
+
+                # Store the cube
+                if not hasattr(galaxy, "data_cubes_fnu"):
+                    galaxy.data_cubes_fnu = {}
+                galaxy.data_cubes_fnu[label] = cube
+
+        # Count the number of data cubes we have generated
+        if hasattr(galaxy, "data_cubes_fnu"):
+            self._op_counts["Data Cubes Fnu"] += len(galaxy.data_cubes_fnu)
+
+        # Record the time taken
+        self._op_timing["Data Cubes Fnu"] += time.perf_counter() - start
 
     def get_spectroscopy_lnu(self, *instruments, labels=None):
         """Flag that the Pipeline should compute spectral luminosity density.
