@@ -2545,7 +2545,7 @@ class Pipeline:
         self._got_fnu_data_cubes = True
         self._took(start, "Getting fnu data cubes")
 
-    def get_spectroscopy_lnu(self, *instruments):
+    def get_spectroscopy_lnu(self, *instruments, labels=None):
         """Flag that the Pipeline should compute spectral luminosity density.
 
         This will signal the Pipeline to compute the spectral luminosity
@@ -2557,7 +2557,15 @@ class Pipeline:
                 This can be any number of instruments or instrument
                 collections, they will all be combined into a single
                 InstrumentCollection for this operation.
+            labels (list/str, optional):
+                The type of spectra to generate spectroscopy for. By default
+                this is None and all saved spectra types will be used. This
+                can either be a list of strings or a single string.
         """
+        # If we have no labels then use all saved models
+        if labels is None:
+            labels = self.emission_model.saved_labels
+
         # Flag that we will compute the spectral luminosity density
         self._do_spectroscopy_lnu = True
 
@@ -2593,6 +2601,13 @@ class Pipeline:
                     f"Cannot generate spectroscopy with {inst.label}!"
                 )
 
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            labels,
+            "get_spectroscopy_lnu",
+            instruments=_instruments,
+        )
+
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_spectroscopy_lnu",
@@ -2600,9 +2615,43 @@ class Pipeline:
         ).add_instruments(*_instruments)
 
     def _get_spectroscopy_lnu(self, galaxy):
-        pass
+        """Compute the spectral luminosity density for the galaxy.
 
-    def get_spectroscopy_fnu(self, *instruments):
+        This function will compute the spectral luminosity density for all
+        spectra stored on the galaxy and its components.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate the spectroscopy for.
+        """
+        start = time.perf_counter()
+
+        # Iterate over all queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_spectroscopy_lnu"
+        ]:
+            # Loop over instruments
+            for inst in op_kwargs["instruments"]:
+                # Get the spectroscopy for this instrument
+                galaxy.get_spectroscopy(inst, limit_to=model_label)
+
+        # Count the number of spectroscopy items we have generated
+        self._op_counts["Spectroscopy Lnu"] += count_and_check_dict_recursive(
+            galaxy.spectroscopy
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Spectroscopy Lnu"] += (
+                count_and_check_dict_recursive(galaxy.stars.spectroscopy)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Spectroscopy Lnu"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.spectroscopy)
+            )
+
+        # Record the time taken
+        self._op_timing["Spectroscopy Lnu"] += time.perf_counter() - start
+
+    def get_spectroscopy_fnu(self, *instruments, labels=None):
         """Flag that the Pipeline should compute the spectral flux density.
 
         This will signal the Pipeline to compute the spectral flux density
@@ -2614,7 +2663,15 @@ class Pipeline:
                 be any number of instruments or instrument collections, they
                 will all be combined into a single InstrumentCollection for
                 this operation.
+            labels (list/str, optional):
+                The type of spectra to generate spectroscopy for. By default
+                this is None and all saved spectra types will be used. This
+                can either be a list of strings or a single string.
         """
+        # If we have no labels then use all saved models
+        if labels is None:
+            labels = self.emission_model.saved_labels
+
         # Flag that we will compute the spectral flux density
         self._do_spectroscopy_fnu = True
 
@@ -2650,6 +2707,13 @@ class Pipeline:
                     f"Cannot generate spectroscopy with {inst.label}!"
                 )
 
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            labels,
+            "get_spectroscopy_fnu",
+            instruments=_instruments,
+        )
+
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
             "get_spectroscopy_fnu",
@@ -2657,7 +2721,41 @@ class Pipeline:
         ).add_instruments(*_instruments)
 
     def _get_spectroscopy_fnu(self, galaxy):
-        pass
+        """Compute the spectral flux density for the galaxy.
+
+        This function will compute the spectral flux density for all
+        spectra stored on the galaxy and its components.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate the spectroscopy for.
+        """
+        start = time.perf_counter()
+
+        # Iterate over all queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_spectroscopy_fnu"
+        ]:
+            # Loop over instruments
+            for inst in op_kwargs["instruments"]:
+                # Get the spectroscopy for this instrument
+                galaxy.get_spectroscopy(inst, limit_to=model_label)
+
+        # Count the number of spectroscopy items we have generated
+        self._op_counts["Spectroscopy Fnu"] += count_and_check_dict_recursive(
+            galaxy.spectroscopy
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Spectroscopy Fnu"] += (
+                count_and_check_dict_recursive(galaxy.stars.spectroscopy)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Spectroscopy Fnu"] += (
+                count_and_check_dict_recursive(galaxy.black_holes.spectroscopy)
+            )
+
+        # Record the time taken
+        self._op_timing["Spectroscopy Fnu"] += time.perf_counter() - start
 
     def _run_extra_analysis(self, galaxy):
         """Call any user provided analysis functions.
