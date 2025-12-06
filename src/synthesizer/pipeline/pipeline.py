@@ -1521,6 +1521,12 @@ class Pipeline:
             instruments=_instruments,
         )
 
+        # Store the instruments too for later reference
+        self.instruments.get(
+            "get_photometry_luminosities",
+            InstrumentCollection(),
+        ).add_instruments(_instruments)
+
     def _get_photometry_luminosities(self, galaxy):
         """Compute the photometric luminosities from the generated spectra.
 
@@ -1641,6 +1647,12 @@ class Pipeline:
             cosmo=cosmo,
             igm=igm,
         )
+
+        # Store the instruments too for later reference
+        self.instruments.setdefault(
+            "get_photometry_fluxes",
+            InstrumentCollection(),
+        ).add_instruments(_instruments)
 
     def _get_photometry_fluxes(self, galaxy):
         """Compute the photometric fluxes from the generated spectra.
@@ -1952,20 +1964,7 @@ class Pipeline:
         """
         # If we have no labels then use all saved models
         if labels is None:
-            labels = self.emission_model.saved_models
-
-        # Store the arguments for the operation
-        self._operation_kwargs.add(
-            labels,
-            "get_images_luminosity",
-            fov=fov,
-            img_type=img_type,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
-            psf_resample_factor=psf_resample_factor,
-            cosmo=cosmo,
-            write_all=write_all,
-        )
+            labels = self.emission_model.saved_labels
 
         # Flag that we will compute the luminosity images
         self._do_images_lum = True
@@ -2003,6 +2002,20 @@ class Pipeline:
                 raise exceptions.PipelineNotReady(
                     f"Cannot generate images with {inst.label}!"
                 )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            labels,
+            "get_images_luminosity",
+            instruments=_instruments,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            psf_resample_factor=psf_resample_factor,
+            cosmo=cosmo,
+            write_all=write_all,
+        )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
@@ -2065,97 +2078,83 @@ class Pipeline:
         psf_time = 0
         noise_time = 0
 
-        # Unpack the instruments for this operation
-        instruments = self.instruments["get_images_luminosity"]
+        # Loop over all the queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_images_luminosity"
+        ]:
+            # Unpack the instruments for this operation
+            instruments = op_kwargs.pop("instruments")
 
-        # Which emissions are we working on?
-        spectra_type = self._operation_kwargs["get_images_luminosity"][
-            "spectra_type"
-        ]
-        if spectra_type is None:
-            spectra_type = self.emission_model.saved_labels
+            # Are we writing all intermediate images?
+            write_all = op_kwargs.pop("write_all")
 
-        # Loop over instruments and perform any imaging they define
-        for inst in instruments:
-            # Get the basic images for the requested spectra types
-            galaxy.get_images_luminosity(
-                *spectra_type,
-                fov=self._operation_kwargs["get_images_luminosity"]["fov"],
-                img_type=self._operation_kwargs["get_images_luminosity"][
-                    "img_type"
-                ],
-                kernel=self._operation_kwargs["get_images_luminosity"][
-                    "kernel"
-                ],
-                kernel_threshold=self._operation_kwargs[
-                    "get_images_luminosity"
-                ]["kernel_threshold"],
-                nthreads=self.nthreads,
-                instrument=inst,
-                cosmo=self._operation_kwargs["get_images_luminosity"]["cosmo"],
-            )
-
-            # Apply the PSF if applicable to the instrument
-            if inst.can_do_psf_imaging:
-                psf_start = time.perf_counter()
-                galaxy.apply_psf_to_images_lnu(
+            # Loop over instruments and perform any imaging they define
+            for inst in instruments:
+                # Get the basic images for the requested spectra types
+                galaxy.get_images_luminosity(
+                    *model_label,
+                    fov=op_kwargs["fov"],
+                    img_type=op_kwargs["img_type"],
+                    kernel=op_kwargs["kernel"],
+                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    nthreads=self.nthreads,
                     instrument=inst,
-                    psf_resample_factor=self._operation_kwargs[
-                        "get_images_luminosity"
-                    ]["psf_resample_factor"],
-                    limit_to=self._operation_kwargs["get_images_luminosity"][
-                        "spectra_type"
-                    ],
+                    cosmo=op_kwargs["cosmo"],
                 )
-                psf_time += time.perf_counter() - psf_start
 
-                # Remove the psfless images if not writing all
-                if not self._operation_kwargs["get_images_luminosity"][
-                    "write_all"
-                ]:
-                    if inst.label in galaxy.images_lnu:
-                        del galaxy.images_lnu[inst.label]
-                    if (
-                        galaxy.stars is not None
-                        and inst.label in galaxy.stars.images_lnu
-                    ):
-                        del galaxy.stars.images_lnu[inst.label]
-                    if (
-                        galaxy.black_holes is not None
-                        and inst.label in galaxy.black_holes.images_lnu
-                    ):
-                        del galaxy.black_holes.images_lnu[inst.label]
+                # Apply the PSF if applicable to the instrument
+                if inst.can_do_psf_imaging:
+                    psf_start = time.perf_counter()
+                    galaxy.apply_psf_to_images_lnu(
+                        instrument=inst,
+                        psf_resample_factor=op_kwargs["psf_resample_factor"],
+                        limit_to=model_label,
+                    )
+                    psf_time += time.perf_counter() - psf_start
 
-            # Apply the instrument noise if applicable to the instrument
-            if inst.can_do_noisy_imaging:
-                noise_start = time.perf_counter()
-                galaxy.apply_noise_to_images_lnu(
-                    instrument=inst,
-                    limit_to=self._operation_kwargs["get_images_luminosity"][
-                        "spectra_type"
-                    ],
-                    apply_to_psf=inst.can_do_psf_imaging,
-                )
-                noise_time += time.perf_counter() - noise_start
-
-                # Remove the noiseless images if not writing all
-                if not self._operation_kwargs["get_images_luminosity"][
-                    "write_all"
-                ]:
-                    if inst.label in galaxy.images_lnu:
-                        del galaxy.images_lnu[inst.label]
-                    if inst.label in galaxy.images_psf_lnu:
-                        del galaxy.images_psf_lnu[inst.label]
-                    if galaxy.stars is not None:
-                        if inst.label in galaxy.stars.images_lnu:
+                    # Remove the psfless images if not writing all
+                    if not write_all:
+                        if inst.label in galaxy.images_lnu:
+                            del galaxy.images_lnu[inst.label]
+                        if (
+                            galaxy.stars is not None
+                            and inst.label in galaxy.stars.images_lnu
+                        ):
                             del galaxy.stars.images_lnu[inst.label]
-                        if inst.label in galaxy.stars.images_psf_lnu:
-                            del galaxy.stars.images_psf_lnu[inst.label]
-                    if galaxy.black_holes is not None:
-                        if inst.label in galaxy.black_holes.images_lnu:
+                        if (
+                            galaxy.black_holes is not None
+                            and inst.label in galaxy.black_holes.images_lnu
+                        ):
                             del galaxy.black_holes.images_lnu[inst.label]
-                        if inst.label in galaxy.black_holes.images_psf_lnu:
-                            del galaxy.black_holes.images_psf_lnu[inst.label]
+
+                # Apply the instrument noise if applicable to the instrument
+                if inst.can_do_noisy_imaging:
+                    noise_start = time.perf_counter()
+                    galaxy.apply_noise_to_images_lnu(
+                        instrument=inst,
+                        limit_to=model_label,
+                        apply_to_psf=inst.can_do_psf_imaging,
+                    )
+                    noise_time += time.perf_counter() - noise_start
+
+                    # Remove the noiseless images if not writing all
+                    if not write_all:
+                        if inst.label in galaxy.images_lnu:
+                            del galaxy.images_lnu[inst.label]
+                        if inst.label in galaxy.images_psf_lnu:
+                            del galaxy.images_psf_lnu[inst.label]
+                        if galaxy.stars is not None:
+                            if inst.label in galaxy.stars.images_lnu:
+                                del galaxy.stars.images_lnu[inst.label]
+                            if inst.label in galaxy.stars.images_psf_lnu:
+                                del galaxy.stars.images_psf_lnu[inst.label]
+                        if galaxy.black_holes is not None:
+                            if inst.label in galaxy.black_holes.images_lnu:
+                                del galaxy.black_holes.images_lnu[inst.label]
+                            if inst.label in galaxy.black_holes.images_psf_lnu:
+                                del galaxy.black_holes.images_psf_lnu[
+                                    inst.label
+                                ]
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -2208,7 +2207,7 @@ class Pipeline:
         kernel_threshold=1.0,
         cosmo=None,
         igm=None,
-        spectra_type=None,
+        labels=None,
         psf_resample_factor=1,
         write_all=False,
     ):
@@ -2245,10 +2244,10 @@ class Pipeline:
                 we will need the IGM model to compute the observed spectra
                 first. Unlike the cosmology, this is not required if IGM
                 attenuation is not needed. Default is None.
-            spectra_type (list/str):
+            labels (list/str):
                 The type of spectra to generate images for. By default this
-                is None and all models will be used. This can either
-                be a list of strings or a single string.
+                is None and all saved spectra types will be used. This can
+                either be a list of strings or a single string.
             psf_resample_factor (int):
                 (Only applicable for instruments with a PSF.) The resample
                 factor for the PSF. This should be a value greater than 1.
@@ -2266,18 +2265,9 @@ class Pipeline:
                 only PSF images if PSF but no noise, or only base images
                 otherwise).
         """
-        # Store the arguments for the operation
-        self._operation_kwargs["get_images_flux"] = {
-            "fov": fov,
-            "img_type": img_type,
-            "kernel": kernel,
-            "kernel_threshold": kernel_threshold,
-            "spectra_type": spectra_type
-            if isinstance(spectra_type, (list, tuple)) or spectra_type is None
-            else [spectra_type],
-            "psf_resample_factor": psf_resample_factor,
-            "write_all": write_all,
-        }
+        # If we have no labels then use all saved models
+        if labels is None:
+            labels = self.emission_model.saved_labels
 
         # Flag that we will compute the flux images
         self._do_images_flux = True
@@ -2302,7 +2292,7 @@ class Pipeline:
         # Ensure we have a cosmology if we need to compute the observed spectra
         # and get_spectra_observed has not been called
         if (
-            "get_observed_spectra" not in self._operation_kwargs
+            not self._operation_kwargs.has("get_observed_spectra")
             and cosmo is None
         ):
             raise exceptions.PipelineNotReady(
@@ -2310,11 +2300,13 @@ class Pipeline:
                 " object, please pass one to the cosmo argument of "
                 "get_images_flux."
             )
-        elif "get_observed_spectra" not in self._operation_kwargs:
-            self._operation_kwargs["get_observed_spectra"] = {
-                "cosmo": cosmo,
-                "igm": igm,
-            }
+        elif not self._operation_kwargs.has("get_observed_spectra"):
+            self._operation_kwargs.add(
+                NO_MODEL_LABEL,
+                "get_observed_spectra",
+                cosmo=cosmo,
+                igm=igm,
+            )
 
         # Check that we have instruments to compute the images for
         if len(instruments) == 0:
@@ -2337,6 +2329,19 @@ class Pipeline:
                 raise exceptions.PipelineNotReady(
                     f"Cannot generate images with {inst.label}!"
                 )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            labels,
+            "get_images_flux",
+            instruments=_instruments,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            psf_resample_factor=psf_resample_factor,
+            write_all=write_all,
+        )
 
         # Add the instruments to the instruments for this operation
         self.instruments.setdefault(
@@ -2399,88 +2404,82 @@ class Pipeline:
         psf_time = 0
         noise_time = 0
 
-        # Unpack the instruments for this operation
-        instruments = self.instruments["get_images_flux"]
+        # Loop over all the queued operation configurations
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_images_flux"
+        ]:
+            # Unpack the instruments for this operation
+            instruments = op_kwargs.pop("instruments")
 
-        # Which emissions are we working on?
-        spectra_type = self._operation_kwargs["get_images_flux"][
-            "spectra_type"
-        ]
-        if spectra_type is None:
-            spectra_type = self.emission_model.saved_labels
+            # Are we writing all intermediate images?
+            write_all = op_kwargs.pop("write_all")
 
-        # Loop over instruments and perform any imaging they define
-        for inst in instruments:
-            # Get the basic images for the requested spectra types
-            galaxy.get_images_flux(
-                *spectra_type,
-                fov=self._operation_kwargs["get_images_flux"]["fov"],
-                img_type=self._operation_kwargs["get_images_flux"]["img_type"],
-                kernel=self._operation_kwargs["get_images_flux"]["kernel"],
-                kernel_threshold=self._operation_kwargs["get_images_flux"][
-                    "kernel_threshold"
-                ],
-                nthreads=self.nthreads,
-                instrument=inst,
-            )
-
-            # Apply the PSF if applicable to the instrument
-            if inst.can_do_psf_imaging:
-                psf_start = time.perf_counter()
-                galaxy.apply_psf_to_images_fnu(
+            # Loop over instruments and perform any imaging they define
+            for inst in instruments:
+                # Get the basic images for the requested spectra types
+                galaxy.get_images_flux(
+                    *model_label,
+                    fov=op_kwargs["fov"],
+                    img_type=op_kwargs["img_type"],
+                    kernel=op_kwargs["kernel"],
+                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    nthreads=self.nthreads,
                     instrument=inst,
-                    psf_resample_factor=self._operation_kwargs[
-                        "get_images_flux"
-                    ]["psf_resample_factor"],
-                    limit_to=self._operation_kwargs["get_images_flux"][
-                        "spectra_type"
-                    ],
                 )
-                psf_time += time.perf_counter() - psf_start
 
-                # Remove the psfless images if not writing all
-                if not self._operation_kwargs["get_images_flux"]["write_all"]:
-                    if inst.label in galaxy.images_fnu:
-                        del galaxy.images_fnu[inst.label]
-                    if (
-                        galaxy.stars is not None
-                        and inst.label in galaxy.stars.images_fnu
-                    ):
-                        del galaxy.stars.images_fnu[inst.label]
-                    if (
-                        galaxy.black_holes is not None
-                        and inst.label in galaxy.black_holes.images_fnu
-                    ):
-                        del galaxy.black_holes.images_fnu[inst.label]
+                # Apply the PSF if applicable to the instrument
+                if inst.can_do_psf_imaging:
+                    psf_start = time.perf_counter()
+                    galaxy.apply_psf_to_images_fnu(
+                        instrument=inst,
+                        psf_resample_factor=op_kwargs["psf_resample_factor"],
+                        limit_to=model_label,
+                    )
+                    psf_time += time.perf_counter() - psf_start
 
-            # Apply the instrument noise if applicable to the instrument
-            if inst.can_do_noisy_imaging:
-                noise_start = time.perf_counter()
-                galaxy.apply_noise_to_images_fnu(
-                    instrument=inst,
-                    limit_to=self._operation_kwargs["get_images_flux"][
-                        "spectra_type"
-                    ],
-                    apply_to_psf=inst.can_do_psf_imaging,
-                )
-                noise_time += time.perf_counter() - noise_start
-
-                # Remove the noiseless images if not writing all
-                if not self._operation_kwargs["get_images_flux"]["write_all"]:
-                    if inst.label in galaxy.images_fnu:
-                        del galaxy.images_fnu[inst.label]
-                    if inst.label in galaxy.images_psf_fnu:
-                        del galaxy.images_psf_fnu[inst.label]
-                    if galaxy.stars is not None:
-                        if inst.label in galaxy.stars.images_fnu:
+                    # Remove the psfless images if not writing all
+                    if not write_all:
+                        if inst.label in galaxy.images_fnu:
+                            del galaxy.images_fnu[inst.label]
+                        if (
+                            galaxy.stars is not None
+                            and inst.label in galaxy.stars.images_fnu
+                        ):
                             del galaxy.stars.images_fnu[inst.label]
-                        if inst.label in galaxy.stars.images_psf_fnu:
-                            del galaxy.stars.images_psf_fnu[inst.label]
-                    if galaxy.black_holes is not None:
-                        if inst.label in galaxy.black_holes.images_fnu:
+                        if (
+                            galaxy.black_holes is not None
+                            and inst.label in galaxy.black_holes.images_fnu
+                        ):
                             del galaxy.black_holes.images_fnu[inst.label]
-                        if inst.label in galaxy.black_holes.images_psf_fnu:
-                            del galaxy.black_holes.images_psf_fnu[inst.label]
+
+                # Apply the instrument noise if applicable to the instrument
+                if inst.can_do_noisy_imaging:
+                    noise_start = time.perf_counter()
+                    galaxy.apply_noise_to_images_fnu(
+                        instrument=inst,
+                        limit_to=model_label,
+                        apply_to_psf=inst.can_do_psf_imaging,
+                    )
+                    noise_time += time.perf_counter() - noise_start
+
+                    # Remove the noiseless images if not writing all
+                    if not write_all:
+                        if inst.label in galaxy.images_fnu:
+                            del galaxy.images_fnu[inst.label]
+                        if inst.label in galaxy.images_psf_fnu:
+                            del galaxy.images_psf_fnu[inst.label]
+                        if galaxy.stars is not None:
+                            if inst.label in galaxy.stars.images_fnu:
+                                del galaxy.stars.images_fnu[inst.label]
+                            if inst.label in galaxy.stars.images_psf_fnu:
+                                del galaxy.stars.images_psf_fnu[inst.label]
+                        if galaxy.black_holes is not None:
+                            if inst.label in galaxy.black_holes.images_fnu:
+                                del galaxy.black_holes.images_fnu[inst.label]
+                            if inst.label in galaxy.black_holes.images_psf_fnu:
+                                del galaxy.black_holes.images_psf_fnu[
+                                    inst.label
+                                ]
 
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
