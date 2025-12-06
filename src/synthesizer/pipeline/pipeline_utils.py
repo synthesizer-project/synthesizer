@@ -676,7 +676,18 @@ class OperationKwargsHandler:
             **kwargs:
                 Arbitrary keyword arguments to store for this (model, func).
         """
-        self._get_from_queue(model_label, func_name).append(kwargs)
+        # If model_label is None, use the special no-model label.
+        if model_label is None:
+            model_label = NO_MODEL_LABEL
+        elif isinstance(model_label, str):
+            self._get_from_queue(model_label, func_name).append(kwargs)
+        elif isinstance(model_label, (list, set, tuple)):
+            for m_lab in model_label:
+                self._get_from_queue(m_lab, func_name).append(kwargs)
+        else:
+            raise exceptions.InconsistentArguments(
+                "model_label must be a str, list, set or tuple."
+            )
 
     def has(self, func_name, model_label=None):
         """Return True if any kwargs are queued for the given operation.
