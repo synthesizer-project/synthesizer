@@ -1431,14 +1431,16 @@ class Pipeline:
         # Flag that we will compute the observed spectra
         self._do_fnu_spectra = True
 
-        # To compute the observed spectra we need to have already computed the
-        # rest frame spectra
-        self._do_lnu_spectra = True
-
         # Flag that we will want to write out the observed spectra (calling the
         # get_observed_spectra method is considered the intent to write it out
         # by default)
         self._write_fnu_spectra = write or self._write_fnu_spectra
+
+        # We need to ensure the lnu spectra are computed first
+        # NOTE: this is safe if the user has already called get_spectra, it
+        # will just leave the flag as True and respect the original intent to
+        # write or not write
+        self.get_spectra(write=False)
 
     def _get_observed_spectra(self, galaxy):
         """Compute the observed spectra for each galaxy.
@@ -1507,10 +1509,6 @@ class Pipeline:
         # Flag that we will compute the photometric luminosities
         self._do_luminosities = True
 
-        # To compute the photometric luminosities we need to have already
-        # computed the lnu spectra
-        self._do_lnu_spectra = True
-
         # Flag that we will want to write out the photometric luminosities
         # (calling the get_photometry_luminosities method is considered the
         # intent to write it out by default)
@@ -1550,6 +1548,12 @@ class Pipeline:
             "get_photometry_luminosities",
             InstrumentCollection(),
         ).add_instruments(_instruments)
+
+        # We need to ensure the lnu spectra are computed first
+        # NOTE: this is safe if the user has already called get_spectra, it
+        # will just leave the flag as True and respect the original intent to
+        # write or not write
+        self.get_spectra(write=False)
 
     def _get_photometry_luminosities(self, galaxy):
         """Compute the photometric luminosities from the generated spectra.
@@ -1633,12 +1637,6 @@ class Pipeline:
         # Flag that we will compute the photometric fluxes
         self._do_fluxes = True
 
-        # To compute the photometric fluxes we need to have already computed
-        # the fnu spectra which themselves require the lnu spectra to be
-        # computed
-        self._do_fnu_spectra = True
-        self._do_lnu_spectra = True
-
         # Flag that we will want to write out the photometric fluxes (calling
         # the get_photometry_fluxes method is considered the intent to write it
         # out by default)
@@ -1681,6 +1679,12 @@ class Pipeline:
             InstrumentCollection(),
         ).add_instruments(_instruments)
 
+        # We need to ensure the fnu spectra are computed first
+        # NOTE: this is safe if the user has already calculated
+        # get_observed_spectra, it will just leave the flag as True and respect
+        # the original intent to write or not write
+        self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
+
     def _get_photometry_fluxes(self, galaxy):
         """Compute the photometric fluxes from the generated spectra.
 
@@ -1695,12 +1699,11 @@ class Pipeline:
             "get_photometry_fluxes"
         ]:
             # Unpack the instruments for this operation
-            instruments = op_kwargs.pop("instruments")
+            instruments = op_kwargs["instruments"]
 
             # Get the photometry.
             galaxy.get_photo_fnu(
                 filters=instruments.all_filters,
-                **op_kwargs,
                 nthreads=self.nthreads,
                 limit_to=model_label
                 if model_label != NO_MODEL_LABEL
@@ -1748,11 +1751,15 @@ class Pipeline:
         # Flag that we will compute the emission lines
         self._do_lum_lines = True
 
-        # To compute the emission lines we need to have already computed the
-        # lnu spectra
-        # TODO: Not sure this is actually necessary now... it shouldn't be
-        # anyway, find out what is causing this to be needed and squash it
-        self._do_lnu_spectra = True
+        # Some models require spectra to compute certain line emission
+        # contributions, if we have now spectra warn the user
+        if not self._do_lnu_spectra:
+            warn(
+                "Some generation emission models may require spectra to "
+                "in addition to lines. Currently no spectra will be "
+                "generated. This could be fine depending on the "
+                "emission model."
+            )
 
         # Flag that we will want to write out the emission lines (calling the
         # get_lines method is considered the intent to write it out
@@ -1861,12 +1868,6 @@ class Pipeline:
         # Flag that we will compute the observed emission lines
         self._do_flux_lines = True
 
-        # To compute the observed emission lines we need to have already
-        # computed the emission lines which themselves require the lnu spectra
-        # to be computed
-        self._do_lum_lines = True
-        self._do_lnu_spectra = True
-
         # Ensure we have line IDs if we need to compute the emission lines and
         # get_lines has not been called
         if "get_lines" not in self._operation_kwargs and line_ids is None:
@@ -1887,6 +1888,12 @@ class Pipeline:
         # (calling the get_observed_lines method is considered the intent to
         # write it out by default)
         self._write_flux_lines = write or self._write_flux_lines
+
+        # We need to ensure the emission lines are computed first
+        # NOTE: this is safe if the user has already called get_lines, it
+        # will just leave the flag as True and respect the original intent to
+        # write or not write
+        self.get_lines(line_ids=line_ids, write=False)
 
     def _get_observed_lines(self, galaxy):
         """Compute the observed emission lines for each galaxy.
@@ -2011,11 +2018,6 @@ class Pipeline:
         # Flag that we will compute the luminosity images
         self._do_images_lum = True
 
-        # To compute the luminosity images we need to have already computed the
-        # luminosities, and therefore also the lnu spectra
-        self._do_luminosities = True
-        self._do_lnu_spectra = True
-
         # Ensure we have a field of view if we need to compute the images
         if fov is None:
             raise exceptions.InconsistentArguments(
@@ -2099,6 +2101,16 @@ class Pipeline:
                 )
             else:
                 self._write_images_lum = write or self._write_images_lum
+
+        # We need to ensure the photometric luminosities are computed first
+        # NOTE: this is safe if the user has already called
+        # get_photometry_luminosities, it will just leave the flag as True and
+        # respect the original intent to write or not write
+        self.get_photometry_luminosities(
+            *instruments,
+            labels=labels,
+            write=False,
+        )
 
     def _get_images_luminosity(self, galaxy):
         """Compute the luminosity images for the galaxies.
@@ -2314,12 +2326,6 @@ class Pipeline:
         # Flag that we will compute the flux images
         self._do_images_flux = True
 
-        # To compute the flux images we need to have already computed the
-        # fluxes which themselves require the fnu spectra to be computed
-        self._do_fluxes = True
-        self._do_lnu_spectra = True
-        self._do_fnu_spectra = True
-
         # Ensure we have a field of view if we need to compute the images
         if fov is None:
             raise exceptions.InconsistentArguments(
@@ -2421,6 +2427,18 @@ class Pipeline:
                 )
             else:
                 self._write_images_flux = write or self._write_images_flux
+
+        # We need to ensure the photometric fluxes are computed first
+        # NOTE: this is safe if the user has already called
+        # get_photometry_fluxes, it will just leave the flag as True and
+        # respect the original intent to write or not write
+        self.get_photometry_fluxes(
+            *instruments,
+            labels=labels,
+            cosmo=cosmo,
+            igm=igm,
+            write=False,
+        )
 
     def _get_images_flux(self, galaxy):
         """Compute the flux images for the galaxies.
@@ -2605,10 +2623,6 @@ class Pipeline:
         # Flag that we will compute the lnu data cubes
         self._do_data_cubes_lnu = True
 
-        # To compute the lnu data cubes we need to have already
-        # computed the lnu spectra
-        self._do_lnu_spectra = True
-
         # Flag that we will want to write out the lnu data cubes
         self._write_data_cubes_lnu = write or self._write_data_cubes_lnu
 
@@ -2644,6 +2658,12 @@ class Pipeline:
             kernel=kernel,
             kernel_threshold=kernel_threshold,
         )
+
+        # We need to ensure the lnu spectra are computed first
+        # NOTE: this is safe if the user has already called
+        # get_spectra, it will just leave the flag as True and
+        # respect the original intent to write or not write
+        self.get_spectra(write=False)
 
     def _get_data_cubes_lnu(self, galaxy):
         """Compute the luminosity data cubes for the galaxy.
@@ -2755,11 +2775,6 @@ class Pipeline:
         # Flag that we will compute the fnu data cubes
         self._do_data_cubes_fnu = True
 
-        # To compute the fnu data cubes we need to have already
-        # computed the fnu spectra, which require lnu spectra
-        self._do_fnu_spectra = True
-        self._do_lnu_spectra = True
-
         # Flag that we will want to write out the fnu data cubes
         self._write_data_cubes_fnu = write or self._write_data_cubes_fnu
 
@@ -2797,6 +2812,12 @@ class Pipeline:
             cosmo=cosmo,
             igm=igm,
         )
+
+        # We need to ensure the observed spectra are computed first
+        # NOTE: this is safe if the user has already called
+        # get_observed_spectra, it will just leave the flag as True and
+        # respect the original intent to write or not write
+        self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
 
     def _get_data_cubes_fnu(self, galaxy):
         """Compute the flux density data cubes for the galaxy.
@@ -2881,10 +2902,6 @@ class Pipeline:
         # Flag that we will compute the spectral luminosity density
         self._do_spectroscopy_lnu = True
 
-        # To compute the spectral luminosity density we need to have already
-        # computed the lnu spectra
-        self._do_lnu_spectra = True
-
         # Flag that we will want to write out the spectral luminosity density
         # (calling the get_spectroscopy_lnu method is considered the intent
         # to write it out by default)
@@ -2925,6 +2942,12 @@ class Pipeline:
             "get_spectroscopy_lnu",
             InstrumentCollection(),
         ).add_instruments(*_instruments)
+
+        # We need to ensure the lnu spectra are computed first
+        # NOTE: this is safe if the user has already called
+        # get_spectra, it will just leave the flag as True and
+        # respect the original intent to write or not write
+        self.get_spectra(write=False)
 
     def _get_spectroscopy_lnu(self, galaxy):
         """Compute the spectral luminosity density for the galaxy.
@@ -2990,10 +3013,6 @@ class Pipeline:
         # Flag that we will compute the spectral flux density
         self._do_spectroscopy_fnu = True
 
-        # To compute the spectral flux density we need to have already computed
-        # the fnu spectra
-        self._do_fnu_spectra = True
-
         # Flag that we will want to write out the spectral flux density
         # (calling the get_spectroscopy_fnu method is considered the intent
         # to write it out by default)
@@ -3034,6 +3053,12 @@ class Pipeline:
             "get_spectroscopy_fnu",
             InstrumentCollection(),
         ).add_instruments(*_instruments)
+
+        # We need to ensure the fnu spectra are computed first
+        # NOTE: this is safe if the user has already called
+        # get_observed_spectra, it will just leave the flag as True and
+        # respect the original intent to write or not write
+        self.get_observed_spectra(write=False)
 
     def _get_spectroscopy_fnu(self, galaxy):
         """Compute the spectral flux density for the galaxy.
