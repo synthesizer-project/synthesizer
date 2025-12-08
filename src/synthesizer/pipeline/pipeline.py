@@ -970,22 +970,21 @@ class Pipeline:
             + str(self._do_images_flux).rjust(15)
             + str(self._write_images_flux).rjust(15)
         )
-        # Coming soon...
-        # self._print(
-        #     "Lnu Data Cubes".ljust(30)
-        #     + str(self._do_lnu_data_cubes).rjust(15)
-        #     + str(self._write_lnu_data_cubes).rjust(15)
-        # )
-        # self._print(
-        #     "Fnu Data Cubes".ljust(30)
-        #     + str(self._do_fnu_data_cubes).rjust(15)
-        #     + str(self._write_fnu_data_cubes).rjust(15)
-        # )
-        # self._print(
-        #     "Spectroscopy".ljust(30)
-        #     + str(self._do_spectroscopy).rjust(15)
-        #     + str(self._write_spectroscopy).rjust(15)
-        # )
+        self._print(
+            "Lnu Data Cubes".ljust(30)
+            + str(self._do_lnu_data_cubes).rjust(15)
+            + str(self._write_lnu_data_cubes).rjust(15)
+        )
+        self._print(
+            "Fnu Data Cubes".ljust(30)
+            + str(self._do_fnu_data_cubes).rjust(15)
+            + str(self._write_fnu_data_cubes).rjust(15)
+        )
+        self._print(
+            "Spectroscopy".ljust(30)
+            + str(self._do_spectroscopy).rjust(15)
+            + str(self._write_spectroscopy).rjust(15)
+        )
         self._print("-" * 60)
 
     def add_analysis_func(self, func, result_key, *args, **kwargs):
@@ -1160,7 +1159,7 @@ class Pipeline:
         )
 
         # Flag that we will compute the LOS optical depths
-        self._do_los_optical_depths = write
+        self._do_los_optical_depths = write or self._do_los_optical_depths
 
     def _get_los_optical_depths(self, galaxy):
         """Compute the Line of Sight optical depths for all particles.
@@ -1240,7 +1239,7 @@ class Pipeline:
         # Flag that we will want to write out the SFZH grid (calling the
         # get_sfzh method is considered the the intent to write it out
         # by default)
-        self._write_sfzh = write
+        self._write_sfzh = write or self._write_sfzh
 
     def _get_sfzh(self, galaxy):
         """Compute the SFZH grid for each galaxy.
@@ -1314,7 +1313,7 @@ class Pipeline:
         # Flag that we will want to write out the SFH grid (calling the
         # get_sfh method is considered the the intent to write it out
         # by default)
-        self._write_sfh = write
+        self._write_sfh = write or self._write_sfh
 
     def _get_sfh(self, galaxy):
         """Compute the binned SFH for each galaxy.
@@ -1374,7 +1373,7 @@ class Pipeline:
         # Flag that we will want to write out the spectra (calling the
         # get_spectra method is considered the intent to write it out
         # by default)
-        self._write_lnu_spectra = write
+        self._write_lnu_spectra = write or self._write_lnu_spectra
 
     def _get_spectra(self, galaxy):
         """Generate the spectra for the galaxies based on the EmissionModel.
@@ -1439,7 +1438,7 @@ class Pipeline:
         # Flag that we will want to write out the observed spectra (calling the
         # get_observed_spectra method is considered the intent to write it out
         # by default)
-        self._write_fnu_spectra = write
+        self._write_fnu_spectra = write or self._write_fnu_spectra
 
     def _get_observed_spectra(self, galaxy):
         """Compute the observed spectra for each galaxy.
@@ -1515,7 +1514,7 @@ class Pipeline:
         # Flag that we will want to write out the photometric luminosities
         # (calling the get_photometry_luminosities method is considered the
         # intent to write it out by default)
-        self._write_luminosities = write
+        self._write_luminosities = write or self._write_luminosities
 
         # Check that we have instruments to compute the photometry for
         if len(instruments) == 0:
@@ -1643,7 +1642,7 @@ class Pipeline:
         # Flag that we will want to write out the photometric fluxes (calling
         # the get_photometry_fluxes method is considered the intent to write it
         # out by default)
-        self._write_fluxes = write
+        self._write_fluxes = write or self._write_fluxes
 
         # Check that we have instruments to compute the photometry for
         if len(instruments) == 0:
@@ -1758,7 +1757,7 @@ class Pipeline:
         # Flag that we will want to write out the emission lines (calling the
         # get_lines method is considered the intent to write it out
         # by default)
-        self._write_lines = write
+        self._write_lines = write or self._write_lines
 
         # Store the line IDs, we'll write these once later
         self.line_ids = line_ids
@@ -1887,7 +1886,7 @@ class Pipeline:
         # Flag that we will want to write out the observed emission lines
         # (calling the get_observed_lines method is considered the intent to
         # write it out by default)
-        self._write_flux_lines = write
+        self._write_flux_lines = write or self._write_flux_lines
 
     def _get_observed_lines(self, galaxy):
         """Compute the observed emission lines for each galaxy.
@@ -2091,11 +2090,15 @@ class Pipeline:
         for inst in _instruments:
             # Only write the final processed images
             if inst.can_do_noisy_imaging:
-                self._write_images_lum_noise = write
+                self._write_images_lum_noise = (
+                    write or self._write_images_lum_noise
+                )
             elif inst.can_do_psf_imaging:
-                self._write_images_lum_psf = write
+                self._write_images_lum_psf = (
+                    write or self._write_images_lum_psf
+                )
             else:
-                self._write_images_lum = write
+                self._write_images_lum = write or self._write_images_lum
 
     def _get_images_luminosity(self, galaxy):
         """Compute the luminosity images for the galaxies.
@@ -2409,11 +2412,15 @@ class Pipeline:
         for inst in _instruments:
             # Only write the final processed images
             if inst.can_do_noisy_imaging:
-                self._write_images_flux_noise = write
+                self._write_images_flux_noise = (
+                    write or self._write_images_flux_noise
+                )
             elif inst.can_do_psf_imaging:
-                self._write_images_flux_psf = write
+                self._write_images_flux_psf = (
+                    write or self._write_images_flux_psf
+                )
             else:
-                self._write_images_flux = write
+                self._write_images_flux = write or self._write_images_flux
 
     def _get_images_flux(self, galaxy):
         """Compute the flux images for the galaxies.
@@ -2603,7 +2610,7 @@ class Pipeline:
         self._do_lnu_spectra = True
 
         # Flag that we will want to write out the lnu data cubes
-        self._write_data_cubes_lnu = write
+        self._write_data_cubes_lnu = write or self._write_data_cubes_lnu
 
         # Ensure we have a field of view
         if fov is None:
@@ -2754,7 +2761,7 @@ class Pipeline:
         self._do_lnu_spectra = True
 
         # Flag that we will want to write out the fnu data cubes
-        self._write_data_cubes_fnu = write
+        self._write_data_cubes_fnu = write or self._write_data_cubes_fnu
 
         # Ensure we have a field of view
         if fov is None:
@@ -2881,7 +2888,7 @@ class Pipeline:
         # Flag that we will want to write out the spectral luminosity density
         # (calling the get_spectroscopy_lnu method is considered the intent
         # to write it out by default)
-        self._write_spectroscopy_lnu = write
+        self._write_spectroscopy_lnu = write or self._write_spectroscopy_lnu
 
         # Check that we have instruments to compute the spectroscopy for
         if len(instruments) == 0:
@@ -2990,7 +2997,7 @@ class Pipeline:
         # Flag that we will want to write out the spectral flux density
         # (calling the get_spectroscopy_fnu method is considered the intent
         # to write it out by default)
-        self._write_spectroscopy_fnu = write
+        self._write_spectroscopy_fnu = write or self._write_spectroscopy_fnu
 
         # Check that we have instruments to compute the spectroscopy for
         if len(instruments) == 0:
