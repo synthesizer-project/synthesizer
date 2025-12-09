@@ -1254,7 +1254,7 @@ class Pipeline:
         start = time.perf_counter()
 
         # Get the operation kwargs for this operation
-        op_kwargs = self._operation_kwargs.pop_next(NO_MODEL_LABEL, "get_sfzh")
+        op_kwargs = self._operation_kwargs.get_single("get_sfzh")
 
         # Get the SFZH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
@@ -1325,7 +1325,7 @@ class Pipeline:
         start = time.perf_counter()
 
         # Get the operation kwargs for this operation
-        op_kwargs = self._operation_kwargs.pop_next(NO_MODEL_LABEL, "get_sfh")
+        op_kwargs = self._operation_kwargs.get_single("get_sfh")
 
         # Get the SFH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
@@ -1452,10 +1452,7 @@ class Pipeline:
         start = time.perf_counter()
 
         # Get the operation kwargs for this operation
-        op_kwargs = self._operation_kwargs.pop_next(
-            NO_MODEL_LABEL,
-            "get_observed_spectra",
-        )
+        op_kwargs = self._operation_kwargs.get_single("get_observed_spectra")
 
         # Get the observed spectra
         galaxy.get_observed_spectra(**op_kwargs)
@@ -1543,11 +1540,22 @@ class Pipeline:
             instruments=_instruments,
         )
 
-        # Store the instruments too for later reference
-        self.instruments.get(
+        # Store the instruments too for later reference (but only if they are
+        # not already in the collection)
+        phot_lum_insts = self.instruments.get(
             "get_photometry_luminosities",
             InstrumentCollection(),
-        ).add_instruments(_instruments)
+        )
+        self.instruments.setdefault(
+            "get_photometry_luminosities",
+            InstrumentCollection(),
+        ).add_instruments(
+            *[
+                inst
+                for inst in _instruments
+                if inst.label not in phot_lum_insts
+            ]
+        )
 
         # We need to ensure the lnu spectra are computed first
         # NOTE: this is safe if the user has already called get_spectra, it
@@ -1568,14 +1576,21 @@ class Pipeline:
         for model_label, op_kwargs in self._operation_kwargs[
             "get_photometry_luminosities"
         ]:
-            # Unpack the instruments for this operation
-            instruments = op_kwargs["instruments"]
+            # Get the instruments for this operation
+            inst_list = self._operation_kwargs.get_instruments(
+                model_label,
+                "get_photometry_luminosities",
+                op_kwargs,
+            )
+            # Create an InstrumentCollection from the list
+            instruments = InstrumentCollection()
+            instruments.add_instruments(*inst_list)
 
             # Get the photometry.
             galaxy.get_photo_lnu(
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
-                limit_to=model_label
+                limit_to=[model_label]
                 if model_label != NO_MODEL_LABEL
                 else None,
             )
@@ -1673,11 +1688,22 @@ class Pipeline:
             igm=igm,
         )
 
-        # Store the instruments too for later reference
+        # Store the instruments too for later reference (but only if they are
+        # not already in the collection)
+        phot_flux_insts = self.instruments.get(
+            "get_photometry_fluxes",
+            InstrumentCollection(),
+        )
         self.instruments.setdefault(
             "get_photometry_fluxes",
             InstrumentCollection(),
-        ).add_instruments(_instruments)
+        ).add_instruments(
+            *[
+                inst
+                for inst in _instruments
+                if inst.label not in phot_flux_insts
+            ]
+        )
 
         # We need to ensure the fnu spectra are computed first
         # NOTE: this is safe if the user has already calculated
@@ -1698,14 +1724,21 @@ class Pipeline:
         for model_label, op_kwargs in self._operation_kwargs[
             "get_photometry_fluxes"
         ]:
-            # Unpack the instruments for this operation
-            instruments = op_kwargs["instruments"]
+            # Get the instruments for this operation
+            inst_list = self._operation_kwargs.get_instruments(
+                model_label,
+                "get_photometry_fluxes",
+                op_kwargs,
+            )
+            # Create an InstrumentCollection from the list
+            instruments = InstrumentCollection()
+            instruments.add_instruments(*inst_list)
 
             # Get the photometry.
             galaxy.get_photo_fnu(
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
-                limit_to=model_label
+                limit_to=[model_label]
                 if model_label != NO_MODEL_LABEL
                 else None,
             )
@@ -1782,10 +1815,7 @@ class Pipeline:
         start = time.perf_counter()
 
         # Get the operation kwargs for this operation
-        op_kwargs = self._operation_kwargs.pop_next(
-            NO_MODEL_LABEL,
-            "get_lines",
-        )
+        op_kwargs = self._operation_kwargs.get_single("get_lines")
 
         # Loop over the galaxies and get the spectra
         galaxy.get_lines(
@@ -1905,10 +1935,7 @@ class Pipeline:
         start = time.perf_counter()
 
         # Get the operation kwargs for this operation
-        op_kwargs = self._operation_kwargs.pop_next(
-            NO_MODEL_LABEL,
-            "get_observed_lines",
-        )
+        op_kwargs = self._operation_kwargs.get_single("get_observed_lines")
 
         # Get the observed emission lines
         galaxy.get_observed_lines(**op_kwargs)
@@ -2133,8 +2160,15 @@ class Pipeline:
         for model_label, op_kwargs in self._operation_kwargs[
             "get_images_luminosity"
         ]:
-            # Unpack the instruments for this operation
-            instruments = op_kwargs["instruments"]
+            # Get the instruments for this operation
+            inst_list = self._operation_kwargs.get_instruments(
+                model_label,
+                "get_images_luminosity",
+                op_kwargs,
+            )
+            # Create an InstrumentCollection from the list
+            instruments = InstrumentCollection()
+            instruments.add_instruments(*inst_list)
 
             # Are we writing all intermediate images?
             write_all = op_kwargs["write_all"]
@@ -2143,7 +2177,6 @@ class Pipeline:
             for inst in instruments:
                 # Get the basic images for the requested spectra types
                 galaxy.get_images_luminosity(
-                    *model_label,
                     fov=op_kwargs["fov"],
                     img_type=op_kwargs["img_type"],
                     kernel=op_kwargs["kernel"],
@@ -2151,6 +2184,9 @@ class Pipeline:
                     nthreads=self.nthreads,
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
+                    limit_to=[model_label]
+                    if model_label != NO_MODEL_LABEL
+                    else None,
                 )
 
                 # Apply the PSF if applicable to the instrument
@@ -2461,8 +2497,15 @@ class Pipeline:
         for model_label, op_kwargs in self._operation_kwargs[
             "get_images_flux"
         ]:
-            # Unpack the instruments for this operation
-            instruments = op_kwargs["instruments"]
+            # Get the instruments for this operation
+            inst_list = self._operation_kwargs.get_instruments(
+                model_label,
+                "get_images_flux",
+                op_kwargs,
+            )
+            # Create an InstrumentCollection from the list
+            instruments = InstrumentCollection()
+            instruments.add_instruments(*inst_list)
 
             # Are we writing all intermediate images?
             write_all = op_kwargs["write_all"]
@@ -2471,13 +2514,15 @@ class Pipeline:
             for inst in instruments:
                 # Get the basic images for the requested spectra types
                 galaxy.get_images_flux(
-                    *model_label,
                     fov=op_kwargs["fov"],
                     img_type=op_kwargs["img_type"],
                     kernel=op_kwargs["kernel"],
                     kernel_threshold=op_kwargs["kernel_threshold"],
                     nthreads=self.nthreads,
                     instrument=inst,
+                    limit_to=[model_label]
+                    if model_label != NO_MODEL_LABEL
+                    else None,
                 )
 
                 # Apply the PSF if applicable to the instrument
@@ -2965,8 +3010,14 @@ class Pipeline:
         for model_label, op_kwargs in self._operation_kwargs[
             "get_spectroscopy_lnu"
         ]:
+            # Get the instruments for this operation
+            inst_list = self._operation_kwargs.get_instruments(
+                model_label,
+                "get_spectroscopy_lnu",
+                op_kwargs,
+            )
             # Loop over instruments
-            for inst in op_kwargs["instruments"]:
+            for inst in inst_list:
                 # Get the spectroscopy for this instrument
                 galaxy.get_spectroscopy(inst, limit_to=model_label)
 
@@ -3076,8 +3127,14 @@ class Pipeline:
         for model_label, op_kwargs in self._operation_kwargs[
             "get_spectroscopy_fnu"
         ]:
+            # Get the instruments for this operation
+            inst_list = self._operation_kwargs.get_instruments(
+                model_label,
+                "get_spectroscopy_fnu",
+                op_kwargs,
+            )
             # Loop over instruments
-            for inst in op_kwargs["instruments"]:
+            for inst in inst_list:
                 # Get the spectroscopy for this instrument
                 galaxy.get_spectroscopy(inst, limit_to=model_label)
 
