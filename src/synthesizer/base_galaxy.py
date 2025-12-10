@@ -466,10 +466,34 @@ class BaseGalaxy:
                 A PhotometryCollection object containing the luminosity
                 photometry in each filter in filters.
         """
+        # Split labels for each component or the whole galaxy if we have
+        # a limit to list
+        if limit_to is not None:
+            gal_labels = [lab for lab in limit_to if lab in self.spectra]
+            star_labels = [
+                lab
+                for lab in limit_to
+                if self.stars is not None and lab in self.stars.spectra
+            ]
+            bh_labels = [
+                lab
+                for lab in limit_to
+                if self.black_holes is not None
+                and lab in self.black_holes.spectra
+            ]
+        else:
+            # Otherwise we can use all labels (or pass None to components)
+            gal_labels = self.spectra.keys()
+            star_labels = None
+            bh_labels = None
+
         # Get stellar photometry
         if self.stars is not None:
             self.stars.get_photo_lnu(
-                filters, verbose, nthreads=nthreads, limit_to=limit_to
+                filters,
+                verbose,
+                nthreads=nthreads,
+                limit_to=star_labels,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -479,13 +503,16 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=limit_to,
+                    limit_to=star_labels,
                 )
 
         # Get black hole photometry
         if self.black_holes is not None:
             self.black_holes.get_photo_lnu(
-                filters, verbose, nthreads=nthreads, limit_to=limit_to
+                filters,
+                verbose,
+                nthreads=nthreads,
+                limit_to=bh_labels,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -495,14 +522,11 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=limit_to,
+                    limit_to=bh_labels,
                 )
 
-        # Get the labels
-        labels = self.spectra.keys() if limit_to is None else limit_to
-
         # Get the combined photometry
-        for label in labels:
+        for label in gal_labels:
             # Create the photometry collection and store it in the object
             self.photo_lnu[label] = self.spectra[label].get_photo_lnu(
                 filters,
@@ -557,10 +581,34 @@ class BaseGalaxy:
                 A PhotometryCollection object containing the flux photometry
                 in each filter in filters.
         """
+        # Split labels for each component or the whole galaxy if we have
+        # a limit to list
+        if limit_to is not None:
+            gal_labels = [lab for lab in limit_to if lab in self.spectra]
+            star_labels = [
+                lab
+                for lab in limit_to
+                if self.stars is not None and lab in self.stars.spectra
+            ]
+            bh_labels = [
+                lab
+                for lab in limit_to
+                if self.black_holes is not None
+                and lab in self.black_holes.spectra
+            ]
+        else:
+            # Otherwise we can use all labels (or pass None to components)
+            gal_labels = self.spectra.keys()
+            star_labels = None
+            bh_labels = None
+
         # Get stellar photometry
         if self.stars is not None:
             self.stars.get_photo_fnu(
-                filters, verbose, nthreads=nthreads, limit_to=limit_to
+                filters,
+                verbose,
+                nthreads=nthreads,
+                limit_to=star_labels,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -570,7 +618,7 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=limit_to,
+                    limit_to=star_labels,
                 )
 
         # Get black hole photometry
@@ -586,14 +634,11 @@ class BaseGalaxy:
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=limit_to,
+                    limit_to=bh_labels,
                 )
 
-        # Get the labels
-        labels = self.spectra.keys() if limit_to is None else limit_to
-
         # Get the combined photometry
-        for label in labels:
+        for label in gal_labels:
             # Create the photometry collection and store it in the object
             self.photo_fnu[label] = self.spectra[label].get_photo_fnu(
                 filters,
@@ -1323,12 +1368,15 @@ class BaseGalaxy:
         # Convert labels tuple to a list
         labels = list(labels)
 
-        # If limit_to is passed flag that this is deprecated
+        # If limit_to is passed, flag that this is deprecated
         if limit_to is not None:
             deprecation(
                 "The `limit_to` argument in `get_images_luminosity` is "
                 "deprecated and will be removed in v1.0.0. You now pass "
                 "the desired model label(s) as positional arguments."
+            )
+            labels.extend(
+                limit_to if isinstance(limit_to, list) else [limit_to]
             )
 
         # Similarly, if labels contain an emission_model raise a deprecation
