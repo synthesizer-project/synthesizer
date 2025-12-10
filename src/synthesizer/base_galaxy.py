@@ -624,7 +624,10 @@ class BaseGalaxy:
         # Get black hole photometry
         if self.black_holes is not None:
             self.black_holes.get_photo_fnu(
-                filters, verbose, nthreads=nthreads, limit_to=limit_to
+                filters,
+                verbose,
+                nthreads=nthreads,
+                limit_to=bh_labels,
             )
 
             # If we have particle spectra do that too (not applicable to
