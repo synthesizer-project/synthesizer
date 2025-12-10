@@ -11,6 +11,7 @@ from unyt import Unit, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
+from synthesizer.instruments import InstrumentCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 
@@ -552,6 +553,26 @@ class OperationKwargs:
         # Lazy cache of the structural key used for hashing/equality.
         self._hash_key = None
 
+        # Convert any 'instruments' list to InstrumentCollection.
+        self._convert_instruments_list()
+
+    def _convert_instruments_list(self):
+        """Convert any 'instruments' list to a InstrumentCollection."""
+        # If we don't have instruments, nothing to do.
+        if "instruments" not in self._kwargs:
+            return
+
+        # Convert list to InstrumentCollection if needed.
+        inst_val = self._kwargs["instruments"]
+        if isinstance(inst_val, list):
+            self._kwargs["instruments"] = InstrumentCollection()
+            self._kwargs["instruments"].add_instruments(*inst_val)
+        elif not isinstance(inst_val, InstrumentCollection):
+            raise exceptions.InconsistentArguments(
+                "'instruments' kwarg must be a list of Instrument objects "
+                "or an InstrumentCollection."
+            )
+
     def __getitem__(self, key):
         """Dict-like access: obj['fov'] -> kwargs['fov']."""
         return self._kwargs[key]
@@ -662,9 +683,6 @@ class OperationKwargsHandler:
         # Convert the input model_labels to a set for efficient lookup.
         self._allowed_models = set(model_labels)
 
-        # We can always use the special NO_MODEL_LABEL.
-        self._allowed_models.add(NO_MODEL_LABEL)
-
         # Mapping:
         #   func_name -> {OperationKwargs -> list[model_label]}
         self._func_map = defaultdict(dict)
@@ -695,8 +713,7 @@ class OperationKwargsHandler:
             "EmissionModel."
         )
 
-    @staticmethod
-    def _normalize_labels(model_label):
+    def _normalize_labels(self, model_label):
         """Return a set of labels from the model_label argument.
 
         This helper exists to handle the various possible input types for
@@ -710,8 +727,8 @@ class OperationKwargsHandler:
             set:
                 A set of model labels.
         """
-        if model_label is None:
-            return {NO_MODEL_LABEL}
+        if model_label is None or model_label == NO_MODEL_LABEL:
+            return self._allowed_models
         if isinstance(model_label, str):
             return {model_label}
         # list / tuple / set
@@ -768,6 +785,13 @@ class OperationKwargsHandler:
             OperationKwargs:
                 The OperationKwargs instance representing this kwargs set.
         """
+        # Just exit if we already have an entry for this function.
+        # We can get here multiple times if we recurse, so we just
+        # return the existing one. If theres an issue with conflicting
+        # kwargs, that should be caught elsewhere.
+        if func_name in self._unique_func_map:
+            return self._unique_func_map[func_name]
+
         # Create the kwargs object
         op_kwargs = OperationKwargs(**kwargs)
 
@@ -791,7 +815,9 @@ class OperationKwargsHandler:
                 True if at least one OperationKwargs exists matching the query.
         """
         # Do we actually have an entry for this function name?
-        func_entries = self._label_map.get(func_name, None)
+        func_entries = self._func_map.get(
+            func_name, self._unique_func_map.get(func_name, None)
+        )
         if func_entries is None:
             return False
 
@@ -833,8 +859,9 @@ class OperationKwargsHandler:
         """
         func_entries = self._func_map.get(func_name, {})
         for op_kwargs, label_map in func_entries.items():
-            for model_label in label_map.keys():
-                yield model_label, op_kwargs
+            if not isinstance(label_map, (list, set)):
+                label_map = [label_map]
+            yield label_map, op_kwargs
 
     def __getitem__(self, func_name):
         """Return an iterator over (model_label, OperationKwargs).
