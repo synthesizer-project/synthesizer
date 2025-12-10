@@ -25,6 +25,8 @@ import numpy as np
 from astropy import units as u
 from unyt import Mpc
 
+from synthesizer import exceptions
+
 
 def _get_cosmo_key(cosmo):
     """Create a hashable key for a cosmology object.
@@ -198,6 +200,11 @@ def get_luminosity_distance(cosmo, redshift):
     Returns:
         unyt_quantity: The luminosity distance in Mpc.
     """
+    if cosmo is None:
+        raise exceptions.InconsistentArguments(
+            "Cosmology object cannot be None"
+        )
+
     cosmo_key = _get_cosmo_key(cosmo)
     result_value = _cached_luminosity_distance(cosmo_key, redshift)
     return result_value * Mpc
