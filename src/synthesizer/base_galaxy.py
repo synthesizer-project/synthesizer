@@ -475,17 +475,29 @@ class BaseGalaxy:
                 for lab in limit_to
                 if self.stars is not None and lab in self.stars.spectra
             ]
+            part_star_labels = [
+                lab
+                for lab in limit_to
+                if lab in getattr(self.stars, "particle_spectra", {})
+            ]
             bh_labels = [
                 lab
                 for lab in limit_to
                 if self.black_holes is not None
                 and lab in self.black_holes.spectra
             ]
+            part_bh_labels = [
+                lab
+                for lab in limit_to
+                if lab in getattr(self.black_holes, "particle_spectra", {})
+            ]
         else:
             # Otherwise we can use all labels (or pass None to components)
             gal_labels = self.spectra.keys()
             star_labels = None
+            part_star_labels = None
             bh_labels = None
+            part_bh_labels = None
 
         # Get stellar photometry
         if self.stars is not None:
@@ -498,12 +510,12 @@ class BaseGalaxy:
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
-            if getattr(self.stars, "particle_spectra", None) is not None:
+            if hasattr(self.stars, "particle_spectra"):
                 self.stars.get_particle_photo_lnu(
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=star_labels,
+                    limit_to=part_star_labels,
                 )
 
         # Get black hole photometry
@@ -517,12 +529,12 @@ class BaseGalaxy:
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
-            if getattr(self.black_holes, "particle_spectra", None) is not None:
+            if hasattr(self.black_holes, "particle_spectra"):
                 self.black_holes.get_particle_photo_lnu(
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=bh_labels,
+                    limit_to=part_bh_labels,
                 )
 
         # Get the combined photometry
@@ -590,17 +602,29 @@ class BaseGalaxy:
                 for lab in limit_to
                 if self.stars is not None and lab in self.stars.spectra
             ]
+            part_star_labels = [
+                lab
+                for lab in limit_to
+                if lab in getattr(self.stars, "particle_spectra", {})
+            ]
             bh_labels = [
                 lab
                 for lab in limit_to
                 if self.black_holes is not None
                 and lab in self.black_holes.spectra
             ]
+            part_bh_labels = [
+                lab
+                for lab in limit_to
+                if lab in getattr(self.black_holes, "particle_spectra", {})
+            ]
         else:
             # Otherwise we can use all labels (or pass None to components)
             gal_labels = self.spectra.keys()
             star_labels = None
+            part_star_labels = None
             bh_labels = None
+            part_bh_labels = None
 
         # Get stellar photometry
         if self.stars is not None:
@@ -613,12 +637,12 @@ class BaseGalaxy:
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
-            if getattr(self.stars, "particle_spectra", None) is not None:
+            if hasattr(self.stars, "particle_spectra"):
                 self.stars.get_particle_photo_fnu(
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=star_labels,
+                    limit_to=part_star_labels,
                 )
 
         # Get black hole photometry
@@ -632,12 +656,12 @@ class BaseGalaxy:
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
-            if getattr(self.black_holes, "particle_spectra", None) is not None:
+            if hasattr(self.black_holes, "particle_spectra"):
                 self.black_holes.get_particle_photo_fnu(
                     filters,
                     verbose,
                     nthreads=nthreads,
-                    limit_to=bh_labels,
+                    limit_to=part_bh_labels,
                 )
 
         # Get the combined photometry
