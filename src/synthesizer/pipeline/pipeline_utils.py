@@ -827,8 +827,20 @@ class OperationKwargsHandler:
 
         # Check for the specific model label.
         self._check_model_label(model_label)
-        if model_label in func_entries:
+
+        # Check in the label map first (most efficient)
+        if func_name in self._label_map:
+            return model_label in self._label_map[func_name]
+
+        # func_entries for unique is just OperationKwargs object (not dict).
+        if isinstance(func_entries, OperationKwargs):
             return True
+
+        # Fallback to checking values in func_entries (which is a dict)
+        for labels in func_entries.values():
+            if model_label in labels:
+                return True
+
         return False
 
     def __contains__(self, func_name):
