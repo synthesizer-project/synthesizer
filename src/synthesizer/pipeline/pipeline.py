@@ -2032,6 +2032,12 @@ class Pipeline:
         """
         # If we have no labels then use all saved models
         if labels is None:
+            warn(
+                "No labels were passed to get_images_luminosity. We will "
+                f"generate images for: {self.emission_model.saved_labels}. "
+                "This could be very expensive depending on the number of "
+                " models and image sizes."
+            )
             labels = self.emission_model.saved_labels
 
         # Flag that we will compute the luminosity images
@@ -2340,6 +2346,12 @@ class Pipeline:
         """
         # If we have no labels then use all saved models
         if labels is None:
+            warn(
+                "No labels were passed to get_images_flux. We will generate "
+                f"images for: {self.emission_model.saved_labels}. This could "
+                "be very expensive depending on the number of models and "
+                "image sizes."
+            )
             labels = self.emission_model.saved_labels
 
         # Flag that we will compute the flux images
@@ -2630,6 +2642,12 @@ class Pipeline:
         """
         # If we have no labels then use all saved models
         if labels is None:
+            warn(
+                "No labels were passed to get_data_cubes_lnu. We will "
+                f"generate data cubes for: {self.emission_model.saved_labels}."
+                " This could be very expensive depending on the number of "
+                "models and cube sizes."
+            )
             labels = self.emission_model.saved_labels
 
         # Flag that we will compute the lnu data cubes
@@ -2782,6 +2800,12 @@ class Pipeline:
         """
         # If we have no labels then use all saved models
         if labels is None:
+            warn(
+                "No labels were passed to get_data_cubes_fnu. We will "
+                f"generate data cubes for: {self.emission_model.saved_labels}."
+                " This could be very expensive depending on the number of "
+                "models and cube sizes."
+            )
             labels = self.emission_model.saved_labels
 
         # Flag that we will compute the fnu data cubes
