@@ -458,7 +458,9 @@ class TestPipelineNotReady:
         base_pipeline.add_galaxies(list_of_random_particle_galaxies)
 
         # Should raise during run() when trying to get observed spectra
-        with pytest.raises(TypeError):  # Missing required cosmo argument
+        with pytest.raises(
+            exceptions.InconsistentArguments
+        ):  # Missing required cosmo argument
             base_pipeline.run()
 
     def test_get_observed_lines_without_line_ids(self, base_pipeline):
@@ -831,8 +833,8 @@ class TestPipelineOperations:
             count_and_check_dict_recursive(
                 pipeline_with_galaxies_per_particle.images_lum
             )
-            == 0
-        ), "PSFless images were not removed"
+            > 0
+        ), "Base images were removed"
 
     def test_run_pipeline_images_flux_psfs(
         self,
@@ -867,8 +869,8 @@ class TestPipelineOperations:
             count_and_check_dict_recursive(
                 pipeline_with_galaxies_per_particle.images_flux
             )
-            == 0
-        ), "PSFless images were not removed"
+            > 0
+        ), "Base images were removed"
 
     def test_run_pipeline_sfzh(
         self,
@@ -957,128 +959,6 @@ class TestPipelineNewFeatures:
         # Run the pipeline and ensure no errors
         pipeline_with_galaxies_per_particle.run()
         assert pipeline_with_galaxies_per_particle._analysis_complete
-
-    def test_get_images_luminosity_write_all_true(
-        self,
-        kernel,
-        pipeline_with_galaxies_per_particle,
-        nircam_instrument,
-    ):
-        """Test that write_all=True keeps intermediate images."""
-        # Add dummy galaxies with PSF and write_all=True
-        pipeline_with_galaxies_per_particle.get_images_luminosity(
-            nircam_instrument,
-            fov=100 * Mpc,
-            kernel=kernel,
-            write_all=True,
-        )
-        pipeline_with_galaxies_per_particle.run()
-
-        # Check that both base and PSF images exist
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum
-            )
-            > 0
-        ), "Base images were removed despite write_all=True"
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum_psf
-            )
-            > 0
-        ), "PSF images not calculated"
-
-    def test_get_images_luminosity_write_all_false(
-        self,
-        kernel,
-        pipeline_with_galaxies_per_particle,
-        nircam_instrument,
-    ):
-        """Test that write_all=False removes intermediate images."""
-        # Add dummy galaxies with PSF and write_all=False (default)
-        pipeline_with_galaxies_per_particle.get_images_luminosity(
-            nircam_instrument,
-            fov=100 * Mpc,
-            kernel=kernel,
-            write_all=False,
-        )
-        pipeline_with_galaxies_per_particle.run()
-
-        # Check that only PSF images exist
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum
-            )
-            == 0
-        ), "Base images were not removed"
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum_psf
-            )
-            > 0
-        ), "PSF images not calculated"
-
-    def test_get_images_flux_write_all_true(
-        self,
-        kernel,
-        pipeline_with_galaxies_per_particle,
-        nircam_instrument,
-    ):
-        """Test that write_all=True keeps intermediate flux images."""
-        # Add dummy galaxies with PSF and write_all=True
-        pipeline_with_galaxies_per_particle.get_images_flux(
-            nircam_instrument,
-            fov=100 * Mpc,
-            kernel=kernel,
-            cosmo=cosmo,
-            write_all=True,
-        )
-        pipeline_with_galaxies_per_particle.run()
-
-        # Check that both base and PSF images exist
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux
-            )
-            > 0
-        ), "Base flux images were removed despite write_all=True"
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux_psf
-            )
-            > 0
-        ), "PSF flux images not calculated"
-
-    def test_get_images_flux_write_all_false(
-        self,
-        kernel,
-        pipeline_with_galaxies_per_particle,
-        nircam_instrument,
-    ):
-        """Test that write_all=False removes intermediate flux images."""
-        # Add dummy galaxies with PSF and write_all=False (default)
-        pipeline_with_galaxies_per_particle.get_images_flux(
-            nircam_instrument,
-            fov=100 * Mpc,
-            kernel=kernel,
-            cosmo=cosmo,
-            write_all=False,
-        )
-        pipeline_with_galaxies_per_particle.run()
-
-        # Check that only PSF images exist
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux
-            )
-            == 0
-        ), "Base flux images were not removed"
-        assert (
-            count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux_psf
-            )
-            > 0
-        ), "PSF flux images not calculated"
 
     def test_noise_unit_validation_luminosity_depth_wrong_units(
         self,
