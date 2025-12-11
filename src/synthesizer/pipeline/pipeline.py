@@ -181,10 +181,10 @@ class Pipeline:
         # Define the container to hold the galaxies
         self.galaxies = []
 
-        # Define a container to hold the instruments for each operation
-        # (the keys of this will be the methods we'll be using and the
-        # values will be lists of instruments for each operation)
-        self.instruments = {}
+        # Define an empty InstrumentCollection to hold the instruments we
+        # will use (this is only used for book keeping, the kwarg handler
+        # deals with where to apply different instruments)
+        self.instruments = InstrumentCollection()
 
         # How many threads are we using for shared memory parallelism?
         self.nthreads = nthreads
@@ -1120,6 +1120,56 @@ class Pipeline:
         self._loaded_galaxies = True
         self._took(start, f"Adding {self.n_galaxies} galaxies")
 
+    def _add_instruments(self, instruments):
+        """Add instruments to the Pipeline.
+
+        This is a helprer used to attach instruments to the pipeline. Note
+        that these instruments are only used for book keeping. The machinery
+        to apply instruments to the right operation is handled by the
+        OperationKwargsHandler (self._operation_kwargs).
+
+        This method will convert the input to a flat list of Instruments.
+
+        Args:
+            instruments (list of Instrument/InstrumentCollection):
+                The instruments to attach to the pipeline.
+
+        Returns:
+            list of Instrument:
+                The flattened list of instruments.
+        """
+        # Flatten the instruments into a single list
+        _instruments = []
+        for inst in instruments:
+            if isinstance(inst, InstrumentCollection):
+                _instruments.extend(list(inst.instruments.values()))
+            else:
+                _instruments.append(inst)
+
+        # Get a set for the currently instrument collection
+        current_instruments = self.instruments.to_set()
+
+        # Combine the current instruments with the new ones
+        current_instruments.update(_instruments)
+
+        # Ensure we don't have duplicate labels (this can happen if the same
+        # label is being used for similar instruments with different
+        # properties)
+        all_labels = [inst.label for inst in current_instruments]
+        label_set = set(all_labels)
+        if len(label_set) != len(current_instruments):
+            raise exceptions.InconsistentArguments(
+                "Duplicate instrument labels found when adding "
+                "instruments to the Pipeline. Ensure all instruments "
+                f"have unique labels. Labels found: {all_labels}"
+            )
+
+        # Add the new instruments to the instrument collection
+        new_instruments = set(_instruments) - current_instruments
+        self.instruments.add_instruments(*new_instruments)
+
+        return _instruments
+
     def get_los_optical_depths(
         self,
         kernel,
@@ -1527,13 +1577,8 @@ class Pipeline:
                 "Pass instruments to the get_photometry_luminosities method."
             )
 
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
+        # Unpack and attach instruments to the pipeline
+        _instruments = self._add_instruments(instruments)
 
         # Check that the instruments can do photometry
         for inst in _instruments:
@@ -1547,23 +1592,6 @@ class Pipeline:
             labels if labels is not None else NO_MODEL_LABEL,
             "get_photometry_luminosities",
             instruments=_instruments,
-        )
-
-        # Store the instruments too for later reference (but only if they are
-        # not already in the collection)
-        phot_lum_insts = self.instruments.get(
-            "get_photometry_luminosities",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_photometry_luminosities",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[
-                inst
-                for inst in _instruments
-                if inst.label not in phot_lum_insts
-            ]
         )
 
         # We need to ensure the lnu spectra are computed first
@@ -1664,13 +1692,8 @@ class Pipeline:
                 "Pass instruments to the get_photometry_fluxes method."
             )
 
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
+        # Unpack and attach instruments to the pipeline
+        _instruments = self._add_instruments(instruments)
 
         # Check that the instruments can do photometry
         for inst in _instruments:
@@ -1686,23 +1709,6 @@ class Pipeline:
             instruments=_instruments,
             cosmo=cosmo,
             igm=igm,
-        )
-
-        # Store the instruments too for later reference (but only if they are
-        # not already in the collection)
-        phot_flux_insts = self.instruments.get(
-            "get_photometry_fluxes",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_photometry_fluxes",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[
-                inst
-                for inst in _instruments
-                if inst.label not in phot_flux_insts
-            ]
         )
 
         # We need to ensure the fnu spectra are computed first
@@ -2050,13 +2056,8 @@ class Pipeline:
                 "Pass instruments to the get_images_luminosity method."
             )
 
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
+        # Unpack and attach instruments to the pipeline
+        _instruments = self._add_instruments(instruments)
 
         # Check that the instruments can do imaging
         for inst in _instruments:
@@ -2076,29 +2077,6 @@ class Pipeline:
             kernel_threshold=kernel_threshold,
             psf_resample_factor=psf_resample_factor,
             cosmo=cosmo,
-        )
-
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
-            "get_images_luminosity",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
-
-        # We also need to include these instruments in the instrument
-        # collection for the luminosities (but only if they are not already)
-        phot_lum_insts = self.instruments.get(
-            "get_photometry_luminosities",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_photometry_luminosities",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[
-                inst
-                for inst in _instruments
-                if inst.label not in phot_lum_insts
-            ]
         )
 
         # Validate noise attribute units for luminosity images
@@ -2326,13 +2304,8 @@ class Pipeline:
                 "Pass instruments to the get_images_flux method."
             )
 
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
+        # Unpack and attach instruments to the pipeline
+        _instruments = self._add_instruments(instruments)
 
         # Check that the instruments can do imaging
         for inst in _instruments:
@@ -2351,29 +2324,6 @@ class Pipeline:
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             psf_resample_factor=psf_resample_factor,
-        )
-
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
-            "get_images_flux",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
-
-        # We also need to include these instruments in the instrument
-        # collection for the fluxes
-        phot_flux_insts = self.instruments.get(
-            "get_photometry_fluxes",
-            InstrumentCollection(),
-        )
-        self.instruments.setdefault(
-            "get_photometry_fluxes",
-            InstrumentCollection(),
-        ).add_instruments(
-            *[
-                inst
-                for inst in _instruments
-                if inst.label not in phot_flux_insts
-            ]
         )
 
         # Validate noise attribute units for flux images
@@ -2851,13 +2801,8 @@ class Pipeline:
                 "method."
             )
 
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
+        # Unpack and attach instruments to the pipeline
+        _instruments = self._add_instruments(instruments)
 
         # Check that the instruments can do spectroscopy
         for inst in _instruments:
@@ -2872,12 +2817,6 @@ class Pipeline:
             "get_spectroscopy_lnu",
             instruments=_instruments,
         )
-
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
-            "get_spectroscopy_lnu",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
 
         # We need to ensure the lnu spectra are computed first
         # NOTE: this is safe if the user has already called
@@ -2978,13 +2917,8 @@ class Pipeline:
                 "method."
             )
 
-        # Unpack any instrument collections into the instruments list
-        _instruments = []
-        for inst in instruments:
-            if isinstance(inst, InstrumentCollection):
-                _instruments.extend(list(inst.instruments.values()))
-            else:
-                _instruments.append(inst)
+        # Unpack and attach instruments to the pipeline
+        _instruments = self._add_instruments(instruments)
 
         # Check that the instruments can do spectroscopy
         for inst in _instruments:
@@ -2999,12 +2933,6 @@ class Pipeline:
             "get_spectroscopy_fnu",
             instruments=_instruments,
         )
-
-        # Add the instruments to the instruments for this operation
-        self.instruments.setdefault(
-            "get_spectroscopy_fnu",
-            InstrumentCollection(),
-        ).add_instruments(*_instruments)
 
         # We need to ensure the fnu spectra are computed first
         # NOTE: this is safe if the user has already called
