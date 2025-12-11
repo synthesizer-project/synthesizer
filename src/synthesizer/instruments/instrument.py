@@ -632,7 +632,9 @@ class Instrument:
         """
         # Unpack all the annoyingly flexible options to a consistent hashable
         # state
-        filters_hash = obj_to_hashable(self.filters.filter_codes)
+        filters_hash = obj_to_hashable(
+            self.filters.filter_codes if self.filters else None
+        )
         lam_hash = obj_to_hashable(self._lam)
         depth_hash = obj_to_hashable(self.depth)
         depth_app_radius_hash = obj_to_hashable(self.depth_app_radius)

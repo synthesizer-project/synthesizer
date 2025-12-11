@@ -242,11 +242,10 @@ class PipelineIO:
         # Unpack the instruments into a single instrument collection containing
         # all unique instruments
         unique_instruments = InstrumentCollection()
-        for insts in instruments.values():
-            for inst in insts:
-                if inst.label in unique_instruments:
-                    continue
-                unique_instruments.add_instruments(inst)
+        for inst in instruments:
+            if inst.label in unique_instruments:
+                continue
+            unique_instruments.add_instruments(inst)
         instruments = unique_instruments
 
         # Only write this metadata once

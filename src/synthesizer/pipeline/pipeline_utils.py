@@ -589,6 +589,10 @@ class OperationKwargs:
                 f"{type(self).__name__!s} has no attribute {name!r}"
             ) from None
 
+    def get(self, key, default=None):
+        """Dict-like get method: obj.get('fov', default) -> kwargs.get()."""
+        return self._kwargs.get(key, default)
+
     @property
     def kwargs(self):
         """Return the underlying kwargs dict."""
