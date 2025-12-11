@@ -639,13 +639,14 @@ class Instrument:
         snrs_hash = obj_to_hashable(self.snrs)
         psfs_hash = obj_to_hashable(self.psfs)
         noise_maps_hash = obj_to_hashable(self.noise_maps)
+        resolution_hash = obj_to_hashable(self.resolution)
 
         # Define the hash based on the label and properties of the object
         return hash(
             (
                 self.label,
                 filters_hash,
-                self._resolution,
+                resolution_hash,
                 lam_hash,
                 depth_hash,
                 depth_app_radius_hash,

@@ -613,29 +613,75 @@ def obj_to_hashable(obj):
     Raises:
         CannottHashThat: If a data type is passed that can't be handled.
     """
+    # Cheap cases first: already hashable scalars
     if isinstance(obj, (int, float, str, bool, type(None))):
         return obj
-    elif isinstance(obj, np.ndarray):
-        if obj.isnumeric():
-            # Just do a cheap match on the min, max, average diff, and size.
-            # Thisnis enough to quantify uniqueness
-            return tuple(
-                obj_to_hashable(obj.min()),
-                obj_to_hashable(obj.max()),
-                obj_to_hashable(np.mean(np.diff(obj))),
-                obj.size,
-            )
-        else:
-            return tuple(obj_to_hashable(item) for item in obj)
+
+    # Handle NumPy scalar types (e.g. np.int64, np.float64, np.bool_)
+    # by converting them to the corresponding Python scalar.
+    elif isinstance(obj, np.generic):
+        return obj.item()
+
+    # Unyt stuff: convert to the underlying ndarray view and recurse
     elif isinstance(obj, (unyt_quantity, unyt_array)):
         return obj_to_hashable(obj.ndview)
+
+    # NumPy arrays: either summarize numerically or recurse element-wise
+    elif isinstance(obj, np.ndarray):
+        dt = obj.dtype
+
+        # For numeric types min+max+diff is enough to differentiate uniqueness
+        is_numeric = (
+            np.issubdtype(dt, np.number)
+            or dt == np.bool_
+            or np.issubdtype(dt, np.datetime64)
+            or np.issubdtype(dt, np.timedelta64)
+        )
+        if is_numeric:
+            size = int(obj.size)
+
+            # Handle 0 sized arrays
+            if size == 0:
+                min_val = None
+                max_val = None
+                diff_mean = None
+
+            # Get the min and max because we can
+            else:
+                min_val = obj.min()
+                max_val = obj.max()
+
+                # Ensure diff is meaningful
+                if size < 2:
+                    diff_mean = None
+                else:
+                    diff_mean = np.mean(np.diff(obj))
+
+            # Cheap numerical fingerprint: (min, max, avg diff, size)
+            return (
+                obj_to_hashable(min_val),
+                obj_to_hashable(max_val),
+                obj_to_hashable(diff_mean),
+                size,
+            )
+        else:
+            # Non-numeric array: hash element-wise
+            return tuple(obj_to_hashable(item) for item in obj)
+
+    # Built-in containers: recurse
     elif isinstance(obj, (list, tuple)):
         return tuple(obj_to_hashable(item) for item in obj)
+
+    # Handle dict
     elif isinstance(obj, dict):
         return tuple(
             sorted((key, obj_to_hashable(value)) for key, value in obj.items())
         )
+
+    # Handle set
     elif isinstance(obj, set):
         return tuple(sorted(obj_to_hashable(item) for item in obj))
+
+    # Anything else: bail, we can't hash it
     else:
         raise exceptions.CannottHashThat(f"Unhashable type: {type(obj)}")
