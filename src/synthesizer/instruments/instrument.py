@@ -32,6 +32,7 @@ from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_collection import InstrumentCollection
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.util_funcs import obj_to_hashable
 
 
 class Instrument:
@@ -622,6 +623,37 @@ class Instrument:
         collection.add_instruments(self, other)
 
         return collection
+
+    def __hash__(self):
+        """Enable hashing of Instrument objects.
+
+        This enables instruments to be able to placed into a set for quick
+        removal of duplicates.
+        """
+        # Unpack all the annoyingly flexible options to a consistent hashable
+        # state
+        filters_hash = obj_to_hashable(self.filters.filter_codes)
+        lam_hash = obj_to_hashable(self._lam)
+        depth_hash = obj_to_hashable(self.depth)
+        depth_app_radius_hash = obj_to_hashable(self.depth_app_radius)
+        snrs_hash = obj_to_hashable(self.snrs)
+        psfs_hash = obj_to_hashable(self.psfs)
+        noise_maps_hash = obj_to_hashable(self.noise_maps)
+
+        # Define the hash based on the label and properties of the object
+        return hash(
+            (
+                self.label,
+                filters_hash,
+                self._resolution,
+                lam_hash,
+                depth_hash,
+                depth_app_radius_hash,
+                snrs_hash,
+                psfs_hash,
+                noise_maps_hash,
+            )
+        )
 
     def add_filters(self, filters, psfs=None, noise_maps=None):
         """Add filters to the Instrument.

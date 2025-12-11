@@ -596,3 +596,46 @@ def sigmoid(x, A, a, c, center):
         float: Sigmoid function value.
     """
     return A / (1 + np.exp(-a * (x - center))) + c
+
+
+def obj_to_hashable(obj):
+    """Convert an object to a hashable data type.
+
+    This is a helper for converting different data types to hashable types
+    with minimal cost.
+
+    Args:
+        obj (Any): The object to convert.
+
+    Returns:
+        hashable: A hashable representation of the object.
+
+    Raises:
+        CannottHashThat: If a data type is passed that can't be handled.
+    """
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    elif isinstance(obj, np.ndarray):
+        if obj.isnumeric():
+            # Just do a cheap match on the min, max, average diff, and size.
+            # Thisnis enough to quantify uniqueness
+            return tuple(
+                obj_to_hashable(obj.min()),
+                obj_to_hashable(obj.max()),
+                obj_to_hashable(np.mean(np.diff(obj))),
+                obj.size,
+            )
+        else:
+            return tuple(obj_to_hashable(item) for item in obj)
+    elif isinstance(obj, (unyt_quantity, unyt_array)):
+        return obj_to_hashable(obj.ndview)
+    elif isinstance(obj, (list, tuple)):
+        return tuple(obj_to_hashable(item) for item in obj)
+    elif isinstance(obj, dict):
+        return tuple(
+            sorted((key, obj_to_hashable(value)) for key, value in obj.items())
+        )
+    elif isinstance(obj, set):
+        return tuple(sorted(obj_to_hashable(item) for item in obj))
+    else:
+        raise exceptions.CannottHashThat(f"Unhashable type: {type(obj)}")
