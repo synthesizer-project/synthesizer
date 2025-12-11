@@ -272,3 +272,27 @@ class TestStandardizeImagingUnits:
                 cosmo=Planck18,
                 include_smoothing_lengths=False,
             )
+
+    def test_empty_coordinates(self):
+        """Test handling of empty coordinate arrays."""
+        # Setup
+        resolution = 0.1 * kpc
+        fov = 10.0 * kpc
+        coords = unyt_array([], "kpc").reshape(0, 3)
+        emitter = MockEmitter(coords, redshift=1.0)
+
+        # Execute
+        res_out, fov_out, coords_out, smls_out = _standardize_imaging_units(
+            resolution=resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=Planck18,
+            include_smoothing_lengths=False,
+        )
+
+        # Assert
+        assert res_out == resolution
+        assert np.allclose(fov_out.value, fov.value)
+        assert coords_out.size == 0
+        assert coords_out.units == coords.units
+        assert smls_out is None

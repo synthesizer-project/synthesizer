@@ -1521,6 +1521,28 @@ class Galaxy(BaseGalaxy):
                 " What component/s do you want a data cube of?"
             )
 
+        # Validate cosmo parameter if mixed units are detected
+        if cosmo is None:
+            from unyt import arcsecond, kpc
+
+            from synthesizer.units import unit_is_compatible
+
+            resolution_is_angular = unit_is_compatible(resolution, arcsecond)
+            resolution_is_cartesian = unit_is_compatible(resolution, kpc)
+            fov_is_angular = unit_is_compatible(fov, arcsecond)
+            fov_is_cartesian = unit_is_compatible(fov, kpc)
+
+            # Check for mixed unit systems
+            if (resolution_is_angular and fov_is_cartesian) or (
+                resolution_is_cartesian and fov_is_angular
+            ):
+                raise exceptions.InconsistentArguments(
+                    "Mixed unit systems detected (angular resolution with "
+                    "Cartesian fov or vice versa) but no cosmology "
+                    "provided. Please provide a cosmology object via the "
+                    "cosmo parameter to enable unit conversion."
+                )
+
         # Import unit standardization function
         from synthesizer.imaging.image_generators import (
             _standardize_imaging_units,

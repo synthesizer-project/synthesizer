@@ -2548,9 +2548,12 @@ class Pipeline:
         if cube_type == "smoothed" and kernel is None:
             raise exceptions.InconsistentArguments(
                 "Cannot generate smoothed data cubes without a kernel! "
-                "Please pass a kernel (e.g., Kernel('cubic')) to the "
-                "get_data_cubes_lnu method, or use cube_type='hist' for "
-                "histogram-based data cubes."
+                "Please pass a kernel to the get_data_cubes_lnu method. "
+                "Example: from synthesizer.kernel_functions import Kernel; "
+                "kernel = Kernel().get_kernel(). Available kernel names: "
+                "'uniform', 'sph_anarchy', 'gadget_2', 'cubic', 'quintic'. "
+                "Alternatively, use cube_type='hist' for histogram-based "
+                "data cubes."
             )
 
         # Add the instruments to the operation kwargs
@@ -2732,9 +2735,12 @@ class Pipeline:
         if cube_type == "smoothed" and kernel is None:
             raise exceptions.InconsistentArguments(
                 "Cannot generate smoothed data cubes without a kernel! "
-                "Please pass a kernel (e.g., Kernel('cubic')) to the "
-                "get_data_cubes_fnu method, or use cube_type='hist' for "
-                "histogram-based data cubes."
+                "Please pass a kernel to the get_data_cubes_fnu method. "
+                "Example: from synthesizer.kernel_functions import Kernel; "
+                "kernel = Kernel().get_kernel(). Available kernel names: "
+                "'uniform', 'sph_anarchy', 'gadget_2', 'cubic', 'quintic'. "
+                "Alternatively, use cube_type='hist' for histogram-based "
+                "data cubes."
             )
 
         # Add the instruments to the operation kwargs
