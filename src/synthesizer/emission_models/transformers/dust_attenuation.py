@@ -37,6 +37,7 @@ from unyt import (
 )
 
 from synthesizer import exceptions
+from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
@@ -1145,7 +1146,12 @@ class DraineLiGrainCurves(AttenuationLaw):
             E.g. grain_dict = {'graphite': [0.01, 0.1]}
     """
 
-    def __init__(self, grid_name: str, grid_dir: str, grain_dict: Dict = None):
+    def __init__(
+        self,
+        grid_name: str,
+        grid_dir: str = None,
+        grain_dict: Dict = None,
+    ):
         """Initialise the Draine and Li extinction curves.
 
         Draine and Li extinction curves obtained from pre-processing
@@ -1158,20 +1164,21 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         Attributes:
             grid_name (string):
-                Name of the extinction curve grid (without hdf5
-                extension)
+                Name of the extinction curve grid.
             grid_dir (string):
-                Location of the grid
+                Location of the grid. By default None, and the standard
+                grids directory will be assumed.
             grain_dict (Dict):
                 Dictionary containing the grain type ('graphite' or
                 'silicate' or 'pahionised' or 'pahneutral') and their
                 corresponding centre of the grain size distribution in
-                microns.
+                microns. This should correspond to the grid that you
+                are providing.
                 E.g. grain_dict = {'graphite': [0.01, 0.1]}
 
         """
-        self.grid_name = grid_name
-        self.grid_dir = grid_dir
+        self.grid_name = grid_name.replace(".hdf5", "").replace(".h5", "")
+        self.grid_dir = get_grids_dir() if grid_dir is None else grid_dir
         self.grain_dict = grain_dict
         if self.grain_dict is None:
             raise exceptions.MissingArgument(
