@@ -299,7 +299,7 @@ class Component(ABC):
         # avoid any issues with 0s
         return (10 * pc).to(kpc)
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1, limit_to=None):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
@@ -310,15 +310,22 @@ class Component(ABC):
             nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
+            limit_to (str/list, optional):
+                If None, then photometry is calculated for all spectra in the
+                galaxy. If a string or list of strings is provided, then
+                photometry is only calculated for the specified spectra.
 
         Returns:
             photo_lnu (dict):
                 A dictionary of rest frame broadband luminosities.
         """
+        # Get the labels
+        labels = self.spectra.keys() if limit_to is None else limit_to
+
         # Loop over spectra in the component
-        for spectra in self.spectra:
+        for label in labels:
             # Create the photometry collection and store it in the object
-            self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
+            self.photo_lnu[label] = self.spectra[label].get_photo_lnu(
                 filters,
                 verbose,
                 nthreads=nthreads,
@@ -350,7 +357,7 @@ class Component(ABC):
         """
         return self.get_photo_lnu(filters, verbose)
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
         """Calculate flux photometry using a FilterCollection object.
 
         Args:
@@ -361,15 +368,22 @@ class Component(ABC):
             nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
+            limit_to (str/list, optional):
+                If None, then photometry is calculated for all spectra in the
+                galaxy. If a string or list of strings is provided, then
+                photometry is only calculated for the specified spectra.
 
         Returns:
             dict:
                 A dictionary of fluxes in each filter in filters.
         """
+        # Get the labels
+        labels = self.spectra.keys() if limit_to is None else limit_to
+
         # Loop over spectra in the component
-        for spectra in self.spectra:
+        for label in labels:
             # Create the photometry collection and store it in the object
-            self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
+            self.photo_fnu[label] = self.spectra[label].get_photo_fnu(
                 filters,
                 verbose,
                 nthreads=nthreads,
@@ -1333,6 +1347,7 @@ class Component(ABC):
     def get_spectroscopy(
         self,
         instrument,
+        limit_to=None,
     ):
         """Get spectroscopy for the component based on a specific instrument.
 
@@ -1342,6 +1357,11 @@ class Component(ABC):
         Args:
             instrument (Instrument):
                 The instrument to use for the spectroscopy.
+            limit_to (str/list, optional):
+                If None, then spectroscopy is calculated for all spectra in
+                the component. If a string or list of strings is provided,
+                then spectroscopy is only calculated for the specified
+                spectra.
 
         Returns:
             dict
@@ -1352,11 +1372,17 @@ class Component(ABC):
         if instrument.label not in self.spectroscopy:
             self.spectroscopy[instrument.label] = {}
 
+        # Get the labels
+        labels = self.spectra.keys() if limit_to is None else limit_to
+
         # Loop over the spectra in the component and apply the instrument
-        for key, sed in self.spectra.items():
-            self.spectroscopy[instrument.label][key] = (
-                sed.apply_instrument_lams(instrument)
-            )
+        for label in labels:
+            # Skip labels that don't exist on this component
+            if label not in self.spectra:
+                continue
+            self.spectroscopy[instrument.label][label] = self.spectra[
+                label
+            ].apply_instrument_lams(instrument)
 
         # If we have particle spectra then do the same for them
         if (
@@ -1366,10 +1392,20 @@ class Component(ABC):
             if instrument.label not in self.particle_spectroscopy:
                 self.particle_spectroscopy[instrument.label] = {}
 
+            # Get the labels for particle spectra
+            particle_labels = (
+                self.particle_spectra.keys() if limit_to is None else limit_to
+            )
+
             # Loop over the spectra in the component and apply the instrument
-            for key, sed in self.particle_spectra.items():
-                self.particle_spectroscopy[instrument.label][key] = (
-                    sed.apply_instrument_lams(instrument)
+            for label in particle_labels:
+                # Skip labels that don't exist on this component
+                if label not in self.particle_spectra:
+                    continue
+                self.particle_spectroscopy[instrument.label][label] = (
+                    self.particle_spectra[label].apply_instrument_lams(
+                        instrument
+                    )
                 )
 
         # Return the spectroscopy for the component

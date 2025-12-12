@@ -596,3 +596,114 @@ def sigmoid(x, A, a, c, center):
         float: Sigmoid function value.
     """
     return A / (1 + np.exp(-a * (x - center))) + c
+
+
+def obj_to_hashable(obj):
+    """Convert an object to a hashable data type.
+
+    This is a helper for converting different data types to hashable types
+    with minimal cost.
+
+    Args:
+        obj (Any): The object to convert.
+
+    Returns:
+        hashable: A hashable representation of the object.
+
+    Raises:
+        CannotHashThat: If a data type is passed that can't be handled.
+    """
+    # Cheap cases first: already hashable scalars
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+
+    # Handle NumPy scalar types (e.g. np.int64, np.float64, np.bool_)
+    # by converting them to the corresponding Python scalar.
+    elif isinstance(obj, np.generic):
+        return obj.item()
+
+    # Unyt stuff: convert to the underlying ndarray view and recurse
+    elif isinstance(obj, (unyt_quantity, unyt_array)):
+        return obj_to_hashable(obj.ndview)
+
+    # NumPy arrays: either summarize numerically or recurse element-wise
+    elif isinstance(obj, np.ndarray):
+        dt = obj.dtype
+
+        # For numeric types min+max+diff is enough to differentiate uniqueness
+        is_numeric = (
+            np.issubdtype(dt, np.number)
+            or dt == np.bool_
+            or np.issubdtype(dt, np.datetime64)
+            or np.issubdtype(dt, np.timedelta64)
+        )
+        if is_numeric:
+            size = int(obj.size)
+
+            # Handle 0 sized arrays
+            if size == 0:
+                min_val = None
+                max_val = None
+                diff_mean = None
+
+            # Get the min and max because we can
+            else:
+                min_val = obj.min()
+                max_val = obj.max()
+
+                # Ensure diff is meaningful
+                if size < 2:
+                    diff_mean = None
+                else:
+                    diff_mean = np.mean(np.diff(obj))
+
+            # Cheap numerical fingerprint: (min, max, avg diff, size)
+            return (
+                obj_to_hashable(min_val),
+                obj_to_hashable(max_val),
+                obj_to_hashable(diff_mean),
+                size,
+            )
+        else:
+            # Non-numeric array: hash element-wise
+            return tuple(obj_to_hashable(item) for item in obj)
+
+    # Built-in containers: recurse
+    elif isinstance(obj, (list, tuple)):
+        return tuple(obj_to_hashable(item) for item in obj)
+
+    # Handle dict
+    elif isinstance(obj, dict):
+        return tuple(
+            sorted((key, obj_to_hashable(value)) for key, value in obj.items())
+        )
+
+    # Handle set
+    elif isinstance(obj, set):
+        # Convert all items to hashable form first
+        hashable_items = tuple(obj_to_hashable(item) for item in obj)
+
+        # Try to sort directly (works if items are comparable)
+        try:
+            return tuple(sorted(hashable_items))
+        except TypeError:
+            # Items are not directly comparable (e.g., heterogeneous types).
+            # Use a deterministic key based on type name and repr for stable
+            # sorting
+            try:
+                return tuple(
+                    sorted(
+                        hashable_items,
+                        key=lambda x: (type(x).__name__, repr(x)),
+                    )
+                )
+            except Exception as e:
+                # If even that fails, we can't create a deterministic hash
+                raise exceptions.CannotHashThat(
+                    f"Cannot create deterministic hash for set with "
+                    f"non-comparable items: {e}"
+                ) from e
+
+    # Anything else: bail, we can't hash it
+    else:
+        raise exceptions.CannotHashThat(f"Unhashable type: {type(obj)}")

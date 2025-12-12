@@ -19,6 +19,10 @@ import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.conversions import (
+    angular_to_spatial_at_z,
+    spatial_to_angular_at_z,
+)
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
@@ -75,6 +79,229 @@ def _validate_centered_coordinates(cent_coords, *, warn_only=False):
         warn(msg)
     else:
         raise exceptions.InconsistentArguments(msg)
+
+
+def _standardize_imaging_units(
+    resolution,
+    fov,
+    emitter,
+    cosmo=None,
+    include_smoothing_lengths=False,
+):
+    """Standardize all imaging inputs to the same unit system.
+
+    This function ensures that resolution, fov, and emitter coordinates
+    are all in the same unit system (either all angular or all Cartesian).
+    If they are in different systems, it converts them to a common system
+    using the provided cosmology and the emitter's redshift.
+
+    The target system is determined by the resolution units:
+    - If resolution is angular, everything will be converted to angular
+    - If resolution is Cartesian, everything will be converted to Cartesian
+
+    This should be called at the start of any imaging operation to ensure
+    consistent units throughout.
+
+    IMPORTANT: This function does NOT modify the emitter's underlying data.
+    It returns new coordinate arrays.
+
+    Args:
+        resolution (unyt_quantity):
+            The size of a pixel. Can be in angular (e.g., arcsec) or
+            Cartesian (e.g., kpc) units.
+        fov (unyt_quantity/tuple of unyt_quantity):
+            The width of the image. Can be in angular or Cartesian units.
+            If a single value is given it will be used for both axes.
+        emitter (Stars/BlackHoles/BlackHole):
+            The emitter object containing the coordinates (and optionally
+            smoothing lengths) to standardize.
+        cosmo (astropy.cosmology.Cosmology, optional):
+            The cosmology object used for unit conversions. Required if
+            any inputs are in different unit systems.
+        include_smoothing_lengths (bool):
+            If True, also standardize and return smoothing lengths from
+            the emitter. Default is False.
+
+    Returns:
+        tuple:
+            - standardized_resolution (unyt_quantity)
+            - standardized_fov (unyt_array)
+            - standardized_coordinates (unyt_array)
+            - standardized_smoothing_lengths (unyt_array or None)
+              Only returned if include_smoothing_lengths=True, otherwise None
+
+    Raises:
+        InconsistentArguments:
+            If inputs are in different unit systems but cosmo or
+            emitter.redshift are not available.
+
+    Examples:
+        >>> # All Cartesian - no conversion needed
+        >>> res, fov, coords, smls = _standardize_imaging_units(
+        ...     0.1 * kpc,
+        ...     10 * kpc,
+        ...     emitter,
+        ...     include_smoothing_lengths=True,
+        ... )
+        >>> # Mixed units - conversion needed
+        >>> res, fov, coords, smls = _standardize_imaging_units(
+        ...     0.1 * arcsecond,
+        ...     10 * kpc,
+        ...     emitter,
+        ...     cosmo=cosmo,
+        ...     include_smoothing_lengths=True,
+        ... )
+    """
+    from unyt import arcsecond, kpc
+
+    # Validate resolution is a unyt object
+    if not isinstance(resolution, (unyt_quantity, unyt_array)):
+        raise exceptions.InconsistentArguments(
+            "Resolution must be a unyt_quantity or unyt_array. "
+            f"Got {type(resolution).__name__}."
+        )
+
+    # Validate fov is a unyt object
+    if not isinstance(fov, (unyt_quantity, unyt_array)):
+        raise exceptions.InconsistentArguments(
+            "Field of view (fov) must be a unyt_quantity or unyt_array. "
+            f"Got {type(fov).__name__}."
+        )
+
+    # Ensure fov has an entry for each axis if it doesn't already
+    if isinstance(fov, unyt_quantity):
+        fov = unyt_array((fov.value, fov.value), fov.units)
+    elif fov.size == 1:
+        fov = unyt_array((fov.value, fov.value), fov.units)
+
+    # Validate emitter has required attributes
+    if not hasattr(emitter, "centered_coordinates"):
+        raise exceptions.InconsistentArguments(
+            "Emitter must have 'centered_coordinates' attribute. "
+            f"Got {type(emitter).__name__} which does not have this attribute."
+        )
+
+    if include_smoothing_lengths and not hasattr(emitter, "smoothing_lengths"):
+        raise exceptions.InconsistentArguments(
+            "Emitter must have 'smoothing_lengths' attribute when "
+            "include_smoothing_lengths=True. "
+            f"Got {type(emitter).__name__} which does not have this attribute."
+        )
+
+    # Get the redshift from the emitter
+    redshift = getattr(emitter, "redshift", None)
+
+    # Determine the target unit system based on resolution
+    resolution_is_angular = unit_is_compatible(resolution, arcsecond)
+    resolution_is_cartesian = unit_is_compatible(resolution, kpc)
+
+    if not resolution_is_angular and not resolution_is_cartesian:
+        raise exceptions.InconsistentArguments(
+            "Resolution must be in either angular (e.g., arcsec) or "
+            f"Cartesian (e.g., kpc) units. Got {resolution.units}."
+        )
+
+    # Get emitter coordinates and optionally smoothing lengths
+    # Use centered coordinates which should already exist on the emitter
+    emitter_coords = emitter.centered_coordinates
+    emitter_smls = (
+        emitter.smoothing_lengths if include_smoothing_lengths else None
+    )
+
+    # Validate that coordinates are unyt arrays
+    if not isinstance(emitter_coords, unyt_array):
+        raise exceptions.InconsistentArguments(
+            "Emitter centered_coordinates must be a unyt_array. "
+            f"Got {type(emitter_coords).__name__}."
+        )
+
+    # Validate smoothing lengths if requested
+    if emitter_smls is not None and not isinstance(emitter_smls, unyt_array):
+        raise exceptions.InconsistentArguments(
+            "Emitter smoothing_lengths must be a unyt_array. "
+            f"Got {type(emitter_smls).__name__}."
+        )
+
+    # Check if conversion is needed
+    coords_compatible = unit_is_compatible(resolution, emitter_coords.units)
+    fov_compatible = unit_is_compatible(resolution, fov.units)
+    smls_compatible = emitter_smls is None or unit_is_compatible(
+        resolution, emitter_smls.units
+    )
+
+    # If everything is already compatible, return copies to avoid
+    # accidentally modifying the emitter
+    if coords_compatible and fov_compatible and smls_compatible:
+        standardized_coords = emitter_coords.copy()
+        standardized_fov = fov.copy()
+        standardized_smls = (
+            emitter_smls.copy() if emitter_smls is not None else None
+        )
+        return (
+            resolution,
+            standardized_fov,
+            standardized_coords,
+            standardized_smls,
+        )
+
+    # Need to convert - check we have the required cosmology and redshift
+    if cosmo is None or redshift is None:
+        raise exceptions.InconsistentArguments(
+            "Cannot convert between angular and Cartesian units without "
+            "both a cosmology and the emitter's redshift. "
+            f"Got resolution={resolution.units}, "
+            f"emitter coords={emitter_coords.units}, "
+            f"fov={fov.units}, cosmo={cosmo}, redshift={redshift}."
+        )
+
+    # Convert everything to the target system (based on resolution)
+    if resolution_is_angular:
+        # Convert to angular units
+        if not coords_compatible:
+            standardized_coords = spatial_to_angular_at_z(
+                emitter_coords, cosmo, redshift
+            )
+        else:
+            standardized_coords = emitter_coords.copy()
+
+        if not fov_compatible:
+            standardized_fov = spatial_to_angular_at_z(fov, cosmo, redshift)
+        else:
+            standardized_fov = fov.copy()
+
+        if emitter_smls is not None and not smls_compatible:
+            standardized_smls = spatial_to_angular_at_z(
+                emitter_smls, cosmo, redshift
+            )
+        elif emitter_smls is not None:
+            standardized_smls = emitter_smls.copy()
+        else:
+            standardized_smls = None
+
+    else:  # resolution_is_cartesian
+        # Convert to Cartesian units
+        if not coords_compatible:
+            standardized_coords = angular_to_spatial_at_z(
+                emitter_coords, cosmo, redshift
+            )
+        else:
+            standardized_coords = emitter_coords.copy()
+
+        if not fov_compatible:
+            standardized_fov = angular_to_spatial_at_z(fov, cosmo, redshift)
+        else:
+            standardized_fov = fov.copy()
+
+        if emitter_smls is not None and not smls_compatible:
+            standardized_smls = angular_to_spatial_at_z(
+                emitter_smls, cosmo, redshift
+            )
+        elif emitter_smls is not None:
+            standardized_smls = emitter_smls.copy()
+        else:
+            standardized_smls = None
+
+    return resolution, standardized_fov, standardized_coords, standardized_smls
 
 
 def _generate_image_particle_hist(
@@ -706,9 +933,37 @@ def _generate_image_collection_generic(
     from synthesizer.imaging import ImageCollection
     from synthesizer.particle import Particles
 
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
+    # NOTE: This does NOT modify the emitter's underlying data
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        # Validate that smoothing lengths exist for smoothed particle imaging
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        # Parametric emitters: keep original resolution/fov, skip coord
+        # standardization
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
+
     # Create the image collection
     imgs = ImageCollection(
-        resolution=instrument.resolution,
+        resolution=resolution,
         fov=fov,
     )
 
@@ -719,18 +974,7 @@ def _generate_image_collection_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
-        # Get the correct coordinates for the particles (i.e. angular
-        # or cartesian)
-        if imgs.has_angular_units and cosmo is not None:
-            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
-        elif imgs.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-
+        # Use the standardized coordinates (already in correct units)
         return _generate_images_particle_hist(
             imgs,
             coordinates=coords,
@@ -743,21 +987,8 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
-        # Get the correct coordinates and smoothing lengths for the
-        # particles (i.e. angular or cartesian)
-        if imgs.has_angular_units and cosmo is not None:
-            coords, smls = emitter.get_projected_angular_imaging_props(
-                cosmo=cosmo
-            )
-        elif imgs.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-            smls = emitter.smoothing_lengths
-
+        # Use the standardized coordinates and smoothing lengths
+        # (already in correct units)
         return _generate_images_particle_smoothed(
             imgs=imgs,
             signals=photometry.photometry,
@@ -1223,9 +1454,37 @@ def _generate_ifu_generic(
             "Did you not save the spectra or produce the photometry?"
         )
 
-    # Create the IFU
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
+    # NOTE: This does NOT modify the emitter's underlying data
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        # Validate that smoothing lengths exist for smoothed particle imaging
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        # Parametric emitters: keep original resolution/fov, skip coord
+        # standardization
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
+
+    # Create the IFU with standardized units
     ifu = SpectralCube(
-        resolution=instrument.resolution,
+        resolution=resolution,
         lam=lam * angstrom,
         fov=fov,
     )
@@ -1237,18 +1496,7 @@ def _generate_ifu_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
-        # Get the correct coordinates for the particles (i.e. angular
-        # or cartesian)
-        if ifu.has_angular_units and cosmo is not None:
-            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
-        elif ifu.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-
+        # Use the standardized coordinates (already in correct units)
         return _generate_ifu_particle_hist(
             ifu,
             sed=sed,
@@ -1263,21 +1511,8 @@ def _generate_ifu_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
-        # Get the correct coordinates and smoothing lengths for the
-        # particles (i.e. angular or cartesian)
-        if ifu.has_angular_units and cosmo is not None:
-            coords, smls = emitter.get_projected_angular_imaging_props(
-                cosmo=cosmo
-            )
-        elif ifu.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-            smls = emitter.smoothing_lengths
-
+        # Use the standardized coordinates and smoothing lengths
+        # (already in correct units)
         return _generate_ifu_particle_smoothed(
             ifu,
             sed=sed,

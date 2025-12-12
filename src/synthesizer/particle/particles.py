@@ -405,7 +405,13 @@ class Particles:
             projected_angular_smls,
         )
 
-    def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
+    def get_particle_photo_lnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+    ):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
@@ -416,21 +422,34 @@ class Particles:
             nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
+            limit_to (str/list, optional):
+                If None, then photometry is calculated for all spectra in the
+                galaxy. If a string or list of strings is provided, then
+                photometry is only calculated for the specified spectra.
 
         Returns:
             photo_lnu (dict): A dictionary of rest frame broadband
                 luminosities.
         """
+        # Get the labels
+        labels = self.particle_spectra.keys() if limit_to is None else limit_to
+
         # Loop over spectra in the component
-        for spectra in self.particle_spectra:
+        for label in labels:
             # Create the photometry collection and store it in the object
-            self.particle_photo_lnu[spectra] = self.particle_spectra[
-                spectra
+            self.particle_photo_lnu[label] = self.particle_spectra[
+                label
             ].get_photo_lnu(filters, verbose, nthreads=nthreads)
 
         return self.particle_photo_lnu
 
-    def get_particle_photo_fnu(self, filters, verbose=True, nthreads=1):
+    def get_particle_photo_fnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+    ):
         """Calculate flux photometry using a FilterCollection object.
 
         Args:
@@ -441,15 +460,22 @@ class Particles:
             nthreads (int):
                 The number of threads to use for the integration. If -1, all
                 threads will be used.
+            limit_to (str/list, optional):
+                If None, then photometry is calculated for all spectra in the
+                galaxy. If a string or list of strings is provided, then
+                photometry is only calculated for the specified spectra.
 
         Returns:
             dict: A dictionary of fluxes in each filter in filters.
         """
+        # Get the labels
+        labels = self.particle_spectra.keys() if limit_to is None else limit_to
+
         # Loop over spectra in the component
-        for spectra in self.particle_spectra:
+        for label in labels:
             # Create the photometry collection and store it in the object
-            self.particle_photo_fnu[spectra] = self.particle_spectra[
-                spectra
+            self.particle_photo_fnu[label] = self.particle_spectra[
+                label
             ].get_photo_fnu(filters, verbose, nthreads=nthreads)
 
         return self.particle_photo_fnu
