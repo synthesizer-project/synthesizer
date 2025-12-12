@@ -56,6 +56,12 @@ __all__ = [
 _RESET_SENTINEL = object()
 
 
+# Constants for some unit manipulation later in DraineLiGrainCurves
+MU = 1.4
+M_H = 1.6738e-24 * g  # in grams per H
+GAS_MASS_PER_H = (MU * M_H).to(Msun)  # in Msun
+
+
 class AttenuationLaw(Transformer):
     """The base class for all attenuation laws.
 
@@ -1310,11 +1316,6 @@ class DraineLiGrainCurves(AttenuationLaw):
                     f"Provide units to the {key} quantity"
                 )
 
-        # For some unit manipulation later
-        MU = 1.4
-        M_H = 1.6738e-24 * g  # in grams per H
-        # In Msun units
-        GAS_MASS_PER_H = (MU * M_H).to(Msun)
         # Read wavelengths and dtg from grid
         # Save all grain datasets
         prefix = "extinction_curves"
