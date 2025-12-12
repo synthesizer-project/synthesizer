@@ -1182,22 +1182,18 @@ class DraineLiGrainCurves(AttenuationLaw):
         self.grain_dict = grain_dict
         if self.grain_dict is None:
             raise exceptions.MissingArgument(
-                """
-                Provide `grain_dict` argument in
-                initialisation of the type
-                grain_dict = {grain type: grain size bins}.
-                Example definition
-                grain_dict = {'graphite': [0.01, 0.1]}.
-                This should correspond to the grid that you
-                are providing.
-                """
+                "Provide `grain_dict` argument in initialisation of the type "
+                "grain_dict = {grain type: grain size bins}. Example "
+                "definition grain_dict = {'graphite': [0.01, 0.1]}. This "
+                "should correspondto the grid that you are providing."
             )
-        description = """DraineLiGrainCurves: Draine and Li dust grain
-        model for extinction curves obtained from pre-processing the
-        extinction efficiencies for the required grain size
-        distribution. The different components and their relationship
-        with the dust-to-gas ratio have been interpolated
-        and LRU-cached"""
+        description = (
+            "DraineLiGrainCurves: Draine and Li dust grain model for "
+            "extinction curves obtained from pre-processing the extinction "
+            "efficiencies for the required grain size distribution. The "
+            "different components and their relationship with the dust-to-gas "
+            "ratio have been interpolated and LRU-cached"
+        )
         required_params = [
             f"sigmalos_{grain_type}_a{grain_size}um".replace(".", "p")
             for grain_type, grain_sizes in self.grain_dict.items()
@@ -1311,9 +1307,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                     )
             else:
                 raise exceptions.InconsistentArguments(
-                    f"""Provide units to the {key}
-                    quantity
-                    """
+                    f"Provide units to the {key} quantity"
                 )
 
         # For some unit manipulation later
@@ -1381,10 +1375,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             dataset_key = dataset_key.replace("0p", "0.")
             if dataset_key not in grid_dataset_names:
                 raise exceptions.InconsistentArguments(
-                    f"""
-                    Grain type {dataset_key} not in the
-                    provided dust grid!
-                    """
+                    f"Grain type {dataset_key} not in the provided dust grid!"
                 )
             # Get cached interpolator (will open HDF5 and
             # build interp1d on first call for this key)
@@ -1421,8 +1412,8 @@ class DraineLiGrainCurves(AttenuationLaw):
             dust_col = np.atleast_1d(dust_col)
             if dust_col.size not in (1, N):
                 raise exceptions.InconsistentArguments(
-                    f"""sigmalos component {comp_key} length
-                    {dust_col.size} incompatible with others."""
+                    f"sigmalos component {comp_key} length {dust_col.size} "
+                    "incompatible with others."
                 )
             if dust_col.size == 1:
                 dust_col = np.repeat(dust_col, N)
@@ -1513,11 +1504,8 @@ class DraineLiGrainCurves(AttenuationLaw):
         """
         if tau_v is not None:
             warn(
-                """
-                tau_v has been provided. However,
-                `DraineLiGrainCurves` does not use tau_v.
-                Ignoring tau_v in the calculation.
-                """
+                "tau_v has been provided. However, `DraineLiGrainCurves` "
+                "does not use tau_v. Ignoring tau_v in the calculation. "
             )
 
         # Set any additional parameters on the dust curve
