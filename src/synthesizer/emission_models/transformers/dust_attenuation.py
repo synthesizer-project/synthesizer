@@ -94,16 +94,19 @@ class AttenuationLaw(Transformer):
         """
         # Store the description of the model.
         self.description = description
+
         # Store user-supplied conversions between model arguments and parameter
         # names, e.g. allows the user to set e.g. slope = 'slope_young' on the
         # emitter or model and have that passed to the dust curve as slope
         self._name_transforms = {}
+
         # Stores overridden parameters temporarily
         self._temp_params = {}
         if ("tau_v" not in required_params) and (require_tau_v is True):
             raise exceptions.InconsistentArguments(
                 "AttenuationLaw requires 'tau_v' as a parameter."
             )
+
         # Call the parent constructor
         Transformer.__init__(self, required_params=required_params)
 
