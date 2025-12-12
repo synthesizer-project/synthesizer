@@ -1206,7 +1206,7 @@ class Pipeline:
         """
         # Store the arguments for the operation
         self._operation_kwargs.add(
-            NO_MODEL_LABEL,  # TODO: make this work for arbitrary los
+            NO_MODEL_LABEL,
             "get_los_optical_depths",
             kernel=kernel,
             kernel_threshold=kernel_threshold,
