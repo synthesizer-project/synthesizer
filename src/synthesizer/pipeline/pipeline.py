@@ -1180,7 +1180,7 @@ class Pipeline:
         kernel,
         kernel_threshold=1.0,
         kappa=0.0795,
-        write=True,
+        tau_v_attr="tau_v",
     ):
         """Flag that the Pipeline should compute the LOS optical depths.
 
@@ -1200,8 +1200,9 @@ class Pipeline:
             kappa (float):
                 The dust opacity coefficient in units of Msun / pc**2. Default
                 is 0.0795.
-            write (bool):
-                Whether to write out the LOS optical depths. Default is True.
+            tau_v_attr (str):
+                The name of the attribute to store the V-band optical depth.
+                Default is "tau_v".
         """
         # Store the arguments for the operation
         self._operation_kwargs.add(
@@ -1210,10 +1211,11 @@ class Pipeline:
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             kappa=kappa,
+            tau_v_attr=tau_v_attr,
         )
 
         # Flag that we will compute the LOS optical depths
-        self._do_los_optical_depths = write or self._do_los_optical_depths
+        self._do_los_optical_depths = True
 
     def _get_los_optical_depths(self, galaxy):
         """Compute the Line of Sight optical depths for all particles.
@@ -1243,6 +1245,7 @@ class Pipeline:
                     kernel=op_kwargs["kernel"],
                     kernel_threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
+                    tau_v_attr=op_kwargs["tau_v_attr"],
                     nthreads=self.nthreads,
                 )
             if (
@@ -1254,6 +1257,7 @@ class Pipeline:
                     kernel=op_kwargs["kernel"],
                     kernel_threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
+                    tau_v_attr=op_kwargs["tau_v_attr"],
                     nthreads=self.nthreads,
                 )
 
