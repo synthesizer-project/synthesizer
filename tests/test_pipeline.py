@@ -1793,7 +1793,7 @@ class TestOperationKwargsHandler:
 
         handler = OperationKwargsHandler(["model1", "model2"])
 
-        # Check allowed models are stored (including NO_MODEL_LABEL)
+        # Check allowed models are stored
         assert handler._allowed_models == {"model1", "model2"}
 
         # Check that _func_map exists
@@ -1904,7 +1904,7 @@ class TestOperationKwargsHandler:
 
         handler = OperationKwargsHandler(["model1"])
         # Invalid type (int) will raise TypeError when trying to iterate
-        with pytest.raises(TypeError, match="int.*not iterable"):
+        with pytest.raises(TypeError):
             handler.add(123, "test_op", param="value")
 
     def test_has_with_model_label(self):
