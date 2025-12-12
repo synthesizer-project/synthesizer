@@ -296,3 +296,96 @@ class TestStandardizeImagingUnits:
         assert coords_out.size == 0
         assert coords_out.units == coords.units
         assert smls_out is None
+
+    def test_invalid_resolution_type_raises_error(self):
+        """Test that non-unyt resolution raises an error."""
+        # Setup - resolution without units
+        resolution = 0.1  # Plain float, no units
+        fov = 10.0 * kpc
+        coords = unyt_array(np.random.rand(100, 3), "kpc") - 0.5 * kpc
+        emitter = MockEmitter(coords, redshift=1.0)
+
+        # Execute and assert
+        with pytest.raises(exceptions.InconsistentArguments) as excinfo:
+            _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=emitter,
+                cosmo=Planck18,
+                include_smoothing_lengths=False,
+            )
+        assert "Resolution must be a unyt_quantity" in str(excinfo.value)
+
+    def test_invalid_fov_type_raises_error(self):
+        """Test that non-unyt fov raises an error."""
+        # Setup - fov without units
+        resolution = 0.1 * kpc
+        fov = 10.0  # Plain float, no units
+        coords = unyt_array(np.random.rand(100, 3), "kpc") - 0.5 * kpc
+        emitter = MockEmitter(coords, redshift=1.0)
+
+        # Execute and assert
+        with pytest.raises(exceptions.InconsistentArguments) as excinfo:
+            _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=emitter,
+                cosmo=Planck18,
+                include_smoothing_lengths=False,
+            )
+        assert "Field of view (fov) must be a unyt_quantity" in str(
+            excinfo.value
+        )
+
+    def test_missing_centered_coordinates_raises_error(self):
+        """Test that emitter without centered_coordinates raises error."""
+        # Setup - emitter without centered_coordinates attribute
+        resolution = 0.1 * kpc
+        fov = 10.0 * kpc
+
+        class BadEmitter:
+            """Emitter without centered_coordinates."""
+
+            def __init__(self):
+                self.redshift = 1.0
+
+        emitter = BadEmitter()
+
+        # Execute and assert
+        with pytest.raises(exceptions.InconsistentArguments) as excinfo:
+            _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=emitter,
+                cosmo=Planck18,
+                include_smoothing_lengths=False,
+            )
+        assert "centered_coordinates" in str(excinfo.value)
+
+    def test_missing_smoothing_lengths_raises_error(self):
+        """Test that missing smoothing_lengths raises error when required."""
+        # Setup - emitter without smoothing_lengths
+        resolution = 0.1 * kpc
+        fov = 10.0 * kpc
+        coords = unyt_array(np.random.rand(100, 3), "kpc") - 0.5 * kpc
+
+        class EmitterWithoutSmls:
+            """Emitter without smoothing_lengths."""
+
+            def __init__(self, coords):
+                self.centered_coordinates = coords
+                self.redshift = 1.0
+
+        emitter = EmitterWithoutSmls(coords)
+
+        # Execute and assert
+        with pytest.raises(exceptions.InconsistentArguments) as excinfo:
+            _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=emitter,
+                cosmo=Planck18,
+                include_smoothing_lengths=True,
+            )
+        assert "smoothing_lengths" in str(excinfo.value)
+        assert "include_smoothing_lengths=True" in str(excinfo.value)

@@ -876,7 +876,7 @@ class ParameterFunctionError(Exception):
         return "There was an error in the parameter function."
 
 
-class CannottHashThat(Exception):
+class CannotHashThat(Exception):
     """Exception class for when an object cannot be hashed."""
 
     def __init__(self, *args):

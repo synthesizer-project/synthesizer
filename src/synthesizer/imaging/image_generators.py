@@ -154,14 +154,42 @@ def _standardize_imaging_units(
     """
     from unyt import arcsecond, kpc
 
-    # Get the redshift from the emitter
-    redshift = getattr(emitter, "redshift", None)
+    # Validate resolution is a unyt object
+    if not isinstance(resolution, (unyt_quantity, unyt_array)):
+        raise exceptions.InconsistentArguments(
+            "Resolution must be a unyt_quantity or unyt_array. "
+            f"Got {type(resolution).__name__}."
+        )
+
+    # Validate fov is a unyt object
+    if not isinstance(fov, (unyt_quantity, unyt_array)):
+        raise exceptions.InconsistentArguments(
+            "Field of view (fov) must be a unyt_quantity or unyt_array. "
+            f"Got {type(fov).__name__}."
+        )
 
     # Ensure fov has an entry for each axis if it doesn't already
     if isinstance(fov, unyt_quantity):
         fov = unyt_array((fov.value, fov.value), fov.units)
     elif fov.size == 1:
         fov = unyt_array((fov.value, fov.value), fov.units)
+
+    # Validate emitter has required attributes
+    if not hasattr(emitter, "centered_coordinates"):
+        raise exceptions.InconsistentArguments(
+            "Emitter must have 'centered_coordinates' attribute. "
+            f"Got {type(emitter).__name__} which does not have this attribute."
+        )
+
+    if include_smoothing_lengths and not hasattr(emitter, "smoothing_lengths"):
+        raise exceptions.InconsistentArguments(
+            "Emitter must have 'smoothing_lengths' attribute when "
+            "include_smoothing_lengths=True. "
+            f"Got {type(emitter).__name__} which does not have this attribute."
+        )
+
+    # Get the redshift from the emitter
+    redshift = getattr(emitter, "redshift", None)
 
     # Determine the target unit system based on resolution
     resolution_is_angular = unit_is_compatible(resolution, arcsecond)
@@ -179,6 +207,20 @@ def _standardize_imaging_units(
     emitter_smls = (
         emitter.smoothing_lengths if include_smoothing_lengths else None
     )
+
+    # Validate that coordinates are unyt arrays
+    if not isinstance(emitter_coords, unyt_array):
+        raise exceptions.InconsistentArguments(
+            "Emitter centered_coordinates must be a unyt_array. "
+            f"Got {type(emitter_coords).__name__}."
+        )
+
+    # Validate smoothing lengths if requested
+    if emitter_smls is not None and not isinstance(emitter_smls, unyt_array):
+        raise exceptions.InconsistentArguments(
+            "Emitter smoothing_lengths must be a unyt_array. "
+            f"Got {type(emitter_smls).__name__}."
+        )
 
     # Check if conversion is needed
     coords_compatible = unit_is_compatible(resolution, emitter_coords.units)
@@ -891,19 +933,33 @@ def _generate_image_collection_generic(
     from synthesizer.imaging import ImageCollection
     from synthesizer.particle import Particles
 
-    # Standardize units to ensure resolution, fov, and emitter data are all
-    # in the same system (both angular or both Cartesian)
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
     # NOTE: This does NOT modify the emitter's underlying data
-    needs_smoothing_lengths = img_type == "smoothed" and isinstance(
-        emitter, Particles
-    )
-    resolution, fov, coords, smls = _standardize_imaging_units(
-        resolution=instrument.resolution,
-        fov=fov,
-        emitter=emitter,
-        cosmo=cosmo,
-        include_smoothing_lengths=needs_smoothing_lengths,
-    )
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        # Validate that smoothing lengths exist for smoothed particle imaging
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        # Parametric emitters: keep original resolution/fov, skip coord
+        # standardization
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
 
     # Create the image collection
     imgs = ImageCollection(
@@ -1398,19 +1454,33 @@ def _generate_ifu_generic(
             "Did you not save the spectra or produce the photometry?"
         )
 
-    # Standardize units to ensure resolution, fov, and emitter data are all
-    # in the same system (both angular or both Cartesian)
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
     # NOTE: This does NOT modify the emitter's underlying data
-    needs_smoothing_lengths = img_type == "smoothed" and isinstance(
-        emitter, Particles
-    )
-    resolution, fov, coords, smls = _standardize_imaging_units(
-        resolution=instrument.resolution,
-        fov=fov,
-        emitter=emitter,
-        cosmo=cosmo,
-        include_smoothing_lengths=needs_smoothing_lengths,
-    )
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        # Validate that smoothing lengths exist for smoothed particle imaging
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        # Parametric emitters: keep original resolution/fov, skip coord
+        # standardization
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
 
     # Create the IFU with standardized units
     ifu = SpectralCube(

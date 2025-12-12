@@ -658,6 +658,47 @@ class Instrument:
             )
         )
 
+    def __eq__(self, other):
+        """Enable equality comparison of Instrument objects.
+
+        Two Instruments are considered equal if all their defining
+        properties match. This is consistent with __hash__ to ensure
+        proper behavior in sets and dictionaries.
+
+        Args:
+            other: The object to compare with.
+
+        Returns:
+            bool: True if the instruments are equal, False otherwise.
+            NotImplemented: If other is not an Instrument.
+        """
+        # Return NotImplemented for non-Instrument objects so Python
+        # can try the reverse comparison
+        if not isinstance(other, Instrument):
+            return NotImplemented
+
+        # Compare all fields used in __hash__ using the same normalized
+        # representations
+        return (
+            self.label == other.label
+            and obj_to_hashable(
+                self.filters.filter_codes if self.filters else None
+            )
+            == obj_to_hashable(
+                other.filters.filter_codes if other.filters else None
+            )
+            and obj_to_hashable(self._lam) == obj_to_hashable(other._lam)
+            and obj_to_hashable(self.depth) == obj_to_hashable(other.depth)
+            and obj_to_hashable(self.depth_app_radius)
+            == obj_to_hashable(other.depth_app_radius)
+            and obj_to_hashable(self.snrs) == obj_to_hashable(other.snrs)
+            and obj_to_hashable(self.psfs) == obj_to_hashable(other.psfs)
+            and obj_to_hashable(self.noise_maps)
+            == obj_to_hashable(other.noise_maps)
+            and obj_to_hashable(self.resolution)
+            == obj_to_hashable(other.resolution)
+        )
+
     def add_filters(self, filters, psfs=None, noise_maps=None):
         """Add filters to the Instrument.
 

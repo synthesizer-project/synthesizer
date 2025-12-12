@@ -693,7 +693,9 @@ class OperationKwargsHandler:
         #   func_name -> list[model_label]
         self._label_map = defaultdict(set)
         #   func_name -> OperationKwargs (for single-kwarg operations)
-        self._unique_func_map = defaultdict(OperationKwargs)
+        # Note: Plain dict (not defaultdict) so missing keys return None
+        # via .get()
+        self._unique_func_map = {}
 
     def _check_model_label(self, model_label):
         """Validate that the provided model_label is allowed.
@@ -764,9 +766,14 @@ class OperationKwargsHandler:
         op_kwargs = OperationKwargs(**kwargs)
 
         # Link the operation kwargs into the internal mapping.
-        label_map = self._func_map.get(op_kwargs, [])
+        # Get the per-function mapping (defaultdict creates empty dict if
+        # missing)
+        func_kwargs_map = self._func_map[func_name]
+
+        # Get the existing label list for this op_kwargs (or create empty list)
+        label_map = func_kwargs_map.get(op_kwargs, [])
         label_map.extend(labels)
-        self._func_map[func_name][op_kwargs] = label_map
+        func_kwargs_map[op_kwargs] = label_map
 
         # Update the label map for this function.
         self._label_map[func_name].update(labels)

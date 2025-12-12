@@ -1998,8 +1998,13 @@ class TestOperationKwargsHandler:
         assert handler.has("test_op", "model1") is True
         assert handler.has("test_op", "model2") is True
 
-    def test_mutation_protection(self):
-        """Test that kwargs are copied, preventing mutation issues."""
+    def test_mutation_persistence(self):
+        """Test that kwargs use shared references, allowing mutations.
+
+        OperationKwargsHandler stores dict references rather than copies,
+        so modifications to retrieved kwargs will persist across multiple
+        retrievals. This test verifies this shared-reference behavior.
+        """
         from synthesizer.pipeline.pipeline_utils import (
             OperationKwargsHandler,
         )
@@ -2014,9 +2019,9 @@ class TestOperationKwargsHandler:
         # Mutate the list in the kwargs
         op_kwargs["mutable_list"].append(1)
 
-        # Since OperationKwargs stores the dict reference, modification
-        # applies.
-        # Check that it persists (shared object)
+        # Since OperationKwargs stores the dict reference, the modification
+        # persists when we retrieve the kwargs again (shared-reference
+        # behavior)
         results2 = list(handler.iter_all("test_op"))
         labels2, op_kwargs2 = results2[0]
         assert op_kwargs2["mutable_list"] == [1]

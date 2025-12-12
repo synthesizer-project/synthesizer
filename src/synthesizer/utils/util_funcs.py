@@ -611,7 +611,7 @@ def obj_to_hashable(obj):
         hashable: A hashable representation of the object.
 
     Raises:
-        CannottHashThat: If a data type is passed that can't be handled.
+        CannotHashThat: If a data type is passed that can't be handled.
     """
     # Cheap cases first: already hashable scalars
     if isinstance(obj, (int, float, str, bool, type(None))):
@@ -680,8 +680,30 @@ def obj_to_hashable(obj):
 
     # Handle set
     elif isinstance(obj, set):
-        return tuple(sorted(obj_to_hashable(item) for item in obj))
+        # Convert all items to hashable form first
+        hashable_items = tuple(obj_to_hashable(item) for item in obj)
+
+        # Try to sort directly (works if items are comparable)
+        try:
+            return tuple(sorted(hashable_items))
+        except TypeError:
+            # Items are not directly comparable (e.g., heterogeneous types).
+            # Use a deterministic key based on type name and repr for stable
+            # sorting
+            try:
+                return tuple(
+                    sorted(
+                        hashable_items,
+                        key=lambda x: (type(x).__name__, repr(x)),
+                    )
+                )
+            except Exception as e:
+                # If even that fails, we can't create a deterministic hash
+                raise exceptions.CannotHashThat(
+                    f"Cannot create deterministic hash for set with "
+                    f"non-comparable items: {e}"
+                ) from e
 
     # Anything else: bail, we can't hash it
     else:
-        raise exceptions.CannottHashThat(f"Unhashable type: {type(obj)}")
+        raise exceptions.CannotHashThat(f"Unhashable type: {type(obj)}")
