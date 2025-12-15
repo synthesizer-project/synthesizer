@@ -58,11 +58,12 @@ Example usage:
 import os
 
 import h5py
-from unyt import arcsecond
+from unyt import arcsecond, angstrom
+import numpy as np
 
 from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
 from synthesizer.instruments import Instrument
-from synthesizer.instruments.filters import FilterCollection
+from synthesizer.instruments.filters import FilterCollection, Filter
 
 __all__ = [
     "JWSTNIRCamWide",
@@ -84,6 +85,8 @@ __all__ = [
     "HSTACSWFC",
     "EuclidNISP",
     "EuclidVIS",
+    "GALEXFUV",
+    "GALEXNUV"
 ]
 
 
@@ -2521,6 +2524,194 @@ class EuclidVIS(PremadeInstrument):
             label=label,
             filters=filters,
             resolution=0.10 * arcsecond,
+            depth=depth,
+            depth_app_radius=depth_app_radius,
+            snrs=snrs,
+            psfs=psfs,
+            noise_maps=noise_maps,
+            **kwargs,
+        )
+
+class GALEXFUV(PremadeInstrument):
+    """A class containing the properties of the GALEX instrument.
+
+    Default label: "GALEXFUV"
+
+    Resolution: 6"
+
+    Available filters:
+        - FUV
+
+    For further details see the PremadeInstrument class.
+    """
+
+    def __init__(
+        self,
+        label="GALEXFUV",
+        filter_lams=None,
+        depth=None,
+        depth_app_radius=None,
+        snrs=None,
+        psfs=None,
+        noise_maps=None,
+        filter_subset=(),
+        **kwargs,
+    ):
+        """Initialize the GALEX FUV instrument.
+
+        Args:
+            label (str):
+                The label of the instrument. Default is "GALEXFUV".
+            filter_lams (unyt_array):
+                An optional wavelength array to resample the filter
+                transmission curves to. This should be a unyt array. Default
+                is None.
+            depth (dict/float):
+                The depth of the instrument in apparent mags. If filters are
+                passed depth must be a dictionary of depths with an entry
+                per filter. Default is None.
+            depth_app_radius (unyt_quantity):
+                The depth aperture radius of the instrument (with units). If
+                this is omitted but SNRs and depths are provided, it is assumed
+                that the depth is a point source depth. Default is None.
+            snrs (unyt_array):
+                The signal-to-noise ratios of the instrument. Default is None.
+            psfs (unyt_array):
+                The PSFs of the instrument. If doing imaging this should be a
+                dictionary of PSFs with an entry for each filter. If doing
+                resolved spectroscopy this should be an array. Default is None.
+            noise_maps (unyt_array):
+                The noise maps of the instrument. If doing imaging this should
+                be a dictionary of noise maps with an entry for each filter.
+                If doing resolved spectroscopy this should be an array with
+                noise as a function of wavelength. Default is None.
+            filter_subset (list/tuple):
+                A list of filters defining a subset of the filters to include
+                in the instrument. This should be a list of strings with the
+                filter names. If this is not provided, all filters defined in
+                this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
+        """
+
+        # Since SVO returns effective area rather than transmission curves for GALEX,
+        # here we define the transmission curves manually rather than using SVO
+        fuv_lam = np.array([
+            1340.6205, 1350.4851, 1370.2143, 1399.808, 1449.131, 1477.0806, 
+            1500.098, 1519.8272, 1549.4209, 1608.6084, 1648.0668, 1705.6102, 
+            1750.0008, 1810.8324
+        ]) * angstrom 
+            
+        fuv_trans = np.array([
+            9.07e-07, 0.11537571, 0.17650714, 0.12312477, 0.33665425, 0.36851147, 
+            0.35043035, 0.34698632, 0.26174673, 0.25485868, 0.16014802, 0.11881973, 
+            0.10504364, 0.000860099
+        ])
+
+        fuv_filter = Filter("GALEX/GALEX.FUV", 
+                        transmission=fuv_trans,
+                        new_lam=fuv_lam)
+
+        # Call the parent constructor with the appropriate parameters
+        PremadeInstrument.__init__(
+            self,
+            label=label,
+            filters=[fuv_filter],
+            resolution=6 * arcsecond,
+            depth=depth,
+            depth_app_radius=depth_app_radius,
+            snrs=snrs,
+            psfs=psfs,
+            noise_maps=noise_maps,
+            **kwargs,
+        )
+
+class GALEXNUV(PremadeInstrument):
+    """A class containing the properties of the GALEX instrument.
+
+    Default label: "GALEXNUV"
+
+    Resolution: 8"
+
+    Available filters:
+        - NUV
+
+    For further details see the PremadeInstrument class.
+    """
+
+    def __init__(
+        self,
+        label="GALEXNUV",
+        filter_lams=None,
+        depth=None,
+        depth_app_radius=None,
+        snrs=None,
+        psfs=None,
+        noise_maps=None,
+        filter_subset=(),
+        **kwargs,
+    ):
+        """Initialize the GALEX FUV instrument.
+
+        Args:
+            label (str):
+                The label of the instrument. Default is "GALEXNUV".
+            filter_lams (unyt_array):
+                An optional wavelength array to resample the filter
+                transmission curves to. This should be a unyt array. Default
+                is None.
+            depth (dict/float):
+                The depth of the instrument in apparent mags. If filters are
+                passed depth must be a dictionary of depths with an entry
+                per filter. Default is None.
+            depth_app_radius (unyt_quantity):
+                The depth aperture radius of the instrument (with units). If
+                this is omitted but SNRs and depths are provided, it is assumed
+                that the depth is a point source depth. Default is None.
+            snrs (unyt_array):
+                The signal-to-noise ratios of the instrument. Default is None.
+            psfs (unyt_array):
+                The PSFs of the instrument. If doing imaging this should be a
+                dictionary of PSFs with an entry for each filter. If doing
+                resolved spectroscopy this should be an array. Default is None.
+            noise_maps (unyt_array):
+                The noise maps of the instrument. If doing imaging this should
+                be a dictionary of noise maps with an entry for each filter.
+                If doing resolved spectroscopy this should be an array with
+                noise as a function of wavelength. Default is None.
+            filter_subset (list/tuple):
+                A list of filters defining a subset of the filters to include
+                in the instrument. This should be a list of strings with the
+                filter names. If this is not provided, all filters defined in
+                this class will be included.
+            **kwargs: Keyword arguments to pass to the Instrument class.
+        """
+
+        # Since SVO returns effective area rather than transmission curves for GALEX,
+        # here we define the transmission curves manually rather than using SVO
+        nuv_lam = np.array([
+            1687.5251, 1699.0338, 1748.3567, 1837.138, 1899.6137, 1948.9366, 
+            1998.2595, 2050.8707, 2151.1606, 2200.4835, 2253.0946, 2300.7735, 
+            2348.4523, 2445.4541, 2553.9645, 2595.0669, 2646.0339, 2697.001, 
+            2797.2909, 2849.902, 2897.5809, 2999.5149, 3007.7354
+        ]) * angstrom
+        
+        nuv_trans = np.array([
+            9.07e-07, 0.024109075, 0.031858129, 0.16100903, 0.26519076, 0.3289052, 
+            0.44858503, 0.4718322, 0.59495605, 0.6164812, 0.56223782, 0.5303806, 
+            0.47785924, 0.53468563, 0.51488249, 0.50024539, 0.46236113, 0.38056556, 
+            0.11020967, 0.033580141, 0.012054991, 0.016360021, 9.07e-07
+        ])
+
+        nuv_filter = Filter("GALEX/GALEX.NUV", 
+                        transmission=nuv_trans,
+                        new_lam=nuv_lam)
+
+        # Call the parent constructor with the appropriate parameters
+        PremadeInstrument.__init__(
+            self,
+            label=label,
+            filters=[nuv_filter],
+            resolution=8 * arcsecond,
             depth=depth,
             depth_app_radius=depth_app_radius,
             snrs=snrs,
