@@ -11,8 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Msun, deg, kelvin, yr
 
-from synthesizer.emission_models import UnifiedAGN
-from synthesizer.emission_models.dust.emission import Greybody
+from synthesizer.emission_models import Greybody, UnifiedAGN
 from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.parametric import BlackHole
@@ -50,8 +49,10 @@ model = UnifiedAGN(
     covering_fraction_nlr=0.1,
     covering_fraction_blr=0.1,
     torus_emission_model=Greybody(1000 * kelvin, 1.5),
-    ionisation_parameter=1e-2,
-    hydrogen_density=1e3,
+    ionisation_parameter_nlr=1e-2,
+    ionisation_parameter_blr=1e-2,
+    hydrogen_density_nlr=1e3,
+    hydrogen_density_blr=1e3,
     velocity_dispersion=100 * 1e3,
 )
 

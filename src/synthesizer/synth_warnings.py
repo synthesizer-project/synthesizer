@@ -163,6 +163,8 @@ def _wrap_with_prefix(message, stacklevel, category):
     This inserts a new line after the warning prefix to ensure the whole
     message is wrapped correctly.
 
+    We default to a minimum warning width of 80 characters.
+
     Args:
         message (str): The message to wrap.
         stacklevel (int): The stack level for the warning.
@@ -179,6 +181,9 @@ def _wrap_with_prefix(message, stacklevel, category):
 
     # Subtract some padding for the warning
     width -= 4
+
+    # Ensure width is > 80
+    width = max(80, width)
 
     # Wrap the message
     wrapped = textwrap.fill(

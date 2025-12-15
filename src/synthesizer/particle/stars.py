@@ -1067,7 +1067,7 @@ class Stars(Particles, StarsComponent):
     def get_sfzh(
         self,
         log10ages,
-        log10metallicities,
+        metallicities,
         grid_assignment_method="cic",
         nthreads=0,
     ):
@@ -1082,8 +1082,8 @@ class Stars(Particles, StarsComponent):
         Args:
             log10ages (np.ndarray of float):
                 The log10 ages of the desired SFZH.
-            log10metallicities (np.ndarray of float):
-                The logged metallicities of the desired SFZH.
+            metallicities (np.ndarray of float):
+                The metallicities of the desired SFZH.
             grid_assignment_method (string):
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -1104,7 +1104,7 @@ class Stars(Particles, StarsComponent):
         # Prepare the arguments for the C function.
         args = self._prepare_sfzh_args(
             log10ages,
-            log10metallicities,
+            np.log10(metallicities),
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
@@ -1112,7 +1112,7 @@ class Stars(Particles, StarsComponent):
         # Get the SFZH and create the ParametricStars object
         self.sfzh = ParametricStars(
             log10ages,
-            10**log10metallicities,
+            metallicities,
             sfzh=compute_sfzh(*args),
         )
 
@@ -1163,7 +1163,7 @@ class Stars(Particles, StarsComponent):
         if self.sfzh is None:
             _stars = self.get_sfzh(
                 grid.log10ages,
-                grid.log10metallicities,
+                grid.metallicities,
                 grid_assignment_method=grid_assignment_method,
             )
         else:
@@ -1657,7 +1657,7 @@ def sample_sfzh(
     log10ages,
     log10metallicities,
     nstar,
-    initial_mass=1 * Msun,
+    initial_mass=None,
     **kwargs,
 ):
     """Create "fake" stellar particles by sampling a SFZH.
@@ -1673,7 +1673,12 @@ def sample_sfzh(
         nstar (int):
             The number of stellar particles to produce.
         initial_mass (int):
-            The intial mass of the fake stellar particles.
+            The initial mass of the fake stellar particles. If None, the
+            initial mass is set such that the total mass of the SFZH is
+            split equally among the nstar particles. If set, this mass will
+            override the parametric mass implied by the SFZH, instead using
+            the SFZH as a normalised probability distribution function for
+            sampling ages and metallicities.
         **kwargs:
             Any additional keyword arguments to pass to the Stars
             constructor.
@@ -1682,11 +1687,17 @@ def sample_sfzh(
         stars (Stars)
             An instance of Stars containing the fake stellar particles.
     """
-    # Normalise the sfhz to produce a histogram (binned in time) between 0
+    # If we have an initial_mass of None, use the existing one
+    if initial_mass is None:
+        initial_mass = np.sum(sfzh) / nstar * Msun.in_base("galactic")
+    else:
+        initial_mass = initial_mass.in_base("galactic")
+
+    # Normalise the sfzh to produce a histogram (binned in time) between 0
     # and 1.
     hist = sfzh / np.sum(sfzh)
 
-    # Compute the cumaltive distribution function
+    # Compute the cumulative distribution function
     cdf = np.cumsum(hist.flatten())
     cdf = cdf / cdf[-1]
 
@@ -1699,7 +1710,7 @@ def sample_sfzh(
         value_bins, (len(log10ages), len(log10metallicities))
     )
 
-    # Extract the sampled ages and metallicites and create an array
+    # Extract the sampled ages and metallicities and create an array
     random_from_cdf = np.column_stack(
         (log10ages[x_idx], log10metallicities[y_idx])
     )

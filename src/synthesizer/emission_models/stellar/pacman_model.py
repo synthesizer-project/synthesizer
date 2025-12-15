@@ -49,6 +49,8 @@ Example::
     )
 """
 
+from copy import deepcopy
+
 from unyt import dimensionless
 
 from synthesizer.emission_models.attenuation import Calzetti2000, PowerLaw
@@ -74,10 +76,10 @@ from synthesizer.emission_models.stellar.models import (
 class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
     """A class defining the Pacman model without escape fraction.
 
-    This model defines both intrinsic and attenuated steller emission without
+    This model defines both intrinsic and attenuated stellar emission without
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce
@@ -175,10 +177,10 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
 class PacmanEmissionNoEscapedWithDust(EmissionModel):
     """A class defining the Pacman model with escape fraction + dust emission.
 
-    This model defines both intrinsic and attenuated steller emission with
+    This model defines both intrinsic and attenuated stellar emission with
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce:
@@ -276,11 +278,10 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             tau_v=tau_v,
             **kwargs,
         )
+        dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
             label="dust_emission",
             dust_emission_model=dust_emission,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -301,10 +302,10 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
 class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
     """A class defining the Pacman model with fesc and no dust emission.
 
-    This model defines both intrinsic and attenuated steller emission without
+    This model defines both intrinsic and attenuated stellar emission without
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce:
@@ -424,10 +425,10 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
 class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
     """A class defining the Pacman model with fesc and dust emission.
 
-    This model defines both intrinsic and attenuated steller emission with
+    This model defines both intrinsic and attenuated stellar emission with
     dust emission. If a lyman alpha escape fraction is given, a more
     sophisticated nebular emission model is used, including line and
-    nebuluar continuum emission with the amount of lyman alpha emission
+    nebular continuum emission with the amount of lyman alpha emission
     scaled by the escape fraction.
 
     This model will produce:
@@ -553,11 +554,10 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             escaped=escaped,
             **kwargs,
         )
+        dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
             label="dust_emission",
             dust_emission_model=dust_emission,
-            dust_lum_intrinsic=reprocessed,
-            dust_lum_attenuated=attenuated,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -578,11 +578,11 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
 class PacmanEmission:
     """A class defining the Pacman model.
 
-    This model defines both intrinsic and attenuated steller emission with or
+    This model defines both intrinsic and attenuated stellar emission with or
     without dust emission. It also includes the option to include escaped
     emission for a given escape fraction. If a lyman alpha escape fraction is
     given, a more sophisticated nebular emission model is used, including line
-    and nebuluar continuum emission.
+    and nebular continuum emission.
 
     This model will always produce:
         - incident: the stellar emission incident onto the ISM.
@@ -1300,19 +1300,21 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
         emergent = attenuated
 
         # Create the dust emission models
+        dust_emission_birth.set_energy_balance(
+            young_reprocessed, young_attenuated_nebular
+        )
         young_dust_emission_birth = DustEmission(
             label="young_dust_emission_birth",
             dust_emission_model=dust_emission_birth,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_nebular,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
+        )
+        dust_emission_ism.set_energy_balance(
+            young_attenuated_nebular, young_attenuated_ism
         )
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
             dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_ism,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -1322,11 +1324,13 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
+        dust_emission_ism_old = deepcopy(dust_emission_ism)
+        dust_emission_ism_old.set_energy_balance(
+            old_reprocessed, old_attenuated
+        )
         old_dust_emission = DustEmission(
             label="old_dust_emission",
-            dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=old_intrinsic,
-            dust_lum_attenuated=old_attenuated,
+            dust_emission_model=dust_emission_ism_old,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -1926,6 +1930,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             mask_op="<",
             fesc=fesc,
             incident=young_incident,
+            escaped_label="young_escaped",
             **kwargs,
         )
         old_transmitted = TransmittedEmission(
@@ -1936,6 +1941,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             mask_op=">=",
             fesc=fesc,
             incident=old_incident,
+            escaped_label="old_escaped",
             **kwargs,
         )
         transmitted = StellarEmissionModel(
@@ -1945,8 +1951,8 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         )
 
         # Extract escaped models
-        young_escaped = young_transmitted["escaped"]
-        old_escaped = old_transmitted["escaped"]
+        young_escaped = young_transmitted["young_escaped"]
+        old_escaped = old_transmitted["old_escaped"]
         escaped = StellarEmissionModel(
             label="escaped",
             combine=(young_escaped, old_escaped),
@@ -2100,19 +2106,21 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         )
 
         # Create the dust emission models
+        dust_emission_birth.set_energy_balance(
+            young_reprocessed, young_attenuated_nebular
+        )
         young_dust_emission_birth = DustEmission(
             label="young_dust_emission_birth",
             dust_emission_model=dust_emission_birth,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_nebular,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
+        )
+        dust_emission_ism.set_energy_balance(
+            young_attenuated_nebular, young_attenuated_ism
         )
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
             dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=young_intrinsic,
-            dust_lum_attenuated=young_attenuated_ism,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -2122,11 +2130,13 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
+        dust_emission_ism_old = deepcopy(dust_emission_ism)
+        dust_emission_ism_old.set_energy_balance(
+            old_reprocessed, old_attenuated
+        )
         old_dust_emission = DustEmission(
             label="old_dust_emission",
-            dust_emission_model=dust_emission_ism,
-            dust_lum_intrinsic=old_intrinsic,
-            dust_lum_attenuated=old_attenuated,
+            dust_emission_model=dust_emission_ism_old,
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
@@ -2404,9 +2414,9 @@ class BimodalPacmanEmission:
 
 
 class CharlotFall2000(BimodalPacmanEmission):
-    """The Charlot & Fall(2000) emission model.
+    """The Charlot & Fall (2000) emission model.
 
-    This emission model is based on the Charlot & Fall(2000) model, which
+    This emission model is based on the Charlot & Fall (2000) model, which
     describes the emission from a galaxy as a combination of emission from a
     young stellar population and an old stellar population. The dust
     attenuation for each population can be different, and dust emission can be
@@ -2416,24 +2426,29 @@ class CharlotFall2000(BimodalPacmanEmission):
     in reality is just a wrapper around that model. The only difference is that
     there is no option to specify an escape fraction.
 
+    Implementation note:
+        This wrapper overrides ``__new__`` and forces ``fesc=None`` *before*
+        the base-class factory runs, ensuring the no-escape branch is always
+        chosen. Because the base ``__new__`` returns the concrete model
+        instance, an ``__init__`` here would generally never be called and is
+        therefore omitted.
+
     Attributes:
-        grid(synthesizer.grid.Grid): The grid object.
-        tau_v_ism(float): The V-band optical depth for the ISM.
-        tau_v_birth(float): The V-band optical depth for the nebular.
-        dust_curve_ism(AttenuationLaw):
-            The dust curve for the ISM.
-        dust_curve_birth(AttenuationLaw): The dust curve for the
-            nebular.
-        age_pivot(unyt.unyt_quantity): The age pivot between young and old
+        grid (synthesizer.grid.Grid): The grid object.
+        tau_v_ism (float): The V-band optical depth for the ISM.
+        tau_v_birth (float): The V-band optical depth for the nebular.
+        dust_curve_ism (AttenuationLaw): The dust curve for the ISM.
+        dust_curve_birth (AttenuationLaw): The dust curve for the nebular.
+        age_pivot (unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
-        dust_emission_ism(synthesizer.dust.EmissionModel): The dust
+        dust_emission_ism (synthesizer.dust.EmissionModel): The dust
             emission model for the ISM.
-        dust_emission_birth(synthesizer.dust.EmissionModel): The dust
+        dust_emission_birth (synthesizer.dust.EmissionModel): The dust
             emission model for the nebular.
     """
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         grid,
         tau_v_ism,
         tau_v_birth,
@@ -2446,41 +2461,48 @@ class CharlotFall2000(BimodalPacmanEmission):
         stellar_dust=True,
         **kwargs,
     ):
-        """Initialize the PacmanEmission model.
+        """Construct the CharlotFall2000 model.
+
+        This forwards to :class:`BimodalPacmanEmission`'s factory ``__new__``,
+        forcing ``fesc=None`` so that no-escape variants are selected.
 
         Args:
-            grid(synthesizer.grid.Grid):
+            grid (synthesizer.grid.Grid):
                 The grid object.
-            tau_v_ism(float):
+            tau_v_ism (float):
                 The V-band optical depth for the ISM.
-            tau_v_birth(float):
+            tau_v_birth (float):
                 The V-band optical depth for the nebular.
-            age_pivot(unyt.unyt_quantity):
+            age_pivot (unyt.unyt_quantity):
                 The age pivot between young and old populations, expressed
                 in terms of log10(age) in Myr. Defaults to 10 ^ 7 Myr.
-            dust_curve_ism(AttenuationLaw):
-                The dust curve for the ISM. Defaults to `Calzetti2000`
+            dust_curve_ism (AttenuationLaw):
+                The dust curve for the ISM. Defaults to ``Calzetti2000`` with
+                fiducial parameters.
+            dust_curve_birth (AttenuationLaw):
+                The dust curve for the nebular. Defaults to ``Calzetti2000``
                 with fiducial parameters.
-            dust_curve_birth(AttenuationLaw):
-                The dust curve for the nebular. Defaults to `Calzetti2000`
-                with fiducial parameters.
-            dust_emission_ism(synthesizer.dust.EmissionModel):
+            dust_emission_ism (synthesizer.dust.EmissionModel):
                 The dust emission model for the ISM.
-            dust_emission_birth(synthesizer.dust.EmissionModel):
+            dust_emission_birth (synthesizer.dust.EmissionModel):
                 The dust emission model for the nebular.
-            label(str):
-                The label for the total emission model. If None this will
-                be set to "total" or "emergent" if dust_emission is `None`.
-            stellar_dust(bool):
-                If `True`, the dust emission will be treated as stellar
+            label (str):
+                The label for the total emission model. If ``None`` this will
+                be set to ``"total"`` or ``"emergent"`` if ``dust_emission`` is
+                ``None``.
+            stellar_dust (bool):
+                If ``True``, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
-            kwargs:
-                Additional keyword arguments to pass to the models.
+            **kwargs:
+                Additional keyword arguments are forwarded unchanged.
+
+        Returns:
+            An instance of the concrete no-escape Pacman emission model
+            selected by :class:`BimodalPacmanEmission`.
         """
-        # Call the parent constructor to intialise the model
-        BimodalPacmanEmission.__init__(
-            self,
-            grid,
+        return super().__new__(
+            cls,
+            grid=grid,
             tau_v_ism=tau_v_ism,
             tau_v_birth=tau_v_birth,
             dust_curve_ism=dust_curve_ism,
@@ -2488,6 +2510,9 @@ class CharlotFall2000(BimodalPacmanEmission):
             age_pivot=age_pivot,
             dust_emission_ism=dust_emission_ism,
             dust_emission_birth=dust_emission_birth,
+            # Force no-escape behavior in the base factory:
+            fesc=None,
+            # Pass through other options unchanged:
             label=label,
             stellar_dust=stellar_dust,
             **kwargs,
@@ -2503,17 +2528,23 @@ class ScreenEmission(PacmanEmission):
 
     This model is a simplified version of the PacmanEmission model, so in
     reality is just a wrapper around that model. The only difference is that
-    fesc and fesc_ly_alpha are zero by definition.
+    ``fesc`` and ``fesc_ly_alpha`` are zero by definition.
+
+    Implementation note:
+        This wrapper overrides ``__new__`` and forces ``fesc=0.0`` and
+        ``fesc_ly_alpha=0.0`` *before* the base-class factory runs, ensuring
+        the no-escape branch is always chosen. As the base factory returns the
+        concrete instance, an ``__init__`` here is unnecessary and omitted.
 
     Attributes:
-        grid(synthesizer.grid.Grid): The grid object.
-        dust_curve(AttenuationLaw): The dust curve.
-        dust_emission(synthesizer.dust.EmissionModel): The dust emission
+        grid (synthesizer.grid.Grid): The grid object.
+        dust_curve (AttenuationLaw): The dust curve.
+        dust_emission (synthesizer.dust.EmissionModel): The dust emission
             model.
     """
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         grid,
         tau_v,
         dust_curve=Calzetti2000(),
@@ -2523,7 +2554,11 @@ class ScreenEmission(PacmanEmission):
         fesc_ly_alpha=None,
         **kwargs,
     ):
-        """Initialize the ScreenEmission model.
+        """Construct the ScreenEmission model.
+
+        Forwards to :class:`PacmanEmission`'s factory ``__new__`` while
+        *ignoring* any user-provided ``fesc``/``fesc_ly_alpha`` and forcing
+        both to ``0.0``.
 
         Args:
             grid (synthesizer.grid.Grid):
@@ -2531,30 +2566,36 @@ class ScreenEmission(PacmanEmission):
             tau_v (float):
                 The V-band optical depth for the dust screen.
             dust_curve (AttenuationLaw):
-                The assumed dust curve. Defaults to `Calzetti2000` with
+                The assumed dust curve. Defaults to ``Calzetti2000`` with
                 default parameters.
             dust_emission (synthesizer.dust.EmissionModel):
                 The dust emission model.
             label (str):
-                The label for the total emission model. If None this will
-                be set to "total" or "emergent" if dust_emission is None.
+                The label for the total emission model. If ``None`` this will
+                be set to ``"total"`` or ``"emergent"`` if ``dust_emission`` is
+                ``None``.
             fesc (float):
-                The escape fraction. This is always zero for this model.
+                Ignored. The escape fraction is always forced to ``0.0``.
             fesc_ly_alpha (float):
-                The Lyman alpha escape fraction. This is always zero for
-                this model.
-            kwargs:
-                Additional keyword arguments to pass to the models.
+                Ignored. The Lyman alpha escape fraction is always forced to
+                ``0.0``.
+            **kwargs:
+                Additional keyword arguments are forwarded unchanged.
+
+        Returns:
+            An instance of the concrete no-escape screen model selected
+            by :class:`PacmanEmission`.
         """
-        # Call the parent constructor to intialise the model
-        PacmanEmission.__init__(
-            self,
+        return super().__new__(
+            cls,
             grid=grid,
             tau_v=tau_v,
             dust_curve=dust_curve,
             dust_emission=dust_emission,
-            fesc=fesc,
-            fesc_ly_alpha=fesc_ly_alpha,
+            # Force no-escape behavior in the base factory:
+            fesc=0.0,
+            fesc_ly_alpha=0.0,
+            # Pass through other options unchanged:
             label=label,
             **kwargs,
         )

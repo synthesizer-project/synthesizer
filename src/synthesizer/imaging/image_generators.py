@@ -13,10 +13,16 @@ The functions in this module are not intended to be called directly by the
 user.
 """
 
+from copy import deepcopy
+
 import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.conversions import (
+    angular_to_spatial_at_z,
+    spatial_to_angular_at_z,
+)
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
@@ -25,6 +31,277 @@ from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
 )
+
+_CENTERING_TOLERANCE = 1e-6
+
+
+def _validate_centered_coordinates(cent_coords, *, warn_only=False):
+    """Ensure coordinates are centred on zero along each axis.
+
+    Args:
+        cent_coords (unyt_array, float):
+            The centred coordinates to validate.
+        warn_only (bool):
+            If True, only issue a warning if the coordinates are not centred.
+            If False, raise an exception.
+
+    Raises:
+        InconsistentArguments:
+            If the coordinates are not centred and warn_only is False.
+    """
+    # Nothing to do for empty coordinates
+    if cent_coords.size == 0:
+        return
+
+    # Determine the tolerance for centering based on the span of the
+    # coordinates to allow for relative precision in the centering check.
+    coord_min = cent_coords.min(axis=0)
+    coord_max = cent_coords.max(axis=0)
+    span = np.max(np.abs(coord_max - coord_min))
+    tolerance = (
+        span * _CENTERING_TOLERANCE if span != 0 else _CENTERING_TOLERANCE
+    )
+
+    # Coordinates should straddle zero (or sit very near zero) in every axis
+    spans_zero = np.all(
+        (coord_min <= tolerance) & (coord_max >= -tolerance)
+    ) or np.all(np.isclose(cent_coords, 0, atol=tolerance, rtol=0.0))
+    centred = spans_zero
+    if centred:
+        return
+
+    # Not centred, either warn or raise
+    msg = (
+        "Coordinates must be centered for imaging"
+        f" (got min={coord_min} and max={coord_max})."
+    )
+    if warn_only:
+        warn(msg)
+    else:
+        raise exceptions.InconsistentArguments(msg)
+
+
+def _standardize_imaging_units(
+    resolution,
+    fov,
+    emitter,
+    cosmo=None,
+    include_smoothing_lengths=False,
+):
+    """Standardize all imaging inputs to the same unit system.
+
+    This function ensures that resolution, fov, and emitter coordinates
+    are all in the same unit system (either all angular or all Cartesian).
+    If they are in different systems, it converts them to a common system
+    using the provided cosmology and the emitter's redshift.
+
+    The target system is determined by the resolution units:
+    - If resolution is angular, everything will be converted to angular
+    - If resolution is Cartesian, everything will be converted to Cartesian
+
+    This should be called at the start of any imaging operation to ensure
+    consistent units throughout.
+
+    IMPORTANT: This function does NOT modify the emitter's underlying data.
+    It returns new coordinate arrays.
+
+    Args:
+        resolution (unyt_quantity):
+            The size of a pixel. Can be in angular (e.g., arcsec) or
+            Cartesian (e.g., kpc) units.
+        fov (unyt_quantity/tuple of unyt_quantity):
+            The width of the image. Can be in angular or Cartesian units.
+            If a single value is given it will be used for both axes.
+        emitter (Stars/BlackHoles/BlackHole):
+            The emitter object containing the coordinates (and optionally
+            smoothing lengths) to standardize.
+        cosmo (astropy.cosmology.Cosmology, optional):
+            The cosmology object used for unit conversions. Required if
+            any inputs are in different unit systems.
+        include_smoothing_lengths (bool):
+            If True, also standardize and return smoothing lengths from
+            the emitter. Default is False.
+
+    Returns:
+        tuple:
+            - standardized_resolution (unyt_quantity)
+            - standardized_fov (unyt_array)
+            - standardized_coordinates (unyt_array)
+            - standardized_smoothing_lengths (unyt_array or None)
+              Only returned if include_smoothing_lengths=True, otherwise None
+
+    Raises:
+        InconsistentArguments:
+            If inputs are in different unit systems but cosmo or
+            emitter.redshift are not available.
+
+    Examples:
+        >>> # All Cartesian - no conversion needed
+        >>> res, fov, coords, smls = _standardize_imaging_units(
+        ...     0.1 * kpc,
+        ...     10 * kpc,
+        ...     emitter,
+        ...     include_smoothing_lengths=True,
+        ... )
+        >>> # Mixed units - conversion needed
+        >>> res, fov, coords, smls = _standardize_imaging_units(
+        ...     0.1 * arcsecond,
+        ...     10 * kpc,
+        ...     emitter,
+        ...     cosmo=cosmo,
+        ...     include_smoothing_lengths=True,
+        ... )
+    """
+    from unyt import arcsecond, kpc
+
+    # Validate resolution is a unyt object
+    if not isinstance(resolution, (unyt_quantity, unyt_array)):
+        raise exceptions.InconsistentArguments(
+            "Resolution must be a unyt_quantity or unyt_array. "
+            f"Got {type(resolution).__name__}."
+        )
+
+    # Validate fov is a unyt object
+    if not isinstance(fov, (unyt_quantity, unyt_array)):
+        raise exceptions.InconsistentArguments(
+            "Field of view (fov) must be a unyt_quantity or unyt_array. "
+            f"Got {type(fov).__name__}."
+        )
+
+    # Ensure fov has an entry for each axis if it doesn't already
+    if isinstance(fov, unyt_quantity):
+        fov = unyt_array((fov.value, fov.value), fov.units)
+    elif fov.size == 1:
+        fov = unyt_array((fov.value, fov.value), fov.units)
+
+    # Validate emitter has required attributes
+    if not hasattr(emitter, "centered_coordinates"):
+        raise exceptions.InconsistentArguments(
+            "Emitter must have 'centered_coordinates' attribute. "
+            f"Got {type(emitter).__name__} which does not have this attribute."
+        )
+
+    if include_smoothing_lengths and not hasattr(emitter, "smoothing_lengths"):
+        raise exceptions.InconsistentArguments(
+            "Emitter must have 'smoothing_lengths' attribute when "
+            "include_smoothing_lengths=True. "
+            f"Got {type(emitter).__name__} which does not have this attribute."
+        )
+
+    # Get the redshift from the emitter
+    redshift = getattr(emitter, "redshift", None)
+
+    # Determine the target unit system based on resolution
+    resolution_is_angular = unit_is_compatible(resolution, arcsecond)
+    resolution_is_cartesian = unit_is_compatible(resolution, kpc)
+
+    if not resolution_is_angular and not resolution_is_cartesian:
+        raise exceptions.InconsistentArguments(
+            "Resolution must be in either angular (e.g., arcsec) or "
+            f"Cartesian (e.g., kpc) units. Got {resolution.units}."
+        )
+
+    # Get emitter coordinates and optionally smoothing lengths
+    # Use centered coordinates which should already exist on the emitter
+    emitter_coords = emitter.centered_coordinates
+    emitter_smls = (
+        emitter.smoothing_lengths if include_smoothing_lengths else None
+    )
+
+    # Validate that coordinates are unyt arrays
+    if not isinstance(emitter_coords, unyt_array):
+        raise exceptions.InconsistentArguments(
+            "Emitter centered_coordinates must be a unyt_array. "
+            f"Got {type(emitter_coords).__name__}."
+        )
+
+    # Validate smoothing lengths if requested
+    if emitter_smls is not None and not isinstance(emitter_smls, unyt_array):
+        raise exceptions.InconsistentArguments(
+            "Emitter smoothing_lengths must be a unyt_array. "
+            f"Got {type(emitter_smls).__name__}."
+        )
+
+    # Check if conversion is needed
+    coords_compatible = unit_is_compatible(resolution, emitter_coords.units)
+    fov_compatible = unit_is_compatible(resolution, fov.units)
+    smls_compatible = emitter_smls is None or unit_is_compatible(
+        resolution, emitter_smls.units
+    )
+
+    # If everything is already compatible, return copies to avoid
+    # accidentally modifying the emitter
+    if coords_compatible and fov_compatible and smls_compatible:
+        standardized_coords = emitter_coords.copy()
+        standardized_fov = fov.copy()
+        standardized_smls = (
+            emitter_smls.copy() if emitter_smls is not None else None
+        )
+        return (
+            resolution,
+            standardized_fov,
+            standardized_coords,
+            standardized_smls,
+        )
+
+    # Need to convert - check we have the required cosmology and redshift
+    if cosmo is None or redshift is None:
+        raise exceptions.InconsistentArguments(
+            "Cannot convert between angular and Cartesian units without "
+            "both a cosmology and the emitter's redshift. "
+            f"Got resolution={resolution.units}, "
+            f"emitter coords={emitter_coords.units}, "
+            f"fov={fov.units}, cosmo={cosmo}, redshift={redshift}."
+        )
+
+    # Convert everything to the target system (based on resolution)
+    if resolution_is_angular:
+        # Convert to angular units
+        if not coords_compatible:
+            standardized_coords = spatial_to_angular_at_z(
+                emitter_coords, cosmo, redshift
+            )
+        else:
+            standardized_coords = emitter_coords.copy()
+
+        if not fov_compatible:
+            standardized_fov = spatial_to_angular_at_z(fov, cosmo, redshift)
+        else:
+            standardized_fov = fov.copy()
+
+        if emitter_smls is not None and not smls_compatible:
+            standardized_smls = spatial_to_angular_at_z(
+                emitter_smls, cosmo, redshift
+            )
+        elif emitter_smls is not None:
+            standardized_smls = emitter_smls.copy()
+        else:
+            standardized_smls = None
+
+    else:  # resolution_is_cartesian
+        # Convert to Cartesian units
+        if not coords_compatible:
+            standardized_coords = angular_to_spatial_at_z(
+                emitter_coords, cosmo, redshift
+            )
+        else:
+            standardized_coords = emitter_coords.copy()
+
+        if not fov_compatible:
+            standardized_fov = angular_to_spatial_at_z(fov, cosmo, redshift)
+        else:
+            standardized_fov = fov.copy()
+
+        if emitter_smls is not None and not smls_compatible:
+            standardized_smls = angular_to_spatial_at_z(
+                emitter_smls, cosmo, redshift
+            )
+        elif emitter_smls is not None:
+            standardized_smls = emitter_smls.copy()
+        else:
+            standardized_smls = None
+
+    return resolution, standardized_fov, standardized_coords, standardized_smls
 
 
 def _generate_image_particle_hist(
@@ -74,13 +351,7 @@ def _generate_image_particle_hist(
         )
 
     # Ensure coordinates have been centred
-    if not (coordinates.min() < 0 and coordinates.max() > 0) and not np.all(
-        np.isclose(coordinates, 0)
-    ):
-        warn(
-            "Coordinates must be centered for imaging"
-            f" (got min={coordinates.min()} and max={coordinates.max()})."
-        )
+    _validate_centered_coordinates(coordinates, warn_only=True)
 
     # Strip off and store the units on the signal if they are present
     if isinstance(signal, (unyt_quantity, unyt_array)):
@@ -281,13 +552,7 @@ def _generate_image_particle_smoothed(
         )
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords)
 
     # Get the spatial units we'll work with
     spatial_units = img.resolution.units
@@ -460,13 +725,7 @@ def _generate_images_particle_smoothed(
         )
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        warn(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords, warn_only=True)
 
     # Get the spatial units we'll work with
     spatial_units = imgs.resolution.units
@@ -574,7 +833,7 @@ def _generate_image_parametric_smoothed(
     start = tic()
 
     # Multiply the density grid by the sed to get the image
-    img.arr = density_grid[:, :] * signal
+    img.arr = density_grid[:, :] * signal.value
     img.units = signal.units
 
     toc("Setting up smoothed image inputs", start)
@@ -650,7 +909,7 @@ def _generate_image_collection_generic(
         img_type (str):
             The type of image to create. Options are "hist" or "smoothed".
         kernel (str):
-            The array describing the kernel. This is dervied from the
+            The array describing the kernel. This is derived from the
             kernel_functions module. (Only applicable to particle imaging)
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
@@ -674,9 +933,37 @@ def _generate_image_collection_generic(
     from synthesizer.imaging import ImageCollection
     from synthesizer.particle import Particles
 
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
+    # NOTE: This does NOT modify the emitter's underlying data
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        # Validate that smoothing lengths exist for smoothed particle imaging
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        # Parametric emitters: keep original resolution/fov, skip coord
+        # standardization
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
+
     # Create the image collection
     imgs = ImageCollection(
-        resolution=instrument.resolution,
+        resolution=resolution,
         fov=fov,
     )
 
@@ -687,18 +974,7 @@ def _generate_image_collection_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
-        # Get the correct coordinates for the particles (i.e. angular
-        # or cartesian)
-        if imgs.has_angular_units and cosmo is not None:
-            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
-        elif imgs.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-
+        # Use the standardized coordinates (already in correct units)
         return _generate_images_particle_hist(
             imgs,
             coordinates=coords,
@@ -711,21 +987,8 @@ def _generate_image_collection_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
-        # Get the correct coordinates and smoothing lengths for the
-        # particles (i.e. angular or cartesian)
-        if imgs.has_angular_units and cosmo is not None:
-            coords, smls = emitter.get_projected_angular_imaging_props(
-                cosmo=cosmo
-            )
-        elif imgs.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-            smls = emitter.smoothing_lengths
-
+        # Use the standardized coordinates and smoothing lengths
+        # (already in correct units)
         return _generate_images_particle_smoothed(
             imgs=imgs,
             signals=photometry.photometry,
@@ -756,6 +1019,55 @@ def _generate_image_collection_generic(
         )
 
     return imgs
+
+
+def _combine_image_collections(images, label, model_cache):
+    """Combine multiple image collections into a single image collection.
+
+    Args:
+        images: Dictionary of existing images.
+        label: The label of the combined image to create.
+        model_cache: The model parameter cache to use for lookup.
+
+    Returns:
+        ImageCollection: The combined images.
+
+    Raises:
+        MissingModel: If label not found in model_cache.
+        MissingImage: If any required component images are missing.
+    """
+    # Validate label exists in model_cache
+    if label not in model_cache:
+        raise exceptions.MissingModel(
+            f"Label '{label}' not found in model cache."
+        )
+
+    # Validate that the model cache entry contains combine keys
+    if "combine" not in model_cache[label]:
+        raise exceptions.MissingModel(
+            f"Label '{label}' in model cache missing 'combine' key."
+        )
+
+    # Find the images we need to combine from the provided model cache
+    combine_keys = model_cache[label]["combine"]
+
+    # Validate all combine_keys exist in images
+    missing_keys = [key for key in combine_keys if key not in images]
+    if missing_keys:
+        raise exceptions.MissingImage(
+            f"Cannot combine images for '{label}': missing images for "
+            f"{', '.join(missing_keys)}"
+        )
+
+    # Get all the images to add
+    combine_imgs = [images[key] for key in combine_keys]
+
+    # Combine the images
+    combined_img = deepcopy(combine_imgs[0])
+    for img in combine_imgs[1:]:
+        combined_img += img
+
+    return combined_img
 
 
 def _generate_ifu_particle_hist(
@@ -841,13 +1153,7 @@ def _generate_ifu_particle_hist(
     _coords = cent_coords.to(spatial_units).value
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        warn(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords, warn_only=True)
 
     # Prepare the inputs, we need to make sure we are passing C contiguous
     # arrays.
@@ -908,7 +1214,7 @@ def _generate_ifu_particle_smoothed(
             The smoothing lengths of the particles. These will be
             converted to the image resolution units.
         kernel (str):
-            The array describing the kernel. This is dervied from the
+            The array describing the kernel. This is derived from the
             kernel_functions module.
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
@@ -983,13 +1289,7 @@ def _generate_ifu_particle_smoothed(
     _coords = cent_coords.to_value(spatial_units)
 
     # Ensure coordinates have been centred
-    if not (cent_coords.min() < 0 and cent_coords.max() > 0) and not np.all(
-        np.isclose(cent_coords, 0)
-    ):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be centered for imaging"
-            f" (got min={cent_coords.min()} and max={cent_coords.max()})."
-        )
+    _validate_centered_coordinates(cent_coords)
 
     # Shift the centred coordinates by half the FOV to lie in the
     # range [0, FOV]
@@ -1154,9 +1454,37 @@ def _generate_ifu_generic(
             "Did you not save the spectra or produce the photometry?"
         )
 
-    # Create the IFU
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
+    # NOTE: This does NOT modify the emitter's underlying data
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        # Validate that smoothing lengths exist for smoothed particle imaging
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        # Parametric emitters: keep original resolution/fov, skip coord
+        # standardization
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
+
+    # Create the IFU with standardized units
     ifu = SpectralCube(
-        resolution=instrument.resolution,
+        resolution=resolution,
         lam=lam * angstrom,
         fov=fov,
     )
@@ -1168,18 +1496,7 @@ def _generate_ifu_generic(
     if (img_type == "hist" and isinstance(emitter, Particles)) or (
         getattr(emitter, "name", None) == "Black Holes"
     ):
-        # Get the correct coordinates for the particles (i.e. angular
-        # or cartesian)
-        if ifu.has_angular_units and cosmo is not None:
-            coords = emitter.get_projected_angular_coordinates(cosmo=cosmo)
-        elif ifu.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-
+        # Use the standardized coordinates (already in correct units)
         return _generate_ifu_particle_hist(
             ifu,
             sed=sed,
@@ -1194,21 +1511,8 @@ def _generate_ifu_generic(
         )
 
     elif img_type == "smoothed" and isinstance(emitter, Particles):
-        # Get the correct coordinates and smoothing lengths for the
-        # particles (i.e. angular or cartesian)
-        if ifu.has_angular_units and cosmo is not None:
-            coords, smls = emitter.get_projected_angular_imaging_props(
-                cosmo=cosmo
-            )
-        elif ifu.has_angular_units:
-            raise exceptions.InconsistentArguments(
-                "An Astropy cosmology object must be provided to use angular "
-                "coordinates for imaging."
-            )
-        else:
-            coords = emitter.centered_coordinates
-            smls = emitter.smoothing_lengths
-
+        # Use the standardized coordinates and smoothing lengths
+        # (already in correct units)
         return _generate_ifu_particle_smoothed(
             ifu,
             sed=sed,
@@ -1239,3 +1543,156 @@ def _generate_ifu_generic(
         )
 
     return ifu
+
+
+def _prepare_component_image_labels(
+    labels: list[str],
+    model_cache: dict,
+    remove_missing: bool = False,
+) -> tuple[list[str], list[str]]:
+    """Split component image labels into combined and generated labels.
+
+    This function checks if any of the requested labels can be combined
+    from other labels already in the request, avoiding unnecessary generation.
+
+    Args:
+        labels (list of str):
+            The requested image labels (already fully expanded).
+        model_cache (dict):
+            The model parameter cache from the component emitter.
+        remove_missing (bool):
+            Whether to remove labels missing from the model cache entirely.
+
+    Returns:
+        tuple of list of str:
+            - combine_labels: Labels that can be combined from others.
+            - generate_labels: Labels that must be generated directly.
+    """
+    combine_labels_set = set()
+    generate_labels = []
+    labels_set = set(labels)
+
+    # Check each label to see if it can be combined from others already in
+    # the list
+    for label in labels:
+        # Skip if not in cache
+        if label not in model_cache:
+            if not remove_missing:
+                generate_labels.append(label)
+            continue
+
+        # Check if this label has combine keys
+        combine_keys = model_cache[label].get("combine", [])
+
+        # If all combine keys are already in our list, we can combine instead
+        # of generate
+        if combine_keys and all(key in labels_set for key in combine_keys):
+            combine_labels_set.add(label)
+        else:
+            # Either no combine keys, or not all dependencies are in the list
+            generate_labels.append(label)
+
+    # Sort combine_labels in dependency order (dependencies first)
+    combine_labels = []
+    added = set()
+
+    def add_in_order(label):
+        """Add label after its dependencies."""
+        if label in added or label not in model_cache:
+            return
+        # Add dependencies first
+        combine_keys = model_cache[label].get("combine", [])
+        for key in combine_keys:
+            if key in combine_labels_set:
+                add_in_order(key)
+        # Then add this label
+        if label not in added:
+            combine_labels.append(label)
+            added.add(label)
+
+    # Add all combine labels in order to ensure dependencies are met before
+    # we try to combine them
+    for label in combine_labels_set:
+        add_in_order(label)
+
+    return combine_labels, generate_labels
+
+
+def _prepare_galaxy_image_labels(
+    labels: list[str],
+    model_cache: dict,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Prepare galaxy-level image generation by routing to components.
+
+    This function takes the requested labels and recursively expands
+    galaxy-level combination models, routing component-level labels to
+    the appropriate emitters. Component labels are recursively expanded
+    until we get to the actual labels each component needs to handle.
+
+    Args:
+        labels (list of str):
+            The requested image labels.
+        model_cache (dict):
+            The combined model parameter cache from all components and galaxy.
+
+    Returns:
+        tuple:
+            - galaxy_combine_labels (list of str): Labels for galaxy-level
+              combinations.
+            - component_labels_by_emitter (dict): Dict mapping emitter type
+              to list of labels that emitter needs to handle.
+    """
+    # Track galaxy-level combinations and all labels needed
+    galaxy_combine_labels = []
+    all_component_labels = set()
+    visited = set()
+
+    # Recursively expand galaxy-level models
+    def expand_galaxy_label(label):
+        """Recursively expand a label with cycle protection."""
+        # Skip if already visited (cycle protection)
+        if label in visited:
+            return
+
+        # Skip if not in cache
+        if label not in model_cache:
+            return
+
+        # Mark as visited to prevent cycles
+        visited.add(label)
+
+        # Get the emitter for this model
+        emitter = model_cache[label].get("emitter", None)
+
+        # If this is a galaxy-level model, expand it
+        if emitter == "galaxy":
+            # Check if it's a combination model
+            combine_keys = model_cache[label].get("combine", [])
+            if combine_keys:
+                # Recursively expand the combination keys first so that
+                # dependencies are combined before their parents
+                for key in combine_keys:
+                    expand_galaxy_label(key)
+                # Then add this label if not already present
+                if label not in galaxy_combine_labels:
+                    galaxy_combine_labels.append(label)
+        else:
+            # This is a component-level label
+            if label not in all_component_labels:
+                all_component_labels.add(label)
+
+    # Expand all requested labels
+    for label in labels:
+        expand_galaxy_label(label)
+
+    # Now route component labels to the appropriate emitters
+    component_labels_by_emitter = {}
+    for label in all_component_labels:
+        if label in model_cache:
+            emitter = model_cache[label].get("emitter", None)
+            if emitter is not None:
+                if emitter not in component_labels_by_emitter:
+                    component_labels_by_emitter[emitter] = []
+                component_labels_by_emitter[emitter].append(label)
+
+    return galaxy_combine_labels, component_labels_by_emitter

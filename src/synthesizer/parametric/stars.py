@@ -11,15 +11,27 @@ Example usage::
     stars.plot_spectra()
 """
 
+from copy import deepcopy
+
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from scipy.interpolate import RegularGridInterpolator
-from unyt import Hz, Msun, erg, nJy, s, unyt_array, unyt_quantity, yr
+from unyt import (
+    Hz,
+    Msun,
+    erg,
+    nJy,
+    s,
+    unyt_array,
+    unyt_quantity,
+    yr,
+)
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
+from synthesizer.emission_models.utils import get_param
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
@@ -41,7 +53,7 @@ class Stars(StarsComponent):
         ages (np.ndarray of float):
             The array of ages defining the age axis of the SFZH.
         metallicities (np.ndarray of float):
-            The array of metallicitities defining the metallicity axies of
+            The array of metallicitities defining the metallicity axes of
             the SFZH.
         initial_mass (unyt_quantity/float)
             The total initial stellar mass.
@@ -55,14 +67,14 @@ class Stars(StarsComponent):
         sf_hist (np.ndarray of float):
             An array describing the star formation history.
         metal_dist (np.ndarray of float):
-            An array describing the metallity distribution.
+            An array describing the metallicity distribution.
         sf_hist_func (SFH.*)
             An instance of one of the child classes of SFH. This will be
-            used to calculate sf_hist and takes precendence over a passed
+            used to calculate sf_hist and takes precedence over a passed
             sf_hist if both are present.
         metal_dist_func (ZH.*)
             An instance of one of the child classes of ZH. This will be
-            used to calculate metal_dist and takes precendence over a
+            used to calculate metal_dist and takes precedence over a
             passed metal_dist if both are present.
         instant_sf (float):
             An age at which to compute an instantaneous SFH, i.e. all
@@ -115,7 +127,7 @@ class Stars(StarsComponent):
             log10ages (np.ndarray of float):
                 The array of ages defining the log10(age) axis of the SFZH.
             metallicities (np.ndarray of float):
-                The array of metallicitities defining the metallicity axies of
+                The array of metallicitities defining the metallicity axes of
                 the SFZH.
             initial_mass (unyt_quantity/float):
                 The total initial stellar mass. If provided the SFZH grid will
@@ -138,7 +150,7 @@ class Stars(StarsComponent):
                 Either:
                     - A metallicity at which to compute an instantaneous
                       ZH, i.e. all stellar mass populating a single Z bin.
-                    - An array describing the metallity distribution.
+                    - An array describing the metallicity distribution.
                     - An instance of one of the child classes of ZH. This
                       will be used to calculate an array describing the
                       metallicity distribution.
@@ -257,6 +269,12 @@ class Stars(StarsComponent):
             # Compute the SFZH grid
             self._get_sfzh(instant_sf, instant_metallicity)
 
+        if np.any(~np.isfinite(self.sfzh)):
+            raise exceptions.InconsistentArguments(
+                "SFZH grid contains NaN or Inf values! "
+                "Please check the input parameters."
+            )
+
         # Attach the morphology model
         self.morphology = morphology
 
@@ -327,7 +345,7 @@ class Stars(StarsComponent):
             # Compute the SFZH grid
             self.sfzh = inst_stars.get_sfzh(
                 self.log10ages,
-                self.log10metallicities,
+                self.metallicities,
                 grid_assignment_method="cic",
             ).sfzh
 
@@ -428,8 +446,17 @@ class Stars(StarsComponent):
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
-    def get_mask(self, attr, thresh, op, mask=None):
-        """Create a mask using a threshold and attribute on which to mask.
+    def get_mask(
+        self,
+        attr,
+        thresh,
+        op,
+        mask=None,
+        attr_override_obj=None,
+    ):
+        """Return a mask based on the attribute and threshold.
+
+        Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         Args:
             attr (str):
@@ -441,13 +468,19 @@ class Stars(StarsComponent):
                 or "!=".
             mask (np.ndarray):
                 Optionally, a mask to combine with the new mask.
+            attr_override_obj (object):
+                An alternative object to check from the attribute. This
+                is specifically used when an EmissionModel may have a
+                fixed parameter override, but can be used more generally.
 
         Returns:
             mask (np.ndarray):
                 The mask array.
         """
+        start = tic()
+
         # Get the attribute
-        attr = getattr(self, attr)
+        attr = get_param(attr, attr_override_obj, None, self)
 
         # Apply the operator
         if op == ">":
@@ -496,6 +529,8 @@ class Stars(StarsComponent):
                     f"or an axis (mask.shape={new_mask.shape}, "
                     f"sfzh.shape={self.sfzh.shape})"
                 )
+
+        toc("Generating parametric mask", start)
 
         return new_mask
 
@@ -566,7 +601,7 @@ class Stars(StarsComponent):
 
         Args:
             lum (unyt_quantity):
-                The desried luminosity in scale_filter.
+                The desired luminosity in scale_filter.
             scale_filter (Filter):
                 The filter in which lum is measured.
             spectra_type (str):
@@ -615,7 +650,7 @@ class Stars(StarsComponent):
 
         Args:
             flux (unyt_quantity):
-                The desried flux in scale_filter.
+                The desired flux in scale_filter.
             scale_filter (Filter):
                 The filter in which flux is measured.
             spectra_type (str):
@@ -672,60 +707,65 @@ class Stars(StarsComponent):
         grid_assignment_method="cic",
         nthreads=0,
     ):
-        """Generate the binned SFZH history of this stellar component.
+        """Get the binned SFZH at the provided axes.
 
-        In the parametric case this will resample the existing SFZH onto the
-        desired grid. For a particle based component the binned SFZH is
-        calculated by binning the particles onto the desired grid defined by
-        the input log10ages and metallicities.
+        This method remaps the parametric SFZH onto a new grid defined
+        by log10ages and metallicities. To do so, it first goes through a
+        particle Stars object to perform the remapping using a conservative
+        remap.
 
-
-        For a particle based galaxy the binned SFZH produced by this method
-        is equivalent to the weights used to extract spectra from the grid.
+        TODO: Along with spectra generation, this should be improved going
+        forward to use a "cookie cutter" approach based on the bins overlaid
+        on the existing grid.
 
         Args:
             log10ages (np.ndarray of float):
-                The log10 ages of the desired SFZH.
+                The log10 ages of the desired SFZH (bin centers, strictly
+                monotonic).
             metallicities (np.ndarray of float):
-                The metallicities of the desired SFZH.
+                The metallicities of the desired SFZH (bin centers, strictly
+                monotonic).
             grid_assignment_method (str):
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or their uppercase equivalents (CIC, NGP).
-                Defaults to cic. (particle only)
+                The grid assignment method to use when remapping from the
+                particle Stars to the parametric Stars. Options are:
+                    - "cic": Cloud-in-cell assignment.
+                    - "ngp": Nearest grid point assignment.
             nthreads (int):
-                The number of threads to use in the computation. If set to -1
-                all available threads will be used. (particle only)
+                The number of threads to use for the remapping. If -1 all
+                available threads are used.
 
         Returns:
-            numpy.ndarray:
-                Numpy array of containing the SFZH.
+            Stars: New Stars object on the requested grid.
         """
-        # Prepare an interpolator based on the existing SFZH
-        interp = RegularGridInterpolator(
-            (self.log10ages, self.metallicities),
-            self.sfzh,
-            bounds_error=False,
-            fill_value=0.0,
+        # If the axes are the same as our existing ones just return our SFZH
+        if np.allclose(log10ages, self.log10ages) and np.allclose(
+            metallicities, self.metallicities
+        ):
+            return deepcopy(self)
+
+        # Avoid cyclic imports
+        from synthesizer.particle import Stars as ParticleStars
+
+        # OK, we have different grids so we need to remap. For now, the best
+        # way to do this is use a particle Stars object to do the remapping
+        # for us
+        initial_masses = self.sfzh.flatten() * Msun
+        ages, metals = np.meshgrid(
+            self.ages,
+            self.metallicities,
+            indexing="ij",
+        )
+        part_stars = ParticleStars(
+            initial_masses=initial_masses,
+            ages=ages.flatten(),
+            metallicities=metals.flatten(),
         )
 
-        # Build a mesh containing the new grid points
-        age_mesh, metal_mesh = np.meshgrid(
-            log10ages, metallicities, indexing="ij"
-        )
-
-        # Interpolate the SFZH onto the new grid
-        points = np.column_stack([age_mesh.ravel(), metal_mesh.ravel()])
-        new_values = interp(points)  # shape is (N,)
-
-        # Reshape interpolated values onto the new grid shape
-        new_sfzh = new_values.reshape(len(log10ages), len(metallicities))
-
-        return Stars(
+        return part_stars.get_sfzh(
             log10ages,
             metallicities,
-            sfzh=new_sfzh,
-            initial_mass=self.initial_mass,
+            grid_assignment_method=grid_assignment_method,
+            nthreads=nthreads,
         )
 
     def plot_sfzh(
@@ -933,6 +973,90 @@ class Stars(StarsComponent):
 
         return weighted_mean(attr, weight)
 
+    def calculate_average_sfr(self, t_range: tuple = (0, 1e8)):
+        """Calculate the average SFR over a given age range.
+
+        This method assumes that stars form at discrete time points given by
+        `self.ages`, with the mass in `self.get_sfh()`.
+        To calculate a continuous rate, it treats this mass as having
+        formed uniformly in bins constructed around each age point.
+
+        Args:
+            t_range (tuple[float, float]):
+                The lookback age limits (t_start, t_end) in years over which
+                to calculate the average SFR.
+
+        Returns:
+            unyt_quantity:
+                The average SFR over the specified time range in Msun/yr.
+        """
+        # --- Input Validation and Setup ---
+        sfh_mass = np.asarray(self.get_sfh())
+        age_points = np.asarray(self.ages)
+
+        if sfh_mass.size != age_points.size:
+            raise ValueError(
+                "Mass array and age points array must have the same size."
+            )
+
+        if age_points.size == 0:
+            return unyt_quantity(0, units="Msun/yr")
+
+        # Support unyt quantities in t_range
+        t_start, t_end = t_range
+        if hasattr(t_start, "to"):
+            t_start = t_start.to("yr").value
+        if hasattr(t_end, "to"):
+            t_end = t_end.to("yr").value
+        # Ensure consistent ordering
+        order = np.argsort(age_points)
+        age_points = age_points[order]
+        sfh_mass = sfh_mass[order]
+
+        if t_start >= t_end:
+            raise ValueError("Start of t_range must be less than its end.")
+
+        # --- Construct Bins from Age Points ---
+        if age_points.size == 1:
+            # For a single point, assume the bin is centered on it,
+            # starting from 0.
+            age_edges = np.array([0, 2 * age_points[0]])
+        else:
+            # Bin edges are the midpoints between age points.
+            internal_edges = (age_points[:-1] + age_points[1:]) / 2.0
+            # Extrapolate the first and last edges to define the outer bounds.
+            first_edge = age_points[0] - (age_points[1] - age_points[0]) / 2.0
+            last_edge = (
+                age_points[-1] + (age_points[-1] - age_points[-2]) / 2.0
+            )
+            age_edges = np.concatenate(
+                ([first_edge], internal_edges, [last_edge])
+            )
+
+        # Ensure the first edge isn't negative for lookback time.
+        age_edges[0] = max(0, age_edges[0])
+
+        bin_starts = age_edges[:-1]
+        bin_ends = age_edges[1:]
+        bin_widths = bin_ends - bin_starts
+
+        rates = np.divide(
+            sfh_mass,
+            bin_widths,
+            out=np.zeros_like(sfh_mass, dtype=float),
+            where=(bin_widths > 0),
+        )
+
+        overlap_starts = np.maximum(bin_starts, t_start)
+        overlap_ends = np.minimum(bin_ends, t_end)
+        overlap_durations = np.maximum(0, overlap_ends - overlap_starts)
+
+        total_mass_in_range = np.sum(rates * overlap_durations) * Msun
+        range_duration = (t_end - t_start) * yr
+        average_sfr = total_mass_in_range / range_duration
+
+        return average_sfr.to("Msun/yr")
+
     def calculate_surviving_mass(self, grid: Grid):
         """Calculate the surviving mass of the stellar population.
 
@@ -951,3 +1075,31 @@ class Stars(StarsComponent):
         surviving_mass = np.sum(self.sfzh * grid.stellar_fraction)
 
         return surviving_mass * Msun
+
+    def get_ionising_photon_luminosity(
+        self,
+        grid: Grid,
+        ion: str = "HI",
+    ) -> float:
+        """Calculate the ionising photon luminosity from the grid.
+
+        Args:
+            grid (object, Grid):
+                The SPS Grid object from which to extract spectra.
+            ion (str):
+                The ion for which to calculate the ionising photon luminosity.
+                Must be a recognised ion in the grid's
+                log10_specific_ionising_lum dictionary.
+
+        Returns:
+             The ionising photon luminosity summed over the grid dimensions.
+        """
+        if ion not in grid.log10_specific_ionising_lum:
+            raise exceptions.MissingGridProperty(
+                f"The provided grid does not contain {ion} "
+                "ionising luminosities"
+            )
+        return np.sum(
+            10 ** grid.log10_specific_ionising_lum[ion] * self.sfzh,
+            axis=(0, 1),
+        )

@@ -1,7 +1,19 @@
 """A test suite for the cosmology module."""
 
 import numpy as np
-from astropy.cosmology import Planck18
+from astropy.cosmology import (
+    WMAP9,
+    FlatLambdaCDM,
+    Flatw0waCDM,
+    Flatw0wzCDM,
+    FlatwCDM,
+    FlatwpwaCDM,
+    Planck18,
+    w0waCDM,
+    w0wzCDM,
+    wCDM,
+    wpwaCDM,
+)
 from unyt import Mpc
 
 from synthesizer.cosmology import (
@@ -134,8 +146,6 @@ class TestCosmologyDistanceFunctions:
 
     def test_different_cosmologies(self):
         """Test that functions work with different cosmology objects."""
-        from astropy.cosmology import WMAP9
-
         redshift = 1.0
 
         # Test with different cosmology
@@ -150,6 +160,64 @@ class TestCosmologyDistanceFunctions:
         # But both should have correct units
         assert result_planck.units == Mpc
         assert result_wmap.units == Mpc
+
+    def test_comprehensive_cosmology_support(self):
+        """Test cosmology caching supports all major cosmology classes."""
+        redshift = 1.0
+
+        # Test a comprehensive set of cosmology models
+        cosmologies = [
+            # Basic ΛCDM models
+            FlatLambdaCDM(H0=70, Om0=0.3),
+            # Constant w models
+            wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1.1),
+            FlatwCDM(H0=70, Om0=0.3, w0=-1.1),
+            # Time-varying w models
+            w0waCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1.0, wa=0.1),
+            Flatw0waCDM(H0=70, Om0=0.3, w0=-1.0, wa=0.1),
+            # Pivot redshift models
+            wpwaCDM(H0=70, Om0=0.3, Ode0=0.7, wp=-1.0, wa=0.1, zp=0.5),
+            FlatwpwaCDM(H0=70, Om0=0.3, wp=-1.0, wa=0.1, zp=0.5),
+            # Redshift derivative models
+            w0wzCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1.0, wz=0.1),
+            Flatw0wzCDM(H0=70, Om0=0.3, w0=-1.0, wz=0.1),
+        ]
+
+        # Test both distance functions with each cosmology
+        for cosmo in cosmologies:
+            lum_dist = get_luminosity_distance(cosmo, redshift)
+            ang_dist = get_angular_diameter_distance(cosmo, redshift)
+
+            # Basic sanity checks
+            assert lum_dist.units == Mpc, (
+                "Luminosity distance should have Mpc units for "
+                f"{cosmo.__class__.__name__}"
+            )
+            assert ang_dist.units == Mpc, (
+                "Angular diameter distance should have Mpc units for "
+                f"{cosmo.__class__.__name__}"
+            )
+            assert lum_dist.value > 0, (
+                "Luminosity distance should be positive for "
+                f"{cosmo.__class__.__name__}"
+            )
+            assert ang_dist.value > 0, (
+                "Angular diameter distance should be positive for "
+                f"{cosmo.__class__.__name__}"
+            )
+
+            # Test caching by calling again
+            lum_dist_cached = get_luminosity_distance(cosmo, redshift)
+            ang_dist_cached = get_angular_diameter_distance(cosmo, redshift)
+
+            assert np.isclose(lum_dist.value, lum_dist_cached.value), (
+                f"Cached luminosity distance should match for "
+                f"{cosmo.__class__.__name__}"
+            )
+            assert np.isclose(ang_dist.value, ang_dist_cached.value), (
+                f"Cached angular diameter distance should match for "
+                f"{cosmo.__class__.__name__}"
+            )
 
     def test_high_redshift(self):
         """Test distance calculations at high redshift."""

@@ -6,12 +6,16 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Lsun, Msun, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import (
+    TableFormatter,
+    array_to_scalar,
+    scalar_to_array,
+)
 
 
 class BlackholesComponent(Component):
@@ -69,13 +73,25 @@ class BlackholesComponent(Component):
             The angle of the torus.
         torus_fraction (np.ndarray of float):
             The fraction of the torus angle to 90 degrees.
+        disc_transmission (np.ndarray of str):
+            The disc transmission scenario used by UnifiedAGN. Can either be
+            "none", "blr", or "nlr".
+        transmission_fraction_escape (np.ndarray of float):
+            The fraction of the disc emission that escapes. Either 0.0 or 1.0
+            depending on the scenario.
+        transmission_fraction_nlr (np.ndarray of float):
+            The fraction of the disc emission that is transmitted through the
+            NLR. Either 0.0 or 1.0 depending on the scenario.
+        transmission_fraction_blr (np.ndarray of float):
+            The fraction of the disc emission that is transmitted through the
+            BLR. Either 0.0 or 1.0 depending on the scenario.
     """
 
     # Define class level Quantity attributes
     accretion_rate = Quantity("mass_rate")
     inclination = Quantity("angle")
     bolometric_luminosity = Quantity("luminosity")
-    eddington_luminosity = Quantity("luminosity")
+    eddington_luminosity = Quantity("luminosity_solar")
     bb_temperature = Quantity("temperature")
     mass = Quantity("mass")
 
@@ -115,7 +131,7 @@ class BlackholesComponent(Component):
         """Initialise the BlackholeComponent.
 
         Where they're not provided missing quantities are automatically
-        calcualted. Not all parameters need to be set for every emission model.
+        calculated. Not all parameters need to be set for every emission model.
 
         Args:
             fesc (float):
@@ -139,7 +155,7 @@ class BlackholesComponent(Component):
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
             ionisation_parameter_blr (np.ndarray of float):
-                The ionisation parameter of the broadline region.
+                The ionisation parameter of the broad line region.
             hydrogen_density_blr (np.ndarray of float):
                 The hydrogen density of the broad line region.
             covering_fraction_blr (np.ndarray of float):
@@ -189,6 +205,113 @@ class BlackholesComponent(Component):
         self.covering_fraction_nlr = covering_fraction_nlr
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
 
+        # If a covering_fraction_blr is set then randomly allocate a scenario
+        # for the disc transmission. This can either be that emission entirely
+        #  escapes (none), or is transmitted through the BLR (blr), or NLR
+        # (nlr). These are allocated based on the relative covering fractions
+        # of the BLR and NLR. These are used by the UnifiedAGN emission model.
+        if self.covering_fraction_blr is not None:
+            # Calculate the total covering fraction
+            self.covering_fraction = (
+                covering_fraction_blr + covering_fraction_nlr
+            )
+
+            # Calculate the escape fraction. This is equivalent to a covering
+            # fraction for escaping radiation.
+            self.escape_fraction = 1.0 - self.covering_fraction
+
+            # Validate that covering fractions don't exceed unity
+            if np.any(self.covering_fraction > 1.0):
+                raise exceptions.InconsistentArguments(
+                    "Sum of BLR and NLR covering fractions cannot exceed 1.0"
+                )
+
+            # Define transmission scenario choices
+            transmission_scenario_choices = ["blr", "nlr", "none"]
+
+            # Convert the covering_fraction_blr and covering_fraction_nlr to
+            # arrays to allow us to use the same logic for both parametric and
+            # particle blackholes.
+            covering_fraction_blr = scalar_to_array(covering_fraction_blr)
+            covering_fraction_nlr = scalar_to_array(covering_fraction_nlr)
+
+            # Validate both covering fractions are set and have matching
+            # lengths.
+            if covering_fraction_nlr is None:
+                raise exceptions.InconsistentArguments(
+                    "covering_fraction_nlr must be provided when "
+                    "covering_fraction_blr is set"
+                )
+            if len(covering_fraction_blr) != len(covering_fraction_nlr):
+                raise exceptions.InconsistentArguments(
+                    "covering_fraction_blr "
+                    f"(length {len(covering_fraction_blr)}) and "
+                    "covering_fraction_nlr "
+                    f"(length {len(covering_fraction_nlr)}) must have the"
+                    "same length"
+                )
+
+            # Define number of blackholes.
+            N = len(covering_fraction_blr)
+
+            # Loop over blackholes and decide whether the disc emission
+            # escapes (none), or is transmitted through the BLR (blr) or NLR
+            # (nlr).
+            disc_transmission_ = np.empty(N, dtype="U10")
+            for i, (
+                blr_covering_fraction_,
+                nlr_covering_fraction_,
+            ) in enumerate(zip(covering_fraction_blr, covering_fraction_nlr)):
+                # Define the probabilities for each option based on the
+                # covering fractions.
+                probabilities = [
+                    blr_covering_fraction_,
+                    nlr_covering_fraction_,
+                    1.0 - blr_covering_fraction_ - nlr_covering_fraction_,
+                ]
+
+                # Randomly choose the scenario using these probabilities.
+                disc_transmission_[i] = np.random.choice(
+                    transmission_scenario_choices, p=probabilities
+                )
+
+            # Initialise transmission fraction arrays. These determine the
+            # fraction of the disc emission that entirely escapes or is
+            # transmitted through the BLR and NLR. Since, in this context,
+            # the emission is only propagated through one component then one
+            # of these must be unity with the other two zero. It is however
+            # possible to use the average, but this is more clearly
+            # implemented at the emission model level.
+            transmission_fraction_escape = np.zeros(N)
+            transmission_fraction_nlr = np.zeros(N)
+            transmission_fraction_blr = np.zeros(N)
+
+            # For each corresponding scenario set the transmission fraction to
+            # unity.
+            transmission_fraction_escape[disc_transmission_ == "none"] = 1.0
+            transmission_fraction_nlr[disc_transmission_ == "nlr"] = 1.0
+            transmission_fraction_blr[disc_transmission_ == "blr"] = 1.0
+
+            # convert to scalars if only one value
+            if N == 1:
+                self.transmission_fraction_escape = array_to_scalar(
+                    transmission_fraction_escape
+                )
+                self.transmission_fraction_nlr = array_to_scalar(
+                    transmission_fraction_nlr
+                )
+                self.transmission_fraction_blr = array_to_scalar(
+                    transmission_fraction_blr
+                )
+                self.disc_transmission = array_to_scalar(disc_transmission_)
+            else:
+                self.transmission_fraction_escape = (
+                    transmission_fraction_escape
+                )
+                self.transmission_fraction_nlr = transmission_fraction_nlr
+                self.transmission_fraction_blr = transmission_fraction_blr
+                self.disc_transmission = disc_transmission_
+
         # The inclination of the black hole disc
         self.inclination = (
             inclination if inclination is not None else 0.0 * deg
@@ -197,7 +320,6 @@ class BlackholesComponent(Component):
         # The angle of the torus
         self.theta_torus = theta_torus
         self.torus_fraction = (self.theta_torus / (90 * deg)).value
-        self._torus_edgeon_cond = self.inclination + self.theta_torus
 
         # Check to make sure that both accretion rate and bolometric luminosity
         # haven't been provided because that could be confusing.
@@ -318,11 +440,13 @@ class BlackholesComponent(Component):
 
         Returns:
             unyt_array
-                The black hole eddington luminosity
+                The black hole eddington luminosity in solar luminosities
         """
-        # Note: the factor 1.257E38 comes from:
-        # 4*pi*G*mp*c*Msun/sigma_thompson
-        self.eddington_luminosity = 1.257e38 * self._mass
+        # The Eddington luminosity is given by:
+        # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
+        # Converting to solar luminosities:
+        # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
+        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
 
         return self.eddington_luminosity
 
@@ -333,9 +457,13 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        self.eddington_ratio = (
-            self._bolometric_luminosity / self._eddington_luminosity
-        )
+        # Compute the eddington ratio but ensure both luminosities are in the
+        # same units.
+        bol_lum = self.bolometric_luminosity.to(
+            self.eddington_luminosity.units
+        ).ndview
+        edd_lum = self._eddington_luminosity
+        self.eddington_ratio = bol_lum / edd_lum
 
         return self.eddington_ratio
 
@@ -379,3 +507,74 @@ class BlackholesComponent(Component):
         formatter = TableFormatter(self)
 
         return formatter.get_table("Black Holes")
+
+    def calculate_circular_velocity(self, radial_distance):
+        r"""Calculate the circular velocity.
+
+        v_c(r) = \\sqrt{\frac{G M(<r)}{r}}.
+
+        Args:
+            radial_distance (np.ndarray of float):
+                The distance from the blackhole.
+
+        Returns:
+             unyt_array:
+                The circular velocity at the radial distance.
+        """
+        return np.sqrt(G * self.mass / radial_distance)
+
+    def calculate_schwarzschild_radius(self):
+        r"""Calculate the Schwarzschild radius of the blackhole(s).
+
+        R_{\rm s} = \frac{2GM}{c^2}
+
+        Returns:
+             unyt_array:
+                The Schwarzschild radius.
+        """
+        return 2 * G * self.mass / c**2
+
+    def calculate_integrated_ionising_luminosity(self):
+        """Calculates the integrated ionising luminosity of the blackhole(s).
+
+        This requires that the disc_incident spectra be available.
+
+        Returns:
+             unyt_array:
+                The ionising photon production rate (s^-1).
+        """
+        if "disc_incident" in self.spectra.keys():
+            return self.spectra[
+                "disc_incident"
+            ].calculate_ionising_photon_production_rate()
+        else:
+            raise exceptions.MissingSpectraType(
+                "It is necessary to first calculate the disc_incident spectra "
+                "before calculating the ionising luminosity"
+            )
+
+    def calculate_ionisation_parameter(
+        self, radial_distance, hydrogen_density
+    ):
+        r"""Calculate the ionisation parameter.
+
+        Calculates the ionising parameter (U) at radial_distance for the given
+        hydrogen_density.
+
+        U = \frac{Q_{\mathrm{H}}}{4\pi r^{2} n_{\mathrm{H}} c}
+
+        Args:
+            radial_distance (np.ndarray of float):
+                The distance from the blackhole.
+            hydrogen_density (np.ndarray of float):
+                The hydrogen density at radial_distance.
+
+        Returns:
+             unyt_array:
+                The ionisation parameter.
+        """
+        ionising_luminosity = self.calculate_ionising_luminosity()
+
+        return ionising_luminosity / (
+            4 * np.pi * radial_distance**2 * hydrogen_density * c
+        )

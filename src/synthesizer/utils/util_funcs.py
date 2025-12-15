@@ -143,6 +143,30 @@ def scalar_to_array(value):
     return arr
 
 
+def array_to_scalar(x):
+    """Convert a NumPy array-like of length 1 to a scalar.
+
+    Args:
+        x (array or list):
+            array or list to be converted
+
+    Returns:
+        scale:
+            A scalar value.
+
+    Raises:
+        InconsistentArguments
+            If the value has more than 1 element.
+    """
+    x = np.asanyarray(x)
+    if x.size != 1:
+        raise ValueError(
+            f"Expected an array with exactly 1 element, got shape {x.shape}"
+            f"with {x.size} elements."
+        )
+    return x.item()
+
+
 def parse_grid_id(grid_id):
     """Parse a grid name for the properties of the grid.
 
@@ -335,35 +359,38 @@ def combine_arrays(arr1, arr2, verbose=False):
 def pluralize(word: str) -> str:
     """Pluralize a singular word.
 
+    Simple implementation using special cases + basic rules. Handles axis
+    names (age, mass, metallicity) and component names (blackhole, star).
+
     Args:
-        word (str):
-            The word to pluralize.
+        word (str): The word to pluralize.
 
     Returns:
         str: The pluralized word.
     """
-    if (
-        word.endswith("s")
-        or word.endswith("x")
-        or word.endswith("z")
-        or word.endswith("sh")
-        or word.endswith("ch")
-    ):
-        return word + "es"
-    elif word.endswith("y") and word[-2] not in "aeiou":
-        return word[:-1] + "ies"
-    elif word.endswith("f"):
-        return word[:-1] + "ves"
-    elif word.endswith("fe"):
-        return word[:-2] + "ves"
-    elif word.endswith("o") and word[-2] not in "aeiou":
-        return word + "es"
+    # Handle known edge cases explicitly
+    special_cases = {
+        "mass": "masses",
+        "gas": "gases",
+        "axis": "axes",
+    }
+    if word in special_cases:
+        return special_cases[word]
+
+    # Simple fallback rules
+    if word.endswith("y") and len(word) > 1 and word[-2] not in "aeiou":
+        return word[:-1] + "ies"  # metallicity -> metallicities
+    elif word.endswith(("s", "x", "z", "sh", "ch")):
+        return word + "es"  # box -> boxes, bias -> biases
     else:
-        return word + "s"
+        return word + "s"  # age -> ages
 
 
 def depluralize(word: str) -> str:
-    """Convert a plural word to its singular form based on simple rules.
+    """Convert a plural word to its singular form.
+
+    Uses special cases for known edge cases, with simple fallback rules.
+    Only needs to handle axis names/attributes in synthesizer grids.
 
     Args:
         word (str): The word to depluralize.
@@ -371,20 +398,25 @@ def depluralize(word: str) -> str:
     Returns:
         str: The depluralized word.
     """
-    if word.endswith("ies") and len(word) > 3:  # babies -> baby
-        return word[:-3] + "y"
-    elif word.endswith("ves"):  # leaves -> leaf, knives -> knife
-        return word[:-3] + "f"
-    elif word.endswith("oes"):  # heroes -> hero, potatoes -> potato
-        return word[:-2]
-    elif word.endswith(
-        ("ches", "shes", "xes", "sses")
-    ):  # boxes -> box, churches -> church
-        return word[:-2]
-    elif word.endswith("s") and len(word) > 2:  # general case: cats -> cat
-        return word[:-1]
+    # Handle known edge cases explicitly
+    special_cases = {
+        "masses": "mass",
+        "gases": "gas",
+        "gas": "gas",  # Already singular
+        "axes": "axis",
+    }
+    if word in special_cases:
+        return special_cases[word]
 
-    return word  # Return unchanged if no rule applies
+    # Simple fallback rules (reverse of pluralize)
+    if word.endswith("ies") and len(word) > 3:
+        return word[:-3] + "y"  # metallicities -> metallicity
+    elif word.endswith(("xes", "shes", "ches", "sses", "zes")):
+        return word[:-2]  # boxes -> box, biases -> bias
+    elif word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]  # ages -> age
+    else:
+        return word  # Already singular or unknown pattern
 
 
 def ensure_double_precision(value):
@@ -548,3 +580,130 @@ def get_attr_c_compatible_double(obj, attr):
 
     # Also return the array
     return arr
+
+
+def sigmoid(x, A, a, c, center):
+    """Sigmoid function.
+
+    Args:
+        x (float): Input value.
+        A (float): Amplitude parameter.
+        a (float): Slope parameter.
+        c (float): Offset parameter.
+        center (float): Center of the sigmoid function.
+
+    Returns:
+        float: Sigmoid function value.
+    """
+    return A / (1 + np.exp(-a * (x - center))) + c
+
+
+def obj_to_hashable(obj):
+    """Convert an object to a hashable data type.
+
+    This is a helper for converting different data types to hashable types
+    with minimal cost.
+
+    Args:
+        obj (Any): The object to convert.
+
+    Returns:
+        hashable: A hashable representation of the object.
+
+    Raises:
+        CannotHashThat: If a data type is passed that can't be handled.
+    """
+    # Cheap cases first: already hashable scalars
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+
+    # Handle NumPy scalar types (e.g. np.int64, np.float64, np.bool_)
+    # by converting them to the corresponding Python scalar.
+    elif isinstance(obj, np.generic):
+        return obj.item()
+
+    # Unyt stuff: convert to the underlying ndarray view and recurse
+    elif isinstance(obj, (unyt_quantity, unyt_array)):
+        return obj_to_hashable(obj.ndview)
+
+    # NumPy arrays: either summarize numerically or recurse element-wise
+    elif isinstance(obj, np.ndarray):
+        dt = obj.dtype
+
+        # For numeric types min+max+diff is enough to differentiate uniqueness
+        is_numeric = (
+            np.issubdtype(dt, np.number)
+            or dt == np.bool_
+            or np.issubdtype(dt, np.datetime64)
+            or np.issubdtype(dt, np.timedelta64)
+        )
+        if is_numeric:
+            size = int(obj.size)
+
+            # Handle 0 sized arrays
+            if size == 0:
+                min_val = None
+                max_val = None
+                diff_mean = None
+
+            # Get the min and max because we can
+            else:
+                min_val = obj.min()
+                max_val = obj.max()
+
+                # Ensure diff is meaningful
+                if size < 2:
+                    diff_mean = None
+                else:
+                    diff_mean = np.mean(np.diff(obj))
+
+            # Cheap numerical fingerprint: (min, max, avg diff, size)
+            return (
+                obj_to_hashable(min_val),
+                obj_to_hashable(max_val),
+                obj_to_hashable(diff_mean),
+                size,
+            )
+        else:
+            # Non-numeric array: hash element-wise
+            return tuple(obj_to_hashable(item) for item in obj)
+
+    # Built-in containers: recurse
+    elif isinstance(obj, (list, tuple)):
+        return tuple(obj_to_hashable(item) for item in obj)
+
+    # Handle dict
+    elif isinstance(obj, dict):
+        return tuple(
+            sorted((key, obj_to_hashable(value)) for key, value in obj.items())
+        )
+
+    # Handle set
+    elif isinstance(obj, set):
+        # Convert all items to hashable form first
+        hashable_items = tuple(obj_to_hashable(item) for item in obj)
+
+        # Try to sort directly (works if items are comparable)
+        try:
+            return tuple(sorted(hashable_items))
+        except TypeError:
+            # Items are not directly comparable (e.g., heterogeneous types).
+            # Use a deterministic key based on type name and repr for stable
+            # sorting
+            try:
+                return tuple(
+                    sorted(
+                        hashable_items,
+                        key=lambda x: (type(x).__name__, repr(x)),
+                    )
+                )
+            except Exception as e:
+                # If even that fails, we can't create a deterministic hash
+                raise exceptions.CannotHashThat(
+                    f"Cannot create deterministic hash for set with "
+                    f"non-comparable items: {e}"
+                ) from e
+
+    # Anything else: bail, we can't hash it
+    else:
+        raise exceptions.CannotHashThat(f"Unhashable type: {type(obj)}")

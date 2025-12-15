@@ -122,10 +122,14 @@ class PipelineIO:
             self.comm.Barrier()
             self._took(start, "Waiting for all ranks to get to I/O")
 
-        # If we are writing in parallel but not using collective I/O we need
-        # write a file per rank. Modify the file path to include the rank.
-        ext = filepath.split(".")[-1]
-        self.filepath = filepath.replace(f".{ext}", f"_{self.rank}.{ext}")
+            # If we are writing in parallel but not using collective I/O we
+            # need to write a file per rank. Modify the file path to include
+            # the rank.
+            if not self.is_collective:
+                ext = filepath.split(".")[-1]
+                self.filepath = filepath.replace(
+                    f".{ext}", f"_{self.rank}.{ext}"
+                )
 
         # Report some useful information
         if self.is_collective:
@@ -238,11 +242,10 @@ class PipelineIO:
         # Unpack the instruments into a single instrument collection containing
         # all unique instruments
         unique_instruments = InstrumentCollection()
-        for insts in instruments.values():
-            for inst in insts:
-                if inst.label in unique_instruments:
-                    continue
-                unique_instruments.add_instruments(inst)
+        for inst in instruments:
+            if inst.label in unique_instruments:
+                continue
+            unique_instruments.add_instruments(inst)
         instruments = unique_instruments
 
         # Only write this metadata once

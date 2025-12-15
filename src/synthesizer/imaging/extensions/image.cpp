@@ -25,48 +25,11 @@
 #include "../../extensions/octree.h"
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
+#include "kernel_smoothing_funcs.h"
 
 #ifdef WITH_OPENMP
 #include <omp.h>
 #endif
-
-/**
- * @brief Inline function for kernel interpolation.
- *
- * This funciton interpolates the value of the kernel at a given distance
- * from the center, `q`, it starts from the precomputed kernel look up table
- * and refines this value using linear interpolation.
- *
- * @param q The distance from the center, normalized by the smoothing length.
- * @param kernel The precomputed kernel look up table.
- * @param kdim The dimension of the kernel (number of entries in the kernel
- * array).
- * @param threshold The threshold value for the kernel, above which the kernel
- * value is zero.
- *
- * @return The interpolated kernel value at distance `q`.
- */
-inline double interpolate_kernel(double q, const double *kernel, int kdim,
-                                 double threshold) {
-
-  /* Early exit if q is above the threshold */
-  if (q >= threshold) {
-    return 0.0;
-  }
-
-  /* Convert q to a fraction of the kernel dimension */
-  double q_scaled = q * kdim;
-
-  /* Return the maximum kernel value if q is beyond the last entry */
-  if (q_scaled >= kdim - 1) {
-    return kernel[kdim - 1];
-  }
-
-  /* Linear interpolation between the two nearest kernel values */
-  int kindex_low = static_cast<int>(q_scaled);
-  double frac = q_scaled - kindex_low;
-  return kernel[kindex_low] * (1.0 - frac) + kernel[kindex_low + 1] * frac;
-}
 
 /**
  * @brief Structure to hold cell with its computational cost
@@ -223,10 +186,11 @@ build_balanced_work_list(struct cell *root, int nthreads,
  * @param pix_values The pixel values to use for each image.
  */
 static void populate_pixel_recursive(const struct cell *c, double threshold,
-                                     int kdim, const double *kernel, int npart,
-                                     double *out, int nimgs,
-                                     const double *pix_values, const double res,
-                                     const int npix_x, const int npix_y) {
+                                     int kdim, const double *kernel,
+                                     double norm_factor, int npart, double *out,
+                                     int nimgs, const double *pix_values,
+                                     const double res, const int npix_x,
+                                     const int npix_y) {
 
   /* Is the cell split? */
   if (c->split) {
@@ -241,8 +205,8 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
       }
 
       /* Recurse... */
-      populate_pixel_recursive(cp, threshold, kdim, kernel, npart, out, nimgs,
-                               pix_values, res, npix_x, npix_y);
+      populate_pixel_recursive(cp, threshold, kdim, kernel, norm_factor, npart,
+                               out, nimgs, pix_values, res, npix_x, npix_y);
     }
 
   } else {
@@ -302,34 +266,6 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
       int i = (int)floor(part->pos[0] / res);
       int j = (int)floor(part->pos[1] / res);
 
-      /* If the smoothing length is less than half the resolution just add it
-       * to the nearest pixel in our local buffer. */
-      if (part->sml < res / 2.0) {
-
-        /* Check if this pixel falls within our local region. */
-        if (i >= i_min && i < i_max && j >= j_min && j < j_max) {
-
-          /* Convert global pixel coordinates to local buffer coordinates. */
-          int local_i = i - i_min;
-          int local_j = j - j_min;
-
-          /* Safety check bounds. */
-          if (local_i >= 0 && local_i < local_width && local_j >= 0 &&
-              local_j < local_height) {
-
-            /* Add the particle's contribution to all images. */
-            for (int nimg = 0; nimg < nimgs; nimg++) {
-              int local_idx =
-                  local_i * local_height * nimgs + local_j * nimgs + nimg;
-              if (local_idx >= 0 && local_idx < local_img.size()) {
-                local_img[local_idx] += pix_values[part->index * nimgs + nimg];
-              }
-            }
-          }
-        }
-        continue;
-      }
-
       /* How many pixels do we need to walk out in the kernel? (with a
        * buffer of 1 pixel to ensure we cover the kernel). */
       int delta_pix = (int)ceil(part->sml * threshold / res) + 1;
@@ -349,30 +285,47 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
             continue;
           }
 
-          /* Calculate the pixel position. */
-          double pix_x = iii * res;
-          double pix_y = jjj * res;
+          /* Calculate the pixel bounds. */
+          double pix_x_min = iii * res;
+          double pix_x_max = (iii + 1) * res;
+          double pix_y_min = jjj * res;
+          double pix_y_max = (jjj + 1) * res;
 
-          /* Calculate the x and y separations. */
-          double dx = pix_x - part->pos[0];
-          double dy = pix_y - part->pos[1];
+          /* Calculate kernel support radius */
+          double kernel_radius = part->sml * threshold;
 
-          /* Calculate the impact parameter. */
-          double b = sqrt(dx * dx + dy * dy);
+          /* Fast path: kernel wholly inside this pixel. */
+          double kvalue;
+          if (kernel_fully_inside_pixel(part, pix_x_min, pix_x_max, pix_y_min,
+                                        pix_y_max, kernel_radius)) {
+            kvalue = 1.0; /* Entire kernel mass inside this pixel */
+          } else {
+            /* Determine overlap of kernel and pixel. */
+            double q_min, q_max, q_center;
+            calculate_pixel_kernel_overlap(
+                part->pos[0], part->pos[1], pix_x_min, pix_x_max, pix_y_min,
+                pix_y_max, part->sml, q_min, q_max, q_center);
 
-          /* Compute the impact parameter in terms of the smoothing length. */
-          double q = b / part->sml;
+            /* Skip pixels that don't overlap with the kernel at all. */
+            if (q_min >= threshold) {
+              continue;
+            }
 
-          /* Early skip if the pixel is outside the kernel threshold. */
-          if (q > threshold) {
-            continue;
+            if (q_max < threshold) {
+              /* Pixel wholly inside kernel: center-sample with SPH
+               * normalization (fast path). */
+              kvalue = pixel_inside_kernel_contribution(
+                  pix_x_min, pix_y_min, res, part, kernel, kdim, threshold);
+            } else {
+              /* Partial overlap: integrate over pixel area. */
+              kvalue = pixel_kernel_partial_overlap_contribution(
+                  part, pix_x_min, pix_x_max, pix_y_min, pix_y_max, kernel,
+                  kdim, threshold, res);
+            }
           }
 
-          /* Get the kernel value at this pixel position. */
-          double kvalue_interpolated =
-              interpolate_kernel(q, kernel, kdim, threshold);
-          double kvalue =
-              kvalue_interpolated / (part->sml * part->sml) * res * res;
+          /* Apply kernel normalization to conserve flux when truncated. */
+          kvalue *= norm_factor;
 
           /* Convert global pixel coordinates to local buffer coordinates. */
           int local_i = iii - i_min;
@@ -459,9 +412,9 @@ void populate_smoothed_image_parallel(const double *pix_values,
                                       const double *kernel, const double res,
                                       const int npix_x, const int npix_y,
                                       const int npart, const double threshold,
-                                      const int kdim, double *img,
-                                      const int nimgs, struct cell *root,
-                                      const int nthreads) {
+                                      const int kdim, double norm_factor,
+                                      double *img, const int nimgs,
+                                      struct cell *root, const int nthreads) {
 
   /* Build a balanced work list. */
   std::vector<weighted_cell> work_list =
@@ -474,8 +427,8 @@ void populate_smoothed_image_parallel(const double *pix_values,
     struct cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
-    populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
-                             pix_values, res, npix_x, npix_y);
+    populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
+                             img, nimgs, pix_values, res, npix_x, npix_y);
   }
 }
 #endif
@@ -512,8 +465,9 @@ void populate_smoothed_image_serial(const double *pix_values,
                                     const double *kernel, const double res,
                                     const int npix_x, const int npix_y,
                                     const int npart, const double threshold,
-                                    const int kdim, double *img,
-                                    const int nimgs, struct cell *root) {
+                                    const int kdim, double norm_factor,
+                                    double *img, const int nimgs,
+                                    struct cell *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
    * but it keeps the code consistent with the parallel version and has
@@ -526,8 +480,8 @@ void populate_smoothed_image_serial(const double *pix_values,
     struct cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
-    populate_pixel_recursive(c, threshold, kdim, kernel, npart, img, nimgs,
-                             pix_values, res, npix_x, npix_y);
+    populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
+                             img, nimgs, pix_values, res, npix_x, npix_y);
   }
 }
 
@@ -561,27 +515,32 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
                              const int nthreads) {
   double start = tic();
 
+  /* Compute normalization to conserve flux when truncating kernel. */
+  double norm_factor = compute_kernel_norm(kernel, kdim, threshold);
+
   /* If we have multiple threads and OpenMP we can parallelise. */
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
 
     /* Populate the image in parallel. */
     populate_smoothed_image_parallel(pix_values, kernel, res, npix_x, npix_y,
-                                     npart, threshold, kdim, img, nimgs, root,
-                                     nthreads);
+                                     npart, threshold, kdim, norm_factor, img,
+                                     nimgs, root, nthreads);
 
   } else {
 
     /* If we don't have OpenMP call the serial version. */
     populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y,
-                                   npart, threshold, kdim, img, nimgs, root);
+                                   npart, threshold, kdim, norm_factor, img,
+                                   nimgs, root);
   }
 #else
   (void)nthreads;
 
   /* If we don't have OpenMP call the serial version. */
   populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y, npart,
-                                 threshold, kdim, img, nimgs, root);
+                                 threshold, kdim, norm_factor, img, nimgs,
+                                 root);
 #endif
 
   toc("Populating smoothed image", start);
@@ -643,7 +602,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   int ncells = 1;
   struct cell *root = new struct cell;
 
-  /* Consturct the cell tree. */
+  /* Construct the cell tree. */
   construct_cell_tree(pos, smoothing_lengths, smoothing_lengths, npart, root,
                       ncells, MAX_DEPTH, 100);
 

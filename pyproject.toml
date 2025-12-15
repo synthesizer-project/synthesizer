@@ -11,7 +11,7 @@ description = "A package for synthetic observations of the Universe"
 readme = "README.md"
 
 # Minimum Python version
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 
 # The licence
 license = {file = "LICENSE.md"}
@@ -45,6 +45,7 @@ authors = [
   {name = "A. P. Vijayan", email = "A.Payyoor-Vijayan@sussex.ac.uk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
   {name = "S. Newman", email = "sophie.newman@port.ac.uk" },
+  {name = "T. Harvey", email = "thomas.harvey-3@manchester.ac.uk" },
   {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
   {name = "K. Iyer", email = "kartheikiyer@gmail.com" },
   {name = "C. S. Fournier", email = "connor.sant.17@um.edu.mt"},
@@ -60,15 +61,16 @@ maintainers = [
 
 # Classifiers
 classifiers = [  # Optional
-  "Development Status :: 4 - Beta",  # 3 Alpha/4 Beta/5 Production/Stable
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Science/Research",
   "Topic :: Scientific/Engineering :: Astronomy",
   "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 
   # Supported Python versions
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3 :: Only",
 ]
 
@@ -145,6 +147,7 @@ synthesizer-init = "synthesizer.data.initialise:synth_initialise"
 synthesizer-clear = "synthesizer.data.initialise:synth_clear_data"
 synthesizer-download="synthesizer.downloader.downloader:download"
 synthesizer-report = "synthesizer.data.initialise:synth_report_config"
+synference-download="synthesizer.downloader.downloader:synference_download"
 
 # Package data
 [tool.setuptools.package-data]
@@ -205,7 +208,7 @@ indent-width = 4
 
 
 # Assume Python 3.8 by default regardless
-target-version = "py38"
+target-version = "py310"
 
 
 [tool.ruff.lint]

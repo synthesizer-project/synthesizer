@@ -16,20 +16,41 @@ Example usage::
 """
 
 import os
+from functools import lru_cache
+from typing import Callable, Dict
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from dust_extinction.grain_models import WD01
+from dust_extinction import grain_models
+from numpy.typing import NDArray
 from scipy import interpolate
-from unyt import angstrom, um
+from unyt import (
+    Msun,
+    angstrom,
+    cm,
+    g,
+    pc,
+    um,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 
 this_dir, this_filename = os.path.split(__file__)
 
-__all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLi08"]
+__all__ = [
+    "PowerLaw",
+    "MWN18",
+    "Calzetti2000",
+    "GrainModels",
+    "ParametricLi08",
+    "DraineLiGrainCurves",
+]
 
 _RESET_SENTINEL = object()
 
@@ -51,7 +72,9 @@ class AttenuationLaw(Transformer):
             If they are missing an exception will be raised.
     """
 
-    def __init__(self, description, required_params=("tau_v",)):
+    def __init__(
+        self, description, required_params=("tau_v",), require_tau_v=True
+    ):
         """Initialise the parent and set common attributes.
 
         Args:
@@ -59,6 +82,8 @@ class AttenuationLaw(Transformer):
                 A description of the type of model.
             required_params (tuple):
                 List of required model attributes.
+            require_tau_v (bool):
+                Do we really need tau_v?
         """
         # Store the description of the model.
         self.description = description
@@ -68,12 +93,16 @@ class AttenuationLaw(Transformer):
         self._name_transforms = {}
         # Stores overridden parameters temporarily
         self._temp_params = {}
-        if "tau_v" not in required_params:
+        if ("tau_v" not in required_params) and (require_tau_v is True):
             raise exceptions.InconsistentArguments(
                 "AttenuationLaw requires 'tau_v' as a parameter."
             )
         # Call the parent constructor
         Transformer.__init__(self, required_params=required_params)
+
+    def __repr__(self):
+        """Return a string representation of the AttenuationLaw object."""
+        return f"{self.__class__.__name__}({self.description})"
 
     def get_tau(self, *args):
         """Compute the V-band normalised optical depth."""
@@ -371,6 +400,10 @@ class PowerLaw(AttenuationLaw):
 
         self._check_required_params()
 
+    def __repr__(self):
+        """Return a string representation of the PowerLaw object."""
+        return f"PowerLaw(slope={self.slope})"
+
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam):
         """Calculate optical depth at a wavelength.
@@ -552,6 +585,16 @@ class Calzetti2000(AttenuationLaw):
 
         self._check_required_params()
 
+    def __repr__(self):
+        """Return a string representation of the Calzetti2000 object."""
+        parts = [
+            f"slope={self.slope}",
+            f"cent_lam={self.cent_lam}",
+            f"ampl={self.ampl}",
+            f"gamma={self.gamma}",
+        ]
+        return f"Calzetti2000({', '.join(parts)})"
+
     @accepts(lam=angstrom)
     def get_tau(self, lam):
         """Calculate V-band normalised optical depth.
@@ -632,6 +675,10 @@ class MWN18(AttenuationLaw):
             5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
         )
 
+    def __repr__(self):
+        """Return a string representation of the MWN18 object."""
+        return "MWN18()"
+
     @accepts(lam=angstrom)
     def get_tau(self, lam, interp="cubic"):
         """Calculate V-band normalised optical depth.
@@ -686,40 +733,120 @@ class MWN18(AttenuationLaw):
         return func(lam)
 
 
-class GrainsWD01(AttenuationLaw):
-    """Weingarter and Draine 2001 dust grain extinction model.
+class GrainModels(AttenuationLaw):
+    """Grain model dust attenuation curves.
 
-    Includes curves for MW, SMC and LMC or any available in WD01.
+    These models are based on dust grain size, composition, and shape
+    distributions constrained by observations of extinction, abundances,
+    emission, and polarization. Some of these models can be used to
+    estimate extinction at wavelengths inaccessible to observations
+    (e.g., extreme UV below 912 Å). These models are taken from the
+    astropy affiliated dust-extinction package
+    (https://dust-extinction.readthedocs.io/en/latest/ for details).
+    By default, we will use the Weingarter & Draine 2001 (WD01) models,
+    and the submodel for the SMC bar.)
 
     Attributes:
         model (str):
             The dust grain model used.
-        emodel (function)
-            The function that describes the model from WD01 imported above.
+            Available models are:
+                DBP90: Desert, Boulanger, & Puget 1990, A&A, 237, 215
+                WD01: Weingartner & Draine 2001, ApJ, 548, 296
+                D03: Draine 2003, ARA&A, 41, 241; Draine 2003, ApJ, 598, 1017
+                ZDA04: Zubko, Dwek, & Arendt 2004, ApJS, 152, 211
+                C11: Compiegne et al. 2011, A&A, 525, 103
+                J13: Jones et al. 2013, A&A, 558, 62
+                HD23: Hensley & Draine 2023, ApJ, 948, 55
+                Y24: Ysard et al. 2024, A&A, 684, 34
+        submodel (str):
+                The submodel to use within the main grain model.
+                The submodels available for the different models
+                listed below. All of them are self-explanatory with
+                the RV defining the normalisation of the extinction
+                curve, where RV = AV / E(B-V).
+                DBP90: MWRV31
+                WD01 MWRV31, MWRV40, MWRV55, LMCAvg, LMC2, SMCBar
+                D03: MWRV31, MWRV40, MWRV55
+                ZDA04: MWRV31
+                C11: MWRV31
+                J13: MWRV31
+                HD23: MWRV31
+                Y24: MWRV31
     """
 
-    def __init__(self, model="SMCBar"):
+    def __init__(self, model: str = "WD01", submodel: str = "SMCBar"):
         """Initialise the dust curve.
 
         Args:
             model (str):
                 The dust grain model to use.
+                Available models are:
+                DBP90: Desert, Boulanger, & Puget 1990, A&A, 237, 215
+                WD01: Weingartner & Draine 2001, ApJ, 548, 296
+                D03: Draine 2003, ARA&A, 41, 241; Draine 2003, ApJ, 598, 1017
+                ZDA04: Zubko, Dwek, & Arendt 2004, ApJS, 152, 211
+                C11: Compiegne et al. 2011, A&A, 525, 103
+                J13: Jones et al. 2013, A&A, 558, 62
+                HD23: Hensley & Draine 2023, ApJ, 948, 55
+                Y24: Ysard et al. 2024, A&A, 684, 34
+            submodel (str):
+                The submodel to use within the main grain model.
+                The submodels available for the different models
+                listed below. All of them are self-explanatory with
+                the RV defining the normalisation of the extinction
+                curve, where RV = AV / E(B-V).
+                DBP90: MWRV31
+                WD01 MWRV31, MWRV40, MWRV55, LMCAvg, LMC2, SMCBar
+                D03: MWRV31, MWRV40, MWRV55
+                ZDA04: MWRV31
+                C11: MWRV31
+                J13: MWRV31
+                HD23: MWRV31
+                Y24: MWRV31
         """
         AttenuationLaw.__init__(
             self,
-            "Weingarter and Draine 2001 dust grain model for MW, SMC, and LMC",
+            "Dust grain models from dust-extinction package",
         )
-
-        # Get the correct model string
-        if "MW" in model:
-            self.model = "MWRV31"
-        elif "LMC" in model:
-            self.model = "LMCAvg"
-        elif "SMC" in model:
-            self.model = "SMCBar"
+        available_models = {
+            "DBP90": ["MWRV31"],
+            "WD01": ["MWRV31", "MWRV40", "MWRV55", "LMCAvg", "LMC2", "SMCBar"],
+            "D03": ["MWRV31", "MWRV40", "MWRV55"],
+            "ZDA04": ["MWRV31"],
+            "C11": ["MWRV31"],
+            "J13": ["MWRV31"],
+            "HD23": ["MWRV31"],
+            "Y24": ["MWRV31"],
+        }
+        if model not in available_models:
+            raise exceptions.InconsistentArguments(
+                f"Model '{model}' not recognized. Available models are: "
+                f"{', '.join(available_models.keys())}"
+            )
+        self.model = model
+        # Get the correct model string if model is WD01
+        if model == "WD01":
+            alias_map = {
+                "MW": "MWRV31",
+                "LMC": "LMCAvg",
+                "SMC": "SMCBar",
+            }
+            self.submodel = alias_map.get(submodel.upper(), submodel)
         else:
-            self.model = model
-        self.emodel = WD01(self.model)
+            self.submodel = submodel
+
+        if self.submodel not in available_models[model]:
+            raise exceptions.InconsistentArguments(
+                f"Submodel '{submodel}' not recognized for model '{model}'. "
+                f"Available submodels are: "
+                f"{', '.join(available_models[model])}"
+            )
+        # Initialise the grain model and its submodel
+        self.extmodel = getattr(grain_models, self.model)(self.submodel)
+
+    def __repr__(self):
+        """Return a string representation of the GrainModels object."""
+        return f"GrainModels(model={self.model}, submodel={self.submodel})"
 
     @accepts(lam=angstrom)
     def get_tau(self, lam, interp="slinear"):
@@ -740,21 +867,10 @@ class GrainsWD01(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        lam_lims = np.logspace(2, 8, 10000) * angstrom
         lam_v = 5500 * angstrom  # V-band wavelength
-        func = interpolate.interp1d(
-            lam_lims,
-            self.emodel(lam_lims.to_astropy()),
-            kind=interp,
-            fill_value="extrapolate",
+        out = self.get_tau_at_lam(lam, interp=interp) / self.get_tau_at_lam(
+            lam_v, interp=interp
         )
-        out = func(lam) / func(lam_v)
-
-        if np.isscalar(lam):
-            if lam > lam_lims[-1]:
-                out = func(lam_lims[-1])
-        elif np.sum(lam > lam_lims[-1]) > 0:
-            out[(lam > lam_lims[-1])] = func(lam_lims[-1])
 
         return out
 
@@ -777,20 +893,32 @@ class GrainsWD01(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        lam_lims = np.logspace(2, 8, 10000) * angstrom
-        func = interpolate.interp1d(
-            lam_lims,
-            self.emodel(lam_lims.to_astropy()),
-            kind=interp,
-            fill_value="extrapolate",
-        )
-        out = func(lam)
-
-        if np.isscalar(lam):
-            if lam > lam_lims[-1]:
-                out = func(lam_lims[-1])
-        elif np.sum(lam > lam_lims[-1]) > 0:
-            out[(lam > lam_lims[-1])] = func(lam_lims[-1])
+        # Inverse wavelength range in 1/um
+        _inverse_lam_range = self.extmodel.data_x * 1 / um
+        _lam_range = (1 / _inverse_lam_range).to("angstrom")
+        # Change to increasing order
+        _lam_range = np.unique(_lam_range[::-1])
+        _lam = np.atleast_1d(lam.to("angstrom").value) * angstrom
+        if np.any((_lam < np.min(_lam_range)) | (_lam > np.max(_lam_range))):
+            warn(
+                f"Wavelengths outside the range "
+                f"{np.min(_lam_range):.1f} - {np.max(_lam_range):.1f} "
+                f"Values are being extrapolated.",
+                RuntimeWarning,
+            )
+            # Remove the first and last points to avoid edge effects
+            lower = self.extmodel(_lam_range[0].to_astropy())
+            upper = self.extmodel(_lam_range[-1].to_astropy())
+            func = interpolate.interp1d(
+                _lam_range.to("Angstrom").value,
+                self.extmodel(_lam_range.to_astropy()),
+                kind=interp,
+                bounds_error=False,
+                fill_value=(lower, upper),
+            )
+            out = func(_lam.to("Angstrom").value)
+        else:
+            out = self.extmodel(lam.to_astropy())
 
         return out
 
@@ -943,6 +1071,10 @@ class ParametricLi08(AttenuationLaw):
 
         self._check_required_params()
 
+    def __repr__(self):
+        """Return a string representation of the ParametricLi08 object."""
+        return f"ParametricLi08(model={self.model})"
+
     @accepts(lam=angstrom)
     def get_tau(self, lam):
         """Calculate V-band normalised optical depth.
@@ -986,3 +1118,421 @@ class ParametricLi08(AttenuationLaw):
             "for the different models, so does not make sense to have this"
             "function. Use other attenuation curve models to get tau_v or Av"
         )
+
+
+class DraineLiGrainCurves(AttenuationLaw):
+    """Draine and Li extinction curves.
+
+    Draine and Li extinction curves obtained from pre-processing
+    the extinction efficiencies for the required grain size
+    distribution. This is done in grid-generation repo under
+    'grid-generation/src/synthesizer_grids/dust/
+    create_dustextcurve_draine_li.py' for the required dust
+    parameters. Currently only implemented for 2 grain sizes
+    of graphites and silicates, and 1 size of PAHs.
+
+    Attributes:
+        grid_name (string):
+            Name of the extinction curve grid (without hdf5
+            extension)
+        grid_dir (string):
+            Location of the grid
+        grain_dict (Dict):
+            Dictionary containing the grain type ('graphite' or
+            'silicate' or 'pahionised' or 'pahneutral') and their
+            corresponding centre of the grain size distribution in
+            microns.
+            E.g. grain_dict = {'graphite': [0.01, 0.1]}
+    """
+
+    def __init__(self, grid_name: str, grid_dir: str, grain_dict: Dict = None):
+        """Initialise the Draine and Li extinction curves.
+
+        Draine and Li extinction curves obtained from pre-processing
+        the extinction efficiencies for the required grain size
+        distribution. This is done in grid-generation repo under
+        'grid-generation/src/synthesizer_grids/dust/
+        create_dustextcurve_draine_li.py' for the required dust
+        parameters. Currently only implemented for 2 grain sizes
+        of graphites and silicates, and 1 size of PAHs.
+
+        Attributes:
+            grid_name (string):
+                Name of the extinction curve grid (without hdf5
+                extension)
+            grid_dir (string):
+                Location of the grid
+            grain_dict (Dict):
+                Dictionary containing the grain type ('graphite' or
+                'silicate' or 'pahionised' or 'pahneutral') and their
+                corresponding centre of the grain size distribution in
+                microns.
+                E.g. grain_dict = {'graphite': [0.01, 0.1]}
+
+        """
+        self.grid_name = grid_name
+        self.grid_dir = grid_dir
+        self.grain_dict = grain_dict
+        if self.grain_dict is None:
+            raise exceptions.MissingArgument(
+                """
+                Provide `grain_dict` argument in
+                initialisation of the type
+                grain_dict = {grain type: grain size bins}.
+                Example definition
+                grain_dict = {'graphite': [0.01, 0.1]}.
+                This should correspond to the grid that you
+                are providing.
+                """
+            )
+        description = """DraineLiGrainCurves: Draine and Li dust grain
+        model for extinction curves obtained from pre-processing the
+        extinction efficiencies for the required grain size
+        distribution. The different components and their relationship
+        with the dust-to-gas ratio have been interpolated
+        and LRU-cached"""
+        required_params = [
+            f"sigmalos_{grain_type}_a{grain_size}um".replace(".", "p")
+            for grain_type, grain_sizes in self.grain_dict.items()
+            for grain_size in grain_sizes
+        ]
+        required_params.append("sigmalos_H")
+        AttenuationLaw.__init__(
+            self,
+            description=description,
+            required_params=required_params,
+            require_tau_v=False,
+        )
+
+    def __repr__(self):
+        """Return a string representation of the DraineLiGrainCurves object."""
+        return f"DraineLiGrainCurves(grid_name={self.grid_name})"
+
+    @lru_cache(maxsize=8)
+    def _get_component_interp(
+        self, component_key: str, interp: str = "slinear"
+    ) -> Callable[[float | NDArray], NDArray]:
+        """Interpolate extinction across dust-to-gas ratio.
+
+        Uses scipy interpolate.interp1d to interpolate the extinction
+        per column density along the dust-to-gas ratio axis. The function
+        uses lru_cache to cache the interpolation instance.
+
+        Args:
+            component_key (str):
+                Dust grain dataset in the hdf5 to interpolate
+            interp (str):
+                The type of interpolation to use. Can be 'linear', 'nearest',
+                'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
+                'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
+                'cubic' refer to a spline interpolation of zeroth, first,
+                second or third order. Uses scipy.interpolate.interp1d.
+
+        Return:
+            interp1d object
+                Return an interp1d which maps dtg -> extinction curve
+                (values at every grid wavelength). Cached by (grid_dir,
+                grid_name, component_key).
+        """
+        # Check path
+        if not os.path.exists(f"{self.grid_dir}/{self.grid_name}.hdf5"):
+            raise exceptions.MissingArgument(
+                f"Grid file not found: {self.grid_dir}/{self.grid_name}.hdf5"
+            )
+        prefix = "extinction_curves"
+        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as grid:
+            grid_dtg = np.array(grid["axes/dtg"])
+            comp_arr = np.array(grid[f"{prefix}/{component_key}"])
+        # Interpolate along dtg axis (axis=0)
+        return interpolate.interp1d(
+            grid_dtg,
+            comp_arr,
+            axis=0,
+            kind=interp,
+            assume_sorted=True,
+        )
+
+    @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
+    def get_tau_at_lam(
+        self,
+        lam: unyt_array,
+        sigmalos_H: unyt_array = None,
+        **sigmalos_dust: unyt_array,
+    ):
+        """Calculate optical depth at a wavelength.
+
+        Args:
+            lam (unyt_array, float):
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+            sigmalos_H (unyt array):
+                Line-of-sight H density in units of
+                Msun/pc^2
+            sigmalos_dust (Dict: unyt_array):
+                Dictionary containing the different
+                line-of-sight dust density of the dust
+                components. This should follow the format
+                'sigmalos_{grain_type}_a{grain_bin_centre}um':
+                unyt_array (units of Msun/pc^2). The function will
+                unpack the contents.
+
+        Returns:
+            optical depth (unyt_array, float)
+                The optical depth at the given wavlength ((N_dtg, N_lambda)
+                if sigmalos input is array-like, otherwise shape (N_lambda,)).
+                Dimensionless
+        """
+        # Some important argument requirements
+        if sigmalos_H is None:
+            raise exceptions.MissingArgument("sigmalos_H is required")
+
+        for key, value in sigmalos_dust.items():
+            if np.atleast_1d(value).shape != np.atleast_1d(sigmalos_H).shape:
+                raise exceptions.InconsistentArguments(
+                    f"""
+                    Contents of los dust density and the
+                    los H density do not have the same shape
+                    in {key}!
+                    """
+                )
+            elif isinstance(value, (unyt_quantity, unyt_array)):
+                try:
+                    _ = value.to(sigmalos_H.units)
+                except Exception:
+                    raise exceptions.InconsistentArguments(
+                        f"{key} must have units compatible with mass/length^2"
+                    )
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"""Provide units to the {key}
+                    quantity
+                    """
+                )
+
+        # For some unit manipulation later
+        MU = 1.4
+        M_H = 1.6738e-24 * g  # in grams per H
+        # In Msun units
+        GAS_MASS_PER_H = (MU * M_H).to(Msun)
+        # Read wavelengths and dtg from grid
+        # Save all grain datasets
+        prefix = "extinction_curves"
+        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as grid:
+            grid_dtg = np.array(grid["axes/dtg"])
+            grid_lam = (
+                np.array(grid[f"{prefix}/wavelength"]) * 1e4
+            )  # convert to Angstrom
+            grid_dataset_names = [
+                name
+                for name, obj in grid[prefix].items()
+                if isinstance(obj, h5py.Dataset)
+            ]
+        # Check if the inputs are within the grids
+        dtg_min = np.min(grid_dtg)
+        dtg_max = np.max(grid_dtg)
+        # Map hdf5 components to inputs
+        dtg_inputs = {}
+        for key, value in sigmalos_dust.items():
+            dtg_inputs[key] = value.to(Msun / pc**2) / (
+                sigmalos_H.to(Msun / pc**2) * MU
+            )
+        # Convert dtg inputs to numpy arrays or None
+        # Determine number of samples
+        dtg_arrays = {}
+        lengths = []
+        for key, value in dtg_inputs.items():
+            not_within = np.logical_or(value < dtg_min, value > dtg_max)
+            if np.sum(not_within) > 0:
+                raise exceptions.InconsistentArguments(
+                    f"Given dust-to-gas ratio for {key} "
+                    "is outside the grid values."
+                    "Rerun the dust grid with updated range."
+                )
+            arr = np.atleast_1d(np.array(value, dtype=float))
+            dtg_arrays[key] = arr
+            lengths.append(arr.size)
+        N = max(lengths) if lengths else 1
+        M = lam.size
+
+        # Build Alam_NH Dict component: array of shape (N, L)
+        Alam_by_NH = {}
+        # Ensure consistent lengths across components
+        max_len = max(lengths) if lengths else 1
+        for klen in lengths:
+            if klen not in (1, max_len):
+                raise exceptions.InconsistentArguments(
+                    "All dust components must be scalar or have the same "
+                    f"length ({max_len})."
+                )
+        # For each provided component, get cached interp and
+        # evaluate at dtg array
+        for comp_key, dtg_arr in dtg_arrays.items():
+            if dtg_arr is None:
+                continue
+            # Strip sigmalos_ from key
+            dataset_key = comp_key.split("sigmalos_", 1)[-1]
+            dataset_key = dataset_key.replace("0p", "0.")
+            if dataset_key not in grid_dataset_names:
+                raise exceptions.InconsistentArguments(
+                    f"""
+                    Grain type {dataset_key} not in the
+                    provided dust grid!
+                    """
+                )
+            # Get cached interpolator (will open HDF5 and
+            # build interp1d on first call for this key)
+            f_dtg = self._get_component_interp(dataset_key)
+            # f_dtg accepts array-like dtg values and returns shape (N, L)
+            comp_vals = f_dtg(dtg_arr)
+            Alam_by_NH[comp_key] = comp_vals
+
+        # Interpolate along wavelength axis with the given 'lam'
+        lam_vals = np.atleast_1d(lam.to("Angstrom").value)
+        tau_all = np.zeros((N, M), dtype=np.float32)
+
+        for key, value in Alam_by_NH.items():
+            f_lam = interpolate.interp1d(
+                grid_lam,
+                value,
+                axis=1,
+                kind="slinear",
+                fill_value="extrapolate",
+                assume_sorted=True,
+            )
+            # Let's store things for now in `tmp`
+            tmp = f_lam(lam_vals)  # shape (n_dtg, M)
+
+            # Mag -> optical depth
+            tmp /= 1.086
+            # Attach area units cm^2 then convert to pc^2
+            tmp_area_pc2 = (tmp * cm**2).to(pc**2)
+            # Divide by GAS_MASS_PER_H (Msun per H) to get pc^2 / Msun
+            # This is because the grid is basically in units of
+            # mag cm^2 / H nucleus
+            tmp_pc2_per_msun = tmp_area_pc2 / GAS_MASS_PER_H
+            dust_col = sigmalos_dust[key].to(Msun / pc**2)
+            dust_col = np.atleast_1d(dust_col)
+            if dust_col.size not in (1, N):
+                raise exceptions.InconsistentArguments(
+                    f"""sigmalos component {comp_key} length
+                    {dust_col.size} incompatible with others."""
+                )
+            if dust_col.size == 1:
+                dust_col = np.repeat(dust_col, N)
+
+            # tau = tmp_pc2_per_msun (n_dtg x M) * dust_col[:, None]  (N x M)
+            # But n_dtg might be < N (if dtg is float for component).
+            # Broadcast accordingly:
+            if tmp_pc2_per_msun.shape[0] == 1 and N > 1:
+                tmp_pc2_per_msun = np.repeat(tmp_pc2_per_msun, N, axis=0)
+
+            # Multiply by the line-of-sight dust column density
+            # (sigmalos_dust[key]) to get unitless tau
+            # And add up all components
+            tau_all += tmp_pc2_per_msun * dust_col[:, np.newaxis]
+
+        # if N == 1
+        if tau_all.shape[0] == 1:
+            return tau_all[0]
+        return tau_all
+
+    @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
+    def get_tau(
+        self,
+        lam: unyt_array,
+        sigmalos_H: unyt_array = None,
+        **sigmalos_dust: unyt_array,
+    ):
+        """Calculate optical depth normalised at V-band at a wavelength.
+
+        Args:
+            lam (float/array-like, float):
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+            sigmalos_H (unyt array):
+                Line-of-sight H density in units of
+                Msun/pc^2
+            sigmalos_dust (Dict: unyt_array):
+                Dictionary containing the different
+                line-of-sight dust density of the dust
+                components. This should follow the format
+                'sigmalos_{grain_type}_a{grain_bin_centre}um':
+                unyt_array (units of Msun/pc^2). The function will
+                unpack the contents.
+
+        Returns:
+            optical depth/optical depth at V-band (unyt_array, float)
+                The optical depth at the given wavlength ((N_dtg, N_lambda)
+                if sigmalos input is array-like, otherwise shape (N_lambda,)).
+                Dimensionless
+        """
+        if sigmalos_H is None and len(sigmalos_dust) == 0:
+            sigmalos_H = getattr(self, "sigmalos_H", None)
+            # Collect any attributes starting with 'sigmalos_'
+            sigmalos_dust = {
+                key: getattr(self, key)
+                for key in vars(self)
+                if key.startswith("sigmalos_") and key != "sigmalos_H"
+            }
+        tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
+        tau_V = self.get_tau_at_lam(
+            5500 * angstrom, sigmalos_H, **sigmalos_dust
+        )
+        # tau_lam: (N, M) or (M,), tau_V: (N,) or scalar (M==1)
+        if np.ndim(tau_V) <= 1:
+            return tau_lam / tau_V
+        return tau_lam / tau_V[:, np.newaxis]
+
+    @accepts(lam=angstrom)
+    def get_transmission(self, tau_v=None, lam=None, **dust_curve_kwargs):
+        """Compute the transmission curve.
+
+         Returns the transmitted flux/luminosity fraction based on an optical
+        depth at a range of wavelengths.
+
+        Args:
+            tau_v (None):
+                Optical depth at V-band, not required here.
+            lam (np.ndarray of float):
+                The wavelengths (with units) at which to calculate
+                transmission.
+            **dust_curve_kwargs (dict):
+                Additional keyword arguments to be passed to the dust curve
+                which have been defined on the emitter or model.
+
+        Returns:
+            np.ndarray of float:
+                The transmission at each wavelength
+        """
+        if tau_v is not None:
+            warn(
+                """
+                tau_v has been provided. However,
+                `DraineLiGrainCurves` does not use tau_v.
+                Ignoring tau_v in the calculation.
+                """
+            )
+
+        # Set any additional parameters on the dust curve
+        self._set_params(**dust_curve_kwargs)
+
+        try:
+            sigmalos_H = dust_curve_kwargs.get(
+                "sigmalos_H", getattr(self, "sigmalos_H", None)
+            )
+            # Gather sigmalos_* dust components: start with attributes,
+            # then override with kwargs
+            sigmalos_dust = {}
+            for key in vars(self):
+                if key.startswith("sigmalos_") and key != "sigmalos_H":
+                    sigmalos_dust[key] = getattr(self, key)
+            for key, value in dust_curve_kwargs.items():
+                if key.startswith("sigmalos_") and key != "sigmalos_H":
+                    sigmalos_dust[key] = value
+            # Compute tau_lam directly (tau_v is not used for this model)
+            tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
+        finally:
+            # Always restore previous state
+            self._reset_params()
+
+        return np.exp(-tau_lam)

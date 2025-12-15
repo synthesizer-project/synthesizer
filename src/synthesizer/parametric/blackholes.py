@@ -22,6 +22,8 @@ from unyt import Msun, cm, deg, erg, km, kpc, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
+from synthesizer.emission_models.utils import get_param
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.units import accepts
 
@@ -51,6 +53,7 @@ class BlackHole(BlackholesComponent):
         self,
         mass=None,
         accretion_rate=None,
+        accretion_rate_eddington=None,
         epsilon=0.1,
         inclination=None,
         spin=None,
@@ -75,16 +78,20 @@ class BlackHole(BlackholesComponent):
             mass (float):
                 The mass of each particle in Msun.
             accretion_rate (float):
-                The accretion rate of the/each black hole in Msun/yr.
+                The accretion rate of the black hole in Msun/yr. No need to
+                provide if accretion_rate_eddington is given.
+            accretion_rate_eddington (float):
+                The accretion rate of the black hole in terms of the Eddington
+                accretion rate. No need to provide if accretion_rate is given.
             epsilon (float):
                 The radiative efficiency. By default set to 0.1.
             inclination (float):
-                The inclination of the blackhole. Necessary for some disc
+                The inclination of the black hole. Necessary for some disc
                 models.
             spin (float):
-                The spin of the blackhole. Necessary for some disc models.
+                The spin of the black hole. Necessary for some disc models.
             offset (unyt_array):
-                The (x,y) offsets of the blackhole relative to the centre of
+                The (x,y) offsets of the black hole relative to the centre of
                 the image. Units can be length or angle but should be
                 consistent with the scene.
             bolometric_luminosity (float):
@@ -125,6 +132,7 @@ class BlackHole(BlackholesComponent):
             bolometric_luminosity=bolometric_luminosity,
             mass=mass,
             accretion_rate=accretion_rate,
+            accretion_rate_eddington=accretion_rate_eddington,
             epsilon=epsilon,
             inclination=inclination,
             spin=spin,
@@ -150,8 +158,17 @@ class BlackHole(BlackholesComponent):
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
 
-    def get_mask(self, attr, thresh, op, mask=None):
-        """Create a mask using a threshold and attribute on which to mask.
+    def get_mask(
+        self,
+        attr,
+        thresh,
+        op,
+        mask=None,
+        attr_override_obj=None,
+    ):
+        """Return a mask based on the attribute and threshold.
+
+        Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         Args:
             attr (str):
@@ -163,13 +180,19 @@ class BlackHole(BlackholesComponent):
                 or "!=".
             mask (np.ndarray):
                 Optionally, a mask to combine with the new mask.
+            attr_override_obj (object):
+                An alternative object to check from the attribute. This
+                is specifically used when an EmissionModel may have a
+                fixed parameter override, but can be used more generally.
 
         Returns:
             mask (np.ndarray):
                 The mask array.
         """
+        start = tic()
+
         # Get the attribute
-        attr = getattr(self, attr)
+        attr = get_param(attr, attr_override_obj, None, self)
 
         # Apply the operator
         if op == ">":
@@ -194,6 +217,8 @@ class BlackHole(BlackholesComponent):
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
 
+        toc("Generating parametric mask", start)
+
         return new_mask
 
     def get_weighted_attr(self, *args, **kwargs):
@@ -208,3 +233,22 @@ class BlackHole(BlackholesComponent):
             "Parametric black holes are by definition singular "
             "making weighted attributes non-sensical."
         )
+
+    def calculate_ionising_luminosity(self):
+        """Calculates the ionising luminosity of the blackhole(s).
+
+        This requires that the disc_incident spectra be available.
+
+        Returns:
+             unyt_array:
+                The ionising photon production rate (s^-1).
+        """
+        if "disc_incident" in self.spectra.keys():
+            return self.spectra[
+                "disc_incident"
+            ].calculate_ionising_photon_production_rate()
+        else:
+            raise exceptions.MissingSpectraType(
+                "It is necessary to first calculate the disc_incident "
+                "spectra before calculating the ionising luminosity"
+            )

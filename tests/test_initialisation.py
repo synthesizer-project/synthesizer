@@ -13,10 +13,8 @@ from synthesizer.data.initialise import (
     SynthesizerInitializer,
     base_dir_exists,
     data_dir_exists,
-    database_dir_exists,
     get_base_dir,
     get_data_dir,
-    get_database_dir,
     get_grids_dir,
     get_instrument_dir,
     get_test_data_dir,
@@ -73,12 +71,6 @@ class TestEnvAndPaths:
         )
         base = get_base_dir()
 
-        # database always under <base>/data/database
-        assert get_database_dir() == base / "data" / "database", (
-            f"Database dir should be under {base}/data/database not "
-            f"{get_database_dir()}"
-        )
-
         # data dir
         assert get_data_dir() == base / "data", (
             "Default data dir should be base/data"
@@ -133,9 +125,6 @@ class TestEnvAndPaths:
         monkeypatch.setattr(
             init_mod, "get_instrument_dir", lambda: tmp_path / "inst"
         )
-        monkeypatch.setattr(
-            init_mod, "get_database_dir", lambda: tmp_path / "db"
-        )
 
         # Import here to avoid the testdata directory exists function from
         # being treated a test
@@ -149,16 +138,14 @@ class TestEnvAndPaths:
         assert not grids_dir_exists()
         assert not testdata_dir_exists()
         assert not instrument_cache_exists()
-        assert not database_dir_exists()
         # create them
-        for d in ("base", "data", "grids", "test", "inst", "db"):
+        for d in ("base", "data", "grids", "test", "inst"):
             (tmp_path / d).mkdir()
         assert base_dir_exists()
         assert data_dir_exists()
         assert grids_dir_exists()
         assert testdata_dir_exists()
         assert instrument_cache_exists()
-        assert database_dir_exists()
 
 
 class DummyResource(BytesIO):
@@ -274,7 +261,6 @@ class TestInitializerMethods:
             ("grids_dir", "grids"),
             ("instrument_cache_dir", "instrument_cache"),
             ("test_data_dir", "test_data"),
-            ("database_dir", "database"),
         ]:
             path = getattr(init, attr)
             assert path.exists()
@@ -283,9 +269,6 @@ class TestInitializerMethods:
         # verify files copied
         assert (init.base_dir / "default_units.yml").exists()
         assert init.status["units_file"] in {"created", "exists"}
-
-        assert (init.database_dir / "downloader_database.yml").exists()
-        assert init.status["ids_file"] in {"created", "exists"}
 
     def test_report_prints(self, capsys, monkeypatch):
         """Test report() prints status messages."""
@@ -301,7 +284,6 @@ class TestInitializerMethods:
             "grids_dir",
             "test_data_dir",
             "instrument_cache_dir",
-            "database_dir",
         ):
             p = getattr(init, attr)
             p.mkdir(parents=True, exist_ok=True)
@@ -310,6 +292,164 @@ class TestInitializerMethods:
         assert "Synthesizer initialising" in out
         assert "Initialised Synthesizer directories" in out
         assert "Synthesizer initialisation complete" in out
+
+
+class TestUnitsFileHandling:
+    """Tests for the units file handling functionality."""
+
+    @pytest.fixture(autouse=True)
+    def patch_paths(self, monkeypatch, tmp_path):
+        """Patch paths to use tmp_path for all Synthesizer dirs."""
+        monkeypatch.setenv("SYNTHESIZER_DIR", str(tmp_path / "base"))
+        monkeypatch.setenv(
+            "SYNTHESIZER_DATA_DIR", str(tmp_path / "base" / "data")
+        )
+        monkeypatch.setenv(
+            "SYNTHESIZER_GRID_DIR", str(tmp_path / "base" / "grids")
+        )
+        monkeypatch.setenv(
+            "SYNTHESIZER_TEST_DATA_DIR",
+            str(tmp_path / "base" / "data" / "test"),
+        )
+        monkeypatch.setenv(
+            "SYNTHESIZER_INSTRUMENT_CACHE", str(tmp_path / "base" / "inst")
+        )
+        monkeypatch.setattr(init_mod, "resources", resources)
+        # Create base directory
+        (tmp_path / "base").mkdir(parents=True)
+        yield tmp_path
+
+    def test_units_needs_update_when_missing(self, tmp_path):
+        """Test that units file is flagged for update when missing."""
+        from synthesizer.data.initialise import default_units_needs_update
+
+        # File doesn't exist
+        assert default_units_needs_update()
+
+    def test_units_needs_update_when_empty(self, tmp_path):
+        """Test that empty units file is flagged for update."""
+        from synthesizer.data.initialise import default_units_needs_update
+
+        # Create empty file
+        (tmp_path / "base" / "default_units.yml").write_text("")
+        assert default_units_needs_update()
+
+    def test_units_needs_update_when_invalid_yaml(self, tmp_path):
+        """Test that invalid YAML is flagged for update."""
+        from synthesizer.data.initialise import default_units_needs_update
+
+        # Create invalid YAML
+        (tmp_path / "base" / "default_units.yml").write_text(
+            "invalid: yaml: structure: ["
+        )
+        assert default_units_needs_update()
+
+    def test_units_needs_update_when_missing_categories(self, tmp_path):
+        """Test that file without UnitCategories is flagged for update."""
+        from synthesizer.data.initialise import default_units_needs_update
+
+        # Create file without UnitCategories
+        (tmp_path / "base" / "default_units.yml").write_text(
+            "SomeOtherKey: value"
+        )
+        assert default_units_needs_update()
+
+    def test_units_needs_update_when_missing_keys(self, tmp_path):
+        """Test that file with missing keys is flagged for update."""
+        from synthesizer.data.initialise import default_units_needs_update
+
+        # Create file with only one category (missing the rest)
+        (tmp_path / "base" / "default_units.yml").write_text(
+            "UnitCategories:\n  spatial:\n    unit: Mpc\n"
+        )
+        assert default_units_needs_update()
+
+    def test_units_no_update_when_complete(self, tmp_path, monkeypatch):
+        """Test that complete units file is not flagged for update."""
+        from synthesizer.data.initialise import default_units_needs_update
+
+        # Copy the actual default units file
+        with resources.open_text("synthesizer", "default_units.yml") as f:
+            units_content = f.read()
+        (tmp_path / "base" / "default_units.yml").write_text(units_content)
+
+        assert not default_units_needs_update()
+
+    def test_copy_units_handles_empty_file(self, tmp_path, monkeypatch):
+        """Test that _copy_units handles empty user file gracefully."""
+        # Create empty file
+        (tmp_path / "base" / "default_units.yml").write_text("")
+
+        init = SynthesizerInitializer()
+        init._copy_units()
+
+        # Verify file was updated
+        assert init.status["units_file"] == "created"
+
+        # Verify file now has valid content
+        with open(tmp_path / "base" / "default_units.yml", "r") as f:
+            import yaml
+
+            units = yaml.safe_load(f)
+        assert "UnitCategories" in units
+        assert "spatial" in units["UnitCategories"]
+
+    def test_copy_units_preserves_user_preferences(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that _copy_units preserves user's unit preferences."""
+        # Create a units file with custom preference
+        custom_units = """UnitCategories:
+  spatial:
+    unit: kpc
+    description: "Custom spatial unit"
+"""
+        (tmp_path / "base" / "default_units.yml").write_text(custom_units)
+
+        init = SynthesizerInitializer()
+        init._copy_units()
+
+        # Verify user preference was preserved
+        with open(tmp_path / "base" / "default_units.yml", "r") as f:
+            import yaml
+
+            units = yaml.safe_load(f)
+        assert units["UnitCategories"]["spatial"]["unit"] == "kpc"
+        assert (
+            units["UnitCategories"]["spatial"]["description"]
+            == "Custom spatial unit"
+        )
+
+        # Verify new categories were added
+        assert "mass" in units["UnitCategories"]
+        assert "time" in units["UnitCategories"]
+
+    def test_copy_units_adds_missing_categories(self, tmp_path, monkeypatch):
+        """Test that _copy_units adds missing categories to existing file."""
+        # Create a file with only spatial category
+        partial_units = """UnitCategories:
+  spatial:
+    unit: Mpc
+    description: "Spatial lengths"
+"""
+        (tmp_path / "base" / "default_units.yml").write_text(partial_units)
+
+        init = SynthesizerInitializer()
+        init._copy_units()
+
+        # Verify all default categories are now present
+        with open(tmp_path / "base" / "default_units.yml", "r") as f:
+            import yaml
+
+            units = yaml.safe_load(f)
+
+        # Check that original category is still there
+        assert units["UnitCategories"]["spatial"]["unit"] == "Mpc"
+
+        # Check that new categories were added
+        assert "mass" in units["UnitCategories"]
+        assert "luminosity" in units["UnitCategories"]
+        assert "wavelength" in units["UnitCategories"]
 
 
 class TestTopLevelFlows:
@@ -338,10 +478,10 @@ class TestTopLevelFlows:
         (base / "grids").mkdir()
         (base / "data" / "test").mkdir(parents=True)
         (base / "inst").mkdir()
-        (base / "data" / "database").mkdir(parents=True)
-        # default_units.yml and ids file
-        (base / "default_units.yml").write_text("")
-        (base / "data" / "database" / "downloader_database.yml").write_text("")
+        # default_units.yml - use valid content this time
+        with resources.open_text("synthesizer", "default_units.yml") as f:
+            units_content = f.read()
+        (base / "default_units.yml").write_text(units_content)
         # should return immediately and not error
         synth_initialise()
 
@@ -395,11 +535,10 @@ class TestTopLevelFlows:
         grids = Path(os.environ["SYNTHESIZER_GRID_DIR"])
         inst = Path(os.environ["SYNTHESIZER_INSTRUMENT_CACHE"])
         testd = Path(os.environ["SYNTHESIZER_TEST_DATA_DIR"])
-        db = data / "database"
-        for p in (base, data, grids, inst, testd, db):
+        for p in (base, data, grids, inst, testd):
             p.mkdir(parents=True, exist_ok=True)
             (p / "f.txt").write_text("x")
         synth_clear_data()
         # none should exist anymore
-        for p in (base, data, grids, inst, testd, db):
+        for p in (base, data, grids, inst, testd):
             assert not p.exists()

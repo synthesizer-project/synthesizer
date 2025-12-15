@@ -27,6 +27,8 @@ Example usage:
     )
 """
 
+import numpy as np
+
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
@@ -71,6 +73,10 @@ class ProcessedFraction(Transformer):
         # transformer.
         Transformer.__init__(self, required_params=fesc_attrs)
 
+    def __repr__(self):
+        """Return a string representation of the ProcessedFraction object."""
+        return f"ProcessedFraction(fesc_attrs={self._required_params})"
+
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the transformation to the emission.
 
@@ -107,7 +113,7 @@ class ProcessedFraction(Transformer):
         fesc = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fesc <= 1:
+        if np.any((fesc < 0) | (fesc > 1)):
             raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
@@ -158,6 +164,10 @@ class EscapedFraction(Transformer):
         # transformer.
         Transformer.__init__(self, required_params=fesc_attrs)
 
+    def __repr__(self):
+        """Return a string representation of the EscapedFraction object."""
+        return f"EscapedFraction(fesc_attrs={self._required_params})"
+
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the escape fraction to the emission.
 
@@ -194,7 +204,7 @@ class EscapedFraction(Transformer):
         fesc = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fesc <= 1:
+        if np.any((fesc < 0) | (fesc > 1)):
             raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
@@ -246,6 +256,10 @@ class CoveringFraction(Transformer):
         # transformer.
         Transformer.__init__(self, required_params=covering_attrs)
 
+    def __repr__(self):
+        """Return a string representation of the CoveringFraction object."""
+        return f"CoveringFraction(covering_attrs={self._required_params})"
+
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the transformation to the emission.
 
@@ -282,7 +296,7 @@ class CoveringFraction(Transformer):
         fcov = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fcov <= 1:
+        if np.any((fcov < 0) | (fcov > 1)):
             raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
@@ -334,6 +348,10 @@ class EscapingFraction(Transformer):
         # transformer.
         Transformer.__init__(self, required_params=covering_attrs)
 
+    def __repr__(self):
+        """Return a string representation of the EscapingFraction object."""
+        return f"EscapingFraction(covering_attrs={self._required_params})"
+
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the transformation to the emission.
 
@@ -370,7 +388,7 @@ class EscapingFraction(Transformer):
         fcov = sum([params[attr] for attr in self._required_params])
 
         # Ensure the escape fraction is between 0 and 1
-        if not 0 <= fcov <= 1:
+        if np.any((fcov < 0) | (fcov > 1)):
             raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )

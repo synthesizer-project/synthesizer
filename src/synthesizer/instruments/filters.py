@@ -117,7 +117,7 @@ class FilterCollection:
         fill_gaps=True,
         verbose=False,
     ):
-        """Intialise the FilterCollection.
+        """Initialise the FilterCollection.
 
         Args:
             filter_codes  (list, string):
@@ -253,7 +253,7 @@ class FilterCollection:
             warn(
                 "Synthesizer versions differ between the code and "
                 "FilterCollection file! This is probably fine but there "
-                "is no gaurantee it won't cause errors."
+                "is no guarantee it won't cause errors."
             )
 
         # Get the wavelength units
@@ -300,7 +300,7 @@ class FilterCollection:
             warn(
                 "Synthesizer versions differ between the code and "
                 "FilterCollection file! This is probably fine but there "
-                "is no gaurantee it won't cause errors."
+                "is no guarantee it won't cause errors."
             )
 
         # Get the wavelength units
@@ -469,30 +469,80 @@ class FilterCollection:
         # Update the number of filters we have
         self.nfilters = len(self.filter_codes)
 
-        # Get a combined wavelength array (we resample filters before
-        # applying them to spectra so the actual resolution doesn't matter)
-        if self.lam is not None and other_filters.lam is not None:
-            new_lam = np.linspace(
-                min(self.lam.min(), other_filters.lam.min()),
-                max(self.lam.max(), other_filters.lam.max()),
-                self.lam.size + other_filters.lam.size,
-            )
-        elif self.lam is not None:
-            new_lam = self.lam
-        elif other_filters.lam is not None:
-            new_lam = other_filters.lam
-        else:
+        # Determine the wavelength array for the combined FilterCollection
+        # We only create a new wavelength array when absolutely necessary
+        resample = False
+        new_lam = None
+
+        # Are both wavelength arrays None? -> Resample to derive a new one
+        if self.lam is None and other_filters.lam is None:
             new_lam = None
+            resample = True
+
+        # Only self has a wavelength array - use it
+        elif self.lam is not None and other_filters.lam is None:
+            new_lam = self.lam
+            resample = True
+
+        # Only other_filters has a wavelength array - use it
+        elif self.lam is None and other_filters.lam is not None:
+            new_lam = other_filters.lam
+            resample = True
+
+        # Both have wavelength arrays - see if they agree
+        else:
+            # Check if they're identical (same size and values)
+            if self._lam.size == other_filters._lam.size and np.allclose(
+                self._lam, other_filters._lam
+            ):
+                # Identical arrays - no resampling needed
+                new_lam = self.lam
+                resample = False
+
+            # Check if self's wavelength array covers other_filters
+            elif (
+                self.lam.min() <= other_filters.lam.min()
+                and self.lam.max() >= other_filters.lam.max()
+            ):
+                # self covers other_filters - use self's array
+                new_lam = self.lam
+                resample = True
+
+            # Check if other_filters' wavelength array covers self
+            elif (
+                other_filters.lam.min() <= self.lam.min()
+                and other_filters.lam.max() >= self.lam.max()
+            ):
+                # other_filters covers self - use other_filters' array
+                new_lam = other_filters.lam
+                resample = True
+
+            # Neither covers the other - create new combined array
+            else:
+                # Use logarithmic spacing for wavelength arrays that span
+                # many orders of magnitude (e.g., grids)
+                min_lam = min(self.lam.min(), other_filters.lam.min())
+                max_lam = max(self.lam.max(), other_filters.lam.max())
+                new_lam = (
+                    np.logspace(
+                        np.log10(min_lam),
+                        np.log10(max_lam),
+                        self.lam.size + other_filters.lam.size,
+                    )
+                    * self.lam.units
+                )
+                resample = True
 
         # Now resample the filters onto the filter collection's wavelength
-        # array,
+        # array, but there's no need if they already agree.
         # NOTE: If the new filter extends beyond the filter collection's
-        # wavlength array a warning is given and that filter curve will
+        # wavelength array a warning is given and that filter curve will be
         # truncated at the limits. This is because we can't have the
         # filter collection's wavelength array modified, if that were
         # to happen it could become inconsistent with Sed wavelength arrays
         # and photometry would be impossible.
-        self.resample_filters(new_lam=new_lam)
+        if resample:
+            self.resample_filters(new_lam=new_lam)
 
         return self
 
@@ -502,7 +552,7 @@ class FilterCollection:
         Returns:
             str: A string representation of the FilterCollection.
         """
-        # Intialise the table formatter
+        # Initialise the table formatter
         formatter = TableFormatter(self)
 
         return formatter.get_table("FilterCollection")
@@ -555,7 +605,8 @@ class FilterCollection:
         if self.nfilters != other_filters.nfilters:
             return True
 
-        # Ok they do, so do they have the same filter codes? (elementwise test)
+        # Ok they do, so do they have the same filter codes? (element-wise
+        # test)
         not_equal = False
         for n in range(self.nfilters):
             if self.filter_codes[n] != other_filters.filter_codes[n]:
@@ -583,7 +634,8 @@ class FilterCollection:
         if self.nfilters != other_filters.nfilters:
             return False
 
-        # Ok they do, so do they have the same filter codes? (elementwise test)
+        # Ok they do, so do they have the same filter codes? (element-wise
+        # test)
         equal = True
         for n in range(self.nfilters):
             if self.filter_codes[n] != other_filters.filter_codes[n]:
@@ -814,7 +866,7 @@ class FilterCollection:
                 )
 
         # Loop over filters unifying them onto this wavelength array
-        # NOTE: Filters already on self.lam will be uneffected but doing a
+        # NOTE: Filters already on self.lam will be unaffected but doing a
         # np.all condition to check for matches and skip them is more expensive
         # than just doing the interpolation for all filters
         for fcode in self.filters:
@@ -886,7 +938,7 @@ class FilterCollection:
             fig (matplotlib.Figure)
                 The matplotlib figure object containing the plot.
             ax obj (matplotlib.axis)
-                The matplotlib axis object containg the plot.
+                The matplotlib axis object containing the plot.
         """
         # Set up figure
         if fig is None:
@@ -1038,7 +1090,7 @@ class FilterCollection:
 
         else:
             raise exceptions.InconsistentArguments(
-                "Method not recognised! Can be either 'pivot', "
+                "Method not recognized! Can be either 'pivot', "
                 "'mean'' or 'transmission'"
             )
 
@@ -1110,7 +1162,7 @@ class FilterCollection:
         # Include the Synthesizer version
         head.attrs["synthesizer_version"] = __version__
 
-        # Wrtie the FilterCollection attributes
+        # Write the FilterCollection attributes
         head.attrs["nfilters"] = self.nfilters
 
         # Write the wavelengths
@@ -1326,7 +1378,7 @@ class Filter:
         else:
             raise exceptions.InconsistentArguments(
                 "Invalid combination of filter inputs. \n For a generic "
-                "filter provide a transimision and wavelength array. \nFor "
+                "filter provide a transmission and wavelength array. \nFor "
                 "a filter from the SVO database provide a filter code of the "
                 "form Observatory/Instrument.Filter that matches the database."
                 " \nFor a top hat provide either a minimum and maximum "
@@ -1399,7 +1451,7 @@ class Filter:
         self.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
 
         # For SVO filters we don't want to send a request to the
-        # database so instead instatiate it as a generic filter and
+        # database so instead instantiate it as a generic filter and
         # overwrite some attributes after the fact
         if filter_type == "SVO":
             # Set the SVO specific attributes
@@ -1454,7 +1506,7 @@ class Filter:
         """Clip transmission curve between 0 and 1.
 
         Some transmission curves from SVO can come with strange
-        upper limits, the way we use them requires the maxiumum of a
+        upper limits, the way we use them requires the maximum of a
         transmission curve is at most 1. So for one final check lets
         clip the transmission curve between 0 and 1
         """
@@ -1478,7 +1530,7 @@ class Filter:
             self.lam_min = self.lam_eff - (self.lam_fwhm / 2.0)
             self.lam_max = self.lam_eff + (self.lam_fwhm / 2.0)
 
-        # Otherwise, use the explict min and max
+        # Otherwise, use the explicit min and max
 
         # Define this top hat filters wavelength array (+/- 1000 Angstrom)
         # if it hasn't been provided
@@ -1639,7 +1691,11 @@ class Filter:
 
         # Perform interpolation
         self.t = np.interp(
-            self._lam, self._original_lam, self.original_t, left=0.0, right=0.0
+            self._lam,
+            self._original_lam,
+            self.original_t,
+            left=0.0,
+            right=0.0,
         )
 
         # Ensure we don't have 0 transmission
@@ -1722,7 +1778,7 @@ class Filter:
             original_xs = self._original_nu
 
         elif lam is not None:
-            # If we have lams we are intergrating over llam or flam
+            # If we have lams we are integrating over llam or flam
 
             # Ensure the passed wavelengths have units
             if not isinstance(lam, unyt_array):
@@ -1783,8 +1839,9 @@ class Filter:
 
         # Warn and exit if there are no array elements in this band
         if arr_in_band.size == 0:
-            warn(f"{self.filter_code} outside of emission array.")
-            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
+            if arr.shape[0] > 0:
+                warn(f"{self.filter_code} outside of emission array.")
+            return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
 
         # Multiply the array by the filter transmission curve
         transmission = arr_in_band * t_in_band
@@ -1792,7 +1849,7 @@ class Filter:
         # Ensure we actually have some transmission in this band, no point
         # in calling the C extensions if not
         if np.sum(transmission) == 0:
-            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
+            return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_per_x = integrate_last_axis(
@@ -1823,10 +1880,10 @@ class Filter:
         """
         return (
             np.sqrt(
-                np.trapz(
+                np.trapezoid(
                     self._original_lam * self.original_t, x=self._original_lam
                 )
-                / np.trapz(
+                / np.trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1859,13 +1916,13 @@ class Filter:
         """
         return (
             np.exp(
-                np.trapz(
+                np.trapezoid(
                     np.log(self._original_lam)
                     * self.original_t
                     / self._original_lam,
                     x=self._original_lam,
                 )
-                / np.trapz(
+                / np.trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1884,7 +1941,7 @@ class Filter:
         """
         # Calculate the left and right hand side.
         A = np.sqrt(
-            np.trapz(
+            np.trapezoid(
                 (np.log(self._original_lam / self.meanwv().value) ** 2)
                 * self.original_t
                 / self._original_lam,
@@ -1893,7 +1950,7 @@ class Filter:
         )
 
         B = np.sqrt(
-            np.trapz(
+            np.trapezoid(
                 self.original_t / self._original_lam, x=self._original_lam
             )
         )
@@ -1933,7 +1990,9 @@ class Filter:
             float
                 The rectangular width.
         """
-        return np.trapz(self.original_t, x=self._original_lam) / self.Tpeak()
+        return (
+            np.trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
+        )
 
     def max(self):
         """Calculate the longest wavelength with transmission >0.01.
