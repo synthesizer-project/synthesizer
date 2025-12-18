@@ -396,9 +396,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             self.related_models = set()
         elif isinstance(related_models, set):
             self.related_models = related_models
-        elif isinstance(related_models, list):
-            self.related_models = set(related_models)
-        elif isinstance(related_models, tuple):
+        elif isinstance(related_models, (tuple, list)):
             self.related_models = set(related_models)
         elif isinstance(related_models, EmissionModel):
             self.related_models = {
@@ -823,6 +821,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     raise exceptions.InconsistentArguments(
                         "Wavelength arrays do not match somewhere in the tree."
                     )
+
+        # Remove related models that actually appear in the tree
+        self.related_models = {
+            model
+            for model in self.related_models
+            if model.label not in self._models
+        }
 
     def _set_attr(self, attr, value):
         """Set an attribute on the model.
