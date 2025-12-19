@@ -62,8 +62,8 @@ from unyt import arcsecond, angstrom
 import numpy as np
 
 from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
-from synthesizer.instruments import Instrument
-from synthesizer.instruments.filters import FilterCollection, Filter, InstrumentCollection
+from synthesizer.instruments import Instrument, InstrumentCollection
+from synthesizer.instruments.filters import FilterCollection, Filter
 
 __all__ = [
     "JWSTNIRCamWide",
@@ -85,8 +85,7 @@ __all__ = [
     "HSTACSWFC",
     "EuclidNISP",
     "EuclidVIS",
-    "GALEXFUV",
-    "GALEXNUV"
+    "GALEX"
 ]
 
 
@@ -2737,7 +2736,7 @@ class GALEXNUV(PremadeInstrument):
 class GALEX:
     """
     Factory class returning a GALEX InstrumentCollection
-    containing both FUV and NUV instruments. 
+    (not a PremadeInstrument!) containing both FUV and NUV instruments. 
 
     This should allow the following:
 
@@ -2747,7 +2746,7 @@ class GALEX:
         print(inst.label, inst.resolution)
 
     which would return:
-    
+
     GALEXFUV 6 arcsec
     GALEXNUV 8 arcsec
 
