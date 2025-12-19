@@ -2545,6 +2545,13 @@ class GALEXFUV(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    @classmethod
+    def load(cls, *args, **kwargs):
+        raise NotImplementedError(
+            "GALEXFUV does not support loading from an instrument cache file. "
+            "Please instantiate it directly using GALEXFUV(...)."
+        )
+
     def __init__(
         self,
         label="GALEXFUV",
@@ -2638,6 +2645,13 @@ class GALEXNUV(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    @classmethod
+    def load(cls, *args, **kwargs):
+        raise NotImplementedError(
+            "GALEXNUV does not support loading from an instrument cache file. "
+            "Please instantiate it directly using GALEXNUV(...)."
+        )
+
     def __init__(
         self,
         label="GALEXNUV",
@@ -2650,7 +2664,7 @@ class GALEXNUV(PremadeInstrument):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the GALEX FUV instrument.
+        """Initialize the GALEX NUV instrument.
 
         Args:
             label (str):
