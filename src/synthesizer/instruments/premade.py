@@ -2560,7 +2560,6 @@ class GALEXFUV(PremadeInstrument):
         snrs=None,
         psfs=None,
         noise_maps=None,
-        filter_subset=(),
         **kwargs,
     ):
         """Initialize the GALEX FUV instrument.
@@ -2616,12 +2615,18 @@ class GALEXFUV(PremadeInstrument):
         fuv_filter = Filter("GALEX/GALEX.FUV", 
                         transmission=fuv_trans,
                         new_lam=fuv_lam)
+        
+        filters = FilterCollection(filters=[fuv_filter])
+
+        # Resample if requested
+        if filter_lams is not None and len(filters) > 0:
+            filters[0].resample_filter(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
-            filters=[fuv_filter],
+            filters=filters,
             resolution=6 * arcsecond,
             depth=depth,
             depth_app_radius=depth_app_radius,
@@ -2660,7 +2665,6 @@ class GALEXNUV(PremadeInstrument):
         snrs=None,
         psfs=None,
         noise_maps=None,
-        filter_subset=(),
         **kwargs,
     ):
         """Initialize the GALEX NUV instrument.
@@ -2718,12 +2722,18 @@ class GALEXNUV(PremadeInstrument):
         nuv_filter = Filter("GALEX/GALEX.NUV", 
                         transmission=nuv_trans,
                         new_lam=nuv_lam)
+        
+        filters = FilterCollection(filters=[nuv_filter])
+
+        # Resample if requested
+        if filter_lams is not None and len(filters) > 0:
+            filters[0].resample_filter(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
             self,
             label=label,
-            filters=[nuv_filter],
+            filters=filters,
             resolution=8 * arcsecond,
             depth=depth,
             depth_app_radius=depth_app_radius,
