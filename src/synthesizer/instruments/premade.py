@@ -2591,11 +2591,6 @@ class GALEXFUV(PremadeInstrument):
                 be a dictionary of noise maps with an entry for each filter.
                 If doing resolved spectroscopy this should be an array with
                 noise as a function of wavelength. Default is None.
-            filter_subset (list/tuple):
-                A list of filters defining a subset of the filters to include
-                in the instrument. This should be a list of strings with the
-                filter names. If this is not provided, all filters defined in
-                this class will be included.
             **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Since SVO returns effective area rather than transmission curves
@@ -2726,11 +2721,6 @@ class GALEXNUV(PremadeInstrument):
                 be a dictionary of noise maps with an entry for each filter.
                 If doing resolved spectroscopy this should be an array with
                 noise as a function of wavelength. Default is None.
-            filter_subset (list/tuple):
-                A list of filters defining a subset of the filters to include
-                in the instrument. This should be a list of strings with the
-                filter names. If this is not provided, all filters defined in
-                this class will be included.
             **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Since SVO returns effective area rather than transmission curves for
