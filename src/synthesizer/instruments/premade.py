@@ -63,7 +63,7 @@ import numpy as np
 
 from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
 from synthesizer.instruments import Instrument
-from synthesizer.instruments.filters import FilterCollection, Filter
+from synthesizer.instruments.filters import FilterCollection, Filter, InstrumentCollection
 
 __all__ = [
     "JWSTNIRCamWide",
@@ -2733,3 +2733,40 @@ class GALEXNUV(PremadeInstrument):
             noise_maps=noise_maps,
             **kwargs,
         )
+
+class GALEX:
+    """
+    Factory class returning a GALEX InstrumentCollection
+    containing both FUV and NUV instruments. 
+
+    This should allow the following:
+
+    from synthesizer.instruments import GALEX
+    galex = GALEX()
+    for inst in galex:
+        print(inst.label, inst.resolution)
+
+    which would return:
+    
+    GALEXFUV 6 arcsec
+    GALEXNUV 8 arcsec
+
+    """
+
+    def __new__(
+        cls,
+        fuv_kwargs=None,
+        nuv_kwargs=None,
+    ):
+
+        fuv_kwargs = fuv_kwargs or {}
+        nuv_kwargs = nuv_kwargs or {}
+
+        collection = InstrumentCollection()
+
+        collection.add_instruments(
+            GALEXFUV(**fuv_kwargs),
+            GALEXNUV(**nuv_kwargs),
+        )
+
+        return collection
