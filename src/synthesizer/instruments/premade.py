@@ -58,12 +58,12 @@ Example usage:
 import os
 
 import h5py
-from unyt import arcsecond, angstrom
 import numpy as np
+from unyt import angstrom, arcsecond
 
 from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
 from synthesizer.instruments import Instrument, InstrumentCollection
-from synthesizer.instruments.filters import FilterCollection, Filter
+from synthesizer.instruments.filters import Filter, FilterCollection
 
 __all__ = [
     "JWSTNIRCamWide",
@@ -85,7 +85,7 @@ __all__ = [
     "HSTACSWFC",
     "EuclidNISP",
     "EuclidVIS",
-    "GALEX"
+    "GALEX",
 ]
 
 
@@ -2531,6 +2531,7 @@ class EuclidVIS(PremadeInstrument):
             **kwargs,
         )
 
+
 class GALEXFUV(PremadeInstrument):
     """A class containing the properties of the GALEX instrument.
 
@@ -2597,25 +2598,54 @@ class GALEXFUV(PremadeInstrument):
                 this class will be included.
             **kwargs: Keyword arguments to pass to the Instrument class.
         """
+        # Since SVO returns effective area rather than transmission curves
+        # for GALEX, here we define the transmission curves manually rather
+        # than using SVO
+        fuv_lam = (
+            np.array(
+                [
+                    1340.6205,
+                    1350.4851,
+                    1370.2143,
+                    1399.808,
+                    1449.131,
+                    1477.0806,
+                    1500.098,
+                    1519.8272,
+                    1549.4209,
+                    1608.6084,
+                    1648.0668,
+                    1705.6102,
+                    1750.0008,
+                    1810.8324,
+                ]
+            )
+            * angstrom
+        )
 
-        # Since SVO returns effective area rather than transmission curves for GALEX,
-        # here we define the transmission curves manually rather than using SVO
-        fuv_lam = np.array([
-            1340.6205, 1350.4851, 1370.2143, 1399.808, 1449.131, 1477.0806, 
-            1500.098, 1519.8272, 1549.4209, 1608.6084, 1648.0668, 1705.6102, 
-            1750.0008, 1810.8324
-        ]) * angstrom 
-            
-        fuv_trans = np.array([
-            9.07e-07, 0.11537571, 0.17650714, 0.12312477, 0.33665425, 0.36851147, 
-            0.35043035, 0.34698632, 0.26174673, 0.25485868, 0.16014802, 0.11881973, 
-            0.10504364, 0.000860099
-        ])
+        fuv_trans = np.array(
+            [
+                9.07e-07,
+                0.11537571,
+                0.17650714,
+                0.12312477,
+                0.33665425,
+                0.36851147,
+                0.35043035,
+                0.34698632,
+                0.26174673,
+                0.25485868,
+                0.16014802,
+                0.11881973,
+                0.10504364,
+                0.000860099,
+            ]
+        )
 
-        fuv_filter = Filter("GALEX/GALEX.FUV", 
-                        transmission=fuv_trans,
-                        new_lam=fuv_lam)
-        
+        fuv_filter = Filter(
+            "GALEX/GALEX.FUV", transmission=fuv_trans, new_lam=fuv_lam
+        )
+
         filters = FilterCollection(filters=[fuv_filter])
 
         # Resample if requested
@@ -2635,6 +2665,7 @@ class GALEXFUV(PremadeInstrument):
             noise_maps=noise_maps,
             **kwargs,
         )
+
 
 class GALEXNUV(PremadeInstrument):
     """A class containing the properties of the GALEX instrument.
@@ -2702,27 +2733,72 @@ class GALEXNUV(PremadeInstrument):
                 this class will be included.
             **kwargs: Keyword arguments to pass to the Instrument class.
         """
+        # Since SVO returns effective area rather than transmission curves for
+        # GALEX, here we define the transmission curves manually rather than
+        # using SVO
+        nuv_lam = (
+            np.array(
+                [
+                    1687.5251,
+                    1699.0338,
+                    1748.3567,
+                    1837.138,
+                    1899.6137,
+                    1948.9366,
+                    1998.2595,
+                    2050.8707,
+                    2151.1606,
+                    2200.4835,
+                    2253.0946,
+                    2300.7735,
+                    2348.4523,
+                    2445.4541,
+                    2553.9645,
+                    2595.0669,
+                    2646.0339,
+                    2697.001,
+                    2797.2909,
+                    2849.902,
+                    2897.5809,
+                    2999.5149,
+                    3007.7354,
+                ]
+            )
+            * angstrom
+        )
 
-        # Since SVO returns effective area rather than transmission curves for GALEX,
-        # here we define the transmission curves manually rather than using SVO
-        nuv_lam = np.array([
-            1687.5251, 1699.0338, 1748.3567, 1837.138, 1899.6137, 1948.9366, 
-            1998.2595, 2050.8707, 2151.1606, 2200.4835, 2253.0946, 2300.7735, 
-            2348.4523, 2445.4541, 2553.9645, 2595.0669, 2646.0339, 2697.001, 
-            2797.2909, 2849.902, 2897.5809, 2999.5149, 3007.7354
-        ]) * angstrom
-        
-        nuv_trans = np.array([
-            9.07e-07, 0.024109075, 0.031858129, 0.16100903, 0.26519076, 0.3289052, 
-            0.44858503, 0.4718322, 0.59495605, 0.6164812, 0.56223782, 0.5303806, 
-            0.47785924, 0.53468563, 0.51488249, 0.50024539, 0.46236113, 0.38056556, 
-            0.11020967, 0.033580141, 0.012054991, 0.016360021, 9.07e-07
-        ])
+        nuv_trans = np.array(
+            [
+                9.07e-07,
+                0.024109075,
+                0.031858129,
+                0.16100903,
+                0.26519076,
+                0.3289052,
+                0.44858503,
+                0.4718322,
+                0.59495605,
+                0.6164812,
+                0.56223782,
+                0.5303806,
+                0.47785924,
+                0.53468563,
+                0.51488249,
+                0.50024539,
+                0.46236113,
+                0.38056556,
+                0.11020967,
+                0.033580141,
+                0.012054991,
+                0.016360021,
+                9.07e-07,
+            ]
+        )
 
-        nuv_filter = Filter("GALEX/GALEX.NUV", 
-                        transmission=nuv_trans,
-                        new_lam=nuv_lam)
-        
+        nuv_filter = Filter(
+            "GALEX/GALEX.NUV", transmission=nuv_trans, new_lam=nuv_lam
+        )
+
         filters = FilterCollection(filters=[nuv_filter])
 
         # Resample if requested
@@ -2743,12 +2819,14 @@ class GALEXNUV(PremadeInstrument):
             **kwargs,
         )
 
-class GALEX:
-    """
-    Factory class returning a GALEX InstrumentCollection
-    (not a PremadeInstrument!) containing both FUV and NUV instruments. 
 
-    This should allow the following:
+class GALEX:
+    """Factory class returning a GALEX InstrumentCollection.
+
+    This is not a PremadeInstrument! It contains the
+    Premade FUV and NUV instruments.
+
+    This allows the following:
 
     from synthesizer.instruments import GALEX
     galex = GALEX()
@@ -2762,12 +2840,19 @@ class GALEX:
 
     """
 
-    def __new__(
-        cls,
-        fuv_kwargs=None,
-        nuv_kwargs=None,
-    ):
+    def __new__(cls, fuv_kwargs=None, nuv_kwargs=None):
+        """Instantiate a GALEX InstrumentCollection.
 
+        Contains FUV and NUV instruments.
+
+        Args:
+            fuv_kwargs (dict, optional): Keyword arguments for GALEXFUV.
+            nuv_kwargs (dict, optional): Keyword arguments for GALEXNUV.
+
+        Returns:
+            InstrumentCollection: Collection with both GALEXFUV and
+            GALEXNUV instruments.
+        """
         fuv_kwargs = fuv_kwargs or {}
         nuv_kwargs = nuv_kwargs or {}
 
