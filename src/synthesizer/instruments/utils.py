@@ -78,30 +78,52 @@ def print_premade_instruments() -> None:
     # Avoid circular import
     from synthesizer.instruments import premade as instruments
 
-    # Find all subclasses of PremadeInstrument
+    # Find all subclasses of PremadeInstrument and
+    # PremadeInstrumentCollectionFactory
     instrument_classes = []
     for name, obj in inspect.getmembers(instruments):
-        if (
-            inspect.isclass(obj)
-            and issubclass(obj, instruments.PremadeInstrument)
-            and obj is not instruments.PremadeInstrument
-        ):
-            instrument_classes.append(obj)
+        if inspect.isclass(obj):
+            # Include PremadeInstrument subclasses
+            if (
+                issubclass(obj, instruments.PremadeInstrument)
+                and obj is not instruments.PremadeInstrument
+            ):
+                instrument_classes.append(obj)
+            # Include PremadeInstrumentCollectionFactory subclasses
+            elif (
+                issubclass(obj, instruments.PremadeInstrumentCollectionFactory)
+                and obj is not instruments.PremadeInstrumentCollectionFactory
+            ):
+                instrument_classes.append(obj)
 
     # Prepare table rows
     rows = []
     for cls in instrument_classes:
         name = cls.__name__
         try:
-            num_filters = (
-                len(getattr(cls, "available_filters", None))
-                if getattr(cls, "available_filters", None) is not None
-                else "N/A"
-            )
-            cache_file = getattr(cls, "_instrument_cache_file", None)
-            available = (
-                "Yes" if cache_file and os.path.exists(cache_file) else "No"
-            )
+            # Check if this is a factory class
+            if issubclass(cls, instruments.PremadeInstrumentCollectionFactory):
+                # For factory classes, show number of instruments
+                instruments_dict = getattr(cls, "instruments", {})
+                num_filters = (
+                    f"{len(instruments_dict)} insts"
+                    if instruments_dict
+                    else "N/A"
+                )
+                available = "N/A"  # Factory classes don't have cache files
+            else:
+                # For regular instruments, show number of filters
+                num_filters = (
+                    len(getattr(cls, "available_filters", None))
+                    if getattr(cls, "available_filters", None) is not None
+                    else "N/A"
+                )
+                cache_file = getattr(cls, "_instrument_cache_file", None)
+                available = (
+                    "Yes"
+                    if cache_file and os.path.exists(cache_file)
+                    else "No"
+                )
         except Exception:
             num_filters = "N/A"
             available = "Error"

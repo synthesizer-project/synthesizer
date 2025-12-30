@@ -272,6 +272,60 @@ class PremadeInstrument(Instrument):
         )
 
 
+class PremadeInstrumentCollectionFactory:
+    """Base class for factory classes that create instrument collections.
+
+    This class provides a common pattern for creating
+    InstrumentCollections that contain multiple related instruments
+    (e.g., GALEX FUV and NUV).
+
+    Child classes should define an `instruments` class attribute as a
+    dictionary mapping instrument names to instrument classes. Kwargs
+    for individual instruments can be passed as `<name>_kwargs`.
+
+    Example:
+        ```python
+        class GALEX(PremadeInstrumentCollectionFactory):
+            instruments = {
+                "fuv": GALEXFUV,
+                "nuv": GALEXNUV,
+            }
+
+        # Create a GALEX collection with custom kwargs for each instrument
+        galex = GALEX(fuv_kwargs={"depth": 25.0}, nuv_kwargs={"depth": 26.0})
+        ```
+    """
+
+    _is_premade_factory = True
+    instruments = {}  # Override in child classes
+
+    def __new__(cls, **kwargs):
+        """Create an InstrumentCollection with all instruments.
+
+        Args:
+            **kwargs: Keyword arguments in the form `<name>_kwargs` where
+                <name> matches a key in the `instruments` class attribute.
+                Each `<name>_kwargs` should be a dictionary of keyword
+                arguments to pass to that instrument's constructor.
+
+        Returns:
+            InstrumentCollection: Collection containing all instruments
+                defined in the `instruments` class attribute.
+        """
+        collection = InstrumentCollection()
+
+        instruments_list = []
+        for name, inst_cls in cls.instruments.items():
+            inst_kwargs = kwargs.get(f"{name}_kwargs", {})
+            if inst_kwargs is None:
+                inst_kwargs = {}
+            instruments_list.append(inst_cls(**inst_kwargs))
+
+        collection.add_instruments(*instruments_list)
+
+        return collection
+
+
 class JWSTNIRCamWide(PremadeInstrument):
     """A class containing JWST's NIRCam instrument (Wide).
 
@@ -2645,7 +2699,7 @@ class GALEXFUV(PremadeInstrument):
 
         # Resample if requested
         if filter_lams is not None:
-            filters[0].resample_filter(new_lam=filter_lams, verbose=False)
+            filters.resample_filters(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
@@ -2793,7 +2847,7 @@ class GALEXNUV(PremadeInstrument):
 
         # Resample if requested
         if filter_lams is not None:
-            filters[0].resample_filter(new_lam=filter_lams, verbose=False)
+            filters.resample_filters(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
         PremadeInstrument.__init__(
@@ -2810,11 +2864,10 @@ class GALEXNUV(PremadeInstrument):
         )
 
 
-class GALEX:
+class GALEX(PremadeInstrumentCollectionFactory):
     """Factory class returning a GALEX InstrumentCollection.
 
-    This is not a PremadeInstrument! It contains the
-    Premade FUV and NUV instruments.
+    Contains FUV and NUV instruments.
 
     This allows the following:
 
@@ -2828,29 +2881,10 @@ class GALEX:
     GALEXFUV 6 arcsec
     GALEXNUV 8 arcsec
 
+    For further details see the PremadeInstrumentCollectionFactory class.
     """
 
-    def __new__(cls, fuv_kwargs=None, nuv_kwargs=None):
-        """Instantiate a GALEX InstrumentCollection.
-
-        Contains FUV and NUV instruments.
-
-        Args:
-            fuv_kwargs (dict, optional): Keyword arguments for GALEXFUV.
-            nuv_kwargs (dict, optional): Keyword arguments for GALEXNUV.
-
-        Returns:
-            InstrumentCollection: Collection with both GALEXFUV and
-            GALEXNUV instruments.
-        """
-        fuv_kwargs = fuv_kwargs or {}
-        nuv_kwargs = nuv_kwargs or {}
-
-        collection = InstrumentCollection()
-
-        collection.add_instruments(
-            GALEXFUV(**fuv_kwargs),
-            GALEXNUV(**nuv_kwargs),
-        )
-
-        return collection
+    instruments = {
+        "fuv": GALEXFUV,
+        "nuv": GALEXNUV,
+    }
