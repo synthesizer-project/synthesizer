@@ -1335,7 +1335,7 @@ class Sed:
             )
 
             # Measure index for all SEDs
-            index = np.trapz(
+            index = np.trapezoid(
                 feature_lum_continuum_subtracted, x=feature_lam, axis=1
             )
 
@@ -1360,7 +1360,9 @@ class Sed:
             )
 
             # Measure index
-            index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
+            index = np.trapezoid(
+                feature_lum_continuum_subtracted, x=feature_lam
+            )
 
         return index
 
