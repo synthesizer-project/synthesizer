@@ -2644,7 +2644,7 @@ class GALEXFUV(PremadeInstrument):
         filters = FilterCollection(filters=[fuv_filter])
 
         # Resample if requested
-        if filter_lams is not None and len(filters) > 0:
+        if filter_lams is not None:
             filters[0].resample_filter(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
@@ -2792,7 +2792,7 @@ class GALEXNUV(PremadeInstrument):
         filters = FilterCollection(filters=[nuv_filter])
 
         # Resample if requested
-        if filter_lams is not None and len(filters) > 0:
+        if filter_lams is not None:
             filters[0].resample_filter(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
