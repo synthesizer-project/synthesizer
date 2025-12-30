@@ -71,6 +71,8 @@ __all__ = [
     "JWSTNIRCamNarrow",
     "JWSTNIRCam",
     "JWSTMIRI",
+    "JWSTNIRSpec",
+    "JWST",
     "HSTWFC3UVISWide",
     "HSTWFC3UVISMedium",
     "HSTWFC3UVISNarrow",
@@ -83,8 +85,10 @@ __all__ = [
     "HSTACSWFCMedium",
     "HSTACSWFCNarrow",
     "HSTACSWFC",
+    "HST",
     "EuclidNISP",
     "EuclidVIS",
+    "Euclid",
     "GALEX",
 ]
 
@@ -2599,6 +2603,11 @@ class GALEXFUV(PremadeInstrument):
     For further details see the PremadeInstrument class.
     """
 
+    # Define the available filters
+    available_filters = [
+        "GALEX/GALEX.FUV",
+    ]
+
     @classmethod
     def load(cls, *args, **kwargs):
         raise NotImplementedError(
@@ -2728,6 +2737,11 @@ class GALEXNUV(PremadeInstrument):
 
     For further details see the PremadeInstrument class.
     """
+
+    # Define the available filters
+    available_filters = [
+        "GALEX/GALEX.NUV",
+    ]
 
     @classmethod
     def load(cls, *args, **kwargs):
@@ -2887,4 +2901,86 @@ class GALEX(PremadeInstrumentCollectionFactory):
     instruments = {
         "fuv": GALEXFUV,
         "nuv": GALEXNUV,
+    }
+
+
+class Euclid(PremadeInstrumentCollectionFactory):
+    """Factory class returning a Euclid InstrumentCollection.
+
+    Contains NISP and VIS instruments.
+
+    This allows the following:
+
+    from synthesizer.instruments import Euclid
+    euclid = Euclid()
+    for inst in euclid:
+        print(inst.label, inst.resolution)
+
+    which would return:
+
+    Euclid.NISP 0.3 arcsec
+    Euclid.VIS 0.1 arcsec
+
+    For further details see the PremadeInstrumentCollectionFactory class.
+    """
+
+    instruments = {
+        "nisp": EuclidNISP,
+        "vis": EuclidVIS,
+    }
+
+
+class HST(PremadeInstrumentCollectionFactory):
+    """Factory class returning a HST InstrumentCollection.
+
+    Contains WFC3 UVIS, WFC3 IR, and ACS WFC instruments.
+
+    This allows the following:
+
+    from synthesizer.instruments import HST
+    hst = HST()
+    for inst in hst:
+        print(inst.label, inst.resolution)
+
+    which would return:
+
+    HST.WFC3.UVIS 0.04 arcsec
+    HST.WFC3.IR 0.13 arcsec
+    HST.ACS.WFC 0.05 arcsec
+
+    For further details see the PremadeInstrumentCollectionFactory class.
+    """
+
+    instruments = {
+        "wfc3_uvis": HSTWFC3UVIS,
+        "wfc3_ir": HSTWFC3IR,
+        "acs_wfc": HSTACSWFC,
+    }
+
+
+class JWST(PremadeInstrumentCollectionFactory):
+    """Factory class returning a JWST InstrumentCollection.
+
+    Contains NIRCam, MIRI, and NIRSpec instruments.
+
+    This allows the following:
+
+    from synthesizer.instruments import JWST
+    jwst = JWST()
+    for inst in jwst:
+        print(inst.label, inst.resolution)
+
+    which would return:
+
+    JWST.NIRCam 0.031 arcsec
+    JWST.MIRI 0.11 arcsec
+    JWST.NIRSpec N/A (placeholder)
+
+    For further details see the PremadeInstrumentCollectionFactory class.
+    """
+
+    instruments = {
+        "nircam": JWSTNIRCam,
+        "miri": JWSTMIRI,
+        "nirspec": JWSTNIRSpec,
     }

@@ -103,20 +103,28 @@ def print_premade_instruments() -> None:
         try:
             # Check if this is a factory class
             if issubclass(cls, instruments.PremadeInstrumentCollectionFactory):
-                # For factory classes, show number of instruments
+                # For factory classes, count instruments and sum filters
                 instruments_dict = getattr(cls, "instruments", {})
-                num_filters = (
-                    f"{len(instruments_dict)} insts"
-                    if instruments_dict
-                    else "N/A"
-                )
+                num_instruments = len(instruments_dict)
+
+                # Sum up filters from all instruments, skipping those without
+                num_filters = 0
+                for inst_cls in instruments_dict.values():
+                    available_filters = getattr(
+                        inst_cls, "available_filters", None
+                    )
+                    if available_filters is not None:
+                        num_filters += len(available_filters)
+
                 available = "N/A"  # Factory classes don't have cache files
             else:
-                # For regular instruments, show number of filters
+                # For regular instruments
+                num_instruments = 1
+                available_filters = getattr(cls, "available_filters", None)
                 num_filters = (
-                    len(getattr(cls, "available_filters", None))
-                    if getattr(cls, "available_filters", None) is not None
-                    else "N/A"
+                    len(available_filters)
+                    if available_filters is not None
+                    else 0
                 )
                 cache_file = getattr(cls, "_instrument_cache_file", None)
                 available = (
@@ -125,34 +133,39 @@ def print_premade_instruments() -> None:
                     else "No"
                 )
         except Exception:
-            num_filters = "N/A"
+            num_instruments = "Error"
+            num_filters = "Error"
             available = "Error"
-        rows.append((name, str(num_filters), available))
+        rows.append((name, str(num_instruments), str(num_filters), available))
 
     # Determine column widths
     col_widths = [
-        max(len(row[0]) for row in rows + [("Instrument", "", "")]),
-        max(len(row[1]) for row in rows + [("", "NFilters", "")]),
-        max(len(row[2]) for row in rows + [("", "", "Cached?")]),
+        max(len(row[0]) for row in rows + [("Instrument", "", "", "")]),
+        max(len(row[1]) for row in rows + [("", "NInstruments", "", "")]),
+        max(len(row[2]) for row in rows + [("", "", "NFilters", "")]),
+        max(len(row[3]) for row in rows + [("", "", "", "Cached?")]),
     ]
 
     # Build the table
     separator = (
         f"+{'-' * (col_widths[0] + 2)}+"
         f"{'-' * (col_widths[1] + 2)}+"
-        f"{'-' * (col_widths[2] + 3)}+"
+        f"{'-' * (col_widths[2] + 2)}+"
+        f"{'-' * (col_widths[3] + 3)}+"
     )
     header = (
         f"| {'Instrument':<{col_widths[0]}} | "
-        f"{'NFilters':<{col_widths[1]}} | "
-        f" {'Cached?':<{col_widths[2]}} |"
+        f"{'NInstruments':<{col_widths[1]}} | "
+        f"{'NFilters':<{col_widths[2]}} | "
+        f" {'Cached?':<{col_widths[3]}} |"
     )
     lines = [separator, header, separator]
     for row in rows:
         lines.append(
             f"| {row[0]:<{col_widths[0]}} | "
             f"{row[1]:<{col_widths[1]}} | "
-            f" {row[2]:<{col_widths[2]}} |"
+            f"{row[2]:<{col_widths[2]}} | "
+            f" {row[3]:<{col_widths[3]}} |"
         )
     lines.append(separator)
 
