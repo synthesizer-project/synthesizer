@@ -1632,7 +1632,10 @@ class Filter:
                     "can sometimes occur where the effective "
                     "area is returned instead. Please check "
                     "that the filter you are querying returns "
-                    "the transmission / response."
+                    "the transmission / response. (Note that for the case "
+                    "of GALEX we provide an importable instrument that "
+                    "handles this correctly: "
+                    "`from synthesizer.instruments import GALEX`.)"
                 )
             )
 
