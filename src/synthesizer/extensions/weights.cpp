@@ -59,7 +59,7 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
   };
   std::vector<SubCell> subcells(num_sub_cells);
   {
-    std::array<int, MAX_GRID_NDIM> tmp;
+    std::array<int, MAX_GRID_NDIM> tmp{};
     for (int ic = 0; ic < num_sub_cells; ++ic) {
       get_indices_from_flat(ic, ndim, sub_dims, tmp);
       subcells[ic].offs = tmp;
@@ -150,7 +150,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
   };
   std::vector<SubCell> subcells(num_sub_cells);
   {
-    std::array<int, MAX_GRID_NDIM> tmp;
+    std::array<int, MAX_GRID_NDIM> tmp{};
     for (int ic = 0; ic < num_sub_cells; ic++) {
       get_indices_from_flat(ic, ndim, sub_dims, tmp);
       subcells[ic].offs = tmp;
