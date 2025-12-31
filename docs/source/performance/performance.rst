@@ -19,8 +19,11 @@ We detail the OpenMP parallelism model we have implemented in the codebase in th
 Profiling 
 ~~~~~~~~~ 
 
-To ensure the code remains performant, we have a bespoke profilling suite we maintain (and plan to expand) to test the performance of the codebase. 
-This can be found in the ``profiling`` direcotory of the repository. 
+.. note::
+    Before running the profiling suite, you will need to download the grids. See the `Downloading Grids <../getting_started/downloading_grids>`_ documentation for details.
+
+To ensure the code remains performant, we have a bespoke profiling suite we maintain (and plan to expand) to test the performance of the codebase. 
+This can be found in the ``profiling`` directory of the repository. 
 In the following sections we show some performance benchmarks to give an idea of the performance of the codebase. All these tests were run on the Cosma8 HPC at Durham University. The output of the ``lscpu`` command is shown below, which gives an idea of the hardware used for these tests.
 
 .. code-block:: 
