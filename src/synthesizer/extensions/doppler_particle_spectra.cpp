@@ -100,7 +100,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
     const double shift_factor = 1.0 + vel / c;
 
     /* Shift wavelengths & map to bins once per particle. */
-    for (int il = 0; il < nlam; ++il) {
+    for (size_t il = 0; il < nlam; ++il) {
       const double lam_s = wavelength[il] * shift_factor;
       shifted_wavelengths[il] = lam_s;
       mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -134,10 +134,10 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
       /* Loop over wavelengths (we can't prepare the unmasked wavelengths
        * like we can in the non-shifted case, since the shifted wavelengths
        * are particle-dependent) */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         const int ils = mapped_indices[il];
         /* Skip out-of-bounds or masked */
-        if (ils <= 0 || ils >= nlam || grid_props->lam_is_masked(ils)) {
+        if (ils <= 0 || static_cast<size_t>(ils) >= nlam || grid_props->lam_is_masked(ils)) {
           continue;
         }
 
@@ -249,7 +249,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       const double shift_factor = 1.0 + vel / c;
 
       /* Shift wavelengths & map to bins once per particle */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         const double lam_s = wavelength[il] * shift_factor;
         shifted_wavelengths[il] = lam_s;
         mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -279,10 +279,10 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         /* Loop over wavelengths (we can't prepare the unmasked wavelengths like
          * we can in the non-shifted case, since the shifted wavelengths are
          * particle-dependent) */
-        for (int il = 0; il < nlam; ++il) {
+        for (size_t il = 0; il < nlam; ++il) {
           const int ils = mapped_indices[il];
           /* Skip out-of-bounds or masked bins */
-          if (ils <= 0 || ils >= nlam || grid_props->lam_is_masked(ils)) {
+          if (ils <= 0 || static_cast<size_t>(ils) >= nlam || grid_props->lam_is_masked(ils)) {
             continue;
           }
 
@@ -293,7 +293,6 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
           /* Base spectra contribution */
           const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
-          const size_t base_idx = p * nlam;
 
           /* Deposit into the thread's part spectra */
           this_part_spectra[ils - 1] =
@@ -303,7 +302,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       }
 
       /* Copy the entire spectrum at once  into the output array. */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         local_part_spectra[(p - start_idx) * nlam + il] = this_part_spectra[il];
       }
     }
@@ -372,7 +371,6 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
                                             const double c) {
 
   /* Unpack the grid properties. */
-  const int ndim = grid_props->ndim;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
 
@@ -396,7 +394,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
     double shift_factor = 1.0 + vel / c;
 
     /* Shift wavelengths & map to bins once per particle. */
-    for (int il = 0; il < nlam; ++il) {
+    for (size_t il = 0; il < nlam; ++il) {
       const double lam_s = wavelength[il] * shift_factor;
       shifted_wavelengths[il] = lam_s;
       mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -411,7 +409,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
     /* Loop over wavelengths (we can't prepare the unmasked wavelengths
      * like we can in the non-shifted case, since the shifted wavelengths
      * are particle-dependent) */
-    for (int ilam = 0; ilam < nlam; ilam++) {
+    for (size_t ilam = 0; ilam < nlam; ilam++) {
 
       /* Get the shifted wavelength and index. */
       int ilam_shifted = mapped_indices[ilam];
@@ -425,7 +423,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
       /* Compute the fraction of the shifted wavelength between the two
        * closest wavelength elements. */
       double frac_shifted = 0.0;
-      if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+      if (ilam_shifted > 0 && static_cast<size_t>(ilam_shifted) <= nlam - 1) {
         frac_shifted =
             (shifted_lambda - wavelength[ilam_shifted - 1]) /
             (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
@@ -462,7 +460,6 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
                                          int nthreads, const double c) {
 
   /* Unpack the grid properties. */
-  const int ndim = grid_props->ndim;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
 
@@ -507,7 +504,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
       double shift_factor = 1.0 + vel / c;
 
       /* Shift wavelengths & map to bins once per particle. */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         const double lam_s = wavelength[il] * shift_factor;
         shifted_wavelengths[il] = lam_s;
         mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -522,7 +519,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
       /* Loop over wavelengths (we can't prepare the unmasked wavelengths
        * like we can in the non-shifted case, since the shifted wavelengths
        * are particle-dependent) */
-      for (int ilam = 0; ilam < nlam; ilam++) {
+      for (size_t ilam = 0; ilam < nlam; ilam++) {
 
         /* Get the shifted wavelength and index. */
         int ilam_shifted = mapped_indices[ilam];
@@ -536,7 +533,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
         /* Compute the fraction of the shifted wavelength between the two
          * closest wavelength elements. */
         double frac_shifted = 0.0;
-        if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+        if (ilam_shifted > 0 && static_cast<size_t>(ilam_shifted) <= nlam - 1) {
           frac_shifted =
               (shifted_lambda - wavelength[ilam_shifted - 1]) /
               (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);

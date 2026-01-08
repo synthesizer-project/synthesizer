@@ -108,7 +108,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
     double avg_cost = total_cost / work_list.size();
 
     // Check termination conditions
-    bool enough_cells = work_list.size() >= target_cells;
+    bool enough_cells = work_list.size() >= static_cast<size_t>(target_cells);
     bool balanced = (max_cost / avg_cost) <= balance_tolerance;
     bool can_continue = subdividable_cells > 0;
 
@@ -159,8 +159,6 @@ build_balanced_work_list(struct cell *root, int nthreads,
     final_max_cost = std::max(final_max_cost, wc.cost);
     final_min_cost = std::min(final_min_cost, wc.cost);
   }
-
-  double final_avg_cost = final_total_cost / work_list.size();
 
   toc("Splitting cell tree over threads", start_time);
 
@@ -319,8 +317,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
             } else {
               /* Partial overlap: integrate over pixel area. */
               kvalue = pixel_kernel_partial_overlap_contribution(
-                  part, pix_x_min, pix_x_max, pix_y_min, pix_y_max, kernel,
-                  kdim, threshold, res);
+                  part, pix_x_min, pix_y_min, kernel, kdim, threshold, res);
             }
           }
 
@@ -339,7 +336,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
             for (int nimg = 0; nimg < nimgs; nimg++) {
               int local_idx =
                   local_i * local_height * nimgs + local_j * nimgs + nimg;
-              if (local_idx >= 0 && local_idx < local_img.size()) {
+              if (local_idx >= 0 && static_cast<size_t>(local_idx) < local_img.size()) {
                 local_img[local_idx] +=
                     kvalue * pix_values[part->index * nimgs + nimg];
               }
@@ -422,7 +419,7 @@ void populate_smoothed_image_parallel(const double *pix_values,
 
   /* Parallel loop over the work list. */
 #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
-  for (int i = 0; i < work_list.size(); i++) {
+  for (size_t i = 0; i < work_list.size(); i++) {
     const weighted_cell &wc = work_list[i];
     struct cell *c = wc.cell_ptr;
 
@@ -475,7 +472,7 @@ void populate_smoothed_image_serial(const double *pix_values,
   std::vector<weighted_cell> work_list = build_balanced_work_list(root, 1);
 
   /* Loop over the work list. */
-  for (int i = 0; i < work_list.size(); i++) {
+  for (size_t i = 0; i < work_list.size(); i++) {
     const weighted_cell &wc = work_list[i];
     struct cell *c = wc.cell_ptr;
 

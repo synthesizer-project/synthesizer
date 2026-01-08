@@ -249,9 +249,7 @@ inline double pixel_inside_kernel_contribution(double pix_x_min,
  *
  * @param part Pointer to the particle.
  * @param pix_x_min Pixel minimum x coordinate.
- * @param pix_x_max Pixel maximum x coordinate.
  * @param pix_y_min Pixel minimum y coordinate.
- * @param pix_y_max Pixel maximum y coordinate.
  * @param kernel Pointer to kernel interpolation table.
  * @param kdim Dimension of kernel table.
  * @param threshold Kernel threshold value.
@@ -260,9 +258,8 @@ inline double pixel_inside_kernel_contribution(double pix_x_min,
  * @return The kernel contribution value (normalized).
  */
 inline double pixel_kernel_partial_overlap_contribution(
-    const struct particle *part, double pix_x_min, double pix_x_max,
-    double pix_y_min, double pix_y_max, const double *kernel, int kdim,
-    double threshold, double res) {
+    const struct particle *part, double pix_x_min, double pix_y_min,
+    const double *kernel, int kdim, double threshold, double res) {
 
   /* Adaptive sampling based on smoothing length.
    * Minimum 4 samples per axis, increase for small smoothing lengths. */
