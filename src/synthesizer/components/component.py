@@ -748,9 +748,13 @@ class Component(ABC):
             if phot_type == "lnu":
                 if first_label in self.photo_lnu:
                     filters = self.photo_lnu[first_label].filters
+                elif not is_param and first_label in self.particle_photo_lnu:
+                    filters = self.particle_photo_lnu[first_label].filters
             elif phot_type == "fnu":
                 if first_label in self.photo_fnu:
                     filters = self.photo_fnu[first_label].filters
+                elif not is_param and first_label in self.particle_photo_fnu:
+                    filters = self.particle_photo_fnu[first_label].filters
             else:
                 raise ValueError(
                     f"Unknown phot_type '{phot_type}'. Must be 'lnu' or 'fnu'."
@@ -758,7 +762,7 @@ class Component(ABC):
 
             # Verify filters was found
             if filters is None:
-                raise exceptions.MissingPhotometry(
+                raise exceptions.MissingPhotometryType(
                     f"No photometry found for label '{first_label}' with "
                     f"type '{phot_type}'. Ensure photometry has been "
                     "generated before creating images."
