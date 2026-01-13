@@ -5,6 +5,7 @@
 /* C includes */
 #include <array>
 #include <math.h>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -476,7 +477,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Allocate the sfzh array to output. */
-  double *grid_weights = new double[grid_props->size]();
+  double *grid_weights = new (std::nothrow) double[grid_props->size]();
   /* If allocation failed, clean up and return nullptr to propagate the MemoryError. */
   if (grid_weights == nullptr) {
     PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");

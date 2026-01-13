@@ -5,6 +5,7 @@
 /* C includes */
 #include <array>
 #include <math.h>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -663,8 +664,20 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Allocate the spectra. */
-  double *spectra = new double[grid_props->nlam]();
-  double *part_spectra = new double[npart * grid_props->nlam]();
+  double *spectra = new (std::nothrow) double[grid_props->nlam]();
+  double *part_spectra =
+      new (std::nothrow) double[npart * grid_props->nlam]();
+
+  if (spectra == NULL || part_spectra == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for spectra.");
+    delete part_props;
+    delete grid_props;
+    if (spectra)
+      delete[] spectra;
+    if (part_spectra)
+      delete[] part_spectra;
+    return NULL;
+  }
 
   /* Convert c to double */
   double c = PyFloat_AsDouble(py_c);
@@ -691,21 +704,6 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
   /* Reduce the per-particle spectra to the integrated spectra. */
   reduce_spectra(spectra, part_spectra, nlam, npart, nthreads);
-
-  /* Check we got the spectra sucessfully. (Any error messages will already
-   * be set). Clean up and return NULL to signal failure if not. */
-  if (spectra == NULL) {
-    delete part_props;
-    delete grid_props;
-    delete[] part_spectra; // spectra is null
-    return NULL;
-  }
-  if (part_spectra == NULL) {
-    delete part_props;
-    delete grid_props;
-    delete[] spectra; // part_spectra is null
-    return NULL;
-  }
 
   /* Clean up memory! */
   delete part_props;
