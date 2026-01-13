@@ -680,6 +680,10 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);
+    delete part_props;
+    delete grid_props;
+    delete[] spectra;
+    delete[] part_spectra;
     return NULL;
   }
   RETURN_IF_PYERR();
@@ -690,9 +694,15 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* Check we got the spectra sucessfully. (Any error messages will already
    * be set) */
   if (spectra == NULL) {
+    delete part_props;
+    delete grid_props;
+    delete[] part_spectra; // spectra is null
     return NULL;
   }
   if (part_spectra == NULL) {
+    delete part_props;
+    delete grid_props;
+    delete[] spectra; // part_spectra is null
     return NULL;
   }
 

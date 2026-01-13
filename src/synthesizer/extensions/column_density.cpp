@@ -551,11 +551,26 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
   /* Extract a pointers to the actual data in the numpy arrays. */
   const double *kernel = extract_data_double(np_kernel, "kernel");
+  if (kernel == NULL) {
+    return NULL;
+  }
   const double *pos_i = extract_data_double(np_pos_i, "pos_i");
+  if (pos_i == NULL) {
+    return NULL;
+  }
   const double *pos_j = extract_data_double(np_pos_j, "pos_j");
+  if (pos_j == NULL) {
+    return NULL;
+  }
   const double *smls = extract_data_double(np_smls, "smls");
+  if (smls == NULL) {
+    return NULL;
+  }
   const double *surf_den_val =
       extract_data_double(np_surf_den_val, "surf_den_val");
+  if (surf_den_val == NULL) {
+    return NULL;
+  }
 
   /* Create the output array. */
   npy_intp np_dims[1] = {npart_i};

@@ -479,8 +479,10 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   double *grid_weights = new double[grid_props->size]();
   if (grid_weights == nullptr) {
     PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
+    delete part_props;
+    delete grid_props;
+    return nullptr;
   }
-  RETURN_IF_PYERR();
 
   toc("Extracting Python data", setup_start);
 
@@ -494,6 +496,9 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
                     nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method.");
+    delete part_props;
+    delete grid_props;
+    delete[] grid_weights;
     return nullptr;
   }
 

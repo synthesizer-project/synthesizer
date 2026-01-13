@@ -583,13 +583,20 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Get pointers to the actual data. */
   const double *pix_values = extract_data_double(np_pix_values, "pix_values");
+  if (pix_values == NULL) {
+    return NULL;
+  }
   const double *smoothing_lengths =
       extract_data_double(np_smoothing_lengths, "smoothing_lengths");
+  if (smoothing_lengths == NULL) {
+    return NULL;
+  }
   const double *pos = extract_data_double(np_pos, "pos");
+  if (pos == NULL) {
+    return NULL;
+  }
   const double *kernel = extract_data_double(np_kernel, "kernel");
-
-  if (pix_values == NULL || smoothing_lengths == NULL || pos == NULL ||
-      kernel == NULL) {
+  if (kernel == NULL) {
     return NULL;
   }
 
