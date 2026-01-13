@@ -477,6 +477,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
 
   /* Allocate the sfzh array to output. */
   double *grid_weights = new double[grid_props->size]();
+  /* If allocation failed, clean up and return nullptr to propagate the MemoryError. */
   if (grid_weights == nullptr) {
     PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
     delete part_props;
@@ -496,6 +497,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
                     nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method.");
+    /* Clean up all allocated memory before returning nullptr to propagate the ValueError. */
     delete part_props;
     delete grid_props;
     delete[] grid_weights;

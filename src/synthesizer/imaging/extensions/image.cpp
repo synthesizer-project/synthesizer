@@ -588,6 +588,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   const double *pos = extract_data_double(np_pos, "pos");
   const double *kernel = extract_data_double(np_kernel, "kernel");
 
+  /* One of the data extractions failed and set a Python error. Return NULL
+   * to propagate the exception back to Python. */
   if (pix_values == NULL || smoothing_lengths == NULL || pos == NULL ||
       kernel == NULL) {
     return NULL;
