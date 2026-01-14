@@ -1,16 +1,19 @@
-"""Profile runtime scaling with the number of particles.
+"""Profile memory scaling with the number of particles.
 
 This script generates three separate plots (Spectra, Photometry, Imaging)
-showing how various operations scale from 10^3 to 10^6 particles.
+showing how the peak memory usage of various operations scales from 10^3 to
+10^6 particles.
 """
 
 import argparse
 import gc
-import time
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import psutil
+from memory_profiler import memory_usage
 from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
@@ -30,7 +33,24 @@ plt.rcParams["axes.titlesize"] = 0  # Force no titles
 np.random.seed(42)
 
 
-def profile_nparticles(nthreads=1, n_averages=3):
+def get_current_mem():
+    """Return the current process memory in MiB."""
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / 1024 / 1024
+
+
+def run_and_measure_memory(func, *args, **kwargs):
+    """Run a function and return its peak memory usage INCREASE in GB.
+
+    This subtracts the baseline memory usage before the call to isolate
+    the memory cost of the operation itself.
+    """
+    baseline = get_current_mem()
+    peak = memory_usage((func, args, kwargs), interval=0.1, max_usage=True)
+    return max(0, peak - baseline) / 1024  # Convert MiB to GB
+
+
+def profile_nparticles_memory(nthreads=1, n_averages=3):
     """Run the profiling."""
     print(
         f"Initializing Grid and Models (nthreads={nthreads}, "
@@ -97,10 +117,12 @@ def profile_nparticles(nthreads=1, n_averages=3):
     )
 
     # Particle counts to test
+    # Reduced max to 10^5 for memory safety/speed in this context,
+    # or keep 10^3 to 10^5 as in original file logic (actually logspace(3,5,5))
     n_particles = np.logspace(3, 5, 5).astype(int)
 
     # Storage for results
-    times = {
+    mems = {
         "spectra": {
             "Particle": [],
             "Particle (Doppler)": [],
@@ -132,10 +154,10 @@ def profile_nparticles(nthreads=1, n_averages=3):
     )
 
     for n in n_particles:
-        print(f"Profiling n={n}...")
+        print(f"Profiling Memory n={n}...")
 
         # Local storage for averages
-        iter_times = {
+        iter_mems = {
             "spectra": {
                 "Particle": [],
                 "Particle (Doppler)": [],
@@ -158,7 +180,7 @@ def profile_nparticles(nthreads=1, n_averages=3):
 
         for i in range(n_averages):
             # --- 1. Spectra Profiling ---
-            # Re-sample for each iteration to keep environment clean
+            # Re-sample for each iteration
             stars = sample_sfzh(
                 param_stars.sfzh,
                 param_stars.log10ages,
@@ -166,78 +188,63 @@ def profile_nparticles(nthreads=1, n_averages=3):
                 n,
                 redshift=1,
             )
-            stars.velocities = (
-                np.random.randn(n, 3) * 100 * (kpc / Myr)
-            )  # Needs velocities for shift
+            stars.velocities = np.random.randn(n, 3) * 100 * (kpc / Myr)
 
             # Particle
-            start = time.perf_counter()
-            stars.get_spectra(model_part, nthreads=nthreads)
-            iter_times["spectra"]["Particle"].append(
-                time.perf_counter() - start
+            stars.spectra = {}
+            mem = run_and_measure_memory(
+                stars.get_spectra, model_part, nthreads=nthreads
             )
+            iter_mems["spectra"]["Particle"].append(mem)
+            del stars.spectra["part"]
 
             # Particle Shift
-            start = time.perf_counter()
-            stars.get_spectra(model_part_shift, nthreads=nthreads)
-            iter_times["spectra"]["Particle (Doppler)"].append(
-                time.perf_counter() - start
+            stars.spectra = {}
+            mem = run_and_measure_memory(
+                stars.get_spectra, model_part_shift, nthreads=nthreads
             )
+            iter_mems["spectra"]["Particle (Doppler)"].append(mem)
+            del stars.spectra["part_shift"]
 
             # Integrated
-            start = time.perf_counter()
-            stars.get_spectra(model_int, nthreads=nthreads)
-            iter_times["spectra"]["Integrated"].append(
-                time.perf_counter() - start
+            stars.spectra = {}
+            mem = run_and_measure_memory(
+                stars.get_spectra, model_int, nthreads=nthreads
             )
+            iter_mems["spectra"]["Integrated"].append(mem)
+            del stars.spectra["int"]
 
             # Integrated Shift
-            start = time.perf_counter()
-            stars.get_spectra(model_int_shift, nthreads=nthreads)
-            iter_times["spectra"]["Integrated (Doppler)"].append(
-                time.perf_counter() - start
+            stars.spectra = {}
+            mem = run_and_measure_memory(
+                stars.get_spectra, model_int_shift, nthreads=nthreads
             )
+            iter_mems["spectra"]["Integrated (Doppler)"].append(mem)
 
-            # The previous step generated 'part' and 'int' spectra, so we can
-            # use those.
-            start = time.perf_counter()
-            stars.get_particle_photo_lnu(filters_3)
-            iter_times["photometry"]["Particle (3 filters)"].append(
-                time.perf_counter() - start
+            # Re-generate necessary spectra for photometry
+            stars.get_spectra(model_part, nthreads=nthreads)
+            stars.get_spectra(model_int, nthreads=nthreads)
+
+            # Particle (3 filters)
+            mem = run_and_measure_memory(
+                stars.get_particle_photo_lnu, filters_3
             )
+            iter_mems["photometry"]["Particle (3 filters)"].append(mem)
 
             # Particle (10 filters)
-            start = time.perf_counter()
-            stars.get_particle_photo_lnu(filters_10)
-            iter_times["photometry"]["Particle (10 filters)"].append(
-                time.perf_counter() - start
+            mem = run_and_measure_memory(
+                stars.get_particle_photo_lnu, filters_10
             )
+            iter_mems["photometry"]["Particle (10 filters)"].append(mem)
 
-            # Note: stars.get_photo_lnu usually works on cached spectra.
-            # We need to target the integrated model label 'int'.
-            # Assuming stars object has a method for this or we access the
-            # spectra directly.
-            # But `Stars` (the particle object) has `get_particle_photo_lnu`.
-            # It DOES NOT usually have a direct method for integrated
-            # photometry of its integrated spectra other than interacting with
-            # the Sed object directly.
-            # However, `StarsComponent` (parent) might have `get_photo_lnu`?
-            # Let's check `get_photo_lnu` on the integrated spectra object
-            # directly for fair timing.
-
+            # Integrated Photometry
             sed_int = stars.spectra["int"]
 
-            start = time.perf_counter()
-            sed_int.get_photo_lnu(filters_3)
-            iter_times["photometry"]["Integrated (3 filters)"].append(
-                time.perf_counter() - start
-            )
+            mem = run_and_measure_memory(sed_int.get_photo_lnu, filters_3)
+            iter_mems["photometry"]["Integrated (3 filters)"].append(mem)
 
-            start = time.perf_counter()
-            sed_int.get_photo_lnu(filters_10)
-            iter_times["photometry"]["Integrated (10 filters)"].append(
-                time.perf_counter() - start
-            )
+            mem = run_and_measure_memory(sed_int.get_photo_lnu, filters_10)
+            iter_mems["photometry"]["Integrated (10 filters)"].append(mem)
 
             # --- 3. Imaging Profiling ---
             # Setup coordinates and smoothing lengths
@@ -245,11 +252,9 @@ def profile_nparticles(nthreads=1, n_averages=3):
             stars.centre = np.array([0, 0, 0]) * kpc
             stars.calculate_smoothing_lengths(num_neighbours=50)
 
-            # We use the 'part' (no shift) model for imaging as standard
-
             # Smoothed (0.1 kpc)
-            start = time.perf_counter()
-            stars.get_images_luminosity(
+            mem = run_and_measure_memory(
+                stars.get_images_luminosity,
                 "part",
                 fov=fov,
                 instrument=inst_low,
@@ -257,13 +262,13 @@ def profile_nparticles(nthreads=1, n_averages=3):
                 img_type="smoothed",
                 nthreads=nthreads,
             )
-            iter_times["imaging"][f"Smoothed ({npix_low}x{npix_low})"].append(
-                time.perf_counter() - start
+            iter_mems["imaging"][f"Smoothed ({npix_low}x{npix_low})"].append(
+                mem
             )
 
             # Smoothed (0.01 kpc)
-            start = time.perf_counter()
-            stars.get_images_luminosity(
+            mem = run_and_measure_memory(
+                stars.get_images_luminosity,
                 "part",
                 fov=fov,
                 instrument=inst_high,
@@ -271,44 +276,44 @@ def profile_nparticles(nthreads=1, n_averages=3):
                 img_type="smoothed",
                 nthreads=nthreads,
             )
-            iter_times["imaging"][
-                f"Smoothed ({npix_high}x{npix_high})"
-            ].append(time.perf_counter() - start)
+            iter_mems["imaging"][f"Smoothed ({npix_high}x{npix_high})"].append(
+                mem
+            )
 
             # Histogram (0.1 kpc)
-            start = time.perf_counter()
-            stars.get_images_luminosity(
+            mem = run_and_measure_memory(
+                stars.get_images_luminosity,
                 "part",
                 fov=fov,
                 instrument=inst_low,
                 img_type="hist",
                 nthreads=nthreads,
             )
-            iter_times["imaging"][f"Histogram ({npix_low}x{npix_low})"].append(
-                time.perf_counter() - start
+            iter_mems["imaging"][f"Histogram ({npix_low}x{npix_low})"].append(
+                mem
             )
 
             # Histogram (0.01 kpc)
-            start = time.perf_counter()
-            stars.get_images_luminosity(
+            mem = run_and_measure_memory(
+                stars.get_images_luminosity,
                 "part",
                 fov=fov,
                 instrument=inst_high,
                 img_type="hist",
                 nthreads=nthreads,
             )
-            iter_times["imaging"][
+            iter_mems["imaging"][
                 f"Histogram ({npix_high}x{npix_high})"
-            ].append(time.perf_counter() - start)
+            ].append(mem)
 
             # Force garbage collection
             del stars
             gc.collect()
 
         # Store averages
-        for cat in iter_times:
-            for label in iter_times[cat]:
-                times[cat][label].append(np.mean(iter_times[cat][label]))
+        for cat in iter_mems:
+            for label in iter_mems[cat]:
+                mems[cat][label].append(np.mean(iter_mems[cat][label]))
 
     # --- Plotting ---
     output_dir = Path("profiling/plots")
@@ -316,7 +321,7 @@ def profile_nparticles(nthreads=1, n_averages=3):
 
     def make_plot(category_name, filename):
         fig, ax = plt.subplots(figsize=(8, 6))
-        data = times[category_name]
+        data = mems[category_name]
 
         # Style cycle
         markers = ["o", "s", "d", "v", "^", "<", ">"]
@@ -331,7 +336,7 @@ def profile_nparticles(nthreads=1, n_averages=3):
             )
 
         ax.set_xlabel("Number of Particles")
-        ax.set_ylabel("Time (s)")
+        ax.set_ylabel("Peak Memory Increase (GB)")
         ax.grid(True, alpha=0.3, which="major")
         ax.legend()
         ax.set_title(
@@ -340,7 +345,7 @@ def profile_nparticles(nthreads=1, n_averages=3):
 
         plt.tight_layout()
         filename = (
-            f"nparticles_performance_{category_name}_"
+            f"nparticles_performance_memory_{category_name}_"
             f"nlam{n_lam}_nt{nthreads}.png"
         )
         out_path = output_dir / filename
@@ -348,9 +353,9 @@ def profile_nparticles(nthreads=1, n_averages=3):
         print(f"Plot saved to {out_path}")
         plt.close()
 
-    make_plot("spectra", "scaling_nparticles_spectra.png")
-    make_plot("photometry", "scaling_nparticles_photometry.png")
-    make_plot("imaging", "scaling_nparticles_imaging.png")
+    make_plot("spectra", "scaling_nparticles_memory_spectra.png")
+    make_plot("photometry", "scaling_nparticles_memory_photometry.png")
+    make_plot("imaging", "scaling_nparticles_memory_imaging.png")
 
 
 if __name__ == "__main__":
@@ -359,4 +364,6 @@ if __name__ == "__main__":
     parser.add_argument("--n_averages", type=int, default=3)
     args = parser.parse_args()
 
-    profile_nparticles(nthreads=args.nthreads, n_averages=args.n_averages)
+    profile_nparticles_memory(
+        nthreads=args.nthreads, n_averages=args.n_averages
+    )

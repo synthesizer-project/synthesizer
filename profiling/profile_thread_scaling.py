@@ -13,6 +13,7 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -39,6 +40,22 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
     # Kernel for imaging
     kernel = Kernel().get_kernel()
 
+    # --- Setup Filters ---
+    filters = FilterCollection(
+        filter_codes=[
+            "JWST/NIRCam.F150W",
+            "JWST/NIRCam.F200W",
+            "JWST/NIRCam.F444W",
+        ],
+        new_lam=grid.lam,
+    )
+
+    # Create instrument for imaging
+    fov = 30 * kpc
+    npix = 1000
+    res = fov / npix
+    inst = Instrument(label="test", filters=filters, resolution=res)
+
     # Standard parametric setup for sampling
     mass = 10**10 * Msun
     param_stars = ParametricStars(
@@ -61,6 +78,11 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
     stars.coordinates = np.random.randn(nstars, 3) * kpc
     stars.centre = np.array([0, 0, 0]) * kpc
     stars.calculate_smoothing_lengths(num_neighbours=50)
+
+    # Generate spectra and photometry for imaging
+    # (imaging requires photometry to be present for the labels)
+    stars.get_spectra(model_part)
+    stars.get_particle_photo_lnu(filters)
 
     output_dir = Path("profiling/plots")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -103,10 +125,8 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
     log_path = plot_path.with_suffix(".log")
 
     def get_images_wrapper(nthreads, **kwargs):
-        emission_model = kwargs.pop("emission_model")
-        stars.get_images_luminosity(
-            emission_model, nthreads=nthreads, **kwargs
-        )
+        model_label = kwargs.pop("model_label")
+        stars.get_images_luminosity(model_label, nthreads=nthreads, **kwargs)
 
     run_scaling_test(
         max_threads,
@@ -115,8 +135,8 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
         str(plot_path),
         get_images_wrapper,
         {
-            "emission_model": model_part,
-            "resolution": 0.1 * kpc,
+            "model_label": "particle",
+            "instrument": inst,
             "fov": 30 * kpc,
             "kernel": kernel,
         },
