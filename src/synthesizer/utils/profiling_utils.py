@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
+from synthesizer.instruments import Instrument, InstrumentCollection
+
 plt.rcParams["axes.labelsize"] = 8
 plt.rcParams["axes.titlesize"] = 8
 plt.rcParams["xtick.labelsize"] = 8
@@ -24,6 +26,43 @@ plt.rcParams["legend.fontsize"] = 7
 
 # Set the seed
 np.random.seed(42)
+
+
+def get_instrument_profile(label, filepath, filters=None, resolution=None):
+    """Load an instrument from a file or create and save it if not found.
+
+    This ensures that instruments (and their filters) are cached locally,
+    allowing scripts to run on systems without internet access.
+
+    Args:
+        label (str): The label of the instrument.
+        filepath (str): The path to the HDF5 file.
+        filters (FilterCollection, optional): The filters to use if creating.
+        resolution (unyt_quantity, optional): The resolution to use if
+            creating.
+
+    Returns:
+        Instrument: The loaded or created instrument.
+    """
+    if os.path.exists(filepath):
+        print(f"Loading instrument '{label}' from {filepath}")
+        collection = InstrumentCollection(filepath)
+        return collection[label]
+
+        print(f"Instrument file {filepath} not found. Creating instrument...")
+
+        instrument = Instrument(
+            label=label, filters=filters, resolution=resolution
+        )
+
+        # Save it to a collection file
+
+    collection = InstrumentCollection()
+    collection.add_instruments(instrument)
+    collection.write_instruments(filepath)
+    print(f"Saved instrument '{label}' to {filepath}")
+
+    return instrument
 
 
 def _run_averaged_scaling_test(

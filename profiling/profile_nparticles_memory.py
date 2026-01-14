@@ -18,11 +18,12 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.instruments import FilterCollection
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
+from synthesizer.utils.profiling_utils import get_instrument_profile
 
 # Set style
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -109,11 +110,20 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
     res_high = fov / npix_high
 
     # Create instruments for imaging
-    inst_low = Instrument(
-        label="low_res", filters=filters_3, resolution=res_low
+    inst_dir = Path("profiling/instruments")
+    inst_dir.mkdir(parents=True, exist_ok=True)
+
+    inst_low = get_instrument_profile(
+        label="low_res",
+        filepath=str(inst_dir / "low_res.hdf5"),
+        filters=filters_3,
+        resolution=res_low,
     )
-    inst_high = Instrument(
-        label="high_res", filters=filters_3, resolution=res_high
+    inst_high = get_instrument_profile(
+        label="high_res",
+        filepath=str(inst_dir / "high_res.hdf5"),
+        filters=filters_3,
+        resolution=res_high,
     )
 
     # Particle counts to test
