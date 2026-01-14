@@ -557,6 +557,13 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   const double *surf_den_val =
       extract_data_double(np_surf_den_val, "surf_den_val");
 
+  /* One of the data extractions failed and set a Python error. Return NULL
+   * to propagate the exception back to Python. */
+  if (kernel == NULL || pos_i == NULL || pos_j == NULL || smls == NULL ||
+      surf_den_val == NULL) {
+    return NULL;
+  }
+
   /* Create the output array. */
   npy_intp np_dims[1] = {npart_i};
   PyArrayObject *np_surf_dens =
