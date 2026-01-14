@@ -33,7 +33,6 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* Have we reached the bottom? */
   if (depth > maxdepth) {
-    PyErr_SetString(PyExc_ValueError, "Maximum depth reached in cell tree!");
     return;
   }
 
