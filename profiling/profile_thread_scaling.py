@@ -13,12 +13,15 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.instruments import FilterCollection
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
-from synthesizer.utils.profiling_utils import run_scaling_test
+from synthesizer.utils.profiling_utils import (
+    get_instrument_profile,
+    run_scaling_test,
+)
 
 # Set style
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -51,10 +54,18 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
     )
 
     # Create instrument for imaging
+    inst_dir = Path("profiling/instruments")
+    inst_dir.mkdir(parents=True, exist_ok=True)
+
     fov = 30 * kpc
     npix = 1000
     res = fov / npix
-    inst = Instrument(label="test", filters=filters, resolution=res)
+    inst = get_instrument_profile(
+        label="test",
+        filepath=str(inst_dir / "thread_test.hdf5"),
+        filters=filters,
+        resolution=res,
+    )
 
     # Standard parametric setup for sampling
     mass = 10**10 * Msun
