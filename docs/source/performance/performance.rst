@@ -42,6 +42,51 @@ In the following sections we show some performance benchmarks to give an idea of
         Core(s) per socket:   32
         Socket(s):            2
 
+Performance
+~~~~~~~~~~~
+
+The following plots show how Synthesizer performs as a function of the size of the problem (number of particles and number of wavelength elements). These benchmarks were run using 8 threads.
+
+Particle Performance
+--------------------
+
+Performance as a function of the number of particles (from 10^3 to 10^5 particles). These tests were run using a grid with 9244 wavelength elements.
+
+.. list-table::
+   :widths: 50 50
+   :header-rows: 1
+
+   * - Runtime
+     - Peak Memory Usage
+   * - .. image:: plots/nparticles_performance_spectra_nlam9244_nt8.png
+          :width: 100%
+     - .. image:: plots/nparticles_performance_memory_spectra_nlam9244_nt8.png
+          :width: 100%
+   * - .. image:: plots/nparticles_performance_photometry_nlam9244_nt8.png
+          :width: 100%
+     - .. image:: plots/nparticles_performance_memory_photometry_nlam9244_nt8.png
+          :width: 100%
+   * - .. image:: plots/nparticles_performance_imaging_nlam9244_nt8.png
+          :width: 100%
+     - .. image:: plots/nparticles_performance_memory_imaging_nlam9244_nt8.png
+          :width: 100%
+
+Wavelength Performance
+----------------------
+
+Performance as a function of the number of wavelength elements in the SPS grid (from 100 to 100,000 elements). These tests were run using a component with 10,000 particles.
+
+.. list-table::
+   :widths: 50 50
+   :header-rows: 1
+
+   * - Runtime
+     - Peak Memory Usage
+   * - .. image:: plots/wavelength_performance_spectra_npart10000_nt8.png
+          :width: 100%
+     - .. image:: plots/wavelength_performance_memory_spectra_npart10000_nt8.png
+          :width: 100%
+
 Scaling Performance
 ^^^^^^^^^^^^^^^^^^^
 
@@ -95,47 +140,3 @@ Smoothed Imaging Scaling
    :align: center
 
 
-Algorithm Performance
-^^^^^^^^^^^^^^^^^^^^^
-
-The following plots show how Synthesizer performs as a function of the size of the problem (number of particles and number of wavelength elements). These benchmarks were run using 8 threads.
-
-Particle Performance
---------------------
-
-Performance as a function of the number of particles (from 10^3 to 10^5 particles). These tests were run using a grid with 9244 wavelength elements.
-
-.. list-table::
-   :widths: 50 50
-   :header-rows: 1
-
-   * - Runtime
-     - Peak Memory Usage
-   * - .. image:: plots/nparticles_performance_spectra_nlam9244_nt8.png
-          :width: 100%
-     - .. image:: plots/nparticles_performance_memory_spectra_nlam9244_nt8.png
-          :width: 100%
-   * - .. image:: plots/nparticles_performance_photometry_nlam9244_nt8.png
-          :width: 100%
-     - .. image:: plots/nparticles_performance_memory_photometry_nlam9244_nt8.png
-          :width: 100%
-   * - .. image:: plots/nparticles_performance_imaging_nlam9244_nt8.png
-          :width: 100%
-     - .. image:: plots/nparticles_performance_memory_imaging_nlam9244_nt8.png
-          :width: 100%
-
-Wavelength Performance
-----------------------
-
-Performance as a function of the number of wavelength elements in the SPS grid (from 100 to 100,000 elements). These tests were run using a component with 10,000 particles.
-
-.. list-table::
-   :widths: 50 50
-   :header-rows: 1
-
-   * - Runtime
-     - Peak Memory Usage
-   * - .. image:: plots/wavelength_performance_spectra_npart10000_nt8.png
-          :width: 100%
-     - .. image:: plots/wavelength_performance_memory_spectra_npart10000_nt8.png
-          :width: 100%
