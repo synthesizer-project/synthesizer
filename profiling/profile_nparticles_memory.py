@@ -40,22 +40,25 @@ def get_current_mem():
     return process.memory_info().rss / 1024 / 1024
 
 
-def run_and_measure_memory(func, *args, **kwargs):
+def run_and_measure_memory(func, *args, interval=0.01, **kwargs):
     """Run a function and return its peak memory usage INCREASE in GB.
 
     This subtracts the baseline memory usage before the call to isolate
     the memory cost of the operation itself.
     """
+    gc.collect()
     baseline = get_current_mem()
-    peak = memory_usage((func, args, kwargs), interval=0.1, max_usage=True)
+    peak = memory_usage(
+        (func, args, kwargs), interval=interval, max_usage=True
+    )
     return max(0, peak - baseline) / 1024  # Convert MiB to GB
 
 
-def profile_nparticles_memory(nthreads=1, n_averages=3):
+def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
     """Run the profiling."""
     print(
         f"Initializing Grid and Models (nthreads={nthreads}, "
-        f"n_averages={n_averages})..."
+        f"n_averages={n_averages}, mem_interval={mem_interval})..."
     )
     grid = Grid("test_grid")
     n_lam = grid.nlam
@@ -203,7 +206,10 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             # Particle
             stars.spectra = {}
             mem = run_and_measure_memory(
-                stars.get_spectra, model_part, nthreads=nthreads
+                stars.get_spectra,
+                model_part,
+                interval=mem_interval,
+                nthreads=nthreads,
             )
             iter_mems["spectra"]["Particle"].append(mem)
             del stars.spectra["part"]
@@ -211,7 +217,10 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             # Particle Shift
             stars.spectra = {}
             mem = run_and_measure_memory(
-                stars.get_spectra, model_part_shift, nthreads=nthreads
+                stars.get_spectra,
+                model_part_shift,
+                interval=mem_interval,
+                nthreads=nthreads,
             )
             iter_mems["spectra"]["Particle (Doppler)"].append(mem)
             del stars.spectra["part_shift"]
@@ -219,7 +228,10 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             # Integrated
             stars.spectra = {}
             mem = run_and_measure_memory(
-                stars.get_spectra, model_int, nthreads=nthreads
+                stars.get_spectra,
+                model_int,
+                interval=mem_interval,
+                nthreads=nthreads,
             )
             iter_mems["spectra"]["Integrated"].append(mem)
             del stars.spectra["int"]
@@ -227,7 +239,10 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             # Integrated Shift
             stars.spectra = {}
             mem = run_and_measure_memory(
-                stars.get_spectra, model_int_shift, nthreads=nthreads
+                stars.get_spectra,
+                model_int_shift,
+                interval=mem_interval,
+                nthreads=nthreads,
             )
             iter_mems["spectra"]["Integrated (Doppler)"].append(mem)
 
@@ -237,23 +252,27 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
 
             # Particle (3 filters)
             mem = run_and_measure_memory(
-                stars.get_particle_photo_lnu, filters_3
+                stars.get_particle_photo_lnu, filters_3, interval=mem_interval
             )
             iter_mems["photometry"]["Particle (3 filters)"].append(mem)
 
             # Particle (10 filters)
             mem = run_and_measure_memory(
-                stars.get_particle_photo_lnu, filters_10
+                stars.get_particle_photo_lnu, filters_10, interval=mem_interval
             )
             iter_mems["photometry"]["Particle (10 filters)"].append(mem)
 
             # Integrated Photometry
             sed_int = stars.spectra["int"]
 
-            mem = run_and_measure_memory(sed_int.get_photo_lnu, filters_3)
+            mem = run_and_measure_memory(
+                sed_int.get_photo_lnu, filters_3, interval=mem_interval
+            )
             iter_mems["photometry"]["Integrated (3 filters)"].append(mem)
 
-            mem = run_and_measure_memory(sed_int.get_photo_lnu, filters_10)
+            mem = run_and_measure_memory(
+                sed_int.get_photo_lnu, filters_10, interval=mem_interval
+            )
             iter_mems["photometry"]["Integrated (10 filters)"].append(mem)
 
             # --- 3. Imaging Profiling ---
@@ -266,6 +285,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             mem = run_and_measure_memory(
                 stars.get_images_luminosity,
                 "part",
+                interval=mem_interval,
                 fov=fov,
                 instrument=inst_low,
                 kernel=kernel,
@@ -280,6 +300,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             mem = run_and_measure_memory(
                 stars.get_images_luminosity,
                 "part",
+                interval=mem_interval,
                 fov=fov,
                 instrument=inst_high,
                 kernel=kernel,
@@ -294,6 +315,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             mem = run_and_measure_memory(
                 stars.get_images_luminosity,
                 "part",
+                interval=mem_interval,
                 fov=fov,
                 instrument=inst_low,
                 img_type="hist",
@@ -307,6 +329,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
             mem = run_and_measure_memory(
                 stars.get_images_luminosity,
                 "part",
+                interval=mem_interval,
                 fov=fov,
                 instrument=inst_high,
                 img_type="hist",
@@ -372,8 +395,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--n_averages", type=int, default=3)
+    parser.add_argument("--mem_interval", type=float, default=0.01)
     args = parser.parse_args()
 
     profile_nparticles_memory(
-        nthreads=args.nthreads, n_averages=args.n_averages
+        nthreads=args.nthreads,
+        n_averages=args.n_averages,
+        mem_interval=args.mem_interval,
     )
