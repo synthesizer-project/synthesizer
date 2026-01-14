@@ -43,7 +43,7 @@ application_pubs = {
 }
 
 # Directory containing the plot images (filename format: bibcode.jpeg)
-IMAGE_DIR = "plots/"
+IMAGE_DIR = "plots"
 
 
 def get_author_string(author_field, max_authors=5):
