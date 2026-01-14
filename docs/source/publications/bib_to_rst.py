@@ -46,7 +46,10 @@ application_pubs = {
 IMAGE_DIR = "plots"
 
 
-def get_author_string(author_field, max_authors=5):
+def get_author_string(
+    author_field: str,
+    max_authors: int=5
+)-> str:
     """Parses a BibTeX author string and formats it for display.
 
     Args:
@@ -77,7 +80,7 @@ def get_author_string(author_field, max_authors=5):
         return ", ".join(authors[:max_authors]) + " and others"
 
 
-def get_date_string(entry):
+def get_date_string(entry: dict) -> str:
     """Formats the publication date string (Month Year).
 
     Args:
@@ -129,7 +132,7 @@ def get_date_string(entry):
     return year
 
 
-def get_sort_key(entry):
+def get_sort_key(entry: dict) -> tuple:
     """Generates a sorting key for a BibTeX entry based on Year and Month.
 
     Args:
@@ -171,7 +174,7 @@ def get_sort_key(entry):
     return (year, month)
 
 
-def format_journal_name(journal):
+def format_journal_name(journal: str) -> str:
     """Replaces LaTeX macro journal names with readable text abbreviations.
 
     Args:
@@ -182,19 +185,23 @@ def format_journal_name(journal):
     """
     journal_map = {
         r"\mnras": "MNRAS",
-        "\apj": "ApJ",
+        r"\apj": "ApJ",
         "The Open Journal of Astrophysics": "OJA",
         "arXiv e-prints": "Preprint",
-        "\aap": "A&A",
+        r"\aap": "A&A",
     }
 
-    if journal in journal_map.keys():
+    if journal in journal_map:
         return journal_map[journal]
     else:
         return journal
 
 
-def get_paper_rst(entry, max_authors=5, is_last=False):
+def get_paper_rst(
+    entry: dict,
+    max_authors: int=5,
+    is_last: bool=False,
+)-> str:
     """Generates the ReStructuredText (RST) block for a bib entry.
 
     Layout:
@@ -246,7 +253,8 @@ def get_paper_rst(entry, max_authors=5, is_last=False):
     # We expect images to be named exactly as the
     # BibCode (e.g., 2020ApJ...123.jpeg)
     image_filename = f"{bibcode}.jpeg"
-    has_image = os.path.exists(os.path.join(IMAGE_DIR, image_filename))
+    image_path = os.path.join(IMAGE_DIR, image_filename)
+    has_image = os.path.exists(image_path)
 
     # Build RST for entry
     rst = ""
@@ -259,7 +267,7 @@ def get_paper_rst(entry, max_authors=5, is_last=False):
         rst += "   :class: borderless\n\n"
 
         # Column 1: The Image
-        rst += f"   * - .. image:: {IMAGE_DIR}/{image_filename}\n"
+        rst += f"   * - .. image:: {image_path}\n"
         rst += "          :width: 100%\n"  # Fills the 40% column width
         rst += f"          :target: {ads_link}\n"  # Makes the image clickable
 
@@ -286,7 +294,10 @@ def get_paper_rst(entry, max_authors=5, is_last=False):
     return rst
 
 
-def generate_rst(config, max_authors=5):
+def generate_rst(
+    config: dict,
+    max_authors: int=5
+)-> None:
     """Reads a BibTeX file and writes the RST output.
 
     Args:

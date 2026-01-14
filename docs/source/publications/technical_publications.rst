@@ -10,7 +10,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots//2025arXiv251110640H.jpeg
+   * - .. image:: plots/2025arXiv251110640H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251110640H
      - **Flexible Simulation Based Inference for Galaxy Photometric Fitting with Synthesizer**
@@ -25,7 +25,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots//2025OJAp....8E.152L.jpeg
+   * - .. image:: plots/2025OJAp....8E.152L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025OJAp....8E.152L
      - **Synthesizer: a Software Package for Synthetic Astronomical Observables**
