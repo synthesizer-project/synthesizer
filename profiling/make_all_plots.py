@@ -17,13 +17,11 @@ import sys
 from pathlib import Path
 
 
-def run_script(
-    script_name, project_root, nthreads=1, n_averages=3, mem_interval=0.01
-):
+def run_script(script_name, project_root, nthreads=1, n_averages=3):
     """Run a python script and check for errors."""
     print(
         f"Running {script_name} (nthreads={nthreads}, "
-        f"n_averages={n_averages}, mem_interval={mem_interval})..."
+        f"n_averages={n_averages})..."
     )
     # script_name is relative to profiling dir
     script_path = Path("profiling") / script_name
@@ -36,9 +34,6 @@ def run_script(
             "--n_averages",
             str(n_averages),
         ]
-        # Only add mem_interval if the script supports it (memory scripts)
-        if "memory" in script_name:
-            cmd.extend(["--mem_interval", str(mem_interval)])
 
         subprocess.run(
             cmd,
@@ -50,7 +45,7 @@ def run_script(
         sys.exit(1)
 
 
-def make_all_plots(nthreads=1, n_averages=3, mem_interval=0.01):
+def make_all_plots(nthreads=1, n_averages=3):
     """Run all profiling scripts and move plots."""
     # Define directories
     profiling_dir = Path(__file__).parent
@@ -73,7 +68,6 @@ def make_all_plots(nthreads=1, n_averages=3, mem_interval=0.01):
             project_root,
             nthreads=nthreads,
             n_averages=n_averages,
-            mem_interval=mem_interval,
         )
 
     # Create destination if it doesn't exist
@@ -93,17 +87,11 @@ def make_all_plots(nthreads=1, n_averages=3, mem_interval=0.01):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-
     parser.add_argument("--nthreads", type=int, default=1)
-
     parser.add_argument("--n_averages", type=int, default=3)
-
-    parser.add_argument("--mem_interval", type=float, default=0.01)
-
     args = parser.parse_args()
 
     make_all_plots(
         nthreads=args.nthreads,
         n_averages=args.n_averages,
-        mem_interval=args.mem_interval,
     )

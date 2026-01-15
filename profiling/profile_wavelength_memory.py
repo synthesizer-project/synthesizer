@@ -7,14 +7,11 @@ elements in the grid.
 
 import argparse
 import gc
-import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import psutil
-from memory_profiler import memory_usage
-from unyt import Msun, Myr, kpc
+from unyt import Msun, Myr, kpc, unyt_array
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
@@ -23,46 +20,76 @@ from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
 
 # Set style
+
 plt.rcParams["font.family"] = "DeJavu Serif"
+
 plt.rcParams["font.serif"] = ["Times New Roman"]
+
 plt.rcParams["axes.titlesize"] = 0  # Force no titles
 
+
 # Set the seed
+
 np.random.seed(42)
 
 
-def get_current_mem():
-    """Return the current process memory in MiB."""
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / 1024 / 1024
+def get_obj_size_manual(obj):
+    """Estimate object size in bytes, handling nested dicts and numpy arrays.
 
-
-def run_and_measure_memory(func, *args, interval=0.01, **kwargs):
-    """Run a function and return its peak memory usage INCREASE in GB.
-
-    This subtracts the baseline memory usage before the call to isolate
-
-
-    the memory cost of the operation itself.
-
+    This avoids bugs in pympler.asizeof with certain numpy versions.
 
     """
-    gc.collect()
+    size = 0
 
-    baseline = get_current_mem()
+    if isinstance(obj, dict):
+        for v in obj.values():
+            size += get_obj_size_manual(v)
 
-    peak = memory_usage(
-        (func, args, kwargs), interval=interval, max_usage=True
-    )
+    elif isinstance(obj, (np.ndarray, unyt_array)):
+        size += obj.nbytes
 
-    return max(0, peak - baseline) / 1024  # Convert MiB to GB
+    elif hasattr(obj, "__dict__"):
+        # For simple objects, try to sum their attributes
+
+        for v in vars(obj).values():
+            size += get_obj_size_manual(v)
+
+    else:
+        # Fallback for small objects
+
+        import sys
+
+        size += sys.getsizeof(obj)
+
+    return size
 
 
-def profile_wavelength_memory(nthreads=1, n_averages=3, mem_interval=0.01):
+def run_and_measure_memory(func, *args, obj_to_measure=None, **kwargs):
+    """Run a function and return the size of the result object in GB.
+
+    Uses a manual size estimation targeting large arrays.
+
+    """
+    # Run the function
+
+    func(*args, **kwargs)
+
+    # Measure the size of the specified object
+
+    if obj_to_measure is not None:
+        size = get_obj_size_manual(obj_to_measure)
+
+    else:
+        return 0.0
+
+    return size / 1024 / 1024 / 1024  # Convert Bytes to GB
+
+
+def profile_wavelength_memory(nthreads=1, n_averages=3):
     """Run the profiling."""
     print(
         f"Initializing Base Grid (nthreads={nthreads}, "
-        f"n_averages={n_averages}, mem_interval={mem_interval})..."
+        f"n_averages={n_averages})..."
     )
     # Load the base grid once to get the range
     base_grid = Grid("test_grid")
@@ -137,32 +164,34 @@ def profile_wavelength_memory(nthreads=1, n_averages=3, mem_interval=0.01):
         for i in range(n_averages):
             # Particle
             stars.spectra = {}
+            stars.particle_spectra = {}
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_part,
-                interval=mem_interval,
+                obj_to_measure=stars.particle_spectra,
                 nthreads=nthreads,
             )
             iter_mems["Particle"].append(mem)
-            del stars.spectra["part"]
+            del stars.particle_spectra["part"]
 
             # Particle Shift
             stars.spectra = {}
+            stars.particle_spectra = {}
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_part_shift,
-                interval=mem_interval,
+                obj_to_measure=stars.particle_spectra,
                 nthreads=nthreads,
             )
             iter_mems["Particle (Doppler)"].append(mem)
-            del stars.spectra["part_shift"]
+            del stars.particle_spectra["part_shift"]
 
             # Integrated
             stars.spectra = {}
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_int,
-                interval=mem_interval,
+                obj_to_measure=stars.spectra,
                 nthreads=nthreads,
             )
             iter_mems["Integrated"].append(mem)
@@ -173,11 +202,10 @@ def profile_wavelength_memory(nthreads=1, n_averages=3, mem_interval=0.01):
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_int_shift,
-                interval=mem_interval,
+                obj_to_measure=stars.spectra,
                 nthreads=nthreads,
             )
             iter_mems["Integrated (Doppler)"].append(mem)
-            del stars.spectra["int_shift"]
 
         # Store averages
         for key in iter_mems:
@@ -212,7 +240,7 @@ def profile_wavelength_memory(nthreads=1, n_averages=3, mem_interval=0.01):
             )
 
         ax.set_xlabel("Number of Wavelength Elements")
-        ax.set_ylabel("Peak Memory Increase (GB)")
+        ax.set_ylabel("Result Object Size (GB)")
         ax.grid(True, alpha=0.3, which="major")
         ax.legend()
         ax.set_title(
@@ -237,11 +265,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--n_averages", type=int, default=3)
-    parser.add_argument("--mem_interval", type=float, default=0.01)
     args = parser.parse_args()
 
     profile_wavelength_memory(
-        nthreads=args.nthreads,
-        n_averages=args.n_averages,
-        mem_interval=args.mem_interval,
+        nthreads=args.nthreads, n_averages=args.n_averages
     )

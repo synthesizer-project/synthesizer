@@ -7,23 +7,18 @@ showing how the peak memory usage of various operations scales from 10^3 to
 
 import argparse
 import gc
-import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import psutil
-from memory_profiler import memory_usage
-from unyt import Msun, Myr, kpc
+from unyt import Msun, Myr, kpc, unyt_array
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.instruments import FilterCollection
-from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
-from synthesizer.utils.profiling_utils import get_instrument_profile
 
 # Set style
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -34,31 +29,51 @@ plt.rcParams["axes.titlesize"] = 0  # Force no titles
 np.random.seed(42)
 
 
-def get_current_mem():
-    """Return the current process memory in MiB."""
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / 1024 / 1024
+def get_obj_size_manual(obj):
+    """Estimate object size in bytes, handling nested dicts and numpy arrays.
 
-
-def run_and_measure_memory(func, *args, interval=0.01, **kwargs):
-    """Run a function and return its peak memory usage INCREASE in GB.
-
-    This subtracts the baseline memory usage before the call to isolate
-    the memory cost of the operation itself.
+    This avoids bugs in pympler.asizeof with certain numpy versions.
     """
-    gc.collect()
-    baseline = get_current_mem()
-    peak = memory_usage(
-        (func, args, kwargs), interval=interval, max_usage=True
-    )
-    return max(0, peak - baseline) / 1024  # Convert MiB to GB
+    size = 0
+    if isinstance(obj, dict):
+        for v in obj.values():
+            size += get_obj_size_manual(v)
+    elif isinstance(obj, (np.ndarray, unyt_array)):
+        size += obj.nbytes
+    elif hasattr(obj, "__dict__"):
+        # For simple objects, try to sum their attributes
+        for v in vars(obj).values():
+            size += get_obj_size_manual(v)
+    else:
+        # Fallback for small objects
+        import sys
+
+        size += sys.getsizeof(obj)
+    return size
 
 
-def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
+def run_and_measure_memory(func, *args, obj_to_measure=None, **kwargs):
+    """Run a function and return the size of the result object in GB.
+
+    Uses a manual size estimation targeting large arrays.
+    """
+    # Run the function
+    func(*args, **kwargs)
+
+    # Measure the size of the specified object
+    if obj_to_measure is not None:
+        size = get_obj_size_manual(obj_to_measure)
+    else:
+        return 0.0
+
+    return size / 1024 / 1024 / 1024  # Convert Bytes to GB
+
+
+def profile_nparticles_memory(nthreads=1, n_averages=3):
     """Run the profiling."""
     print(
         f"Initializing Grid and Models (nthreads={nthreads}, "
-        f"n_averages={n_averages}, mem_interval={mem_interval})..."
+        f"n_averages={n_averages})..."
     )
     grid = Grid("test_grid")
     n_lam = grid.nlam
@@ -104,30 +119,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
         new_lam=grid.lam,
     )
 
-    # --- Setup Imaging ---
-    kernel = Kernel().get_kernel()
-    fov = 30 * kpc
-    npix_low = 100
-    npix_high = 1000
-    res_low = fov / npix_low
-    res_high = fov / npix_high
-
-    # Create instruments for imaging
-    inst_dir = Path("profiling/instruments")
-    inst_dir.mkdir(parents=True, exist_ok=True)
-
-    inst_low = get_instrument_profile(
-        label="low_res",
-        filepath=str(inst_dir / "low_res.hdf5"),
-        filters=filters_3,
-        resolution=res_low,
-    )
-    inst_high = get_instrument_profile(
-        label="high_res",
-        filepath=str(inst_dir / "high_res.hdf5"),
-        filters=filters_3,
-        resolution=res_high,
-    )
+    # --- Setup Filters ---
 
     # Particle counts to test
     # Reduced max to 10^5 for memory safety/speed in this context,
@@ -147,12 +139,6 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
             "Particle (10 filters)": [],
             "Integrated (3 filters)": [],
             "Integrated (10 filters)": [],
-        },
-        "imaging": {
-            f"Smoothed ({npix_low}x{npix_low})": [],
-            f"Smoothed ({npix_high}x{npix_high})": [],
-            f"Histogram ({npix_low}x{npix_low})": [],
-            f"Histogram ({npix_high}x{npix_high})": [],
         },
     }
 
@@ -183,12 +169,6 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
                 "Integrated (3 filters)": [],
                 "Integrated (10 filters)": [],
             },
-            "imaging": {
-                f"Smoothed ({npix_low}x{npix_low})": [],
-                f"Smoothed ({npix_high}x{npix_high})": [],
-                f"Histogram ({npix_low}x{npix_low})": [],
-                f"Histogram ({npix_high}x{npix_high})": [],
-            },
         }
 
         for i in range(n_averages):
@@ -205,32 +185,34 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
 
             # Particle
             stars.spectra = {}
+            stars.particle_spectra = {}
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_part,
-                interval=mem_interval,
+                obj_to_measure=stars.particle_spectra,
                 nthreads=nthreads,
             )
             iter_mems["spectra"]["Particle"].append(mem)
-            del stars.spectra["part"]
+            del stars.particle_spectra["part"]
 
             # Particle Shift
             stars.spectra = {}
+            stars.particle_spectra = {}
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_part_shift,
-                interval=mem_interval,
+                obj_to_measure=stars.particle_spectra,
                 nthreads=nthreads,
             )
             iter_mems["spectra"]["Particle (Doppler)"].append(mem)
-            del stars.spectra["part_shift"]
+            del stars.particle_spectra["part_shift"]
 
             # Integrated
             stars.spectra = {}
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_int,
-                interval=mem_interval,
+                obj_to_measure=stars.spectra,
                 nthreads=nthreads,
             )
             iter_mems["spectra"]["Integrated"].append(mem)
@@ -241,7 +223,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
             mem = run_and_measure_memory(
                 stars.get_spectra,
                 model_int_shift,
-                interval=mem_interval,
+                obj_to_measure=stars.spectra,
                 nthreads=nthreads,
             )
             iter_mems["spectra"]["Integrated (Doppler)"].append(mem)
@@ -252,13 +234,19 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
 
             # Particle (3 filters)
             mem = run_and_measure_memory(
-                stars.get_particle_photo_lnu, filters_3, interval=mem_interval
+                stars.get_particle_photo_lnu,
+                filters_3,
+                obj_to_measure=stars.particle_photo_lnu,
             )
             iter_mems["photometry"]["Particle (3 filters)"].append(mem)
+            # Clear to isolate next measurement
+            stars.particle_photo_lnu = {}
 
             # Particle (10 filters)
             mem = run_and_measure_memory(
-                stars.get_particle_photo_lnu, filters_10, interval=mem_interval
+                stars.get_particle_photo_lnu,
+                filters_10,
+                obj_to_measure=stars.particle_photo_lnu,
             )
             iter_mems["photometry"]["Particle (10 filters)"].append(mem)
 
@@ -266,78 +254,19 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
             sed_int = stars.spectra["int"]
 
             mem = run_and_measure_memory(
-                sed_int.get_photo_lnu, filters_3, interval=mem_interval
+                sed_int.get_photo_lnu,
+                filters_3,
+                obj_to_measure=sed_int.photo_lnu,
             )
             iter_mems["photometry"]["Integrated (3 filters)"].append(mem)
+            sed_int.photo_lnu = {}
 
             mem = run_and_measure_memory(
-                sed_int.get_photo_lnu, filters_10, interval=mem_interval
+                sed_int.get_photo_lnu,
+                filters_10,
+                obj_to_measure=sed_int.photo_lnu,
             )
             iter_mems["photometry"]["Integrated (10 filters)"].append(mem)
-
-            # --- 3. Imaging Profiling ---
-            # Setup coordinates and smoothing lengths
-            stars.coordinates = np.random.randn(n, 3) * kpc
-            stars.centre = np.array([0, 0, 0]) * kpc
-            stars.calculate_smoothing_lengths(num_neighbours=50)
-
-            # Smoothed (0.1 kpc)
-            mem = run_and_measure_memory(
-                stars.get_images_luminosity,
-                "part",
-                interval=mem_interval,
-                fov=fov,
-                instrument=inst_low,
-                kernel=kernel,
-                img_type="smoothed",
-                nthreads=nthreads,
-            )
-            iter_mems["imaging"][f"Smoothed ({npix_low}x{npix_low})"].append(
-                mem
-            )
-
-            # Smoothed (0.01 kpc)
-            mem = run_and_measure_memory(
-                stars.get_images_luminosity,
-                "part",
-                interval=mem_interval,
-                fov=fov,
-                instrument=inst_high,
-                kernel=kernel,
-                img_type="smoothed",
-                nthreads=nthreads,
-            )
-            iter_mems["imaging"][f"Smoothed ({npix_high}x{npix_high})"].append(
-                mem
-            )
-
-            # Histogram (0.1 kpc)
-            mem = run_and_measure_memory(
-                stars.get_images_luminosity,
-                "part",
-                interval=mem_interval,
-                fov=fov,
-                instrument=inst_low,
-                img_type="hist",
-                nthreads=nthreads,
-            )
-            iter_mems["imaging"][f"Histogram ({npix_low}x{npix_low})"].append(
-                mem
-            )
-
-            # Histogram (0.01 kpc)
-            mem = run_and_measure_memory(
-                stars.get_images_luminosity,
-                "part",
-                interval=mem_interval,
-                fov=fov,
-                instrument=inst_high,
-                img_type="hist",
-                nthreads=nthreads,
-            )
-            iter_mems["imaging"][
-                f"Histogram ({npix_high}x{npix_high})"
-            ].append(mem)
 
             # Force garbage collection
             del stars
@@ -369,7 +298,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
             )
 
         ax.set_xlabel("Number of Particles")
-        ax.set_ylabel("Peak Memory Increase (GB)")
+        ax.set_ylabel("Result Object Size (GB)")
         ax.grid(True, alpha=0.3, which="major")
         ax.legend()
         ax.set_title(
@@ -388,18 +317,14 @@ def profile_nparticles_memory(nthreads=1, n_averages=3, mem_interval=0.01):
 
     make_plot("spectra", "scaling_nparticles_memory_spectra.png")
     make_plot("photometry", "scaling_nparticles_memory_photometry.png")
-    make_plot("imaging", "scaling_nparticles_memory_imaging.png")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--n_averages", type=int, default=3)
-    parser.add_argument("--mem_interval", type=float, default=0.01)
     args = parser.parse_args()
 
     profile_nparticles_memory(
-        nthreads=args.nthreads,
-        n_averages=args.n_averages,
-        mem_interval=args.mem_interval,
+        nthreads=args.nthreads, n_averages=args.n_averages
     )
