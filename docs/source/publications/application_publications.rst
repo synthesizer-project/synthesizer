@@ -1,12 +1,10 @@
-Publications
-============
+Application Publications
+========================
 
-The full publications gallery related to the Synthesizer project is available below,
+The full list of application publications related to the Synthesizer project is available below,
 ordered by date with the most recent publications first.
 A single ADS library of the papers can be found 
-`here <https://ui.adsabs.harvard.edu/public-libraries/DWQDegluReez1RrvswJ5AA>`_.
-You can also find the :doc:`technical <technical_publications>` and 
-:doc:`application <application_publications>` publications from the Synthesizer project there.
+`here <https://ui.adsabs.harvard.edu/public-libraries/3GA1r890TkeGkIDTddv7Ow>`_.
 
 .. list-table::
    :widths: 40 60
@@ -87,21 +85,6 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025OJAp....8E.152L.jpeg
-          :width: 100%
-          :target: https://ui.adsabs.harvard.edu/abs/2025OJAp....8E.152L
-     - **Synthesizer: a Software Package for Synthetic Astronomical Observables**
-
-       Authors: Lovell, Christopher C., Roper, William J., Vijayan, Aswin P., Wilkins, Stephen M., Newman, Sophie and others
-
-       October 2025, *OJA*
-
-       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025OJAp....8E.152L>`__ | `[arXiv] <https://arxiv.org/abs/2508.03888>`__
-
-.. list-table::
-   :widths: 40 60
-   :class: borderless
-
    * - .. image:: plots/2025MNRAS.542.2998H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.542.2998H
@@ -172,16 +155,6 @@ You can also find the :doc:`technical <technical_publications>` and
        July 2025, *Preprint*
 
        `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250720190V>`__ | `[arXiv] <https://arxiv.org/abs/2507.20190>`__
-
-**Synthesizer: Synthetic Observables For Modern Astronomy**
-
-Authors: Roper, Will J., Lovell, Christopher, Vijayan, Aswin, Wilkins, Stephen, Akins, Hollis and others
-
-June 2025, *Preprint*
-
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R>`__ | `[arXiv] <https://arxiv.org/abs/2506.15811>`__
-
-----
 
 .. list-table::
    :widths: 40 60
