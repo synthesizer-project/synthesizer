@@ -9,6 +9,12 @@ Notes:
     - Checks for local images (inside plots) corresponding to the
       BibCode (e.g., 2020ApJ...123.jpeg) and embeds them.
     - Sorts entries chronologically by Year and Month.
+    - This is intended to be run locally to generate publication
+      lists for the documentation. It is not generated automatically
+      during documentation builds.
+
+Usage:
+    python bib_to_rst.py --max-authors=5
 """
 
 import argparse
@@ -265,6 +271,8 @@ def get_paper_rst(
     image_filename = f"{bibcode}.jpeg"
     image_path = os.path.join(script_dir, image_dir, image_filename)
     has_image = os.path.exists(image_path)
+    # Need the relative path from the RST file to the images
+    relative_image_path = os.path.join(image_dir, image_filename)
 
     # Build RST for entry
     rst = ""
@@ -277,7 +285,7 @@ def get_paper_rst(
         rst += "   :class: borderless\n\n"
 
         # Column 1: The Image
-        rst += f"   * - .. image:: {image_path}\n"
+        rst += f"   * - .. image:: {relative_image_path}\n"
         rst += "          :width: 100%\n"  # Fills the 40% column width
         rst += f"          :target: {ads_link}\n"  # Makes the image clickable
 

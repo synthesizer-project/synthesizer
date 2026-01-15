@@ -12,7 +12,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2026MNRAS.545f1866N.jpeg
+   * - .. image:: plots/2026MNRAS.545f1866N.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.545f1866N
      - **Cloudy-Maraston: integrating nebular continuum and line emission with the Maraston stellar population synthesis models**
@@ -27,7 +27,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025MNRAS.544.3949L.jpeg
+   * - .. image:: plots/2025MNRAS.544.3949L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L
      - **Learning the Universe: cosmological and astrophysical parameter inference with galaxy luminosity functions and colours**
@@ -42,7 +42,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025A&A...704A.248Q.jpeg
+   * - .. image:: plots/2025A&A...704A.248Q.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025A&A...704A.248Q
      - **Super-Eddington accretion in high-redshift quasar hosts: Black-hole-driven outflows, galaxy quenching, and the nature of little red dots**
@@ -57,7 +57,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv251110640H.jpeg
+   * - .. image:: plots/2025arXiv251110640H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251110640H
      - **Flexible Simulation Based Inference for Galaxy Photometric Fitting with Synthesizer**
@@ -72,7 +72,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv251014766F.jpeg
+   * - .. image:: plots/2025arXiv251014766F.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251014766F
      - **Predicting the Subhalo Mass Functions in Simulations from Galaxy Images**
@@ -87,7 +87,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025OJAp....8E.152L.jpeg
+   * - .. image:: plots/2025OJAp....8E.152L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025OJAp....8E.152L
      - **Synthesizer: a Software Package for Synthetic Astronomical Observables**
@@ -102,7 +102,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025MNRAS.542.2998H.jpeg
+   * - .. image:: plots/2025MNRAS.542.2998H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.542.2998H
      - **Behind the spotlight: a systematic assessment of outshining using NIRCam medium bands in the JADES Origins Field**
@@ -117,7 +117,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250916111T.jpeg
+   * - .. image:: plots/2025arXiv250916111T.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250916111T
      - **The Nature of High-Redshift Massive Quiescent Galaxies -- Searching for RUBIES-UDS-QG-z7 in FLARES**
@@ -132,7 +132,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025ApJ...991...83R.jpeg
+   * - .. image:: plots/2025ApJ...991...83R.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025ApJ...991...83R
      - **Caught in the Act: Detections of Recoiling Supermassive Black Holes from Simulations**
@@ -147,7 +147,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250814155J.jpeg
+   * - .. image:: plots/2025arXiv250814155J.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250814155J
      - **Little Red Dots and their Progenitors from Direct Collapse Black Holes**
@@ -162,7 +162,7 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250720190V.jpeg
+   * - .. image:: plots/2025arXiv250720190V.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250720190V
      - **Interpreting nebular emission lines in the high-redshift Universe**
@@ -187,7 +187,7 @@ June 2025, *Preprint*
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250505257W.jpeg
+   * - .. image:: plots/2025arXiv250505257W.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250505257W
      - **First Light and Reionization Epoch Simulations (FLARES) -- XVIII: the ionising emissivities and hydrogen recombination line properties of early AGN**
@@ -202,7 +202,7 @@ June 2025, *Preprint*
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2024MNRAS.533.3724V.jpeg
+   * - .. image:: plots/2024MNRAS.533.3724V.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2024MNRAS.533.3724V
      - **The sizes of bright Lyman-break galaxies at z ≃ 3-5 with JWST PRIMER**
@@ -217,7 +217,7 @@ June 2025, *Preprint*
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2024OJAp....7E..54H.jpeg
+   * - .. image:: plots/2024OJAp....7E..54H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2024OJAp....7E..54H
      - **LtU-ILI: An All-in-One Framework for Implicit Inference in Astrophysics and Cosmology**
@@ -232,7 +232,7 @@ June 2025, *Preprint*
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2024MNRAS.527.7965W.jpeg
+   * - .. image:: plots/2024MNRAS.527.7965W.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2024MNRAS.527.7965W
      - **First Light and Reionization Epoch Simulations (FLARES) - XIV. The Balmer/4000 \rA breaks of distant galaxies**
@@ -247,7 +247,7 @@ June 2025, *Preprint*
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2023MNRAS.525.5520L.jpeg
+   * - .. image:: plots/2023MNRAS.525.5520L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2023MNRAS.525.5520L
      - **First light and reionisation epoch simulations (FLARES) - VIII. The emergence of passive galaxies at z \ensuremath\geq 5**
