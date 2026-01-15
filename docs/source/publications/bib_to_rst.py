@@ -46,10 +46,7 @@ application_pubs = {
 IMAGE_DIR = "plots"
 
 
-def get_author_string(
-    author_field: str,
-    max_authors: int=5
-)-> str:
+def get_author_string(author_field: str, max_authors: int = 5) -> str:
     """Parses a BibTeX author string and formats it for display.
 
     Args:
@@ -199,9 +196,9 @@ def format_journal_name(journal: str) -> str:
 
 def get_paper_rst(
     entry: dict,
-    max_authors: int=5,
-    is_last: bool=False,
-)-> str:
+    max_authors: int = 5,
+    is_last: bool = False,
+) -> str:
     """Generates the ReStructuredText (RST) block for a bib entry.
 
     Layout:
@@ -294,10 +291,7 @@ def get_paper_rst(
     return rst
 
 
-def generate_rst(
-    config: dict,
-    max_authors: int=5
-)-> None:
+def generate_rst(config: dict, max_authors: int = 5) -> None:
     """Reads a BibTeX file and writes the RST output.
 
     Args:
