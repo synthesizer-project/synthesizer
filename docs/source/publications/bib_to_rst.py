@@ -22,6 +22,8 @@ import os
 
 try:
     import bibtexparser
+    from bibtexparser.bparser import BibTexParser
+    from bibtexparser.customization import convert_to_unicode
 except ImportError as e:
     raise ImportError(
         "Please install bibtexparser: pip install bibtexparser"
@@ -328,7 +330,9 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
     print(f"Reading {bib_file}...")
     try:
         with open(bib_file, "r", encoding="utf-8") as bibtex_file:
-            bib_database = bibtexparser.load(bibtex_file)
+            parser = BibTexParser(common_strings=True)
+            parser.customization = convert_to_unicode
+            bib_database = bibtexparser.load(bibtex_file, parser=parser)
     except FileNotFoundError:
         print(f"Error: Could not find {bib_file}.")
         return

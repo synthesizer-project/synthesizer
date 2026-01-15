@@ -30,7 +30,7 @@ A single ADS library of the papers can be found
           :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L
      - **Learning the Universe: cosmological and astrophysical parameter inference with galaxy luminosity functions and colours**
 
-       Authors: Lovell, Christopher C., Starkenburg, Tjitske, Ho, Matthew, Angl\'es-Alc\'azar, Daniel, Dav\'e, Romeel and others
+       Authors: Lovell, Christopher C., Starkenburg, Tjitske, Ho, Matthew, Anglés-Alcázar, Daniel, Davé, Romeel and others
 
        December 2025, *MNRAS*
 
@@ -47,7 +47,7 @@ A single ADS library of the papers can be found
 
        Authors: Quadri, Giada, Trinca, Alessandro, Lupi, Alessandro, Colpi, Monica, Volonteri, Marta
 
-       December 2025, *A&A*
+       December 2025, *åp*
 
        `[ADS] <https://ui.adsabs.harvard.edu/abs/2025A&A...704A.248Q>`__ | `[arXiv] <https://arxiv.org/abs/2505.05556>`__
 
@@ -208,7 +208,7 @@ A single ADS library of the papers can be found
    * - .. image:: plots/2024MNRAS.527.7965W.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2024MNRAS.527.7965W
-     - **First Light and Reionization Epoch Simulations (FLARES) - XIV. The Balmer/4000 \rA breaks of distant galaxies**
+     - **First Light and Reionization Epoch Simulations (FLARES) - XIV. The Balmer/4000 ̊A breaks of distant galaxies**
 
        Authors: Wilkins, Stephen M., Lovell, Christopher C., Irodotou, Dimitrios, Vijayan, Aswin P., Vikaeus, Anton and others
 
@@ -223,7 +223,7 @@ A single ADS library of the papers can be found
    * - .. image:: plots/2023MNRAS.525.5520L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2023MNRAS.525.5520L
-     - **First light and reionisation epoch simulations (FLARES) - VIII. The emergence of passive galaxies at z \ensuremath\geq 5**
+     - **First light and reionisation epoch simulations (FLARES) - VIII. The emergence of passive galaxies at z \ensuremath≥ 5**
 
        Authors: Lovell, Christopher C., Roper, Will, Vijayan, Aswin P., Seeyave, Louise, Irodotou, Dimitrios and others
 
