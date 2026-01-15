@@ -137,8 +137,10 @@ def get_date_string(entry: dict) -> str:
     # Normalize month key: lowercase, remove braces/spaces
     clean_month = month_raw.lower().strip("{} ")
 
-    # Retrieve readable month name, default to original raw string if not found
-    month_str = month_map.get(clean_month[:3], month_raw)
+    # Retrieve readable month name
+    # Try 3-letter prefix for abbreviations (jan, feb, etc.)
+    # or full string for numeric months (1-12)
+    month_str = month_map.get(clean_month[:3]) or month_map.get(clean_month, month_raw)
 
     if month_str:
         return f"{month_str} {year}"
@@ -322,9 +324,9 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
         (BIB_FILE, OUTPUT_FILE, etc.)
         max_authors (int): Maximum number of authors to display.
     """
-    bib_file = f"{script_dir}/{config['BIB_FILE']}"
-    output_file = f"{script_dir}/{config['OUTPUT_FILE']}"
-    intro_file = f"{script_dir}/{config['INTRO_FILE']}"
+    bib_file = os.path.join(script_dir, config["BIB_FILE"])
+    output_file = os.path.join(script_dir, config["OUTPUT_FILE"])
+    intro_file = os.path.join(script_dir, config["INTRO_FILE"])
     header = config["HEADER"]
 
     print(f"Reading {bib_file}...")
