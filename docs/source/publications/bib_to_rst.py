@@ -264,7 +264,6 @@ def get_paper_rst(
     # BibCode (e.g., 2020ApJ...123.jpeg)
     image_filename = f"{bibcode}.jpeg"
     image_path = os.path.join(script_dir, image_dir, image_filename)
-    image_path = os.path.join(image_dir, image_filename)
     has_image = os.path.exists(image_path)
 
     # Build RST for entry
@@ -316,7 +315,7 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
     bib_file = f"{script_dir}/{config['BIB_FILE']}"
     output_file = f"{script_dir}/{config['OUTPUT_FILE']}"
     intro_file = f"{script_dir}/{config['INTRO_FILE']}"
-    header = f"{script_dir}/{config['HEADER']}"
+    header = config["HEADER"]
 
     print(f"Reading {bib_file}...")
     try:
@@ -366,7 +365,7 @@ def main() -> None:
     reStructuredText publication list using release-date (descending) order.
 
     Usage:
-        python bib_to_rst.py max-authors=5
+        python bib_to_rst.py --max-authors=5
 
     Notes:
         - The script processes three publication configurations:

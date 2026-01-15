@@ -6,151 +6,228 @@ ordered by date with the most recent publications first.
 A single ADS library of the papers can be found 
 `here <https://ui.adsabs.harvard.edu/public-libraries/3GA1r890TkeGkIDTddv7Ow>`_.
 
-**Cloudy-Maraston: integrating nebular continuum and line emission with the Maraston stellar population synthesis models**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Newman, Sophie L., Lovell, Christopher C., Maraston, Claudia, Roper, William J., Vijayan, Aswin P. and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2026MNRAS.545f1866N.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.545f1866N
+     - **Cloudy-Maraston: integrating nebular continuum and line emission with the Maraston stellar population synthesis models**
 
-January 2026, *MNRAS*
+       Authors: Newman, Sophie L., Lovell, Christopher C., Maraston, Claudia, Roper, William J., Vijayan, Aswin P. and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2026MNRAS.545f1866N>`__ | `[arXiv] <https://arxiv.org/abs/2501.03133>`__
+       January 2026, *MNRAS*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026MNRAS.545f1866N>`__ | `[arXiv] <https://arxiv.org/abs/2501.03133>`__
 
-**Learning the Universe: cosmological and astrophysical parameter inference with galaxy luminosity functions and colours**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Lovell, Christopher C., Starkenburg, Tjitske, Ho, Matthew, Angl\'es-Alc\'azar, Daniel, Dav\'e, Romeel and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025MNRAS.544.3949L.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L
+     - **Learning the Universe: cosmological and astrophysical parameter inference with galaxy luminosity functions and colours**
 
-December 2025, *MNRAS*
+       Authors: Lovell, Christopher C., Starkenburg, Tjitske, Ho, Matthew, Angl\'es-Alc\'azar, Daniel, Dav\'e, Romeel and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L>`__ | `[arXiv] <https://arxiv.org/abs/2411.13960>`__
+       December 2025, *MNRAS*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L>`__ | `[arXiv] <https://arxiv.org/abs/2411.13960>`__
 
-**Super-Eddington accretion in high-redshift quasar hosts: Black-hole-driven outflows, galaxy quenching, and the nature of little red dots**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Quadri, Giada, Trinca, Alessandro, Lupi, Alessandro, Colpi, Monica, Volonteri, Marta
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025A&A...704A.248Q.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025A&A...704A.248Q
+     - **Super-Eddington accretion in high-redshift quasar hosts: Black-hole-driven outflows, galaxy quenching, and the nature of little red dots**
 
-December 2025, *A&A*
+       Authors: Quadri, Giada, Trinca, Alessandro, Lupi, Alessandro, Colpi, Monica, Volonteri, Marta
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025A&A...704A.248Q>`__ | `[arXiv] <https://arxiv.org/abs/2505.05556>`__
+       December 2025, *A&A*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025A&A...704A.248Q>`__ | `[arXiv] <https://arxiv.org/abs/2505.05556>`__
 
-**Flexible Simulation Based Inference for Galaxy Photometric Fitting with Synthesizer**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Harvey, Thomas, Lovell, Christopher C., Newman, Sophie, Conselice, Christopher J., Austin, Duncan and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv251110640H.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251110640H
+     - **Flexible Simulation Based Inference for Galaxy Photometric Fitting with Synthesizer**
 
-November 2025, *Preprint*
+       Authors: Harvey, Thomas, Lovell, Christopher C., Newman, Sophie, Conselice, Christopher J., Austin, Duncan and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv251110640H>`__ | `[arXiv] <https://arxiv.org/abs/2511.10640>`__
+       November 2025, *Preprint*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv251110640H>`__ | `[arXiv] <https://arxiv.org/abs/2511.10640>`__
 
-**Predicting the Subhalo Mass Functions in Simulations from Galaxy Images**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Filipp, Andreas, Nguyen, Tri, Perreault-Levasseur, Laurence, Rose, Jonah, Lovell, Chris and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv251014766F.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251014766F
+     - **Predicting the Subhalo Mass Functions in Simulations from Galaxy Images**
 
-October 2025, *Preprint*
+       Authors: Filipp, Andreas, Nguyen, Tri, Perreault-Levasseur, Laurence, Rose, Jonah, Lovell, Chris and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv251014766F>`__ | `[arXiv] <https://arxiv.org/abs/2510.14766>`__
+       October 2025, *Preprint*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv251014766F>`__ | `[arXiv] <https://arxiv.org/abs/2510.14766>`__
 
-**Behind the spotlight: a systematic assessment of outshining using NIRCam medium bands in the JADES Origins Field**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Harvey, Thomas, Conselice, Christopher J., Adams, Nathan J., Austin, Duncan, Li, Qiong and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025MNRAS.542.2998H.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.542.2998H
+     - **Behind the spotlight: a systematic assessment of outshining using NIRCam medium bands in the JADES Origins Field**
 
-October 2025, *MNRAS*
+       Authors: Harvey, Thomas, Conselice, Christopher J., Adams, Nathan J., Austin, Duncan, Li, Qiong and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025MNRAS.542.2998H>`__ | `[arXiv] <https://arxiv.org/abs/2504.05244>`__
+       October 2025, *MNRAS*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025MNRAS.542.2998H>`__ | `[arXiv] <https://arxiv.org/abs/2504.05244>`__
 
-**The Nature of High-Redshift Massive Quiescent Galaxies -- Searching for RUBIES-UDS-QG-z7 in FLARES**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Turner, Jack C., Roper, Will J., Vijayan, Aswin P., Newman, Sophie L., Wilkins, Stephen M. and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250916111T.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250916111T
+     - **The Nature of High-Redshift Massive Quiescent Galaxies -- Searching for RUBIES-UDS-QG-z7 in FLARES**
 
-September 2025, *Preprint*
+       Authors: Turner, Jack C., Roper, Will J., Vijayan, Aswin P., Newman, Sophie L., Wilkins, Stephen M. and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250916111T>`__ | `[arXiv] <https://arxiv.org/abs/2509.16111>`__
+       September 2025, *Preprint*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250916111T>`__ | `[arXiv] <https://arxiv.org/abs/2509.16111>`__
 
-**Caught in the Act: Detections of Recoiling Supermassive Black Holes from Simulations**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Rawlings, Alexander, Johansson, Peter H., Naab, Thorsten, Rantala, Antti, Thomas, Jens and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025ApJ...991...83R.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025ApJ...991...83R
+     - **Caught in the Act: Detections of Recoiling Supermassive Black Holes from Simulations**
 
-September 2025, *ApJ*
+       Authors: Rawlings, Alexander, Johansson, Peter H., Naab, Thorsten, Rantala, Antti, Thomas, Jens and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025ApJ...991...83R>`__ | `[arXiv] <https://arxiv.org/abs/2505.17183>`__
+       September 2025, *ApJ*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025ApJ...991...83R>`__ | `[arXiv] <https://arxiv.org/abs/2505.17183>`__
 
-**Little Red Dots and their Progenitors from Direct Collapse Black Holes**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Jeon, Junehyoung, Liu, Boyuan, Bromm, Volker, Fujimoto, Seiji, Taylor, Anthony J. and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250814155J.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250814155J
+     - **Little Red Dots and their Progenitors from Direct Collapse Black Holes**
 
-August 2025, *Preprint*
+       Authors: Jeon, Junehyoung, Liu, Boyuan, Bromm, Volker, Fujimoto, Seiji, Taylor, Anthony J. and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250814155J>`__ | `[arXiv] <https://arxiv.org/abs/2508.14155>`__
+       August 2025, *Preprint*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250814155J>`__ | `[arXiv] <https://arxiv.org/abs/2508.14155>`__
 
-**Interpreting nebular emission lines in the high-redshift Universe**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Vijayan, Aswin P., Yates, Robert M., Lovell, Christopher C., Roper, William J., Wilkins, Stephen M. and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250720190V.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250720190V
+     - **Interpreting nebular emission lines in the high-redshift Universe**
 
-July 2025, *Preprint*
+       Authors: Vijayan, Aswin P., Yates, Robert M., Lovell, Christopher C., Roper, William J., Wilkins, Stephen M. and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250720190V>`__ | `[arXiv] <https://arxiv.org/abs/2507.20190>`__
+       July 2025, *Preprint*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250720190V>`__ | `[arXiv] <https://arxiv.org/abs/2507.20190>`__
 
-**First Light and Reionization Epoch Simulations (FLARES) -- XVIII: the ionising emissivities and hydrogen recombination line properties of early AGN**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Wilkins, Stephen M., Vijayan, Aswin P., Hagen, Scott, Caruana, Joseph, Conselice, Christopher J. and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2025arXiv250505257W.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250505257W
+     - **First Light and Reionization Epoch Simulations (FLARES) -- XVIII: the ionising emissivities and hydrogen recombination line properties of early AGN**
 
-May 2025, *Preprint*
+       Authors: Wilkins, Stephen M., Vijayan, Aswin P., Hagen, Scott, Caruana, Joseph, Conselice, Christopher J. and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250505257W>`__ | `[arXiv] <https://arxiv.org/abs/2505.05257>`__
+       May 2025, *Preprint*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250505257W>`__ | `[arXiv] <https://arxiv.org/abs/2505.05257>`__
 
-**The sizes of bright Lyman-break galaxies at z ≃ 3-5 with JWST PRIMER**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Varadaraj, R.~G., Bowler, R.~A.~A., Jarvis, M.~J., Adams, N.~J., Choustikov, N. and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2024MNRAS.533.3724V.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2024MNRAS.533.3724V
+     - **The sizes of bright Lyman-break galaxies at z ≃ 3-5 with JWST PRIMER**
 
-September 2024, *MNRAS*
+       Authors: Varadaraj, R.~G., Bowler, R.~A.~A., Jarvis, M.~J., Adams, N.~J., Choustikov, N. and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2024MNRAS.533.3724V>`__ | `[arXiv] <https://arxiv.org/abs/2401.15971>`__
+       September 2024, *MNRAS*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2024MNRAS.533.3724V>`__ | `[arXiv] <https://arxiv.org/abs/2401.15971>`__
 
-**LtU-ILI: An All-in-One Framework for Implicit Inference in Astrophysics and Cosmology**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Ho, Matthew, Bartlett, Deaglan J., Chartier, Nicolas, Cuesta-Lazaro, Carolina, Ding, Simon and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2024OJAp....7E..54H.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2024OJAp....7E..54H
+     - **LtU-ILI: An All-in-One Framework for Implicit Inference in Astrophysics and Cosmology**
 
-July 2024, *OJA*
+       Authors: Ho, Matthew, Bartlett, Deaglan J., Chartier, Nicolas, Cuesta-Lazaro, Carolina, Ding, Simon and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2024OJAp....7E..54H>`__ | `[arXiv] <https://arxiv.org/abs/2402.05137>`__
+       July 2024, *OJA*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2024OJAp....7E..54H>`__ | `[arXiv] <https://arxiv.org/abs/2402.05137>`__
 
-**First Light and Reionization Epoch Simulations (FLARES) - XIV. The Balmer/4000 \rA breaks of distant galaxies**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Wilkins, Stephen M., Lovell, Christopher C., Irodotou, Dimitrios, Vijayan, Aswin P., Vikaeus, Anton and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2024MNRAS.527.7965W.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2024MNRAS.527.7965W
+     - **First Light and Reionization Epoch Simulations (FLARES) - XIV. The Balmer/4000 \rA breaks of distant galaxies**
 
-January 2024, *MNRAS*
+       Authors: Wilkins, Stephen M., Lovell, Christopher C., Irodotou, Dimitrios, Vijayan, Aswin P., Vikaeus, Anton and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2024MNRAS.527.7965W>`__ | `[arXiv] <https://arxiv.org/abs/2305.18175>`__
+       January 2024, *MNRAS*
 
-----
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2024MNRAS.527.7965W>`__ | `[arXiv] <https://arxiv.org/abs/2305.18175>`__
 
-**First light and reionisation epoch simulations (FLARES) - VIII. The emergence of passive galaxies at z \ensuremath\geq 5**
+.. list-table::
+   :widths: 40 60
+   :class: borderless
 
-Authors: Lovell, Christopher C., Roper, Will, Vijayan, Aswin P., Seeyave, Louise, Irodotou, Dimitrios and others
+   * - .. image:: /Users/ap629AA/Astro/synthesizer/synthesizer/docs/source/publications/plots/2023MNRAS.525.5520L.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2023MNRAS.525.5520L
+     - **First light and reionisation epoch simulations (FLARES) - VIII. The emergence of passive galaxies at z \ensuremath\geq 5**
 
-November 2023, *MNRAS*
+       Authors: Lovell, Christopher C., Roper, Will, Vijayan, Aswin P., Seeyave, Louise, Irodotou, Dimitrios and others
 
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2023MNRAS.525.5520L>`__ | `[arXiv] <https://arxiv.org/abs/2211.07540>`__
+       November 2023, *MNRAS*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2023MNRAS.525.5520L>`__ | `[arXiv] <https://arxiv.org/abs/2211.07540>`__
 
