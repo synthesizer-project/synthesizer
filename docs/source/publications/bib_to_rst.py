@@ -140,7 +140,9 @@ def get_date_string(entry: dict) -> str:
     # Retrieve readable month name
     # Try 3-letter prefix for abbreviations (jan, feb, etc.)
     # or full string for numeric months (1-12)
-    month_str = month_map.get(clean_month[:3]) or month_map.get(clean_month, month_raw)
+    month_str = month_map.get(clean_month[:3]) or month_map.get(
+        clean_month, month_raw
+    )
 
     if month_str:
         return f"{month_str} {year}"
