@@ -48,8 +48,10 @@ application_pubs = {
     "HEADER": "Application Publications\n========================\n\n",
 }
 
+# At the top of the file, after imports:
+script_dir = os.path.dirname(os.path.abspath(__file__))
 # Directory containing the plot images (filename format: bibcode.jpeg)
-IMAGE_DIR = "plots"
+image_dir = "plots"
 
 
 def get_author_string(author_field: str, max_authors: int = 5) -> str:
@@ -167,8 +169,9 @@ def get_sort_key(entry: dict) -> tuple:
         "dec": 12,
     }
 
-    if month_raw in month_map_to_int:
-        month = month_map_to_int[month_raw]
+    month_key = month_raw[:3] if len(month_raw) >= 3 else month_raw
+    if month_key in month_map_to_int:
+        month = month_map_to_int[month_key]
     elif month_raw.isdigit():
         month = int(month_raw)
     else:
@@ -222,7 +225,9 @@ def get_paper_rst(
     """
     bibcode = entry.get("ID", "unknown")
     if bibcode == "unknown":
-        MissingAttribute("ID or bibcode is required in each BibTeX entry.")
+        raise MissingAttribute(
+            "ID or bibcode is required in each BibTeX entry."
+        )
 
     # Prepare Metadata field
     # Remove braces often found in BibTeX titles/journals
@@ -258,7 +263,8 @@ def get_paper_rst(
     # We expect images to be named exactly as the
     # BibCode (e.g., 2020ApJ...123.jpeg)
     image_filename = f"{bibcode}.jpeg"
-    image_path = os.path.join(IMAGE_DIR, image_filename)
+    image_path = os.path.join(script_dir, image_dir, image_filename)
+    image_path = os.path.join(image_dir, image_filename)
     has_image = os.path.exists(image_path)
 
     # Build RST for entry
@@ -307,10 +313,10 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
         (BIB_FILE, OUTPUT_FILE, etc.)
         max_authors (int): Maximum number of authors to display.
     """
-    bib_file = config["BIB_FILE"]
-    output_file = config["OUTPUT_FILE"]
-    intro_file = config["INTRO_FILE"]
-    header = config["HEADER"]
+    bib_file = f"{script_dir}/{config['BIB_FILE']}"
+    output_file = f"{script_dir}/{config['OUTPUT_FILE']}"
+    intro_file = f"{script_dir}/{config['INTRO_FILE']}"
+    header = f"{script_dir}/{config['HEADER']}"
 
     print(f"Reading {bib_file}...")
     try:
@@ -318,6 +324,9 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
             bib_database = bibtexparser.load(bibtex_file)
     except FileNotFoundError:
         print(f"Error: Could not find {bib_file}.")
+        return
+    except Exception as e:
+        print(f"Error: Failed to parse {bib_file}: {e}")
         return
 
     entries = bib_database.entries
@@ -357,7 +366,14 @@ def main() -> None:
     reStructuredText publication list using release-date (descending) order.
 
     Usage:
-        python bib_to_rst.py publications.bib publications.rst
+        python bib_to_rst.py max-authors=5
+
+    Notes:
+        - The script processes three publication configurations:
+          all publications, technical publications, and application
+          publications.
+        - Each configuration reads from its own .bib file and writes
+          to its own .rst output file.
 
     Args:
         None. Arguments are read from ``sys.argv``.
