@@ -14,7 +14,13 @@ Notes:
 import argparse
 import os
 
-import bibtexparser
+try:
+    import bibtexparser
+except ImportError as e:
+    raise ImportError(
+        "Please install bibtexparser: pip install bibtexparser"
+    ) from e
+from synthesizer.exceptions import MissingAttribute
 
 # All publication configurations, where the different sections are.
 all_pubs = {
@@ -146,7 +152,7 @@ def get_sort_key(entry: dict) -> tuple:
 
     # Parse Month
     month_raw = entry.get("month", "0").lower().strip("{} ")
-    month_map = {
+    month_map_to_int = {
         "jan": 1,
         "feb": 2,
         "mar": 3,
@@ -161,12 +167,12 @@ def get_sort_key(entry: dict) -> tuple:
         "dec": 12,
     }
 
-    if month_raw in month_map:
-        month = month_map[month_raw]
+    if month_raw in month_map_to_int:
+        month = month_map_to_int[month_raw]
     elif month_raw.isdigit():
         month = int(month_raw)
     else:
-        month = 12  # default if unknown
+        month = 1  # default if unknown
 
     return (year, month)
 
@@ -214,7 +220,9 @@ def get_paper_rst(
     Returns:
         str: The formatted RST string for this entry.
     """
-    bibcode = entry.get("ID")
+    bibcode = entry.get("ID", "unknown")
+    if bibcode == "unknown":
+        MissingAttribute("ID or bibcode is required in each BibTeX entry.")
 
     # Prepare Metadata field
     # Remove braces often found in BibTeX titles/journals
@@ -299,17 +307,17 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
         (BIB_FILE, OUTPUT_FILE, etc.)
         max_authors (int): Maximum number of authors to display.
     """
-    BIB_FILE = config["BIB_FILE"]
-    OUTPUT_FILE = config["OUTPUT_FILE"]
-    INTRO_FILE = config["INTRO_FILE"]
-    HEADER = config["HEADER"]
+    bib_file = config["BIB_FILE"]
+    output_file = config["OUTPUT_FILE"]
+    intro_file = config["INTRO_FILE"]
+    header = config["HEADER"]
 
-    print(f"Reading {BIB_FILE}...")
+    print(f"Reading {bib_file}...")
     try:
-        with open(BIB_FILE, "r", encoding="utf-8") as bibtex_file:
+        with open(bib_file, "r", encoding="utf-8") as bibtex_file:
             bib_database = bibtexparser.load(bibtex_file)
     except FileNotFoundError:
-        print(f"Error: Could not find {BIB_FILE}.")
+        print(f"Error: Could not find {bib_file}.")
         return
 
     entries = bib_database.entries
@@ -321,12 +329,11 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
 
     # If a specific intro file exists (e.g. intro.rst), read it.
     # Otherwise, use the default string defined in HEADER.
-    if os.path.exists(INTRO_FILE):
-        with open(INTRO_FILE, "r", encoding="utf-8") as f:
+    if os.path.exists(intro_file):
+        with open(intro_file, "r", encoding="utf-8") as f:
             rst_content += f.read() + "\n\n"
     else:
-        rst_content += HEADER
-
+        rst_content += header
     # Generate RST for each entry
     for ii, entry in enumerate(entries):
         # Check if this is the last item in the list
@@ -337,10 +344,10 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
         )
 
     # Write final output
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(rst_content)
 
-    print(f"Success! Generated {OUTPUT_FILE} with {len(entries)} papers.")
+    print(f"Success! Generated {output_file} with {len(entries)} papers.")
 
 
 def main() -> None:
