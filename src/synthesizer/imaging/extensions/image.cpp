@@ -241,8 +241,6 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
 
     /* Safety check: ensure we have valid dimensions. */
     if (local_width <= 0 || local_height <= 0) {
-      PyErr_SetString(PyExc_ValueError,
-                      "Invalid local image dimensions calculated.");
       return;
     }
 
@@ -589,6 +587,13 @@ PyObject *make_img(PyObject *self, PyObject *args) {
       extract_data_double(np_smoothing_lengths, "smoothing_lengths");
   const double *pos = extract_data_double(np_pos, "pos");
   const double *kernel = extract_data_double(np_kernel, "kernel");
+
+  /* One of the data extractions failed and set a Python error. Return NULL
+   * to propagate the exception back to Python. */
+  if (pix_values == NULL || smoothing_lengths == NULL || pos == NULL ||
+      kernel == NULL) {
+    return NULL;
+  }
 
   toc("Extracting Python data", start_time);
 
