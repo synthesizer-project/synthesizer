@@ -1366,13 +1366,7 @@ class Sed:
             )
 
             # Measure index
-<<<<<<< HEAD
             index = trapezoid(feature_lum_continuum_subtracted, x=feature_lam)
-=======
-            index = np.trapezoid(
-                feature_lum_continuum_subtracted, x=feature_lam
-            )
->>>>>>> main
 
         return index
 
