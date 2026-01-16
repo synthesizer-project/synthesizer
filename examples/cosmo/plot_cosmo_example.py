@@ -23,8 +23,8 @@ from synthesizer.emission_models import (
 )
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import Sed, plot_spectra
-from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
+from synthesizer.instruments import UVJ
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 
 # Get the grid

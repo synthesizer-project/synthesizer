@@ -38,6 +38,10 @@ class IGMBase(Transformer):
         # Initialize the base class
         Transformer.__init__(self, required_params=("redshift", "obslam"))
 
+    def __repr__(self):
+        """Return a string representation of the IGMBase object."""
+        return f"{self.__class__.__name__}(name={self.name})"
+
     def get_transmission(self, redshift, lam_obs):
         """Compute the IGM transmission.
 
@@ -169,6 +173,10 @@ class Inoue14(IGMBase):
 
         # Set the scale factor for the IGM absorption
         self.scale_tau = scale_tau
+
+    def __repr__(self):
+        """Return a string representation of the Inoue14 object."""
+        return f"Inoue14(scale_tau={self.scale_tau})"
 
     def _load_data(self):
         """Load the coefficient data.
@@ -446,6 +454,10 @@ class Madau96(IGMBase):
         self.lams = [1216.0, 1026.0, 973.0, 950.0]
         self.coefficients = [0.0036, 0.0017, 0.0012, 0.00093]
 
+    def __repr__(self):
+        """Return a string representation of the Madau96 object."""
+        return "Madau96()"
+
     @accepts(lam_obs=angstrom)
     def get_transmission(self, redshift, lam_obs):
         """Compute the IGM transmission.
@@ -610,6 +622,14 @@ class Asada25(IGMBase):
         self.sigmoid_params = sigmoid_params
         self.scale_tau = scale_tau
         self.add_cgm = add_cgm
+
+    def __repr__(self):
+        """Return a string representation of the Asada25 object."""
+        parts = [
+            f"scale_tau={self.scale_tau}",
+            f"add_cgm={self.add_cgm}",
+        ]
+        return f"Asada25({', '.join(parts)})"
 
     def _load_data(self):
         """Load the coefficient data.

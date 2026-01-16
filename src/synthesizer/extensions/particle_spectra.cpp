@@ -73,7 +73,7 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
   /* Precompute unmasked wavelengths */
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
-  for (int ilam = 0; ilam < nlam; ilam++) {
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
     if (!grid_props->lam_is_masked(ilam)) {
       good_lams.push_back(ilam);
     }
@@ -177,7 +177,7 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
   /* Precompute unmasked wavelengths */
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
-  for (int ilam = 0; ilam < nlam; ilam++) {
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
     if (!grid_props->lam_is_masked(ilam)) {
       good_lams.push_back(ilam);
     }
@@ -340,7 +340,7 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
     const double weight = parts->get_weight_at(p);
 
     /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
+    for (size_t ilam = 0; ilam < nlam; ilam++) {
 
       /* Skip if this wavelength is masked. */
       if (grid_props->lam_is_masked(ilam)) {
@@ -382,7 +382,7 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
   /* Precompute unmasked wavelengths */
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
-  for (int ilam = 0; ilam < nlam; ilam++) {
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
     if (!grid_props->lam_is_masked(ilam)) {
       good_lams.push_back(ilam);
     }

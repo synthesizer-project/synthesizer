@@ -2,6 +2,7 @@
 
 import inspect
 import sys
+from collections import defaultdict
 from collections.abc import Mapping
 from functools import lru_cache
 
@@ -10,8 +11,14 @@ from unyt import Unit, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
+from synthesizer.instruments import InstrumentCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
+
+# Special model label for operations that are not tied to a specific model.
+# This can be used for operations such as SFZH / SFH with no relation to
+# an emission model.
+NO_MODEL_LABEL = "no_model_label"
 
 
 def discover_attr_paths_recursive(obj, prefix="", output_set=None):
@@ -525,3 +532,384 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                         f"Noise map must be a unyt_array with units. Got "
                         f"{type(inst.noise_maps)} in instrument {inst.label}."
                     )
+
+
+class OperationKwargs:
+    """A container class holding the kwargs needed by any pipeline operation.
+
+    Attributes:
+        _kwargs : dict
+            The original kwargs dict used to build this object.
+            (Values are not copied; we just hold the references.)
+    """
+
+    __slots__ = ("_kwargs", "_hash_key")
+
+    def __init__(self, **kwargs):
+        """Initialise the kwargs."""
+        # Store the kwargs dict (no deep copies).
+        self._kwargs = kwargs
+
+        # Lazy cache of the structural key used for hashing/equality.
+        self._hash_key = None
+
+        # Convert any 'instruments' list to InstrumentCollection.
+        self._convert_instruments_list()
+
+    def _convert_instruments_list(self):
+        """Convert any 'instruments' list to a InstrumentCollection."""
+        # If we don't have instruments, nothing to do.
+        if "instruments" not in self._kwargs:
+            return
+
+        # Convert list to InstrumentCollection if needed.
+        inst_val = self._kwargs["instruments"]
+        if isinstance(inst_val, list):
+            self._kwargs["instruments"] = InstrumentCollection()
+            self._kwargs["instruments"].add_instruments(*inst_val)
+        elif not isinstance(inst_val, InstrumentCollection):
+            raise exceptions.InconsistentArguments(
+                "'instruments' kwarg must be a list of Instrument objects "
+                "or an InstrumentCollection."
+            )
+
+    def __getitem__(self, key):
+        """Dict-like access: obj['fov'] -> kwargs['fov']."""
+        return self._kwargs[key]
+
+    def __getattr__(self, name):
+        """Attribute-style access: obj.fov -> kwargs['fov'].
+
+        Called only if normal attribute lookup fails.
+        """
+        try:
+            return self._kwargs[name]
+        except KeyError:
+            raise AttributeError(
+                f"{type(self).__name__!s} has no attribute {name!r}"
+            ) from None
+
+    def get(self, key, default=None):
+        """Dict-like get method: obj.get('fov', default) -> kwargs.get()."""
+        return self._kwargs.get(key, default)
+
+    @property
+    def kwargs(self):
+        """Return the underlying kwargs dict."""
+        return self._kwargs
+
+    def _build_hash_key(self):
+        """Build a hashable structural key based on kwarg names and values.
+
+        Rules
+        -----
+        - For each kwarg name:
+            - If value is hashable, use ("val", value).
+            - If value is unhashable (lists, arrays, etc.),
+              use ("id", id(value)).
+
+        This:
+        - avoids any deep conversion or inspection of big objects,
+        - deduplicates when all *references* are the same and hashables
+          are equal.
+        """
+        items = []
+        for name, value in self._kwargs.items():
+            try:
+                hash(value)
+            except TypeError:
+                # Unhashable => treat by identity only.
+                items.append((name, ("id", id(value))))
+            else:
+                # Hashable => treat by value.
+                items.append((name, ("val", value)))
+
+        # Sort by kwarg name to make the key order-independent.
+        items.sort(key=lambda kv: kv[0])
+        return tuple(items)
+
+    def get_hash(self):
+        """Get the hash representation of the kwargs for caching purposes."""
+        if self._hash_key is None:
+            self._hash_key = self._build_hash_key()
+        return hash(self._hash_key)
+
+    def __hash__(self):
+        """Return the hash of the kwargs for caching purposes."""
+        return self.get_hash()
+
+    def __eq__(self, other):
+        """Check equality of two OperationKwargs based on their structure."""
+        if not isinstance(other, OperationKwargs):
+            return NotImplemented
+
+        if self._hash_key is None:
+            self._hash_key = self._build_hash_key()
+        if other._hash_key is None:
+            other._hash_key = other._build_hash_key()
+
+        return self._hash_key == other._hash_key
+
+    def __repr__(self):
+        """Return a string representation of the OperationKwargs."""
+        return f"{type(self).__name__}(kwargs={self._kwargs!r})"
+
+
+class OperationKwargsHandler:
+    """Container for Pipeline operation kwargs.
+
+    This handler enables running pipeline operations multiple times
+    with different parameters for different models in a clean,
+    expandable and organized manner.
+
+    Internally it stores unique OperationKwargs objects per operation
+    (func_name) and associates them with one or more model labels and
+    their instruments:
+
+        self._func_map[func_name][OperationKwargs][label] -> list[instruments]
+
+    This avoids duplicating identical kwargs sets across labels and
+    provides a clean interface to loop over:
+
+        - all (label, OperationKwargs) for a given operation, or
+        - all OperationKwargs for a given (label, operation), or
+        - groups of labels that share the same OperationKwargs.
+    """
+
+    def __init__(self, model_labels):
+        """Initialise the OperationKwargsHandler.
+
+        Args:
+            model_labels (list or set of str):
+                All the labels associated with the EmissionModel we
+                are working on.
+        """
+        # Convert the input model_labels to a set for efficient lookup.
+        self._allowed_models = set(model_labels)
+
+        # Mapping:
+        #   func_name -> {OperationKwargs -> list[model_label]}
+        self._func_map = defaultdict(dict)
+        #   func_name -> list[model_label]
+        self._label_map = defaultdict(set)
+        #   func_name -> OperationKwargs (for single-kwarg operations)
+        # Note: Plain dict (not defaultdict) so missing keys return None
+        # via .get()
+        self._unique_func_map = {}
+
+    def _check_model_label(self, model_label):
+        """Validate that the provided model_label is allowed.
+
+        Make sure the model_label exists in the allowed models for this
+        handler, i.e. the label exists in the Pipeline's EmissionModel.
+
+        Args:
+            model_label (str):
+                The model label to check.
+
+        Raises:
+            InconsistentArguments:
+                If the model_label is not found in the allowed models.
+        """
+        if model_label in self._allowed_models:
+            return
+
+        raise exceptions.InconsistentArguments(
+            f"Model label {model_label} not found in the Pipeline's "
+            "EmissionModel."
+        )
+
+    def _normalize_labels(self, model_label):
+        """Return a set of labels from the model_label argument.
+
+        This helper exists to handle the various possible input types for
+        model_label: None, str, or iterable of str.
+
+        Args:
+            model_label (str or iterable of str or None):
+                Emission model label(s) or None for NO_MODEL_LABEL.
+
+        Returns:
+            set:
+                A set of model labels.
+        """
+        if model_label is None or model_label == NO_MODEL_LABEL:
+            return self._allowed_models
+        if isinstance(model_label, str):
+            return {model_label}
+        # list / tuple / set
+        return set(model_label)
+
+    def add(self, model_label, func_name, **kwargs):
+        """Add a kwargs set for a given func_name and one or more labels.
+
+        This wraps the kwargs in an OperationKwargs and deduplicates them
+        based on its hashing / equality semantics.
+
+        Args:
+            model_label (str or iterable of str or None):
+                Emission model label(s) or None for NO_MODEL_LABEL.
+            func_name (str):
+                Operation / method name, e.g. "get_images_luminosity".
+            **kwargs:
+                Arbitrary keyword arguments to store for this func.
+
+        Returns:
+            OperationKwargs:
+                The OperationKwargs instance representing this kwargs set.
+        """
+        labels = self._normalize_labels(model_label)
+        for lab in labels:
+            self._check_model_label(lab)
+
+        # Create the kwargs object
+        op_kwargs = OperationKwargs(**kwargs)
+
+        # Link the operation kwargs into the internal mapping.
+        # Get the per-function mapping (defaultdict creates empty dict if
+        # missing)
+        func_kwargs_map = self._func_map[func_name]
+
+        # Get the existing label list for this op_kwargs (or create empty list)
+        label_map = func_kwargs_map.get(op_kwargs, [])
+        label_map.extend(labels)
+        func_kwargs_map[op_kwargs] = label_map
+
+        # Update the label map for this function.
+        self._label_map[func_name].update(labels)
+
+        return op_kwargs
+
+    def add_unique(self, func_name, **kwargs):
+        """Add a single unique kwargs set for a given func_name.
+
+        This is used for operations that should only have one configuration
+        per pipeline run (e.g., get_sfzh, get_sfh, get_observed_spectra).
+
+        Args:
+            func_name (str):
+                Operation / method name, e.g. "get_sfzh".
+            **kwargs:
+                Arbitrary keyword arguments to store for this func.
+
+        Returns:
+            OperationKwargs:
+                The OperationKwargs instance representing this kwargs set.
+        """
+        # Just exit if we already have an entry for this function.
+        # We can get here multiple times if we recurse, so we just
+        # return the existing one. If theres an issue with conflicting
+        # kwargs, that should be caught elsewhere.
+        if func_name in self._unique_func_map:
+            return self._unique_func_map[func_name]
+
+        # Create the kwargs object
+        op_kwargs = OperationKwargs(**kwargs)
+
+        # Store it in the unique func map.
+        self._unique_func_map[func_name] = op_kwargs
+
+        return op_kwargs
+
+    def has(self, func_name, model_label=None):
+        """Return True if any kwargs are stored for the given operation.
+
+        Args:
+            func_name (str):
+                Operation / method name.
+            model_label (str, optional):
+                If provided, restrict the check to this model.
+                If omitted, all models are searched.
+
+        Returns:
+            bool:
+                True if at least one OperationKwargs exists matching the query.
+        """
+        # Do we actually have an entry for this function name?
+        func_entries = self._func_map.get(
+            func_name, self._unique_func_map.get(func_name, None)
+        )
+        if func_entries is None:
+            return False
+
+        # If no model_label is provided, any entry counts as a match by here
+        if model_label is None:
+            return True
+
+        # Check for the specific model label.
+        self._check_model_label(model_label)
+
+        # Check in the label map first (most efficient)
+        if func_name in self._label_map:
+            return model_label in self._label_map[func_name]
+
+        # func_entries for unique is just OperationKwargs object (not dict).
+        if isinstance(func_entries, OperationKwargs):
+            return True
+
+        # Fallback to checking values in func_entries (which is a dict)
+        for labels in func_entries.values():
+            if model_label in labels:
+                return True
+
+        return False
+
+    def __contains__(self, func_name):
+        """Return True if any kwargs are stored for this operation.
+
+        Allows syntax like:
+
+            if "get_images_flux" in handler:
+                ...
+        """
+        return self.has(func_name)
+
+    def iter_all(self, func_name):
+        """Iterate over (model_label, OperationKwargs) pairs for an operation.
+
+        This is the main entry point for Pipeline methods that want to
+        process all configs for a given operation, regardless of model.
+
+        Non-consuming: internal state is left unchanged.
+
+        Args:
+            func_name (str):
+                Operation / method name.
+
+        Yields:
+            (model_label, OperationKwargs):
+                Tuples of model label and OperationKwargs object.
+        """
+        func_entries = self._func_map.get(func_name, {})
+        for op_kwargs, label_map in func_entries.items():
+            if not isinstance(label_map, (list, set)):
+                label_map = [label_map]
+            yield label_map, op_kwargs
+
+    def __getitem__(self, func_name):
+        """Return an iterator over (model_label, OperationKwargs).
+
+        This allows syntax like:
+
+            for model_label, op_kwargs in handler["get_images_flux"]:
+                ...
+
+        which is non-consuming.
+        """
+        return self.iter_all(func_name)
+
+    def get_unique_kwargs(self, func_name):
+        """Return the unique OperationKwargs for a given func_name.
+
+        This is only applicable for operations added via add_unique() and
+        can never have multiple variations.
+
+        Args:
+            func_name (str):
+                Operation / method name.
+
+        Returns:
+            OperationKwargs:
+                The unique OperationKwargs for this operation.
+        """
+        return self._unique_func_map.get(func_name, None)

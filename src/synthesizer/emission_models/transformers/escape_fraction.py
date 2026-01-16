@@ -73,6 +73,10 @@ class ProcessedFraction(Transformer):
         # transformer.
         Transformer.__init__(self, required_params=fesc_attrs)
 
+    def __repr__(self):
+        """Return a string representation of the ProcessedFraction object."""
+        return f"ProcessedFraction(fesc_attrs={self._required_params})"
+
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the transformation to the emission.
 
@@ -159,6 +163,10 @@ class EscapedFraction(Transformer):
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
         Transformer.__init__(self, required_params=fesc_attrs)
+
+    def __repr__(self):
+        """Return a string representation of the EscapedFraction object."""
+        return f"EscapedFraction(fesc_attrs={self._required_params})"
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the escape fraction to the emission.
@@ -248,6 +256,10 @@ class CoveringFraction(Transformer):
         # transformer.
         Transformer.__init__(self, required_params=covering_attrs)
 
+    def __repr__(self):
+        """Return a string representation of the CoveringFraction object."""
+        return f"CoveringFraction(covering_attrs={self._required_params})"
+
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the transformation to the emission.
 
@@ -335,6 +347,10 @@ class EscapingFraction(Transformer):
         # Call the parent class constructor and declare we need fesc for this
         # transformer.
         Transformer.__init__(self, required_params=covering_attrs)
+
+    def __repr__(self):
+        """Return a string representation of the EscapingFraction object."""
+        return f"EscapingFraction(covering_attrs={self._required_params})"
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply the transformation to the emission.

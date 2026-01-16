@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import ReprocessedEmission
-from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.imaging import ImageCollection
+from synthesizer.instruments import UVJ
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import Sersic2D
@@ -87,9 +87,9 @@ if __name__ == "__main__":
 
     # We can also do the same with a helper function on the galaxy object
     img = galaxy.get_images_luminosity(
+        "reprocessed",
         resolution=resolution,
         fov=fov,
-        emission_model=model,
     )
 
     # and... print an ASCII representation

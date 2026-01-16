@@ -1462,6 +1462,7 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         quantity="lnu",
         nthreads=1,
+        cosmo=None,
     ):
         """Make a SpectralCube from an Sed held by this galaxy.
 
@@ -1499,6 +1500,11 @@ class Galaxy(BaseGalaxy):
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for unit conversions between angular
+                and Cartesian coordinates. Only needed when resolution and
+                fov have different unit systems (e.g., angular resolution
+                but Cartesian fov). Default is None.
 
         Returns:
             SpectralCube:
@@ -1515,25 +1521,84 @@ class Galaxy(BaseGalaxy):
                 " What component/s do you want a data cube of?"
             )
 
-        # Make stellar image if requested
+        # Validate cosmo parameter if mixed units are detected
+        if cosmo is None:
+            from unyt import arcsecond, kpc
+
+            from synthesizer.units import unit_is_compatible
+
+            resolution_is_angular = unit_is_compatible(resolution, arcsecond)
+            resolution_is_cartesian = unit_is_compatible(resolution, kpc)
+            fov_is_angular = unit_is_compatible(fov, arcsecond)
+            fov_is_cartesian = unit_is_compatible(fov, kpc)
+
+            # Check for mixed unit systems
+            if (resolution_is_angular and fov_is_cartesian) or (
+                resolution_is_cartesian and fov_is_angular
+            ):
+                raise exceptions.InconsistentArguments(
+                    "Mixed unit systems detected (angular resolution with "
+                    "Cartesian fov or vice versa) but no cosmology "
+                    "provided. Please provide a cosmology object via the "
+                    "cosmo parameter to enable unit conversion."
+                )
+
+        # Import unit standardization function
+        from synthesizer.imaging.image_generators import (
+            _standardize_imaging_units,
+        )
+
+        # Standardize units for stellar component if needed
         if stellar_spectra is not None:
-            # Instantiate the Image colection ready to make the image.
-            stellar_cube = SpectralCube(
-                resolution=resolution, fov=fov, lam=lam
+            needs_smoothing = cube_type == "smoothed"
+            (
+                stellar_resolution,
+                stellar_fov,
+                stellar_coords,
+                stellar_smls,
+            ) = _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=self.stars,
+                cosmo=cosmo,
+                include_smoothing_lengths=needs_smoothing,
             )
 
-            # Make the image using the requested method
+        # Standardize units for blackhole component if needed
+        if blackhole_spectra is not None:
+            needs_smoothing = cube_type == "smoothed"
+            (
+                bh_resolution,
+                bh_fov,
+                bh_coords,
+                bh_smls,
+            ) = _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=self.black_holes,
+                cosmo=cosmo,
+                include_smoothing_lengths=needs_smoothing,
+            )
+
+        # Make stellar image if requested
+        if stellar_spectra is not None:
+            # Instantiate the cube with standardized units
+            stellar_cube = SpectralCube(
+                resolution=stellar_resolution, fov=stellar_fov, lam=lam
+            )
+
+            # Make the cube using the requested method with standardized coords
             if cube_type == "hist":
                 stellar_cube.get_data_cube_hist(
                     sed=self.stars.particle_spectra[stellar_spectra],
-                    coordinates=self.stars.centered_coordinates,
+                    coordinates=stellar_coords,
                     quantity=quantity,
                 )
             else:
                 stellar_cube.get_data_cube_smoothed(
                     sed=self.stars.particle_spectra[stellar_spectra],
-                    coordinates=self.stars.centered_coordinates,
-                    smoothing_lengths=self.stars.smoothing_lengths,
+                    coordinates=stellar_coords,
+                    smoothing_lengths=stellar_smls,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
@@ -1542,23 +1607,23 @@ class Galaxy(BaseGalaxy):
 
         # Make blackhole image if requested
         if blackhole_spectra is not None:
-            # Instantiate the Image colection ready to make the image.
+            # Instantiate the cube with standardized units
             blackhole_cube = SpectralCube(
-                resolution=resolution, fov=fov, lam=lam
+                resolution=bh_resolution, fov=bh_fov, lam=lam
             )
 
-            # Make the image using the requested method
+            # Make the cube using the requested method with standardized coords
             if cube_type == "hist":
                 blackhole_cube.get_data_cube_hist(
-                    sed=self.blackhole.particle_spectra[blackhole_spectra],
-                    coordinates=self.blackhole.centered_coordinates,
+                    sed=self.black_holes.particle_spectra[blackhole_spectra],
+                    coordinates=bh_coords,
                     quantity=quantity,
                 )
             else:
                 blackhole_cube.get_data_cube_smoothed(
-                    sed=self.blackhole.particle_spectra[blackhole_spectra],
-                    coordinates=self.blackhole.centered_coordinates,
-                    smoothing_lengths=self.blackhole.smoothing_lengths,
+                    sed=self.black_holes.particle_spectra[blackhole_spectra],
+                    coordinates=bh_coords,
+                    smoothing_lengths=bh_smls,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,

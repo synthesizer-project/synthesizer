@@ -230,7 +230,6 @@ static void get_particle_indices_and_fracs_serial(GridProps *grid_props,
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
-  int nlam = grid_props->nlam;
 
   // Pre-allocate exactly npart slots to avoid resizing
   parts->grid_indices.resize(parts->npart);
@@ -359,10 +358,6 @@ void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
 static void get_particle_indices_serial(GridProps *grid_props,
                                         Particles *parts) {
 
-  /* Unpack the grid properties. */
-  const int ndim = grid_props->ndim;
-  int nlam = grid_props->nlam;
-
   // Pre-allocate exactly npart slots to avoid resizing
   parts->grid_indices.resize(parts->npart);
 
@@ -396,7 +391,6 @@ static void get_particle_indices_serial(GridProps *grid_props,
  */
 static void get_particle_indices_parallel(GridProps *grid_props,
                                           Particles *parts, int nthreads) {
-  const int ndim = grid_props->ndim;
   const int npart = parts->npart;
 
   // Pre-allocate exactly npart slots so we can write into slices on

@@ -100,6 +100,10 @@ class AttenuationLaw(Transformer):
         # Call the parent constructor
         Transformer.__init__(self, required_params=required_params)
 
+    def __repr__(self):
+        """Return a string representation of the AttenuationLaw object."""
+        return f"{self.__class__.__name__}({self.description})"
+
     def get_tau(self, *args):
         """Compute the V-band normalised optical depth."""
         raise exceptions.UnimplementedFunctionality(
@@ -396,6 +400,10 @@ class PowerLaw(AttenuationLaw):
 
         self._check_required_params()
 
+    def __repr__(self):
+        """Return a string representation of the PowerLaw object."""
+        return f"PowerLaw(slope={self.slope})"
+
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam):
         """Calculate optical depth at a wavelength.
@@ -577,6 +585,16 @@ class Calzetti2000(AttenuationLaw):
 
         self._check_required_params()
 
+    def __repr__(self):
+        """Return a string representation of the Calzetti2000 object."""
+        parts = [
+            f"slope={self.slope}",
+            f"cent_lam={self.cent_lam}",
+            f"ampl={self.ampl}",
+            f"gamma={self.gamma}",
+        ]
+        return f"Calzetti2000({', '.join(parts)})"
+
     @accepts(lam=angstrom)
     def get_tau(self, lam):
         """Calculate V-band normalised optical depth.
@@ -656,6 +674,10 @@ class MWN18(AttenuationLaw):
         self.tau_lam_v = np.interp(
             5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
         )
+
+    def __repr__(self):
+        """Return a string representation of the MWN18 object."""
+        return "MWN18()"
 
     @accepts(lam=angstrom)
     def get_tau(self, lam, interp="cubic"):
@@ -821,6 +843,10 @@ class GrainModels(AttenuationLaw):
             )
         # Initialise the grain model and its submodel
         self.extmodel = getattr(grain_models, self.model)(self.submodel)
+
+    def __repr__(self):
+        """Return a string representation of the GrainModels object."""
+        return f"GrainModels(model={self.model}, submodel={self.submodel})"
 
     @accepts(lam=angstrom)
     def get_tau(self, lam, interp="slinear"):
@@ -1045,6 +1071,10 @@ class ParametricLi08(AttenuationLaw):
 
         self._check_required_params()
 
+    def __repr__(self):
+        """Return a string representation of the ParametricLi08 object."""
+        return f"ParametricLi08(model={self.model})"
+
     @accepts(lam=angstrom)
     def get_tau(self, lam):
         """Calculate V-band normalised optical depth.
@@ -1173,6 +1203,10 @@ class DraineLiGrainCurves(AttenuationLaw):
             required_params=required_params,
             require_tau_v=False,
         )
+
+    def __repr__(self):
+        """Return a string representation of the DraineLiGrainCurves object."""
+        return f"DraineLiGrainCurves(grid_name={self.grid_name})"
 
     @lru_cache(maxsize=8)
     def _get_component_interp(
