@@ -1,7 +1,9 @@
 """A submodule defining Draine & Li 2007 dust emission generators."""
 
+from __future__ import annotations
+
 from functools import partial
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,7 +20,6 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
@@ -27,6 +28,9 @@ from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 def u_mean_magdis12(dust_mass: float, ldust: float, p0: float) -> float:
@@ -267,6 +271,41 @@ class DraineLi07(DustEmission):
         self.umin_calculated = None
         self.gamma_calculated = None
         self.hydrogen_mass_calculated = None
+
+    def __repr__(self):
+        """Return a string representation of the DraineLi07 object."""
+        # Start with base class repr components
+        parts = []
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler.label}")
+
+        # Add DraineLi07 specific parameters
+        parts.extend(
+            [
+                f"template={self.template}",
+                f"qpah={self.qpah}",
+                f"alpha={self.alpha}",
+            ]
+        )
+
+        # Add optional parameters if set
+        if self.dust_mass is not None:
+            parts.append(f"dust_mass={self.dust_mass}")
+        if self.gamma is not None:
+            parts.append(f"gamma={self.gamma}")
+        if self.umin is not None:
+            parts.append(f"umin={self.umin}")
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"DraineLi07({', '.join(parts)})"
 
     def _setup_dl07_parameters(
         self,

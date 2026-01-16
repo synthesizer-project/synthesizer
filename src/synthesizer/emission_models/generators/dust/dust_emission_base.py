@@ -9,15 +9,19 @@ that generate the actual dust emission spectra and then scale them
 appropriately.
 """
 
-from typing import Tuple, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Tuple, Union
 
 from unyt import K, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.units import accepts
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 @accepts(temperature=K)
@@ -138,6 +142,25 @@ class DustEmission(Generator):
 
         # Store the last used cmb factor for convenience
         self.last_cmb_factor = None
+
+    def __repr__(self):
+        """Return a string representation of the DustEmission object."""
+        parts = [self.__class__.__name__]
+
+        # Add type information
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler.label}")
+
+        # Add CMB heating flag if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"{parts[0]}({', '.join(parts[1:])})"
 
     @property
     def temperature_z(self):

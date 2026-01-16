@@ -305,3 +305,16 @@ class InstrumentCollection:
                 The items in the InstrumentCollection.
         """
         return self.instruments.items()
+
+    def to_set(self):
+        """Return a set containing the Instruments.
+
+        This is a convenience method to allow easy conversion of single
+        Instrument objects into sets for use in functions that expect
+        multiple instruments.
+
+        Returns:
+            set:
+                A set containing this Instrument.
+        """
+        return {inst for inst in self}

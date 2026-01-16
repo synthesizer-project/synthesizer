@@ -15,8 +15,8 @@ from unyt import Msun, Myr
 
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.attenuation import Madau96, PowerLaw
-from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
+from synthesizer.instruments import FilterCollection
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 

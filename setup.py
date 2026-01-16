@@ -304,19 +304,6 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
-        "synthesizer.imaging.extensions.spectral_cube",
-        [
-            "src/synthesizer/imaging/extensions/spectral_cube.cpp",
-            "src/synthesizer/extensions/property_funcs.cpp",
-            "src/synthesizer/extensions/timers.cpp",
-            "src/synthesizer/extensions/numpy_init.cpp",
-            "src/synthesizer/extensions/cpp_to_python.cpp",
-        ],
-        compile_flags=compile_flags,
-        links=link_args,
-        include_dirs=include_dirs,
-    ),
-    create_extension(
         "synthesizer.imaging.extensions.image",
         [
             "src/synthesizer/imaging/extensions/image.cpp",
