@@ -37,6 +37,12 @@ from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.integrate import integrate_last_axis
 
+# Import trapezoid or trapz based on numpy version
+if np.__version__.startswith("1."):
+    from numpy import trapz as trapezoid
+else:
+    from numpy import trapezoid
+
 
 @accepts(new_lam=angstrom)
 def UVJ(new_lam=None):
@@ -1880,10 +1886,10 @@ class Filter:
         """
         return (
             np.sqrt(
-                np.trapezoid(
+                trapezoid(
                     self._original_lam * self.original_t, x=self._original_lam
                 )
-                / np.trapezoid(
+                / trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1916,13 +1922,13 @@ class Filter:
         """
         return (
             np.exp(
-                np.trapezoid(
+                trapezoid(
                     np.log(self._original_lam)
                     * self.original_t
                     / self._original_lam,
                     x=self._original_lam,
                 )
-                / np.trapezoid(
+                / trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1941,7 +1947,7 @@ class Filter:
         """
         # Calculate the left and right hand side.
         A = np.sqrt(
-            np.trapezoid(
+            trapezoid(
                 (np.log(self._original_lam / self.meanwv().value) ** 2)
                 * self.original_t
                 / self._original_lam,
@@ -1950,7 +1956,7 @@ class Filter:
         )
 
         B = np.sqrt(
-            np.trapezoid(
+            trapezoid(
                 self.original_t / self._original_lam, x=self._original_lam
             )
         )
@@ -1991,7 +1997,7 @@ class Filter:
                 The rectangular width.
         """
         return (
-            np.trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
+            trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
         )
 
     def max(self):
