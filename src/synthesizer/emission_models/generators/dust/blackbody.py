@@ -1,12 +1,13 @@
 """A submodule defining blackbody dust emission generators."""
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from unyt import Hz, angstrom, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
@@ -14,6 +15,9 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
 from synthesizer.utils import planck
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 class Blackbody(DustEmission):
@@ -73,6 +77,27 @@ class Blackbody(DustEmission):
             do_cmb_heating,
             required_params=("temperature",),
         )
+
+    def __repr__(self):
+        """Return a string representation of the Blackbody object."""
+        # Start with base class repr components
+        parts = []
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler.label}")
+
+        # Add temperature
+        parts.append(f"temperature={self.temperature}")
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"Blackbody({', '.join(parts)})"
 
     @accepts(lams=angstrom)
     def _generate_spectra(

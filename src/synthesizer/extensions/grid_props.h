@@ -14,12 +14,13 @@
 /* Local includes */
 #include "property_funcs.h"
 
+#pragma omp declare target
+
 /* Define the maximum number of dimensions we support right now (this can be
  * increased but we need a constant reasonable value, if this is ever reached
  * we can increase it). */
 constexpr int MAX_GRID_NDIM = 10;
 
-#pragma omp declare target
 class GridProps {
 
 public:
