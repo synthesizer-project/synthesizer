@@ -15,6 +15,12 @@ import numpy as np
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
 
+# Import trapezoid or trapz based on numpy version
+if np.__version__.startswith("1."):
+    from numpy import trapz as trapezoid
+else:
+    from numpy import trapezoid # noqa: F401, I001
+
 
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     """Integrate the last axis of an N-dimensional array.
