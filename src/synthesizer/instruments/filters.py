@@ -35,13 +35,7 @@ from synthesizer._version import __version__
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.integrate import integrate_last_axis
-
-# Import trapezoid or trapz based on numpy version
-if np.__version__.startswith("1."):
-    from numpy import trapz as trapezoid
-else:
-    from numpy import trapezoid
+from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 
 
 @accepts(new_lam=angstrom)
