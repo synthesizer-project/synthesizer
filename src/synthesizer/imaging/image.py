@@ -22,6 +22,7 @@ from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
+from unyt.dimensions import time
 
 from synthesizer import exceptions
 from synthesizer.extensions.timers import tic, toc
@@ -447,6 +448,91 @@ class Image(ImagingBase):
             fov=self.fov,
             img=convolved_img,
         )
+
+    @accepts(cps_per_unit=unyt_quantity, exposure_time=(time))
+    def apply_poission_noise(self,
+                            cps_per_unit,
+                            exposure_time):
+        """Apply Poisson noise to the image.
+
+        Counts per unit is equicalent for e.g. JWST the number of electrons per
+
+        for JWST see PHOTMJSR in the header.
+        Args:
+            cps_per_unit (unyt_quantity of float):
+                The counts per second per unit of the image.
+            exposure_time (unyt_quantity in time units):
+                The exposure time of the image.
+        """
+
+        # Ensure we have units if we need them
+        if self.units is None:
+            raise exceptions.InconsistentArguments(
+                "The Image must have units to apply Poisson noise."
+            )
+
+        # Calculate the expected counts in each pixel
+        expected_counts = (
+            self.arr * cps_per_unit * exposure_time
+        ).to("")
+
+        # Generate the Poisson noise array
+        noise_arr = np.random.poisson(
+            lam=expected_counts.value,
+            size=self.npix,
+        )
+
+        # Convert the noise array back to image units
+        noise_arr = noise_arr / (cps_per_unit * exposure_time).to(
+            self.units
+        )
+
+        return self.apply_noise_array(noise_arr)
+
+    def apply_correlated_noise(self,
+                    observed_noise_arr=None,
+                    subtract_mean=False,
+                    correct_periodicity=True):
+        """Apply correlated noise to the image.
+
+        This applies correlated noise to the image by convolving a noise
+        field with a kernel. If an observed noise array is passed this is used
+        to generate the correlated noise kernel
+
+        Args:
+            observed_noise_arr (np.ndarray, unyt_quantity):
+                An observed noise array to use instead of generating a new
+                noise field. Should be in image units if the image has units.
+            subtract_mean (bool):
+                Whether to subtract the mean from the observed noise array
+                before generating the correlated noise kernel. Default is
+                False.
+            correct_periodicity (bool):
+                Whether to correct for periodicity in the DFT when generating
+                the correlated noise kernel. Default is True.
+
+        Returns:
+            Image
+                The image including the correlated noise.
+            np.ndarray
+                The weight map, derived from 1 / std^2
+        """
+        targer_arr = np.zeros(self.arr.shape)
+
+        if isinstance(observed_noise_arr, unyt_array):
+            # Convert units to match the image if necessary
+            if self.units is not None:
+                observed_noise_arr = observed_noise_arr.to(self.units)
+
+        noise_arr = model_and_apply_correlated_noise(
+            source_image_arr=observed_noise_arr,
+            target_image_arr=targer_arr,
+            subtract_mean=subtract_mean,
+            correct_periodicity=correct_periodicity,
+        )
+
+        # Apply the correlated noise array
+        return self.apply_noise_array(noise_arr)
 
     def apply_noise_array(self, noise_arr):
         """Apply a noise array.
@@ -933,3 +1019,274 @@ class Image(ImagingBase):
             )
             * self.units
         )
+
+
+# WE PROBABLY WANT THIS IN A SEPARATE FILE
+
+
+def _cf_periodicity_dilution_correction_standalone(
+    cf_shape,
+) -> np.ndarray:
+    """Calculates the correction factor for DFT-based Correlation Functions.
+
+    to account for the assumption of periodicity.
+    Ported from an internal GalSim function.
+
+    Args:
+        cf_shape: Tuple (Ny, Nx) representing the shape of the
+        correlation function array.
+
+    Returns:
+        A 2D NumPy array with the correction factors.
+    """
+    ny, nx = cf_shape
+
+    # Create coordinate arrays for frequency domain
+    # dx_coords corresponds to frequencies in the x-direction (columns)
+    # dy_coords corresponds to frequencies in the y-direction (rows)
+    dx_coords = np.fft.fftfreq(nx) * float(nx)
+    dy_coords = np.fft.fftfreq(ny) * float(ny)
+
+    # Create 2D grids of these coordinates
+    # deltax will have shape (Ny, Nx) and vary along columns (axis 1)
+    # deltay will have shape (Ny, Nx) and vary along rows (axis 0)
+    deltax, deltay = np.meshgrid(dx_coords, dy_coords)
+
+    denominator = (nx - np.abs(deltax)) * (ny - np.abs(deltay))
+
+    # Avoid division by zero if denominator entries are zero,
+    # though this is unlikely with standard fftfreq outputs for valid shapes.
+    # np.finfo(float).eps could be added for numerical stability if needed.
+    valid_denominator = np.where(
+        denominator == 0, 1.0, denominator
+    )  # Avoid true div by zero
+
+    correction = (float(nx * ny)) / valid_denominator
+    if np.any(
+        denominator == 0
+    ):  # Put back zeros where they were to avoid infs if original was 0
+        correction[denominator == 0] = 0  # Or handle as error/warning
+
+    return correction
+
+
+def _generate_noise_from_rootps_standalone(
+    rng: np.random.Generator, shape, rootps: np.ndarray
+) -> np.ndarray:
+    """Generates a real-space noise field from its sqrt(PowerSpectrum).
+
+    Ported and adapted from an internal GalSim function.
+
+    Args:
+        rng: NumPy random number generator.
+        shape: Tuple (Ny, Nx) of the output real-space noise field.
+        rootps: The half-complex 2D array (Ny, Nx//2 + 1) representing
+                the square root of the Power Spectrum from rfft2.
+
+    Returns:
+        A 2D NumPy array representing the generated correlated noise field.
+    """
+    ny, nx = shape
+
+    # GalSim's GaussianDeviate implies specific scaling for random numbers.
+    # E[|gvec_k|^2] = Ny * Nx for each complex component k
+    # if parts are N(0, 0.5*Ny*Nx).
+    sigma_val_for_gvec_parts = np.sqrt(0.5 * ny * nx)
+
+    gvec_real = rng.normal(scale=sigma_val_for_gvec_parts, size=rootps.shape)
+    gvec_imag = rng.normal(scale=sigma_val_for_gvec_parts, size=rootps.shape)
+    gvec = gvec_real + 1j * gvec_imag
+
+    # Impose Hermitian symmetry properties and scaling for DC/Nyquist terms.
+    # This ensures the iFFT results in a real field
+    # with correct variance distribution.
+    rt2 = np.sqrt(2.0)
+
+    # DC component (ky=0, kx=0)
+    gvec[0, 0] = rt2 * gvec[0, 0].real
+
+    # Nyquist frequency for y-axis (ky=Ny/2) at kx=0 (if Ny is even)
+    if ny % 2 == 0:
+        gvec[ny // 2, 0] = rt2 * gvec[ny // 2, 0].real
+
+    # Nyquist frequency for x-axis (kx=Nx/2) at ky=0 (if Nx is even)
+    if nx % 2 == 0:
+        gvec[0, nx // 2] = rt2 * gvec[0, nx // 2].real
+
+    # Corner Nyquist component (ky=Ny/2, kx=Nx/2) (if both Ny and Nx are even)
+    if ny % 2 == 0 and nx % 2 == 0:
+        gvec[ny // 2, nx // 2] = rt2 * gvec[ny // 2, nx // 2].real
+
+    # Conjugate symmetry for the kx=0 column (y-axis frequencies)
+    # gvec[Ny-row, 0] = conj(gvec[row, 0]) for row in 1 .. (Ny/2 - 1)
+    # or ((Ny-1)/2)
+    # This handles the negative y-frequencies for kx=0.
+    # The slice `ny-1 : ny//2 : -1` covers rows from Ny-1 down to (Ny//2 + 1).
+    # The slice `1 : (ny+1)//2` covers rows from 1 up to Ny//2.
+    if (
+        ny > 1
+    ):  # This symmetry operation is relevant
+        # if Ny > 1 (or Ny > 2 for some ranges)
+        gvec[ny - 1 : ny // 2 : -1, 0] = np.conj(gvec[1 : (ny + 1) // 2, 0])
+
+    # Conjugate symmetry for the kx=Nx/2 column (if Nx is even)
+    # This handles negative y-frequencies for the Nyquist x-frequency.
+    if nx % 2 == 0:
+        kx_nyq_idx = nx // 2
+        if ny > 1:
+            gvec[ny - 1 : ny // 2 : -1, kx_nyq_idx] = np.conj(
+                gvec[1 : (ny + 1) // 2, kx_nyq_idx]
+            )
+
+    # Element-wise multiplication in Fourier space
+    noise_field_k_space = gvec * rootps
+
+    # Inverse FFT to get the real-space noise field
+    # The `s` parameter ensures the output shape matches the desired `shape`.
+    noise_real_space = np.fft.irfft2(noise_field_k_space, s=shape)
+
+    return noise_real_space
+
+
+def model_and_apply_correlated_noise(
+    source_image_arr: np.ndarray,
+    target_image_arr: np.ndarray,
+    subtract_mean: bool = False,
+    correct_periodicity: bool = True,
+    rng_seed: int = None,
+) -> np.ndarray:
+    """Models correlated noise from a source image and applies it to a target.
+
+    The noise model, represented by its Correlation Function (CF), is derived
+    from the `source_image_arr`. This CF is then used to generate a noise field
+    with similar statistical properties, which is subsequently added to the
+    `target_image_arr`.
+
+    This function assumes that the pixel scales of the source and target images
+    are comparable, or that the CF is intended to be interpreted in pixels.
+    If the images possess different physical pixel scales, appropriate
+    pre-processing (e.g., resampling) might be necessary before using
+    this function for physically accurate noise transfer.
+
+    Args:
+        source_image_arr: A 2D NumPy array. This image is used to model the
+                        correlated noise characteristics.
+        target_image_arr: A 2D NumPy array. Correlated noise
+                        will be added to this image.
+        subtract_mean: If True, the mean of the `source_image_arr`
+                        is effectively removed before Power Spectrum estimation
+                        by setting the DC component (PS[0,0]) of the
+                        Power Spectrum to zero.
+        correct_periodicity: If True, a correction factor is applied to the
+                        estimated Correlation Function. This factor
+                        aims tocompensate for the inherent assumption of
+                         periodicity in Discrete Fourier Transforms.
+        rng_seed: An optional integer seed for the random number generator.
+                        Providing a seed ensures reproducible noise generation.
+
+    Returns:
+        A new 2D NumPy array, which is the `target_image_arr` with the
+        synthesized correlated noise added to it.
+    """
+    if source_image_arr.ndim != 2 or target_image_arr.ndim != 2:
+        raise ValueError("Input images must be 2D numpy arrays.")
+
+    rng = np.random.default_rng(rng_seed)
+    source_shape = source_image_arr.shape
+
+    # --- Part 1: Model Noise (Correlation Function) from source_image_arr ---
+    # Calculate Fourier Transform of the source image
+    ft_array = np.fft.rfft2(source_image_arr)
+
+    # Power Spectrum (PS) of the source image
+    ps_array_source = np.abs(ft_array) ** 2
+
+    # Normalize PS: Ensures iFFT(PS) results in a CF
+    # where CF[0,0] is the variance.
+    ps_array_source /= np.prod(source_shape)
+
+    if subtract_mean:
+        ps_array_source[0, 0] = 0.0  # Zero out DC component of PS
+
+    # Estimate Correlation Function (CF) from the normalized PS
+    # cf_array_prelim is unrolled (origin at [0,0] for DFT purposes)
+    cf_array_prelim = np.fft.irfft2(ps_array_source, s=source_shape)
+
+    if correct_periodicity:
+        correction = _cf_periodicity_dilution_correction_standalone(
+            source_shape
+        )
+        cf_array_prelim *= correction
+
+    # cf_array_prelim now holds the noise model (unrolled CF).
+    # cf_array_prelim[0,0] approximates the variance of the source noise.
+
+    # --- Part 2: Prepare CF for target_image_arr dimensions ---
+    target_shape = target_image_arr.shape
+
+    # "Draw" cf_array_prelim onto an array of target_shape.
+    # This involves rolling the source CF to center its peak, then
+    # cropping or padding it to match target dimensions (centers aligned),
+    # and finally unrolling it for FFT.
+
+    # Roll source CF so that the peak (variance, originally at [0,0])
+    # is at the center
+    cf_source_rolled = np.roll(
+        cf_array_prelim,
+        shift=(source_shape[0] // 2, source_shape[1] // 2),
+        axis=(0, 1),
+    )
+
+    # Create a rolled CF for the target shape by copying the
+    # central part of cf_source_rolled
+    cf_target_rolled = np.zeros(target_shape, dtype=float)
+
+    src_cy, src_cx = source_shape[0] // 2, source_shape[1] // 2
+    trg_cy, trg_cx = target_shape[0] // 2, target_shape[1] // 2
+
+    # Define copy regions to place the center of
+    #  source_cf onto the center of target_cf
+    # Source region to copy from:
+    y_start_src = max(0, src_cy - trg_cy)
+    y_end_src = min(source_shape[0], src_cy + (target_shape[0] - trg_cy))
+    x_start_src = max(0, src_cx - trg_cx)
+    x_end_src = min(source_shape[1], src_cx + (target_shape[1] - trg_cx))
+
+    # Target region to copy to:
+    y_start_trg = max(0, trg_cy - src_cy)
+    y_end_trg = min(target_shape[0], trg_cy + (source_shape[0] - src_cy))
+    x_start_trg = max(0, trg_cx - src_cx)
+    x_end_trg = min(target_shape[1], trg_cx + (source_shape[1] - src_cx))
+
+    # Ensure the lengths of the regions to be copied match
+    dy = min(y_end_src - y_start_src, y_end_trg - y_start_trg)
+    dx = min(x_end_src - x_start_src, x_end_trg - x_start_trg)
+
+    if dy > 0 and dx > 0:
+        cf_target_rolled[
+            y_start_trg : y_start_trg + dy, x_start_trg : x_start_trg + dx
+        ] = cf_source_rolled[
+            y_start_src : y_start_src + dy, x_start_src : x_start_src + dx
+        ]
+
+    # Unroll cf_target_rolled to place the origin at [0,0] for DFT
+    # This array represents the CF sampled on the target grid.
+    cf_on_target_grid_unrolled = np.roll(
+        cf_target_rolled,
+        shift=(-(target_shape[0] // 2), -(target_shape[1] // 2)),
+        axis=(0, 1),
+    )
+
+    # Calculate Power Spectrum for this target-shaped CF.
+    # This ps_target_fft is unnormalized (direct output of rfft2).
+    ps_target_fft = np.fft.rfft2(cf_on_target_grid_unrolled)
+    rootps_target = np.sqrt(np.abs(ps_target_fft))  # Magnitudes for sqrt
+
+    # --- Part 3: Generate noise and apply it to the target image ---
+    generated_noise = _generate_noise_from_rootps_standalone(
+        rng, target_shape, rootps_target
+    )
+
+    # Add the generated noise to the original target image
+    output_image_arr = target_image_arr + generated_noise
+    return output_image_arr
