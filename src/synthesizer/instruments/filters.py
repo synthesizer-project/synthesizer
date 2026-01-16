@@ -1993,9 +1993,7 @@ class Filter:
             float
                 The rectangular width.
         """
-        return (
-            trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
-        )
+        return trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
 
     def max(self):
         """Calculate the longest wavelength with transmission >0.01.
