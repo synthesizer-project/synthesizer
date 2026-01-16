@@ -19,7 +19,7 @@ from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
 if np.__version__.startswith("1."):
     from numpy import trapz as trapezoid
 else:
-    from numpy import trapezoid # noqa: F401, I001
+    from numpy import trapezoid  # noqa: F401, I001
 
 
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
