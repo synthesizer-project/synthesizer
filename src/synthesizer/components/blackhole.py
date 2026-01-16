@@ -91,7 +91,7 @@ class BlackholesComponent(Component):
     accretion_rate = Quantity("mass_rate")
     inclination = Quantity("angle")
     bolometric_luminosity = Quantity("luminosity")
-    eddington_luminosity = Quantity("luminosity")
+    eddington_luminosity = Quantity("luminosity_solar")
     bb_temperature = Quantity("temperature")
     mass = Quantity("mass")
 
@@ -405,11 +405,6 @@ class BlackholesComponent(Component):
                 self.inclination.to("radian").value
             )
 
-    @property
-    def _torus_edgeon_cond(self):
-        """When this is > 90 deg the torus obscures the disc."""
-        return self.inclination + self.theta_torus
-
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.
 
@@ -462,9 +457,13 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        self.eddington_ratio = (
-            self._bolometric_luminosity / self._eddington_luminosity
-        )
+        # Compute the eddington ratio but ensure both luminosities are in the
+        # same units.
+        bol_lum = self.bolometric_luminosity.to(
+            self.eddington_luminosity.units
+        ).ndview
+        edd_lum = self._eddington_luminosity
+        self.eddington_ratio = bol_lum / edd_lum
 
         return self.eddington_ratio
 

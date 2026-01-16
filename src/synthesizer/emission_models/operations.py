@@ -1,6 +1,6 @@
 """A submodule containing the operations performed by an EmissionModel.
 
-An emission models inherits each of there opertaion classes but will only
+An emission models inherits each of there operation classes but will only
 ever instantiate one. This is because operations are isolated to one per
 model. The correct operation is instantiated in EmissionMode._init_operations.
 
@@ -18,11 +18,10 @@ from synthesizer.emission_models.extractors.extractor import (
     IntegratedParticleExtractor,
     ParticleExtractor,
 )
+from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
-from synthesizer.imaging import Image, ImageCollection
-from synthesizer.parametric import BlackHole
 
 
 class Extraction:
@@ -101,6 +100,9 @@ class Extraction:
             dict:
                 The dictionary of extracted spectra.
         """
+        # Avoid circular imports
+        from synthesizer.parametric import BlackHole
+
         # Extract the label for this model
         label = this_model.label
 
@@ -115,7 +117,11 @@ class Extraction:
         mask_start = tic()
         this_mask = None
         for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+            this_mask = emitter.get_mask(
+                **mask_dict,
+                mask=this_mask,
+                attr_override_obj=this_model,
+            )
         toc("Getting the mask", mask_start)
 
         # Get the appropriate extractor
@@ -159,6 +165,9 @@ class Extraction:
             nthreads=nthreads,
             do_grid_check=False,
         )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the spectra in the right place
         if this_model.per_particle:
@@ -206,6 +215,9 @@ class Extraction:
             dict:
                 The dictionary of extracted lines.
         """
+        # Avoid circular imports
+        from synthesizer.parametric import BlackHole
+
         # We need to be certain that any composite lines we have been
         # passed are split into their constituent parts
         passed_line_ids = line_ids
@@ -244,7 +256,11 @@ class Extraction:
         # Do we have to define a property mask?
         this_mask = None
         for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+            this_mask = emitter.get_mask(
+                **mask_dict,
+                mask=this_mask,
+                attr_override_obj=this_model,
+            )
 
         # Get the appropriate extractor
         if this_model.per_particle and this_model.vel_shift:
@@ -310,6 +326,9 @@ class Extraction:
             nthreads=nthreads,
             do_grid_check=False,
         )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place
         if this_model.per_particle:
@@ -439,6 +458,9 @@ class Generation:
                 particle_spectra if per_particle else spectra,
             )
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if per_particle:
             particle_spectra[this_model.label] = sed
@@ -538,6 +560,9 @@ class Generation:
                 particle_lines if per_particle else lines,
                 particle_spectra if per_particle else spectra,
             )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
@@ -733,6 +758,9 @@ class Transformation:
             lam_mask,
         )
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
@@ -798,6 +826,7 @@ class Combination:
         spectra,
         particle_spectra,
         this_model,
+        emitter,
     ):
         """Combine the extracted spectra.
 
@@ -811,6 +840,8 @@ class Combination:
                 The dictionary of particle spectra.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -849,6 +880,9 @@ class Combination:
                     ~nan_mask
                 ]
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_spectra[this_model.label] = out_spec
@@ -864,6 +898,7 @@ class Combination:
         lines,
         particle_lines,
         this_model,
+        emitter,
     ):
         """Combine the extracted lines.
 
@@ -877,6 +912,8 @@ class Combination:
                 The dictionary of particle lines.
             this_model (EmissionModel):
                 The model defining the combination.
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -917,6 +954,9 @@ class Combination:
         for combine_label in this_model._combine_labels:
             out_lines += in_lines[combine_label]
 
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
+
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_lines[this_model.label] = out_lines
@@ -925,88 +965,6 @@ class Combination:
             lines[this_model.label] = out_lines
 
         return lines, particle_lines
-
-    def _combine_images(
-        self,
-        images,
-        this_model,
-        instrument,
-        fov,
-        img_type,
-        do_flux,
-        emitters,
-        kernel,
-        kernel_threshold,
-        nthreads,
-    ):
-        """Combine the images by addition.
-
-        Args:
-            images (dict):
-                The dictionary of image collections.
-            this_model (EmissionModel):
-                The model defining the combination.
-            instrument (Instrument):
-                The instrument to use when generating images.
-            fov (float):
-                The field of view of the images.
-            img_type (str):
-                The type of image to generate.
-            do_flux (bool):
-                Are we generating flux images?
-            emitters (dict):
-                The emitters to generate the images for.
-            kernel (str):
-                The kernel to use when generating images.
-            kernel_threshold (float):
-                The threshold to use when generating images.
-            nthreads (int):
-                The number of threads to use when generating images.
-        """
-        # Check we saved the models we are combining
-        missing = [
-            model.label
-            for model in this_model.combine
-            if model.label not in images
-        ]
-
-        # Ok, we're missing some images. All other images that can be made
-        # have been made
-        if len(missing) > 0:
-            raise exceptions.MissingImage(
-                "Can't generate galaxy level images without saving the "
-                f"spectra from the component models ({', '.join(missing)})."
-            )
-
-        # Get the image for each model we are combining
-        combine_images = []
-        for combine_label in this_model._combine_labels:
-            combine_images.append(images[combine_label])
-
-        # Get the first image to add to
-        out_image = ImageCollection(
-            resolution=combine_images[0].resolution,
-            fov=combine_images[0].fov,
-            imgs={
-                f: Image(
-                    resolution=combine_images[0].resolution,
-                    fov=combine_images[0].fov,
-                    img=np.zeros(combine_images[0].npix)
-                    * combine_images[0].imgs[f].units,
-                )
-                for f in combine_images[0].imgs
-            },
-        )
-
-        # Combine the images
-        # Again, we have a problem if any don't exist
-        for img in combine_images:
-            out_image += img
-
-        # Store the combined image
-        images[this_model.label] = out_image
-
-        return images
 
     def _combine_summary(self):
         """Return a summary of a combination model."""

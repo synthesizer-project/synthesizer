@@ -1,6 +1,8 @@
 """A submodule defining greybody dust emission generators."""
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from unyt import (
@@ -15,7 +17,6 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
@@ -23,6 +24,9 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
 from synthesizer.utils import planck
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 class Greybody(DustEmission):
@@ -103,6 +107,34 @@ class Greybody(DustEmission):
             do_cmb_heating,
             required_params=("temperature", "emissivity"),
         )
+
+    def __repr__(self):
+        """Return a string representation of the Greybody object."""
+        # Start with base class repr components
+        parts = []
+        if self.is_energy_balance:
+            parts.append(
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
+            )
+        elif self.is_scaled:
+            parts.append(f"scaler={self._scaler.label}")
+
+        # Add Greybody specific parameters
+        parts.extend(
+            [
+                f"temperature={self.temperature}",
+                f"emissivity={self.emissivity}",
+                f"optically_thin={self.optically_thin}",
+                f"lam_0={self.lam_0}",
+            ]
+        )
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"Greybody({', '.join(parts)})"
 
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array, temperature: unyt_quantity) -> unyt_array:

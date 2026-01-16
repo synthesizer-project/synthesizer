@@ -22,7 +22,7 @@ static void reduce_spectra_serial(double *spectra, double *part_spectra,
   size_t npart_size = static_cast<size_t>(npart);
 
   /* Loop over particles. */
-  for (size_t p = 0; p < npart; p++) {
+  for (size_t p = 0; p < npart_size; p++) {
     /* Loop over wavelengths. */
     for (int ilam = 0; ilam < nlam; ilam++) {
       size_t part_spec_ind = p * nlam + ilam;
@@ -54,7 +54,7 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
   /* Loop over particles in parallel. */
 #if defined(_OPENMP) && _OPENMP >= 201511
 #pragma omp parallel for num_threads(nthreads) reduction(+ : spectra[ : nlam])
-  for (size_t p = 0; p < npart; p++) {
+  for (size_t p = 0; p < npart_size; p++) {
     for (int ilam = 0; ilam < nlam; ilam++) {
       size_t part_spec_ind = p * nlam + ilam;
       spectra[ilam] += part_spectra[part_spec_ind];

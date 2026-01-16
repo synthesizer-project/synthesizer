@@ -6,7 +6,7 @@ The Quantity is a descriptor object which uses the Units class to attach units
 to attributes of a class. The Quantity descriptor can be used to attach units
 to class attributes.
 
-Example defintion:
+Example definition:
 
     class Foo:
 
@@ -182,7 +182,7 @@ class DefaultUnits:
         # Local import to avoid cyclic imports
         from synthesizer.utils import TableFormatter
 
-        # Intialise the table formatter
+        # Initialise the table formatter
         formatter = TableFormatter(self)
 
         return (
@@ -272,7 +272,7 @@ class Units(metaclass=UnitSingleton):
     """
 
     def __init__(self, units=None, force=False):
-        """Intialise the Units object.
+        """Initialise the Units object.
 
         Args:
             units (dict):
@@ -337,7 +337,7 @@ class Units(metaclass=UnitSingleton):
         # Local import to avoid cyclic imports
         from synthesizer.utils import TableFormatter
 
-        # Intialise the table formatter
+        # Initialise the table formatter
         formatter = TableFormatter(self)
 
         return (
@@ -367,17 +367,17 @@ class Units(metaclass=UnitSingleton):
         print(f"Original unit system has been preserved at {original_path}.")
 
     def overwrite_defaults_yaml(self):
-        """Permenantly overwrite the default unit system with the current one.
+        """Permanently overwrite the default unit system with the current one.
 
         This method is used to overwrite the default unit system with the
-        current one. This is to be used when the user wants to permenantly
+        current one. This is to be used when the user wants to permanently
         modify the default unit system with the current one.
         """
         # If we haven't already made a copy of the original default units
         # yaml file then do so now
         self._preserve_orig_units()
 
-        # Contstruct the dictionary to write out
+        # Construct the dictionary to write out
         new_units = {}
         new_units["UnitCategories"] = {}
         for key, unit in self._units.items():
@@ -423,7 +423,7 @@ class Units(metaclass=UnitSingleton):
 
 
 class Quantity:
-    """A decriptor class controlling dynamicly associated attribute units.
+    """A descriptor class controlling dynamically associated attribute units.
 
     Provides the ability to associate attribute values on an object with unyt
     units defined in the global unit system (Units).
@@ -444,7 +444,7 @@ class Quantity:
         """Initialise the Quantity.
 
         This will extract the unit from the global unit system based on the
-        passed category. Note that this unit can be overriden if the user
+        passed category. Note that this unit can be overridden if the user
         specified a unit override for the attribute associated with this
         Quantity.
 
@@ -454,7 +454,7 @@ class Quantity:
                 from the global unit system.
         """
         # Get the unit based on the category passed at initialisation. This
-        # can be overriden in __set_name__ if the user set a specific unit for
+        # can be overridden in __set_name__ if the user set a specific unit for
         # the attribute associated with this Quantity.
         self.unit = getattr(Units(), category)
 
@@ -527,7 +527,7 @@ class Quantity:
 def has_units(x):
     """Check whether the passed variable has units.
 
-    This will check the argument is a unyt_quanity or unyt_array.
+    This will check the argument is a unyt_quantity or unyt_array.
 
     Args:
         x (generic variable):
@@ -586,7 +586,7 @@ def unyt_to_ndview(arr, unit=None):
     # return the ndview
     # NOTE: for some reason this method of conversion can lead to very small
     # precision differences vs the to, to_value (etc.) methods. In reality
-    # these diffences are negligable but they can lead to exact comparisons
+    # these differences are negligible but they can lead to exact comparisons
     # failing. This is fine as long as np.isclose/np.allclose is used to check
     # for equality.
     arr.convert_to_units(unit)
@@ -696,7 +696,7 @@ def _check_arg(units, name, value):
 
     # If the argument is None just skip it, its an optional argument that
     # hasn't been passed... or the user has somehow managed to pass None
-    # which is sufficently weird to cause an obvious error elsewhere
+    # which is sufficiently weird to cause an obvious error elsewhere
     if value is None:
         return None
 

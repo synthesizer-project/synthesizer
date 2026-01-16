@@ -970,12 +970,17 @@ class LineCollection:
             axis=0,
         )
 
-        # Return a single float if we have a single line
-        if numer_lum.ndim == 1:
-            return float(numer_lum / denom_lum)
+        # Calculate the ratio
+        ratio = numer_lum / denom_lum
+
+        # Return a single float if we have a scalar result
+        if ratio.ndim == 0:
+            return float(ratio)
+        elif ratio.size == 1:
+            return float(ratio.item())
 
         # Otherwise return the ratio array
-        return numer_lum / denom_lum
+        return ratio
 
     def get_ratio(self, ratio_id):
         """Measure (and return) a line ratio.

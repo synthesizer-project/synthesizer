@@ -18,8 +18,8 @@ from astropy.cosmology import Planck15 as cosmo
 from unyt import Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
-from synthesizer.filters import FilterCollection as Filters
 from synthesizer.grid import Grid
+from synthesizer.instruments import FilterCollection as Filters
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
