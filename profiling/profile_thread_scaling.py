@@ -24,7 +24,7 @@ from synthesizer.utils.profiling_utils import (
 )
 
 # Set style
-plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
