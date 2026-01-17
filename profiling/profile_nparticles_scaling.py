@@ -1,7 +1,7 @@
 """Profile runtime scaling with the number of particles.
 
 This script generates three separate plots (Spectra, Photometry, Imaging)
-showing how various operations scale from 10^3 to 10^6 particles.
+showing how various operations scale from 10^3 to 10^5 particles.
 """
 
 import argparse
