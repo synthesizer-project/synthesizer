@@ -35,7 +35,7 @@ from synthesizer._version import __version__
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.integrate import integrate_last_axis
+from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 
 
 @accepts(new_lam=angstrom)
@@ -1883,10 +1883,10 @@ class Filter:
         """
         return (
             np.sqrt(
-                np.trapezoid(
+                trapezoid(
                     self._original_lam * self.original_t, x=self._original_lam
                 )
-                / np.trapezoid(
+                / trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1919,13 +1919,13 @@ class Filter:
         """
         return (
             np.exp(
-                np.trapezoid(
+                trapezoid(
                     np.log(self._original_lam)
                     * self.original_t
                     / self._original_lam,
                     x=self._original_lam,
                 )
-                / np.trapezoid(
+                / trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1944,7 +1944,7 @@ class Filter:
         """
         # Calculate the left and right hand side.
         A = np.sqrt(
-            np.trapezoid(
+            trapezoid(
                 (np.log(self._original_lam / self.meanwv().value) ** 2)
                 * self.original_t
                 / self._original_lam,
@@ -1953,7 +1953,7 @@ class Filter:
         )
 
         B = np.sqrt(
-            np.trapezoid(
+            trapezoid(
                 self.original_t / self._original_lam, x=self._original_lam
             )
         )
@@ -1993,9 +1993,7 @@ class Filter:
             float
                 The rectangular width.
         """
-        return (
-            np.trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
-        )
+        return trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
 
     def max(self):
         """Calculate the longest wavelength with transmission >0.01.

@@ -47,7 +47,7 @@ from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
-from synthesizer.utils.integrate import integrate_last_axis
+from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 
 
 class Sed:
@@ -1335,7 +1335,7 @@ class Sed:
             )
 
             # Measure index for all SEDs
-            index = np.trapezoid(
+            index = trapezoid(
                 feature_lum_continuum_subtracted, x=feature_lam, axis=1
             )
 
@@ -1360,9 +1360,7 @@ class Sed:
             )
 
             # Measure index
-            index = np.trapezoid(
-                feature_lum_continuum_subtracted, x=feature_lam
-            )
+            index = trapezoid(feature_lum_continuum_subtracted, x=feature_lam)
 
         return index
 
