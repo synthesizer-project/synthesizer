@@ -21,7 +21,7 @@ from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
 
 # Set style
-plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 plt.rcParams["axes.titlesize"] = 0  # Force no titles
 
