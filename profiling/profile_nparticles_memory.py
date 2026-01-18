@@ -1,8 +1,8 @@
 """Profile memory scaling with the number of particles.
 
-This script generates three separate plots (Spectra, Photometry, Imaging)
+This script generates two separate plots (Spectra, Photometry)
 showing how the peak memory usage of various operations scales from 10^3 to
-10^6 particles.
+10^5 particles.
 """
 
 import argparse
