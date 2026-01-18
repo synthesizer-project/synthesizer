@@ -49,14 +49,16 @@ def get_instrument_profile(label, filepath, filters=None, resolution=None):
         collection = InstrumentCollection(filepath)
         return collection[label]
 
-        print(f"Instrument file {filepath} not found. Creating instrument...")
+    print(f"Instrument file {filepath} not found. Creating instrument...")
 
-        instrument = Instrument(
-            label=label, filters=filters, resolution=resolution
-        )
+    # Create the instrument
+    instrument = Instrument(
+        label=label,
+        filters=filters,
+        resolution=resolution,
+    )
 
-        # Save it to a collection file
-
+    # Save it to a collection file
     collection = InstrumentCollection()
     collection.add_instruments(instrument)
     collection.write_instruments(filepath)
