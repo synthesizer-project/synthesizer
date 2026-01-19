@@ -42,6 +42,69 @@ In the following sections we show some performance benchmarks to give an idea of
         Core(s) per socket:   32
         Socket(s):            2
 
+Performance
+^^^^^^^^^^^
+
+The following sections show how Synthesizer performs as a function of the size of the problem (number of particles and number of wavelength elements). These benchmarks were run using 8 threads on a test machine.
+
+Runtime Performance
+-------------------
+
+The following plots show the time taken to complete various operations as the problem size scales.
+
+**Particle Scaling**
+
+This plot shows how the runtime of spectra generation, photometry, and imaging scales with the number of stellar particles (from 10^3 to 10^5). These tests were run using a grid with 9244 wavelength elements. Imaging benchmarks include both smoothed and histogram-based methods at different pixel resolutions (100x100 and 1000x1000).
+
+.. image:: plots/nparticles_performance_spectra_nlam9244_nt8.png
+   :width: 75%
+   :align: center
+
+.. image:: plots/nparticles_performance_photometry_nlam9244_nt8.png
+   :width: 75%
+   :align: center
+
+.. image:: plots/nparticles_performance_imaging_nlam9244_nt8.png
+   :width: 75%
+   :align: center
+
+**Wavelength Scaling**
+
+This plot shows the scaling of spectra generation runtime with the number of wavelength elements in the SPS grid (from 100 to 100,000 elements). These tests were run using a component with 10,000 particles.
+
+.. image:: plots/wavelength_performance_spectra_npart10000_nt8.png
+   :width: 75%
+   :align: center
+
+
+Memory Performance
+------------------
+
+The following plots show the memory footprint of the **results** of various operations. 
+
+.. note::
+   These plots measure the size of the final objects stored in memory (e.g., the generated spectra or photometry data). While these represent the permanent memory cost added to your session, there may be transient spikes in memory usage during the actual computation that are slightly higher than these values.
+
+**Particle Scaling (Memory)**
+
+This plot shows the memory size of the generated spectra and photometry objects as a function of the number of particles. 
+
+.. image:: plots/nparticles_performance_memory_spectra_nlam9244_nt8.png
+   :width: 75%
+   :align: center
+
+.. image:: plots/nparticles_performance_memory_photometry_nlam9244_nt8.png
+   :width: 75%
+   :align: center
+
+**Wavelength Scaling (Memory)**
+
+This plot shows the memory size of the generated spectra as a function of the number of wavelength elements in the grid.
+
+.. image:: plots/wavelength_performance_memory_spectra_npart10000_nt8.png
+   :width: 75%
+   :align: center
+
 Scaling Performance
 ^^^^^^^^^^^^^^^^^^^
 
@@ -93,11 +156,5 @@ Smoothed Imaging Scaling
 .. image:: plots/test_images_totThreads32_nstars10000.png
    :width: 75%
    :align: center
-
-
-
-
-
-
 
 
