@@ -281,7 +281,7 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
     output_dir = Path("profiling/plots")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    def make_plot(category_name, filename):
+    def make_plot(category_name):
         fig, ax = plt.subplots(figsize=(8, 6))
         data = mems[category_name]
 
@@ -315,8 +315,8 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
         print(f"Plot saved to {out_path}")
         plt.close()
 
-    make_plot("spectra", "scaling_nparticles_memory_spectra.png")
-    make_plot("photometry", "scaling_nparticles_memory_photometry.png")
+    make_plot("spectra")
+    make_plot("photometry")
 
 
 if __name__ == "__main__":
