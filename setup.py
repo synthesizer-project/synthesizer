@@ -105,9 +105,29 @@ CFLAGS = os.environ.get("CFLAGS", "")
 LDFLAGS = os.environ.get("LDFLAGS", "")
 INCLUDES = os.environ.get("EXTRA_INCLUDES", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
-WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
-RUTHLESS = "RUTHLESS" in os.environ
-ATOMIC_TIMING = "ATOMIC_TIMING" in os.environ
+WITH_DEBUGGING_CHECKS = (
+    os.environ.get("WITH_DEBUGGING_CHECKS", "0").lower()
+    in ("1", "true", "yes", "on")
+    or "ENABLE_DEBUGGING_CHECKS" in os.environ
+)
+RUTHLESS = os.environ.get("RUTHLESS", "0").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+ATOMIC_TIMING = os.environ.get("ATOMIC_TIMING", "0").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+SINGLE_PRECISION = os.environ.get("SINGLE_PRECISION", "0").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
 
 # Define the log file
 LOG_FILE = "build_synth.log"
@@ -149,6 +169,12 @@ logger.info(f"### WITH_OPENMP: {WITH_OPENMP}")
 logger.info(f"### EXTRA_INCLUDES: {INCLUDES}")
 if WITH_DEBUGGING_CHECKS:
     logger.info(f"### WITH_DEBUGGING_CHECKS: {WITH_DEBUGGING_CHECKS}")
+if RUTHLESS:
+    logger.info(f"### RUTHLESS: {RUTHLESS}")
+if ATOMIC_TIMING:
+    logger.info(f"### ATOMIC_TIMING: {ATOMIC_TIMING}")
+if SINGLE_PRECISION:
+    logger.info(f"### SYNTHESIZER_SINGLE_PRECISION: {SINGLE_PRECISION}")
 
 # Create a compiler instance
 compiler = new_compiler()
@@ -231,6 +257,8 @@ if WITH_DEBUGGING_CHECKS:
     compile_flags.append("-DWITH_DEBUGGING_CHECKS")
 if ATOMIC_TIMING:
     compile_flags.append("-DATOMIC_TIMING")
+if SINGLE_PRECISION:
+    compile_flags.append("-DSYNTHESIZER_SINGLE_PRECISION")
 
 # Report the flags we will use
 logger.info(f"### Using compile flags: {compile_flags}")
@@ -370,6 +398,16 @@ extensions = [
             "src/synthesizer/imaging/extensions/circular_aperture.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
+        "synthesizer.extensions.precision_info",
+        [
+            "src/synthesizer/extensions/precision_info.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
