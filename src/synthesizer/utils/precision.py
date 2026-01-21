@@ -33,6 +33,7 @@ def get_precision() -> str:
         str: Either 'float32' or 'float64' depending on how the
             C extensions were compiled.
     """
+    # Call the C++ extension function to get the precision
     return _get_precision()
 
 
@@ -42,6 +43,7 @@ def get_float_bytes() -> int:
     Returns:
         int: Either 4 (single precision) or 8 (double precision).
     """
+    # Call the C++ extension function to get the byte size
     return _get_float_bytes()
 
 
@@ -51,7 +53,10 @@ def get_numpy_dtype() -> np.dtype:
     Returns:
         np.dtype: Either np.float32 or np.float64.
     """
+    # What precision are we using?
     precision = get_precision()
+
+    # Return the corresponding numpy dtype
     if precision == "float32":
         return np.dtype(np.float32)
     return np.dtype(np.float64)
@@ -74,17 +79,22 @@ def array_to_precision(arr: np.ndarray, *, copy: bool = False) -> np.ndarray:
         TypeError: If copy=False and the input dtype doesn't match
             the compiled precision.
     """
+    # Ensure input is a numpy array
     arr = np.asanyarray(arr)
     target_dtype = get_numpy_dtype()
 
+    # Check if the array already has the correct dtype, if so, return it
+    # or a copy of it
     if arr.dtype == target_dtype:
         if copy:
             return arr.copy()
         return arr
 
+    # If copy is requested, convert and return the array
     if copy:
         return arr.astype(target_dtype)
 
+    # IF we reach here, the dtypes differ and no copy was requested
     raise TypeError(
         f"Array has dtype {arr.dtype} but compiled precision is "
         f"{target_dtype}. Use copy=True to convert, or pass an array "
