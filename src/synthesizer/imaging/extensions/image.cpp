@@ -41,7 +41,7 @@ struct weighted_cell {
   struct cell *cell_ptr;
 
   /*! Cost of the cell, calculated as max_smoothing_length * particle_count */
-  FLOAT cost;
+  Float cost;
 
   /*! Whether the cell can be subdivided, i.e. if the cell is split */
   bool can_subdivide;
@@ -54,7 +54,7 @@ struct weighted_cell {
   weighted_cell(struct cell *c) : cell_ptr(c) {
     // Cost = max_smoothing_length * particle_count
     // This represents kernel area × work per kernel
-    FLOAT max_sml = sqrt(c->max_sml_squ);
+    Float max_sml = sqrt(c->max_sml_squ);
     cost = max_sml * c->part_count;
     can_subdivide = c->split;
   }
@@ -83,7 +83,7 @@ inline bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
  */
 static std::vector<weighted_cell>
 build_balanced_work_list(struct cell *root, int nthreads,
-                         FLOAT balance_tolerance = 2.0) {
+                         Float balance_tolerance = 2.0) {
 
   double start_time = tic();
 
@@ -95,8 +95,8 @@ build_balanced_work_list(struct cell *root, int nthreads,
 
   while (true) {
     // Calculate statistics
-    FLOAT total_cost = 0.0;
-    FLOAT max_cost = 0.0;
+    Float total_cost = 0.0;
+    Float max_cost = 0.0;
     int subdividable_cells = 0;
 
     for (const auto &wc : work_list) {
@@ -106,7 +106,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
         subdividable_cells++;
     }
 
-    FLOAT avg_cost = total_cost / work_list.size();
+    Float avg_cost = total_cost / work_list.size();
 
     // Check termination conditions
     bool enough_cells = work_list.size() >= static_cast<size_t>(target_cells);
@@ -151,9 +151,9 @@ build_balanced_work_list(struct cell *root, int nthreads,
   }
 
   // Final statistics
-  FLOAT final_total_cost = 0.0;
-  FLOAT final_max_cost = 0.0;
-  FLOAT final_min_cost = 1e99;
+  Float final_total_cost = 0.0;
+  Float final_max_cost = 0.0;
+  Float final_min_cost = 1e99;
 
   for (const auto &wc : work_list) {
     final_total_cost += wc.cost;
@@ -184,11 +184,11 @@ build_balanced_work_list(struct cell *root, int nthreads,
  * @param nimgs The number of images to populate.
  * @param pix_values The pixel values to use for each image.
  */
-static void populate_pixel_recursive(const struct cell *c, FLOAT threshold,
-                                     int kdim, const FLOAT *kernel,
-                                     FLOAT norm_factor, int npart, FLOAT *out,
-                                     int nimgs, const FLOAT *pix_values,
-                                     const FLOAT res, const int npix_x,
+static void populate_pixel_recursive(const struct cell *c, Float threshold,
+                                     int kdim, const Float *kernel,
+                                     Float norm_factor, int npart, Float *out,
+                                     int nimgs, const Float *pix_values,
+                                     const Float res, const int npix_x,
                                      const int npix_y) {
 
   /* Is the cell split? */
@@ -216,19 +216,19 @@ static void populate_pixel_recursive(const struct cell *c, FLOAT threshold,
      * then copy the results back to the global image at the end. */
 
     /* Calculate the maximum kernel radius for particles in this cell. */
-    FLOAT max_sml = sqrt(c->max_sml_squ);
-    FLOAT max_kernel_radius = max_sml * threshold;
+    Float max_sml = sqrt(c->max_sml_squ);
+    Float max_kernel_radius = max_sml * threshold;
 
     /* Add a buffer around the cell to account for kernel overlap. We need
      * to include the maximum kernel radius plus an extra pixel buffer to
      * ensure we capture all affected pixels. */
-    FLOAT buffer = max_kernel_radius + res;
+    Float buffer = max_kernel_radius + res;
 
     /* Calculate the world coordinate bounds of the region this cell affects. */
-    FLOAT x_min_world = c->loc[0] - buffer;
-    FLOAT x_max_world = c->loc[0] + c->width + buffer;
-    FLOAT y_min_world = c->loc[1] - buffer;
-    FLOAT y_max_world = c->loc[1] + c->width + buffer;
+    Float x_min_world = c->loc[0] - buffer;
+    Float x_max_world = c->loc[0] + c->width + buffer;
+    Float y_min_world = c->loc[1] - buffer;
+    Float y_max_world = c->loc[1] + c->width + buffer;
 
     /* Convert world coordinates to pixel indices, clamping to image bounds. */
     int i_min = std::max(0, (int)floor(x_min_world / res));
@@ -248,7 +248,7 @@ static void populate_pixel_recursive(const struct cell *c, FLOAT threshold,
     /* Allocate and zero-initialize the local image buffer. This will store
      * contributions from all particles in this cell before we copy them
      * back to the global image. */
-    std::vector<FLOAT> local_img(local_width * local_height * nimgs, 0.0);
+    std::vector<Float> local_img(local_width * local_height * nimgs, 0.0);
 
     /* Unpack the particles from this leaf cell. */
     struct particle *parts = c->particles;
@@ -283,22 +283,22 @@ static void populate_pixel_recursive(const struct cell *c, FLOAT threshold,
           }
 
           /* Calculate the pixel bounds. */
-          FLOAT pix_x_min = iii * res;
-          FLOAT pix_x_max = (iii + 1) * res;
-          FLOAT pix_y_min = jjj * res;
-          FLOAT pix_y_max = (jjj + 1) * res;
+          Float pix_x_min = iii * res;
+          Float pix_x_max = (iii + 1) * res;
+          Float pix_y_min = jjj * res;
+          Float pix_y_max = (jjj + 1) * res;
 
           /* Calculate kernel support radius */
-          FLOAT kernel_radius = part->sml * threshold;
+          Float kernel_radius = part->sml * threshold;
 
           /* Fast path: kernel wholly inside this pixel. */
-          FLOAT kvalue;
+          Float kvalue;
           if (kernel_fully_inside_pixel(part, pix_x_min, pix_x_max, pix_y_min,
                                         pix_y_max, kernel_radius)) {
             kvalue = 1.0; /* Entire kernel mass inside this pixel */
           } else {
             /* Determine overlap of kernel and pixel. */
-            FLOAT q_min, q_max, q_center;
+            Float q_min, q_max, q_center;
             calculate_pixel_kernel_overlap(
                 part->pos[0], part->pos[1], pix_x_min, pix_x_max, pix_y_min,
                 pix_y_max, part->sml, q_min, q_max, q_center);
@@ -404,12 +404,12 @@ static void populate_pixel_recursive(const struct cell *c, FLOAT threshold,
  * @return void
  */
 #ifdef WITH_OPENMP
-void populate_smoothed_image_parallel(const FLOAT *pix_values,
-                                      const FLOAT *kernel, const FLOAT res,
+void populate_smoothed_image_parallel(const Float *pix_values,
+                                      const Float *kernel, const Float res,
                                       const int npix_x, const int npix_y,
-                                      const int npart, const FLOAT threshold,
-                                      const int kdim, FLOAT norm_factor,
-                                      FLOAT *img, const int nimgs,
+                                      const int npart, const Float threshold,
+                                      const int kdim, Float norm_factor,
+                                      Float *img, const int nimgs,
                                       struct cell *root, const int nthreads) {
 
   /* Build a balanced work list. */
@@ -457,12 +457,12 @@ void populate_smoothed_image_parallel(const FLOAT *pix_values,
  * @param nimgs: The number of images to populate.
  * @param root: The root of the tree.
  */
-void populate_smoothed_image_serial(const FLOAT *pix_values,
-                                    const FLOAT *kernel, const FLOAT res,
+void populate_smoothed_image_serial(const Float *pix_values,
+                                    const Float *kernel, const Float res,
                                     const int npix_x, const int npix_y,
-                                    const int npart, const FLOAT threshold,
-                                    const int kdim, FLOAT norm_factor,
-                                    FLOAT *img, const int nimgs,
+                                    const int npart, const Float threshold,
+                                    const int kdim, Float norm_factor,
+                                    Float *img, const int nimgs,
                                     struct cell *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
@@ -503,16 +503,16 @@ void populate_smoothed_image_serial(const FLOAT *pix_values,
  * @param root: The root of the tree.
  * @param nthreads: The number of threads to use.
  */
-void populate_smoothed_image(const FLOAT *pix_values, const FLOAT *kernel,
-                             const FLOAT res, const int npix_x,
+void populate_smoothed_image(const Float *pix_values, const Float *kernel,
+                             const Float res, const int npix_x,
                              const int npix_y, const int npart,
-                             const FLOAT threshold, const int kdim,
-                             FLOAT *img, const int nimgs, struct cell *root,
+                             const Float threshold, const int kdim,
+                             Float *img, const int nimgs, struct cell *root,
                              const int nthreads) {
   double start = tic();
 
   /* Compute normalization to conserve flux when truncating kernel. */
-  FLOAT norm_factor = compute_kernel_norm(kernel, kdim, threshold);
+  Float norm_factor = compute_kernel_norm(kernel, kdim, threshold);
 
   /* If we have multiple threads and OpenMP we can parallelise. */
 #ifdef WITH_OPENMP
@@ -582,15 +582,15 @@ PyObject *make_img(PyObject *self, PyObject *args) {
                         &nthreads))
     return NULL;
 
-  FLOAT res = (FLOAT)res_in;
-  FLOAT threshold = (FLOAT)threshold_in;
+  Float res = (Float)res_in;
+  Float threshold = (Float)threshold_in;
 
   /* Get pointers to the actual data. */
-  const FLOAT *pix_values = extract_data_float(np_pix_values, "pix_values");
-  const FLOAT *smoothing_lengths =
+  const Float *pix_values = extract_data_float(np_pix_values, "pix_values");
+  const Float *smoothing_lengths =
       extract_data_float(np_smoothing_lengths, "smoothing_lengths");
-  const FLOAT *pos = extract_data_float(np_pos, "pos");
-  const FLOAT *kernel = extract_data_float(np_kernel, "kernel");
+  const Float *pos = extract_data_float(np_pos, "pos");
+  const Float *kernel = extract_data_float(np_kernel, "kernel");
 
   /* One of the data extractions failed and set a Python error. Return NULL
    * to propagate the exception back to Python. */
@@ -620,7 +620,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
   PyArrayObject *np_img =
       (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_FLOAT_T, 0);
-  FLOAT *img = (FLOAT *)PyArray_DATA(np_img);
+  Float *img = (Float *)PyArray_DATA(np_img);
 
   toc("Creating output image array", out_start);
 
