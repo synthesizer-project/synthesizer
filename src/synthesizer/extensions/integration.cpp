@@ -89,9 +89,15 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
 
   /* Get the data pointer of the xs array */
   Float *x = extract_data_float(xs, "xs");
+  if (x == NULL) {
+    return NULL; /* Type error already set */
+  }
 
   /* Get the data pointer of the ys array */
-  Float *y = (Float *)PyArray_DATA(ys);
+  Float *y = extract_data_float(ys, "ys");
+  if (y == NULL) {
+    return NULL; /* Type error already set */
+  }
 
   /* Number of elements excluding the last axis */
   npy_intp num_elements = PyArray_SIZE(ys) / n;
@@ -218,9 +224,15 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
 
   /* Get the data pointer of the xs array */
   Float *x = extract_data_float(xs, "xs");
+  if (x == NULL) {
+    return NULL; /* Type error already set */
+  }
 
   /* Get the data pointer of the ys array */
-  Float *y = (Float *)PyArray_DATA(ys);
+  Float *y = extract_data_float(ys, "ys");
+  if (y == NULL) {
+    return NULL; /* Type error already set */
+  }
 
   /* Number of elements excluding the last axis */
   npy_intp num_elements = PyArray_SIZE(ys) / n;
