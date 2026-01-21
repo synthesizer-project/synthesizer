@@ -48,7 +48,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   }
 
   /* Compute the width at this level. */
-  FLOAT width = c->width / 2;
+  Float width = c->width / 2;
 
   /* We need to split... get the progeny. */
   c->split = 1;
@@ -84,7 +84,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   for (int ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
-    FLOAT ipos[3] = {
+    Float ipos[3] = {
         particles[ipart].pos[0] - c->loc[0],
         particles[ipart].pos[1] - c->loc[1],
         particles[ipart].pos[2] - c->loc[2],
@@ -118,7 +118,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   for (int ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
-    FLOAT ipos[3] = {
+    Float ipos[3] = {
         particles[ipart].pos[0] - c->loc[0],
         particles[ipart].pos[1] - c->loc[1],
         particles[ipart].pos[2] - c->loc[2],
@@ -209,15 +209,15 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
  * @param npart The number of particles.
  * @param root The root cell.
  */
-static void construct_particles(struct particle *particles, const FLOAT *pos,
-                                const FLOAT *sml, const FLOAT *surf_den_vals,
+static void construct_particles(struct particle *particles, const Float *pos,
+                                const Float *sml, const Float *surf_den_vals,
                                 const int npart, struct cell *root) {
 
   double part_start = tic();
 
   /* Create an array to hold the bounds of the particle distribution. */
-  FLOAT max_val = std::numeric_limits<FLOAT>::max();
-  FLOAT bounds[6] = {max_val, 0, max_val, 0, max_val, 0};
+  Float max_val = std::numeric_limits<Float>::max();
+  Float bounds[6] = {max_val, 0, max_val, 0, max_val, 0};
 
   /* Loop over gas particles and associate them with the root. We could
    * just attach the pointer but we already need to find the maximum sml in
@@ -248,7 +248,7 @@ static void construct_particles(struct particle *particles, const FLOAT *pos,
 
   /* Get the cell width based on the bounds we have found. Note that
    * we are assuming a cubic domain so the maximum width is the width. */
-  FLOAT width = bounds[1] - bounds[0];
+  Float width = bounds[1] - bounds[0];
   if (bounds[3] - bounds[2] > width)
     width = bounds[3] - bounds[2];
   if (bounds[5] - bounds[4] > width)
@@ -258,7 +258,7 @@ static void construct_particles(struct particle *particles, const FLOAT *pos,
   width *= 1.0001;
 
   /* Get the geometric mid point. */
-  FLOAT mid[3] = {0.5f * (bounds[0] + bounds[1]), 0.5f * (bounds[2] + bounds[3]),
+  Float mid[3] = {0.5f * (bounds[0] + bounds[1]), 0.5f * (bounds[2] + bounds[3]),
                    0.5f * (bounds[4] + bounds[5])};
 
   /* Recalculate the bounds using the width and midpoint. */
@@ -300,8 +300,8 @@ static void construct_particles(struct particle *particles, const FLOAT *pos,
  * @param maxdepth The maximum depth of the tree.
  * @param min_count The minimum number of particles in a leaf cell.
  */
-void construct_cell_tree(const FLOAT *pos, const FLOAT *sml,
-                         const FLOAT *surf_den_val, const int npart,
+void construct_cell_tree(const Float *pos, const Float *sml,
+                         const Float *surf_den_val, const int npart,
                          struct cell *root, int ncells, int maxdepth,
                          int min_count) {
 
@@ -370,12 +370,12 @@ void cleanup_cell_tree(struct cell *c) {
  *
  * @return The distance between the cells.
  */
-FLOAT min_projected_dist2(struct cell *c, FLOAT x, FLOAT y) {
+Float min_projected_dist2(struct cell *c, Float x, Float y) {
 
   /* Get the minimum separation along each axis (if the point is within the cell
    * along an axis then the separation should be 0). */
-  FLOAT dx = 0;
-  FLOAT dy = 0;
+  Float dx = 0;
+  Float dy = 0;
   if (!(x > c->loc[0] && x < c->loc[0] + c->width)) {
     dx = std::fmin(std::abs(c->loc[0] - x), std::abs(c->loc[0] + c->width - x));
   }

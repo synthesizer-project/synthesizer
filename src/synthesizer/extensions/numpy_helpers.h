@@ -15,7 +15,7 @@
  *
  * Ensures:
  *   - NumPy array
- *   - dtype == FLOAT
+ *   - dtype == Float
  *   - C-contiguous
  *   - aligned
  *
@@ -59,8 +59,8 @@ static inline PyArrayObject *require_float_array(PyObject *obj, int allow_copy,
 /*----------------------------------------------------------------------------
  * Convenience accessor
  *----------------------------------------------------------------------------*/
-static inline FLOAT *float_array_data(PyArrayObject *arr) {
-  return (FLOAT *)PyArray_DATA(arr);
+static inline Float *float_array_data(PyArrayObject *arr) {
+  return (Float *)PyArray_DATA(arr);
 }
 
 #endif /* NUMPY_HELPERS_H */

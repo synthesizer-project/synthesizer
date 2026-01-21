@@ -44,28 +44,28 @@
  * @param kdim The dimension of the kernel.
  * @param threshold The threshold for the kernel.
  */
-static void los_loop_serial(const FLOAT *pos_i, const FLOAT *pos_j,
-                            const FLOAT *smls, const FLOAT *surf_den_vals,
-                            const FLOAT *kernel, FLOAT *surf_dens,
+static void los_loop_serial(const Float *pos_i, const Float *pos_j,
+                            const Float *smls, const Float *surf_den_vals,
+                            const Float *kernel, Float *surf_dens,
                             const int npart_i, const int npart_j,
-                            const int kdim, const FLOAT threshold) {
+                            const int kdim, const Float threshold) {
 
   /* Loop over particle postions. */
   for (int i = 0; i < npart_i; i++) {
 
-    FLOAT x = pos_i[i * 3];
-    FLOAT y = pos_i[i * 3 + 1];
-    FLOAT z = pos_i[i * 3 + 2];
+    Float x = pos_i[i * 3];
+    Float y = pos_i[i * 3 + 1];
+    Float z = pos_i[i * 3 + 2];
 
     /* Loop over other particle postions. */
     for (int j = 0; j < npart_j; j++) {
 
       /* Get gas particle data. */
-      FLOAT xj = pos_j[j * 3];
-      FLOAT yj = pos_j[j * 3 + 1];
-      FLOAT zj = pos_j[j * 3 + 2];
-      FLOAT sml = smls[j];
-      FLOAT surf_den_val = surf_den_vals[j];
+      Float xj = pos_j[j * 3];
+      Float yj = pos_j[j * 3 + 1];
+      Float zj = pos_j[j * 3 + 2];
+      Float sml = smls[j];
+      Float surf_den_val = surf_den_vals[j];
 
       /* Skip straight away if the surface density particle is behind the z
        * position. */
@@ -74,11 +74,11 @@ static void los_loop_serial(const FLOAT *pos_i, const FLOAT *pos_j,
       }
 
       /* Calculate the projected x and y separations. */
-      FLOAT dx = xj - x;
-      FLOAT dy = yj - y;
+      Float dx = xj - x;
+      Float dy = yj - y;
 
       /* Calculate the impact parameter. */
-      FLOAT b = sqrt(dx * dx + dy * dy);
+      Float b = sqrt(dx * dx + dy * dy);
 
       /* Early skip if the star's line of sight doesn't fall in the gas
        * particles kernel. */
@@ -86,11 +86,11 @@ static void los_loop_serial(const FLOAT *pos_i, const FLOAT *pos_j,
         continue;
 
       /* Find fraction of smoothing length. */
-      FLOAT q = b / sml;
+      Float q = b / sml;
 
       /* Get the value of the kernel at q (handling q =1). */
       int index = std::min(kdim - 1, static_cast<int>(q * kdim));
-      FLOAT kvalue = kernel[index];
+      Float kvalue = kernel[index];
 
       /* Finally, compute the dust surface density itself. */
       surf_dens[i] += surf_den_val / (sml * sml) * kvalue;
@@ -123,11 +123,11 @@ static void los_loop_serial(const FLOAT *pos_i, const FLOAT *pos_j,
  * @param nthreads The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void los_loop_omp(const FLOAT *pos_i, const FLOAT *pos_j,
-                         const FLOAT *smls, const FLOAT *surf_den_vals,
-                         const FLOAT *kernel, FLOAT *surf_dens,
+static void los_loop_omp(const Float *pos_i, const Float *pos_j,
+                         const Float *smls, const Float *surf_den_vals,
+                         const Float *kernel, Float *surf_dens,
                          const int npart_i, const int npart_j, const int kdim,
-                         const FLOAT threshold, const int nthreads) {
+                         const Float threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
   int nparti_per_thread = npart_i / nthreads;
@@ -144,7 +144,7 @@ static void los_loop_omp(const FLOAT *pos_i, const FLOAT *pos_j,
 
     /* Get this threads chunk of the results array to write to. We get a chunk
      * here to avoid cache locality issues. */
-    FLOAT *surf_dens_thread = new FLOAT[end - start]();
+    Float *surf_dens_thread = new Float[end - start]();
 
     /* Loop over particle postions. */
     for (int i = start; i < end; i++) {
@@ -152,18 +152,18 @@ static void los_loop_omp(const FLOAT *pos_i, const FLOAT *pos_j,
       /* Get the relative index. */
       int ii = i - start;
 
-      FLOAT x = pos_i[i * 3];
-      FLOAT y = pos_i[i * 3 + 1];
-      FLOAT z = pos_i[i * 3 + 2];
+      Float x = pos_i[i * 3];
+      Float y = pos_i[i * 3 + 1];
+      Float z = pos_i[i * 3 + 2];
 
       for (int j = 0; j < npart_j; j++) {
 
         /* Get gas particle data. */
-        FLOAT xj = pos_j[j * 3];
-        FLOAT yj = pos_j[j * 3 + 1];
-        FLOAT zj = pos_j[j * 3 + 2];
-        FLOAT sml = smls[j];
-        FLOAT surf_den_val = surf_den_vals[j];
+        Float xj = pos_j[j * 3];
+        Float yj = pos_j[j * 3 + 1];
+        Float zj = pos_j[j * 3 + 2];
+        Float sml = smls[j];
+        Float surf_den_val = surf_den_vals[j];
 
         /* Skip straight away if the surface density particle is behind the z
          * position. */
@@ -172,11 +172,11 @@ static void los_loop_omp(const FLOAT *pos_i, const FLOAT *pos_j,
         }
 
         /* Calculate the projected x and y separations. */
-        FLOAT dx = xj - x;
-        FLOAT dy = yj - y;
+        Float dx = xj - x;
+        Float dy = yj - y;
 
         /* Calculate the impact parameter. */
-        FLOAT b = sqrt(dx * dx + dy * dy);
+        Float b = sqrt(dx * dx + dy * dy);
 
         /* Early skip if the star's line of sight doesn't fall in the gas
          * particles kernel. */
@@ -184,11 +184,11 @@ static void los_loop_omp(const FLOAT *pos_i, const FLOAT *pos_j,
           continue;
 
         /* Find fraction of smoothing length. */
-        FLOAT q = b / sml;
+        Float q = b / sml;
 
         /* Get the value of the kernel at q (handling q =1). */
         int index = std::min(kdim - 1, static_cast<int>(q * kdim));
-        FLOAT kvalue = kernel[index];
+        Float kvalue = kernel[index];
 
         /* Finally, compute the dust surface density itself. */
         surf_dens_thread[ii] += surf_den_val / (sml * sml) * kvalue;
@@ -228,10 +228,10 @@ static void los_loop_omp(const FLOAT *pos_i, const FLOAT *pos_j,
  * @param threshold The threshold for the kernel.
  * @param nthreads The number of threads to use.
  */
-static void los_loop(const FLOAT *pos_i, const FLOAT *pos_j,
-                     const FLOAT *smls, const FLOAT *surf_den_vals,
-                     const FLOAT *kernel, FLOAT *surf_dens, const int npart_i,
-                     const int npart_j, const int kdim, const FLOAT threshold,
+static void los_loop(const Float *pos_i, const Float *pos_j,
+                     const Float *smls, const Float *surf_den_vals,
+                     const Float *kernel, Float *surf_dens, const int npart_i,
+                     const int npart_j, const int kdim, const Float threshold,
                      const int nthreads) {
 
   double start = tic();
@@ -275,10 +275,10 @@ static void los_loop(const FLOAT *pos_i, const FLOAT *pos_j,
  * @param kdim The dimension of the kernel.
  * @param kernel The kernel to use for the calculation.
  */
-static FLOAT calculate_los_recursive(struct cell *c, const FLOAT x,
-                                      const FLOAT y, const FLOAT z,
-                                      FLOAT threshold, int kdim,
-                                      const FLOAT *kernel) {
+static Float calculate_los_recursive(struct cell *c, const Float x,
+                                      const Float y, const Float z,
+                                      Float threshold, int kdim,
+                                      const Float *kernel) {
 
   /* Early exit if the cell is entirely behind the position. */
   if (c->loc[2] > z) {
@@ -292,7 +292,7 @@ static FLOAT calculate_los_recursive(struct cell *c, const FLOAT x,
   }
 
   /* The line of sight dust surface density. */
-  FLOAT surf_dens = 0.0;
+  Float surf_dens = 0.0;
 
   /* Is the cell split? */
   if (c->split) {
@@ -329,11 +329,11 @@ static FLOAT calculate_los_recursive(struct cell *c, const FLOAT x,
       }
 
       /* Calculate the x and y separations. */
-      FLOAT dx = part->pos[0] - x;
-      FLOAT dy = part->pos[1] - y;
+      Float dx = part->pos[0] - x;
+      Float dy = part->pos[1] - y;
 
       /* Calculate the impact parameter. */
-      FLOAT b = sqrt(dx * dx + dy * dy);
+      Float b = sqrt(dx * dx + dy * dy);
 
       /* Early skip if the star's line of sight doesn't fall in the gas
        * particles kernel. */
@@ -342,11 +342,11 @@ static FLOAT calculate_los_recursive(struct cell *c, const FLOAT x,
       }
 
       /* Find fraction of smoothing length. */
-      FLOAT q = b / part->sml;
+      Float q = b / part->sml;
 
       /* Get the value of the kernel at q (handling q =1). */
       int index = std::min(kdim - 1, static_cast<int>(q * kdim));
-      FLOAT kvalue = kernel[index];
+      Float kvalue = kernel[index];
 
       /* Finally, compute the surface density itself. */
       surf_dens += part->surf_den_var / (part->sml * part->sml) * kvalue;
@@ -374,10 +374,10 @@ static FLOAT calculate_los_recursive(struct cell *c, const FLOAT x,
  * @param kdim The dimension of the kernel.
  * @param threshold The threshold for the kernel.
  */
-static void los_tree_serial(struct cell *root, const FLOAT *pos_i,
-                            const FLOAT *kernel, FLOAT *surf_dens,
+static void los_tree_serial(struct cell *root, const Float *pos_i,
+                            const Float *kernel, Float *surf_dens,
                             const int npart_i, const int kdim,
-                            const FLOAT threshold) {
+                            const Float threshold) {
 
   /* Loop over the particles we are calculating the surface density for. */
   for (int i = 0; i < npart_i; i++) {
@@ -410,10 +410,10 @@ static void los_tree_serial(struct cell *root, const FLOAT *pos_i,
  * @param nthreads The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void los_tree_omp(struct cell *root, const FLOAT *pos_i,
-                         const FLOAT *kernel, FLOAT *surf_dens,
+static void los_tree_omp(struct cell *root, const Float *pos_i,
+                         const Float *kernel, Float *surf_dens,
                          const int npart_i, const int kdim,
-                         const FLOAT threshold, const int nthreads) {
+                         const Float threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
   int nparti_per_thread = npart_i / nthreads;
@@ -430,7 +430,7 @@ static void los_tree_omp(struct cell *root, const FLOAT *pos_i,
 
     /* Get this threads chunk of the results array to write to. We get a chunk
      * here to avoid cache locality issues. */
-    FLOAT *surf_dens_thread = new FLOAT[end - start]();
+    Float *surf_dens_thread = new Float[end - start]();
 
     /* Loop over the particles we are calculating the surface density for. */
     for (int i = start; i < end; i++) {
@@ -446,7 +446,7 @@ static void los_tree_omp(struct cell *root, const FLOAT *pos_i,
 #pragma omp critical
     {
       memcpy(&surf_dens[start], surf_dens_thread,
-             (end - start) * sizeof(FLOAT));
+             (end - start) * sizeof(Float));
     }
   }
 }
@@ -470,9 +470,9 @@ static void los_tree_omp(struct cell *root, const FLOAT *pos_i,
  * @param threshold The threshold for the kernel.
  * @param nthreads The number of threads to use.
  */
-static void los_tree(struct cell *root, const FLOAT *pos_i,
-                     const FLOAT *kernel, FLOAT *surf_dens, const int npart_i,
-                     const int kdim, const FLOAT threshold,
+static void los_tree(struct cell *root, const Float *pos_i,
+                     const Float *kernel, Float *surf_dens, const int npart_i,
+                     const int kdim, const Float threshold,
                      const int nthreads) {
 
   double start = tic();
@@ -550,11 +550,11 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   }
 
   /* Extract a pointers to the actual data in the numpy arrays. */
-  const FLOAT *kernel = extract_data_float(np_kernel, "kernel");
-  const FLOAT *pos_i = extract_data_float(np_pos_i, "pos_i");
-  const FLOAT *pos_j = extract_data_float(np_pos_j, "pos_j");
-  const FLOAT *smls = extract_data_float(np_smls, "smls");
-  const FLOAT *surf_den_val =
+  const Float *kernel = extract_data_float(np_kernel, "kernel");
+  const Float *pos_i = extract_data_float(np_pos_i, "pos_i");
+  const Float *pos_j = extract_data_float(np_pos_j, "pos_j");
+  const Float *smls = extract_data_float(np_smls, "smls");
+  const Float *surf_den_val =
       extract_data_float(np_surf_den_val, "surf_den_val");
 
   /* One of the data extractions failed and set a Python error. Return NULL
@@ -568,7 +568,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   npy_intp np_dims[1] = {npart_i};
   PyArrayObject *np_surf_dens =
       (PyArrayObject *)PyArray_ZEROS(1, np_dims, NPY_FLOAT_T, 0);
-  FLOAT *surf_dens = static_cast<FLOAT *>(PyArray_DATA(np_surf_dens));
+  Float *surf_dens = static_cast<Float *>(PyArray_DATA(np_surf_dens));
 
   /* No point constructing cells if there isn't enough gas to construct a tree
    * below depth 0. (and loop if we've been told to) */
@@ -576,7 +576,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
     /* Use the simple loop over stars and gas. */
     los_loop(pos_i, pos_j, smls, surf_den_val, kernel, surf_dens, npart_i,
-             npart_j, kdim, (FLOAT)threshold, nthreads);
+             npart_j, kdim, (Float)threshold, nthreads);
 
     toc("Calculating surface densities (with a loop)", start);
 
@@ -593,7 +593,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
                       MAX_DEPTH, min_count);
 
   /* Calculate the surface densities. */
-  los_tree(root, pos_i, kernel, surf_dens, npart_i, kdim, (FLOAT)threshold, nthreads);
+  los_tree(root, pos_i, kernel, surf_dens, npart_i, kdim, (Float)threshold, nthreads);
 
   /* Clean up. */
   cleanup_cell_tree(root);

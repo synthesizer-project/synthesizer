@@ -68,7 +68,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Get the grid weights we'll work on. */
-  FLOAT *sfzh = grid_props->get_grid_weights();
+  Float *sfzh = grid_props->get_grid_weights();
   RETURN_IF_PYERR();
 
   /* With everything set up we can compute the weights for each particle using

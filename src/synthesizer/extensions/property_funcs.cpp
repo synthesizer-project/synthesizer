@@ -33,17 +33,17 @@ double *extract_data_double(PyArrayObject *np_arr, const char *name) {
 }
 
 /**
- * @brief Extract FLOAT data from a numpy array.
+ * @brief Extract Float data from a numpy array.
  *
  * This extracts data matching the compiled precision (float32 or float64).
  *
  * @param np_arr: The numpy array to extract.
  * @param name: The name of the numpy array. (For error messages)
  */
-FLOAT *extract_data_float(PyArrayObject *np_arr, const char *name) {
+Float *extract_data_float(PyArrayObject *np_arr, const char *name) {
 
   /* Extract a pointer to the data */
-  FLOAT *data = reinterpret_cast<FLOAT *>(PyArray_DATA(np_arr));
+  Float *data = reinterpret_cast<Float *>(PyArray_DATA(np_arr));
   if (data == NULL) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);

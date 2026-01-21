@@ -50,15 +50,15 @@ public:
   std::array<int, MAX_GRID_NDIM + 1> unravel_spectra_index(int index) const;
 
   /* Prototypes for getters. */
-  FLOAT *get_spectra() const;
-  FLOAT get_spectra_at(int grid_ind, int ilam) const;
-  FLOAT *get_lam() const;
-  FLOAT *get_axis(int idim) const;
-  std::array<FLOAT *, MAX_GRID_NDIM> get_all_axes() const;
-  FLOAT get_axis_at(int idim, int ind) const;
-  FLOAT *get_grid_weights();
+  Float *get_spectra() const;
+  Float get_spectra_at(int grid_ind, int ilam) const;
+  Float *get_lam() const;
+  Float *get_axis(int idim) const;
+  std::array<Float *, MAX_GRID_NDIM> get_all_axes() const;
+  Float get_axis_at(int idim, int ind) const;
+  Float *get_grid_weights();
   PyArrayObject *get_np_grid_weights() const;
-  FLOAT get_grid_weight_at(int ind) const;
+  Float get_grid_weight_at(int ind) const;
 
   /* Is wavelength masked? */
   bool lam_is_masked(int ind) const;
@@ -86,7 +86,7 @@ private:
   PyArrayObject *np_grid_weights_;
 
   /* A pointer to the grid weights array data. */
-  FLOAT *grid_weights_ = nullptr;
+  Float *grid_weights_ = nullptr;
 
   /* Flag for whether we need to populate the grid weights */
   bool need_grid_weights_ = true;

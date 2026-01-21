@@ -10,9 +10,9 @@
  *----------------------------------------------------------------------------*/
 
 #ifdef SYNTHESIZER_SINGLE_PRECISION
-typedef float FLOAT;
+typedef float Float;
 #else
-typedef double FLOAT;
+typedef double Float;
 #endif
 
 /*----------------------------------------------------------------------------
@@ -33,6 +33,6 @@ typedef double FLOAT;
  * Size helper
  *----------------------------------------------------------------------------*/
 
-#define FLOAT_BYTES ((int)sizeof(FLOAT))
+#define FLOAT_BYTES ((int)sizeof(Float))
 
 #endif /* DATA_TYPES_H */

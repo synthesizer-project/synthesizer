@@ -39,7 +39,7 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
   /* Allocate the output spectra. */
   PyArrayObject *np_spectra =
       (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_FLOAT_T, 0);
-  FLOAT *spectra = static_cast<FLOAT *>(PyArray_DATA(np_spectra));
+  Float *spectra = static_cast<Float *>(PyArray_DATA(np_spectra));
 
   /* Loop over wavelengths */
   for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
@@ -53,14 +53,14 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
     for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
       /* Get the weight. */
-      const FLOAT weight = grid_props->get_grid_weight_at(grid_ind);
+      const Float weight = grid_props->get_grid_weight_at(grid_ind);
 
       /* Skip zero weight cells. */
       if (weight <= 0)
         continue;
 
       /* Get the grid spectra value at this index and wavelength. */
-      FLOAT spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+      Float spec_val = grid_props->get_spectra_at(grid_ind, ilam);
 
       /* Add the contribution to this wavelength. */
       spectra[ilam] += spec_val * weight;
@@ -87,7 +87,7 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
   /* Allocate the output spectra. */
   PyArrayObject *np_spectra =
       (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_FLOAT_T, 0);
-  FLOAT *spectra = static_cast<FLOAT *>(PyArray_DATA(np_spectra));
+  Float *spectra = static_cast<Float *>(PyArray_DATA(np_spectra));
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -115,20 +115,20 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
       }
 
       /* Temporary value to hold the the spectra for this wavelength. */
-      FLOAT this_element = 0.0;
+      Float this_element = 0.0;
 
       /* Loop over grid cells. */
       for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
         /* Get the weight. */
-        const FLOAT weight = grid_props->get_grid_weight_at(grid_ind);
+        const Float weight = grid_props->get_grid_weight_at(grid_ind);
 
         /* Skip zero weight cells. */
         if (weight <= 0)
           continue;
 
         /* Get the grid spectra value at this index and wavelength. */
-        FLOAT spec_val = grid_props->get_spectra_at(grid_ind, start + ilam);
+        Float spec_val = grid_props->get_spectra_at(grid_ind, start + ilam);
 
         /* Add the contribution to this wavelength. */
         this_element += spec_val * weight;
@@ -218,7 +218,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Get existing grid weights or allocate new ones. */
-  FLOAT *grid_weights = grid_props->get_grid_weights();
+  Float *grid_weights = grid_props->get_grid_weights();
   RETURN_IF_PYERR();
 
   /* With everything set up we can compute the weights for each particle using

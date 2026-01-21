@@ -21,7 +21,7 @@
  * @param nlam: The number of wavelengths in the spectra.
  * @param npart: The number of particles.
  */
-static void reduce_spectra_serial(FLOAT *spectra, FLOAT *part_spectra,
+static void reduce_spectra_serial(Float *spectra, Float *part_spectra,
                                   int nlam, int npart) {
 
   /* Cast npart to size_t for safety in the loop. */
@@ -51,7 +51,7 @@ static void reduce_spectra_serial(FLOAT *spectra, FLOAT *part_spectra,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void reduce_spectra_parallel(FLOAT *spectra, FLOAT *part_spectra,
+static void reduce_spectra_parallel(Float *spectra, Float *part_spectra,
                                     int nlam, int npart, int nthreads) {
 
   /* Cast npart to size_t for safety in the loop. */
@@ -70,7 +70,7 @@ static void reduce_spectra_parallel(FLOAT *spectra, FLOAT *part_spectra,
 #pragma omp parallel num_threads(nthreads)
   {
     // Thread-local accumulation to avoid false sharing and atomics
-    std::vector<FLOAT> local(nlam, 0.0);
+    std::vector<Float> local(nlam, 0.0);
 #pragma omp for nowait schedule(static)
     for (size_t p = 0; p < npart; p++) {
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -103,7 +103,7 @@ static void reduce_spectra_parallel(FLOAT *spectra, FLOAT *part_spectra,
  * @param npart: The number of particles.
  * @param nthreads: The number of threads to use.
  */
-void reduce_spectra(FLOAT *spectra, FLOAT *part_spectra, int nlam, int npart,
+void reduce_spectra(Float *spectra, Float *part_spectra, int nlam, int npart,
                     int nthreads) {
 
   double start_time = tic();

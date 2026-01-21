@@ -31,7 +31,7 @@ public:
   std::vector<int> grid_indices;
 
   /* The fractions of the particle's mass in each grid cell (for CIC). */
-  std::vector<FLOAT> grid_fracs;
+  std::vector<Float> grid_fracs;
 
   /* Constructor */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
@@ -41,14 +41,14 @@ public:
   ~Particles();
 
   /* Prototypes for getters. */
-  FLOAT *get_weights() const;
-  FLOAT *get_velocities() const;
-  FLOAT **get_all_props(int ndim) const;
-  FLOAT *get_part_props(int idim) const;
-  FLOAT get_weight_at(int pind) const;
-  FLOAT get_vel_at(int pind) const;
+  Float *get_weights() const;
+  Float *get_velocities() const;
+  Float **get_all_props(int ndim) const;
+  Float *get_part_props(int idim) const;
+  Float get_weight_at(int pind) const;
+  Float get_vel_at(int pind) const;
   npy_bool get_mask_at(int pind) const;
-  FLOAT get_part_prop_at(int idim, int pind) const;
+  Float get_part_prop_at(int idim, int pind) const;
 
   /* Is a particle masked? */
   bool part_is_masked(int pind) const;

@@ -57,7 +57,7 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
 }
 
 /**
- * @brief Get a FLOAT value at a specific index in a numpy array.
+ * @brief Get a Float value at a specific index in a numpy array.
  *
  * This function assumes the numpy array is of the compiled precision type
  * (float32 or float64) and contiguous.
@@ -66,9 +66,9 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
  *
  * @param np_arr: The numpy array to access.
  * @param ind: The index to access.
- * @return The FLOAT value at the specified index.
+ * @return The Float value at the specified index.
  */
-static inline FLOAT get_float_at(PyArrayObject *np_arr, npy_intp ind) {
+static inline Float get_float_at(PyArrayObject *np_arr, npy_intp ind) {
   if (PyArray_TYPE(np_arr) != NPY_FLOAT_T) {
     char error_msg[256];
     snprintf(error_msg, sizeof(error_msg),
@@ -88,7 +88,7 @@ static inline FLOAT get_float_at(PyArrayObject *np_arr, npy_intp ind) {
   }
 
   if (PyArray_ISCONTIGUOUS(np_arr)) {
-    const FLOAT *data_ptr = static_cast<const FLOAT *>(PyArray_DATA(np_arr));
+    const Float *data_ptr = static_cast<const Float *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
     PyErr_SetString(
@@ -179,9 +179,9 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
 
 /* Prototypes */
 double *extract_data_double(PyArrayObject *np_arr, const char *name);
-FLOAT *extract_data_float(PyArrayObject *np_arr, const char *name);
+Float *extract_data_float(PyArrayObject *np_arr, const char *name);
 int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
-FLOAT **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
+Float **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 
 #endif // PROPERTY_FUNCS_H_

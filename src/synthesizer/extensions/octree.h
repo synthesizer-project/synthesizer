@@ -20,13 +20,13 @@
 struct particle {
 
   /* Position of the particle. */
-  FLOAT pos[3];
+  Float pos[3];
 
   /* Smoothing length of the particle. */
-  FLOAT sml;
+  Float sml;
 
   /* Surface density variable. */
-  FLOAT surf_den_var;
+  Float surf_den_var;
 
   /*! The index of the particle in the original array. */
   int index;
@@ -38,8 +38,8 @@ struct particle {
 struct cell {
 
   /* Location and width */
-  FLOAT loc[3];
-  FLOAT width;
+  Float loc[3];
+  Float width;
 
   /* Is it split? */
   int split;
@@ -52,7 +52,7 @@ struct cell {
   struct particle *particles;
 
   /* Store the square of the maximum smoothing length. */
-  FLOAT max_sml_squ;
+  Float max_sml_squ;
 
   /* Pointers to cells below this one. */
   struct cell *progeny;
@@ -62,11 +62,11 @@ struct cell {
 };
 
 /* Prototypes. */
-void construct_cell_tree(const FLOAT *pos, const FLOAT *sml,
-                         const FLOAT *surf_den_val, const int npart,
+void construct_cell_tree(const Float *pos, const Float *sml,
+                         const Float *surf_den_val, const int npart,
                          struct cell *root, int ncells, int maxdepth,
                          int min_count);
 void cleanup_cell_tree(struct cell *c);
-FLOAT min_projected_dist2(struct cell *c, FLOAT x, FLOAT y);
+Float min_projected_dist2(struct cell *c, Float x, Float y);
 
 #endif // OCTREE_H_

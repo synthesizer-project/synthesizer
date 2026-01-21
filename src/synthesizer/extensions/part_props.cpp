@@ -61,8 +61,8 @@ Particles::~Particles() {
  *
  * @return The weights of the particles.
  */
-FLOAT *Particles::get_weights() const {
-  return (FLOAT *)PyArray_DATA(np_weights_);
+Float *Particles::get_weights() const {
+  return (Float *)PyArray_DATA(np_weights_);
 }
 
 /**
@@ -70,8 +70,8 @@ FLOAT *Particles::get_weights() const {
  *
  * @return The velocities of the particles.
  */
-FLOAT *Particles::get_velocities() const {
-  return (FLOAT *)PyArray_DATA(np_velocities_);
+Float *Particles::get_velocities() const {
+  return (Float *)PyArray_DATA(np_velocities_);
 }
 
 /**
@@ -79,9 +79,9 @@ FLOAT *Particles::get_velocities() const {
  *
  * @return The properties of the particles.
  */
-FLOAT **Particles::get_all_props(int ndim) const {
+Float **Particles::get_all_props(int ndim) const {
   /* Allocate a single array for particle properties. */
-  FLOAT **part_props = new FLOAT *[ndim];
+  Float **part_props = new Float *[ndim];
   if (part_props == NULL) {
     PyErr_SetString(PyExc_MemoryError,
                     "Failed to allocate memory for part_props.");
@@ -98,7 +98,7 @@ FLOAT **Particles::get_all_props(int ndim) const {
       PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
       return NULL;
     }
-    part_props[idim] = (FLOAT *)PyArray_DATA(np_part_arr);
+    part_props[idim] = (Float *)PyArray_DATA(np_part_arr);
   }
 
   /* Success. */
@@ -110,7 +110,7 @@ FLOAT **Particles::get_all_props(int ndim) const {
  *
  * @return The properties of the particles.
  */
-FLOAT *Particles::get_part_props(int idim) const {
+Float *Particles::get_part_props(int idim) const {
   /* Get the array stored at idim. */
   PyArrayObject *np_part_arr =
       (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
@@ -120,7 +120,7 @@ FLOAT *Particles::get_part_props(int idim) const {
   }
 
   /* Extract the data from the numpy array. */
-  FLOAT *part_arr = (FLOAT *)PyArray_DATA(np_part_arr);
+  Float *part_arr = (Float *)PyArray_DATA(np_part_arr);
   if (part_arr == NULL) {
     PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
     return NULL;
@@ -134,7 +134,7 @@ FLOAT *Particles::get_part_props(int idim) const {
  * @param pind: The index of the particle.
  * @return The weight of the particle at the given index.
  */
-FLOAT Particles::get_weight_at(int pind) const {
+Float Particles::get_weight_at(int pind) const {
   return get_float_at(np_weights_, pind);
 }
 
@@ -144,7 +144,7 @@ FLOAT Particles::get_weight_at(int pind) const {
  * @param pind: The index of the particle.
  * @return The velocity of the particle at the given index.
  */
-FLOAT Particles::get_vel_at(int pind) const {
+Float Particles::get_vel_at(int pind) const {
   return get_float_at(np_velocities_, pind);
 }
 
@@ -176,13 +176,13 @@ npy_bool Particles::get_mask_at(int pind) const {
  * @param pind: The index of the particle.
  * @return The property of the particle at the given index.
  */
-FLOAT Particles::get_part_prop_at(int idim, int pind) const {
+Float Particles::get_part_prop_at(int idim, int pind) const {
   /* Get the array stored at idim. */
   PyArrayObject *np_part_arr =
       (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
   if (np_part_arr == NULL) {
     PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-    return std::numeric_limits<FLOAT>::quiet_NaN();
+    return std::numeric_limits<Float>::quiet_NaN();
   }
 
   /* If we have a size 1 array then we have a fixed scalar value. In this case
@@ -250,7 +250,7 @@ static void get_particle_indices_and_fracs_serial(GridProps *grid_props,
 
     /* Get the grid indices and cell fractions for the particle. */
     std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<FLOAT, MAX_GRID_NDIM> axis_fracs;
+    std::array<Float, MAX_GRID_NDIM> axis_fracs;
     get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
     /* Compute base linear index for this particle */
@@ -306,7 +306,7 @@ static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
 
     // Get the grid indices and cell fractions for the particle.
     std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<FLOAT, MAX_GRID_NDIM> axis_fracs;
+    std::array<Float, MAX_GRID_NDIM> axis_fracs;
     get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
     // Compute base linear index for this particle
