@@ -35,7 +35,7 @@ from synthesizer.galaxy import galaxy
 from synthesizer.galaxy import galaxy as Galaxy  # add a convenient alias
 from synthesizer.grid import Grid
 from synthesizer.instruments import filters
-from synthesizer.utils import art, integrate, plt, stats, util_funcs
+from synthesizer.utils import art, integrate, plt, precision, stats, util_funcs
 
 # Define the __all__ variable to control what is imported with
 # 'from synthesizer import *'
@@ -52,6 +52,7 @@ __all__ = [
     "check_openmp",
     "filters",
     "LineCollection",
+    "precision",
     "__version__",
     "BASE_DIR",
     "DATA_DIR",
