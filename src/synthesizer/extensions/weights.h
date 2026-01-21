@@ -10,6 +10,7 @@
 #include <string.h>
 
 /* Local includes */
+#include "data_types.h"
 #include "grid_props.h"
 #include "index_utils.h"
 #include "macros.h"
@@ -25,8 +26,8 @@
  * @param arr: The array to search in.
  * @param val: The value to search for.
  */
-static inline int binary_search(int low, int high, const double *arr,
-                                const double val) {
+static inline int binary_search(int low, int high, const FLOAT *arr,
+                                const FLOAT val) {
 
   /* While we don't have a pair of adjacent indices. */
   int diff = high - low;
@@ -64,21 +65,21 @@ static inline int binary_search(int low, int high, const double *arr,
  */
 static inline void
 get_part_ind_frac_cic(std::array<int, MAX_GRID_NDIM> &part_indices,
-                      std::array<double, MAX_GRID_NDIM> &axis_fracs,
+                      std::array<FLOAT, MAX_GRID_NDIM> &axis_fracs,
                       GridProps *grid_props, Particles *parts, int p) {
 
   /* Loop over dimensions, finding the mass weightings and indices. */
   for (int dim = 0; dim < grid_props->ndim; dim++) {
 
     /* Get the array of grid coordinates for this dimension. */
-    const double *grid_axis = grid_props->get_axis(dim);
+    const FLOAT *grid_axis = grid_props->get_axis(dim);
     const int dim_size = grid_props->dims[dim];
 
     /* Get the particle's value along this dimension. */
-    const double part_val = parts->get_part_prop_at(dim, p);
+    const FLOAT part_val = parts->get_part_prop_at(dim, p);
 
     int lower, upper;
-    double frac;
+    FLOAT frac;
 
     /* Handle values outside the grid bounds. Clamp to edges. */
     if (part_val <= grid_axis[0]) {
@@ -105,8 +106,8 @@ get_part_ind_frac_cic(std::array<int, MAX_GRID_NDIM> &part_indices,
       lower = upper - 1;
 
       /* Compute the linear fraction between the two grid points. */
-      const double low = grid_axis[lower];
-      const double high = grid_axis[upper];
+      const FLOAT low = grid_axis[lower];
+      const FLOAT high = grid_axis[upper];
       frac = (part_val - low) / (high - low);
     }
 
@@ -136,11 +137,11 @@ get_part_inds_ngp(std::array<int, MAX_GRID_NDIM> &part_indices,
   for (int dim = 0; dim < grid_props->ndim; dim++) {
 
     /* Get this array of grid coordinate values for this dimension. */
-    const double *grid_axis = grid_props->get_axis(dim);
+    const FLOAT *grid_axis = grid_props->get_axis(dim);
     const int dim_size = grid_props->dims[dim];
 
     /* Get the particle's coordinate along this axis. */
-    const double part_val = parts->get_part_prop_at(dim, p);
+    const FLOAT part_val = parts->get_part_prop_at(dim, p);
 
     int part_cell;
 

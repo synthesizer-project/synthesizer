@@ -14,6 +14,9 @@
 #include "numpy_init.h"
 #include <Python.h>
 
+/* Local includes */
+#include "data_types.h"
+
 /**
  * @brief Get a double value at a specific index in a numpy array.
  *
@@ -49,6 +52,48 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
     PyErr_SetString(
         PyExc_ValueError,
         "[get_double_at]: Array must be contiguous to use get_double_at.");
+    return 0.0;
+  }
+}
+
+/**
+ * @brief Get a FLOAT value at a specific index in a numpy array.
+ *
+ * This function assumes the numpy array is of the compiled precision type
+ * (float32 or float64) and contiguous.
+ * If the array is not of the correct type, it will raise a TypeError.
+ * If the index is out of bounds, it will raise an IndexError.
+ *
+ * @param np_arr: The numpy array to access.
+ * @param ind: The index to access.
+ * @return The FLOAT value at the specified index.
+ */
+static inline FLOAT get_float_at(PyArrayObject *np_arr, npy_intp ind) {
+  if (PyArray_TYPE(np_arr) != NPY_FLOAT_T) {
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_float_at]: Array must be of type %s.", FLOAT_NAME);
+    PyErr_SetString(PyExc_TypeError, error_msg);
+    return 0.0;
+  }
+
+  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg),
+             "[get_float_at]: Index (%ld) out of bounds. Valid range is [0, "
+             "%ld).",
+             ind, PyArray_SIZE(np_arr));
+    PyErr_SetString(PyExc_IndexError, error_msg);
+    return 0.0;
+  }
+
+  if (PyArray_ISCONTIGUOUS(np_arr)) {
+    const FLOAT *data_ptr = static_cast<const FLOAT *>(PyArray_DATA(np_arr));
+    return data_ptr[ind];
+  } else {
+    PyErr_SetString(
+        PyExc_ValueError,
+        "[get_float_at]: Array must be contiguous to use get_float_at.");
     return 0.0;
   }
 }
@@ -134,8 +179,9 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
 
 /* Prototypes */
 double *extract_data_double(PyArrayObject *np_arr, const char *name);
+FLOAT *extract_data_float(PyArrayObject *np_arr, const char *name);
 int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
-double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
+FLOAT **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 
 #endif // PROPERTY_FUNCS_H_

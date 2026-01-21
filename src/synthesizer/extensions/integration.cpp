@@ -12,6 +12,7 @@
 
 /* Local includes. */
 #include "cpp_to_python.h"
+#include "data_types.h"
 #include "property_funcs.h"
 #include "timers.h"
 
@@ -21,9 +22,9 @@
  * @param xs 1D array of x values.
  * @param ys 1D array of y values.
  */
-static double *trapz_last_axis_serial(double *x, double *y, npy_intp n,
+static FLOAT *trapz_last_axis_serial(FLOAT *x, FLOAT *y, npy_intp n,
                                       npy_intp num_elements) {
-  double *integral = (double *)calloc(num_elements, sizeof(double));
+  FLOAT *integral = (FLOAT *)calloc(num_elements, sizeof(FLOAT));
 
   for (npy_intp i = 0; i < num_elements; ++i) {
     for (npy_intp j = 0; j < n - 1; ++j) {
@@ -43,9 +44,9 @@ static double *trapz_last_axis_serial(double *x, double *y, npy_intp n,
  * @param nthreads Number of threads to use.
  */
 #ifdef WITH_OPENMP
-static double *trapz_last_axis_parallel(double *x, double *y, npy_intp n,
+static FLOAT *trapz_last_axis_parallel(FLOAT *x, FLOAT *y, npy_intp n,
                                         npy_intp num_elements, int nthreads) {
-  double *integral = (double *)calloc(num_elements, sizeof(double));
+  FLOAT *integral = (FLOAT *)calloc(num_elements, sizeof(FLOAT));
 
 #pragma omp parallel for num_threads(nthreads)                                 \
     reduction(+ : integral[ : num_elements])
@@ -87,16 +88,16 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   npy_intp n = shape[ndim - 1];
 
   /* Get the data pointer of the xs array */
-  double *x = extract_data_double(xs, "xs");
+  FLOAT *x = extract_data_float(xs, "xs");
 
   /* Get the data pointer of the ys array */
-  double *y = (double *)PyArray_DATA(ys);
+  FLOAT *y = (FLOAT *)PyArray_DATA(ys);
 
   /* Number of elements excluding the last axis */
   npy_intp num_elements = PyArray_SIZE(ys) / n;
 
   /* Compute the integral with the appropriate function. */
-  double *integral;
+  FLOAT *integral;
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
     integral = trapz_last_axis_parallel(x, y, n, num_elements, nthreads);
@@ -113,7 +114,7 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
     result_shape[i] = shape[i];
   }
   PyArrayObject *result =
-      wrap_array_to_numpy<double>(ndim - 1, result_shape, integral);
+      wrap_array_to_numpy<FLOAT>(ndim - 1, result_shape, integral);
 
   /* Create the output object. */
   if (result == NULL) {
@@ -131,9 +132,9 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
  * @param xs 1D array of x values.
  * @param ys ND array of y values.
  */
-static double *simps_last_axis_serial(double *x, double *y, npy_intp n,
+static FLOAT *simps_last_axis_serial(FLOAT *x, FLOAT *y, npy_intp n,
                                       npy_intp num_elements) {
-  double *integral = (double *)calloc(num_elements, sizeof(double));
+  FLOAT *integral = (FLOAT *)calloc(num_elements, sizeof(FLOAT));
 
   for (npy_intp i = 0; i < num_elements; ++i) {
     if (n < 2) {
@@ -162,9 +163,9 @@ static double *simps_last_axis_serial(double *x, double *y, npy_intp n,
  * @param nthreads Number of threads to use.
  */
 #ifdef WITH_OPENMP
-static double *simps_last_axis_parallel(double *x, double *y, npy_intp n,
+static FLOAT *simps_last_axis_parallel(FLOAT *x, FLOAT *y, npy_intp n,
                                         npy_intp num_elements, int nthreads) {
-  double *integral = (double *)calloc(num_elements, sizeof(double));
+  FLOAT *integral = (FLOAT *)calloc(num_elements, sizeof(FLOAT));
 
 #pragma omp parallel for num_threads(nthreads)                                 \
     reduction(+ : integral[ : num_elements])
@@ -216,16 +217,16 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   npy_intp n = shape[ndim - 1];
 
   /* Get the data pointer of the xs array */
-  double *x = extract_data_double(xs, "xs");
+  FLOAT *x = extract_data_float(xs, "xs");
 
   /* Get the data pointer of the ys array */
-  double *y = (double *)PyArray_DATA(ys);
+  FLOAT *y = (FLOAT *)PyArray_DATA(ys);
 
   /* Number of elements excluding the last axis */
   npy_intp num_elements = PyArray_SIZE(ys) / n;
 
   /* Compute the integral with the appropriate function. */
-  double *integral;
+  FLOAT *integral;
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
     integral = simps_last_axis_parallel(x, y, n, num_elements, nthreads);
@@ -242,7 +243,7 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
     result_shape[i] = shape[i];
   }
   PyArrayObject *result =
-      wrap_array_to_numpy<double>(ndim - 1, result_shape, integral);
+      wrap_array_to_numpy<FLOAT>(ndim - 1, result_shape, integral);
 
   /* Create the output object. */
   if (result == NULL) {

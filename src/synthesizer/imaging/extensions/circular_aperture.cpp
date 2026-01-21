@@ -23,6 +23,7 @@
 #include <Python.h>
 
 /* Local includes */
+#include "../../extensions/data_types.h"
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
 
@@ -38,7 +39,7 @@
  * @param x - The input value.
  * @return The square root of x if x >= 0, otherwise 0.
  */
-static double floor_sqrt(double x) {
+static FLOAT floor_sqrt(FLOAT x) {
   if (x > 0) {
     return sqrt(x);
   } else {
@@ -53,7 +54,7 @@ static double floor_sqrt(double x) {
  * @param x2, y2 - Coordinates of the second point.
  * @return The Euclidean distance between the two points.
  */
-static double distance(double x1, double y1, double x2, double y2) {
+static FLOAT distance(FLOAT x1, FLOAT y1, FLOAT x2, FLOAT y2) {
   return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 }
 
@@ -66,9 +67,9 @@ static double distance(double x1, double y1, double x2, double y2) {
  * @param r - Radius of the circle.
  * @return The area of the circular arc.
  */
-static double area_arc(double x1, double y1, double x2, double y2, double r) {
-  double a = distance(x1, y1, x2, y2);
-  double theta = 2.0 * asin(0.5 * a / r);
+static FLOAT area_arc(FLOAT x1, FLOAT y1, FLOAT x2, FLOAT y2, FLOAT r) {
+  FLOAT a = distance(x1, y1, x2, y2);
+  FLOAT theta = 2.0 * asin(0.5 * a / r);
   return 0.5 * r * r * (theta - sin(theta));
 }
 
@@ -80,8 +81,8 @@ static double area_arc(double x1, double y1, double x2, double y2, double r) {
  * @param x3, y3 - Coordinates of the third vertex.
  * @return The area of the triangle.
  */
-static double area_triangle(double x1, double y1, double x2, double y2,
-                            double x3, double y3) {
+static FLOAT area_triangle(FLOAT x1, FLOAT y1, FLOAT x2, FLOAT y2,
+                            FLOAT x3, FLOAT y3) {
   return 0.5 * fabs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
 }
 
@@ -94,9 +95,9 @@ static double area_triangle(double x1, double y1, double x2, double y2,
  * @param r - Radius of the circle.
  * @return The area of overlap between the circle and the rectangle.
  */
-static double circular_overlap_core(double xmin, double ymin, double xmax,
-                                    double ymax, double r) {
-  double area, d1, d2, x1, x2, y1, y2;
+static FLOAT circular_overlap_core(FLOAT xmin, FLOAT ymin, FLOAT xmax,
+                                    FLOAT ymax, FLOAT r) {
+  FLOAT area, d1, d2, x1, x2, y1, y2;
 
   if (xmin * xmin + ymin * ymin > r * r) {
     area = 0.0;
@@ -151,9 +152,9 @@ static double circular_overlap_core(double xmin, double ymin, double xmax,
  * @param r - Radius of the circle.
  * @return The exact area of overlap between the circle and the rectangle.
  */
-static double circular_overlap_single_exact(double pix_xmin, double pix_ymin,
-                                            double pix_xmax, double pix_ymax,
-                                            double r) {
+static FLOAT circular_overlap_single_exact(FLOAT pix_xmin, FLOAT pix_ymin,
+                                            FLOAT pix_xmax, FLOAT pix_ymax,
+                                            FLOAT r) {
   if (0.0 <= pix_xmin) {
     if (0.0 <= pix_ymin) {
       return circular_overlap_core(pix_xmin, pix_ymin, pix_xmax, pix_ymax, r);
@@ -210,29 +211,29 @@ static double circular_overlap_single_exact(double pix_xmin, double pix_ymin,
  *
  * @return The signal inside the aperture.
  */
-static double calculate_overlap_serial(const double res, const double xmin,
-                                       const double ymin, const double r,
+static FLOAT calculate_overlap_serial(const FLOAT res, const FLOAT xmin,
+                                       const FLOAT ymin, const FLOAT r,
                                        const int nx, const int ny,
-                                       const double *img,
-                                       const double pixel_radius) {
+                                       const FLOAT *img,
+                                       const FLOAT pixel_radius) {
 
   /* Define the signal in aperture. */
-  double signal = 0.0;
+  FLOAT signal = 0.0;
 
   /* Loop over pixels and accumalate the pixel weight mulitiplied by pixel
    * values. */
   for (int i = 0; i < nx; i++) {
-    double pxmin = xmin + i * res;
-    double pxcen = pxmin + 0.5 * res;
-    double pxmax = pxmin + res;
+    FLOAT pxmin = xmin + i * res;
+    FLOAT pxcen = pxmin + 0.5 * res;
+    FLOAT pxmax = pxmin + res;
     for (int j = 0; j < ny; j++) {
-      double pymin = ymin + j * res;
-      double pycen = pymin + 0.5 * res;
-      double pymax = pymin + res;
+      FLOAT pymin = ymin + j * res;
+      FLOAT pycen = pymin + 0.5 * res;
+      FLOAT pymax = pymin + res;
 
-      double frac;
+      FLOAT frac;
 
-      double d = sqrt(pxcen * pxcen + pycen * pycen);
+      FLOAT d = sqrt(pxcen * pxcen + pycen * pycen);
       if (d < r - pixel_radius) {
         frac = 1.0;
       } else if (d < r + pixel_radius) {
@@ -262,32 +263,32 @@ static double calculate_overlap_serial(const double res, const double xmin,
  *
  * @return The signal inside the aperture.
  */
-static double calculate_overlap_omp(const double res, const double xmin,
-                                    const double ymin, const double r,
+static FLOAT calculate_overlap_omp(const FLOAT res, const FLOAT xmin,
+                                    const FLOAT ymin, const FLOAT r,
                                     const int nx, const int ny,
-                                    const double *img,
-                                    const double pixel_radius,
+                                    const FLOAT *img,
+                                    const FLOAT pixel_radius,
                                     const int nthreads) {
 
   /* Define the signal in aperture. */
-  double signal = 0.0;
+  FLOAT signal = 0.0;
 
   /* Loop over pixels and accumalate the pixel weight mulitiplied by pixel
    * values. */
 #pragma omp parallel for num_threads(nthreads) reduction(+ : signal)           \
     schedule(dynamic)
   for (int i = 0; i < nx; i++) {
-    double pxmin = xmin + i * res;
-    double pxcen = pxmin + 0.5 * res;
-    double pxmax = pxmin + res;
+    FLOAT pxmin = xmin + i * res;
+    FLOAT pxcen = pxmin + 0.5 * res;
+    FLOAT pxmax = pxmin + res;
     for (int j = 0; j < ny; j++) {
-      double pymin = ymin + j * res;
-      double pycen = pymin + 0.5 * res;
-      double pymax = pymin + res;
+      FLOAT pymin = ymin + j * res;
+      FLOAT pycen = pymin + 0.5 * res;
+      FLOAT pymax = pymin + res;
 
-      double frac;
+      FLOAT frac;
 
-      double d = sqrt(pxcen * pxcen + pycen * pycen);
+      FLOAT d = sqrt(pxcen * pxcen + pycen * pycen);
       if (d < r - pixel_radius) {
         frac = 1.0;
       } else if (d < r + pixel_radius) {
@@ -316,14 +317,14 @@ static double calculate_overlap_omp(const double res, const double xmin,
  *
  * @return The signal inside the aperture.
  */
-static double calculate_overlap(const double res, const double r, const int nx,
-                                const int ny, const double *img,
-                                const double cent[2], const int nthreads) {
+static FLOAT calculate_overlap(const FLOAT res, const FLOAT r, const int nx,
+                                const int ny, const FLOAT *img,
+                                const FLOAT cent[2], const int nthreads) {
 
   /* Define some helpful variables. */
-  double xmin = -cent[0] * res;
-  double ymin = -cent[1] * res;
-  double pixel_radius = 0.5 * sqrt(2) * res;
+  FLOAT xmin = -cent[0] * res;
+  FLOAT ymin = -cent[1] * res;
+  FLOAT pixel_radius = 0.5 * sqrt(2) * res;
 
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
@@ -360,25 +361,28 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  double r, res;
+  double r_in, res_in;
   int nx, ny, nthreads;
   PyArrayObject *np_img, *np_cent;
-  double signal = 0;
+  FLOAT signal = 0;
 
-  if (!PyArg_ParseTuple(args, "diidOOi", &res, &nx, &ny, &r, &np_img, &np_cent,
+  if (!PyArg_ParseTuple(args, "diidOOi", &res_in, &nx, &ny, &r_in, &np_img, &np_cent,
                         &nthreads)) {
     return NULL;
   }
 
+  FLOAT r = (FLOAT)r_in;
+  FLOAT res = (FLOAT)res_in;
+
   /* Unpack the image and centre from the numpy array. */
-  const double *img = extract_data_double(np_img, "img");
-  const double *cent = extract_data_double(np_cent, "cent");
+  const FLOAT *img = extract_data_float(np_img, "img");
+  const FLOAT *cent = extract_data_float(np_cent, "cent");
 
   /* Is the aperture smaller than a pixel? */
   if (r < 0.5 * res) {
     /* Compute the areas. */
-    const double app_area = M_PI * r * r;
-    const double pix_area = res * res;
+    const FLOAT app_area = M_PI * r * r;
+    const FLOAT pix_area = res * res;
 
     /* Compute the signal based on the fractional area of the aperture. */
     signal = app_area / pix_area * img[(int)cent[0] * ny + (int)cent[1]];
@@ -390,7 +394,7 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   }
 
   /* Construct the ouput. */
-  PyObject *np_signal = Py_BuildValue("d", signal);
+  PyObject *np_signal = Py_BuildValue("d", (double)signal);
 
   toc("Calculating signal in aperture", start);
 

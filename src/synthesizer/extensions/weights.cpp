@@ -70,8 +70,8 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  /* Cast the output buffer to a double array. */
-  double *out_arr = static_cast<double *>(out);
+  /* Cast the output buffer to a FLOAT array. */
+  FLOAT *out_arr = static_cast<FLOAT *>(out);
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; ++p) {
@@ -81,10 +81,10 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
 
     /* Get this particle's weight and base cell info. */
-    const double weight = parts->get_weight_at(p);
+    const FLOAT weight = parts->get_weight_at(p);
 
     std::array<int, MAX_GRID_NDIM> part_idx;
-    std::array<double, MAX_GRID_NDIM> axis_frac;
+    std::array<FLOAT, MAX_GRID_NDIM> axis_frac;
     get_part_ind_frac_cic(part_idx, axis_frac, grid_props, parts, p);
 
     /* Compute linear index of the “low” corner once */
@@ -95,7 +95,7 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
       const auto &sc = subcells[ic];
 
       /* Compute the CIC fraction for this corner */
-      double frac = 1.0;
+      FLOAT frac = 1.0;
       for (int d = 0; d < ndim; ++d) {
         frac *= sc.offs[d] ? axis_frac[d] : (1.0 - axis_frac[d]);
       }
@@ -131,7 +131,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
                                 int out_size, void *out, int nthreads) {
 
   /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
+  FLOAT *out_arr = static_cast<FLOAT *>(out);
 
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -170,7 +170,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
       end = parts->npart;
 
     /* Allocate a local output array to avoid races. */
-    std::vector<double> local_out_arr(out_size, 0.0);
+    std::vector<FLOAT> local_out_arr(out_size, 0.0);
 
     /* Loop over the particles assigned to this thread. */
     for (int p = start; p < end; p++) {
@@ -181,11 +181,11 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
       }
 
       /* Get this particle's weight. */
-      const double weight = parts->get_weight_at(p);
+      const FLOAT weight = parts->get_weight_at(p);
 
       /* Setup the base cell indices and axis fractions. */
       std::array<int, MAX_GRID_NDIM> part_indices;
-      std::array<double, MAX_GRID_NDIM> axis_fracs;
+      std::array<FLOAT, MAX_GRID_NDIM> axis_fracs;
       get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
 
       /* Compute base linear index for the “low” corner once */
@@ -196,7 +196,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
         const auto &sc = subcells[ic];
 
         /* Compute the CIC fraction for this corner */
-        double frac = 1.0;
+        FLOAT frac = 1.0;
         for (int d = 0; d < ndim; d++) {
           frac *= sc.offs[d] ? axis_fracs[d] : (1.0 - axis_fracs[d]);
         }
@@ -282,7 +282,7 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
   const int ndim = grid_props->ndim;
 
   /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
+  FLOAT *out_arr = static_cast<FLOAT *>(out);
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; p++) {
@@ -293,7 +293,7 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
     }
 
     /* Get this particle's weight. */
-    const double weight = parts->get_weight_at(p);
+    const FLOAT weight = parts->get_weight_at(p);
 
     /* Setup the index array. */
     std::array<int, MAX_GRID_NDIM> part_indices;
@@ -330,7 +330,7 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
                                 int out_size, void *out, int nthreads) {
 
   /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
+  FLOAT *out_arr = static_cast<FLOAT *>(out);
 
   /* Unpack the grid properties. */
   std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -354,7 +354,7 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
 
     /* Allocate a local output array. This avoids race conditions and false
      * sharing. */
-    std::vector<double> local_out_arr(out_size, 0.0);
+    std::vector<FLOAT> local_out_arr(out_size, 0.0);
 
     /* Loop over the assigned particle range. */
     for (int p = start; p < end; ++p) {
@@ -365,7 +365,7 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
       }
 
       /* Get this particle's weight. */
-      const double weight = parts->get_weight_at(p);
+      const FLOAT weight = parts->get_weight_at(p);
 
       /* Setup the index array. */
       std::array<int, MAX_GRID_NDIM> part_indices;
@@ -477,7 +477,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Allocate the sfzh array to output. */
-  double *grid_weights = new (std::nothrow) double[grid_props->size]();
+  FLOAT *grid_weights = new (std::nothrow) FLOAT[grid_props->size]();
   /* If allocation failed, clean up and return nullptr to propagate the MemoryError. */
   if (grid_weights == nullptr) {
     PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");

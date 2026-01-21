@@ -12,6 +12,7 @@
 #include <Python.h>
 
 /* Local includes */
+#include "data_types.h"
 #include "property_funcs.h"
 
 /**
@@ -30,7 +31,7 @@ public:
   std::vector<int> grid_indices;
 
   /* The fractions of the particle's mass in each grid cell (for CIC). */
-  std::vector<double> grid_fracs;
+  std::vector<FLOAT> grid_fracs;
 
   /* Constructor */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
@@ -40,14 +41,14 @@ public:
   ~Particles();
 
   /* Prototypes for getters. */
-  double *get_weights() const;
-  double *get_velocities() const;
-  double **get_all_props(int ndim) const;
-  double *get_part_props(int idim) const;
-  double get_weight_at(int pind) const;
-  double get_vel_at(int pind) const;
+  FLOAT *get_weights() const;
+  FLOAT *get_velocities() const;
+  FLOAT **get_all_props(int ndim) const;
+  FLOAT *get_part_props(int idim) const;
+  FLOAT get_weight_at(int pind) const;
+  FLOAT get_vel_at(int pind) const;
   npy_bool get_mask_at(int pind) const;
-  double get_part_prop_at(int idim, int pind) const;
+  FLOAT get_part_prop_at(int idim, int pind) const;
 
   /* Is a particle masked? */
   bool part_is_masked(int pind) const;
