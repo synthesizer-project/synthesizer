@@ -97,7 +97,7 @@ master_doc = "index"
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_static_path = []
+html_static_path = ["_static"]
 
 html_logo = "img/synthesizer_logo.png"
 
@@ -107,3 +107,20 @@ html_theme_options = {
 }
 
 html_title = "Synthesizer"
+
+# Google Analytics
+# Register the scripts to be included in the HTML <head>.
+# We manually inject the GA4 scripts using html_js_files
+# because the Furo theme does not have a built-in analytics
+# configuration setting.
+html_js_files = [
+    # Load the remote Google Tag Manager library.
+    # The 'async' attribute prevents the script from blocking
+    # page rendering.
+    (
+        "https://www.googletagmanager.com/gtag/js?id=G-CKBVJ4RR3N",
+        {"async": "async"},
+    ),
+    # Load our local configuration file (from _static/google_analytics.js)
+    "google_analytics.js",
+]
