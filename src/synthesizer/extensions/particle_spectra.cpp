@@ -546,9 +546,20 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Allocate the spectra. */
   PyArrayObject *np_spectra =
       (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_FLOAT_T, 0);
+  if (np_spectra == NULL) {
+    delete part_props;
+    delete grid_props;
+    return NULL;
+  }
   Float *spectra = static_cast<Float *>(PyArray_DATA(np_spectra));
   PyArrayObject *np_part_spectra =
       (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_FLOAT_T, 0);
+  if (np_part_spectra == NULL) {
+    Py_DECREF(np_spectra);
+    delete part_props;
+    delete grid_props;
+    return NULL;
+  }
   Float *part_spectra = static_cast<Float *>(PyArray_DATA(np_part_spectra));
 
   toc("Setting up output arrays", out_tic);

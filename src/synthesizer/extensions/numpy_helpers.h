@@ -26,34 +26,31 @@
  *----------------------------------------------------------------------------*/
 static inline PyArrayObject *require_float_array(PyObject *obj, int allow_copy,
                                                  const char *name) {
-  int flags = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-
   if (allow_copy) {
+    int flags = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
     flags |= NPY_ARRAY_ENSUREARRAY;
     return (PyArrayObject *)PyArray_FROM_OTF(obj, NPY_FLOAT_T, flags);
   }
 
   /* Strict path */
-  PyArrayObject *arr =
-      (PyArrayObject *)PyArray_FROM_OTF(obj, NPY_FLOAT_T, flags);
-
-  if (arr == NULL) {
-    return NULL; /* NumPy already raised error */
+  if (!PyArray_Check(obj)) {
+    PyErr_Format(PyExc_TypeError, "%s must be a NumPy array", name);
+    return NULL;
   }
+
+  PyArrayObject *arr = (PyArrayObject *)obj;
 
   if (PyArray_TYPE(arr) != NPY_FLOAT_T) {
     PyErr_Format(PyExc_TypeError, "%s must have dtype %s", name, FLOAT_NAME);
-    Py_DECREF(arr);
     return NULL;
   }
 
   if (!PyArray_ISCARRAY(arr)) {
     PyErr_Format(PyExc_ValueError, "%s must be C-contiguous", name);
-    Py_DECREF(arr);
     return NULL;
   }
 
-  return arr;
+  return (PyArrayObject *)PyArray_FROM_OTF(obj, NPY_FLOAT_T, 0);
 }
 
 /*----------------------------------------------------------------------------

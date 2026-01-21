@@ -48,5 +48,5 @@ jobs:
       - name: Run Core Tests
         run: |
           # Run the main test suite with single precision
-          # We skip notebook tests to keep this workflow focused
+          # Run the full pytest suite in tests/
           pytest -n auto tests/
