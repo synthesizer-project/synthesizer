@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Mpc, Msun, Myr, km, s, unyt_quantity, yr
 
-from synthesizer import exceptions
+from synthesizer import exceptions, precision
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH
@@ -1024,17 +1024,16 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Set up the inputs to the C function.
+        dtype = precision.get_numpy_dtype()
         grid_props = [
-            np.ascontiguousarray(log10ages, dtype=np.float64),
-            np.ascontiguousarray(log10metallicities, dtype=np.float64),
+            np.ascontiguousarray(log10ages, dtype=dtype),
+            np.ascontiguousarray(log10metallicities, dtype=dtype),
         ]
         part_props = [
-            np.ascontiguousarray(self.log10ages, dtype=np.float64),
-            np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
+            np.ascontiguousarray(self.log10ages, dtype=dtype),
+            np.ascontiguousarray(self.log10metallicities, dtype=dtype),
         ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
-        )
+        part_mass = np.ascontiguousarray(self._initial_masses, dtype=dtype)
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -1198,15 +1197,14 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Set up the inputs to the C function.
+        dtype = precision.get_numpy_dtype()
         grid_props = [
-            np.ascontiguousarray(log10ages, dtype=np.float64),
+            np.ascontiguousarray(log10ages, dtype=dtype),
         ]
         part_props = [
-            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            np.ascontiguousarray(self.log10ages, dtype=dtype),
         ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
-        )
+        part_mass = np.ascontiguousarray(self._initial_masses, dtype=dtype)
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -1353,15 +1351,14 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Set up the inputs to the C function.
+        dtype = precision.get_numpy_dtype()
         grid_props = [
-            np.ascontiguousarray(metallicities, dtype=np.float64),
+            np.ascontiguousarray(metallicities, dtype=dtype),
         ]
         part_props = [
-            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+            np.ascontiguousarray(self.metallicities, dtype=dtype),
         ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
-        )
+        part_mass = np.ascontiguousarray(self._initial_masses, dtype=dtype)
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))

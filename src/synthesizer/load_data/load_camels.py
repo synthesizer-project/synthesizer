@@ -23,6 +23,7 @@ import numpy as np
 from astropy.cosmology import FlatLambdaCDM
 from unyt import Mpc, Msun, kpc, yr
 
+from synthesizer import precision
 from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import (
     age_lookup_table,
@@ -334,8 +335,9 @@ def load_CAMELS_Astrid(
             `ParticleGalaxy` object containing star and gas particle
     """
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
-        redshift = hf["Header"].attrs["Redshift"].astype(np.float32)[0]
-        scale_factor = hf["Header"].attrs["Time"].astype(np.float32)[0]
+        dtype = precision.get_numpy_dtype()
+        redshift = hf["Header"].attrs["Redshift"].astype(dtype)[0]
+        scale_factor = hf["Header"].attrs["Time"].astype(dtype)[0]
         h = hf["Header"].attrs["HubbleParam"][0]
         Om0 = hf["Header"].attrs["Omega0"][0]
 

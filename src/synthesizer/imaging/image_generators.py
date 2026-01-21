@@ -18,7 +18,7 @@ from copy import deepcopy
 import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
-from synthesizer import exceptions
+from synthesizer import exceptions, precision
 from synthesizer.conversions import (
     angular_to_spatial_at_z,
     spatial_to_angular_at_z,
@@ -1159,7 +1159,7 @@ def _generate_ifu_particle_hist(
     # arrays.
     _coords[:, 0] += fov[0] / 2
     _coords[:, 1] += fov[1] / 2
-    smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
+    smls = np.zeros(cent_coords.shape[0], dtype=precision.get_numpy_dtype())
 
     # Get the kernel
     # TODO: We should do away with this and write a histogram backend

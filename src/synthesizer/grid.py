@@ -36,7 +36,7 @@ from scipy.interpolate import interp1d
 from spectres import spectres
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
-from synthesizer import exceptions
+from synthesizer import exceptions, precision
 from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
@@ -698,20 +698,21 @@ class Grid:
                     )
 
             # Ensure the line luminosities and continuums are contiguous
+            dtype = precision.get_numpy_dtype()
             for spectra in self.line_lums.keys():
                 lum_units = self.line_lums[spectra].units
                 cont_units = self.line_conts[spectra].units
                 self.line_lums[spectra] = (
                     np.ascontiguousarray(
                         self.line_lums[spectra],
-                        dtype=np.float64,
+                        dtype=dtype,
                     )
                     * lum_units
                 )
                 self.line_conts[spectra] = (
                     np.ascontiguousarray(
                         self.line_conts[spectra],
-                        dtype=np.float64,
+                        dtype=dtype,
                     )
                     * cont_units
                 )

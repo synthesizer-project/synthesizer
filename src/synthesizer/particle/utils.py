@@ -4,6 +4,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 from unyt import Mpc, rad, unyt_array
 
+from synthesizer import precision
 from synthesizer.units import accepts
 
 
@@ -65,7 +66,7 @@ def rotate(
 @accepts(coordinates=Mpc, boxsize=Mpc)
 def calculate_smoothing_lengths(
     coordinates: unyt_array,
-    kernel_gamma: np.float32 = 1.4,
+    kernel_gamma: float = 1.4,
     num_neighbours: int = 32,
     speedup_fac: int = 2,
     dimension: int = 3,
@@ -116,7 +117,9 @@ def calculate_smoothing_lengths(
             coordinates.value, boxsize=boxsize.to(coordinates.units).value
         )
 
-    smoothing_lengths: np.ndarray = np.empty(nparts, dtype=np.float32)
+    smoothing_lengths: np.ndarray = np.empty(
+        nparts, dtype=precision.get_numpy_dtype()
+    )
     smoothing_lengths[-1] = -0.1
 
     # Include speedup_fac stuff here:

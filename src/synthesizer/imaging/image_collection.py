@@ -49,7 +49,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import unyt_quantity
 
-from synthesizer import exceptions
+from synthesizer import exceptions, precision
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
@@ -943,7 +943,9 @@ class ImageCollection(ImagingBase):
                 weights[f] /= w_sum
 
         # Set up the rgb image
-        rgb_img = np.zeros((self.npix[0], self.npix[1], 3), dtype=np.float64)
+        rgb_img = np.zeros(
+            (self.npix[0], self.npix[1], 3), dtype=precision.get_numpy_dtype()
+        )
 
         # Loop over each filter calcualting the RGB channels
         for rgb_ind, rgb in enumerate(rgb_filters):

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import unyt_array, unyt_quantity
 
-from synthesizer import exceptions
+from synthesizer import exceptions, precision
 from synthesizer.units import Quantity, default_units
 
 
@@ -79,10 +79,12 @@ class PhotometryCollection:
                 f"or unyt_arrays. Got {type(photometry[0])} instead."
             )
 
+        units = photometry[0].units
+
         # Convert it from a list of unyt_quantities to a unyt_array
-        photometry = unyt_array(
-            np.array(photometry, dtype=np.float64),
-            units=photometry[0].units,
+        self.photometry = unyt_array(
+            np.array(photometry, dtype=precision.get_numpy_dtype()),
+            units,
         )
 
         # Get the dimensions of a flux for testing

@@ -18,6 +18,7 @@ from astropy.cosmology import LambdaCDM
 from numpy.typing import NDArray
 from typing_extensions import Never
 
+from synthesizer import precision
 from synthesizer.exceptions import InconsistentArguments, UnmetDependency
 
 try:
@@ -85,7 +86,8 @@ def load_EAGLE(
         grpno = np.array(hf.get("/Subhalo/GroupNumber"), dtype=np.int32)
         # centre of potential of subhalo in h-less physical Mpc
         cop = np.array(
-            hf.get("/Subhalo/CentreOfPotential"), dtype=np.float32
+            hf.get("/Subhalo/CentreOfPotential"),
+            dtype=precision.get_numpy_dtype(),
         ) / (h * (1 + zed))
 
     if grpno.dtype == object:
@@ -381,7 +383,8 @@ def load_EAGLE_shm(
         grpno = np.array(hf.get("/Subhalo/GroupNumber"), dtype=np.int32)
         # centre of potential of subhalo in h-less physical Mpc
         cop = np.array(
-            hf.get("/Subhalo/CentreOfPotential"), dtype=np.float32
+            hf.get("/Subhalo/CentreOfPotential"),
+            dtype=precision.get_numpy_dtype(),
         ) / (h * (1 + zed))
 
     if grpno.dtype == object:
@@ -925,25 +928,25 @@ def assign_galaxy_prop(
     aperture: float,
     grpno: NDArray[np.int32],
     sgrpno: NDArray[np.int32],
-    cop: NDArray[np.float32],
+    cop: NDArray,
     s_grpno: NDArray[np.int32],
     s_sgrpno: NDArray[np.int32],
-    s_imasses: NDArray[np.float32],
-    s_masses: NDArray[np.float32],
-    s_ages: NDArray[np.float32],
-    s_Zsmooth: NDArray[np.float32],
-    s_coords: NDArray[np.float32],
-    s_hsml: NDArray[np.float32],
-    s_oxygen: NDArray[np.float32],
-    s_hydrogen: NDArray[np.float32],
-    s_velocities: NDArray[np.float32],
+    s_imasses: NDArray,
+    s_masses: NDArray,
+    s_ages: NDArray,
+    s_Zsmooth: NDArray,
+    s_coords: NDArray,
+    s_hsml: NDArray,
+    s_oxygen: NDArray,
+    s_hydrogen: NDArray,
+    s_velocities: NDArray,
     g_grpno: NDArray[np.int32],
     g_sgrpno: NDArray[np.int32],
-    g_masses: NDArray[np.float32],
-    g_Zsmooth: NDArray[np.float32],
-    g_sfr: NDArray[np.float32],
-    g_coords: NDArray[np.float32],
-    g_hsml: NDArray[np.float32],
+    g_masses: NDArray,
+    g_Zsmooth: NDArray,
+    g_sfr: NDArray,
+    g_coords: NDArray,
+    g_hsml: NDArray,
     verbose: bool,
     s_kwargs: Dict = {},
     g_kwargs: Dict = {},

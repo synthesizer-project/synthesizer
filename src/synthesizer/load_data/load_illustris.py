@@ -28,6 +28,7 @@ from astropy.cosmology import Planck15
 from tqdm import tqdm
 from unyt import Msun, kpc, yr
 
+from synthesizer import precision
 from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
 
@@ -100,10 +101,11 @@ def load_IllustrisTNG(
     if verbose:
         print("Loading header information...")
 
-    # Get header information
+    # Get some header info
     header = il.groupcat.loadHeader(directory, snap_number)
-    scale_factor = header["Time"].astype(np.float32)
-    redshift = header["Redshift"].astype(np.float32)
+    dtype = precision.get_numpy_dtype()
+    scale_factor = header["Time"].astype(dtype)
+    redshift = header["Redshift"].astype(dtype)
     h = header["HubbleParam"]
 
     if verbose:

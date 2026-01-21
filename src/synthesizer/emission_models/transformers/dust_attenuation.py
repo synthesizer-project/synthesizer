@@ -36,7 +36,7 @@ from unyt import (
     unyt_quantity,
 )
 
-from synthesizer import exceptions
+from synthesizer import exceptions, precision
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
@@ -1388,7 +1388,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         # Interpolate along wavelength axis with the given 'lam'
         lam_vals = np.atleast_1d(lam.to("Angstrom").value)
-        tau_all = np.zeros((N, M), dtype=np.float32)
+        tau_all = np.zeros((N, M), dtype=precision.get_numpy_dtype())
 
         for key, value in Alam_by_NH.items():
             f_lam = interpolate.interp1d(

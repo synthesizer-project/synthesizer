@@ -23,7 +23,7 @@ from scipy import signal
 from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
-from synthesizer import exceptions
+from synthesizer import exceptions, precision
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
@@ -921,14 +921,15 @@ class Image(ImagingBase):
             calculate_circular_overlap,
         )
 
+        dtype = precision.get_numpy_dtype()
         return (
             calculate_circular_overlap(
                 self._resolution,
                 self.npix[0],
                 self.npix[1],
-                np.float64(aperture_radius),
+                dtype.type(aperture_radius),
                 self.arr,
-                np.float64(aperture_cent),
+                np.ascontiguousarray(aperture_cent, dtype=dtype),
                 nthreads,
             )
             * self.units
