@@ -115,7 +115,7 @@ html_title = "Synthesizer"
 # configuration setting.
 html_js_files = [
     # Load the remote Google Tag Manager library.
-    # The 'async' attributeprevents the script from blocking
+    # The 'async' attribute prevents the script from blocking
     # page rendering.
     (
         "https://www.googletagmanager.com/gtag/js?id=G-CKBVJ4RR3N",
