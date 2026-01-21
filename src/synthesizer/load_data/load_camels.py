@@ -23,13 +23,13 @@ import numpy as np
 from astropy.cosmology import FlatLambdaCDM
 from unyt import Mpc, Msun, kpc, yr
 
-from synthesizer import precision
 from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import (
     age_lookup_table,
     get_begin_end_pointers,
     lookup_age,
 )
+from synthesizer.utils import precision
 
 from ..particle.galaxy import Galaxy
 

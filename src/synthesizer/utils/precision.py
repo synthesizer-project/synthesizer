@@ -9,7 +9,7 @@ environment variable:
     - SINGLE_PRECISION=1: single precision (float32)
 
 Example usage:
-    >>> from synthesizer import precision
+    >>> from synthesizer.utils import precision
     >>> print(precision.get_precision())
     'float64'
     >>> arr = np.array([1.0, 2.0, 3.0])

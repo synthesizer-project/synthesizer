@@ -11,13 +11,17 @@ import numpy as np
 from numpy.random import multivariate_normal
 from unyt import Mpc, Msun, km, pc, rad, s
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
+from synthesizer.utils import (
+    TableFormatter,
+    ensure_array_c_compatible_double,
+    precision,
+)
 from synthesizer.utils.geometry import get_rotation_matrix
 
 

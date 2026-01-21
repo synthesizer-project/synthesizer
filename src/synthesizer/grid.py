@@ -36,12 +36,12 @@ from scipy.interpolate import interp1d
 from spectres import spectres
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import depluralize, pluralize
+from synthesizer.utils import depluralize, pluralize, precision
 from synthesizer.utils.ascii_table import TableFormatter
 
 

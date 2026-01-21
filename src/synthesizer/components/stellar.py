@@ -8,10 +8,10 @@ common between them. StarsComponent is a child class of Component.
 import numpy as np
 from unyt import Myr, yr
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import TableFormatter, precision
 
 
 class StarsComponent(Component):

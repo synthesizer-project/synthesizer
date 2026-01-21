@@ -49,7 +49,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import unyt_quantity
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
@@ -58,7 +58,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import TableFormatter, precision
 
 
 class ImageCollection(ImagingBase):

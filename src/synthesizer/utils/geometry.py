@@ -17,7 +17,7 @@ Example usage:
 
 import numpy as np
 
-from synthesizer import precision
+from synthesizer.utils import precision
 
 
 def get_rotation_matrix(

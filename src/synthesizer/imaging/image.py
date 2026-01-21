@@ -23,7 +23,7 @@ from scipy import signal
 from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
@@ -32,7 +32,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_smoothed,
 )
 from synthesizer.units import accepts, unit_is_compatible
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import TableFormatter, precision
 
 
 class Image(ImagingBase):

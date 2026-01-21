@@ -4,8 +4,8 @@ import numpy as np
 from scipy.spatial import cKDTree
 from unyt import Mpc, rad, unyt_array
 
-from synthesizer import precision
 from synthesizer.units import accepts
+from synthesizer.utils import precision
 
 
 @accepts(phi=rad, theta=rad)

@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import unyt_array, unyt_quantity
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.units import Quantity, default_units
+from synthesizer.utils import precision
 
 
 class PhotometryCollection:

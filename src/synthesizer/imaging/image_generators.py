@@ -18,7 +18,7 @@ from copy import deepcopy
 import numpy as np
 from unyt import angstrom, unyt_array, unyt_quantity
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.conversions import (
     angular_to_spatial_at_z,
     spatial_to_angular_at_z,
@@ -30,6 +30,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
+    precision,
 )
 
 _CENTERING_TOLERANCE = 1e-6

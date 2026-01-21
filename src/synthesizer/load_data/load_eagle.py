@@ -18,8 +18,8 @@ from astropy.cosmology import LambdaCDM
 from numpy.typing import NDArray
 from typing_extensions import Never
 
-from synthesizer import precision
 from synthesizer.exceptions import InconsistentArguments, UnmetDependency
+from synthesizer.utils import precision
 
 try:
     import schwimmbad

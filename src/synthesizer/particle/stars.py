@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Mpc, Msun, Myr, km, s, unyt_quantity, yr
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH
@@ -33,6 +33,7 @@ from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils import precision
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.util_funcs import combine_arrays
 

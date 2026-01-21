@@ -36,10 +36,11 @@ from unyt import (
     unyt_quantity,
 )
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+from synthesizer.utils import precision
 
 this_dir, this_filename = os.path.split(__file__)
 
