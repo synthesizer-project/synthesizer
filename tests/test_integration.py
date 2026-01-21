@@ -8,32 +8,36 @@ from synthesizer.extensions.integration import (
     simps_last_axis,
     trapz_last_axis,
 )
+from synthesizer.utils import precision
 
 
 @pytest.fixture
 def example_data_1d():
     """Fixture for 1D example data."""
-    xs = np.linspace(0, 10, 1000)  # 1D x array
-    ys = np.sin(xs)  # Corresponding y values
+    dtype = precision.get_numpy_dtype()
+    xs = np.ascontiguousarray(np.linspace(0, 10, 1000), dtype=dtype)
+    ys = np.ascontiguousarray(np.sin(xs), dtype=dtype)
     return xs, ys
 
 
 @pytest.fixture
 def example_data_2d():
     """Fixture for 2D example data."""
-    xs = np.linspace(0, 10, 1000)  # 1D x array
-    ys = np.sin(xs)  # Corresponding y values
-    ys = np.tile(ys, (100, 1))  # Reshape ys to be 2D
+    dtype = precision.get_numpy_dtype()
+    xs = np.ascontiguousarray(np.linspace(0, 10, 1000), dtype=dtype)
+    ys = np.ascontiguousarray(np.sin(xs), dtype=dtype)
+    ys = np.ascontiguousarray(np.tile(ys, (100, 1)), dtype=dtype)
     return xs, ys
 
 
 @pytest.fixture
 def example_data_3d():
     """Fixture for 3D example data."""
-    xs = np.linspace(0, 10, 1000)  # 1D x array
-    ys = np.sin(xs)  # Corresponding y values
+    dtype = precision.get_numpy_dtype()
+    xs = np.ascontiguousarray(np.linspace(0, 10, 1000), dtype=dtype)
+    ys = np.ascontiguousarray(np.sin(xs), dtype=dtype)
     ys = np.tile(ys, (10, 10, 1))  # Reshape ys to be 3D, last axis matches xs
-    ys = np.sin(xs * ys)  # Repeat ys along the last axis
+    ys = np.ascontiguousarray(np.sin(xs * ys), dtype=dtype)
     return xs, ys
 
 
