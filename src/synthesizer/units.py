@@ -496,6 +496,25 @@ class Quantity:
         if value is None:
             return None
 
+        # Get the unit we expect to use
+        unit = self.unit
+
+        # Do we have a temporary unit?
+        if (
+            hasattr(obj, "_temp_quantity_units")
+            and self.public_name in obj._temp_quantity_units
+        ):
+            temp_unit = obj._temp_quantity_units[self.public_name]
+
+            # If we have a temporary unit create a new unyt_array to return
+            # which we will associate with the temporary unit and use for
+            # conversion
+            if temp_unit != unit:
+                print(temp_unit, unit)
+                arr = unyt_array(value, temp_unit)
+                arr.convert_to_units(unit)
+                return arr
+
         return value * self.unit
 
     def __set__(self, obj, value):

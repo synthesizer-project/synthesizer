@@ -17,6 +17,7 @@ from synthesizer.emission_models.extractors.extractor import (
 from synthesizer.emissions import Sed
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.utils import precision
 
 
 # Mock Extractor implementation for testing abstract base class methods
@@ -66,9 +67,12 @@ def test_get_emitter_attrs(
     extractor._weight_var = "initial_mass"
 
     # Call get_emitter_attrs
+    print("Before", particle_stars_A.ages)
     extracted, weight = extractor.get_emitter_attrs(
         particle_stars_A, nebular_emission_model, False
     )
+    extractor.clean_quantity_attrs(particle_stars_A, nebular_emission_model)
+    print("After", extracted, particle_stars_A._ages, particle_stars_A.ages)
 
     # Check that the extracted values and weight are correct
     assert len(extracted) == 2, (
@@ -142,7 +146,7 @@ def test_integrated_particle_generate_lnu(
 
     # Mock the get_emitter_attrs method to return known values
     extractor.get_emitter_attrs = MagicMock(
-        return_value=(("mock_extracted",), "mock_weight")
+        return_value=(("mock_extracted",), np.array([1.0]))
     )
 
     # Set up the compute_integrated_sed mock to return a known spectrum
@@ -160,14 +164,16 @@ def test_integrated_particle_generate_lnu(
     assert args[0] is extractor._spectra_grid  # spectra_grid
     assert args[1] is extractor._grid_axes  # grid_axes
     assert args[2] == ("mock_extracted",)  # extracted
-    assert args[3] == "mock_weight"  # weight
+    assert np.array_equal(
+        args[3], np.array([1.0], dtype=precision.get_numpy_dtype())
+    )  # weight
 
     # Ensure the output sed is "integrated" (has ndim == 1)
     assert result.lnu.ndim == 1, f"Expected 1D lnu, got {result.lnu.ndim}"
 
     # Check that the result is a Sed object with the right values
     assert isinstance(result, Sed)
-    assert np.array_equal(result.lnu, mock_spectrum * erg / s / Hz)
+    assert np.allclose(result.lnu, mock_spectrum * erg / s / Hz)
 
 
 def test_integrated_particle_empty_case(test_grid, nebular_emission_model):
@@ -257,7 +263,7 @@ def test_doppler_shifted_generate_lnu(
 
     # Mock the get_emitter_attrs method to return known values
     extractor.get_emitter_attrs = MagicMock(
-        return_value=(("mock_extracted",), "mock_weight")
+        return_value=(("mock_extracted",), np.array([1.0]))
     )
 
     # Set up the compute_part_seds_with_vel_shift mock to return
@@ -281,7 +287,9 @@ def test_doppler_shifted_generate_lnu(
     assert args[0] is extractor._spectra_grid  # spectra_grid
     assert args[2] is extractor._grid_axes  # grid_axes
     assert args[3] == ("mock_extracted",)  # extracted
-    assert args[4] == "mock_weight"  # weight
+    assert np.array_equal(
+        args[4], np.array([1.0], dtype=precision.get_numpy_dtype())
+    )  # weight
     assert args[5] is random_part_stars._velocities  # velocities
 
     # Ensure the output sed is "per-particle" (has ndim == 2)
@@ -289,7 +297,7 @@ def test_doppler_shifted_generate_lnu(
 
     # Check that the result is a Sed object with the right values
     assert isinstance(result, Sed)
-    assert np.array_equal(result.lnu, mock_spectrum * erg / s / Hz)
+    assert np.allclose(result.lnu, mock_spectrum * erg / s / Hz)
 
 
 def test_doppler_shifted_no_velocities(
@@ -337,7 +345,7 @@ def test_integrated_doppler_shifted_generate_lnu(
 
     # Mock the get_emitter_attrs method to return known values
     extractor.get_emitter_attrs = MagicMock(
-        return_value=(("mock_extracted",), "mock_weight")
+        return_value=(("mock_extracted",), np.array([1.0]))
     )
 
     # Set up the compute_part_seds_with_vel_shift mock to return a
@@ -366,7 +374,9 @@ def test_integrated_doppler_shifted_generate_lnu(
     assert args[0] is extractor._spectra_grid  # spectra_grid
     assert args[2] is extractor._grid_axes  # grid_axes
     assert args[3] == ("mock_extracted",)  # extracted
-    assert args[4] == "mock_weight"  # weight
+    assert np.array_equal(
+        args[4], np.array([1.0], dtype=precision.get_numpy_dtype())
+    )  # weight
     assert args[5] is random_part_stars._velocities  # velocities
 
     # Ensure the output sed is "integrated" (has ndim == 1)
@@ -391,7 +401,7 @@ def test_particle_generate_lnu(
 
     # Mock the get_emitter_attrs method to return known values
     extractor.get_emitter_attrs = MagicMock(
-        return_value=(("mock_extracted",), "mock_weight")
+        return_value=(("mock_extracted",), np.array([1.0]))
     )
 
     # Set up the compute_particle_seds mock to return a known spectrum
@@ -414,7 +424,9 @@ def test_particle_generate_lnu(
     assert args[0] is extractor._spectra_grid  # spectra_grid
     assert args[1] is extractor._grid_axes  # grid_axes
     assert args[2] == ("mock_extracted",)  # extracted
-    assert args[3] == "mock_weight"  # weight
+    assert np.array_equal(
+        args[3], np.array([1.0], dtype=precision.get_numpy_dtype())
+    )  # weight
 
     # Ensure the output sed is "per-particle" (has ndim == 2)
     assert part_spec.lnu.ndim == 2, (
@@ -474,7 +486,7 @@ def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
     # can be check by summing the sfzh values for the particles that are
     # included in the mask
     expected = mock_sfzh.sum()
-    assert np.array_equal(result.lnu.sum(), expected * erg / s / Hz), (
+    assert np.allclose(result.lnu.sum(), expected * erg / s / Hz), (
         f"Expected {expected * erg / s / Hz}, got {result.lnu.sum()}"
         f"{result.lnu} {mock_sfzh}"
     )

@@ -114,6 +114,15 @@ class Component(ABC):
         # A container for caching parameters calculated by emission models
         self.model_param_cache = {}
 
+        # We do some unit operations inplace to avoid costly allocations,
+        # behind the scenes. For Quantity objects this can lead to the value
+        # being converted to differing units from those in the Units class and
+        # thus an inconsistency. To maintain consistency, but also avoid
+        # unnecessary allocations, we temporarily store the current units of
+        # quantities which differ from the Units class here to be restored
+        # on the next access.
+        self._temp_quantity_units = {}
+
     @property
     def photo_fluxes(self):
         """Get the photometric fluxes.

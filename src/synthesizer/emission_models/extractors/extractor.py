@@ -32,7 +32,11 @@ from synthesizer.extensions.particle_spectra import (
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
-from synthesizer.utils import get_attr_c_compatible_double
+from synthesizer.utils import (
+    ensure_array_c_compatible_float,
+    get_attr_c_compatible_double,
+    precision,
+)
 
 
 class Extractor(ABC):
@@ -141,6 +145,11 @@ class Extractor(ABC):
     def get_emitter_attrs(self, emitter, model, do_grid_check):
         """Get the attributes from the emitter.
 
+        This can invoke inplace unit conversions to Quantity attributes
+        on the emitter to avoid costly copies. As such, any call to this
+        method should be matched with a call to clean_quantity_attrs to
+        undo any changes made to the emitter.
+
         Args:
             emitter (Stars/BlackHoles/Gas):
                 The emitter object.
@@ -157,6 +166,9 @@ class Extractor(ABC):
                 The extracted attributes and the weight variable.
         """
         start = tic()
+
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
 
         # Set up a list to store the extracted attributes
         extracted = []
@@ -182,8 +194,9 @@ class Extractor(ABC):
             # We know that the extracted values must be arrays, this can not be
             # the case when we only have 1 value (i.e. a single particle, or
             # singular valued parametric property) so here we make sure that
-            # we have a 1D array for everything we are returning
-            value = np.atleast_1d(value)
+            # we have a 1D array for everything we are returning and that
+            # it is in the correct precision for C++ extensions
+            value = ensure_array_c_compatible_float(np.atleast_1d(value))
 
             # Append the extracted value to the list
             extracted.append(value)
@@ -195,13 +208,72 @@ class Extractor(ABC):
         # Also extract the weight variable
         weight = get_param(self._weight_var, model, None, emitter)
 
-        # Remove the units from the weight if necessary
+        # Remove the units from the weight if necessary and convert to
+        # the correct precision for C++ extensions
         if isinstance(weight, (unyt_array, unyt_quantity)):
             weight = weight.ndview
+        weight = np.ascontiguousarray(weight, dtype=dtype)
 
         toc("Preparing particle data for extraction", start)
 
         return tuple(extracted), weight
+
+    def clean_quantity_attrs(self, emitter, model):
+        """Undo any inplace conversions we did to the emitter attributes.
+
+        Since we do inplace unit conversions to avoid costly copies. We
+        need to undo these changes after extraction so the emitter is not
+        modified.
+
+        This will be a noop if no inplace conversions were done.
+
+        Each call to get_emitter_attrs should be matched with a call to
+        clean_emitter_attrs to ensure the emitter is not modified.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter from which the attributes were extracted.
+            model (EmissionModel):
+                The emission model defining the emission to extract. We need
+                this to check the source of the attributes.
+        """
+        start = tic()
+
+        for axis, units, log in zip(
+            self._emitter_attributes,
+            self._axes_units,
+            self._log_emitter_attr,
+        ):
+            print("Cleaning", axis, units, log)
+            # We don't care if the units were dimensionless or log was true
+            if units == "dimensionless" or log:
+                print("Skipping", axis)
+                continue
+
+            # Did we get this attribute from the model or emitter? For the
+            # former we have nothing to do because EmissionModels do not
+            # carry Quantity attributes.
+            value = get_param(axis, model, None, None, default=None)
+            if value is not None:
+                # We did get it from the model, move on
+                print("Skipping, found on model", axis)
+                continue
+
+            # What is the unit supposed to be?
+            value = get_param(axis, None, None, emitter)
+            expected_unit = value.units
+            print(value, expected_unit, units)
+
+            # If this is the same as the target unit then we have nothing to do
+            if expected_unit == units:
+                continue
+
+            # Alright, we did an inplace conversion, undo it
+            value_with_units = unyt_array(value.ndview, units)
+            print(value_with_units)
+            value_with_units.convert_to_units(expected_unit)
+
+        toc("Cleaning up emitter attributes", start)
 
     def check_emitter_attrs(self, emitter, extracted_attrs):
         """Compute the fraction of emitter attributes outside the grid axes.
@@ -324,6 +396,18 @@ class IntegratedParticleExtractor(Extractor):
         else:
             grid_weights = None
 
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
+
+        # Scale weights to avoid overflow during integration (especially for
+        # float32) We use float64 for the scaling calculation itself
+        weight_scale = float(np.max(weight))
+        if weight_scale == 0:
+            weight_scale = 1.0
+
+        # Scale and cast to correct precision for C extension
+        weight_scaled = (weight / weight_scale).astype(dtype)
+
         toc("Setting up integrated lnu calculation", start)
 
         # Compute the integrated lnu array (this is attached to an Sed
@@ -332,7 +416,7 @@ class IntegratedParticleExtractor(Extractor):
             self._spectra_grid,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -344,6 +428,9 @@ class IntegratedParticleExtractor(Extractor):
             lam_mask,
         )
 
+        # Rescale the result in double precision to avoid overflow
+        spec = spec.astype(np.float64) * weight_scale
+
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
         if (
@@ -354,6 +441,9 @@ class IntegratedParticleExtractor(Extractor):
             emitter._grid_weights[grid_assignment_method.lower()][
                 self._grid.grid_name
             ] = grid_weights
+
+        # Clean up any inplace conversions we did to the emitter attributes
+        self.clean_quantity_attrs(emitter, model)
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -434,6 +524,17 @@ class IntegratedParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
+
+        # Scale weights to avoid overflow during integration
+        weight_scale = float(np.max(weight))
+        if weight_scale == 0:
+            weight_scale = 1.0
+
+        # Scale and cast to correct precision for C extension
+        weight_scaled = (weight / weight_scale).astype(dtype)
+
         toc("Setting up particle line calculation", start)
 
         # Compute the integrated line lum array
@@ -441,7 +542,7 @@ class IntegratedParticleExtractor(Extractor):
             self._line_lum_grid,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -458,7 +559,7 @@ class IntegratedParticleExtractor(Extractor):
             self._line_cont_grid,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -470,6 +571,10 @@ class IntegratedParticleExtractor(Extractor):
             lam_mask,
         )
 
+        # Rescale results in double precision
+        lum = lum.astype(np.float64) * weight_scale
+        cont = cont.astype(np.float64) * weight_scale
+
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
         if (
@@ -480,6 +585,9 @@ class IntegratedParticleExtractor(Extractor):
             emitter._grid_weights[grid_assignment_method.lower()][
                 self._grid.grid_name
             ] = grid_weights
+
+        # Clean up any inplace conversions we did to the emitter attributes
+        self.clean_quantity_attrs(emitter, model)
 
         return LineCollection(
             line_ids=self._grid.line_ids,
@@ -572,6 +680,17 @@ class DopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
+
+        # Scale weights to avoid overflow
+        weight_scale = float(np.max(weight))
+        if weight_scale == 0:
+            weight_scale = 1.0
+
+        # Scale and cast to correct precision for C extension
+        weight_scaled = (weight / weight_scale).astype(dtype)
+
         toc("Setting up particle lnu (with velocity shift) calculation", start)
 
         # Compute the lnu array
@@ -580,7 +699,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             self._grid._lam,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             get_attr_c_compatible_double(emitter, "_velocities"),
             self._grid_dims,
             self._grid_naxes,
@@ -593,9 +712,16 @@ class DopplerShiftedParticleExtractor(Extractor):
             lam_mask,
         )
 
+        # Rescale results in double precision
+        spec = spec.astype(np.float64) * weight_scale
+        integrated_spec = integrated_spec.astype(np.float64) * weight_scale
+
         # Make the Sed objects themselves
         part_sed = Sed(model.lam, spec * erg / s / Hz)
         integrated_sed = Sed(model.lam, integrated_spec * erg / s / Hz)
+
+        # Clean up any inplace conversions we did to the emitter attributes
+        self.clean_quantity_attrs(emitter, model)
 
         return part_sed, integrated_sed
 
@@ -685,6 +811,17 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
+
+        # Scale weights to avoid overflow
+        weight_scale = float(np.max(weight))
+        if weight_scale == 0:
+            weight_scale = 1.0
+
+        # Scale and cast to correct precision for C extension
+        weight_scaled = (weight / weight_scale).astype(dtype)
+
         toc(
             "Setting up integrated lnu (with velocity shift) calculation",
             start,
@@ -696,7 +833,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             self._grid._lam,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             get_attr_c_compatible_double(emitter, "_velocities"),
             self._grid_dims,
             self._grid_naxes,
@@ -708,6 +845,12 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             mask,
             lam_mask,
         )
+
+        # Rescale result in double precision
+        integrated_spec = integrated_spec.astype(np.float64) * weight_scale
+
+        # Clean up any inplace conversions we did to the emitter attributes
+        self.clean_quantity_attrs(emitter, model)
 
         return Sed(model.lam, integrated_spec * erg / s / Hz)
 
@@ -813,6 +956,17 @@ class ParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
+
+        # Scale weights to avoid overflow
+        weight_scale = float(np.max(weight))
+        if weight_scale == 0:
+            weight_scale = 1.0
+
+        # Scale and cast to correct precision for C extension
+        weight_scaled = (weight / weight_scale).astype(dtype)
+
         toc("Setting up particle lnu calculation", start)
 
         # Compute the lnu array
@@ -820,7 +974,7 @@ class ParticleExtractor(Extractor):
             self._spectra_grid,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -831,6 +985,10 @@ class ParticleExtractor(Extractor):
             lam_mask,
         )
 
+        # Rescale results in double precision
+        spec = spec.astype(np.float64) * weight_scale
+        integrated_spec = integrated_spec.astype(np.float64) * weight_scale
+
         # Make the Sed objects themselves
         part_lnu = unyt_array(spec, erg / s / Hz, bypass_validation=True)
         int_lnu = unyt_array(
@@ -838,6 +996,9 @@ class ParticleExtractor(Extractor):
         )
         part_sed = Sed(model.lam, part_lnu)
         integrated_sed = Sed(model.lam, int_lnu)
+
+        # Clean up any inplace conversions we did to the emitter attributes
+        self.clean_quantity_attrs(emitter, model)
 
         return part_sed, integrated_sed
 
@@ -937,6 +1098,17 @@ class ParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
+
+        # Scale weights to avoid overflow
+        weight_scale = float(np.max(weight))
+        if weight_scale == 0:
+            weight_scale = 1.0
+
+        # Scale and cast to correct precision for C extension
+        weight_scaled = (weight / weight_scale).astype(dtype)
+
         toc("Setting up particle line calculation", start)
 
         # Compute the integrated line lum array
@@ -944,7 +1116,7 @@ class ParticleExtractor(Extractor):
             self._line_lum_grid,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -960,7 +1132,7 @@ class ParticleExtractor(Extractor):
             self._line_cont_grid,
             self._grid_axes,
             extracted,
-            weight,
+            weight_scaled,
             grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -970,6 +1142,12 @@ class ParticleExtractor(Extractor):
             mask,
             lam_mask,
         )
+
+        # Rescale results in double precision
+        lum = lum.astype(np.float64) * weight_scale
+        integrated_lum = integrated_lum.astype(np.float64) * weight_scale
+        cont = cont.astype(np.float64) * weight_scale
+        integrated_cont = integrated_cont.astype(np.float64) * weight_scale
 
         # Make the LineCollection objects themselves
         part_line = LineCollection(
@@ -984,6 +1162,9 @@ class ParticleExtractor(Extractor):
             lum=integrated_lum * erg / s,
             cont=integrated_cont * erg / s / Hz,
         )
+
+        # Clean up any inplace conversions we did to the emitter attributes
+        self.clean_quantity_attrs(emitter, model)
 
         return part_line, integrated_line
 
@@ -1049,7 +1230,12 @@ class IntegratedParametricExtractor(Extractor):
 
         # Compute the integrated lnu array by multiplying the sfzh by the
         # grid spectra
-        spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0)
+        # Ensure we use float64 to avoid overflow during summation
+        spec = np.sum(
+            grid_spectra[mask].astype(np.float64)
+            * sfzh[mask].astype(np.float64),
+            axis=0,
+        )
 
         toc("Generating integrated lnu", start)
 
@@ -1109,11 +1295,27 @@ class IntegratedParametricExtractor(Extractor):
         if lam_mask is not None:
             lum = np.zeros(self._grid.nlines) * erg / s
             cont = np.zeros(self._grid.nlines) * erg / s / Hz
-            lum[lam_mask] = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
-            cont[lam_mask] = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
+            lum[lam_mask] = np.sum(
+                grid_line_lums[mask].astype(np.float64)
+                * sfzh[mask].astype(np.float64),
+                axis=0,
+            )
+            cont[lam_mask] = np.sum(
+                grid_line_conts[mask].astype(np.float64)
+                * sfzh[mask].astype(np.float64),
+                axis=0,
+            )
         else:
-            lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
-            cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
+            lum = np.sum(
+                grid_line_lums[mask].astype(np.float64)
+                * sfzh[mask].astype(np.float64),
+                axis=0,
+            )
+            cont = np.sum(
+                grid_line_conts[mask].astype(np.float64)
+                * sfzh[mask].astype(np.float64),
+                axis=0,
+            )
 
         toc("Generating integrated lnu", start)
 

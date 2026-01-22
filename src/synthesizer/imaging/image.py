@@ -26,13 +26,20 @@ from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
+from synthesizer.imaging.extensions.circular_aperture import (
+    calculate_circular_overlap,
+)
 from synthesizer.imaging.image_generators import (
     _generate_image_parametric_smoothed,
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
 from synthesizer.units import accepts, unit_is_compatible
-from synthesizer.utils import TableFormatter, precision
+from synthesizer.utils import (
+    TableFormatter,
+    ensure_array_c_compatible_float,
+    precision,
+)
 
 
 class Image(ImagingBase):
@@ -917,19 +924,14 @@ class Image(ImagingBase):
             max_pixel = np.unravel_index(self.arr.argmax(), self.arr.shape)
             aperture_cent = np.array(max_pixel) + 0.5
 
-        from synthesizer.imaging.extensions.circular_aperture import (
-            calculate_circular_overlap,
-        )
-
-        dtype = precision.get_numpy_dtype()
         return (
             calculate_circular_overlap(
                 self._resolution,
                 self.npix[0],
                 self.npix[1],
-                dtype.type(aperture_radius),
-                self.arr,
-                np.ascontiguousarray(aperture_cent, dtype=dtype),
+                precision.get_numpy_dtype().type(aperture_radius),
+                ensure_array_c_compatible_float(self.arr),
+                ensure_array_c_compatible_float(aperture_cent),
                 nthreads,
             )
             * self.units

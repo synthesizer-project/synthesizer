@@ -422,6 +422,9 @@ class Grid:
             # Get list of axes
             axes = list(hf.attrs["axes"])
 
+            # Get the target dtype for precision
+            dtype = precision.get_numpy_dtype()
+
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in axes:
@@ -435,8 +438,8 @@ class Grid:
                         "of ambiguous units. Please update your grid file."
                     )
 
-                # Get the values
-                values = hf["axes"][axis][:]
+                # Get the values and convert to the correct precision
+                values = np.ascontiguousarray(hf["axes"][axis][:], dtype=dtype)
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
@@ -539,18 +542,25 @@ class Grid:
                     "containing a subset of spectra to read."
                 )
 
-            # Read the wavelengths
-            self.lam = hf["spectra/wavelength"][:]
+            # Get the target dtype for precision
+            dtype = precision.get_numpy_dtype()
 
-            # Get all our spectra
+            # Read the wavelengths and convert to the correct precision
+            self.lam = np.ascontiguousarray(
+                hf["spectra/wavelength"][:], dtype=dtype
+            )
+
+            # Get all our spectra and convert to the correct precision
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+                self.spectra[spectra_id] = np.ascontiguousarray(
+                    hf["spectra"][spectra_id][:], dtype=dtype
+                )
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed is True:
             # The nebular continuum is the nebular emission with the line
-            # contribution removed
+            # contribution removed (already in correct precision from above)
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
@@ -883,6 +893,9 @@ class Grid:
                 grid, or loop over the first axes. The latter is less memory
                 intensive, but slower. Defaults to False.
         """
+        # Get the target dtype for precision
+        dtype = precision.get_numpy_dtype()
+
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra_emissions:
             # Are we doing the look up in one go, or looping?
@@ -900,7 +913,7 @@ class Grid:
                     )
 
                 del self.spectra[spectra_type]
-                new_spectra = np.asarray(new_spectra)
+                new_spectra = np.ascontiguousarray(new_spectra, dtype=dtype)
             else:
                 # Evaluate the function at the desired wavelengths
                 new_spectra = spectres(
@@ -911,11 +924,15 @@ class Grid:
                     verbose=False,
                 )
 
-            # Update this spectra
-            self.spectra[spectra_type] = new_spectra
+            # Update this spectra, ensuring correct precision
+            self.spectra[spectra_type] = np.ascontiguousarray(
+                new_spectra, dtype=dtype
+            )
 
-        # Update wavelength array
-        self.lam = new_lam
+        # Update wavelength array with correct precision
+        self.lam = (
+            np.ascontiguousarray(new_lam.value, dtype=dtype) * new_lam.units
+        )
 
         # Remove any lines outside the new wavelength range
         if self.lines_available:
