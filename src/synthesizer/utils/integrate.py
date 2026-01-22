@@ -64,28 +64,27 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     # Get the target dtype for precision
     dtype = precision.get_numpy_dtype()
 
-    # We need to make a copy of xs and ys and convert to the correct precision
-    _xs = np.array(xs, dtype=dtype, copy=True)
-    _ys = np.array(ys, dtype=dtype, copy=True)
-
-    # Scale the integrand and xs to avoid numerical issues
-    xscale = np.max(np.abs(_xs))
-    yscale = np.max(np.abs(_ys))
+    # Scale the integrand and xs to avoid numerical issues.
+    # We do this calculation in the input's precision to avoid overflow
+    # before we have a chance to normalize.
+    xscale = np.max(np.abs(xs))
+    yscale = np.max(np.abs(ys))
 
     # If the maximum is zero, we return zero
     if xscale == 0 or yscale == 0:
         ndim = ys.ndim - 1
-        return np.zeros(ndim, dtype=dtype) if ndim > 0 else 0.0
+        return (
+            np.zeros(ndim, dtype=ys.dtype) if ndim > 0 else ys.dtype.type(0.0)
+        )
 
-    # Scale to internal units (0..1)
-    _xs /= xscale
-    _ys /= yscale
+    # Create normalized arrays in the compiled precision for the C extension
+    _xs = np.ascontiguousarray(xs / xscale, dtype=dtype)
+    _ys = np.ascontiguousarray(ys / yscale, dtype=dtype)
 
-    # Perform integration and rescale result
+    # Perform the integration in the compiled precision
+    integral = integration_function(_xs, _ys, nthreads)
+
+    # Rescale the result back to physical units.
     # We cast to double precision here to ensure the scaling calculation itself
     # doesn't overflow float32 limits if the result is large.
-    return (
-        integration_function(_xs, _ys, nthreads).astype(float)
-        * float(xscale)
-        * float(yscale)
-    )
+    return integral.astype(np.float64) * float(xscale) * float(yscale)

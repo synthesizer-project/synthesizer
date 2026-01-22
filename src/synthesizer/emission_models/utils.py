@@ -10,8 +10,8 @@ import numpy as np
 from synthesizer import exceptions
 from synthesizer.utils import (
     depluralize,
-    ensure_array_c_compatible_double,
-    get_attr_c_compatible_double,
+    ensure_array_c_compatible_float,
+    get_attr_c_compatible_float,
     pluralize,
 )
 
@@ -206,7 +206,7 @@ def get_param(
             model.fixed_parameters[param],
             ParameterFunction,
         ):
-            value = ensure_array_c_compatible_double(
+            value = ensure_array_c_compatible_float(
                 model.fixed_parameters[param]
             )
         else:
@@ -214,15 +214,15 @@ def get_param(
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = get_attr_c_compatible_double(emission, param)
+        value = get_attr_c_compatible_float(emission, param)
 
     # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = get_attr_c_compatible_double(emitter, param)
+        value = get_attr_c_compatible_float(emitter, param)
 
     # Finally, if we have an additional object, check that
     elif obj is not None and hasattr(obj, param):
-        value = get_attr_c_compatible_double(obj, param)
+        value = get_attr_c_compatible_float(obj, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)

@@ -13,6 +13,7 @@ from unyt import Hz, K, erg, pc, s, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+from synthesizer.utils.precision import get_numpy_dtype
 
 
 @accepts(frequency=Hz, temperature=K)
@@ -446,11 +447,11 @@ def ensure_double_precision(value):
         )
 
 
-def is_c_compatible_double(arr):
+def is_c_compatible_float(arr):
     """Check if the input array is compatible with our C extensions.
 
     Being "compatible" means that the numpy array is both C contiguous and
-    is a double array for floating point numbers.
+    is a float array of the correct precision.
 
     If we don't do this then the C extensions will produce garbage due to the
     mismatch between the data types.
@@ -459,10 +460,10 @@ def is_c_compatible_double(arr):
         arr (np.ndarray): The input array to be checked.
 
     Returns:
-        bool: True if the array is C contiguous and of double precision,
+        bool: True if the array is C contiguous and of correct precision,
               False otherwise.
     """
-    return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.float64
+    return arr.flags["C_CONTIGUOUS"] and arr.dtype == get_numpy_dtype()
 
 
 def is_c_compatible_int(arr):
@@ -484,11 +485,11 @@ def is_c_compatible_int(arr):
     return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.intc
 
 
-def ensure_array_c_compatible_double(arr):
+def ensure_array_c_compatible_float(arr):
     """Ensure that the input array is compatible with our C extensions.
 
     Being "compatible" means that the numpy array is both C contiguous and
-    is a double array for floating point numbers.
+    is a float array of the correct precision.
 
     If we don't do this then the C extensions will produce garbage due to the
     mismatch between the data types.
@@ -510,33 +511,36 @@ def ensure_array_c_compatible_double(arr):
         units = arr.units
         arr = arr.ndview
 
-    # If its a scalar then just return it as a double
+    # Get target dtype
+    dtype = get_numpy_dtype()
+
+    # If its a scalar then just return it as a correct float type
     if np.isscalar(arr):
-        return np.float64(arr)
+        return dtype.type(arr)
 
     # Do we need to do anything?
     need_contiguous = False
-    need_double = False
+    need_float = False
     if not arr.flags["C_CONTIGUOUS"]:
         need_contiguous = True
-    if arr.dtype != np.float64:
-        need_double = True
+    if arr.dtype != dtype:
+        need_float = True
 
     # If there's nothing to do then just return
-    if not need_double and not need_contiguous:
+    if not need_float and not need_contiguous:
         return arr
 
     # If we need both we can do it all at once
-    if need_double and need_contiguous:
-        arr = np.ascontiguousarray(arr, dtype=np.float64)
+    if need_float and need_contiguous:
+        arr = np.ascontiguousarray(arr, dtype=dtype)
 
     # If we only need to make it contiguous then do that
     elif need_contiguous:
         arr = np.ascontiguousarray(arr)
 
-    # If we only need to make it double then do that
-    elif need_double:
-        arr = arr.astype(np.float64)
+    # If we only need to make it correct float precision then do that
+    elif need_float:
+        arr = arr.astype(dtype)
 
     # If we had units then reattach them
     if units is not None:
@@ -545,11 +549,11 @@ def ensure_array_c_compatible_double(arr):
     return arr
 
 
-def get_attr_c_compatible_double(obj, attr):
+def get_attr_c_compatible_float(obj, attr):
     """Ensure an attribute of an object is compatible with our C extensions.
 
     This function checks if the attribute of the object is a numpy array and
-    ensures that it is both C contiguous and of double precision. If the
+    ensures that it is both C contiguous and of correct precision. If the
     attribute is not compatible, it modifies it in place.
 
     Args:
@@ -565,12 +569,13 @@ def get_attr_c_compatible_double(obj, attr):
 
     # Handle singular floats
     if np.isscalar(arr):
-        return np.float64(arr)
+        dtype = get_numpy_dtype()
+        return dtype.type(arr)
 
     # Ensure the attribute is compatible with C extensions
-    if not is_c_compatible_double(arr):
+    if not is_c_compatible_float(arr):
         # It's not compatible, make it compatible
-        arr = ensure_array_c_compatible_double(arr)
+        arr = ensure_array_c_compatible_float(arr)
 
         # Assign it inplace so we only do this conversion once (but only if we
         # can actually set it)

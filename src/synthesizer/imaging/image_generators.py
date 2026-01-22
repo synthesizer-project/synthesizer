@@ -29,7 +29,7 @@ from synthesizer.kernel_functions import Kernel
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
-    ensure_array_c_compatible_double,
+    ensure_array_c_compatible_float,
 )
 
 _CENTERING_TOLERANCE = 1e-6
@@ -579,9 +579,9 @@ def _generate_image_particle_smoothed(
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signal),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        ensure_array_c_compatible_float(signal),
+        ensure_array_c_compatible_float(_smoothing_lengths),
+        ensure_array_c_compatible_float(_coords),
         kernel,
         res,
         img.npix[0],
@@ -759,9 +759,9 @@ def _generate_images_particle_smoothed(
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signals),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        ensure_array_c_compatible_float(signals),
+        ensure_array_c_compatible_float(_smoothing_lengths),
+        ensure_array_c_compatible_float(_coords),
         kernel,
         res,
         imgs.npix[0],
@@ -1168,9 +1168,9 @@ def _generate_ifu_particle_hist(
     toc("Setting up histogram IFU inputs", start)
 
     ifu.arr = make_img(
-        ensure_array_c_compatible_double(spectra),
+        ensure_array_c_compatible_float(spectra),
         smls,
-        ensure_array_c_compatible_double(_coords),
+        ensure_array_c_compatible_float(_coords),
         kernel,
         res,
         ifu.npix[0],
@@ -1301,10 +1301,10 @@ def _generate_ifu_particle_smoothed(
     # Generate the IFU
     ifu.arr = make_img(
         spectra,
-        ensure_array_c_compatible_double(
+        ensure_array_c_compatible_float(
             smoothing_lengths.to_value(spatial_units)
         ),
-        ensure_array_c_compatible_double(_coords),
+        ensure_array_c_compatible_float(_coords),
         kernel,
         res,
         ifu.npix[0],
