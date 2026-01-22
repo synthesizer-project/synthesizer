@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import unyt
 
-from synthesizer import exceptions, precision
+from synthesizer import exceptions
 from synthesizer.emission_models.utils import (
     ParameterFunction,
     cache_model_params,
@@ -359,7 +359,7 @@ class TestGetParamArrayConversion:
 
         result = get_param("test_list", model, None, None)
         assert isinstance(result, np.ndarray)
-        assert result.dtype == precision.get_numpy_dtype()
+        assert result.dtype == np.float64
 
     def test_get_param_converts_float32_to_float64(self):
         """Test that float32 arrays are converted to float64."""
@@ -369,7 +369,7 @@ class TestGetParamArrayConversion:
         )
 
         result = get_param("test_array", model, None, None)
-        assert result.dtype == precision.get_numpy_dtype()
+        assert result.dtype == np.float64
 
     def test_get_param_preserves_unyt_units(self):
         """Test that unyt units are stripped from fixed_parameters."""
@@ -380,7 +380,7 @@ class TestGetParamArrayConversion:
         result = get_param("test_unyt", model, None, None)
         # Units are stripped when converting from fixed_parameters
         assert isinstance(result, np.ndarray)
-        assert result.dtype == precision.get_numpy_dtype()
+        assert result.dtype == np.float64
 
 
 class TestParameterFunction:

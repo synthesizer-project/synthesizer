@@ -29,7 +29,6 @@ from synthesizer.load_data.utils import (
     get_begin_end_pointers,
     lookup_age,
 )
-from synthesizer.utils import precision
 
 from ..particle.galaxy import Galaxy
 
@@ -335,9 +334,8 @@ def load_CAMELS_Astrid(
             `ParticleGalaxy` object containing star and gas particle
     """
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
-        dtype = precision.get_numpy_dtype()
-        redshift = hf["Header"].attrs["Redshift"].astype(dtype)[0]
-        scale_factor = hf["Header"].attrs["Time"].astype(dtype)[0]
+        redshift = hf["Header"].attrs["Redshift"].astype(np.float32)[0]
+        scale_factor = hf["Header"].attrs["Time"].astype(np.float32)[0]
         h = hf["Header"].attrs["HubbleParam"][0]
         Om0 = hf["Header"].attrs["Omega0"][0]
 

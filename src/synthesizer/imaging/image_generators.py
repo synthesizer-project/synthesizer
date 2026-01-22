@@ -30,7 +30,6 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
-    precision,
 )
 
 _CENTERING_TOLERANCE = 1e-6
@@ -583,7 +582,7 @@ def _generate_image_particle_smoothed(
         ensure_array_c_compatible_double(signal),
         ensure_array_c_compatible_double(_smoothing_lengths),
         ensure_array_c_compatible_double(_coords),
-        ensure_array_c_compatible_double(kernel),
+        kernel,
         res,
         img.npix[0],
         img.npix[1],
@@ -763,7 +762,7 @@ def _generate_images_particle_smoothed(
         ensure_array_c_compatible_double(signals),
         ensure_array_c_compatible_double(_smoothing_lengths),
         ensure_array_c_compatible_double(_coords),
-        ensure_array_c_compatible_double(kernel),
+        kernel,
         res,
         imgs.npix[0],
         imgs.npix[1],
@@ -1160,7 +1159,7 @@ def _generate_ifu_particle_hist(
     # arrays.
     _coords[:, 0] += fov[0] / 2
     _coords[:, 1] += fov[1] / 2
-    smls = np.zeros(cent_coords.shape[0], dtype=precision.get_numpy_dtype())
+    smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
 
     # Get the kernel
     # TODO: We should do away with this and write a histogram backend
@@ -1172,7 +1171,7 @@ def _generate_ifu_particle_hist(
         ensure_array_c_compatible_double(spectra),
         smls,
         ensure_array_c_compatible_double(_coords),
-        ensure_array_c_compatible_double(kernel),
+        kernel,
         res,
         ifu.npix[0],
         ifu.npix[1],
@@ -1245,19 +1244,21 @@ def _generate_ifu_particle_smoothed(
 
     # Strip off and store the units on the spectra for later
     ifu.units = spectra.units
-    spectra = spectra.value
+    spectra = spectra.value.T
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:
         raise exceptions.InconsistentArguments(
             f"Spectra must be a 2D array for an IFU (got {spectra.ndim})."
         )
-    if spectra.shape[0] != cent_coords.shape[0]:
+    if spectra.shape[1] != cent_coords.shape[0]:
         raise exceptions.InconsistentArguments(
             "Spectra and coordinates must be the same size"
             f" for an IFU (got {spectra.shape[0]} and "
             f"{cent_coords.shape[0]})."
-        )  # Ensure the coordinates are compatible with the fov/resolution
+        )
+
+    # Ensure the coordinates are compatible with the fov/resolution
     # Note that the resolution and fov are already guaranteed to be
     # compatible with each other at this point
     if not unit_is_compatible(cent_coords, ifu.resolution.units):
@@ -1299,12 +1300,12 @@ def _generate_ifu_particle_smoothed(
 
     # Generate the IFU
     ifu.arr = make_img(
-        ensure_array_c_compatible_double(spectra),
+        spectra,
         ensure_array_c_compatible_double(
             smoothing_lengths.to_value(spatial_units)
         ),
         ensure_array_c_compatible_double(_coords),
-        ensure_array_c_compatible_double(kernel),
+        kernel,
         res,
         ifu.npix[0],
         ifu.npix[1],

@@ -14,7 +14,6 @@ import numpy as np
 
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
-from synthesizer.utils import precision
 
 # Import trapezoid or trapz based on numpy version
 if np.__version__.startswith("1."):
@@ -61,41 +60,19 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         trapz_last_axis if method == "trapz" else simps_last_axis
     )
 
-    # Get the target dtype for precision
-    dtype = precision.get_numpy_dtype()
-
-    # We need to make a copy of xs and ys and convert to the correct precision
-    # Use float64 for scaling to avoid overflow with large values
-    # Ensure we copy the array so we don't modify the original in place
-    # NOTE: The C extension trapz_last_axis seems to expect float64 even if
-    # the package is in single precision mode, or at least requires it for
-    # stability.
-    _xs = np.array(xs, dtype=np.float64, copy=True)
-    _ys = np.array(ys, dtype=np.float64, copy=True)
-
-    _xs = np.ascontiguousarray(_xs)
-    _ys = np.ascontiguousarray(_ys)
+    # We need to make a copy of xs and ys to avoid modifying in place
+    _xs = xs.copy()
+    _ys = ys.copy()
 
     # Scale the integrand and xs to avoid numerical issues
     xscale = _xs.max()
     yscale = _ys.max()
-
-    # Handle edge cases where scale is 0 to avoid division by zero
-    if xscale == 0:
-        xscale = 1.0
-    if yscale == 0:
-        yscale = 1.0
-
     _xs /= xscale
     _ys /= yscale
 
-    # Now convert to the compiled precision for the C extension
-    _xs = _xs.astype(dtype)
-    _ys = _ys.astype(dtype)
+    # If the maximum is zero, we return zero
+    if xscale == 0 or yscale == 0:
+        ndim = ys.ndim - 1
+        return np.zeros(ndim) if ndim > 0 else 0.0
 
-    integral = integration_function(_xs, _ys, nthreads)
-
-    # Cast integral to float64 to ensure the scaling calculation doesn't
-    # overflow if integral is float32 (which it will be if compiled in single
-    # precision)
-    return integral.astype(np.float64) * float(xscale) * float(yscale)
+    return integration_function(_xs, _ys, nthreads) * xscale * yscale

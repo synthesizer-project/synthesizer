@@ -11,7 +11,7 @@ from unyt import Myr, yr
 from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, precision
+from synthesizer.utils import TableFormatter
 
 
 class StarsComponent(Component):
@@ -72,12 +72,11 @@ class StarsComponent(Component):
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
         self.metallicities = metallicities
-        dtype = precision.get_numpy_dtype()
         self.log10metallicities = np.log10(
             self.metallicities,
-            dtype=dtype,
+            dtype=np.float64,
         )
-        self.log10ages = np.log10(self.ages.to(yr), dtype=dtype)
+        self.log10ages = np.log10(self.ages.to(yr), dtype=np.float64)
 
         # The type of stars object (parametric or particle). This is useful for
         # determining the type of stars object without relying on isinstance

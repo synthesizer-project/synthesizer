@@ -41,7 +41,7 @@ from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import depluralize, pluralize, precision
+from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
 
 
@@ -422,9 +422,6 @@ class Grid:
             # Get list of axes
             axes = list(hf.attrs["axes"])
 
-            # Get the target dtype for precision
-            dtype = precision.get_numpy_dtype()
-
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in axes:
@@ -438,8 +435,8 @@ class Grid:
                         "of ambiguous units. Please update your grid file."
                     )
 
-                # Get the values and convert to the correct precision
-                values = np.ascontiguousarray(hf["axes"][axis][:], dtype=dtype)
+                # Get the values
+                values = hf["axes"][axis][:]
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
@@ -542,25 +539,18 @@ class Grid:
                     "containing a subset of spectra to read."
                 )
 
-            # Get the target dtype for precision
-            dtype = precision.get_numpy_dtype()
+            # Read the wavelengths
+            self.lam = hf["spectra/wavelength"][:]
 
-            # Read the wavelengths and convert to the correct precision
-            self.lam = np.ascontiguousarray(
-                hf["spectra/wavelength"][:], dtype=dtype
-            )
-
-            # Get all our spectra and convert to the correct precision
+            # Get all our spectra
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = np.ascontiguousarray(
-                    hf["spectra"][spectra_id][:], dtype=dtype
-                )
+                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed is True:
             # The nebular continuum is the nebular emission with the line
-            # contribution removed (already in correct precision from above)
+            # contribution removed
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
@@ -708,21 +698,20 @@ class Grid:
                     )
 
             # Ensure the line luminosities and continuums are contiguous
-            dtype = precision.get_numpy_dtype()
             for spectra in self.line_lums.keys():
                 lum_units = self.line_lums[spectra].units
                 cont_units = self.line_conts[spectra].units
                 self.line_lums[spectra] = (
                     np.ascontiguousarray(
                         self.line_lums[spectra],
-                        dtype=dtype,
+                        dtype=np.float64,
                     )
                     * lum_units
                 )
                 self.line_conts[spectra] = (
                     np.ascontiguousarray(
                         self.line_conts[spectra],
-                        dtype=dtype,
+                        dtype=np.float64,
                     )
                     * cont_units
                 )
@@ -893,9 +882,6 @@ class Grid:
                 grid, or loop over the first axes. The latter is less memory
                 intensive, but slower. Defaults to False.
         """
-        # Get the target dtype for precision
-        dtype = precision.get_numpy_dtype()
-
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra_emissions:
             # Are we doing the look up in one go, or looping?
@@ -913,7 +899,7 @@ class Grid:
                     )
 
                 del self.spectra[spectra_type]
-                new_spectra = np.ascontiguousarray(new_spectra, dtype=dtype)
+                new_spectra = np.asarray(new_spectra)
             else:
                 # Evaluate the function at the desired wavelengths
                 new_spectra = spectres(
@@ -924,15 +910,11 @@ class Grid:
                     verbose=False,
                 )
 
-            # Update this spectra, ensuring correct precision
-            self.spectra[spectra_type] = np.ascontiguousarray(
-                new_spectra, dtype=dtype
-            )
+            # Update this spectra
+            self.spectra[spectra_type] = new_spectra
 
-        # Update wavelength array with correct precision
-        self.lam = (
-            np.ascontiguousarray(new_lam.value, dtype=dtype) * new_lam.units
-        )
+        # Update wavelength array
+        self.lam = new_lam
 
         # Remove any lines outside the new wavelength range
         if self.lines_available:

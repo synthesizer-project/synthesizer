@@ -30,7 +30,6 @@ from unyt import Msun, kpc, yr
 
 from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
-from synthesizer.utils import precision
 
 try:
     import illustris_python as il
@@ -101,11 +100,10 @@ def load_IllustrisTNG(
     if verbose:
         print("Loading header information...")
 
-    # Get some header info
+    # Get header information
     header = il.groupcat.loadHeader(directory, snap_number)
-    dtype = precision.get_numpy_dtype()
-    scale_factor = header["Time"].astype(dtype)
-    redshift = header["Redshift"].astype(dtype)
+    scale_factor = header["Time"].astype(np.float32)
+    redshift = header["Redshift"].astype(np.float32)
     h = header["HubbleParam"]
 
     if verbose:

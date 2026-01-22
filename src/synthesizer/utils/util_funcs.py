@@ -14,8 +14,6 @@ from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 
-from . import precision
-
 
 @accepts(frequency=Hz, temperature=K)
 def planck(frequency, temperature):
@@ -421,46 +419,38 @@ def depluralize(word: str) -> str:
         return word  # Already singular or unknown pattern
 
 
-def ensure_precision(value):
-    """Ensure that the input value is the compiled precision float.
+def ensure_double_precision(value):
+    """Ensure that the input value is a double precision float.
 
     Args:
         value (float or unyt_quantity): The value to be converted.
 
     Returns:
-        unyt_quantity: The input value with the compiled precision.
+        unyt_quantity: The input value as a double precision float.
     """
     # If the value is None, return it as is
     if value is None:
         return value
 
-    # Get the target dtype
-    target_dtype = precision.get_numpy_dtype()
-
-    # Convert the value to compiled precision
+    # Convert the value to double precision
     if isinstance(value, (unyt_quantity, unyt_array, np.ndarray)):
-        return value.astype(target_dtype)
+        return value.astype(np.float64)
     elif isinstance(value, (int, float)):
-        return target_dtype.type(value)
+        return np.float64(value)
     elif np.isscalar(value):
-        return target_dtype.type(value)
+        return np.float64(value)
     else:
         raise exceptions.InconsistentArguments(
-            "Value to convert to compiled precision wasn't compatible:"
+            "Value to convert to double precision wasn't compatible:"
             f"type(value) = {type(value)}"
         )
 
 
-def ensure_double_precision(value):
-    """Alias for ensure_precision for backward compatibility."""
-    return ensure_precision(value)
-
-
-def is_c_compatible_float(arr):
+def is_c_compatible_double(arr):
     """Check if the input array is compatible with our C extensions.
 
     Being "compatible" means that the numpy array is both C contiguous and
-    matches the compiled precision (float32 or float64).
+    is a double array for floating point numbers.
 
     If we don't do this then the C extensions will produce garbage due to the
     mismatch between the data types.
@@ -469,17 +459,10 @@ def is_c_compatible_float(arr):
         arr (np.ndarray): The input array to be checked.
 
     Returns:
-        bool: True if the array is C contiguous and matches the compiled
-              precision, False otherwise.
+        bool: True if the array is C contiguous and of double precision,
+              False otherwise.
     """
-    return (
-        arr.flags["C_CONTIGUOUS"] and arr.dtype == precision.get_numpy_dtype()
-    )
-
-
-def is_c_compatible_double(arr):
-    """Alias for is_c_compatible_float for backward compatibility."""
-    return is_c_compatible_float(arr)
+    return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.float64
 
 
 def is_c_compatible_int(arr):
@@ -501,11 +484,11 @@ def is_c_compatible_int(arr):
     return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.intc
 
 
-def ensure_array_c_compatible_float(arr):
+def ensure_array_c_compatible_double(arr):
     """Ensure that the input array is compatible with our C extensions.
 
     Being "compatible" means that the numpy array is both C contiguous and
-    matches the compiled precision (float32 or float64).
+    is a double array for floating point numbers.
 
     If we don't do this then the C extensions will produce garbage due to the
     mismatch between the data types.
@@ -517,9 +500,6 @@ def ensure_array_c_compatible_float(arr):
     if arr is None:
         return arr
 
-    # Get the target dtype
-    target_dtype = precision.get_numpy_dtype()
-
     # Convert a list to a numpy array before we move on
     if isinstance(arr, list):
         arr = np.array(arr)
@@ -530,35 +510,33 @@ def ensure_array_c_compatible_float(arr):
         units = arr.units
         arr = arr.ndview
 
-    # If its a scalar then just return it as a compiled precision float
+    # If its a scalar then just return it as a double
     if np.isscalar(arr):
-        return target_dtype.type(arr)
+        return np.float64(arr)
 
     # Do we need to do anything?
     need_contiguous = False
-    need_precision = False
+    need_double = False
     if not arr.flags["C_CONTIGUOUS"]:
         need_contiguous = True
-    if arr.dtype != target_dtype:
-        need_precision = True
+    if arr.dtype != np.float64:
+        need_double = True
 
-    # If there's nothing to do then just return (after reattaching units)
-    if not need_precision and not need_contiguous:
-        if units is not None:
-            return unyt_array(arr, units)
+    # If there's nothing to do then just return
+    if not need_double and not need_contiguous:
         return arr
 
     # If we need both we can do it all at once
-    if need_precision and need_contiguous:
-        arr = np.ascontiguousarray(arr, dtype=target_dtype)
+    if need_double and need_contiguous:
+        arr = np.ascontiguousarray(arr, dtype=np.float64)
 
     # If we only need to make it contiguous then do that
     elif need_contiguous:
         arr = np.ascontiguousarray(arr)
 
-    # If we only need to make it the correct precision then do that
-    elif need_precision:
-        arr = arr.astype(target_dtype)
+    # If we only need to make it double then do that
+    elif need_double:
+        arr = arr.astype(np.float64)
 
     # If we had units then reattach them
     if units is not None:
@@ -567,16 +545,11 @@ def ensure_array_c_compatible_float(arr):
     return arr
 
 
-def ensure_array_c_compatible_double(arr):
-    """Alias for ensure_array_c_compatible_float for backward compatibility."""
-    return ensure_array_c_compatible_float(arr)
-
-
-def get_attr_c_compatible_float(obj, attr):
+def get_attr_c_compatible_double(obj, attr):
     """Ensure an attribute of an object is compatible with our C extensions.
 
     This function checks if the attribute of the object is a numpy array and
-    ensures that it is both C contiguous and of the compiled precision. If the
+    ensures that it is both C contiguous and of double precision. If the
     attribute is not compatible, it modifies it in place.
 
     Args:
@@ -590,14 +563,14 @@ def get_attr_c_compatible_float(obj, attr):
     if arr is None:
         return arr
 
-    # Handle singular values
+    # Handle singular floats
     if np.isscalar(arr):
-        return precision.get_numpy_dtype().type(arr)
+        return np.float64(arr)
 
     # Ensure the attribute is compatible with C extensions
-    if not is_c_compatible_float(arr):
+    if not is_c_compatible_double(arr):
         # It's not compatible, make it compatible
-        arr = ensure_array_c_compatible_float(arr)
+        arr = ensure_array_c_compatible_double(arr)
 
         # Assign it inplace so we only do this conversion once (but only if we
         # can actually set it)
@@ -607,11 +580,6 @@ def get_attr_c_compatible_float(obj, attr):
 
     # Also return the array
     return arr
-
-
-def get_attr_c_compatible_double(obj, attr):
-    """Alias for get_attr_c_compatible_float for backward compatibility."""
-    return get_attr_c_compatible_float(obj, attr)
 
 
 def sigmoid(x, A, a, c, center):

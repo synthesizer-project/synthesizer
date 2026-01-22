@@ -335,9 +335,9 @@ class DraineLi07(DustEmission):
             )
 
         # Define the model parameters from grid
-        grid_qpahs: NDArray = self.grid.qpah
-        grid_umin_values: NDArray = self.grid.umin
-        grid_alpha_values: NDArray = self.grid.alpha
+        grid_qpahs: NDArray[np.float32] = self.grid.qpah
+        grid_umin_values: NDArray[np.float32] = self.grid.umin
+        grid_alpha_values: NDArray[np.float32] = self.grid.alpha
 
         # Use provided parameters or fall back to instance defaults
         effective_dust_to_gas_ratio = (

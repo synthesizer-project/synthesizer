@@ -293,7 +293,7 @@ def get_param(
                 emission,
                 emitter,
                 obj,
-                default=default,
+                default=None,
                 _singular_attempted=True,
                 _plural_attempted=_plural_attempted,
                 _visited=_visited,
@@ -307,7 +307,7 @@ def get_param(
                 emission,
                 emitter,
                 obj,
-                default=default,
+                default=None,
                 _singular_attempted=_singular_attempted,
                 _plural_attempted=True,
                 _visited=_visited,
@@ -320,7 +320,7 @@ def get_param(
         value = default
 
     # If we found a value, return it
-    if value is not None or (value is None and default is None):
+    if value is not None:
         # Only cache if we are in a cacheable context (have a model
         # and emitter)
         if model is not None and emitter is not None:

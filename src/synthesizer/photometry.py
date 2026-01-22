@@ -15,7 +15,6 @@ from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, default_units
-from synthesizer.utils import precision
 
 
 class PhotometryCollection:
@@ -80,12 +79,10 @@ class PhotometryCollection:
                 f"or unyt_arrays. Got {type(photometry[0])} instead."
             )
 
-        units = photometry[0].units
-
         # Convert it from a list of unyt_quantities to a unyt_array
-        self.photometry = unyt_array(
-            np.array(photometry, dtype=precision.get_numpy_dtype()),
-            units,
+        photometry = unyt_array(
+            np.array(photometry, dtype=np.float64),
+            units=photometry[0].units,
         )
 
         # Get the dimensions of a flux for testing

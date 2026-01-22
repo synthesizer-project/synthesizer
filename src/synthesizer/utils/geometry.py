@@ -17,8 +17,6 @@ Example usage:
 
 import numpy as np
 
-from synthesizer.utils import precision
-
 
 def get_rotation_matrix(
     vector: np.ndarray | list | tuple,
@@ -74,4 +72,4 @@ def get_rotation_matrix(
         + (1.0 - rcos) * uvw[:, None] * uvw[None, :]
     )
 
-    return matrix.astype(precision.get_numpy_dtype())
+    return matrix.astype(np.float64)

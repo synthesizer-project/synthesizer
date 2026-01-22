@@ -17,11 +17,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import (
-    TableFormatter,
-    ensure_array_c_compatible_double,
-    precision,
-)
+from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
 
 
@@ -271,10 +267,8 @@ class Particles:
         y = cent_coords[:, 1].value
         d = los_dists.to_value(cent_coords.units)
 
-        # Prepare the output array
-        coords = np.zeros(
-            (self.nparticles, 3), dtype=precision.get_numpy_dtype()
-        )
+        # Get the angular coordinates and store them in a (N, 3) array
+        coords = np.zeros((self.nparticles, 3), dtype=np.float64)
         coords[:, 0] = np.arctan2(x, d)
         coords[:, 1] = np.arctan2(y, d)
 
@@ -555,11 +549,7 @@ class Particles:
         # If we only have a scalar attribute we need to expand it to a
         # nparticle array
         if attr.size == 1:
-            attr = np.full(
-                self.nparticles,
-                attr.value,
-                dtype=precision.get_numpy_dtype(),
-            )
+            attr = np.full(self.nparticles, attr.value, dtype=np.float64)
 
         # Apply the operator
         if op == ">":
@@ -923,8 +913,7 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        dtype = precision.get_numpy_dtype()
-        kernel = np.ascontiguousarray(kernel, dtype=dtype)
+        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
         kdim = kernel.size
 
         # Get particle counts
@@ -932,15 +921,19 @@ class Particles:
         npart_j = other_parts.nparticles
 
         # Set up the inputs from this particle instance.
-        pos_i = np.ascontiguousarray(self._coordinates[mask, :], dtype=dtype)
+        pos_i = np.ascontiguousarray(
+            self._coordinates[mask, :], dtype=np.float64
+        )
 
         # Set up the inputs from the other particle instance.
-        pos_j = np.ascontiguousarray(other_parts._coordinates, dtype=dtype)
+        pos_j = np.ascontiguousarray(
+            other_parts._coordinates, dtype=np.float64
+        )
         smls = np.ascontiguousarray(
-            other_parts._smoothing_lengths, dtype=dtype
+            other_parts._smoothing_lengths, dtype=np.float64
         )
         surf_den_vals = np.ascontiguousarray(
-            getattr(other_parts, attr), dtype=dtype
+            getattr(other_parts, attr), dtype=np.float64
         )
 
         return (

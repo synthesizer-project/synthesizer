@@ -58,7 +58,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
-from synthesizer.utils import TableFormatter, precision
+from synthesizer.utils import TableFormatter
 
 
 class ImageCollection(ImagingBase):
@@ -943,9 +943,7 @@ class ImageCollection(ImagingBase):
                 weights[f] /= w_sum
 
         # Set up the rgb image
-        rgb_img = np.zeros(
-            (self.npix[0], self.npix[1], 3), dtype=precision.get_numpy_dtype()
-        )
+        rgb_img = np.zeros((self.npix[0], self.npix[1], 3), dtype=np.float64)
 
         # Loop over each filter calcualting the RGB channels
         for rgb_ind, rgb in enumerate(rgb_filters):
