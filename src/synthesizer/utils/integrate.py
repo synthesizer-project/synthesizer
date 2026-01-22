@@ -14,6 +14,7 @@ import numpy as np
 
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
+from synthesizer.utils import precision
 
 # Import trapezoid or trapz based on numpy version
 if np.__version__.startswith("1."):
@@ -60,19 +61,31 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         trapz_last_axis if method == "trapz" else simps_last_axis
     )
 
-    # We need to make a copy of xs and ys to avoid modifying in place
-    _xs = xs.copy()
-    _ys = ys.copy()
+    # Get the target dtype for precision
+    dtype = precision.get_numpy_dtype()
+
+    # We need to make a copy of xs and ys and convert to the correct precision
+    _xs = np.array(xs, dtype=dtype, copy=True)
+    _ys = np.array(ys, dtype=dtype, copy=True)
 
     # Scale the integrand and xs to avoid numerical issues
-    xscale = _xs.max()
-    yscale = _ys.max()
-    _xs /= xscale
-    _ys /= yscale
+    xscale = np.max(np.abs(_xs))
+    yscale = np.max(np.abs(_ys))
 
     # If the maximum is zero, we return zero
     if xscale == 0 or yscale == 0:
         ndim = ys.ndim - 1
-        return np.zeros(ndim) if ndim > 0 else 0.0
+        return np.zeros(ndim, dtype=dtype) if ndim > 0 else 0.0
 
-    return integration_function(_xs, _ys, nthreads) * xscale * yscale
+    # Scale to internal units (0..1)
+    _xs /= xscale
+    _ys /= yscale
+
+    # Perform integration and rescale result
+    # We cast to double precision here to ensure the scaling calculation itself
+    # doesn't overflow float32 limits if the result is large.
+    return (
+        integration_function(_xs, _ys, nthreads).astype(float)
+        * float(xscale)
+        * float(yscale)
+    )
