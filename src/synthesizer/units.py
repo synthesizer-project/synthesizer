@@ -726,13 +726,19 @@ def _check_arg(units, name, value):
 
 
 def accepts(**units):
-    """Check arguments passed to the wrapped function have compatible units.
+    """Check wrapped function arguments have compatible units and precision.
 
     This decorator will cross check any of the arguments passed to the wrapped
     function with the units defined in this decorators kwargs. If units are
     not compatible or are missing an error will be raised. If the units don't
     match the defined units in units then the values will be converted to the
     correct units.
+
+    If the argument is a float/int/numpy array/unyt_array/unyt_quantity then
+    the precision of the argument will be checked and, if required, it will
+    be converted to match the compiled precision of the C extensions, e.g.
+    float64 (double) by default or float32 (single) if installed with the
+    SINGLE_PRECISION flag.
 
     This is inspired by the accepts decorator in the unyt package, but includes
     Synthesizer specific errors and conversion functionality.
