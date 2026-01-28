@@ -62,6 +62,10 @@ class Image(ImagingBase):
             The weight map derived from the noise array.
     """
 
+    @accepts(
+        resolution=(kpc, arcsecond),
+        fov=(kpc, arcsecond),
+    )
     def __init__(
         self,
         resolution,
