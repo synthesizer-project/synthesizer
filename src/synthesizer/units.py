@@ -39,6 +39,7 @@ from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
 from synthesizer.synth_warnings import warn
+from synthesizer.utils.precision import ensure_arg_precision
 
 # Define the path to your YAML file
 FILE_PATH = os.path.join(BASE_DIR, "default_units.yml")
@@ -785,9 +786,19 @@ def accepts(**units):
             for i, (name, value) in enumerate(zip(arg_names, args)):
                 args[i] = _check_arg(units, name, value)
 
+                # Ensure the precision of the argument matches the compiled
+                # precision of the C extensions. Note that arguments that don't
+                # require a conversion are just returned unchanged.
+                args[i] = ensure_arg_precision(args[i])
+
             # Check the keyword arguments
             for name, value in kwargs.items():
                 kwargs[name] = _check_arg(units, name, value)
+
+                # Ensure the precision of the argument matches the compiled
+                # precision of the C extensions. Note that arguments that don't
+                # require a conversion are just returned unchanged.
+                kwargs[name] = ensure_arg_precision(kwargs[name])
 
             return func(*args, **kwargs)
 

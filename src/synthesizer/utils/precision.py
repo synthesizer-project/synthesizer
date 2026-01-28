@@ -16,7 +16,10 @@ Example usage:
     >>> converted = precision.array_to_precision(arr, copy=True)
 """
 
+from typing import Any
+
 import numpy as np
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer.extensions.precision_info import (
     get_float_bytes as _get_float_bytes,
@@ -62,15 +65,11 @@ def get_numpy_dtype() -> np.dtype:
     return np.dtype(np.float64)
 
 
-def array_to_precision(arr: np.ndarray, *, copy: bool = False) -> np.ndarray:
+def array_to_precision(arr: np.ndarray) -> np.ndarray:
     """Convert an array to the compiled precision dtype.
 
     Args:
         arr: Input numpy array.
-        copy: If False (default) and the dtype already matches,
-            returns the original array (no copy). If False and the
-            dtype differs, raises TypeError.
-            If True, always returns a converted copy.
 
     Returns:
         np.ndarray: Array with the compiled precision dtype.
@@ -86,17 +85,56 @@ def array_to_precision(arr: np.ndarray, *, copy: bool = False) -> np.ndarray:
     # Check if the array already has the correct dtype, if so, return it
     # or a copy of it
     if arr.dtype == target_dtype:
-        if copy:
-            return arr.copy()
         return arr
 
     # If copy is requested, convert and return the array
-    if copy:
-        return arr.astype(target_dtype)
+    return arr.astype(target_dtype)
 
-    # IF we reach here, the dtypes differ and no copy was requested
-    raise TypeError(
-        f"Array has dtype {arr.dtype} but compiled precision is "
-        f"{target_dtype}. Use copy=True to convert, or pass an array "
-        f"with the correct dtype."
-    )
+
+def unyt_array_to_precision(arr: unyt_array) -> unyt_array:
+    """Convert a unyt_array to the compiled precision dtype.
+
+    Args:
+        arr: Input unyt_array.
+
+    Returns:
+        unyt.unyt_array: unyt_array with the compiled precision dtype.
+    """
+    # Ensure input is a unyt_array
+    if not isinstance(arr, unyt_array):
+        raise TypeError("Input must be a unyt.unyt_array")
+
+    target_dtype = get_numpy_dtype()
+
+    # Convert the underlying data to the target dtype
+    converted_data = arr.astype(target_dtype)
+
+    return converted_data
+
+
+def ensure_arg_precision(arg: Any) -> Any:
+    """Ensure the argument is in the compiled precision.
+
+    Args:
+        arg: Input argument, if this is an array or float that demands a
+            specific precision, it will be converted. Otherwise, it is returned
+            unchanged.
+
+    Returns:
+        Any: Argument converted to the compiled precision if applicable.
+    """
+    # If the argument is a numpy array, convert it
+    if isinstance(arg, np.ndarray):
+        return array_to_precision(arg)
+
+    # If the argument is a unyt_array or unyt_quantity, convert it
+    if isinstance(arg, (unyt_array, unyt_quantity)):
+        return unyt_array_to_precision(arg)
+
+    # If the argument is a float, convert it
+    if isinstance(arg, float):
+        target_dtype = get_numpy_dtype()
+        return target_dtype.type(arg)
+
+    # Otherwise, return the argument unchanged
+    return arg
