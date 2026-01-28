@@ -1,98 +1,75 @@
 """A test suite for the utils module."""
 
 import numpy as np
+import pytest
 import unyt
 
-from synthesizer.emission_models.utils import (
-    ensure_array_c_compatible_float,
-)
+from synthesizer import exceptions
+from synthesizer.utils import check_array_c_compatible_float
+from synthesizer.utils.precision import get_numpy_dtype
 
 
-class TestEnsureCompatibles:
-    """A test suite for functions helping ensure compatibility."""
+class TestCheckArrayCCompatibleFloat:
+    """A test suite for check_array_c_compatible_float."""
 
-    def test_c_compatible_array_scalar(self):
-        """Test the ensure_array_c_compatible_float function."""
-        # Test with a single value
+    def test_valid_scalar_passes(self):
+        """Test that a valid scalar passes through unchanged."""
         value = 1.0
-        result = ensure_array_c_compatible_float(value)
-        assert result == np.float64(1.0), (
-            "Expected a single float value to be returned as np.float64 "
-            f"but got {result}"
-        )
+        result = check_array_c_compatible_float(value)
+        assert result == value
 
-    def test_c_compatible_array_list(self):
-        """Test the ensure_array_c_compatible_float function."""
-        # Test with a list of values
+    def test_none_passes(self):
+        """Test that None passes through unchanged."""
+        result = check_array_c_compatible_float(None)
+        assert result is None
+
+    def test_valid_array_passes(self):
+        """Test that a valid C-contiguous array with correct dtype passes."""
+        dtype = get_numpy_dtype()
+        value = np.ascontiguousarray([1.0, 2.0, 3.0], dtype=dtype)
+        result = check_array_c_compatible_float(value)
+        assert result is value  # Should be the same object
+
+    def test_valid_unyt_array_passes(self):
+        """Test that a valid unyt array passes through."""
+        dtype = get_numpy_dtype()
+        value = unyt.unyt_array(
+            np.ascontiguousarray([1.0, 2.0, 3.0], dtype=dtype),
+            "cm",
+        )
+        result = check_array_c_compatible_float(value)
+        assert result is value
+
+    def test_list_raises_type_error(self):
+        """Test that a list raises TypeError."""
         value = [1.0, 2.0, 3.0]
-        result = ensure_array_c_compatible_float(value)
-        assert isinstance(result, np.ndarray), (
-            "Expected a list to be converted to a numpy array "
-            f"but got {result}"
-        )
-        assert result.dtype == np.float64, (
-            f"Expected a numpy array of type float64 but got {result.dtype}"
-        )
+        with pytest.raises(TypeError, match="Expected a numpy array"):
+            check_array_c_compatible_float(value)
 
-    def test_c_compatible_array_numpy32(self):
-        """Test the ensure_array_c_compatible_float function."""
-        # Test with a numpy array of type float32
-        value = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-        result = ensure_array_c_compatible_float(value)
-        assert isinstance(result, np.ndarray), (
-            f"Expected a numpy array to be returned but got {result}"
-        )
-        assert result.dtype == np.float64, (
-            f"Expected a numpy array of type float64 but got {result.dtype}"
-        )
+    def test_wrong_dtype_raises_error(self):
+        """Test that wrong dtype raises InconsistentArguments."""
+        dtype = get_numpy_dtype()
+        # Use the opposite dtype
+        wrong_dtype = np.float32 if dtype == np.float64 else np.float64
+        value = np.ascontiguousarray([1.0, 2.0, 3.0], dtype=wrong_dtype)
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="incorrect dtype"
+        ):
+            check_array_c_compatible_float(value)
 
-    def test_c_compatible_array_numpy64(self):
-        """Test the ensure_array_c_compatible_float function."""
-        # Test with a numpy array of type float64
-        value = np.array([1.0, 2.0, 3.0], dtype=np.float64)
-        result = ensure_array_c_compatible_float(value)
-        assert isinstance(result, np.ndarray), (
-            f"Expected a numpy array to be returned but got {result}"
+    def test_non_contiguous_raises_error(self):
+        """Test that non-C-contiguous array raises InconsistentArguments."""
+        dtype = get_numpy_dtype()
+        # Create a non-contiguous array via slicing
+        arr = np.ascontiguousarray(
+            [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=dtype
         )
-        assert result.dtype == np.float64, (
-            f"Expected a numpy array of type float64 but got {result.dtype}"
-        )
-
-    def test_c_compatible_array_unyt32(self):
-        """Test the ensure_array_c_compatible_float function."""
-        value = unyt.unyt_array(
-            np.array([1.0, 2.0, 3.0], dtype=np.float32),
-            "cm",
-        )
-        result = ensure_array_c_compatible_float(value)
-        assert isinstance(result, unyt.unyt_array), (
-            f"Expected a numpy array to be returned but got {result}"
-        )
-        assert result.dtype == np.float64, (
-            f"Expected a numpy array of type float64 but got {result.dtype}"
-        )
-        assert result.units == value.units, (
-            f"Expected a numpy array of type {value.units} but "
-            f"got {result.units}"
-        )
-
-    def test_c_compatible_array_unyt64(self):
-        """Test the ensure_array_c_compatible_float function."""
-        value = unyt.unyt_array(
-            np.array([1.0, 2.0, 3.0], dtype=np.float32),
-            "cm",
-        )
-        result = ensure_array_c_compatible_float(value)
-        assert isinstance(result, unyt.unyt_array), (
-            f"Expected a numpy array to be returned but got {result}"
-        )
-        assert result.dtype == np.float64, (
-            f"Expected a numpy array of type float64 but got {result.dtype}"
-        )
-        assert result.units == value.units, (
-            f"Expected a numpy array of type {value.units} but "
-            f"got {result.units}"
-        )
+        value = arr[:, ::2]  # Non-contiguous slice
+        assert not value.flags["C_CONTIGUOUS"]
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="not C contiguous"
+        ):
+            check_array_c_compatible_float(value)
 
 
 class TestPluralization:

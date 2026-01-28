@@ -477,7 +477,7 @@ def check_array_c_compatible_float(arr):
     if arr is None:
         return arr
 
-    # Strip units if present for checking (but keep the original)
+    # Strip units if present for checking (but keep the original, i.e. ndview)
     arr_to_check = arr
     if isinstance(arr, (unyt_array, unyt_quantity)):
         arr_to_check = arr.ndview
