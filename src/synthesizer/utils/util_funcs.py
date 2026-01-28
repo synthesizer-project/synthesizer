@@ -452,66 +452,69 @@ def is_c_compatible_int(arr):
     return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.intc
 
 
-def ensure_array_c_compatible_float(arr):
-    """Ensure that the input array is compatible with our C extensions.
+def check_array_c_compatible_float(arr):
+    """Check that an array is compatible with our C extensions.
 
     Being "compatible" means that the numpy array is both C contiguous and
     is a float array of the correct precision.
 
-    If we don't do this then the C extensions will produce garbage at best and
-    crash at worst due to the mismatch between the data types.
+    If the array is not compatible, an error is raised. This function does
+    not modify the input array - conversions should be done at the point
+    where data enters the system (e.g., at the UI/API level).
 
     Args:
         arr (np.ndarray): The input array to be checked.
+
+    Returns:
+        np.ndarray: The input array, unmodified, if it passes all checks.
+
+    Raises:
+        TypeError: If the input is not a numpy array.
+        exceptions.InconsistentArguments: If the array is not C contiguous
+            or has the wrong dtype.
     """
     # If the array is None, return it as is
     if arr is None:
         return arr
 
-    # Convert a list to a numpy array before we move on
-    if isinstance(arr, list):
-        arr = np.array(arr)
-
-    # If we have units we need to strip them off temporarily
-    units = None
+    # Strip units if present for checking (but keep the original)
+    arr_to_check = arr
     if isinstance(arr, (unyt_array, unyt_quantity)):
-        units = arr.units
-        arr = arr.ndview
+        arr_to_check = arr.ndview
 
     # Get target dtype
     dtype = get_numpy_dtype()
 
-    # If its a scalar then just return it as a correct float type
-    if np.isscalar(arr):
-        return dtype.type(arr)
-
-    # Do we need to do anything?
-    need_contiguous = False
-    need_float = False
-    if not arr.flags["C_CONTIGUOUS"]:
-        need_contiguous = True
-    if arr.dtype != dtype:
-        need_float = True
-
-    # If there's nothing to do then just return
-    if not need_float and not need_contiguous:
+    # Handle scalars - check type matches
+    if np.isscalar(arr_to_check):
+        if not isinstance(arr_to_check, (dtype.type, int, float)):
+            raise exceptions.InconsistentArguments(
+                f"Scalar has incorrect type. Expected {dtype} compatible "
+                f"type but got {type(arr_to_check)}."
+            )
         return arr
 
-    # If we need both we can do it all at once
-    if need_float and need_contiguous:
-        arr = np.ascontiguousarray(arr, dtype=dtype)
+    # Check it's actually an array
+    if not isinstance(arr_to_check, np.ndarray):
+        raise TypeError(
+            f"Expected a numpy array but got {type(arr_to_check)}. "
+            "Lists and other iterables should be converted to numpy arrays "
+            "before being passed to C extensions."
+        )
 
-    # If we only need to make it contiguous then do that
-    elif need_contiguous:
-        arr = np.ascontiguousarray(arr)
+    # Check C contiguity
+    if not arr_to_check.flags["C_CONTIGUOUS"]:
+        raise exceptions.InconsistentArguments(
+            "Array is not C contiguous. Use np.ascontiguousarray() to "
+            "convert the array before passing to C extensions."
+        )
 
-    # If we only need to make it correct float precision then do that
-    elif need_float:
-        arr = arr.astype(dtype)
-
-    # If we had units then reattach them
-    if units is not None:
-        arr = unyt_array(arr, units)
+    # Check dtype
+    if arr_to_check.dtype != dtype:
+        raise exceptions.InconsistentArguments(
+            f"Array has incorrect dtype. Expected {dtype} but got "
+            f"{arr_to_check.dtype}. Use arr.astype({dtype}) to convert."
+        )
 
     return arr
 

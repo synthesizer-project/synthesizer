@@ -17,7 +17,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, ensure_array_c_compatible_float
+from synthesizer.utils import TableFormatter, check_array_c_compatible_float
 from synthesizer.utils.geometry import get_rotation_matrix
 
 
@@ -111,8 +111,8 @@ class Particles:
                 The name of the particle type.
         """
         # Set phase space coordinates
-        self.coordinates = ensure_array_c_compatible_float(coordinates)
-        self.velocities = ensure_array_c_compatible_float(velocities)
+        self.coordinates = check_array_c_compatible_float(coordinates)
+        self.velocities = check_array_c_compatible_float(velocities)
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
@@ -127,12 +127,12 @@ class Particles:
         # Set unit information
 
         # Set the softening length
-        self.softening_lengths = ensure_array_c_compatible_float(
+        self.softening_lengths = check_array_c_compatible_float(
             softening_lengths
         )
 
         # Set the particle masses
-        self.masses = ensure_array_c_compatible_float(masses)
+        self.masses = check_array_c_compatible_float(masses)
 
         # Set the redshift of the particles
         self.redshift = redshift
@@ -141,7 +141,7 @@ class Particles:
         self.nparticles = nparticles
 
         # Set the centre of the particle distribution
-        self.centre = ensure_array_c_compatible_float(centre)
+        self.centre = check_array_c_compatible_float(centre)
 
         # Set the radius to None, this will be populated when needed and
         # can then be subsequently accessed
@@ -273,7 +273,7 @@ class Particles:
         coords[:, 1] = np.arctan2(y, d)
 
         # Ensure the array is C-contiguous
-        coords = ensure_array_c_compatible_float(coords)
+        coords = check_array_c_compatible_float(coords)
 
         return coords * rad
 
@@ -348,7 +348,7 @@ class Particles:
         projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
 
         # Ensure the array is C-contiguous
-        projected_smoothing_lengths = ensure_array_c_compatible_float(
+        projected_smoothing_lengths = check_array_c_compatible_float(
             projected_smoothing_lengths
         )
 
