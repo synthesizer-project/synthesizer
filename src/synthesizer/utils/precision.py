@@ -139,13 +139,13 @@ def ensure_arg_precision(arg: Any) -> Any:
     Returns:
         Any: Argument converted to the compiled precision if applicable.
     """
-    # If the argument is a numpy array, convert it
-    if isinstance(arg, np.ndarray):
-        return array_to_precision(arg)
-
     # If the argument is a unyt_array or unyt_quantity, convert it
     if isinstance(arg, (unyt_array, unyt_quantity)):
         return unyt_array_to_precision(arg)
+
+    # If the argument is a numpy array, convert it
+    if isinstance(arg, np.ndarray):
+        return array_to_precision(arg)
 
     # If the argument is a float, convert it
     if isinstance(arg, float):
