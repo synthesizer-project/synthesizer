@@ -7,6 +7,7 @@ when util_funcs imports accepts from units).
 Example usage:
 
     planck(frequency, temperature=10000 * K)
+    sigmoid(x, A, a, c, center)
 """
 
 import numpy as np
@@ -14,6 +15,22 @@ import unyt.physical_constants as const
 from unyt import Hz, K, erg, pc, s
 
 from synthesizer.units import accepts
+
+
+def sigmoid(x, A, a, c, center):
+    """Sigmoid function.
+
+    Args:
+        x (float): Input value.
+        A (float): Amplitude parameter.
+        a (float): Slope parameter.
+        c (float): Offset parameter.
+        center (float): Center of the sigmoid function.
+
+    Returns:
+        float: Sigmoid function value.
+    """
+    return A / (1 + np.exp(-a * (x - center))) + c
 
 
 @accepts(frequency=Hz, temperature=K)

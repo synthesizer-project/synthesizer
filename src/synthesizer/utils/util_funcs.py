@@ -458,8 +458,8 @@ def ensure_array_c_compatible_float(arr):
     Being "compatible" means that the numpy array is both C contiguous and
     is a float array of the correct precision.
 
-    If we don't do this then the C extensions will produce garbage due to the
-    mismatch between the data types.
+    If we don't do this then the C extensions will produce garbage at best and
+    crash at worst due to the mismatch between the data types.
 
     Args:
         arr (np.ndarray): The input array to be checked.
@@ -514,60 +514,6 @@ def ensure_array_c_compatible_float(arr):
         arr = unyt_array(arr, units)
 
     return arr
-
-
-def get_attr_c_compatible_float(obj, attr):
-    """Ensure an attribute of an object is compatible with our C extensions.
-
-    This function checks if the attribute of the object is a numpy array and
-    ensures that it is both C contiguous and of correct precision. If the
-    attribute is not compatible, it modifies it in place.
-
-    Args:
-        obj (object): The object containing the attribute to be checked.
-        attr (str): The name of the attribute to be checked.
-    """
-    # Get the attribute from the object
-    arr = getattr(obj, attr)
-
-    # Just return it if it's None
-    if arr is None:
-        return arr
-
-    # Handle singular floats
-    if np.isscalar(arr):
-        dtype = get_numpy_dtype()
-        return dtype.type(arr)
-
-    # Ensure the attribute is compatible with C extensions
-    if not is_c_compatible_float(arr):
-        # It's not compatible, make it compatible
-        arr = ensure_array_c_compatible_float(arr)
-
-        # Assign it inplace so we only do this conversion once (but only if we
-        # can actually set it)
-        if hasattr(obj, attr):
-            # Set the attribute to the new array
-            setattr(obj, attr, arr)
-
-    # Also return the array
-    return arr
-
-
-def sigmoid(x, A, a, c, center):
-    """Sigmoid function.
-
-    Args:
-        x (float): Input value.
-        A (float): Amplitude parameter.
-        a (float): Slope parameter.
-        c (float): Offset parameter.
-        center (float): Center of the sigmoid function.
-
-    Returns:
-        float: Sigmoid function value.
-    """
-    return A / (1 + np.exp(-a * (x - center))) + c
 
 
 def obj_to_hashable(obj):

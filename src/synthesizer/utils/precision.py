@@ -82,12 +82,15 @@ def array_to_precision(arr: np.ndarray) -> np.ndarray:
     arr = np.asanyarray(arr)
     target_dtype = get_numpy_dtype()
 
-    # Check if the array already has the correct dtype, if so, return it
-    # or a copy of it
+    # Ensure the array is C-contiguous
+    if not arr.flags["C_CONTIGUOUS"]:
+        return np.ascontiguousarray(arr, dtype=target_dtype)
+
+    # Check if the array already has the correct dtype, if so return it
     if arr.dtype == target_dtype:
         return arr
 
-    # If copy is requested, convert and return the array
+    # OK, convert the array to the target dtype making a copy and return it
     return arr.astype(target_dtype)
 
 
@@ -104,12 +107,25 @@ def unyt_array_to_precision(arr: unyt_array) -> unyt_array:
     if not isinstance(arr, unyt_array):
         raise TypeError("Input must be a unyt.unyt_array")
 
+    # Get the target dtype
     target_dtype = get_numpy_dtype()
 
-    # Convert the underlying data to the target dtype
-    converted_data = arr.astype(target_dtype)
+    # Ensure the array is C-contiguous
+    if not arr.flags["C_CONTIGUOUS"]:
+        return unyt_array(
+            np.ascontiguousarray(arr.value, dtype=target_dtype),
+            arr.units,
+        )
 
-    return converted_data
+    # If the array already has the correct dtype, return it
+    if arr.dtype == target_dtype:
+        return arr
+
+    # OK, convert the underlying data to the target dtype making a copy
+    return unyt_array(
+        arr.value.astype(target_dtype),
+        arr.units,
+    )
 
 
 def ensure_arg_precision(arg: Any) -> Any:
@@ -138,3 +154,28 @@ def ensure_arg_precision(arg: Any) -> Any:
 
     # Otherwise, return the argument unchanged
     return arg
+
+
+def ensure_extra_attr_precision_and_attach(obj: Any, **kwargs: Any) -> None:
+    """Ensure extra attributes are in the compiled precision and attach them.
+
+    This will attach every key/value pair in kwargs as an attribute to obj,
+    converting any arrays or floats to the compiled precision.
+
+    Every class which takes optional extra attributes via **kwargs should call
+    this function to ensure the attributes are in the correct precision.
+
+    Args:
+        obj: The object to which the attributes will be attached.
+        **kwargs: Key/value pairs to attach as attributes to obj.
+
+    Returns:
+        None: The function modifies obj in place.
+    """
+    # Iterate over each key/value pair in kwargs
+    for key, value in kwargs.items():
+        # Ensure the value is in the compiled precision
+        converted_value = ensure_arg_precision(value)
+
+        # Attach the converted value as an attribute to obj
+        setattr(obj, key, converted_value)
