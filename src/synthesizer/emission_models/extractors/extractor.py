@@ -32,6 +32,7 @@ from synthesizer.extensions.particle_spectra import (
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
+from synthesizer.utils import check_array_c_compatible_float
 
 
 class Extractor(ABC):
@@ -327,9 +328,17 @@ class IntegratedParticleExtractor(Extractor):
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
+        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
+        grid_axes = tuple(
+            check_array_c_compatible_float(axis) for axis in self._grid_axes
+        )
+        extracted = tuple(
+            check_array_c_compatible_float(attr) for attr in extracted
+        )
+        weight = check_array_c_compatible_float(weight)
         spec, grid_weights = compute_integrated_sed(
-            self._spectra_grid,
-            self._grid_axes,
+            spectra_grid,
+            grid_axes,
             extracted,
             weight,
             self._grid_dims,
@@ -436,9 +445,18 @@ class IntegratedParticleExtractor(Extractor):
         toc("Setting up particle line calculation", start)
 
         # Compute the integrated line lum array
+        line_lum_grid = check_array_c_compatible_float(self._line_lum_grid)
+        line_cont_grid = check_array_c_compatible_float(self._line_cont_grid)
+        grid_axes = tuple(
+            check_array_c_compatible_float(axis) for axis in self._grid_axes
+        )
+        extracted = tuple(
+            check_array_c_compatible_float(attr) for attr in extracted
+        )
+        weight = check_array_c_compatible_float(weight)
         lum, grid_weights = compute_integrated_sed(
-            self._line_lum_grid,
-            self._grid_axes,
+            line_lum_grid,
+            grid_axes,
             extracted,
             weight,
             grid_dims,
@@ -454,8 +472,8 @@ class IntegratedParticleExtractor(Extractor):
 
         # Compute the integrated continuum array
         cont, _ = compute_integrated_sed(
-            self._line_cont_grid,
-            self._grid_axes,
+            line_cont_grid,
+            grid_axes,
             extracted,
             weight,
             grid_dims,
@@ -574,13 +592,23 @@ class DopplerShiftedParticleExtractor(Extractor):
         toc("Setting up particle lnu (with velocity shift) calculation", start)
 
         # Compute the lnu array
+        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
+        grid_lam = check_array_c_compatible_float(self._grid._lam)
+        grid_axes = tuple(
+            check_array_c_compatible_float(axis) for axis in self._grid_axes
+        )
+        extracted = tuple(
+            check_array_c_compatible_float(attr) for attr in extracted
+        )
+        weight = check_array_c_compatible_float(weight)
+        velocities = check_array_c_compatible_float(emitter._velocities)
         spec, integrated_spec = compute_part_seds_with_vel_shift(
-            self._spectra_grid,
-            self._grid._lam,
-            self._grid_axes,
+            spectra_grid,
+            grid_lam,
+            grid_axes,
             extracted,
             weight,
-            emitter._velocities,
+            velocities,
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -690,13 +718,23 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         )
 
         # Compute the lnu array
+        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
+        grid_lam = check_array_c_compatible_float(self._grid._lam)
+        grid_axes = tuple(
+            check_array_c_compatible_float(axis) for axis in self._grid_axes
+        )
+        extracted = tuple(
+            check_array_c_compatible_float(attr) for attr in extracted
+        )
+        weight = check_array_c_compatible_float(weight)
+        velocities = check_array_c_compatible_float(emitter._velocities)
         _, integrated_spec = compute_part_seds_with_vel_shift(
-            self._spectra_grid,
-            self._grid._lam,
-            self._grid_axes,
+            spectra_grid,
+            grid_lam,
+            grid_axes,
             extracted,
             weight,
-            emitter._velocities,
+            velocities,
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -815,9 +853,17 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle lnu calculation", start)
 
         # Compute the lnu array
+        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
+        grid_axes = tuple(
+            check_array_c_compatible_float(axis) for axis in self._grid_axes
+        )
+        extracted = tuple(
+            check_array_c_compatible_float(attr) for attr in extracted
+        )
+        weight = check_array_c_compatible_float(weight)
         spec, integrated_spec = compute_particle_seds(
-            self._spectra_grid,
-            self._grid_axes,
+            spectra_grid,
+            grid_axes,
             extracted,
             weight,
             self._grid_dims,
@@ -939,9 +985,18 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle line calculation", start)
 
         # Compute the integrated line lum array
+        line_lum_grid = check_array_c_compatible_float(self._line_lum_grid)
+        line_cont_grid = check_array_c_compatible_float(self._line_cont_grid)
+        grid_axes = tuple(
+            check_array_c_compatible_float(axis) for axis in self._grid_axes
+        )
+        extracted = tuple(
+            check_array_c_compatible_float(attr) for attr in extracted
+        )
+        weight = check_array_c_compatible_float(weight)
         lum, integrated_lum = compute_particle_seds(
-            self._line_lum_grid,
-            self._grid_axes,
+            line_lum_grid,
+            grid_axes,
             extracted,
             weight,
             grid_dims,
@@ -956,8 +1011,8 @@ class ParticleExtractor(Extractor):
 
         # Compute the integrated continuum array
         cont, integrated_cont = compute_particle_seds(
-            self._line_cont_grid,
-            self._grid_axes,
+            line_cont_grid,
+            grid_axes,
             extracted,
             weight,
             grid_dims,

@@ -19,6 +19,7 @@ from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, check_array_c_compatible_float
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.precision import get_numpy_dtype
 
 
 class Particles:
@@ -111,8 +112,8 @@ class Particles:
                 The name of the particle type.
         """
         # Set phase space coordinates
-        self.coordinates = check_array_c_compatible_float(coordinates)
-        self.velocities = check_array_c_compatible_float(velocities)
+        self.coordinates = coordinates
+        self.velocities = velocities
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
@@ -127,12 +128,10 @@ class Particles:
         # Set unit information
 
         # Set the softening length
-        self.softening_lengths = check_array_c_compatible_float(
-            softening_lengths
-        )
+        self.softening_lengths = softening_lengths
 
         # Set the particle masses
-        self.masses = check_array_c_compatible_float(masses)
+        self.masses = masses
 
         # Set the redshift of the particles
         self.redshift = redshift
@@ -141,7 +140,7 @@ class Particles:
         self.nparticles = nparticles
 
         # Set the centre of the particle distribution
-        self.centre = check_array_c_compatible_float(centre)
+        self.centre = centre
 
         # Set the radius to None, this will be populated when needed and
         # can then be subsequently accessed
@@ -272,9 +271,6 @@ class Particles:
         coords[:, 0] = np.arctan2(x, d)
         coords[:, 1] = np.arctan2(y, d)
 
-        # Ensure the array is C-contiguous
-        coords = check_array_c_compatible_float(coords)
-
         return coords * rad
 
     def get_projected_angular_smoothing_lengths(
@@ -346,11 +342,6 @@ class Particles:
 
         # Calculate and return the projected angular smoothing lengths
         projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
-
-        # Ensure the array is C-contiguous
-        projected_smoothing_lengths = check_array_c_compatible_float(
-            projected_smoothing_lengths
-        )
 
         return projected_smoothing_lengths * rad
 
@@ -913,7 +904,10 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
+        dtype = get_numpy_dtype()
+        kernel = check_array_c_compatible_float(
+            np.ascontiguousarray(kernel, dtype=dtype)
+        )
         kdim = kernel.size
 
         # Get particle counts
@@ -921,19 +915,19 @@ class Particles:
         npart_j = other_parts.nparticles
 
         # Set up the inputs from this particle instance.
-        pos_i = np.ascontiguousarray(
-            self._coordinates[mask, :], dtype=np.float64
+        pos_i = check_array_c_compatible_float(
+            np.ascontiguousarray(self._coordinates[mask, :], dtype=dtype)
         )
 
         # Set up the inputs from the other particle instance.
-        pos_j = np.ascontiguousarray(
-            other_parts._coordinates, dtype=np.float64
+        pos_j = check_array_c_compatible_float(
+            np.ascontiguousarray(other_parts._coordinates, dtype=dtype)
         )
-        smls = np.ascontiguousarray(
-            other_parts._smoothing_lengths, dtype=np.float64
+        smls = check_array_c_compatible_float(
+            np.ascontiguousarray(other_parts._smoothing_lengths, dtype=dtype)
         )
-        surf_den_vals = np.ascontiguousarray(
-            getattr(other_parts, attr), dtype=np.float64
+        surf_den_vals = check_array_c_compatible_float(
+            np.ascontiguousarray(getattr(other_parts, attr), dtype=dtype)
         )
 
         return (
@@ -951,6 +945,7 @@ class Particles:
             nthreads,
         )
 
+    @accepts()
     def get_los_column_density(
         self,
         other_parts,

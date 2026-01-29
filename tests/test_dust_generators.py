@@ -140,8 +140,11 @@ class TestDustEmissionUtilities:
         cmb_factor_z0, new_temp_z0 = get_cmb_heating_factor(
             temperature, emissivity, 0.0
         )
-        assert cmb_factor_z0 == 1.0
-        assert new_temp_z0 == temperature
+        assert np.isclose(cmb_factor_z0, 1.0)
+        assert np.isclose(
+            new_temp_z0.to_value(K),
+            temperature.to_value(K),
+        )
 
     def test_get_cmb_heating_factor_units(self):
         """Test that CMB heating preserves units."""
@@ -164,7 +167,10 @@ class TestBlackbodyGenerator:
         temperature = 20 * K
         bb = Blackbody(temperature=temperature)
 
-        assert bb.temperature == temperature
+        assert np.isclose(
+            bb.temperature.to_value(K),
+            temperature.to_value(K),
+        )
         assert not bb.do_cmb_heating
         assert "temperature" in bb._required_params
 
@@ -320,7 +326,10 @@ class TestGreybodyGenerator:
         emissivity = 1.5
         gb = Greybody(temperature=temperature, emissivity=emissivity)
 
-        assert gb.temperature == temperature
+        assert np.isclose(
+            gb.temperature.to_value(K),
+            temperature.to_value(K),
+        )
         assert gb.emissivity == emissivity
         assert gb.optically_thin is True  # Default
         assert gb.lam_0 == 100.0 * um  # Default
@@ -396,7 +405,10 @@ class TestCasey12Generator:
             lam_0=lam_0,
         )
 
-        assert c12.temperature == temperature
+        assert np.isclose(
+            c12.temperature.to_value(K),
+            temperature.to_value(K),
+        )
         assert c12.emissivity == emissivity
         assert c12.alpha == alpha
         assert c12.n_bb == n_bb
@@ -453,7 +465,10 @@ class TestDraineLi07Generator:
         p0 = 125.0
         u_avg = u_mean_magdis12(dust_mass, ldust, p0)
         assert u_avg > 0
-        assert u_avg == ldust / (p0 * dust_mass)
+        assert np.isclose(
+            u_avg,
+            ldust / (p0 * dust_mass),
+        )
 
         # Test u_mean
         umin = 1.0
@@ -481,7 +496,10 @@ class TestDraineLi07Generator:
         )
 
         assert dl07.grid == mock_dust_grid
-        assert dl07.dust_mass == dust_mass
+        assert np.isclose(
+            dl07.dust_mass.to_value(Msun),
+            dust_mass.to_value(Msun),
+        )
         assert dl07.dust_to_gas_ratio == 0.01
         assert dl07.qpah == 0.025
         assert "dust_mass" in dl07._required_params

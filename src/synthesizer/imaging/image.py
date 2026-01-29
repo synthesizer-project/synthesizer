@@ -32,7 +32,8 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_smoothed,
 )
 from synthesizer.units import accepts, unit_is_compatible
-from synthesizer.utils import TableFormatter
+from synthesizer.utils import TableFormatter, check_array_c_compatible_float
+from synthesizer.utils.precision import get_numpy_dtype
 
 
 class Image(ImagingBase):
@@ -303,6 +304,7 @@ class Image(ImagingBase):
         new_img.arr *= mult
         return new_img
 
+    @accepts()
     def get_img_hist(
         self,
         signal,
@@ -335,6 +337,7 @@ class Image(ImagingBase):
             normalisation=normalisation,
         )
 
+    @accepts()
     def get_img_smoothed(
         self,
         signal,
@@ -886,6 +889,7 @@ class Image(ImagingBase):
 
         return fig, ax
 
+    @accepts(aperture_radius=(kpc, arcsecond))
     def get_signal_in_aperture(
         self,
         aperture_radius,
@@ -921,6 +925,15 @@ class Image(ImagingBase):
             max_pixel = np.unravel_index(self.arr.argmax(), self.arr.shape)
             aperture_cent = np.array(max_pixel) + 0.5
 
+        dtype = get_numpy_dtype()
+        aperture_cent = check_array_c_compatible_float(
+            np.ascontiguousarray(aperture_cent, dtype=dtype)
+        )
+        aperture_radius = check_array_c_compatible_float(
+            dtype.type(aperture_radius)
+        )
+        image_data = check_array_c_compatible_float(self.arr)
+
         from synthesizer.imaging.extensions.circular_aperture import (
             calculate_circular_overlap,
         )
@@ -930,9 +943,9 @@ class Image(ImagingBase):
                 self._resolution,
                 self.npix[0],
                 self.npix[1],
-                np.float64(aperture_radius),
-                self.arr,
-                np.float64(aperture_cent),
+                aperture_radius,
+                image_data,
+                aperture_cent,
                 nthreads,
             )
             * self.units

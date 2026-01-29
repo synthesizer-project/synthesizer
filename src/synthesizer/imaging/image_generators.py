@@ -28,9 +28,8 @@ from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils import (
-    check_array_c_compatible_float,
-)
+from synthesizer.utils import check_array_c_compatible_float
+from synthesizer.utils.precision import get_numpy_dtype
 
 _CENTERING_TOLERANCE = 1e-6
 
@@ -582,7 +581,7 @@ def _generate_image_particle_smoothed(
         check_array_c_compatible_float(signal),
         check_array_c_compatible_float(_smoothing_lengths),
         check_array_c_compatible_float(_coords),
-        kernel,
+        check_array_c_compatible_float(kernel),
         res,
         img.npix[0],
         img.npix[1],
@@ -762,7 +761,7 @@ def _generate_images_particle_smoothed(
         check_array_c_compatible_float(signals),
         check_array_c_compatible_float(_smoothing_lengths),
         check_array_c_compatible_float(_coords),
-        kernel,
+        check_array_c_compatible_float(kernel),
         res,
         imgs.npix[0],
         imgs.npix[1],
@@ -1159,11 +1158,16 @@ def _generate_ifu_particle_hist(
     # arrays.
     _coords[:, 0] += fov[0] / 2
     _coords[:, 1] += fov[1] / 2
-    smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
+    dtype = get_numpy_dtype()
+    smls = check_array_c_compatible_float(
+        np.zeros(cent_coords.shape[0], dtype=dtype)
+    )
 
     # Get the kernel
     # TODO: We should do away with this and write a histogram backend
-    kernel = Kernel().get_kernel()
+    kernel = check_array_c_compatible_float(
+        np.ascontiguousarray(Kernel().get_kernel(), dtype=dtype)
+    )
 
     toc("Setting up histogram IFU inputs", start)
 
@@ -1300,12 +1304,12 @@ def _generate_ifu_particle_smoothed(
 
     # Generate the IFU
     ifu.arr = make_img(
-        spectra,
+        check_array_c_compatible_float(spectra),
         check_array_c_compatible_float(
             smoothing_lengths.to_value(spatial_units)
         ),
         check_array_c_compatible_float(_coords),
-        kernel,
+        check_array_c_compatible_float(kernel),
         res,
         ifu.npix[0],
         ifu.npix[1],

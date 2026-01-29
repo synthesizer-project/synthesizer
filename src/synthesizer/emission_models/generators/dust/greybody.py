@@ -215,31 +215,28 @@ class Greybody(DustEmission):
         # Compute the greybody function
         lnu = self._lnu(nu, temperature)
 
-        # Create an SED object for convenience
-        sed = Sed(lam=lams, lnu=lnu)
-
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed._bolometric_luminosity
-
-        # Normalise the greybody spectrum
-        sed._lnu /= bol_lum
-        lnu = sed._lnu
+        # Normalise the greybody spectrum using float64 integration
+        lnu = self._normalize_spectrum(nu, lnu)
 
         # Get the scaling we will need
         scaling = self.get_scaling(emitter, model, emissions)
+        scaling_value = (
+            scaling.to_value(erg / s)
+            if hasattr(scaling, "to_value")
+            else scaling
+        )
 
         # Handle per particle scaling (we need to expand the scaling shape)
         if model is not None and model.per_particle:
-            if not hasattr(scaling, "shape"):
+            if not hasattr(scaling_value, "shape"):
                 # scaling is a float, need to convert to array
-                scaling = np.full(emitter.nparticles, scaling)
-            scaling = scaling[:, np.newaxis]
+                scaling_value = np.full(emitter.nparticles, scaling_value)
+            scaling_value = scaling_value[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        result = lnu * scaling * cmb_factor
-        sed._lnu = result.value if hasattr(result, "value") else result
+        result = lnu * scaling_value * cmb_factor
 
-        return sed
+        return Sed(lam=lams, lnu=result * erg / s / Hz)
 
     @accepts(line_lams=angstrom)
     def _generate_lines(
@@ -310,28 +307,29 @@ class Greybody(DustEmission):
         lnu = self._lnu(nu, temperature)
         norm_lnu = self._lnu(sed_nu, temperature)
 
-        # Create an SED object for convenience
-        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
-
         # Get the bolometric luminosity with proper units
-        bol_lum = norm_sed._bolometric_luminosity
+        bol_lum = self._bolometric_luminosity_value(sed_nu, norm_lnu)
 
         # Normalise the greybody spectrum
-        lnu /= bol_lum
+        lnu = lnu.to_value(erg / s / Hz) / bol_lum
 
         # Normalise the spectrum and apply scaling with proper unit handling
         scaling = self.get_scaling(emitter, model, spectra)
+        scaling_value = (
+            scaling.to_value(erg / s)
+            if hasattr(scaling, "to_value")
+            else scaling
+        )
 
         # Handle per particle scaling (we need to expand the scaling shape)
         if model is not None and model.per_particle:
-            if not hasattr(scaling, "shape"):
+            if not hasattr(scaling_value, "shape"):
                 # scaling is a float, need to convert to array
-                scaling = np.full(emitter.nparticles, scaling)
-            scaling = scaling[:, np.newaxis]
+                scaling_value = np.full(emitter.nparticles, scaling_value)
+            scaling_value = scaling_value[:, np.newaxis]
 
         # Properly handle units: normalize then scale
-        result = lnu * scaling * cmb_factor
-        lnu = result.value if hasattr(result, "value") else result
+        lnu = lnu * scaling_value * cmb_factor
 
         # Return as LineCollection with continuum only
         lines = LineCollection(

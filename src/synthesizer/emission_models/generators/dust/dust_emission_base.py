@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Tuple, Union
 
-from unyt import K, unyt_quantity
+import numpy as np
+from unyt import Hz, K, erg, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
@@ -300,6 +301,36 @@ class DustEmission(Generator):
             )
         else:
             return 1.0
+
+    def _bolometric_luminosity_value(self, nu, lnu):
+        """Compute bolometric luminosity in float64 units.
+
+        Args:
+            nu (unyt_array): Frequency grid.
+            lnu (unyt_array): Spectral luminosity density.
+
+        Returns:
+            np.ndarray: Bolometric luminosity values (no units).
+        """
+        nu_value = np.asarray(nu.to_value(Hz), dtype=np.float64)
+        lnu_value = np.asarray(lnu.to_value(erg / s / Hz), dtype=np.float64)
+        return -np.trapz(lnu_value, x=nu_value, axis=-1)
+
+    def _normalize_spectrum(self, nu, lnu):
+        """Normalize spectrum using float64 integration.
+
+        Args:
+            nu (unyt_array): Frequency grid.
+            lnu (unyt_array): Spectral luminosity density.
+
+        Returns:
+            unyt_array: Normalized spectral luminosity density.
+        """
+        bol_lum = self._bolometric_luminosity_value(nu, lnu)
+        lnu_value = np.asarray(lnu.to_value(erg / s / Hz), dtype=np.float64)
+        if lnu_value.ndim > 1:
+            bol_lum = np.expand_dims(bol_lum, axis=-1)
+        return lnu_value / bol_lum
 
     def apply_cmb_heating(self, temperature, emissivity, redshift) -> Tuple:
         """Compute the cmb heating factor and modify the temperature.

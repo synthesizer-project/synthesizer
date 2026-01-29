@@ -33,7 +33,9 @@ from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils import check_array_c_compatible_float
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.precision import get_numpy_dtype
 from synthesizer.utils.util_funcs import combine_arrays
 
 
@@ -1024,16 +1026,25 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Set up the inputs to the C function.
+        dtype = get_numpy_dtype()
         grid_props = [
-            np.ascontiguousarray(log10ages, dtype=np.float64),
-            np.ascontiguousarray(log10metallicities, dtype=np.float64),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(log10ages, dtype=dtype)
+            ),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(log10metallicities, dtype=dtype)
+            ),
         ]
         part_props = [
-            np.ascontiguousarray(self.log10ages, dtype=np.float64),
-            np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(self.log10ages, dtype=dtype)
+            ),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(self.log10metallicities, dtype=dtype)
+            ),
         ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
+        part_mass = check_array_c_compatible_float(
+            np.ascontiguousarray(self._initial_masses, dtype=dtype)
         )
 
         # Make sure we set the number of particles to the size of the mask
@@ -1064,6 +1075,7 @@ class Stars(Particles, StarsComponent):
             None,
         )
 
+    @accepts()
     def get_sfzh(
         self,
         log10ages,
@@ -1198,14 +1210,19 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Set up the inputs to the C function.
+        dtype = get_numpy_dtype()
         grid_props = [
-            np.ascontiguousarray(log10ages, dtype=np.float64),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(log10ages, dtype=dtype)
+            ),
         ]
         part_props = [
-            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(self.log10ages, dtype=dtype)
+            ),
         ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
+        part_mass = check_array_c_compatible_float(
+            np.ascontiguousarray(self._initial_masses, dtype=dtype)
         )
 
         # Make sure we set the number of particles to the size of the mask
@@ -1236,6 +1253,7 @@ class Stars(Particles, StarsComponent):
             None,
         )
 
+    @accepts()
     def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
         """Generate the SFH of these stars in terms of mass.
 
@@ -1353,14 +1371,19 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         # Set up the inputs to the C function.
+        dtype = get_numpy_dtype()
         grid_props = [
-            np.ascontiguousarray(metallicities, dtype=np.float64),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(metallicities, dtype=dtype)
+            ),
         ]
         part_props = [
-            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+            check_array_c_compatible_float(
+                np.ascontiguousarray(self.metallicities, dtype=dtype)
+            ),
         ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
+        part_mass = check_array_c_compatible_float(
+            np.ascontiguousarray(self._initial_masses, dtype=dtype)
         )
 
         # Make sure we set the number of particles to the size of the mask
@@ -1391,6 +1414,7 @@ class Stars(Particles, StarsComponent):
             None,
         )
 
+    @accepts()
     def get_metal_dist(
         self,
         metallicities,

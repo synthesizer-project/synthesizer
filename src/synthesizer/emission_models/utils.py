@@ -8,11 +8,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.utils import (
-    check_array_c_compatible_float,
-    depluralize,
-    pluralize,
-)
+from synthesizer.utils import depluralize, pluralize
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -199,17 +195,7 @@ def get_param(
 
     # Check the model's fixed parameters first
     if model is not None and param in model.fixed_parameters:
-        if not isinstance(
-            model.fixed_parameters[param], str
-        ) and not isinstance(
-            model.fixed_parameters[param],
-            ParameterFunction,
-        ):
-            value = check_array_c_compatible_float(
-                model.fixed_parameters[param]
-            )
-        else:
-            value = model.fixed_parameters[param]
+        value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):

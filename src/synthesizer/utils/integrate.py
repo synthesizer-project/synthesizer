@@ -14,7 +14,7 @@ import numpy as np
 
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
-from synthesizer.utils import precision
+from synthesizer.utils import check_array_c_compatible_float, precision
 
 # Import trapezoid or trapz based on numpy version
 if np.__version__.startswith("1."):
@@ -82,7 +82,11 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     _ys = np.ascontiguousarray(ys / yscale, dtype=dtype)
 
     # Perform the integration in the compiled precision
-    integral = integration_function(_xs, _ys, nthreads)
+    integral = integration_function(
+        check_array_c_compatible_float(_xs),
+        check_array_c_compatible_float(_ys),
+        nthreads,
+    )
 
     # Rescale the result back to physical units.
     # We cast to double precision here to ensure the scaling calculation itself

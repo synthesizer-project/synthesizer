@@ -50,9 +50,11 @@ def planck(frequency, temperature):
         unyt_quantity: Spectral luminosity density in erg/s/Hz.
     """
     # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
+    frequency = frequency.astype(np.float64)
+    temperature = temperature.astype(np.float64)
     exponent = (const.h * frequency) / (const.kb * temperature)
     spectral_radiance = (2 * const.h * frequency**3) / (
-        const.c**2 * (np.exp(exponent) - 1)
+        const.c**2 * np.expm1(exponent)
     )
 
     # Convert from spectral radiance density to spectral luminosity density,

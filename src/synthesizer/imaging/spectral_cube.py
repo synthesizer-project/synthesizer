@@ -262,6 +262,7 @@ class SpectralCube(ImagingBase):
 
         return new_cube
 
+    @accepts()
     def get_data_cube_hist(
         self,
         sed,
@@ -298,6 +299,7 @@ class SpectralCube(ImagingBase):
             nthreads=nthreads,
         )
 
+    @accepts()
     def get_data_cube_smoothed(
         self,
         sed,

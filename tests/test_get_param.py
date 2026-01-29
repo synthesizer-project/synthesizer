@@ -10,6 +10,11 @@ from synthesizer.emission_models.utils import (
     cache_model_params,
     get_param,
 )
+from synthesizer.utils.precision import (
+    array_to_precision,
+    ensure_arg_precision,
+    get_numpy_dtype,
+)
 
 
 # Mock classes for testing
@@ -20,6 +25,28 @@ class MockModel:
         """Initialize mock model with label and fixed_parameters."""
         self.label = label
         self.fixed_parameters = {}
+
+    def fix_parameters(self, **kwargs):
+        """Normalize fixed parameters like EmissionModel."""
+        normalized = {}
+        for key, value in kwargs.items():
+            if isinstance(
+                value,
+                (np.ndarray, unyt.unyt_array, unyt.unyt_quantity),
+            ):
+                normalized[key] = ensure_arg_precision(value)
+            elif isinstance(value, (float, int, np.floating, np.integer)):
+                normalized[key] = ensure_arg_precision(value)
+            elif isinstance(value, (list, tuple)):
+                arr = np.asarray(value)
+                if np.issubdtype(arr.dtype, np.number):
+                    normalized[key] = array_to_precision(arr)
+                else:
+                    normalized[key] = value
+            else:
+                normalized[key] = value
+
+        self.fixed_parameters.update(normalized)
 
 
 class MockEmission:
@@ -353,34 +380,33 @@ class TestGetParamArrayConversion:
     """Test C-compatible array conversion in get_param."""
 
     def test_get_param_converts_list_to_array(self):
-        """Test that lists are converted to numpy arrays."""
+        """Test that lists are normalized on assignment."""
         model = MockModel()
-        model.fixed_parameters["test_list"] = [1.0, 2.0, 3.0]
+        model.fix_parameters(test_list=[1.0, 2.0, 3.0])
 
         result = get_param("test_list", model, None, None)
         assert isinstance(result, np.ndarray)
-        assert result.dtype == np.float64
+        assert result.dtype == get_numpy_dtype()
 
-    def test_get_param_converts_float32_to_float64(self):
-        """Test that float32 arrays are converted to float64."""
+    def test_get_param_converts_float32_to_precision(self):
+        """Test that float32 arrays are normalized on assignment."""
         model = MockModel()
-        model.fixed_parameters["test_array"] = np.array(
-            [1.0, 2.0, 3.0], dtype=np.float32
+        model.fix_parameters(
+            test_array=np.array([1.0, 2.0, 3.0], dtype=np.float32)
         )
 
         result = get_param("test_array", model, None, None)
-        assert result.dtype == np.float64
+        assert result.dtype == get_numpy_dtype()
 
     def test_get_param_preserves_unyt_units(self):
-        """Test that unyt units are stripped from fixed_parameters."""
+        """Test that unyt arrays keep units with precision normalized."""
         model = MockModel()
         test_val = unyt.unyt_array([1.0, 2.0, 3.0], "Myr")
-        model.fixed_parameters["test_unyt"] = test_val
+        model.fix_parameters(test_unyt=test_val)
 
         result = get_param("test_unyt", model, None, None)
-        # Units are stripped when converting from fixed_parameters
-        assert isinstance(result, np.ndarray)
-        assert result.dtype == np.float64
+        assert isinstance(result, unyt.unyt_array)
+        assert result.dtype == get_numpy_dtype()
 
 
 class TestParameterFunction:
