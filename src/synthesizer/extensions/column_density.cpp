@@ -522,9 +522,11 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   double threshold;
   PyArrayObject *np_kernel, *np_pos_i, *np_pos_j, *np_smls, *np_surf_den_val;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiidiii", &np_kernel, &np_pos_i, &np_pos_j,
-                        &np_smls, &np_surf_den_val, &npart_i, &npart_j, &kdim,
-                        &threshold, &force_loop, &min_count, &nthreads))
+  if (!PyArg_ParseTuple(args, "O!O!O!O!O!iiidiii", &PyArray_Type, &np_kernel,
+                        &PyArray_Type, &np_pos_i, &PyArray_Type, &np_pos_j,
+                        &PyArray_Type, &np_smls, &PyArray_Type,
+                        &np_surf_den_val, &npart_i, &npart_j, &kdim, &threshold,
+                        &force_loop, &min_count, &nthreads))
     return NULL;
 
   double start = tic();

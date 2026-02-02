@@ -458,9 +458,9 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
-                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads))
+  if (!PyArg_ParseTuple(args, "OOO!O!iisi", &grid_tuple, &part_tuple,
+                        &PyArray_Type, &np_part_mass, &PyArray_Type, &np_ndims,
+                        &ndim, &npart, &method, &nthreads))
     return nullptr;
 
   /* Extract the grid struct. */

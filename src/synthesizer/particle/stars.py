@@ -33,8 +33,7 @@ from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import check_array_c_compatible_float
-from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils import TableFormatter
 from synthesizer.utils.precision import accept_precisions
 from synthesizer.utils.util_funcs import combine_arrays
 
@@ -999,6 +998,7 @@ class Stars(Particles, StarsComponent):
         # Set resampled flag
         self.resampled = True
 
+    @accept_precisions(allow_copies=False)
     def _prepare_sfzh_args(
         self,
         log10ages,
@@ -1028,14 +1028,14 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            check_array_c_compatible_float(log10ages),
-            check_array_c_compatible_float(log10metallicities),
+            log10ages,
+            log10metallicities,
         ]
         part_props = [
-            check_array_c_compatible_float(self.log10ages),
-            check_array_c_compatible_float(self.log10metallicities),
+            self.log10ages,
+            self.log10metallicities,
         ]
-        part_mass = check_array_c_compatible_float(self._initial_masses)
+        part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -1176,6 +1176,7 @@ class Stars(Particles, StarsComponent):
 
         return surviving_mass * Msun
 
+    @accept_precisions(allow_copies=False)
     def _prepare_sfh_args(
         self,
         log10ages,
@@ -1202,12 +1203,12 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            check_array_c_compatible_float(log10ages),
+            log10ages,
         ]
         part_props = [
-            check_array_c_compatible_float(self.log10ages),
+            self.log10ages,
         ]
-        part_mass = check_array_c_compatible_float(self._initial_masses)
+        part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -1329,6 +1330,7 @@ class Stars(Particles, StarsComponent):
 
         return fig, ax
 
+    @accept_precisions(allow_copies=False)
     def _prepare_metal_dist_args(
         self,
         metallicities,
@@ -1357,12 +1359,12 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            check_array_c_compatible_float(metallicities),
+            metallicities,
         ]
         part_props = [
-            check_array_c_compatible_float(self.metallicities),
+            self.metallicities,
         ]
-        part_mass = check_array_c_compatible_float(self._initial_masses)
+        part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))

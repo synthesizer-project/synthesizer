@@ -52,9 +52,10 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisiO", &grid_tuple, &part_tuple,
-                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads, &np_mask))
+  if (!PyArg_ParseTuple(args, "OOO!O!iisiO!", &grid_tuple, &part_tuple,
+                        &PyArray_Type, &np_part_mass, &PyArray_Type, &np_ndims,
+                        &ndim, &npart, &method, &nthreads, &PyArray_Type,
+                        &np_mask))
     return NULL;
 
   /* Extract the grid struct. */

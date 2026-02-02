@@ -32,7 +32,6 @@ from synthesizer.extensions.particle_spectra import (
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
-from synthesizer.utils import check_array_c_compatible_float
 from synthesizer.utils.precision import accept_precisions
 
 
@@ -260,7 +259,16 @@ class IntegratedParticleExtractor(Extractor):
     to reduce the computation time.
     """
 
-    @accept_precisions(mask=np.bool_, lam_mask=np.bool_)
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
     def generate_lnu(
         self,
         emitter,
@@ -330,14 +338,10 @@ class IntegratedParticleExtractor(Extractor):
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
-        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
-        grid_axes = tuple(
-            check_array_c_compatible_float(axis) for axis in self._grid_axes
-        )
-        extracted = tuple(
-            check_array_c_compatible_float(attr) for attr in extracted
-        )
-        weight = check_array_c_compatible_float(weight)
+        spectra_grid = self._spectra_grid
+        grid_axes = tuple(self._grid_axes)
+        extracted = tuple(extracted)
+        weight = weight
         spec, grid_weights = compute_integrated_sed(
             spectra_grid,
             grid_axes,
@@ -367,7 +371,11 @@ class IntegratedParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
-    @accept_precisions(mask=np.bool_, lam_mask=np.bool_)
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
     def generate_line(
         self,
         emitter,
@@ -448,15 +456,11 @@ class IntegratedParticleExtractor(Extractor):
         toc("Setting up particle line calculation", start)
 
         # Compute the integrated line lum array
-        line_lum_grid = check_array_c_compatible_float(self._line_lum_grid)
-        line_cont_grid = check_array_c_compatible_float(self._line_cont_grid)
-        grid_axes = tuple(
-            check_array_c_compatible_float(axis) for axis in self._grid_axes
-        )
-        extracted = tuple(
-            check_array_c_compatible_float(attr) for attr in extracted
-        )
-        weight = check_array_c_compatible_float(weight)
+        line_lum_grid = self._line_lum_grid
+        line_cont_grid = self._line_cont_grid
+        grid_axes = tuple(self._grid_axes)
+        extracted = tuple(extracted)
+        weight = weight
         lum, grid_weights = compute_integrated_sed(
             line_lum_grid,
             grid_axes,
@@ -520,6 +524,16 @@ class DopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
     def generate_lnu(
         self,
         emitter,
@@ -595,16 +609,12 @@ class DopplerShiftedParticleExtractor(Extractor):
         toc("Setting up particle lnu (with velocity shift) calculation", start)
 
         # Compute the lnu array
-        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
-        grid_lam = check_array_c_compatible_float(self._grid._lam)
-        grid_axes = tuple(
-            check_array_c_compatible_float(axis) for axis in self._grid_axes
-        )
-        extracted = tuple(
-            check_array_c_compatible_float(attr) for attr in extracted
-        )
-        weight = check_array_c_compatible_float(weight)
-        velocities = check_array_c_compatible_float(emitter._velocities)
+        spectra_grid = self._spectra_grid
+        grid_lam = self._grid._lam
+        grid_axes = tuple(self._grid_axes)
+        extracted = tuple(extracted)
+        weight = weight
+        velocities = emitter._velocities
         spec, integrated_spec = compute_part_seds_with_vel_shift(
             spectra_grid,
             grid_lam,
@@ -649,6 +659,16 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
     def generate_lnu(
         self,
         emitter,
@@ -721,16 +741,12 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         )
 
         # Compute the lnu array
-        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
-        grid_lam = check_array_c_compatible_float(self._grid._lam)
-        grid_axes = tuple(
-            check_array_c_compatible_float(axis) for axis in self._grid_axes
-        )
-        extracted = tuple(
-            check_array_c_compatible_float(attr) for attr in extracted
-        )
-        weight = check_array_c_compatible_float(weight)
-        velocities = check_array_c_compatible_float(emitter._velocities)
+        spectra_grid = self._spectra_grid
+        grid_lam = self._grid._lam
+        grid_axes = tuple(self._grid_axes)
+        extracted = tuple(extracted)
+        weight = weight
+        velocities = emitter._velocities
         _, integrated_spec = compute_part_seds_with_vel_shift(
             spectra_grid,
             grid_lam,
@@ -767,6 +783,11 @@ class ParticleExtractor(Extractor):
     based component.
     """
 
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
     def generate_lnu(
         self,
         emitter,
@@ -856,14 +877,10 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle lnu calculation", start)
 
         # Compute the lnu array
-        spectra_grid = check_array_c_compatible_float(self._spectra_grid)
-        grid_axes = tuple(
-            check_array_c_compatible_float(axis) for axis in self._grid_axes
-        )
-        extracted = tuple(
-            check_array_c_compatible_float(attr) for attr in extracted
-        )
-        weight = check_array_c_compatible_float(weight)
+        spectra_grid = self._spectra_grid
+        grid_axes = tuple(self._grid_axes)
+        extracted = tuple(extracted)
+        weight = weight
         spec, integrated_spec = compute_particle_seds(
             spectra_grid,
             grid_axes,
@@ -889,6 +906,16 @@ class ParticleExtractor(Extractor):
 
         return part_sed, integrated_sed
 
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        lam_mask=np.bool_,
+    )
     def generate_line(
         self,
         emitter,
@@ -988,15 +1015,11 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle line calculation", start)
 
         # Compute the integrated line lum array
-        line_lum_grid = check_array_c_compatible_float(self._line_lum_grid)
-        line_cont_grid = check_array_c_compatible_float(self._line_cont_grid)
-        grid_axes = tuple(
-            check_array_c_compatible_float(axis) for axis in self._grid_axes
-        )
-        extracted = tuple(
-            check_array_c_compatible_float(attr) for attr in extracted
-        )
-        weight = check_array_c_compatible_float(weight)
+        line_lum_grid = self._line_lum_grid
+        line_cont_grid = self._line_cont_grid
+        grid_axes = tuple(self._grid_axes)
+        extracted = tuple(extracted)
+        weight = weight
         lum, integrated_lum = compute_particle_seds(
             line_lum_grid,
             grid_axes,

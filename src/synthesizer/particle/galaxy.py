@@ -32,6 +32,7 @@ from synthesizer.particle.stars import Stars
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.precision import accept_precisions
 
 
 class Galaxy(BaseGalaxy):
@@ -61,6 +62,7 @@ class Galaxy(BaseGalaxy):
     """
 
     @accepts(centre=Mpc)
+    @accept_precisions()
     def __init__(
         self,
         name="particle galaxy",

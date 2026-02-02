@@ -16,6 +16,7 @@ from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
+from synthesizer.utils.precision import accept_precisions
 
 
 class ImagingBase(ABC):
@@ -64,6 +65,7 @@ class ImagingBase(ABC):
     ang_fov = Quantity("angle")
 
     @accepts(resolution=(kpc, arcsecond), fov=(kpc, degree))
+    @accept_precisions()
     def __init__(
         self,
         resolution,

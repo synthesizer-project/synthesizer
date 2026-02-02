@@ -43,6 +43,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.precision import accept_precisions
 
 
 class Grid:
@@ -102,6 +103,7 @@ class Grid:
     line_lams = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
+    @accept_precisions()
     def __init__(
         self,
         grid_name,

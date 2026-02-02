@@ -17,9 +17,9 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, check_array_c_compatible_float
+from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
+from synthesizer.utils.precision import accept_precisions
 
 
 class Particles:
@@ -855,6 +855,11 @@ class Particles:
         """
         return self.get_flux_radius(spectra_type, filter_code, 0.5)
 
+    @accept_precisions(
+        allow_copies=False,
+        mask=np.bool_,
+        force_loop=np.bool_,
+    )
     def _prepare_los_args(
         self,
         other_parts,
@@ -912,10 +917,6 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        dtype = get_numpy_dtype()
-        kernel = check_array_c_compatible_float(
-            np.ascontiguousarray(kernel, dtype=dtype)
-        )
         kdim = kernel.size
 
         # Get particle counts
@@ -923,20 +924,12 @@ class Particles:
         npart_j = other_parts.nparticles
 
         # Set up the inputs from this particle instance.
-        pos_i = check_array_c_compatible_float(
-            np.ascontiguousarray(self._coordinates[mask, :], dtype=dtype)
-        )
+        pos_i = self._coordinates[mask, :]
 
         # Set up the inputs from the other particle instance.
-        pos_j = check_array_c_compatible_float(
-            np.ascontiguousarray(other_parts._coordinates, dtype=dtype)
-        )
-        smls = check_array_c_compatible_float(
-            np.ascontiguousarray(other_parts._smoothing_lengths, dtype=dtype)
-        )
-        surf_den_vals = check_array_c_compatible_float(
-            np.ascontiguousarray(getattr(other_parts, attr), dtype=dtype)
-        )
+        pos_j = other_parts._coordinates
+        smls = other_parts._smoothing_lengths
+        surf_den_vals = getattr(other_parts, attr)
 
         return (
             kernel,

@@ -36,6 +36,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.precision import accept_precisions
 
 
 @accepts(new_lam=angstrom)
@@ -106,6 +107,7 @@ class FilterCollection:
 
     accepts(new_lam=angstrom)
 
+    @accept_precisions(verbose=np.bool_)
     def __init__(
         self,
         filter_codes=None,
@@ -1295,6 +1297,7 @@ class Filter:
         lam_fwhm=angstrom,
         new_lam=angstrom,
     )
+    @accept_precisions()
     def __init__(
         self,
         filter_code,

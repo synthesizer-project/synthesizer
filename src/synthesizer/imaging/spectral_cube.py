@@ -49,6 +49,7 @@ from synthesizer.imaging.image_generators import (
 )
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.precision import accept_precisions
 
 
 class SpectralCube(ImagingBase):
@@ -84,6 +85,7 @@ class SpectralCube(ImagingBase):
     lam = Quantity("wavelength")
 
     @accepts(lam=angstrom)
+    @accept_precisions()
     def __init__(
         self,
         resolution,

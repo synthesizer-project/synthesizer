@@ -32,8 +32,8 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_smoothed,
 )
 from synthesizer.units import accepts, unit_is_compatible
-from synthesizer.utils import TableFormatter, check_array_c_compatible_float
-from synthesizer.utils.precision import get_numpy_dtype
+from synthesizer.utils import TableFormatter
+from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
 
 class Image(ImagingBase):
@@ -67,6 +67,7 @@ class Image(ImagingBase):
         resolution=(kpc, arcsecond),
         fov=(kpc, arcsecond),
     )
+    @accept_precisions()
     def __init__(
         self,
         resolution,
@@ -890,6 +891,7 @@ class Image(ImagingBase):
         return fig, ax
 
     @accepts(aperture_radius=(kpc, arcsecond))
+    @accept_precisions(allow_copies=False)
     def get_signal_in_aperture(
         self,
         aperture_radius,
@@ -923,16 +925,9 @@ class Image(ImagingBase):
         # pixel
         if aperture_cent is None:
             max_pixel = np.unravel_index(self.arr.argmax(), self.arr.shape)
-            aperture_cent = np.array(max_pixel) + 0.5
+            aperture_cent = np.array(max_pixel, dtype=get_numpy_dtype()) + 0.5
 
-        dtype = get_numpy_dtype()
-        aperture_cent = check_array_c_compatible_float(
-            np.ascontiguousarray(aperture_cent, dtype=dtype)
-        )
-        aperture_radius = check_array_c_compatible_float(
-            dtype.type(aperture_radius)
-        )
-        image_data = check_array_c_compatible_float(self.arr)
+        image_data = self.arr
 
         from synthesizer.imaging.extensions.circular_aperture import (
             calculate_circular_overlap,

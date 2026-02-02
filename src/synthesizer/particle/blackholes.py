@@ -31,6 +31,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import scalar_to_array
+from synthesizer.utils.precision import accept_precisions
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -75,6 +76,7 @@ class BlackHoles(Particles, BlackholesComponent):
         velocity_dispersion_nlr=km / s,
         theta_torus=deg,
     )
+    @accept_precisions()
     def __init__(
         self,
         masses,

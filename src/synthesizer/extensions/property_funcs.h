@@ -180,7 +180,7 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
 /* Prototypes */
 double *extract_data_double(PyArrayObject *np_arr, const char *name);
 Float *extract_data_float(PyArrayObject *np_arr, const char *name);
-int *extract_data_int(PyArrayObject *np_arr, const char *name);
+Int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 Float **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 

@@ -11,53 +11,88 @@
 #include "data_types.h"
 
 /*----------------------------------------------------------------------------
- * require_float_array
- *
- * Ensures:
- *   - NumPy array
- *   - dtype == Float
- *   - C-contiguous
- *   - aligned
- *
- * allow_copy = 0 → strict (error if mismatch)
- * allow_copy = 1 → will cast / copy if needed
- *
- * Returns new reference (caller must Py_DECREF)
+ * Array validation helpers (strict, no copies)
  *----------------------------------------------------------------------------*/
-static inline PyArrayObject *require_float_array(PyObject *obj, int allow_copy,
-                                                 const char *name) {
-  if (allow_copy) {
-    int flags = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    flags |= NPY_ARRAY_ENSUREARRAY;
-    return (PyArrayObject *)PyArray_FROM_OTF(obj, NPY_FLOAT_T, flags);
-  }
-
-  /* Strict path */
-  if (!PyArray_Check(obj)) {
-    PyErr_Format(PyExc_TypeError, "%s must be a NumPy array", name);
-    return NULL;
-  }
-
-  PyArrayObject *arr = (PyArrayObject *)obj;
-
-  if (PyArray_TYPE(arr) != NPY_FLOAT_T) {
-    PyErr_Format(PyExc_TypeError, "%s must have dtype %s", name, FLOAT_NAME);
-    return NULL;
-  }
-
+static inline int ensure_c_contiguous(PyArrayObject *arr, const char *name) {
   if (!PyArray_ISCARRAY(arr)) {
-    PyErr_Format(PyExc_ValueError, "%s must be C-contiguous", name);
-    return NULL;
+    PyErr_Format(PyExc_ValueError,
+                 "Array is not C contiguous. Use np.ascontiguousarray() "
+                 "to convert the array before passing to C extensions.");
+    return 0;
   }
-
-  return (PyArrayObject *)PyArray_FROM_OTF(obj, NPY_FLOAT_T, 0);
+  return 1;
 }
 
-/*----------------------------------------------------------------------------
- * Convenience accessor
- *----------------------------------------------------------------------------*/
-static inline Float *float_array_data(PyArrayObject *arr) {
-  return (Float *)PyArray_DATA(arr);
+static inline int ensure_float_array(PyArrayObject *arr, const char *name) {
+  if (!PyArray_Check((PyObject *)arr)) {
+    PyErr_Format(PyExc_TypeError,
+                 "Expected a numpy array but got %s. Lists and other "
+                 "iterables should be converted to numpy arrays before "
+                 "being passed to C extensions.",
+                 Py_TYPE((PyObject *)arr)->tp_name);
+    return 0;
+  }
+  if (PyArray_TYPE(arr) != NPY_FLOAT_T) {
+    PyErr_Format(PyExc_TypeError,
+                 "Array has incorrect dtype. Expected %s but got %s.",
+                 FLOAT_NAME, PyArray_DESCR(arr)->typeobj->tp_name);
+    return 0;
+  }
+  return ensure_c_contiguous(arr, name);
+}
+
+static inline int ensure_double_array(PyArrayObject *arr, const char *name) {
+  if (!PyArray_Check((PyObject *)arr)) {
+    PyErr_Format(PyExc_TypeError,
+                 "Expected a numpy array but got %s. Lists and other "
+                 "iterables should be converted to numpy arrays before "
+                 "being passed to C extensions.",
+                 Py_TYPE((PyObject *)arr)->tp_name);
+    return 0;
+  }
+  if (PyArray_TYPE(arr) != NPY_FLOAT64) {
+    PyErr_Format(PyExc_TypeError,
+                 "Array has incorrect dtype. Expected float64 but got %s.",
+                 PyArray_DESCR(arr)->typeobj->tp_name);
+    return 0;
+  }
+  return ensure_c_contiguous(arr, name);
+}
+
+static inline int ensure_int_array(PyArrayObject *arr, const char *name) {
+  if (!PyArray_Check((PyObject *)arr)) {
+    PyErr_Format(PyExc_TypeError,
+                 "Expected a numpy array but got %s. Lists and other "
+                 "iterables should be converted to numpy arrays before "
+                 "being passed to C extensions.",
+                 Py_TYPE((PyObject *)arr)->tp_name);
+    return 0;
+  }
+  if (PyArray_TYPE(arr) != NPY_INT_T) {
+    PyErr_Format(PyExc_TypeError,
+                 "Array has incorrect dtype. Expected %s but got %s.", INT_NAME,
+                 PyArray_DESCR(arr)->typeobj->tp_name);
+    return 0;
+  }
+  return ensure_c_contiguous(arr, name);
+}
+
+static inline int ensure_bool_array(PyArrayObject *arr, const char *name) {
+  if (!PyArray_Check((PyObject *)arr)) {
+    PyErr_Format(PyExc_TypeError,
+                 "Expected a numpy array but got %s. Lists and other "
+                 "iterables should be converted to numpy arrays before "
+                 "being passed to C extensions.",
+                 Py_TYPE((PyObject *)arr)->tp_name);
+    return 0;
+  }
+  if (PyArray_TYPE(arr) != NPY_BOOL) {
+    PyErr_Format(PyExc_TypeError,
+                 "Array has incorrect dtype. Expected bool but got %s.",
+                 PyArray_DESCR(arr)->typeobj->tp_name);
+    return 0;
+  }
+  return ensure_c_contiguous(arr, name);
 }
 
 #endif /* NUMPY_HELPERS_H */

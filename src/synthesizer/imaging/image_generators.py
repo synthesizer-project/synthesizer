@@ -28,8 +28,7 @@ from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils import check_array_c_compatible_float
-from synthesizer.utils.precision import get_numpy_dtype
+from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
 _CENTERING_TOLERANCE = 1e-6
 
@@ -303,6 +302,7 @@ def _standardize_imaging_units(
     return resolution, standardized_fov, standardized_coords, standardized_smls
 
 
+@accept_precisions(allow_copies=False)
 def _generate_image_particle_hist(
     img,
     signal,
@@ -414,6 +414,7 @@ def _generate_image_particle_hist(
     return img
 
 
+@accept_precisions(allow_copies=False)
 def _generate_images_particle_hist(
     imgs,
     coordinates,
@@ -461,6 +462,7 @@ def _generate_images_particle_hist(
     return imgs
 
 
+@accept_precisions(allow_copies=False)
 def _generate_image_particle_smoothed(
     img,
     signal,
@@ -578,10 +580,10 @@ def _generate_image_particle_smoothed(
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
-        check_array_c_compatible_float(signal),
-        check_array_c_compatible_float(_smoothing_lengths),
-        check_array_c_compatible_float(_coords),
-        check_array_c_compatible_float(kernel),
+        signal,
+        _smoothing_lengths,
+        _coords,
+        kernel,
         res,
         img.npix[0],
         img.npix[1],
@@ -622,6 +624,7 @@ def _generate_image_particle_smoothed(
     return img
 
 
+@accept_precisions(allow_copies=False)
 def _generate_images_particle_smoothed(
     imgs,
     signals,
@@ -758,10 +761,10 @@ def _generate_images_particle_smoothed(
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        check_array_c_compatible_float(signals),
-        check_array_c_compatible_float(_smoothing_lengths),
-        check_array_c_compatible_float(_coords),
-        check_array_c_compatible_float(kernel),
+        signals,
+        _smoothing_lengths,
+        _coords,
+        kernel,
         res,
         imgs.npix[0],
         imgs.npix[1],
@@ -1069,6 +1072,7 @@ def _combine_image_collections(images, label, model_cache):
     return combined_img
 
 
+@accept_precisions(allow_copies=False)
 def _generate_ifu_particle_hist(
     ifu,
     sed,
@@ -1159,22 +1163,18 @@ def _generate_ifu_particle_hist(
     _coords[:, 0] += fov[0] / 2
     _coords[:, 1] += fov[1] / 2
     dtype = get_numpy_dtype()
-    smls = check_array_c_compatible_float(
-        np.zeros(cent_coords.shape[0], dtype=dtype)
-    )
+    smls = np.zeros(cent_coords.shape[0], dtype=dtype)
 
     # Get the kernel
     # TODO: We should do away with this and write a histogram backend
-    kernel = check_array_c_compatible_float(
-        np.ascontiguousarray(Kernel().get_kernel(), dtype=dtype)
-    )
+    kernel = np.ascontiguousarray(Kernel().get_kernel(), dtype=dtype)
 
     toc("Setting up histogram IFU inputs", start)
 
     ifu.arr = make_img(
-        check_array_c_compatible_float(spectra),
+        spectra,
         smls,
-        check_array_c_compatible_float(_coords),
+        _coords,
         kernel,
         res,
         ifu.npix[0],
@@ -1189,6 +1189,7 @@ def _generate_ifu_particle_hist(
     return ifu
 
 
+@accept_precisions(allow_copies=False)
 def _generate_ifu_particle_smoothed(
     ifu,
     sed,
@@ -1304,12 +1305,10 @@ def _generate_ifu_particle_smoothed(
 
     # Generate the IFU
     ifu.arr = make_img(
-        check_array_c_compatible_float(spectra),
-        check_array_c_compatible_float(
-            smoothing_lengths.to_value(spatial_units)
-        ),
-        check_array_c_compatible_float(_coords),
-        check_array_c_compatible_float(kernel),
+        spectra,
+        smoothing_lengths.to_value(spatial_units),
+        _coords,
+        kernel,
         res,
         ifu.npix[0],
         ifu.npix[1],

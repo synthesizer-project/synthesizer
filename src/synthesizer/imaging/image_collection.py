@@ -60,6 +60,7 @@ from synthesizer.imaging.image_generators import (
 )
 from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.precision import accept_precisions
 
 
 class ImageCollection(ImagingBase):
@@ -83,6 +84,7 @@ class ImageCollection(ImagingBase):
             The RGB image array.
     """
 
+    @accept_precisions()
     def __init__(
         self,
         resolution,

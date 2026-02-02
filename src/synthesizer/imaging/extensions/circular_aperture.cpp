@@ -366,7 +366,8 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   PyArrayObject *np_img, *np_cent;
   Float signal = 0;
 
-  if (!PyArg_ParseTuple(args, "diidOOi", &res_in, &nx, &ny, &r_in, &np_img, &np_cent,
+  if (!PyArg_ParseTuple(args, "diidO!O!i", &res_in, &nx, &ny, &r_in,
+                        &PyArray_Type, &np_img, &PyArray_Type, &np_cent,
                         &nthreads)) {
     return NULL;
   }
@@ -377,6 +378,9 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   /* Unpack the image and centre from the numpy array. */
   const Float *img = extract_data_float(np_img, "img");
   const Float *cent = extract_data_float(np_cent, "cent");
+  if (img == NULL || cent == NULL) {
+    return NULL;
+  }
 
   /* Is the aperture smaller than a pixel? */
   if (r < 0.5 * res) {

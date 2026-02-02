@@ -576,10 +576,11 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   PyArrayObject *np_pix_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_pos;
 
-  if (!PyArg_ParseTuple(args, "OOOOdiiidiii", &np_pix_values,
-                        &np_smoothing_lengths, &np_pos, &np_kernel, &res_in,
-                        &npix_x, &npix_y, &npart, &threshold_in, &kdim, &nimgs,
-                        &nthreads))
+  if (!PyArg_ParseTuple(args, "O!O!O!O!diiidiii", &PyArray_Type,
+                        &np_pix_values, &PyArray_Type, &np_smoothing_lengths,
+                        &PyArray_Type, &np_pos, &PyArray_Type, &np_kernel,
+                        &res_in, &npix_x, &npix_y, &npart, &threshold_in, &kdim,
+                        &nimgs, &nthreads))
     return NULL;
 
   Float res = (Float)res_in;

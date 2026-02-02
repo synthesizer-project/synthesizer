@@ -646,10 +646,12 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOO", &np_grid_spectra, &np_lam,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_velocities,
-                        &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
-                        &py_c, &np_mask, &np_lam_mask)) {
+  if (!PyArg_ParseTuple(args, "O!O!OOO!O!O!iiisiOO!O!", &PyArray_Type,
+                        &np_grid_spectra, &PyArray_Type, &np_lam, &grid_tuple,
+                        &part_tuple, &PyArray_Type, &np_part_mass,
+                        &PyArray_Type, &np_velocities, &PyArray_Type, &np_ndims,
+                        &ndim, &npart, &nlam, &method, &nthreads, &py_c,
+                        &PyArray_Type, &np_mask, &PyArray_Type, &np_lam_mask)) {
     return NULL;
   }
 

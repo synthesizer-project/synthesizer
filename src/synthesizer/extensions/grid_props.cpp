@@ -16,6 +16,7 @@
 #include "data_types.h"
 #include "grid_props.h"
 #include "index_utils.h"
+#include "numpy_helpers.h"
 #include "property_funcs.h"
 #include "timers.h"
 
@@ -45,6 +46,20 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
 
   double start_time = tic();
 
+  if (!ensure_float_array(np_spectra, "spectra")) {
+    return;
+  }
+  if (!ensure_float_array(np_lam, "lam")) {
+    return;
+  }
+  if (np_lam_mask != NULL && !ensure_bool_array(np_lam_mask, "lam_mask")) {
+    return;
+  }
+  if (np_grid_weights != NULL &&
+      !ensure_float_array(np_grid_weights, "grid_weights")) {
+    return;
+  }
+
   /* The number of dimensions is the length of the axis tuple. */
   ndim = PyTuple_Size(axes_tuple);
 
@@ -73,6 +88,9 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
     if (np_axis_arr == NULL) {
       PyErr_SetString(PyExc_ValueError,
                       "[GridProps::GridProps]: Failed to extract axis array.");
+      return;
+    }
+    if (!ensure_float_array(np_axis_arr, "axis")) {
       return;
     }
     dims[idim] = PyArray_DIM(np_axis_arr, 0);

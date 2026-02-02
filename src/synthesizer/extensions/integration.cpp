@@ -13,6 +13,7 @@
 /* Local includes. */
 #include "cpp_to_python.h"
 #include "data_types.h"
+#include "numpy_helpers.h"
 #include "property_funcs.h"
 #include "timers.h"
 
@@ -86,6 +87,13 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
 
   /* Number of elements along the last axis */
   npy_intp n = shape[ndim - 1];
+
+  if (!ensure_float_array(xs, "xs")) {
+    return NULL;
+  }
+  if (!ensure_float_array(ys, "ys")) {
+    return NULL;
+  }
 
   /* Get the data pointer of the xs array */
   Float *x = extract_data_float(xs, "xs");

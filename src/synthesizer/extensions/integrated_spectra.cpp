@@ -201,10 +201,12 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOO", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads, &np_grid_weights, &np_mask,
-                        &np_lam_mask))
+  if (!PyArg_ParseTuple(args, "O!OO!O!iiisiO!O!O!", &PyArray_Type,
+                        &np_grid_spectra, &grid_tuple, &part_tuple,
+                        &PyArray_Type, &np_part_mass, &PyArray_Type, &np_ndims,
+                        &ndim, &npart, &nlam, &method, &nthreads,
+                        &PyArray_Type, &np_grid_weights, &PyArray_Type,
+                        &np_mask, &PyArray_Type, &np_lam_mask))
     return NULL;
 
   /* Extract the grid struct. */
