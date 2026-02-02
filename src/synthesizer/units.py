@@ -6,6 +6,20 @@ The Quantity is a descriptor object which uses the Units class to attach units
 to attributes of a class. The Quantity descriptor can be used to attach units
 to class attributes.
 
+This module also provides decorators for checking and converting function
+argument units and precision:
+
+- @accepts(**units): Check/convert units to match expected values
+- @accepts_both(**units): Check/convert both units and precision (combined)
+- @accept_precisions(**precisions): Check/convert precision only
+
+For custom decorators combining unit and precision checks, use the precision
+utilities from synthesizer.utils.precision:
+
+- get_numpy_dtype(): Get the compiled floating-point precision
+- get_integer_dtype(): Get integer precision matching float precision
+  (int32 when float is float32, int64 when float is float64)
+
 Example definition:
 
     class Foo:
@@ -39,7 +53,6 @@ from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
 from synthesizer.synth_warnings import warn
-from synthesizer.utils.precision import ensure_arg_precision
 
 # Define the path to your YAML file
 FILE_PATH = os.path.join(BASE_DIR, "default_units.yml")
@@ -792,19 +805,9 @@ def accepts(**units):
             for i, (name, value) in enumerate(zip(arg_names, args)):
                 args[i] = _check_arg(units, name, value)
 
-                # Ensure the precision of the argument matches the compiled
-                # precision of the C extensions. Note that arguments that don't
-                # require a conversion are just returned unchanged.
-                args[i] = ensure_arg_precision(args[i])
-
             # Check the keyword arguments
             for name, value in kwargs.items():
                 kwargs[name] = _check_arg(units, name, value)
-
-                # Ensure the precision of the argument matches the compiled
-                # precision of the C extensions. Note that arguments that don't
-                # require a conversion are just returned unchanged.
-                kwargs[name] = ensure_arg_precision(kwargs[name])
 
             return func(*args, **kwargs)
 

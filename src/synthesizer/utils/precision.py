@@ -16,6 +16,7 @@ Example usage:
     >>> converted = precision.array_to_precision(arr, copy=True)
 """
 
+from functools import wraps
 from typing import Any, Optional
 
 import numpy as np
@@ -52,10 +53,22 @@ def get_float_bytes() -> int:
 
 
 def get_numpy_dtype() -> np.dtype:
-    """Return the numpy dtype matching the compiled precision.
+    """Return the numpy dtype matching the compiled floating-point precision.
+
+    This function returns the numpy dtype for the compiled floating-point
+    precision. The precision is determined at compile time via the
+    SINGLE_PRECISION environment variable:
+    - Default (no flag or 0): float64
+    - SINGLE_PRECISION=1: float32
 
     Returns:
-        np.dtype: Either np.float32 or np.float64.
+        np.dtype: Either np.float32 or np.float64 depending on how the
+            C extensions were compiled.
+
+    Examples:
+        >>> get_numpy_dtype()  # Returns dtype based on compilation
+        dtype('float32')  # if compiled with SINGLE_PRECISION=1
+        dtype('float64')  # if compiled without SINGLE_PRECISION
     """
     # What precision are we using?
     precision = get_precision()
@@ -64,6 +77,53 @@ def get_numpy_dtype() -> np.dtype:
     if precision == "float32":
         return np.dtype(np.float32)
     return np.dtype(np.float64)
+
+
+def get_integer_dtype() -> np.dtype:
+    """Return the integer dtype matching the compiled floating-point precision.
+
+    This function infers the integer precision from the compiled floating-point
+    precision, ensuring consistent bit-width across the codebase:
+    - If compiled with float32: returns int32
+    - If compiled with float64: returns int64
+
+    This approach assumes that integer operations should match the precision
+    of floating-point operations. When specific integer precision is needed,
+    the dtype should be passed explicitly to decorators.
+
+    Returns:
+        np.dtype: Either np.int32 (if float precision is float32) or np.int64
+            (if float precision is float64).
+
+    Examples:
+        >>> get_integer_dtype()  # Returns dtype based on float
+        dtype('int32')   # if compiled with SINGLE_PRECISION=1
+        dtype('int64')   # if compiled without SINGLE_PRECISION
+    """
+    # Get the floating-point precision
+    precision = get_precision()
+
+    # Infer integer precision from float precision
+    if precision == "float32":
+        return np.dtype(np.int32)
+    return np.dtype(np.int64)
+
+
+def get_boolean_dtype() -> np.dtype:
+    """Return the boolean dtype (always np.bool_).
+
+    This function is provided for consistency with get_numpy_dtype() and
+    get_integer_dtype(). Boolean values are always represented with np.bool_
+    regardless of the compiled floating-point precision.
+
+    Returns:
+        np.dtype: Always np.bool_.
+
+    Examples:
+        >>> get_boolean_dtype()
+        dtype('bool')
+    """
+    return np.dtype(np.bool_)
 
 
 def ensure_compatible_precision(
@@ -308,7 +368,7 @@ def unyt_array_to_precision(
 def ensure_arg_precision(
     arg: Any,
     copy: bool = True,
-    precision: Optional[np.dtype] = None,
+    target_dtype: Optional[np.dtype] = None,
 ) -> Any:
     """Ensure the argument is in the compiled or passed precision.
 
@@ -322,7 +382,7 @@ def ensure_arg_precision(
         copy: If True, always return a copy of arrays in the correct precision.
             If False, raise a TypeError if the input array does not already
             match the compiled precision.
-        precision: Optional numpy dtype to use instead of the compiled
+        target_dtype: Optional numpy dtype to use instead of the compiled
             precision. If provided, for a float argument this will override the
             compiled precision. For any other data type, a dtype must be
             provided to this function.
@@ -332,17 +392,139 @@ def ensure_arg_precision(
     """
     # If the argument is a unyt_array or unyt_quantity, convert it
     if isinstance(arg, (unyt_array, unyt_quantity)):
-        return unyt_array_to_precision(arg)
+        return unyt_array_to_precision(
+            arg,
+            copy=copy,
+            target_dtype=target_dtype,
+        )
 
     # If the argument is a numpy float array, convert numeric arrays only
     if isinstance(arg, np.ndarray):
         if np.issubdtype(arg.dtype, np.number):
-            return array_to_precision(arg)
+            return array_to_precision(
+                arg,
+                copy=copy,
+                target_dtype=target_dtype,
+            )
         return arg
 
     # If the argument is a numeric scalar or numpy scalar, convert it
     if isinstance(arg, (int, float, np.number)):
-        return scalar_to_precision(arg)
+        return scalar_to_precision(arg, copy=copy, target_dtype=target_dtype)
 
     # Otherwise, return the argument unchanged
     return arg
+
+
+def accept_precisions(**precisions):
+    """Ensure wrapped function arguments have the correct precision.
+
+    This decorator will check the precision of any of the arguments passed to
+    the wrapped function with the precisions defined in this decorators kwargs.
+    If the precision does not match the compiled precision of the C extensions,
+    e.g. float64 (double) by default or float32 (single) if installed with the
+    SINGLE_PRECISION flag, then the argument will be converted to match.
+
+    When specifying integer precision, you can use get_integer_dtype() from
+    synthesizer.utils.precision to automatically match the compiled float
+    precision:
+
+        from synthesizer.utils.precision import (
+            get_numpy_dtype,
+            get_integer_dtype,
+        )
+
+        @accept_precisions(
+            values=get_numpy_dtype(),  # Float argument
+            count=get_integer_dtype(),  # Integer (auto-matched)
+        )
+
+    Args:
+        **precisions (dict):
+            The keyword arguments defined with this decorator. Each takes the
+            form of argument=precision_for_argument. In reality this is a
+            dictionary of the form {"variable": np.dtype}.
+
+    Returns:
+        function
+            The wrapped function.
+    """
+
+    def check_precisions(func):
+        """Check arguments have correct precision.
+
+        This will check the arguments passed to the wrapped function have
+        the correct precision. If the precision does not match the compiled
+        precision of the C extensions, e.g. float64 (double) by default or
+        float32 (single) if installed with the SINGLE_PRECISION flag, then
+        the argument will be converted to match.
+
+        Args:
+            func (function): The function to be wrapped.
+
+        Returns:
+            function: The wrapped function.
+        """
+        arg_names = func.__code__.co_varnames
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            """Handle all the arguments passed to the wrapped function.
+
+            Args:
+                *args:
+                    The arguments passed to the wrapped function.
+                **kwargs:
+                    The keyword arguments passed to the wrapped function.
+
+            Returns:
+                The result of the wrapped function.
+            """
+            # Convert the positional arguments to a list (it must be mutable
+            # for what comes next)
+            args = list(args)
+
+            # Check the positional arguments
+            for i, (name, value) in enumerate(zip(arg_names, args)):
+                # Get the target dtype for this argument, either the stated
+                # precision or None if not specified. In the None case we will
+                # use the compiled precision of the C extensions.
+                if name not in precisions:
+                    target_dtype = None
+                else:
+                    target_dtype = precisions[name]
+
+                # Ensure the precision of the argument matches the
+                # compiled or stated precision of the C extensions. Note that
+                # arguments that don't require a conversion are returned
+                # unchanged.
+                args[i] = ensure_arg_precision(
+                    args[i],
+                    copy=True,
+                    target_dtype=target_dtype,
+                )
+
+            # Check the keyword arguments
+            for name, value in kwargs.items():
+                # Get the target dtype for this argument, either the stated
+                # precision or None if not specified. In the None case we will
+                # use the compiled precision of the C extensions.
+                if name not in precisions:
+                    target_dtype = None
+                else:
+                    target_dtype = precisions[name]
+
+                # Ensure the precision of the argument matches the compiled
+                # precision of the C extensions. Note that arguments that don't
+                # require a conversion are just returned unchanged.
+                kwargs[name] = ensure_arg_precision(
+                    kwargs[name],
+                    copy=True,
+                    target_dtype=target_dtype,
+                )
+
+            return func(*args, **kwargs)
+
+        return wrapped
+
+    return check_precisions
