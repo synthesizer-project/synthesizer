@@ -14,7 +14,8 @@ import numpy as np
 
 from synthesizer import exceptions
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
-from synthesizer.utils import check_array_c_compatible_float, precision
+from synthesizer.utils import check_array_c_compatible_float
+from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
 # Import trapezoid or trapz based on numpy version
 if np.__version__.startswith("1."):
@@ -23,6 +24,7 @@ else:
     from numpy import trapezoid  # noqa: F401, I001
 
 
+@accept_precisions()
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     """Integrate the last axis of an N-dimensional array.
 
@@ -62,7 +64,7 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     )
 
     # Get the target dtype for precision
-    dtype = precision.get_numpy_dtype()
+    dtype = get_numpy_dtype()
 
     # Scale the integrand and xs to avoid numerical issues.
     # We do this calculation in the input's precision to avoid overflow

@@ -400,6 +400,24 @@ def ensure_arg_precision(
 
     # If the argument is a numpy float array, convert numeric arrays only
     if isinstance(arg, np.ndarray):
+        if np.issubdtype(arg.dtype, np.bool_):
+            target_dtype = (
+                np.dtype(np.bool_) if target_dtype is None else target_dtype
+            )
+            return array_to_precision(
+                arg,
+                copy=copy,
+                target_dtype=target_dtype,
+            )
+        if np.issubdtype(arg.dtype, np.integer):
+            target_dtype = (
+                get_integer_dtype() if target_dtype is None else target_dtype
+            )
+            return array_to_precision(
+                arg,
+                copy=copy,
+                target_dtype=target_dtype,
+            )
         if np.issubdtype(arg.dtype, np.number):
             return array_to_precision(
                 arg,
@@ -409,14 +427,24 @@ def ensure_arg_precision(
         return arg
 
     # If the argument is a numeric scalar or numpy scalar, convert it
-    if isinstance(arg, (int, float, np.number)):
+    if isinstance(arg, (bool, np.bool_)):
+        target_dtype = (
+            np.dtype(np.bool_) if target_dtype is None else target_dtype
+        )
+        return scalar_to_precision(arg, copy=copy, target_dtype=target_dtype)
+    if isinstance(arg, (int, np.integer)):
+        target_dtype = (
+            get_integer_dtype() if target_dtype is None else target_dtype
+        )
+        return scalar_to_precision(arg, copy=copy, target_dtype=target_dtype)
+    if isinstance(arg, (float, np.floating)):
         return scalar_to_precision(arg, copy=copy, target_dtype=target_dtype)
 
     # Otherwise, return the argument unchanged
     return arg
 
 
-def accept_precisions(**precisions):
+def accept_precisions(allow_copies=True, **precisions):
     """Ensure wrapped function arguments have the correct precision.
 
     This decorator will check the precision of any of the arguments passed to
@@ -440,6 +468,10 @@ def accept_precisions(**precisions):
         )
 
     Args:
+        allow_copies (bool):
+            If True, arguments that need conversion will always be copied.
+            If False, a TypeError will be raised if an argument does not
+            already match the required precision.
         **precisions (dict):
             The keyword arguments defined with this decorator. Each takes the
             form of argument=precision_for_argument. In reality this is a
@@ -486,6 +518,10 @@ def accept_precisions(**precisions):
 
             # Check the positional arguments
             for i, (name, value) in enumerate(zip(arg_names, args)):
+                # Skip None arguments
+                if value is None:
+                    continue
+
                 # Get the target dtype for this argument, either the stated
                 # precision or None if not specified. In the None case we will
                 # use the compiled precision of the C extensions.
@@ -500,12 +536,16 @@ def accept_precisions(**precisions):
                 # unchanged.
                 args[i] = ensure_arg_precision(
                     args[i],
-                    copy=True,
+                    copy=allow_copies,
                     target_dtype=target_dtype,
                 )
 
             # Check the keyword arguments
             for name, value in kwargs.items():
+                # Skip None arguments
+                if value is None:
+                    continue
+
                 # Get the target dtype for this argument, either the stated
                 # precision or None if not specified. In the None case we will
                 # use the compiled precision of the C extensions.
@@ -519,7 +559,7 @@ def accept_precisions(**precisions):
                 # require a conversion are just returned unchanged.
                 kwargs[name] = ensure_arg_precision(
                     kwargs[name],
-                    copy=True,
+                    copy=allow_copies,
                     target_dtype=target_dtype,
                 )
 

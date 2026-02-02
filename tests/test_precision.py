@@ -303,6 +303,24 @@ def test_ensure_arg_precision_scalar():
     assert isinstance(res, (float, np.floating))
 
 
+def test_ensure_arg_precision_int_default_dtype():
+    """Test ensure_arg_precision uses integer dtype by default."""
+    int_value = 42
+
+    res = precision.ensure_arg_precision(int_value, copy=True)
+    assert isinstance(res, (int, np.integer))
+    assert np.asarray(res).dtype == precision.get_integer_dtype()
+
+
+def test_ensure_arg_precision_bool_default_dtype():
+    """Test ensure_arg_precision uses boolean dtype by default."""
+    bool_value = True
+
+    res = precision.ensure_arg_precision(bool_value, copy=True)
+    assert isinstance(res, (bool, np.bool_))
+    assert np.asarray(res).dtype == np.dtype(np.bool_)
+
+
 def test_ensure_arg_precision_other_type():
     """Test ensure_arg_precision with unsupported type (returns unchanged)."""
     # String should be returned unchanged

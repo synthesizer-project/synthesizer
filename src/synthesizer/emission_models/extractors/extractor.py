@@ -33,6 +33,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
 from synthesizer.utils import check_array_c_compatible_float
+from synthesizer.utils.precision import accept_precisions
 
 
 class Extractor(ABC):
@@ -259,6 +260,7 @@ class IntegratedParticleExtractor(Extractor):
     to reduce the computation time.
     """
 
+    @accept_precisions(mask=np.bool_, lam_mask=np.bool_)
     def generate_lnu(
         self,
         emitter,
@@ -365,6 +367,7 @@ class IntegratedParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
+    @accept_precisions(mask=np.bool_, lam_mask=np.bool_)
     def generate_line(
         self,
         emitter,

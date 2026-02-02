@@ -19,7 +19,7 @@ from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, check_array_c_compatible_float
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.utils.precision import get_numpy_dtype
+from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
 
 class Particles:
@@ -73,6 +73,7 @@ class Particles:
         softening_length=Mpc,
         centre=Mpc,
     )
+    @accept_precisions()  # use default precision
     def __init__(
         self,
         coordinates,
@@ -193,6 +194,8 @@ class Particles:
             )
         return self.coordinates - self.centre
 
+    @accepts(los_dists=Mpc)
+    @accept_precisions()  # use default precision
     def get_projected_angular_coordinates(
         self,
         cosmo=None,
@@ -273,6 +276,8 @@ class Particles:
 
         return coords * rad
 
+    @accepts(los_dists=Mpc)
+    @accept_precisions()  # use default precision
     def get_projected_angular_smoothing_lengths(
         self,
         cosmo=None,
@@ -396,6 +401,7 @@ class Particles:
             projected_angular_smls,
         )
 
+    @accept_precisions()
     def get_particle_photo_lnu(
         self,
         filters,
@@ -434,6 +440,7 @@ class Particles:
 
         return self.particle_photo_lnu
 
+    @accept_precisions()
     def get_particle_photo_fnu(
         self,
         filters,
@@ -471,6 +478,7 @@ class Particles:
 
         return self.particle_photo_fnu
 
+    @accept_precisions(mask=np.bool_)
     def get_mask(
         self,
         attr,
@@ -946,6 +954,7 @@ class Particles:
         )
 
     @accepts()
+    @accept_precisions(mask=np.bool_)
     def get_los_column_density(
         self,
         other_parts,
@@ -1034,6 +1043,7 @@ class Particles:
         return col_den
 
     @accepts(phi=rad, theta=rad)
+    @accept_precisions(inplace=np.bool_)
     def rotate_particles(
         self,
         phi=0 * rad,
