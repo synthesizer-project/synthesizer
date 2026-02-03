@@ -46,10 +46,10 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
 
   double start_time = tic();
 
-  if (!ensure_float_array(np_spectra, "spectra")) {
+  if (np_spectra != NULL && !ensure_float_array(np_spectra, "spectra")) {
     return;
   }
-  if (!ensure_float_array(np_lam, "lam")) {
+  if (np_lam != NULL && !ensure_float_array(np_lam, "lam")) {
     return;
   }
   if (np_lam_mask != NULL && !ensure_bool_array(np_lam_mask, "lam_mask")) {

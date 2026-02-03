@@ -43,19 +43,8 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
   if (np_mask_ != NULL && !ensure_bool_array(np_mask_, "mask")) {
     return;
   }
-  if (part_tuple_ != NULL && PyTuple_Check(part_tuple_)) {
-    Py_ssize_t ndim = PyTuple_Size(part_tuple_);
-    for (Py_ssize_t idim = 0; idim < ndim; idim++) {
-      PyArrayObject *np_part_arr =
-          (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
-      if (np_part_arr == NULL) {
-        PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-        return;
-      }
-      if (!ensure_float_array(np_part_arr, "part_props")) {
-        return;
-      }
-    }
+  if (!ensure_float_tuple(part_tuple_, "part_props")) {
+    return;
   }
 
   /* Assign the number of particles. */

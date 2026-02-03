@@ -8,6 +8,8 @@
 #include <Python.h>
 #include <numpy/arrayobject.h>
 
+#include <Python.h>
+#include "numpy_init.h"
 #include "data_types.h"
 
 /*----------------------------------------------------------------------------
@@ -93,6 +95,30 @@ static inline int ensure_bool_array(PyArrayObject *arr, const char *name) {
     return 0;
   }
   return ensure_c_contiguous(arr, name);
+}
+
+static inline int ensure_float_tuple(PyObject *tuple, const char *name) {
+  if (tuple == NULL || tuple == Py_None) {
+    return 1;
+  }
+  if (!PyTuple_Check(tuple)) {
+    PyErr_Format(PyExc_TypeError, "%s must be a tuple of NumPy arrays", name);
+    return 0;
+  }
+
+  Py_ssize_t ndim = PyTuple_Size(tuple);
+  for (Py_ssize_t idim = 0; idim < ndim; idim++) {
+    PyArrayObject *np_arr = (PyArrayObject *)PyTuple_GetItem(tuple, idim);
+    if (np_arr == NULL) {
+      PyErr_Format(PyExc_ValueError, "%s contains a null entry", name);
+      return 0;
+    }
+    if (!ensure_float_array(np_arr, name)) {
+      return 0;
+    }
+  }
+
+  return 1;
 }
 
 #endif /* NUMPY_HELPERS_H */

@@ -17,6 +17,7 @@
 /* Local includes */
 #include "cpp_to_python.h"
 #include "index_utils.h"
+#include "numpy_helpers.h"
 #include "timers.h"
 #include "weights.h"
 
@@ -462,6 +463,16 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
                         &PyArray_Type, &np_part_mass, &PyArray_Type, &np_ndims,
                         &ndim, &npart, &method, &nthreads))
     return nullptr;
+
+  if (!ensure_float_array(np_part_mass, "part_mass")) {
+    return nullptr;
+  }
+  if (!ensure_int_array(np_ndims, "ndims")) {
+    return nullptr;
+  }
+  if (!ensure_float_tuple(part_tuple, "part_props")) {
+    return nullptr;
+  }
 
   /* Extract the grid struct. */
   GridProps *grid_props =

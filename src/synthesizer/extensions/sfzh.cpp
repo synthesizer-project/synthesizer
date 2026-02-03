@@ -18,6 +18,7 @@
 /* Local includes */
 #include "cpp_to_python.h"
 #include "grid_props.h"
+#include "numpy_helpers.h"
 #include "macros.h"
 #include "part_props.h"
 #include "property_funcs.h"
@@ -52,11 +53,24 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOO!O!iisiO!", &grid_tuple, &part_tuple,
+  PyObject *py_mask;
+  if (!PyArg_ParseTuple(args, "OOO!O!iisiO", &grid_tuple, &part_tuple,
                         &PyArray_Type, &np_part_mass, &PyArray_Type, &np_ndims,
-                        &ndim, &npart, &method, &nthreads, &PyArray_Type,
-                        &np_mask))
+                        &ndim, &npart, &method, &nthreads, &py_mask))
     return NULL;
+
+  np_mask = array_or_none(py_mask, "mask");
+  RETURN_IF_PYERR();
+
+  if (!ensure_float_array(np_part_mass, "part_mass")) {
+    return NULL;
+  }
+  if (!ensure_int_array(np_ndims, "ndims")) {
+    return NULL;
+  }
+  if (np_mask != NULL && !ensure_bool_array(np_mask, "mask")) {
+    return NULL;
+  }
 
   /* Extract the grid struct. */
   GridProps *grid_props =

@@ -20,6 +20,7 @@
 /* Local includes */
 #include "cpp_to_python.h"
 #include "grid_props.h"
+#include "numpy_helpers.h"
 #include "macros.h"
 #include "part_props.h"
 #include "property_funcs.h"
@@ -646,12 +647,25 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "O!O!OOO!O!O!iiisiOO!O!", &PyArray_Type,
+  PyObject *py_mask, *py_lam_mask;
+  if (!PyArg_ParseTuple(args, "O!O!OOO!O!O!iiisiOOO", &PyArray_Type,
                         &np_grid_spectra, &PyArray_Type, &np_lam, &grid_tuple,
                         &part_tuple, &PyArray_Type, &np_part_mass,
                         &PyArray_Type, &np_velocities, &PyArray_Type, &np_ndims,
                         &ndim, &npart, &nlam, &method, &nthreads, &py_c,
-                        &PyArray_Type, &np_mask, &PyArray_Type, &np_lam_mask)) {
+                        &py_mask, &py_lam_mask)) {
+    return NULL;
+  }
+
+  np_mask = array_or_none(py_mask, "mask");
+  RETURN_IF_PYERR();
+  np_lam_mask = array_or_none(py_lam_mask, "lam_mask");
+  RETURN_IF_PYERR();
+
+  if (np_mask != NULL && !ensure_bool_array(np_mask, "mask")) {
+    return NULL;
+  }
+  if (np_lam_mask != NULL && !ensure_bool_array(np_lam_mask, "lam_mask")) {
     return NULL;
   }
 
