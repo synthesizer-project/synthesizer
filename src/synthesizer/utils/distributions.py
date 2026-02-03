@@ -15,6 +15,7 @@ import unyt.physical_constants as const
 from unyt import Hz, K, erg, pc, s
 
 from synthesizer.units import accepts
+from synthesizer.utils.precision import get_numpy_dtype
 
 
 def sigmoid(x, A, a, c, center):
@@ -50,11 +51,15 @@ def planck(frequency, temperature):
         unyt_quantity: Spectral luminosity density in erg/s/Hz.
     """
     # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
-    frequency = frequency.astype(np.float64)
-    temperature = temperature.astype(np.float64)
+    dtype = np.float64
+    frequency = frequency.astype(dtype)
+    temperature = temperature.astype(dtype)
     exponent = (const.h * frequency) / (const.kb * temperature)
+    exponent_value = exponent.to_value("")
+    max_log = np.log(np.finfo(dtype).max)
+    exponent_value = np.clip(exponent_value, None, max_log)
     spectral_radiance = (2 * const.h * frequency**3) / (
-        const.c**2 * np.expm1(exponent)
+        const.c**2 * np.expm1(exponent_value)
     )
 
     # Convert from spectral radiance density to spectral luminosity density,
@@ -62,4 +67,5 @@ def planck(frequency, temperature):
     lnu = spectral_radiance * 4 * np.pi * (10 * pc) ** 2
 
     # Convert the result to erg/s/Hz and return
-    return lnu.to(erg / s / Hz)
+    lnu = lnu.to(erg / s / Hz)
+    return lnu.astype(get_numpy_dtype())
