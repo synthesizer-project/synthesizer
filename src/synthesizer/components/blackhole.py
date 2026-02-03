@@ -16,6 +16,7 @@ from synthesizer.utils import (
     array_to_scalar,
     scalar_to_array,
 )
+from synthesizer.utils.precision import accept_precisions
 
 
 class BlackholesComponent(Component):
@@ -106,6 +107,7 @@ class BlackholesComponent(Component):
         velocity_dispersion_nlr=km / s,
         theta_torus=deg,
     )
+    @accept_precisions()
     def __init__(
         self,
         fesc,
@@ -264,11 +266,16 @@ class BlackholesComponent(Component):
             ) in enumerate(zip(covering_fraction_blr, covering_fraction_nlr)):
                 # Define the probabilities for each option based on the
                 # covering fractions.
-                probabilities = [
-                    blr_covering_fraction_,
-                    nlr_covering_fraction_,
-                    1.0 - blr_covering_fraction_ - nlr_covering_fraction_,
-                ]
+                # Use float64 so probabilities sum exactly to 1 for choice.
+                probabilities = np.array(
+                    [
+                        blr_covering_fraction_,
+                        nlr_covering_fraction_,
+                        1.0 - blr_covering_fraction_ - nlr_covering_fraction_,
+                    ],
+                    dtype=np.float64,
+                )
+                probabilities /= probabilities.sum()
 
                 # Randomly choose the scenario using these probabilities.
                 disc_transmission_[i] = np.random.choice(
