@@ -34,7 +34,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
-from synthesizer.utils.precision import accept_precisions
+from synthesizer.utils.precision import accept_precisions, get_integer_dtype
 from synthesizer.utils.util_funcs import combine_arrays
 
 
@@ -150,7 +150,7 @@ class Stars(Particles, StarsComponent):
 
         Args:
             initial_masses (np.ndarray of float):
-                The intial stellar mass of each particle in Msun.
+                The initial stellar mass of each particle in Msun.
             ages (np.ndarray of float):
                 The age of each stellar particle in yrs.
             metallicities (np.ndarray of float):
@@ -1038,10 +1038,10 @@ class Stars(Particles, StarsComponent):
         part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
-        npart = np.int32(len(part_mass))
+        npart = np.array(len(part_mass), dtype=get_integer_dtype())
 
         # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        grid_dims = np.zeros(len(grid_props), dtype=get_integer_dtype())
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
 
@@ -1105,9 +1105,10 @@ class Stars(Particles, StarsComponent):
         from synthesizer.parametric import Stars as ParametricStars
 
         # Prepare the arguments for the C function.
+        log10metallicities = np.log10(metallicities)
         args = self._prepare_sfzh_args(
             log10ages,
-            np.log10(metallicities),
+            log10metallicities,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
@@ -1211,10 +1212,10 @@ class Stars(Particles, StarsComponent):
         part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
-        npart = np.int32(len(part_mass))
+        npart = np.array(len(part_mass), dtype=get_integer_dtype())
 
         # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        grid_dims = np.zeros(len(grid_props), dtype=get_integer_dtype())
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
 
@@ -1367,10 +1368,10 @@ class Stars(Particles, StarsComponent):
         part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
-        npart = np.int32(len(part_mass))
+        npart = np.array(len(part_mass), dtype=get_integer_dtype())
 
         # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        grid_dims = np.zeros(len(grid_props), dtype=get_integer_dtype())
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
 

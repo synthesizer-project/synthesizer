@@ -48,6 +48,11 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.precision import (
+    accept_precisions,
+    ensure_arg_precision,
+    get_numpy_dtype,
+)
 
 
 class Sed:
@@ -89,6 +94,7 @@ class Sed:
     obslam = Quantity("wavelength")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
+    @accept_precisions()
     def __init__(self, lam, lnu=None, description=None):
         """Initialise a new spectral energy distribution object.
 
@@ -116,7 +122,7 @@ class Sed:
         # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
-            self.lnu = np.zeros(self.lam.shape)
+            self.lnu = np.zeros(self.lam.shape, dtype=get_numpy_dtype())
         else:
             self.lnu = lnu
 
@@ -1403,6 +1409,8 @@ class Sed:
         if new_lam is None:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
 
+        new_lam = ensure_arg_precision(new_lam, copy=True)
+
         # Evaluate the function at the desired wavelengths
         new_spectra = spectres(
             new_lam,
@@ -1410,6 +1418,10 @@ class Sed:
             self._lnu,
             fill=0,
             verbose=False,
+        )
+        new_spectra = np.ascontiguousarray(
+            new_spectra,
+            dtype=get_numpy_dtype(),
         )
 
         # Instantiate the new Sed
@@ -1420,16 +1432,18 @@ class Sed:
         if self.fnu is not None:
             sed.obslam = sed.lam * (1.0 + self.redshift)
             sed.obsnu = sed.nu / (1.0 + self.redshift)
-            sed.fnu = (
-                spectres(
-                    sed._obslam,
-                    self._obslam,
-                    self._fnu,
-                    fill=0.0,
-                    verbose=False,
-                )
-                * self.fnu.units
+            resampled_fnu = spectres(
+                sed._obslam,
+                self._obslam,
+                self._fnu,
+                fill=0.0,
+                verbose=False,
             )
+            resampled_fnu = np.ascontiguousarray(
+                resampled_fnu,
+                dtype=get_numpy_dtype(),
+            )
+            sed.fnu = resampled_fnu * self.fnu.units
             sed.redshift = self.redshift
 
         # Clean up nans, we shouldn't get them but they do appear sometimes...

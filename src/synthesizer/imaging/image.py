@@ -306,6 +306,7 @@ class Image(ImagingBase):
         return new_img
 
     @accepts()
+    @accept_precisions()
     def get_img_hist(
         self,
         signal,
@@ -339,6 +340,7 @@ class Image(ImagingBase):
         )
 
     @accepts()
+    @accept_precisions()
     def get_img_smoothed(
         self,
         signal,
@@ -456,6 +458,7 @@ class Image(ImagingBase):
             img=convolved_img,
         )
 
+    @accept_precisions()
     def apply_noise_array(self, noise_arr):
         """Apply a noise array.
 
@@ -499,6 +502,7 @@ class Image(ImagingBase):
 
         return new_img
 
+    @accept_precisions()
     def apply_noise_from_std(self, noise_std):
         """Apply noise derived from a standard deviation.
 
@@ -516,7 +520,7 @@ class Image(ImagingBase):
                 The weight map.
         """
         # Strip off units if necessary
-        if isinstance(noise_std, unyt_quantity):
+        if isinstance(noise_std, (unyt_quantity, unyt_array)):
             units = noise_std.units
             noise_std = noise_std.value
         else:
@@ -542,6 +546,7 @@ class Image(ImagingBase):
         return new_img
 
     @accepts(aperture_radius=(kpc, arcsecond))
+    @accept_precisions()
     def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
         """Apply noise derived from a SNR and depth.
 
@@ -580,14 +585,17 @@ class Image(ImagingBase):
             aperture_radius = aperture_radius.to(self.resolution.units).value
 
         # Ensure we have units if we need them
-        if self.units is not None and not isinstance(depth, unyt_quantity):
+        if self.units is not None and not isinstance(
+            depth,
+            (unyt_quantity, unyt_array),
+        ):
             raise exceptions.InconsistentArguments(
                 "If the Image has units then the depth must also be passed "
                 f"with units. (image.units = {self.units})"
             )
 
         # Strip off units from the depth if we have them
-        if isinstance(depth, unyt_quantity):
+        if isinstance(depth, (unyt_quantity, unyt_array)):
             units = depth.units
             depth = depth.value
         else:
@@ -891,7 +899,7 @@ class Image(ImagingBase):
         return fig, ax
 
     @accepts(aperture_radius=(kpc, arcsecond))
-    @accept_precisions(allow_copies=False)
+    @accept_precisions()
     def get_signal_in_aperture(
         self,
         aperture_radius,

@@ -19,7 +19,7 @@ from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.utils.precision import accept_precisions
+from synthesizer.utils.precision import accept_precisions, ensure_arg_precision
 
 
 class Particles:
@@ -192,7 +192,10 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 "Can't centre coordinates without a centre."
             )
-        return self.coordinates - self.centre
+        return ensure_arg_precision(
+            self.coordinates - self.centre,
+            copy=True,
+        )
 
     @accepts(los_dists=Mpc)
     @accept_precisions()  # use default precision
@@ -858,7 +861,6 @@ class Particles:
     @accept_precisions(
         allow_copies=False,
         mask=np.bool_,
-        force_loop=np.bool_,
     )
     def _prepare_los_args(
         self,
@@ -1215,7 +1217,17 @@ class Particles:
         if hasattr(weights_vals, "units"):
             weights_vals = weights_vals.value
 
-        return np.average(attr_vals, weights=weights_vals, axis=axis)
+        weights_vals = np.asarray(weights_vals, dtype=np.float64)
+        if hasattr(attr_vals, "units"):
+            attr_units = attr_vals.units
+            attr_values = np.asarray(attr_vals.value, dtype=np.float64)
+            return (
+                np.average(attr_values, weights=weights_vals, axis=axis)
+                * attr_units
+            )
+
+        attr_values = np.asarray(attr_vals, dtype=np.float64)
+        return np.average(attr_values, weights=weights_vals, axis=axis)
 
     def get_lum_weighted_attr(
         self, attr, spectra_type, filter_code, axis=None

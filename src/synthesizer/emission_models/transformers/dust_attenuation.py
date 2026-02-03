@@ -40,6 +40,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+from synthesizer.utils.precision import get_numpy_dtype
 
 this_dir, this_filename = os.path.split(__file__)
 
@@ -1388,7 +1389,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         # Interpolate along wavelength axis with the given 'lam'
         lam_vals = np.atleast_1d(lam.to("Angstrom").value)
-        tau_all = np.zeros((N, M), dtype=np.float32)
+        tau_all = np.zeros((N, M), dtype=get_numpy_dtype())
 
         for key, value in Alam_by_NH.items():
             f_lam = interpolate.interp1d(
