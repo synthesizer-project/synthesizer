@@ -15,7 +15,7 @@ from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, default_units
-from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
+from synthesizer.utils.precision import accept_precisions
 
 
 class PhotometryCollection:
@@ -83,10 +83,7 @@ class PhotometryCollection:
 
         # Stack the values into a contiguous array with filters last.
         values = [val.value for val in photometry]
-        photometry_values = np.ascontiguousarray(
-            np.stack(values, axis=-1),
-            dtype=get_numpy_dtype(),
-        )
+        photometry_values = np.stack(values, axis=-1)
         photometry = unyt_array(
             photometry_values,
             units=photometry[0].units,
