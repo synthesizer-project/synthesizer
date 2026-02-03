@@ -99,3 +99,21 @@ class TestPluralization:
         from synthesizer.utils.util_funcs import depluralize
 
         assert depluralize("metallicities") == "metallicity"
+
+
+class TestPipelineProfilingHelpers:
+    """Test profiling helper utilities."""
+
+    def test_build_random_galaxies(self):
+        """Ensure random galaxy builder returns expected sizes."""
+        from profiling.pipeline_profile import build_random_galaxies
+
+        galaxies = build_random_galaxies(
+            nparticles=5,
+            ngalaxies=2,
+            seed=123,
+            redshift=0.1,
+        )
+
+        assert len(galaxies) == 2
+        assert galaxies[0].stars.nstars == 5
