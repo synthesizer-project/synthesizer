@@ -2,9 +2,16 @@
 
 import numpy as np
 import pytest
-from unyt import unyt_array, unyt_quantity
+from unyt import Hz, angstrom, cm, erg, kpc, s, unyt_array, unyt_quantity
 
 from synthesizer import precision
+from synthesizer.emissions import Sed
+from synthesizer.imaging import Image, ImageCollection, SpectralCube
+from synthesizer.imaging.image_generators import (
+    _generate_images_particle_smoothed,
+)
+from synthesizer.kernel_functions import Kernel
+from synthesizer.photometry import PhotometryCollection
 
 # Test precision info functions
 
@@ -199,6 +206,161 @@ def test_scalar_to_precision_explicit_target_dtype():
         scalar, copy=True, target_dtype=other_dtype
     )
     assert np.isclose(res, scalar.item())
+
+
+def test_photometry_precision_dtype():
+    """Photometry should be stored in compiled precision."""
+    target_dtype = precision.get_numpy_dtype()
+    other_dtype = np.float64 if target_dtype == np.float32 else np.float32
+    values = np.array([1.0, 2.0, 3.0], dtype=other_dtype)
+    photo = PhotometryCollection(
+        filters=None,
+        f1=unyt_array(values, erg / s / cm**2 / Hz),
+        f2=unyt_array(values * 2.0, erg / s / cm**2 / Hz),
+    )
+
+    assert photo.photometry.dtype == target_dtype
+    assert photo.photometry.flags["C_CONTIGUOUS"]
+    assert photo.photometry.shape == (values.size, 2)
+
+
+def test_photometry_accept_precisions_converts_dtype():
+    """PhotometryCollection should accept mismatched dtype inputs."""
+    target_dtype = precision.get_numpy_dtype()
+    other_dtype = np.float64 if target_dtype == np.float32 else np.float32
+    values = np.array([1.0, 2.0, 3.0], dtype=other_dtype)
+    phot = PhotometryCollection(
+        filters=None,
+        f1=unyt_array(values, erg / s / cm**2 / Hz),
+        f2=unyt_array(values * 2.0, erg / s / cm**2 / Hz),
+    )
+
+    assert phot.photometry.dtype == target_dtype
+    assert np.allclose(
+        phot["f1"].to(erg / s / cm**2 / Hz).value,
+        values,
+    )
+
+
+def test_sed_precision_dtype():
+    """SED wavelength and spectra should match compiled precision."""
+    target_dtype = precision.get_numpy_dtype()
+    other_dtype = np.float64 if target_dtype == np.float32 else np.float32
+    lam = unyt_array(np.linspace(1000, 2000, 5, dtype=other_dtype), angstrom)
+    lnu = unyt_array(np.ones(5, dtype=other_dtype), erg / s / Hz)
+    sed = Sed(lam, lnu=lnu)
+
+    assert sed.lam.dtype == target_dtype
+    assert sed.lnu.value.dtype == target_dtype
+
+
+def test_image_precision_dtype():
+    """Smoothed imaging should return arrays in compiled precision."""
+    target_dtype = precision.get_numpy_dtype()
+    coords = unyt_array(
+        np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]], dtype=target_dtype),
+        kpc,
+    )
+    signal = unyt_array(
+        np.array([1.0, 2.0], dtype=target_dtype),
+        erg / s,
+    )
+    smoothing_lengths = unyt_array(
+        np.array([1.0, 1.0], dtype=target_dtype),
+        kpc,
+    )
+    img = Image(resolution=1.0 * kpc, fov=5.0 * kpc)
+    img.get_img_smoothed(
+        signal=signal,
+        coordinates=coords,
+        smoothing_lengths=smoothing_lengths,
+        kernel=Kernel().get_kernel(),
+    )
+
+    assert img.arr.dtype == target_dtype
+
+
+def test_image_accept_precisions_converts_dtype():
+    """Smoothed imaging should accept mismatched dtype inputs."""
+    target_dtype = precision.get_numpy_dtype()
+    other_dtype = np.float64 if target_dtype == np.float32 else np.float32
+    coords = unyt_array(
+        np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]], dtype=other_dtype),
+        kpc,
+    )
+    signal = unyt_array(
+        np.array([1.0, 2.0], dtype=other_dtype),
+        erg / s,
+    )
+    smoothing_lengths = unyt_array(
+        np.array([1.0, 1.0], dtype=other_dtype),
+        kpc,
+    )
+    img = Image(resolution=1.0 * kpc, fov=5.0 * kpc)
+    img.get_img_smoothed(
+        signal=signal,
+        coordinates=coords,
+        smoothing_lengths=smoothing_lengths,
+        kernel=Kernel().get_kernel(),
+    )
+
+    assert img.arr.dtype == target_dtype
+
+
+def test_image_precision_error_no_copy():
+    """Smoothed imaging should raise on mismatched dtype."""
+    target_dtype = precision.get_numpy_dtype()
+    other_dtype = np.float64 if target_dtype == np.float32 else np.float32
+
+    imgs = ImageCollection(resolution=1.0 * kpc, fov=5.0 * kpc)
+    coords = unyt_array(
+        np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]], dtype=target_dtype),
+        kpc,
+    )
+    smoothing_lengths = unyt_array(
+        np.array([1.0, 1.0], dtype=target_dtype),
+        kpc,
+    )
+    signals = np.array([[1.0], [2.0]], dtype=other_dtype)
+    kernel = Kernel().get_kernel()
+
+    with pytest.raises(TypeError, match="Array has dtype"):
+        _generate_images_particle_smoothed(
+            imgs,
+            signals,
+            coords,
+            smoothing_lengths,
+            labels=["f1"],
+            kernel=kernel,
+            kernel_threshold=1,
+            nthreads=1,
+            signals_transposed=True,
+        )
+
+
+def test_spectral_cube_accept_precisions_converts_dtype():
+    """Spectral cubes should accept mismatched dtype inputs."""
+    target_dtype = precision.get_numpy_dtype()
+    other_dtype = np.float64 if target_dtype == np.float32 else np.float32
+    lam = unyt_array(np.linspace(1000, 2000, 4, dtype=other_dtype), angstrom)
+    lnu = unyt_array(
+        np.ones((2, 4), dtype=other_dtype),
+        erg / s / Hz,
+    )
+    sed = Sed(lam, lnu=lnu)
+    cube = SpectralCube(
+        resolution=1.0 * kpc,
+        fov=5.0 * kpc,
+        lam=lam,
+    )
+    coords = unyt_array(
+        np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]], dtype=other_dtype),
+        kpc,
+    )
+
+    cube.get_data_cube_hist(sed=sed, coordinates=coords)
+
+    assert cube.arr.dtype == target_dtype
 
 
 # Test unyt array conversion functions
