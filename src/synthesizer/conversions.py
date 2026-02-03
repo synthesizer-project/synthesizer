@@ -28,6 +28,7 @@ from unyt import (
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.units import accepts
+from synthesizer.utils.precision import ensure_arg_precision
 
 
 @accepts(flux=erg / s / cm**2)
@@ -561,7 +562,7 @@ def spatial_to_angular_at_z(spatial, cosmo, redshift):
     arcsec_per_kpc_at_z = (
         cosmo.arcsec_per_kpc_proper(redshift).value * arcsecond / kpc
     )
-    return spatial * arcsec_per_kpc_at_z
+    return ensure_arg_precision(spatial * arcsec_per_kpc_at_z, copy=True)
 
 
 @accepts(angular=arcsecond)
@@ -584,4 +585,4 @@ def angular_to_spatial_at_z(angular, cosmo, redshift):
     kpc_per_arcsec_at_z = (
         1 / cosmo.arcsec_per_kpc_proper(redshift).value * kpc / arcsecond
     )
-    return angular * kpc_per_arcsec_at_z
+    return ensure_arg_precision(angular * kpc_per_arcsec_at_z, copy=True)
