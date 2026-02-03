@@ -20,6 +20,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.units import accepts
+from synthesizer.utils.precision import get_numpy_dtype
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -330,7 +331,7 @@ class DustEmission(Generator):
         lnu_value = np.asarray(lnu.to_value(erg / s / Hz), dtype=np.float64)
         if lnu_value.ndim > 1:
             bol_lum = np.expand_dims(bol_lum, axis=-1)
-        return lnu_value / bol_lum
+        return (lnu_value / bol_lum).astype(get_numpy_dtype())
 
     def apply_cmb_heating(self, temperature, emissivity, redshift) -> Tuple:
         """Compute the cmb heating factor and modify the temperature.
