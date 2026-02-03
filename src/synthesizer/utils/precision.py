@@ -156,11 +156,13 @@ def ensure_compatible_precision(
         iinfo = np.iinfo(target_dtype)
         max_val = iinfo.max
         min_val = iinfo.min
+    elif np.issubdtype(target_dtype, np.bool_):
+        return
     else:
         raise TypeError(
             f"Target dtype {target_dtype} is not a numeric type. "
             "ensure_compatible_precision only supports floating-point and "
-            "integer dtypes."
+            "integer dtypes, and bool."
         )
 
     # Extract the actual data to check
@@ -310,7 +312,7 @@ def scalar_to_precision(
 
     # Convert the scalar to the target dtype
     converted = np.asarray(scalar, dtype=target_dtype)
-    return converted.item()
+    return converted[()]
 
 
 def unyt_array_to_precision(
@@ -431,14 +433,14 @@ def ensure_arg_precision(
         target_dtype = (
             np.dtype(np.bool_) if target_dtype is None else target_dtype
         )
-        return scalar_to_precision(arg, copy=copy, target_dtype=target_dtype)
+        return scalar_to_precision(arg, copy=True, target_dtype=target_dtype)
     if isinstance(arg, (int, np.integer)):
         target_dtype = (
             get_integer_dtype() if target_dtype is None else target_dtype
         )
-        return scalar_to_precision(arg, copy=copy, target_dtype=target_dtype)
+        return scalar_to_precision(arg, copy=True, target_dtype=target_dtype)
     if isinstance(arg, (float, np.floating)):
-        return scalar_to_precision(arg, copy=copy, target_dtype=target_dtype)
+        return scalar_to_precision(arg, copy=True, target_dtype=target_dtype)
 
     # Otherwise, return the argument unchanged
     return arg
