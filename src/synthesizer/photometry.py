@@ -15,6 +15,7 @@ from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, default_units
+from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
 
 class PhotometryCollection:
@@ -47,6 +48,7 @@ class PhotometryCollection:
     photo_lnu = Quantity("luminosity_density_frequency")
     photo_fnu = Quantity("flux_density_frequency")
 
+    @accept_precisions()
     def __init__(self, filters, **kwargs):
         """Instantiate the photometry collection.
 
@@ -79,9 +81,14 @@ class PhotometryCollection:
                 f"or unyt_arrays. Got {type(photometry[0])} instead."
             )
 
-        # Convert it from a list of unyt_quantities to a unyt_array
+        # Stack the values into a contiguous array with filters last.
+        values = [val.value for val in photometry]
+        photometry_values = np.ascontiguousarray(
+            np.stack(values, axis=-1),
+            dtype=get_numpy_dtype(),
+        )
         photometry = unyt_array(
-            np.array(photometry, dtype=np.float64),
+            photometry_values,
             units=photometry[0].units,
         )
 
@@ -103,11 +110,7 @@ class PhotometryCollection:
         # Construct a dict for the look up, importantly we here store
         # the values in photometry not _photometry meaning they have units.
         self._look_up = {
-            f: val
-            for f, val in zip(
-                self.filter_codes,
-                self.photometry,
-            )
+            f: self.photometry[..., i] for i, f in enumerate(self.filter_codes)
         }
 
         # Attach the units for convenience
