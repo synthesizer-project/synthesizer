@@ -1,5 +1,7 @@
 """Tests for C++ extension error handling."""
 
+import importlib
+
 import numpy as np
 import pytest
 
@@ -15,7 +17,7 @@ from synthesizer.imaging.extensions.circular_aperture import (
     calculate_circular_overlap,
 )
 from synthesizer.imaging.extensions.image import make_img
-from synthesizer.utils.precision import get_numpy_dtype
+from synthesizer.utils.precision import get_integer_dtype, get_numpy_dtype
 
 
 def test_integration_rejects_wrong_dtype():
@@ -164,12 +166,9 @@ def test_column_density_rejects_non_contiguous():
     kernel = np.array([1.0, 0.5, 0.0], dtype=dtype)
     pos_full = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=dtype)
     pos_i = pos_full[:1, :]
-    pos_j = pos_full[::2, :]
+    pos_j = np.asfortranarray(pos_full)
     smls = np.array([1.0, 1.0], dtype=dtype)
     surf_den = np.array([1.0, 1.0], dtype=dtype)
-
-    if pos_j.flags["C_CONTIGUOUS"]:
-        pytest.skip("Could not create non-contiguous positions")
 
     with pytest.raises(ValueError, match="C contiguous"):
         compute_column_density(
@@ -197,7 +196,7 @@ def test_particle_spectra_rejects_wrong_dtype():
     grid_axes = (np.array([0.0], dtype=target_dtype),)
     part_props = (np.array([0.0], dtype=target_dtype),)
     part_mass = np.array([1.0], dtype=target_dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     mask = np.array([True], dtype=np.bool_)
     lam_mask = np.array([True, True], dtype=np.bool_)
 
@@ -221,17 +220,13 @@ def test_particle_spectra_rejects_wrong_dtype():
 def test_particle_spectra_rejects_non_contiguous():
     """Ensure particle_spectra rejects non-contiguous arrays."""
     dtype = get_numpy_dtype()
-    grid_spectra_full = np.zeros((2, 2), dtype=dtype)
-    grid_spectra = grid_spectra_full[:, ::2]
+    grid_spectra = np.asfortranarray(np.zeros((2, 2), dtype=dtype))
     grid_axes = (np.array([0.0], dtype=dtype),)
     part_props = (np.array([0.0], dtype=dtype),)
     part_mass = np.array([1.0], dtype=dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     mask = np.array([True], dtype=np.bool_)
     lam_mask = np.array([True, True], dtype=np.bool_)
-
-    if grid_spectra.flags["C_CONTIGUOUS"]:
-        pytest.skip("Could not create non-contiguous grid spectra")
 
     with pytest.raises(ValueError, match="C contiguous"):
         compute_particle_seds(
@@ -257,7 +252,7 @@ def test_particle_spectra_rejects_mask_dtype():
     grid_axes = (np.array([0.0], dtype=dtype),)
     part_props = (np.array([0.0], dtype=dtype),)
     part_mass = np.array([1.0], dtype=dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     mask = np.array([1], dtype=np.int32)
     lam_mask = np.array([True, True], dtype=np.bool_)
 
@@ -287,7 +282,7 @@ def test_integrated_sed_rejects_wrong_dtype():
     grid_axes = (np.array([0.0], dtype=target_dtype),)
     part_props = (np.array([0.0], dtype=target_dtype),)
     part_mass = np.array([1.0], dtype=target_dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     grid_weights = np.zeros((1,), dtype=target_dtype)
     mask = np.array([True], dtype=np.bool_)
     lam_mask = np.array([True, True], dtype=np.bool_)
@@ -313,18 +308,14 @@ def test_integrated_sed_rejects_wrong_dtype():
 def test_integrated_sed_rejects_non_contiguous():
     """Ensure integrated_sed rejects non-contiguous arrays."""
     dtype = get_numpy_dtype()
-    grid_spectra_full = np.zeros((2, 2), dtype=dtype)
-    grid_spectra = grid_spectra_full[:, ::2]
+    grid_spectra = np.asfortranarray(np.zeros((2, 2), dtype=dtype))
     grid_axes = (np.array([0.0], dtype=dtype),)
     part_props = (np.array([0.0], dtype=dtype),)
     part_mass = np.array([1.0], dtype=dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     grid_weights = np.zeros((1,), dtype=dtype)
     mask = np.array([True], dtype=np.bool_)
     lam_mask = np.array([True, True], dtype=np.bool_)
-
-    if grid_spectra.flags["C_CONTIGUOUS"]:
-        pytest.skip("Could not create non-contiguous grid spectra")
 
     with pytest.raises(ValueError, match="C contiguous"):
         compute_integrated_sed(
@@ -355,7 +346,7 @@ def test_doppler_particle_spectra_rejects_wrong_dtype():
     part_props = (np.array([0.0], dtype=target_dtype),)
     part_mass = np.array([1.0], dtype=target_dtype)
     velocities = np.zeros((1, 3), dtype=target_dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     mask = np.array([True], dtype=np.bool_)
     lam_mask = np.array([True, True], dtype=np.bool_)
 
@@ -382,19 +373,15 @@ def test_doppler_particle_spectra_rejects_wrong_dtype():
 def test_doppler_particle_spectra_rejects_non_contiguous():
     """Ensure doppler_particle_spectra rejects non-contiguous arrays."""
     dtype = get_numpy_dtype()
-    grid_spectra_full = np.zeros((2, 2), dtype=dtype)
-    grid_spectra = grid_spectra_full[:, ::2]
+    grid_spectra = np.asfortranarray(np.zeros((2, 2), dtype=dtype))
     grid_lam = np.array([1.0, 2.0], dtype=dtype)
     grid_axes = (np.array([0.0], dtype=dtype),)
     part_props = (np.array([0.0], dtype=dtype),)
     part_mass = np.array([1.0], dtype=dtype)
     velocities = np.zeros((1, 3), dtype=dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     mask = np.array([True], dtype=np.bool_)
     lam_mask = np.array([True, True], dtype=np.bool_)
-
-    if grid_spectra.flags["C_CONTIGUOUS"]:
-        pytest.skip("Could not create non-contiguous grid spectra")
 
     with pytest.raises(ValueError, match="C contiguous"):
         compute_part_seds_with_vel_shift(
@@ -418,10 +405,12 @@ def test_doppler_particle_spectra_rejects_non_contiguous():
 
 def test_compute_grid_weights_rejects_wrong_dtype():
     """Ensure compute_grid_weights rejects incorrect dtype arrays."""
-    compute_weights_module = pytest.importorskip(
-        "synthesizer.extensions.weights",
-        reason="weights extension not available",
-    )
+    try:
+        compute_weights_module = importlib.import_module(
+            "synthesizer.extensions.weights"
+        )
+    except ImportError as exc:
+        pytest.fail(f"weights extension not available: {exc}")
     compute_grid_weights = compute_weights_module.compute_grid_weights
     target_dtype = get_numpy_dtype()
     wrong_dtype = np.float64 if target_dtype == np.float32 else np.float32
@@ -429,7 +418,7 @@ def test_compute_grid_weights_rejects_wrong_dtype():
     grid_axes = (np.array([0.0], dtype=target_dtype),)
     part_props = (np.array([0.0], dtype=target_dtype),)
     part_mass = np.array([1.0], dtype=wrong_dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
 
     with pytest.raises(TypeError, match="incorrect dtype"):
         compute_grid_weights(
@@ -446,20 +435,20 @@ def test_compute_grid_weights_rejects_wrong_dtype():
 
 def test_compute_grid_weights_rejects_non_contiguous():
     """Ensure compute_grid_weights rejects non-contiguous arrays."""
-    compute_weights_module = pytest.importorskip(
-        "synthesizer.extensions.weights",
-        reason="weights extension not available",
-    )
+    try:
+        compute_weights_module = importlib.import_module(
+            "synthesizer.extensions.weights"
+        )
+    except ImportError as exc:
+        pytest.fail(f"weights extension not available: {exc}")
     compute_grid_weights = compute_weights_module.compute_grid_weights
     dtype = get_numpy_dtype()
     grid_axes = (np.array([0.0], dtype=dtype),)
-    part_props_full = np.array([[0.0, 1.0]], dtype=dtype)
-    part_props = (part_props_full[:, ::2],)
+    part_props = (
+        np.asfortranarray(np.array([[0.0, 1.0], [2.0, 3.0]], dtype=dtype)),
+    )
     part_mass = np.array([1.0], dtype=dtype)
-    ndims = np.array([1], dtype=np.int32)
-
-    if part_props[0].flags["C_CONTIGUOUS"]:
-        pytest.skip("Could not create non-contiguous part props")
+    ndims = np.array([1], dtype=get_integer_dtype())
 
     with pytest.raises(ValueError, match="C contiguous"):
         compute_grid_weights(
@@ -482,7 +471,7 @@ def test_compute_sfzh_rejects_wrong_dtype():
     grid_axes = (np.array([0.0], dtype=target_dtype),)
     part_props = (np.array([0.0], dtype=target_dtype),)
     part_mass = np.array([1.0], dtype=wrong_dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     mask = np.array([True], dtype=np.bool_)
 
     with pytest.raises(TypeError, match="incorrect dtype"):
@@ -505,7 +494,7 @@ def test_compute_sfzh_rejects_mask_dtype():
     grid_axes = (np.array([0.0], dtype=dtype),)
     part_props = (np.array([0.0], dtype=dtype),)
     part_mass = np.array([1.0], dtype=dtype)
-    ndims = np.array([1], dtype=np.int32)
+    ndims = np.array([1], dtype=get_integer_dtype())
     mask = np.array([1], dtype=np.int32)
 
     with pytest.raises(TypeError, match="incorrect dtype"):

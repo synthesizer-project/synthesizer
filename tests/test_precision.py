@@ -154,7 +154,7 @@ def test_scalar_to_precision_mismatching_dtype_no_copy():
     """Test scalar_to_precision with mismatched dtype and copy=False."""
     target_dtype = precision.get_numpy_dtype()
     other_dtype = np.float64 if target_dtype == np.float32 else np.float32
-    scalar = np.asarray(3.14, dtype=other_dtype).item()
+    scalar = other_dtype(3.14)
 
     # With copy=False and mismatched dtype, should raise error
     with pytest.raises(TypeError, match="Scalar has dtype"):

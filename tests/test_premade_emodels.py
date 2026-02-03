@@ -31,7 +31,9 @@ class TestPacmanEmission:
         )
 
         assert model["attenuated"].dust_curve.slope == -1
-        assert model["attenuated"].fixed_parameters["tau_v"] == 0.33
+        assert model["attenuated"].fixed_parameters["tau_v"] == pytest.approx(
+            0.33
+        )
 
     def test_missing_optical_depth(self, test_grid, random_part_stars):
         """Test the initialization of the PacmanEmission object."""
@@ -372,10 +374,9 @@ class TestScreenEmission:
         )
 
         # Extract the tau_v and check it's the right one
-        assert (
-            get_param("tau_v", model["attenuated"], None, random_part_stars)
-            == 0.33
-        ), (
+        assert get_param(
+            "tau_v", model["attenuated"], None, random_part_stars
+        ) == pytest.approx(0.33), (
             "get_param returned the wrong tau_v "
             f"(model.tau_v = {model.tau_v}, "
             f"stars.tau_v = {random_part_stars.tau_v})"
@@ -421,8 +422,12 @@ class TestCharlotFallEmission:
         assert (
             model["young_attenuated_ism"].dust_curve.__class__ == Calzetti2000
         )
-        assert model["old_attenuated"].fixed_parameters["tau_v"] == 0.33
-        assert model["young_attenuated_ism"].fixed_parameters["tau_v"] == 0.33
+        assert model["old_attenuated"].fixed_parameters[
+            "tau_v"
+        ] == pytest.approx(0.33)
+        assert model["young_attenuated_ism"].fixed_parameters[
+            "tau_v"
+        ] == pytest.approx(0.33)
 
     def test_charlot_fall_with_no_dust_emission(
         self,
