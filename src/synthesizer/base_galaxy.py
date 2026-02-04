@@ -4,9 +4,13 @@ The class described in this module should never be directly instantiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
-from unyt import Mpc, arcsecond
+from unyt import Mpc, arcsecond, kpc, pc
 
 from synthesizer import exceptions
+from synthesizer.cosmology import (
+    get_angular_diameter_distance,
+    get_luminosity_distance,
+)
 from synthesizer.emission_models import EmissionModel
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
@@ -192,6 +196,74 @@ class BaseGalaxy:
         formatter = TableFormatter(self)
 
         return formatter.get_table("Galaxy")
+
+    def get_luminosity_distance(self, cosmo):
+        """Get the luminosity distance of the galaxy.
+
+        This requires the redshift to be set on the galaxy.
+
+        This will use the astropy cosmology module to calculate the
+        luminosity distance. If the redshift is 0, the distance will be set
+        to 10 pc to avoid any issues with 0s.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation.
+
+        Returns:
+            unyt_quantity:
+                The luminosity distance of the galaxy in kpc.
+        """
+        # If we don't have a redshift then we can't calculate the
+        # luminosity distance
+        if self.redshift is None:
+            raise exceptions.InconsistentArguments(
+                "The galaxy does not have a redshift set."
+            )
+
+        # At redshift > 0 we can calculate the luminosity distance explicitly
+        if self.redshift > 0:
+            return get_luminosity_distance(cosmo, self.redshift).to("kpc")
+
+        # At redshift 0 just place the galaxy at 10 pc to
+        # avoid any issues with 0s
+        return (10 * pc).to(kpc)
+
+    def get_angular_diameter_distance(self, cosmo):
+        """Get the angular diameter distance of the galaxy.
+
+        This requires the redshift to be set on the galaxy.
+
+        This will use the astropy cosmology module to calculate the
+        angular diameter distance. If the redshift is 0, the distance will
+        be set to 10 pc to avoid any issues with 0s.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation.
+
+        Returns:
+            unyt_quantity:
+                The angular diameter distance of the galaxy in kpc.
+        """
+        # If we don't have a redshift then we can't calculate the
+        # angular diameter distance
+        if self.redshift is None:
+            raise exceptions.InconsistentArguments(
+                "The galaxy does not have a redshift set."
+            )
+
+        # At redshift > 0 we can calculate the angular diameter distance
+        # explicitly
+        if self.redshift > 0:
+            return get_angular_diameter_distance(
+                cosmo,
+                self.redshift,
+            ).to("kpc")
+
+        # At redshift 0 just place the galaxy at 10 pc to
+        # avoid any issues with 0s
+        return (10 * pc).to(kpc)
 
     def get_equivalent_width(self, feature, blue, red, spectra_type):
         """Get all equivalent widths associated with a sed object.
