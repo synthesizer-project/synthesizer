@@ -51,7 +51,6 @@ from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.precision import (
     accept_precisions,
     ensure_arg_precision,
-    get_numpy_dtype,
 )
 
 
@@ -120,9 +119,11 @@ class Sed:
         self.nu = c / self.lam
 
         # If no lnu is provided create an empty array with the same shape as
-        # lam.
+        # lam.  self.lam is already in compiled precision (via
+        # @accept_precisions on this __init__) so mirror its dtype
+        # directly — no extension call.
         if lnu is None:
-            self.lnu = np.zeros(self.lam.shape, dtype=get_numpy_dtype())
+            self.lnu = np.zeros(self.lam.shape, dtype=self.lam.dtype)
         else:
             self.lnu = lnu
 
@@ -850,9 +851,12 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Define a pseudo transmission function
+        # Define a pseudo transmission function.  Cast the boolean mask to
+        # the compiled float precision so multiplication with self._lnu stays
+        # in that dtype (plain `float` would unconditionally promote to
+        # float64).
         transmission = (self.lam > window[0]) & (self.lam < window[1])
-        transmission = transmission.astype(float)
+        transmission = transmission.astype(self._lnu.dtype)
 
         # Apply the correct method
         if integration_method == "average":
@@ -1405,13 +1409,17 @@ class Sed:
         if resample_factor is not None and new_lam is not None:
             warn("Got resample_factor and new_lam, ignoring resample_factor")
 
-        # Resample the wavelength array
+        # Resample the wavelength array.  If new_lam was computed internally
+        # from self.lam (already compiled precision) we skip the conversion;
+        # only user-supplied new_lam needs ensure_arg_precision.
         if new_lam is None:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
+        else:
+            new_lam = ensure_arg_precision(new_lam, copy=True)
 
-        new_lam = ensure_arg_precision(new_lam, copy=True)
-
-        # Evaluate the function at the desired wavelengths
+        # Evaluate the function at the desired wavelengths.
+        # spectres returns a fresh contiguous array; only a dtype cast is
+        # needed (not ascontiguousarray which would allocate twice).
         new_spectra = spectres(
             new_lam,
             self._lam,
@@ -1419,10 +1427,7 @@ class Sed:
             fill=0,
             verbose=False,
         )
-        new_spectra = np.ascontiguousarray(
-            new_spectra,
-            dtype=get_numpy_dtype(),
-        )
+        new_spectra = new_spectra.astype(self._lam.dtype, copy=False)
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra * self.lnu.units)
@@ -1439,10 +1444,7 @@ class Sed:
                 fill=0.0,
                 verbose=False,
             )
-            resampled_fnu = np.ascontiguousarray(
-                resampled_fnu,
-                dtype=get_numpy_dtype(),
-            )
+            resampled_fnu = resampled_fnu.astype(self._lam.dtype, copy=False)
             sed.fnu = resampled_fnu * self.fnu.units
             sed.redshift = self.redshift
 

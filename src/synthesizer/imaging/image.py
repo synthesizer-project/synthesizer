@@ -305,7 +305,6 @@ class Image(ImagingBase):
         new_img.arr *= mult
         return new_img
 
-    @accepts()
     @accept_precisions()
     def get_img_hist(
         self,
@@ -339,7 +338,6 @@ class Image(ImagingBase):
             normalisation=normalisation,
         )
 
-    @accepts()
     @accept_precisions()
     def get_img_smoothed(
         self,

@@ -15,7 +15,7 @@ from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, default_units
-from synthesizer.utils.precision import accept_precisions
+from synthesizer.utils.precision import _NUMPY_DTYPE
 
 
 class PhotometryCollection:
@@ -48,7 +48,6 @@ class PhotometryCollection:
     photo_lnu = Quantity("luminosity_density_frequency")
     photo_fnu = Quantity("flux_density_frequency")
 
-    @accept_precisions()
     def __init__(self, filters, **kwargs):
         """Instantiate the photometry collection.
 
@@ -81,9 +80,15 @@ class PhotometryCollection:
                 f"or unyt_arrays. Got {type(photometry[0])} instead."
             )
 
-        # Stack the values into a contiguous array with filters last.
+        # Stack the values into a contiguous array with filters last and
+        # cast to compiled precision in a single allocation.  This avoids
+        # the overhead of the @accept_precisions() decorator converting
+        # each kwarg individually before np.stack discards those
+        # intermediates anyway.
         values = [val.value for val in photometry]
-        photometry_values = np.stack(values, axis=-1)
+        photometry_values = np.stack(values, axis=-1).astype(
+            _NUMPY_DTYPE, copy=False
+        )
         photometry = unyt_array(
             photometry_values,
             units=photometry[0].units,

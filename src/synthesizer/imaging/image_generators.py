@@ -561,10 +561,12 @@ def _generate_image_particle_smoothed(
 
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
-    _coords = cent_coords.to(spatial_units).value
+    _coords = cent_coords.to(spatial_units).value.astype(get_numpy_dtype())
     _coords[:, 0] += fov[0] / 2.0
     _coords[:, 1] += fov[1] / 2.0
-    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+    _smoothing_lengths = smoothing_lengths.to_value(spatial_units).astype(
+        get_numpy_dtype()
+    )
 
     # Apply normalisation to original signal if needed
     if normalisation is not None:
@@ -764,10 +766,15 @@ def _generate_images_particle_smoothed(
 
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
-    _coords = cent_coords.to(spatial_units).value
+    # Cast to compiled dtype here (matching the single-band path at line 564)
+    # so the C extension receives the expected Float* type without a hidden
+    # copy inside the extension's ensure_float_array check.
+    _coords = cent_coords.to(spatial_units).value.astype(get_numpy_dtype())
     _coords[:, 0] += fov[0] / 2.0
     _coords[:, 1] += fov[1] / 2.0
-    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+    _smoothing_lengths = smoothing_lengths.to_value(spatial_units).astype(
+        get_numpy_dtype()
+    )
 
     # Apply normalisation to original signal if needed
     if normalisations is not None:

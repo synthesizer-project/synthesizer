@@ -53,6 +53,24 @@ def get_float_bytes() -> int:
     return _get_float_bytes()
 
 
+# ---------------------------------------------------------------------------
+# Module-level cached dtypes.  The compiled precision is fixed for the
+# lifetime of the process so we query the C extension exactly once and cache
+# the results.  Every hot-path function (ensure_arg_precision,
+# array_to_precision, integrate_last_axis, …) reads these instead of
+# calling get_precision() + string comparison on every invocation.
+# ---------------------------------------------------------------------------
+_PRECISION_STR: str = _get_precision()
+_NUMPY_DTYPE: np.dtype = (
+    np.dtype(np.float32)
+    if _PRECISION_STR == "float32"
+    else np.dtype(np.float64)
+)
+_INTEGER_DTYPE: np.dtype = (
+    np.dtype(np.int32) if _PRECISION_STR == "float32" else np.dtype(np.int64)
+)
+
+
 def get_numpy_dtype() -> np.dtype:
     """Return the numpy dtype matching the compiled floating-point precision.
 
@@ -71,13 +89,7 @@ def get_numpy_dtype() -> np.dtype:
         dtype('float32')  # if compiled with SINGLE_PRECISION=1
         dtype('float64')  # if compiled without SINGLE_PRECISION
     """
-    # What precision are we using?
-    precision = get_precision()
-
-    # Return the corresponding numpy dtype
-    if precision == "float32":
-        return np.dtype(np.float32)
-    return np.dtype(np.float64)
+    return _NUMPY_DTYPE
 
 
 def get_integer_dtype() -> np.dtype:
@@ -101,13 +113,7 @@ def get_integer_dtype() -> np.dtype:
         dtype('int32')   # if compiled with SINGLE_PRECISION=1
         dtype('int64')   # if compiled without SINGLE_PRECISION
     """
-    # Get the floating-point precision
-    precision = get_precision()
-
-    # Infer integer precision from float precision
-    if precision == "float32":
-        return np.dtype(np.int32)
-    return np.dtype(np.int64)
+    return _INTEGER_DTYPE
 
 
 def get_boolean_dtype() -> np.dtype:
@@ -251,9 +257,15 @@ def array_to_precision(
 
     # Ensure input is a numpy array
     arr = np.asanyarray(arr)
-    target_dtype = get_numpy_dtype() if target_dtype is None else target_dtype
+    target_dtype = _NUMPY_DTYPE if target_dtype is None else target_dtype
 
-    # Ensure the array is C-contiguous
+    # Check if the array already has the correct dtype and is contiguous;
+    # this is the common fast path after initial construction.
+    if arr.dtype == target_dtype and arr.flags["C_CONTIGUOUS"]:
+        toc("Converting Array Precision", start)
+        return arr
+
+    # Ensure the array is C-contiguous (handles both dtype and layout in one)
     if not arr.flags["C_CONTIGUOUS"]:
         if not copy and arr.dtype != target_dtype:
             raise TypeError(
@@ -262,11 +274,6 @@ def array_to_precision(
         result = np.ascontiguousarray(arr, dtype=target_dtype)
         toc("Converting Array Precision", start)
         return result
-
-    # Check if the array already has the correct dtype, if so return it
-    if arr.dtype == target_dtype:
-        toc("Converting Array Precision", start)
-        return arr
 
     # OK, convert the array to the target dtype making a copy and return it
     if not copy:
@@ -305,7 +312,7 @@ def scalar_to_precision(
             target precision.
     """
     # Get the target dtype if not provided
-    target_dtype = get_numpy_dtype() if target_dtype is None else target_dtype
+    target_dtype = _NUMPY_DTYPE if target_dtype is None else target_dtype
 
     start = tic()
 
@@ -360,27 +367,15 @@ def unyt_array_to_precision(
         raise TypeError("Input must be a unyt.unyt_array")
 
     # Get the target dtype
-    target_dtype = get_numpy_dtype() if target_dtype is None else target_dtype
+    target_dtype = _NUMPY_DTYPE if target_dtype is None else target_dtype
 
-    # Ensure the array is C-contiguous
-    if not arr.flags["C_CONTIGUOUS"]:
-        result = unyt_array(
-            array_to_precision(
-                arr.ndview,
-                copy=copy,
-                target_dtype=target_dtype,
-            ),
-            arr.units,
-        )
-        toc("Converting Unyt Array Precision", start)
-        return result
-
-    # If the array already has the correct dtype, return it
-    if arr.dtype == target_dtype:
+    # Fast path: already correct dtype and contiguous — no work needed
+    if arr.dtype == target_dtype and arr.flags["C_CONTIGUOUS"]:
         toc("Converting Unyt Array Precision", start)
         return arr
 
-    # OK, convert the underlying data to the target dtype making a copy
+    # Convert the underlying ndview; array_to_precision handles both the
+    # contiguity check and the dtype cast in one allocation when possible
     result = unyt_array(
         array_to_precision(
             arr.ndview,
@@ -401,7 +396,8 @@ def ensure_arg_precision(
     """Ensure the argument is in the compiled or passed precision.
 
     This function checks the type of arg, and if it is a numpy array,
-    unyt_array, unyt_quantity, float,
+    unyt_array, unyt_quantity, float, it will be converted to the target
+    precision. Otherwise, it is returned unchanged.
 
     Args:
         arg: Input argument, if this is an array or float that demands a
@@ -420,68 +416,64 @@ def ensure_arg_precision(
     """
     start = tic()
 
-    # If the argument is a unyt_array or unyt_quantity, convert it
-    if isinstance(arg, (unyt_array, unyt_quantity)):
+    # If the argument is a unyt_array or unyt_quantity, fast-path: if it
+    # already has the right dtype and is contiguous, skip the conversion
+    # entirely.  unyt_quantity is a subclass of unyt_array so only one check.
+    if isinstance(arg, unyt_array):
+        _target = target_dtype if target_dtype is not None else _NUMPY_DTYPE
+        if arg.dtype == _target and arg.flags["C_CONTIGUOUS"]:
+            toc("Ensuring Argument Precision", start)
+            return arg
         result = unyt_array_to_precision(
             arg,
             copy=copy,
-            target_dtype=target_dtype,
+            target_dtype=_target,
         )
         toc("Ensuring Argument Precision", start)
         return result
 
-    # If the argument is a numpy float array, convert numeric arrays only
+    # If the argument is a numpy array, resolve target once and check fast path
     if isinstance(arg, np.ndarray):
         if np.issubdtype(arg.dtype, np.bool_):
-            target_dtype = (
+            _target = (
                 np.dtype(np.bool_) if target_dtype is None else target_dtype
             )
-            result = array_to_precision(
-                arg,
-                copy=copy,
-                target_dtype=target_dtype,
-            )
+        elif np.issubdtype(arg.dtype, np.integer):
+            _target = _INTEGER_DTYPE if target_dtype is None else target_dtype
+        elif np.issubdtype(arg.dtype, np.number):
+            _target = _NUMPY_DTYPE if target_dtype is None else target_dtype
+        else:
+            # Non-numeric array (e.g. string), return unchanged
             toc("Ensuring Argument Precision", start)
-            return result
-        if np.issubdtype(arg.dtype, np.integer):
-            target_dtype = (
-                get_integer_dtype() if target_dtype is None else target_dtype
-            )
-            result = array_to_precision(
-                arg,
-                copy=copy,
-                target_dtype=target_dtype,
-            )
-            toc("Ensuring Argument Precision", start)
-            return result
-        if np.issubdtype(arg.dtype, np.number):
-            result = array_to_precision(
-                arg,
-                copy=copy,
-                target_dtype=target_dtype,
-            )
-            toc("Ensuring Argument Precision", start)
-            return result
-        toc("Ensuring Argument Precision", start)
-        return arg
+            return arg
 
-    # If the argument is a numeric scalar or numpy scalar, convert it
-    if isinstance(arg, (bool, np.bool_)):
-        target_dtype = (
-            np.dtype(np.bool_) if target_dtype is None else target_dtype
+        # Fast path: already correct dtype and contiguous
+        if arg.dtype == _target and arg.flags["C_CONTIGUOUS"]:
+            toc("Ensuring Argument Precision", start)
+            return arg
+
+        result = array_to_precision(
+            arg,
+            copy=copy,
+            target_dtype=_target,
         )
-        result = scalar_to_precision(arg, copy=True, target_dtype=target_dtype)
+        toc("Ensuring Argument Precision", start)
+        return result
+
+    # Scalar paths
+    if isinstance(arg, (bool, np.bool_)):
+        _target = np.dtype(np.bool_) if target_dtype is None else target_dtype
+        result = scalar_to_precision(arg, copy=True, target_dtype=_target)
         toc("Ensuring Argument Precision", start)
         return result
     if isinstance(arg, (int, np.integer)):
-        target_dtype = (
-            get_integer_dtype() if target_dtype is None else target_dtype
-        )
-        result = scalar_to_precision(arg, copy=True, target_dtype=target_dtype)
+        _target = _INTEGER_DTYPE if target_dtype is None else target_dtype
+        result = scalar_to_precision(arg, copy=True, target_dtype=_target)
         toc("Ensuring Argument Precision", start)
         return result
     if isinstance(arg, (float, np.floating)):
-        result = scalar_to_precision(arg, copy=True, target_dtype=target_dtype)
+        _target = _NUMPY_DTYPE if target_dtype is None else target_dtype
+        result = scalar_to_precision(arg, copy=True, target_dtype=_target)
         toc("Ensuring Argument Precision", start)
         return result
 
@@ -527,6 +519,11 @@ def accept_precisions(allow_copies=True, **precisions):
         function
             The wrapped function.
     """
+    # Types that can never need a precision conversion.  Checking
+    # membership here is cheaper than entering ensure_arg_precision and
+    # paying tic/toc + isinstance chains for every `self`, `verbose`,
+    # `nthreads`, `description`, etc. that decorators see.
+    _SKIP_TYPES = (str, bool, type(None), type)
 
     def check_precisions(func):
         """Check arguments have correct precision.
@@ -566,17 +563,22 @@ def accept_precisions(allow_copies=True, **precisions):
 
             # Check the positional arguments
             for i, (name, value) in enumerate(zip(arg_names, args)):
-                # Skip None arguments
-                if value is None:
+                # Skip None and types that can never be numeric
+                if value is None or isinstance(value, _SKIP_TYPES):
+                    continue
+
+                # Skip objects that are clearly not array-like (e.g. self,
+                # FilterCollection, Instrument, …).  Only process types that
+                # could conceivably hold numeric data.
+                if not isinstance(
+                    value, (np.ndarray, unyt_array, int, float, np.generic)
+                ):
                     continue
 
                 # Get the target dtype for this argument, either the stated
                 # precision or None if not specified. In the None case we will
                 # use the compiled precision of the C extensions.
-                if name not in precisions:
-                    target_dtype = None
-                else:
-                    target_dtype = precisions[name]
+                target_dtype = precisions.get(name, None)
 
                 # Ensure the precision of the argument matches the
                 # compiled or stated precision of the C extensions. Note that
@@ -590,17 +592,20 @@ def accept_precisions(allow_copies=True, **precisions):
 
             # Check the keyword arguments
             for name, value in kwargs.items():
-                # Skip None arguments
-                if value is None:
+                # Skip None and types that can never be numeric
+                if value is None or isinstance(value, _SKIP_TYPES):
+                    continue
+
+                # Skip objects that are clearly not array-like
+                if not isinstance(
+                    value, (np.ndarray, unyt_array, int, float, np.generic)
+                ):
                     continue
 
                 # Get the target dtype for this argument, either the stated
                 # precision or None if not specified. In the None case we will
                 # use the compiled precision of the C extensions.
-                if name not in precisions:
-                    target_dtype = None
-                else:
-                    target_dtype = precisions[name]
+                target_dtype = precisions.get(name, None)
 
                 # Ensure the precision of the argument matches the compiled
                 # precision of the C extensions. Note that arguments that don't

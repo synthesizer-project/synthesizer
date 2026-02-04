@@ -19,7 +19,10 @@ from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.utils.precision import accept_precisions, ensure_arg_precision
+from synthesizer.utils.precision import (
+    _NUMPY_DTYPE,
+    accept_precisions,
+)
 
 
 class Particles:
@@ -192,10 +195,10 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 "Can't centre coordinates without a centre."
             )
-        return ensure_arg_precision(
-            self.coordinates - self.centre,
-            copy=True,
-        )
+        # Both self.coordinates and self.centre were converted to compiled
+        # precision by @accept_precisions on __init__; subtraction preserves
+        # the dtype so no explicit conversion is needed here.
+        return self.coordinates - self.centre
 
     @accepts(los_dists=Mpc)
     @accept_precisions()  # use default precision
@@ -273,7 +276,8 @@ class Particles:
         d = los_dists.to_value(cent_coords.units)
 
         # Get the angular coordinates and store them in a (N, 3) array
-        coords = np.zeros((self.nparticles, 3), dtype=np.float64)
+        # in the compiled precision (matches everything else in the pipeline).
+        coords = np.zeros((self.nparticles, 3), dtype=_NUMPY_DTYPE)
         coords[:, 0] = np.arctan2(x, d)
         coords[:, 1] = np.arctan2(y, d)
 
@@ -404,7 +408,6 @@ class Particles:
             projected_angular_smls,
         )
 
-    @accept_precisions()
     def get_particle_photo_lnu(
         self,
         filters,
@@ -443,7 +446,6 @@ class Particles:
 
         return self.particle_photo_lnu
 
-    @accept_precisions()
     def get_particle_photo_fnu(
         self,
         filters,
@@ -454,7 +456,7 @@ class Particles:
         """Calculate flux photometry using a FilterCollection object.
 
         Args:
-            filters (object):
+            filters (FilterCollection):
                 A FilterCollection object.
             verbose (bool):
                 Are we talking?

@@ -419,7 +419,6 @@ class SpectralCube(ImagingBase):
             "docs/CONTRIBUTING.md"
         )
 
-    @accept_precisions()
     def apply_noise_array(self):
         """Apply noise to the data cube.
 
@@ -433,7 +432,6 @@ class SpectralCube(ImagingBase):
             "docs/CONTRIBUTING.md"
         )
 
-    @accept_precisions()
     def apply_noise_from_std(self):
         """Apply noise to the data cube.
 
@@ -447,7 +445,6 @@ class SpectralCube(ImagingBase):
             "docs/CONTRIBUTING.md"
         )
 
-    @accept_precisions()
     def apply_noise_from_snr(self):
         """Apply noise to the data cube.
 

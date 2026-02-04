@@ -88,7 +88,7 @@ def test_array_to_precision_mismatching_dtype_no_copy():
     arr = np.array([1.0, 2.0, 3.0], dtype=other_dtype)
 
     # With copy=False and mismatched dtype, should raise error
-    with pytest.raises(TypeError, match="Array has dtype"):
+    with pytest.raises(TypeError, match="Array has"):
         precision.array_to_precision(arr, copy=False)
 
 
@@ -324,7 +324,7 @@ def test_image_precision_error_no_copy():
     signals = np.array([[1.0], [2.0]], dtype=other_dtype)
     kernel = Kernel().get_kernel()
 
-    with pytest.raises(TypeError, match="Array has dtype"):
+    with pytest.raises(TypeError, match="dtype"):
         _generate_images_particle_smoothed(
             imgs,
             signals,

@@ -36,10 +36,11 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
-from synthesizer.utils.precision import accept_precisions
+from synthesizer.utils.precision import _NUMPY_DTYPE, accept_precisions
 
 
 @accepts(new_lam=angstrom)
+@accept_precisions()
 def UVJ(new_lam=None):
     """Return a FilterCollection of UVJ top hat filters.
 
@@ -105,8 +106,7 @@ class FilterCollection:
     mean_lams = Quantity("wavelength")
     pivot_lams = Quantity("wavelength")
 
-    accepts(new_lam=angstrom)
-
+    @accepts(new_lam=angstrom)
     @accept_precisions(verbose=np.bool_)
     def __init__(
         self,
@@ -1815,14 +1815,17 @@ class Filter:
             xs = self._nu.to(Hz).value
             original_xs = self._original_nu
 
-        # Interpolate the transmission curve onto the provided frequencies
+        # Interpolate the transmission curve onto the provided frequencies.
+        # interp1d always returns float64; cast immediately to the compiled
+        # precision so that all subsequent masking, multiplication, and
+        # division stay in that dtype without silent promotion.
         func = interp1d(
             original_xs,
             self.original_t,
             kind="linear",
             bounds_error=False,
         )
-        t = func(xs)
+        t = func(xs).astype(_NUMPY_DTYPE, copy=False)
 
         # Ensure the xs array and arr are a compatible shape
         if arr.shape[-1] != t.shape[0]:

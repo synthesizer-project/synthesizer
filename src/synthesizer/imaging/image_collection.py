@@ -58,7 +58,6 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
-from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
@@ -390,7 +389,6 @@ class ImageCollection(ImagingBase):
 
         return composite_img
 
-    @accepts()
     @accept_precisions()
     def get_imgs_hist(
         self,
@@ -423,7 +421,6 @@ class ImageCollection(ImagingBase):
             normalisations=normalisations,
         )
 
-    @accepts()
     @accept_precisions()
     def get_imgs_smoothed(
         self,

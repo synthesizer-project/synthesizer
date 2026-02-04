@@ -132,11 +132,13 @@ class ImagingBase(ABC):
             get_integer_dtype()
         )
 
-        # Ensure that the npix is an array of 2 values
+        # Ensure that the npix is an array of 2 values.  self.npix already
+        # has the compiled integer dtype from the round+astype above; mirror
+        # it directly rather than calling get_integer_dtype() again.
         if self.npix.size == 1:
             self.npix = np.array(
                 (self.npix, self.npix),
-                dtype=get_integer_dtype(),
+                dtype=self.npix.dtype,
             )
 
         # Redefine the FOV based on npix
