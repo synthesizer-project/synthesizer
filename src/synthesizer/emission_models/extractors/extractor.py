@@ -33,7 +33,6 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
 from synthesizer.utils.precision import (
-    accept_precisions,
     get_integer_dtype,
     get_numpy_dtype,
 )
@@ -294,16 +293,6 @@ class IntegratedParticleExtractor(Extractor):
     to reduce the computation time.
     """
 
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
     def generate_lnu(
         self,
         emitter,
@@ -406,11 +395,6 @@ class IntegratedParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
     def generate_line(
         self,
         emitter,
@@ -567,16 +551,6 @@ class DopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
     def generate_lnu(
         self,
         emitter,
@@ -702,16 +676,6 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
     def generate_lnu(
         self,
         emitter,
@@ -826,11 +790,6 @@ class ParticleExtractor(Extractor):
     based component.
     """
 
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
     def generate_lnu(
         self,
         emitter,
@@ -949,16 +908,6 @@ class ParticleExtractor(Extractor):
 
         return part_sed, integrated_sed
 
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-        lam_mask=np.bool_,
-    )
     def generate_line(
         self,
         emitter,

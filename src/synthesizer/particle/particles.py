@@ -858,10 +858,6 @@ class Particles:
         """
         return self.get_flux_radius(spectra_type, filter_code, 0.5)
 
-    @accept_precisions(
-        allow_copies=False,
-        mask=np.bool_,
-    )
     def _prepare_los_args(
         self,
         other_parts,

@@ -28,7 +28,7 @@ from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
+from synthesizer.utils.precision import get_numpy_dtype
 
 _CENTERING_TOLERANCE = 1e-6
 
@@ -302,7 +302,6 @@ def _standardize_imaging_units(
     return resolution, standardized_fov, standardized_coords, standardized_smls
 
 
-@accept_precisions(allow_copies=False)
 def _generate_image_particle_hist(
     img,
     signal,
@@ -414,7 +413,6 @@ def _generate_image_particle_hist(
     return img
 
 
-@accept_precisions(allow_copies=False)
 def _generate_images_particle_hist(
     imgs,
     coordinates,
@@ -462,7 +460,6 @@ def _generate_images_particle_hist(
     return imgs
 
 
-@accept_precisions(allow_copies=False)
 def _generate_image_particle_smoothed(
     img,
     signal,
@@ -626,7 +623,6 @@ def _generate_image_particle_smoothed(
     return img
 
 
-@accept_precisions(allow_copies=False)
 def _generate_images_particle_smoothed(
     imgs,
     signals,
@@ -1113,7 +1109,6 @@ def _combine_image_collections(images, label, model_cache):
     return combined_img
 
 
-@accept_precisions(allow_copies=False)
 def _generate_ifu_particle_hist(
     ifu,
     sed,
@@ -1230,7 +1225,6 @@ def _generate_ifu_particle_hist(
     return ifu
 
 
-@accept_precisions(allow_copies=False)
 def _generate_ifu_particle_smoothed(
     ifu,
     spectra,

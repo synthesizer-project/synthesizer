@@ -998,7 +998,6 @@ class Stars(Particles, StarsComponent):
         # Set resampled flag
         self.resampled = True
 
-    @accept_precisions(allow_copies=False)
     def _prepare_sfzh_args(
         self,
         log10ages,
@@ -1177,7 +1176,6 @@ class Stars(Particles, StarsComponent):
 
         return surviving_mass * Msun
 
-    @accept_precisions(allow_copies=False)
     def _prepare_sfh_args(
         self,
         log10ages,
@@ -1331,7 +1329,6 @@ class Stars(Particles, StarsComponent):
 
         return fig, ax
 
-    @accept_precisions(allow_copies=False)
     def _prepare_metal_dist_args(
         self,
         metallicities,
