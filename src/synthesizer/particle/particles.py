@@ -243,8 +243,7 @@ class Particles:
             ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
             # Combine the angular diameter distance with the line of sight
-            # distance
-            # (along the z-axis)
+            # distance (along the z-axis)
             los_dists = ang_diam_dist + cent_coords[:, 2]
 
             # If we are at redshift 0.0 then we need to shift things to
