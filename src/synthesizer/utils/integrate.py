@@ -71,12 +71,11 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     xscale = np.max(np.abs(xs))
     yscale = np.max(np.abs(ys))
 
-    # If the maximum is zero, we return zero
+    # If the maximum is zero, we return zero with the correct output shape
     if xscale == 0 or yscale == 0:
-        ndim = ys.ndim - 1
-        return (
-            np.zeros(ndim, dtype=ys.dtype) if ndim > 0 else ys.dtype.type(0.0)
-        )
+        if ys.ndim > 1:
+            return np.zeros(ys.shape[:-1], dtype=ys.dtype)
+        return ys.dtype.type(0.0)
 
     # Create normalized arrays in the compiled precision for the C extension.
     # Pre-allocate output buffers so the division + dtype cast happen in a
