@@ -54,11 +54,6 @@ from unyt.exceptions import UnitConversionError
 from synthesizer import BASE_DIR, exceptions
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
-from synthesizer.utils.precision import (
-    ensure_arg_precision,
-    ensure_compatible_precision,
-    get_numpy_dtype,
-)
 
 # Define the path to your YAML file
 FILE_PATH = os.path.join(BASE_DIR, "default_units.yml")
@@ -539,12 +534,6 @@ class Quantity:
                 value = unyt_to_ndview(value, self.unit)
             else:
                 value = value.ndview
-
-        try:
-            ensure_compatible_precision(value, get_numpy_dtype())
-            value = ensure_arg_precision(value, copy=True)
-        except OverflowError:
-            pass
 
         # Set the attribute
         setattr(obj, self.private_name, value)

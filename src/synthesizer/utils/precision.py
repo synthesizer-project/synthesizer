@@ -253,9 +253,6 @@ def array_to_precision(
     arr = np.asanyarray(arr)
     target_dtype = get_numpy_dtype() if target_dtype is None else target_dtype
 
-    # Ensure compatibility before conversion
-    ensure_compatible_precision(arr, target_dtype)
-
     # Ensure the array is C-contiguous
     if not arr.flags["C_CONTIGUOUS"]:
         if not copy and arr.dtype != target_dtype:
@@ -310,9 +307,7 @@ def scalar_to_precision(
     # Get the target dtype if not provided
     target_dtype = get_numpy_dtype() if target_dtype is None else target_dtype
 
-    # Ensure compatibility before conversion
     start = tic()
-    ensure_compatible_precision(scalar, target_dtype)
 
     # Convert to numpy scalar for dtype checking
     scalar_arr = np.asarray(scalar)
