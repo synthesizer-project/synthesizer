@@ -17,6 +17,7 @@ import numpy as np
 from unyt import Mpc, Msun, km, s
 
 from synthesizer import exceptions
+from synthesizer.components.component import Component
 from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
@@ -24,12 +25,14 @@ from synthesizer.utils import TableFormatter
 from synthesizer.utils.util_funcs import combine_arrays
 
 
-class Gas(Particles):
+class Gas(Particles, Component):
     """The particle Gas class.
 
     This contains all data a collection of gas particles
     could contain. It inherits from the base Particles class holding
-    attributes and methods common to all particle types.
+    attributes and methods common to all particle types, and from
+    Component to provide distance calculations (e.g.
+    get_angular_diameter_distance) that are needed for angular imaging.
 
     The Gas class can be handed to methods elsewhere to pass information
     about the gas particles needed in other computations. A galaxy object
@@ -148,7 +151,7 @@ class Gas(Particles):
         # Apply the metallicity floor
         metallicities[metallicities < metallicity_floor] = metallicity_floor
 
-        # Instantiate parent
+        # Instantiate parents
         Particles.__init__(
             self,
             coordinates=coordinates,
@@ -162,6 +165,7 @@ class Gas(Particles):
             tau_v=tau_v,
             name="Gas",
         )
+        Component.__init__(self, component_type="Gas", fesc=0.0)
 
         # Set the metallicites and log10 equivalent
         self.metallicities = metallicities
