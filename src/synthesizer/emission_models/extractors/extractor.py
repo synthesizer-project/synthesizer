@@ -34,7 +34,6 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
 from synthesizer.utils.precision import (
     accept_precisions,
-    ensure_arg_precision,
     get_integer_dtype,
     get_numpy_dtype,
 )
@@ -220,7 +219,6 @@ class Extractor(ABC):
             # singular valued parametric property) so here we make sure that
             # we have a 1D array for everything we are returning
             value = np.atleast_1d(value)
-            value = ensure_arg_precision(value, copy=False)
 
             # Append the extracted value to the list
             extracted.append(value)
@@ -235,7 +233,6 @@ class Extractor(ABC):
         # Remove the units from the weight if necessary
         if isinstance(weight, (unyt_array, unyt_quantity)):
             weight = weight.ndview
-        weight = ensure_arg_precision(weight, copy=False)
 
         toc("Preparing particle data for extraction", start)
 
