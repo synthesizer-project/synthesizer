@@ -52,6 +52,7 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.precision import (
     ensure_arg_precision,
@@ -808,6 +809,8 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
+            start = tic()
+
             # Convert the positional arguments to a list (it must be mutable
             # for what comes next)
             args = list(args)
@@ -820,7 +823,9 @@ def accepts(**units):
             for name, value in kwargs.items():
                 kwargs[name] = _check_arg(units, name, value)
 
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            toc("Accepting Units", start)
+            return result
 
         return wrapped
 
