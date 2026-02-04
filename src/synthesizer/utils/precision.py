@@ -147,6 +147,10 @@ def ensure_compatible_precision(
         OverflowError: If any value would overflow when converted to the
             target precision.
     """
+    # Ignore Nones, they don't need checking.
+    if value is None:
+        return
+
     # Get the info about the target dtype to check overflow limits
     if np.issubdtype(target_dtype, np.floating):
         finfo = np.finfo(target_dtype)
