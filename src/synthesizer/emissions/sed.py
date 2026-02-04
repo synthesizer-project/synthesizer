@@ -1410,12 +1410,20 @@ class Sed:
             warn("Got resample_factor and new_lam, ignoring resample_factor")
 
         # Resample the wavelength array.  If new_lam was computed internally
-        # from self.lam (already compiled precision) we skip the conversion;
-        # only user-supplied new_lam needs ensure_arg_precision.
+        # from self.lam (already compiled precision) we strip units to get a
+        # plain ndarray (rebin_1d preserves unyt_array wrapping); only
+        # user-supplied new_lam needs ensure_arg_precision.
         if new_lam is None:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
+            # rebin_1d on a unyt_array returns a unyt_array; strip to plain
+            # ndarray so spectres sees consistent types with self._lam.
+            if hasattr(new_lam, "ndview"):
+                new_lam = new_lam.ndview
         else:
             new_lam = ensure_arg_precision(new_lam, copy=True)
+            # Same strip for user-supplied unyt_arrays after conversion
+            if hasattr(new_lam, "ndview"):
+                new_lam = new_lam.ndview
 
         # Evaluate the function at the desired wavelengths.
         # spectres returns a fresh contiguous array; only a dtype cast is
