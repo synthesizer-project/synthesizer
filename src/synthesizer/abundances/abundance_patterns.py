@@ -112,7 +112,7 @@ class Abundances:
             depletion_model (class):
                 An instance of a synthesizer.depletion_models class.
             depletion_scale (float):
-                A scaling factor to apply to the depletion pattern.
+                A scaling factor to apply to the depletion model.
         """
         # Raise an exception if oxygen_to_hydrogen is used (not yet fully
         # implemented)
@@ -163,7 +163,6 @@ class Abundances:
         # depletion on to dust
         self.depletion_model = depletion_model
         self.depletion_pattern = None
-        self.depletion_scale = None
 
         # If a depletion pattern is provided use this directly.
         if depletion_pattern:
@@ -180,15 +179,18 @@ class Abundances:
                     raise exceptions.UnrecognisedOption(
                         "Depletion model not recognised!"
                     )
-
+           
             # Check if self.depletion_model is instantiated and
             # if not initialise class
             if isinstance(self.depletion_model, type):
-                self.depletion_model = self.depletion_model()
+                if depletion_scale is not None:
+                    self.depletion_model = self.depletion_model(
+                        scale=depletion_scale
+                    )
+                else:
+                    self.depletion_model = self.depletion_model()
 
-            # If a depletion scale is provided apply this to the depletion
-            if depletion_scale:
-                self.depletion_scale = depletion_scale
+            # Get the depletion pattern from the depletion model
             self.depletion_pattern = self.depletion_model.depletion
 
         # If abundance pattern is provided as a string use this to extract the
