@@ -13,7 +13,10 @@ import os
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
+from synthesizer.extensions.integration import (
+    simps_last_axis_scaled,
+    trapz_last_axis_scaled,
+)
 from synthesizer.utils.precision import _NUMPY_DTYPE
 
 # Import trapezoid or trapz based on numpy version
@@ -57,65 +60,48 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     if nthreads == -1:
         nthreads = os.cpu_count()
 
-    integration_function = (
-        trapz_last_axis if method == "trapz" else simps_last_axis
-    )
-
     # Use the module-level cached dtype (avoids a C extension round-trip
     # on every call to get_numpy_dtype())
     dtype = _NUMPY_DTYPE
 
-    # Scale the integrand and xs to avoid numerical issues.
-    # We do this calculation in the input's precision to avoid overflow
-    # before we have a chance to normalize.
-    xscale = np.max(np.abs(xs))
-    yscale = np.max(np.abs(ys))
+    # --- Trapz path: fused scale+integrate in C ---
+    # The C kernel reads Float (float32 in SINGLE_PRECISION builds) inputs,
+    # accumulates in double, and returns a float64 array + scale.  This
+    # avoids two full Python-side passes (max-abs + divide) and the
+    # float32->float64 cast on the output.
+    if method == "trapz":
+        _xs = np.asarray(xs)
+        _ys = np.asarray(ys)
+        # Ensure inputs are in the compiled Float dtype and C-contiguous
+        # before handing off to C.  On the common hot-path they already are.
+        if _xs.dtype != dtype or not _xs.flags["C_CONTIGUOUS"]:
+            _xs = np.ascontiguousarray(_xs, dtype=dtype)
+        if _ys.dtype != dtype or not _ys.flags["C_CONTIGUOUS"]:
+            _ys = np.ascontiguousarray(_ys, dtype=dtype)
 
-    # If the maximum is zero, we return zero with the correct output shape
-    if xscale == 0 or yscale == 0:
-        if ys.ndim > 1:
-            return np.zeros(ys.shape[:-1], dtype=ys.dtype)
-        return ys.dtype.type(0.0)
-
-    # Create normalized arrays in the compiled precision for the C extension.
-    # Pre-allocate output buffers so the division + dtype cast happen in a
-    # single pass rather than allocating an intermediate float64 array from
-    # the division and then copying into float32 via ascontiguousarray.
-    if np.issubdtype(np.asarray(xs).dtype, np.floating) and (
-        np.asarray(xs).dtype == dtype
-    ):
-        # xs is already the right dtype; if contiguous just scale in-place
-        # into a fresh buffer of the same type.
-        _xs_raw = np.asarray(xs)
-        if _xs_raw.flags["C_CONTIGUOUS"]:
-            _xs = np.empty_like(_xs_raw)
-            np.divide(_xs_raw, xscale, out=_xs, casting="same_kind")
-        else:
-            _xs = np.ascontiguousarray(_xs_raw / xscale, dtype=dtype)
-    else:
-        _xs = np.array(np.asarray(xs) / xscale, dtype=dtype, order="C")
-
-    _ys_raw = np.asarray(ys)
-    if _ys_raw.dtype == dtype and _ys_raw.flags["C_CONTIGUOUS"]:
-        _ys = np.empty_like(_ys_raw)
-        np.divide(_ys_raw, yscale, out=_ys, casting="same_kind")
-    else:
-        _ys = np.array(_ys_raw / yscale, dtype=dtype, order="C")
-
-    # Perform the integration in the compiled precision
-    integral = integration_function(
-        _xs,
-        _ys,
-        nthreads,
-    )
-
-    # Rescale the result back to physical units.
-    # We cast to double precision here to ensure the scaling calculation itself
-    # doesn't overflow float32 limits if the result is large.
-    # The C extension returns a freshly-allocated array so we can view it as
-    # float64 without a copy when already in double; otherwise we cast once.
-    scale = float(xscale) * float(yscale)
-    if integral.dtype == np.float64:
+        # C returns (float64 integral array, double scale).
+        # scale == 0 means all inputs were zero.
+        integral, scale = trapz_last_axis_scaled(_xs, _ys, nthreads)
+        if scale == 0.0:
+            if _ys.ndim > 1:
+                return np.zeros(_ys.shape[:-1], dtype=np.float64)
+            return np.float64(0.0)
+        # integral is already float64; multiply scale in-place.
         integral *= scale
         return integral
-    return integral.astype(np.float64) * scale
+
+    # --- Simps path: fused scale+integrate in C (same as trapz) ---
+    _xs = np.asarray(xs)
+    _ys = np.asarray(ys)
+    if _xs.dtype != dtype or not _xs.flags["C_CONTIGUOUS"]:
+        _xs = np.ascontiguousarray(_xs, dtype=dtype)
+    if _ys.dtype != dtype or not _ys.flags["C_CONTIGUOUS"]:
+        _ys = np.ascontiguousarray(_ys, dtype=dtype)
+
+    integral, scale = simps_last_axis_scaled(_xs, _ys, nthreads)
+    if scale == 0.0:
+        if _ys.ndim > 1:
+            return np.zeros(_ys.shape[:-1], dtype=np.float64)
+        return np.float64(0.0)
+    integral *= scale
+    return integral
