@@ -14,6 +14,7 @@ import numpy as np
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.units import Quantity, default_units
 from synthesizer.utils.precision import _NUMPY_DTYPE
 
@@ -64,6 +65,8 @@ class PhotometryCollection:
                 A dictionary of keyword arguments containing all the photometry
                 of the form {"filter_code": photometry}.
         """
+        start = tic()
+
         # Store the filter collection
         self.filters = filters
 
@@ -85,6 +88,7 @@ class PhotometryCollection:
         # the overhead of the @accept_precisions() decorator converting
         # each kwarg individually before np.stack discards those
         # intermediates anyway.
+        stack_start = tic()
         values = [val.value for val in photometry]
         photometry_values = np.stack(values, axis=-1).astype(
             _NUMPY_DTYPE, copy=False
@@ -93,6 +97,7 @@ class PhotometryCollection:
             photometry_values,
             units=photometry[0].units,
         )
+        toc("Stacking Photometry", stack_start)
 
         # Get the dimensions of a flux for testing
         flux_dimensions = default_units[
@@ -117,6 +122,8 @@ class PhotometryCollection:
 
         # Attach the units for convenience
         self.units = self.photometry.units
+
+        toc("Creating PhotometryCollection", start)
 
     def __getitem__(self, filter_code):
         """Enable dictionary key look up syntax to extract specific photometry.

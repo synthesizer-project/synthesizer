@@ -1207,19 +1207,24 @@ class Sed:
             photo_lnu (dict):
                 A dictionary of rest frame broadband luminosities.
         """
+        start = tic()
+
         # Intialise result dictionary
         photo_lnu = {}
 
-        # Loop over filters
+        # Loop over filters applying the transmission curve
+        loop_start = tic()
         for f in filters:
             # Apply the filter transmission curve and store the resulting
             # luminosity
             bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
             photo_lnu[f.filter_code] = bb_lum * self.lnu.units
+        toc("Applying Filters (lnu loop)", loop_start)
 
         # Create the photometry collection and store it in the object
         self.photo_lnu = PhotometryCollection(filters, **photo_lnu)
 
+        toc("Getting Photometry (lnu)", start)
         return self.photo_lnu
 
     def get_photo_fnu(self, filters, verbose=True, nthreads=1):
@@ -1248,10 +1253,13 @@ class Sed:
                 )
             )
 
+        start = tic()
+
         # Set up flux dictionary
         photo_fnu = {}
 
-        # Loop over filters in filter collection
+        # Loop over filters in filter collection applying the transmission
+        loop_start = tic()
         for f in filters:
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(
@@ -1260,10 +1268,12 @@ class Sed:
                 nthreads=nthreads,
             )
             photo_fnu[f.filter_code] = bb_flux * self.fnu.units
+        toc("Applying Filters (fnu loop)", loop_start)
 
         # Create the photometry collection and store it in the object
         self.photo_fnu = PhotometryCollection(filters, **photo_fnu)
 
+        toc("Getting Photometry (fnu)", start)
         return self.photo_fnu
 
     def measure_colour(self, f1, f2):
