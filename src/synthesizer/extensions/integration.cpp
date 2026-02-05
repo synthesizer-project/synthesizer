@@ -1,16 +1,37 @@
 /******************************************************************************
- * A C module containing helper functions for integration.
+ * C extension for numerical integration operations.
+ *
+ * This module provides optimized integration methods (trapezoidal and
+ * Simpson's rules) for integrating over the last axis of N-dimensional
+ * arrays. All implementations use scaled arithmetic with double-precision
+ * accumulation to avoid overflow/underflow issues common in astrophysical
+ * unit systems.
+ *
+ * Key features:
+ *   - Scaled integration: automatically finds max(|x|) and max(|y|) and
+ *     normalizes before integration to prevent overflow
+ *   - Double accumulation: even in SINGLE_PRECISION builds, accumulation
+ *     is done in double to avoid precision loss
+ *   - Weighted integration: fused kernels for computing ∫ y(x)*w(x) dx
+ *     without intermediate array allocations
+ *   - OpenMP parallelization: all methods have serial and parallel versions
+ *
+ * Note: We READ inputs as Float (float32 or float64 depending on build) but
+ * always ACCUMULATE in double precision and return double results.
  *****************************************************************************/
+
+/* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
 #include <Python.h>
 
+/* Optional OpenMP include */
 #ifdef WITH_OPENMP
 #include <omp.h>
 #endif
 
-/* Local includes. */
+/* Local includes */
 #include "cpp_to_python.h"
 #include "data_types.h"
 #include "numpy_helpers.h"
@@ -18,104 +39,58 @@
 #include "timers.h"
 
 /**
- * @brief Serial trapezoidal integration.
+ * @brief Integrate over the last axis using the trapezoidal rule (serial).
  *
- * @param xs 1D array of x values.
- * @param ys 1D array of y values.
- */
-static Float *trapz_last_axis_serial(Float *x, Float *y, npy_intp n,
-                                       npy_intp num_elements) {
-  Float *integral = (Float *)calloc(num_elements, sizeof(Float));
-
-  for (npy_intp i = 0; i < num_elements; ++i) {
-    for (npy_intp j = 0; j < n - 1; ++j) {
-      integral[i] +=
-          0.5 * (x[j + 1] - x[j]) * (y[i * n + j + 1] + y[i * n + j]);
-    }
-  }
-
-  return integral;
-}
-
-/**
- * @brief Parallel trapezoidal integration.
+ * Finds max(|x|) and max(|y|), normalizes, then integrates with double
+ * precision accumulation. Returns the integral and scale factor separately.
  *
- * @param xs 1D array of x values.
- * @param ys 1D array of y values.
- * @param nthreads Number of threads to use.
- */
-#ifdef WITH_OPENMP
-static Float *trapz_last_axis_parallel(Float *x, Float *y, npy_intp n,
-                                         npy_intp num_elements, int nthreads) {
-  Float *integral = (Float *)calloc(num_elements, sizeof(Float));
-
-#pragma omp parallel for num_threads(nthreads)                                 \
-    reduction(+ : integral[ : num_elements])
-  for (npy_intp i = 0; i < num_elements; ++i) {
-    for (npy_intp j = 0; j < n - 1; ++j) {
-      integral[i] +=
-          0.5 * (x[j + 1] - x[j]) * (y[i * n + j + 1] + y[i * n + j]);
-    }
-  }
-  return integral;
-}
-#endif
-
-/* --------------------------------------------------------------------------
- * Scaled variants: find max(abs(xs)), max(abs(ys)) from the Float inputs,
- * then integrate with all arithmetic and accumulation in double precision.
- * The output is a freshly-allocated double array; the caller multiplies by
- * the returned scale = xscale * yscale to recover physical units.
+ * @param x: 1D x values in Float (length n).
+ * @param y: ND y values in Float, row-major.
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param out_scale: Output scale factor (xscale * yscale).
  *
- * Why double accumulation even in the SINGLE_PRECISION build?
- *   - The trapezoid kernel computes dx*(y0+y1) which can exceed float32
- *     range after normalisation when -ffast-math reassociates partial sums.
- *   - double accumulation is safe regardless of compiler flags and avoids
- *     a separate Python-side .astype(float64) on the result.
- *   - We still READ inputs as Float (float32 when SINGLE_PRECISION) so the
- *     memory-bandwidth saving from smaller input arrays is preserved.
- * -------------------------------------------------------------------------- */
-
-/**
- * @brief Serial scaled trapezoidal integration (double accumulator).
- *
- * @param x             1D x values in Float (length n).
- * @param y             ND y values in Float, row-major.
- * @param n             Length of last axis.
- * @param num_elements  Product of all axes except the last.
- * @param out_scale     Written with xscale * yscale (both double).
- * @return              Freshly-allocated double array of length num_elements.
+ * @return: Freshly-allocated double array of length num_elements.
  */
 static double *trapz_last_axis_scaled_serial(Float *x, Float *y, npy_intp n,
-                                              npy_intp num_elements,
-                                              double *out_scale) {
-  /* --- find xscale (1D, serial) --- */
+                                             npy_intp num_elements,
+                                             double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan) */
   double xscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double ax = (double)x[j];
-    if (ax < 0.0) ax = -ax;
-    if (ax > xscale) xscale = ax;
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
   }
 
-  /* --- find yscale (full array scan) --- */
+  /* Find the maximum absolute value in y for scaling (full array scan) */
   npy_intp total = num_elements * n;
   double yscale = 0.0;
   for (npy_intp k = 0; k < total; ++k) {
     double ay = (double)y[k];
-    if (ay < 0.0) ay = -ay;
-    if (ay > yscale) yscale = ay;
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
   }
 
+  /* Output the combined scale factor for caller's reference. */
   *out_scale = xscale * yscale;
 
+  /* If either scale is zero, the result is zero so move along. */
   if (xscale == 0.0 || yscale == 0.0) {
     return (double *)calloc(num_elements, sizeof(double));
   }
 
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
   double inv_xs = 1.0 / xscale;
   double inv_ys = 1.0 / yscale;
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
+  /* Compute the trapezoidal integral with double casting for stability. */
   for (npy_intp i = 0; i < num_elements; ++i) {
     double sum = 0.0;
     for (npy_intp j = 0; j < n - 1; ++j) {
@@ -132,46 +107,65 @@ static double *trapz_last_axis_scaled_serial(Float *x, Float *y, npy_intp n,
 
 #ifdef WITH_OPENMP
 /**
- * @brief Parallel scaled trapezoidal integration (double accumulator).
+ * @brief Integrate over the last axis using the trapezoidal rule (parallel).
  *
- * Parallel reduction for yscale; then parallel-for over rows with a
- * thread-local double accumulator (no array reduction needed — each row
- * writes to a distinct output slot).
+ * OpenMP-parallelized version. Uses parallel reduction for finding max(|y|),
+ * then parallel-for over rows. Each row writes to a distinct output slot
+ * (no array reduction needed).
+ *
+ * @param x: 1D x values in Float (length n).
+ * @param y: ND y values in Float, row-major.
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param nthreads: Number of OpenMP threads to use.
+ * @param out_scale: Output scale factor (xscale * yscale).
+ *
+ * @return: Freshly-allocated double array of length num_elements.
  */
-static double *trapz_last_axis_scaled_parallel(Float *x, Float *y,
-                                                npy_intp n,
-                                                npy_intp num_elements,
-                                                int nthreads,
-                                                double *out_scale) {
-  /* --- find xscale (1D, serial — negligible) --- */
+static double *trapz_last_axis_scaled_parallel(Float *x, Float *y, npy_intp n,
+                                               npy_intp num_elements,
+                                               int nthreads,
+                                               double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan). Sufficiently
+   * cheap to do in a simple loop. */
   double xscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double ax = (double)x[j];
-    if (ax < 0.0) ax = -ax;
-    if (ax > xscale) xscale = ax;
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
   }
 
-  /* --- find yscale (parallel max reduction) --- */
+  /* Find the maximum absolute value in y for scaling (parallel reduction) */
   npy_intp total = num_elements * n;
   double yscale = 0.0;
 #pragma omp parallel for num_threads(nthreads) reduction(max : yscale)
   for (npy_intp k = 0; k < total; ++k) {
     double ay = (double)y[k];
-    if (ay < 0.0) ay = -ay;
-    if (ay > yscale) yscale = ay;
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
   }
 
+  /* Output the combined scale factor for caller's reference. */
   *out_scale = xscale * yscale;
 
+  /* If either scale is zero, the result is zero so move along. */
   if (xscale == 0.0 || yscale == 0.0) {
     return (double *)calloc(num_elements, sizeof(double));
   }
 
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
   double inv_xs = 1.0 / xscale;
   double inv_ys = 1.0 / yscale;
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
-  /* Each row writes to integral[i] — no race, no reduction needed. */
+  /* Each row writes to integral[i] — no race conditions. Parallelize over
+   * rows with OpenMP and compute the trapezoidal integral with double casting
+   * for stability. */
 #pragma omp parallel for num_threads(nthreads)
   for (npy_intp i = 0; i < num_elements; ++i) {
     double sum = 0.0;
@@ -189,132 +183,56 @@ static double *trapz_last_axis_scaled_parallel(Float *x, Float *y,
 #endif
 
 /**
- * @brief Trapezoidal integration over the final axis of an ND array.
+ * @brief Python binding for scaled trapezoidal integration.
  *
- * @param xs 1D array of x values.
- * @param ys ND array of y values.
- * @param num_threads Number of threads to use.
- */
-static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
-
-  (void)self; /* Unused variable */
-
-  PyArrayObject *xs, *ys;
-  int nthreads;
-
-  /* Parse the input tuple */
-  if (!PyArg_ParseTuple(args, "O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
-                        &nthreads)) {
-    return NULL; /* Return NULL in case of parsing error */
-  }
-
-  /* Get the array dimensions. */
-  npy_intp ndim = PyArray_NDIM(ys);
-  npy_intp *shape = PyArray_SHAPE(ys);
-
-  /* Number of elements along the last axis */
-  npy_intp n = shape[ndim - 1];
-
-  if (!ensure_float_array(xs, "xs")) {
-    return NULL;
-  }
-  if (!ensure_float_array(ys, "ys")) {
-    return NULL;
-  }
-
-  /* Get the data pointer of the xs array */
-  Float *x = extract_data_float(xs, "xs");
-  if (x == NULL) {
-    return NULL; /* Type error already set */
-  }
-
-  /* Get the data pointer of the ys array */
-  Float *y = extract_data_float(ys, "ys");
-  if (y == NULL) {
-    return NULL; /* Type error already set */
-  }
-
-  /* Number of elements excluding the last axis */
-  npy_intp num_elements = PyArray_SIZE(ys) / n;
-
-  /* Compute the integral with the appropriate function. */
-  Float *integral;
-#ifdef WITH_OPENMP
-  if (nthreads > 1) {
-    integral = trapz_last_axis_parallel(x, y, n, num_elements, nthreads);
-  } else {
-    integral = trapz_last_axis_serial(x, y, n, num_elements);
-  }
-#else
-  integral = trapz_last_axis_serial(x, y, n, num_elements);
-#endif
-
-  /* Construct the output. */
-  npy_intp result_shape[NPY_MAXDIMS];
-  for (npy_intp i = 0; i < ndim - 1; ++i) {
-    result_shape[i] = shape[i];
-  }
-  PyArrayObject *result =
-      wrap_array_to_numpy<Float>(ndim - 1, result_shape, integral);
-
-  /* Create the output object. */
-  if (result == NULL) {
-    free(integral); /* Free the allocated memory on error */
-    return NULL;    /* Return NULL in case of error */
-  }
-  PyObject *output = (PyObject *)result;
-
-  return output;
-}
-
-/**
- * @brief Scaled trapezoidal integration over the final axis of an ND array.
+ * Integrates over the last axis of an ND array using the trapezoidal rule
+ * with automatic scaling to prevent overflow. Returns (integral, scale)
+ * where the physical result is integral * scale.
  *
- * Fused version: finds max(|xs|) and max(|ys|) inside C, then integrates with
- * inline division.  Returns a 2-tuple (integral_array, scale) where
- * scale = xscale * yscale (as a Python float).  The caller multiplies the
- * result by scale to recover physical units.
+ * @param xs: 1D array of x values (Float dtype, C-contiguous).
+ * @param ys: ND array of y values (Float dtype, C-contiguous).
+ * @param nthreads: Number of threads to use.
  *
- * @param xs 1D array of x values (Float dtype, C-contiguous).
- * @param ys ND array of y values (Float dtype, C-contiguous).
- * @param num_threads Number of threads to use.
+ * @return: Tuple (integral_array, scale) where integral_array is float64
+ *          and scale is a Python float.
  */
 static PyObject *trapz_last_axis_scaled_integration(PyObject *self,
-                                                     PyObject *args) {
+                                                    PyObject *args) {
   (void)self;
 
+  /* Parse Python arguments: two arrays and an integer. */
   PyArrayObject *xs, *ys;
   int nthreads;
-
   if (!PyArg_ParseTuple(args, "O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
                         &nthreads)) {
     return NULL;
   }
 
+  /* Validate inputs and extract data pointers. */
   npy_intp ndim = PyArray_NDIM(ys);
   npy_intp *shape = PyArray_SHAPE(ys);
   npy_intp n = shape[ndim - 1];
-
   if (!ensure_float_array(xs, "xs")) {
     return NULL;
   }
   if (!ensure_float_array(ys, "ys")) {
     return NULL;
   }
-
   Float *x = extract_data_float(xs, "xs");
-  if (x == NULL) return NULL;
+  if (x == NULL)
+    return NULL;
   Float *y = extract_data_float(ys, "ys");
-  if (y == NULL) return NULL;
-
+  if (y == NULL)
+    return NULL;
   npy_intp num_elements = PyArray_SIZE(ys) / n;
 
+  /* Perform the integration with automatic scaling. */
   double scale = 0.0;
   double *integral;
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
-    integral = trapz_last_axis_scaled_parallel(x, y, n, num_elements,
-                                               nthreads, &scale);
+    integral = trapz_last_axis_scaled_parallel(x, y, n, num_elements, nthreads,
+                                               &scale);
   } else {
     integral = trapz_last_axis_scaled_serial(x, y, n, num_elements, &scale);
   }
@@ -346,75 +264,80 @@ static PyObject *trapz_last_axis_scaled_integration(PyObject *self,
   return out;
 }
 
-/* --------------------------------------------------------------------------
- * Weighted-trapz scaled variants: integrate ys[i,:] * w[:] over xs[:].
- * Same scaling / double-accumulation design as the plain scaled trapz,
- * but with a 1D weight vector fused into the inner loop.  This lets the
- * caller avoid three Python-level temporaries:
- *   arr_in_band = arr.compress(in_band)       // 370 MB copy
- *   transmission = arr_in_band * t_in_band    // 370 MB alloc
- *   integrand    = transmission / xs_in_band  // 370 MB alloc
- * All three passes are now a single fused read of arr + w.
- * -------------------------------------------------------------------------- */
-
 /**
- * @brief Serial weighted scaled trapezoidal integration (double accumulator).
+ * @brief Weighted trapezoidal integration over the last axis (serial).
  *
- * @param x   1D x values (Float, length n).
- * @param y   ND y values (Float, row-major, last axis = n).
- * @param w   1D weight vector (Float, length n).  Integrand = y * w.
- * @param n   Length of last axis.
- * @param num_elements  Product of all axes except the last.
- * @param out_scale     Written with xscale * yscale * wscale.
- * @return    Freshly-allocated double array of length num_elements.
+ * Computes ∫ y(x) * w(x) dx where w is a weight vector. Uses scaled
+ * arithmetic with double accumulation for numerical stability.
+ *
+ * @param x: 1D x values (Float, length n).
+ * @param y: ND y values (Float, row-major, last axis = n).
+ * @param w: 1D weight vector (Float, length n).
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param out_scale: Output scale factor (xscale * yscale * wscale).
+ *
+ * @return: Freshly-allocated double array of length num_elements.
  */
 static double *trapz_last_axis_weighted_serial(Float *x, Float *y, Float *w,
-                                                npy_intp n,
-                                                npy_intp num_elements,
-                                                double *out_scale) {
-  /* --- find xscale (1D) --- */
+                                               npy_intp n,
+                                               npy_intp num_elements,
+                                               double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan) */
   double xscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double ax = (double)x[j];
-    if (ax < 0.0) ax = -ax;
-    if (ax > xscale) xscale = ax;
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
   }
 
-  /* --- find wscale (1D) --- */
+  /* Find the maximum absolute value in w for scaling (1D scan) */
   double wscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double aw = (double)w[j];
-    if (aw < 0.0) aw = -aw;
-    if (aw > wscale) wscale = aw;
+    if (aw < 0.0)
+      aw = -aw;
+    if (aw > wscale)
+      wscale = aw;
   }
 
-  /* --- find yscale (full array) --- */
+  /* Find the maximum absolute value in y for scaling (full array scan) */
   npy_intp total = num_elements * n;
   double yscale = 0.0;
   for (npy_intp k = 0; k < total; ++k) {
     double ay = (double)y[k];
-    if (ay < 0.0) ay = -ay;
-    if (ay > yscale) yscale = ay;
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
   }
 
+  /* Output the combined scale factor for caller's reference. */
   *out_scale = xscale * yscale * wscale;
 
+  /* If any scale is zero, the result is zero so move along. */
   if (xscale == 0.0 || yscale == 0.0 || wscale == 0.0) {
     return (double *)calloc(num_elements, sizeof(double));
   }
 
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
   double inv_xs = 1.0 / xscale;
   double inv_ys = 1.0 / yscale;
   double inv_ws = 1.0 / wscale;
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
+  /* Compute the weighted trapezoidal integral with double casting for
+   * stability. The integrand is y(x) * w(x). */
   for (npy_intp i = 0; i < num_elements; ++i) {
     double sum = 0.0;
     for (npy_intp j = 0; j < n - 1; ++j) {
-      double dx  = ((double)x[j + 1] - (double)x[j]) * inv_xs;
+      double dx = ((double)x[j + 1] - (double)x[j]) * inv_xs;
       double yw0 = (double)y[i * n + j] * inv_ys * (double)w[j] * inv_ws;
-      double yw1 = (double)y[i * n + j + 1] * inv_ys *
-                   (double)w[j + 1] * inv_ws;
+      double yw1 =
+          (double)y[i * n + j + 1] * inv_ys * (double)w[j + 1] * inv_ws;
       sum += 0.5 * dx * (yw0 + yw1);
     }
     integral[i] = sum;
@@ -425,59 +348,86 @@ static double *trapz_last_axis_weighted_serial(Float *x, Float *y, Float *w,
 
 #ifdef WITH_OPENMP
 /**
- * @brief Parallel weighted scaled trapezoidal integration (double accumulator).
+ * @brief Weighted trapezoidal integration over the last axis (parallel).
+ *
+ * OpenMP-parallelized version of weighted integration. Computes
+ * ∫ y(x) * w(x) dx with automatic scaling and double accumulation.
+ *
+ * @param x: 1D x values (Float, length n).
+ * @param y: ND y values (Float, row-major, last axis = n).
+ * @param w: 1D weight vector (Float, length n).
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param nthreads: Number of OpenMP threads to use.
+ * @param out_scale: Output scale factor (xscale * yscale * wscale).
+ *
+ * @return: Freshly-allocated double array of length num_elements.
  */
 static double *trapz_last_axis_weighted_parallel(Float *x, Float *y, Float *w,
-                                                  npy_intp n,
-                                                  npy_intp num_elements,
-                                                  int nthreads,
-                                                  double *out_scale) {
-  /* --- find xscale (1D, serial) --- */
+                                                 npy_intp n,
+                                                 npy_intp num_elements,
+                                                 int nthreads,
+                                                 double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan). Sufficiently
+   * cheap to do in a simple loop. */
   double xscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double ax = (double)x[j];
-    if (ax < 0.0) ax = -ax;
-    if (ax > xscale) xscale = ax;
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
   }
 
-  /* --- find wscale (1D, serial) --- */
+  /* Find the maximum absolute value in w for scaling (1D scan). Sufficiently
+   * cheap to do in a simple loop. */
   double wscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double aw = (double)w[j];
-    if (aw < 0.0) aw = -aw;
-    if (aw > wscale) wscale = aw;
+    if (aw < 0.0)
+      aw = -aw;
+    if (aw > wscale)
+      wscale = aw;
   }
 
-  /* --- find yscale (parallel max reduction) --- */
+  /* Find the maximum absolute value in y for scaling (parallel reduction) */
   npy_intp total = num_elements * n;
   double yscale = 0.0;
 #pragma omp parallel for num_threads(nthreads) reduction(max : yscale)
   for (npy_intp k = 0; k < total; ++k) {
     double ay = (double)y[k];
-    if (ay < 0.0) ay = -ay;
-    if (ay > yscale) yscale = ay;
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
   }
 
+  /* Output the combined scale factor for caller's reference. */
   *out_scale = xscale * yscale * wscale;
 
+  /* If any scale is zero, the result is zero so move along. */
   if (xscale == 0.0 || yscale == 0.0 || wscale == 0.0) {
     return (double *)calloc(num_elements, sizeof(double));
   }
 
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
   double inv_xs = 1.0 / xscale;
   double inv_ys = 1.0 / yscale;
   double inv_ws = 1.0 / wscale;
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
-  /* Each row writes to integral[i] — no race. */
+  /* Each row writes to integral[i] — no race conditions. Parallelize over
+   * rows with OpenMP and compute the weighted trapezoidal integral with
+   * double casting for stability. The integrand is y(x) * w(x). */
 #pragma omp parallel for num_threads(nthreads)
   for (npy_intp i = 0; i < num_elements; ++i) {
     double sum = 0.0;
     for (npy_intp j = 0; j < n - 1; ++j) {
-      double dx  = ((double)x[j + 1] - (double)x[j]) * inv_xs;
+      double dx = ((double)x[j + 1] - (double)x[j]) * inv_xs;
       double yw0 = (double)y[i * n + j] * inv_ys * (double)w[j] * inv_ws;
-      double yw1 = (double)y[i * n + j + 1] * inv_ys *
-                   (double)w[j + 1] * inv_ws;
+      double yw1 =
+          (double)y[i * n + j + 1] * inv_ys * (double)w[j + 1] * inv_ws;
       sum += 0.5 * dx * (yw0 + yw1);
     }
     integral[i] = sum;
@@ -488,55 +438,307 @@ static double *trapz_last_axis_weighted_parallel(Float *x, Float *y, Float *w,
 #endif
 
 /**
- * @brief Weighted trapezoidal integration over the final axis of an ND array.
+ * @brief Weighted Simpson's integration over the last axis (serial).
  *
- * Fused version: computes ∫ y(x)*w(x) dx with inline scaling.
- * Returns a 2-tuple (float64 integral_array, scale) where
- * scale = xscale * yscale * wscale.
+ * Computes ∫ y(x) * w(x) dx using Simpson's rule with Cartwright correction
+ * for even-length arrays. Uses scaled arithmetic with double accumulation.
  *
- * @param xs 1D x values (Float, C-contiguous).
- * @param ys ND y values (Float, C-contiguous).
- * @param ws 1D weight vector (Float, C-contiguous, same length as xs).
- * @param nthreads Number of threads.
+ * @param x: 1D x values (Float, length n).
+ * @param y: ND y values (Float, row-major, last axis = n).
+ * @param w: 1D weight vector (Float, length n).
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param out_scale: Output scale factor (xscale * yscale * wscale).
+ *
+ * @return: Freshly-allocated double array of length num_elements.
+ */
+static double *simps_last_axis_weighted_serial(Float *x, Float *y, Float *w,
+                                               npy_intp n,
+                                               npy_intp num_elements,
+                                               double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan) */
+  double xscale = 0.0;
+  for (npy_intp j = 0; j < n; ++j) {
+    double ax = (double)x[j];
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
+  }
+
+  /* Find the maximum absolute value in w for scaling (1D scan) */
+  double wscale = 0.0;
+  for (npy_intp j = 0; j < n; ++j) {
+    double aw = (double)w[j];
+    if (aw < 0.0)
+      aw = -aw;
+    if (aw > wscale)
+      wscale = aw;
+  }
+
+  /* Find the maximum absolute value in y for scaling (full array scan) */
+  npy_intp total = num_elements * n;
+  double yscale = 0.0;
+  for (npy_intp k = 0; k < total; ++k) {
+    double ay = (double)y[k];
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
+  }
+
+  /* Output the combined scale factor for caller's reference. */
+  *out_scale = xscale * yscale * wscale;
+
+  /* If any scale is zero, the result is zero so move along. */
+  if (xscale == 0.0 || yscale == 0.0 || wscale == 0.0) {
+    return (double *)calloc(num_elements, sizeof(double));
+  }
+
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
+  double inv_xs = 1.0 / xscale;
+  double inv_ys = 1.0 / yscale;
+  double inv_ws = 1.0 / wscale;
+  double *integral = (double *)calloc(num_elements, sizeof(double));
+
+  /* Compute the weighted Simpson's integral with double casting for stability.
+   * The integrand is y(x) * w(x). */
+  for (npy_intp i = 0; i < num_elements; ++i) {
+    if (n < 2)
+      continue;
+
+    /* n==2: only one interval, fall back to trapezoid (matches scipy). */
+    if (n == 2) {
+      integral[i] = 0.5 * ((double)x[1] - (double)x[0]) * inv_xs *
+                    ((double)y[i * n] * (double)w[0] +
+                     (double)y[i * n + 1] * (double)w[1]) *
+                    inv_ys * inv_ws;
+      continue;
+    }
+
+    double sum = 0.0;
+
+    /* Generalised Simpson panels (correct for non-uniform spacing). */
+    for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
+      npy_intp k = 2 * j;
+      double h0 = ((double)x[k + 1] - (double)x[k]) * inv_xs;
+      double h1 = ((double)x[k + 2] - (double)x[k + 1]) * inv_xs;
+      double hs = h0 + h1;
+      double yw0 = (double)y[i * n + k] * inv_ys * (double)w[k] * inv_ws;
+      double yw1 =
+          (double)y[i * n + k + 1] * inv_ys * (double)w[k + 1] * inv_ws;
+      double yw2 =
+          (double)y[i * n + k + 2] * inv_ys * (double)w[k + 2] * inv_ws;
+      sum += hs / 6.0 *
+             (yw0 * (2.0 - h1 / h0) + yw1 * (hs * hs / (h0 * h1)) +
+              yw2 * (2.0 - h0 / h1));
+    }
+
+    /* Even n (odd intervals): Cartwright correction on last 3 points. */
+    if (n % 2 == 0) {
+      double h0 = ((double)x[n - 2] - (double)x[n - 3]) * inv_xs;
+      double h1 = ((double)x[n - 1] - (double)x[n - 2]) * inv_xs;
+      double alpha = (2.0 * h1 * h1 + 3.0 * h0 * h1) / (6.0 * (h0 + h1));
+      double beta = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
+      double eta = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
+      sum +=
+          alpha * (double)y[i * n + n - 1] * inv_ys * (double)w[n - 1] *
+              inv_ws +
+          beta * (double)y[i * n + n - 2] * inv_ys * (double)w[n - 2] * inv_ws -
+          eta * (double)y[i * n + n - 3] * inv_ys * (double)w[n - 3] * inv_ws;
+    }
+
+    integral[i] = sum;
+  }
+
+  return integral;
+}
+
+#ifdef WITH_OPENMP
+/**
+ * @brief Weighted Simpson's integration over the last axis (parallel).
+ *
+ * OpenMP-parallelized version of weighted Simpson's integration.
+ * Handles non-uniform grids with Cartwright correction for even-length arrays.
+ *
+ * @param x: 1D x values (Float, length n).
+ * @param y: ND y values (Float, row-major, last axis = n).
+ * @param w: 1D weight vector (Float, length n).
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param nthreads: Number of OpenMP threads to use.
+ * @param out_scale: Output scale factor (xscale * yscale * wscale).
+ *
+ * @return: Freshly-allocated double array of length num_elements.
+ */
+static double *simps_last_axis_weighted_parallel(Float *x, Float *y, Float *w,
+                                                 npy_intp n,
+                                                 npy_intp num_elements,
+                                                 int nthreads,
+                                                 double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan). Sufficiently
+   * cheap to do in a simple loop. */
+  double xscale = 0.0;
+  for (npy_intp j = 0; j < n; ++j) {
+    double ax = (double)x[j];
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
+  }
+
+  /* Find the maximum absolute value in w for scaling (1D scan). Sufficiently
+   * cheap to do in a simple loop. */
+  double wscale = 0.0;
+  for (npy_intp j = 0; j < n; ++j) {
+    double aw = (double)w[j];
+    if (aw < 0.0)
+      aw = -aw;
+    if (aw > wscale)
+      wscale = aw;
+  }
+
+  /* Find the maximum absolute value in y for scaling (parallel reduction) */
+  npy_intp total = num_elements * n;
+  double yscale = 0.0;
+#pragma omp parallel for num_threads(nthreads) reduction(max : yscale)
+  for (npy_intp k = 0; k < total; ++k) {
+    double ay = (double)y[k];
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
+  }
+
+  /* Output the combined scale factor for caller's reference. */
+  *out_scale = xscale * yscale * wscale;
+
+  /* If any scale is zero, the result is zero so move along. */
+  if (xscale == 0.0 || yscale == 0.0 || wscale == 0.0) {
+    return (double *)calloc(num_elements, sizeof(double));
+  }
+
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
+  double inv_xs = 1.0 / xscale;
+  double inv_ys = 1.0 / yscale;
+  double inv_ws = 1.0 / wscale;
+  double *integral = (double *)calloc(num_elements, sizeof(double));
+
+  /* Each row writes to integral[i] — no race conditions. Parallelize over
+   * rows with OpenMP and compute the weighted Simpson's integral with double
+   * casting for stability. The integrand is y(x) * w(x). */
+#pragma omp parallel for num_threads(nthreads)
+  for (npy_intp i = 0; i < num_elements; ++i) {
+    if (n < 2)
+      continue;
+
+    /* n==2: only one interval, fall back to trapezoid (matches scipy). */
+    if (n == 2) {
+      integral[i] = 0.5 * ((double)x[1] - (double)x[0]) * inv_xs *
+                    ((double)y[i * n] * (double)w[0] +
+                     (double)y[i * n + 1] * (double)w[1]) *
+                    inv_ys * inv_ws;
+      continue;
+    }
+
+    double sum = 0.0;
+
+    /* Generalised Simpson panels (correct for non-uniform spacing). */
+    for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
+      npy_intp k = 2 * j;
+      double h0 = ((double)x[k + 1] - (double)x[k]) * inv_xs;
+      double h1 = ((double)x[k + 2] - (double)x[k + 1]) * inv_xs;
+      double hs = h0 + h1;
+      double yw0 = (double)y[i * n + k] * inv_ys * (double)w[k] * inv_ws;
+      double yw1 =
+          (double)y[i * n + k + 1] * inv_ys * (double)w[k + 1] * inv_ws;
+      double yw2 =
+          (double)y[i * n + k + 2] * inv_ys * (double)w[k + 2] * inv_ws;
+      sum += hs / 6.0 *
+             (yw0 * (2.0 - h1 / h0) + yw1 * (hs * hs / (h0 * h1)) +
+              yw2 * (2.0 - h0 / h1));
+    }
+
+    /* Even n (odd intervals): Cartwright correction on last 3 points. */
+    if (n % 2 == 0) {
+      double h0 = ((double)x[n - 2] - (double)x[n - 3]) * inv_xs;
+      double h1 = ((double)x[n - 1] - (double)x[n - 2]) * inv_xs;
+      double alpha = (2.0 * h1 * h1 + 3.0 * h0 * h1) / (6.0 * (h0 + h1));
+      double beta = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
+      double eta = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
+      sum +=
+          alpha * (double)y[i * n + n - 1] * inv_ys * (double)w[n - 1] *
+              inv_ws +
+          beta * (double)y[i * n + n - 2] * inv_ys * (double)w[n - 2] * inv_ws -
+          eta * (double)y[i * n + n - 3] * inv_ys * (double)w[n - 3] * inv_ws;
+    }
+
+    integral[i] = sum;
+  }
+
+  return integral;
+}
+#endif
+
+/**
+ * @brief Python binding for weighted trapezoidal integration.
+ *
+ * Computes ∫ y(x) * w(x) dx over the last axis with automatic scaling.
+ * Returns (integral, scale) where the physical result is integral * scale.
+ *
+ * @param xs: 1D array of x values (Float dtype, C-contiguous).
+ * @param ys: ND array of y values (Float dtype, C-contiguous).
+ * @param ws: 1D weight vector (Float dtype, C-contiguous, same length as xs).
+ * @param nthreads: Number of threads to use.
+ *
+ * @return: Tuple (integral_array, scale) where integral_array is float64
+ *          and scale is a Python float.
  */
 static PyObject *trapz_last_axis_weighted_integration(PyObject *self,
-                                                       PyObject *args) {
+                                                      PyObject *args) {
   (void)self;
 
+  /* Parse Python arguments: three arrays and an integer. */
   PyArrayObject *xs, *ys, *ws;
   int nthreads;
-
   if (!PyArg_ParseTuple(args, "O!O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
                         &PyArray_Type, &ws, &nthreads)) {
     return NULL;
   }
 
+  /* Validate inputs and extract data pointers. */
   npy_intp ndim = PyArray_NDIM(ys);
   npy_intp *shape = PyArray_SHAPE(ys);
   npy_intp n = shape[ndim - 1];
-
-  if (!ensure_float_array(xs, "xs")) return NULL;
-  if (!ensure_float_array(ys, "ys")) return NULL;
-  if (!ensure_float_array(ws, "ws")) return NULL;
-
+  if (!ensure_float_array(xs, "xs"))
+    return NULL;
+  if (!ensure_float_array(ys, "ys"))
+    return NULL;
+  if (!ensure_float_array(ws, "ws"))
+    return NULL;
   Float *x = extract_data_float(xs, "xs");
-  if (x == NULL) return NULL;
+  if (x == NULL)
+    return NULL;
   Float *y = extract_data_float(ys, "ys");
-  if (y == NULL) return NULL;
+  if (y == NULL)
+    return NULL;
   Float *w = extract_data_float(ws, "ws");
-  if (w == NULL) return NULL;
-
+  if (w == NULL)
+    return NULL;
   npy_intp num_elements = PyArray_SIZE(ys) / n;
 
+  /* Perform the weighted integration with automatic scaling. */
   double scale = 0.0;
   double *integral;
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
     integral = trapz_last_axis_weighted_parallel(x, y, w, n, num_elements,
-                                                  nthreads, &scale);
+                                                 nthreads, &scale);
   } else {
-    integral = trapz_last_axis_weighted_serial(x, y, w, n, num_elements,
-                                               &scale);
+    integral =
+        trapz_last_axis_weighted_serial(x, y, w, n, num_elements, &scale);
   }
 #else
   integral = trapz_last_axis_weighted_serial(x, y, w, n, num_elements, &scale);
@@ -567,152 +769,61 @@ static PyObject *trapz_last_axis_weighted_integration(PyObject *self,
 }
 
 /**
- * @brief Serial Simpson's integration.
+ * @brief Integrate over the last axis using Simpson's rule (serial).
  *
- * @param xs 1D array of x values.
- * @param ys ND array of y values.
- */
-static Float *simps_last_axis_serial(Float *x, Float *y, npy_intp n,
-                                       npy_intp num_elements) {
-  Float *integral = (Float *)calloc(num_elements, sizeof(Float));
-
-  for (npy_intp i = 0; i < num_elements; ++i) {
-    if (n < 2) {
-      continue;
-    }
-    /* n==2: only one interval, fall back to trapezoid (matches scipy). */
-    if (n == 2) {
-      integral[i] = (Float)(0.5 * ((double)x[1] - (double)x[0]) *
-                           ((double)y[i * n] + (double)y[i * n + 1]));
-      continue;
-    }
-    /* Generalised Simpson panels (correct for non-uniform spacing). */
-    for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
-      npy_intp k  = 2 * j;
-      double   h0 = (double)x[k + 1] - (double)x[k];
-      double   h1 = (double)x[k + 2] - (double)x[k + 1];
-      double   hs = h0 + h1;
-      double   y0 = (double)y[i * n + k];
-      double   y1 = (double)y[i * n + k + 1];
-      double   y2 = (double)y[i * n + k + 2];
-      integral[i] += (Float)(hs / 6.0 *
-                     (y0 * (2.0 - h1 / h0) +
-                      y1 * (hs * hs / (h0 * h1)) +
-                      y2 * (2.0 - h0 / h1)));
-    }
-    /* Even n (odd intervals): Cartwright correction on last 3 points. */
-    if (n % 2 == 0) {
-      double h0 = (double)x[n - 2] - (double)x[n - 3];
-      double h1 = (double)x[n - 1] - (double)x[n - 2];
-      double alpha = (2.0 * h1 * h1 + 3.0 * h0 * h1) / (6.0 * (h0 + h1));
-      double beta  = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
-      double eta   = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
-      integral[i] += (Float)(alpha * (double)y[i * n + n - 1] +
-                             beta  * (double)y[i * n + n - 2] -
-                             eta   * (double)y[i * n + n - 3]);
-    }
-  }
-
-  return integral;
-}
-
-/**
- * @brief Parallel Simpson's integration.
+ * Uses generalized Simpson's rule for non-uniform grids with Cartwright
+ * correction for even-length arrays. Automatic scaling and double accumulation.
  *
- * @param xs 1D array of x values.
- * @param ys ND array of y values.
- * @param nthreads Number of threads to use.
- */
-#ifdef WITH_OPENMP
-static Float *simps_last_axis_parallel(Float *x, Float *y, npy_intp n,
-                                        npy_intp num_elements, int nthreads) {
-  Float *integral = (Float *)calloc(num_elements, sizeof(Float));
-
-#pragma omp parallel for num_threads(nthreads)                                 \
-    reduction(+ : integral[ : num_elements])
-  for (npy_intp i = 0; i < num_elements; ++i) {
-    if (n < 2) {
-      continue;
-    }
-    /* n==2: only one interval, fall back to trapezoid (matches scipy). */
-    if (n == 2) {
-      integral[i] = (Float)(0.5 * ((double)x[1] - (double)x[0]) *
-                           ((double)y[i * n] + (double)y[i * n + 1]));
-      continue;
-    }
-
-    /* Generalised Simpson panels (correct for non-uniform spacing). */
-    for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
-      npy_intp k  = 2 * j;
-      double   h0 = (double)x[k + 1] - (double)x[k];
-      double   h1 = (double)x[k + 2] - (double)x[k + 1];
-      double   hs = h0 + h1;
-      double   y0 = (double)y[i * n + k];
-      double   y1 = (double)y[i * n + k + 1];
-      double   y2 = (double)y[i * n + k + 2];
-      integral[i] += (Float)(hs / 6.0 *
-                     (y0 * (2.0 - h1 / h0) +
-                      y1 * (hs * hs / (h0 * h1)) +
-                      y2 * (2.0 - h0 / h1)));
-    }
-    /* Even n (odd intervals): Cartwright correction on last 3 points. */
-    if (n % 2 == 0) {
-      double h0 = (double)x[n - 2] - (double)x[n - 3];
-      double h1 = (double)x[n - 1] - (double)x[n - 2];
-      double alpha = (2.0 * h1 * h1 + 3.0 * h0 * h1) / (6.0 * (h0 + h1));
-      double beta  = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
-      double eta   = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
-      integral[i] += (Float)(alpha * (double)y[i * n + n - 1] +
-                             beta  * (double)y[i * n + n - 2] -
-                             eta   * (double)y[i * n + n - 3]);
-    }
-  }
-
-  return integral;
-}
-#endif
-
-/* --------------------------------------------------------------------------
- * Scaled Simpson's variants — same design as the scaled trapz kernels:
- * read Float* inputs, find scale in double, accumulate in double, return
- * double* + scale.  The odd-panel trapezoid tail uses the same pattern.
- * -------------------------------------------------------------------------- */
-
-/**
- * @brief Serial scaled Simpson's integration (double accumulator).
+ * @param x: 1D x values (Float, length n).
+ * @param y: ND y values (Float, row-major, last axis = n).
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param out_scale: Output scale factor (xscale * yscale).
+ *
+ * @return: Freshly-allocated double array of length num_elements.
  */
 static double *simps_last_axis_scaled_serial(Float *x, Float *y, npy_intp n,
-                                              npy_intp num_elements,
-                                              double *out_scale) {
-  /* --- find xscale (1D) --- */
+                                             npy_intp num_elements,
+                                             double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan) */
   double xscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double ax = (double)x[j];
-    if (ax < 0.0) ax = -ax;
-    if (ax > xscale) xscale = ax;
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
   }
 
-  /* --- find yscale (full array) --- */
+  /* Find the maximum absolute value in y for scaling (full array scan) */
   npy_intp total = num_elements * n;
   double yscale = 0.0;
   for (npy_intp k = 0; k < total; ++k) {
     double ay = (double)y[k];
-    if (ay < 0.0) ay = -ay;
-    if (ay > yscale) yscale = ay;
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
   }
 
+  /* Output the combined scale factor for caller's reference. */
   *out_scale = xscale * yscale;
 
+  /* If either scale is zero, the result is zero so move along. */
   if (xscale == 0.0 || yscale == 0.0) {
     return (double *)calloc(num_elements, sizeof(double));
   }
 
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
   double inv_xs = 1.0 / xscale;
   double inv_ys = 1.0 / yscale;
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
+  /* Compute Simpson's integral with double casting for stability. */
   for (npy_intp i = 0; i < num_elements; ++i) {
-    if (n < 2) continue;
+    if (n < 2)
+      continue;
 
     /* n==2: only one interval, fall back to trapezoid (matches scipy). */
     if (n == 2) {
@@ -725,16 +836,16 @@ static double *simps_last_axis_scaled_serial(Float *x, Float *y, npy_intp n,
 
     /* Generalised Simpson panels (correct for non-uniform spacing). */
     for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
-      npy_intp k  = 2 * j;
-      double   h0 = ((double)x[k + 1] - (double)x[k]) * inv_xs;
-      double   h1 = ((double)x[k + 2] - (double)x[k + 1]) * inv_xs;
-      double   hs = h0 + h1;
-      double   y0 = (double)y[i * n + k] * inv_ys;
-      double   y1 = (double)y[i * n + k + 1] * inv_ys;
-      double   y2 = (double)y[i * n + k + 2] * inv_ys;
-      sum += hs / 6.0 * (y0 * (2.0 - h1 / h0) +
-                          y1 * (hs * hs / (h0 * h1)) +
-                          y2 * (2.0 - h0 / h1));
+      npy_intp k = 2 * j;
+      double h0 = ((double)x[k + 1] - (double)x[k]) * inv_xs;
+      double h1 = ((double)x[k + 2] - (double)x[k + 1]) * inv_xs;
+      double hs = h0 + h1;
+      double y0 = (double)y[i * n + k] * inv_ys;
+      double y1 = (double)y[i * n + k + 1] * inv_ys;
+      double y2 = (double)y[i * n + k + 2] * inv_ys;
+      sum += hs / 6.0 *
+             (y0 * (2.0 - h1 / h0) + y1 * (hs * hs / (h0 * h1)) +
+              y2 * (2.0 - h0 / h1));
     }
 
     /* Even n (odd intervals): Cartwright correction on last 3 points. */
@@ -742,11 +853,11 @@ static double *simps_last_axis_scaled_serial(Float *x, Float *y, npy_intp n,
       double h0 = ((double)x[n - 2] - (double)x[n - 3]) * inv_xs;
       double h1 = ((double)x[n - 1] - (double)x[n - 2]) * inv_xs;
       double alpha = (2.0 * h1 * h1 + 3.0 * h0 * h1) / (6.0 * (h0 + h1));
-      double beta  = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
-      double eta   = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
+      double beta = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
+      double eta = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
       sum += alpha * (double)y[i * n + n - 1] * inv_ys +
-             beta  * (double)y[i * n + n - 2] * inv_ys -
-             eta   * (double)y[i * n + n - 3] * inv_ys;
+             beta * (double)y[i * n + n - 2] * inv_ys -
+             eta * (double)y[i * n + n - 3] * inv_ys;
     }
 
     integral[i] = sum;
@@ -757,45 +868,68 @@ static double *simps_last_axis_scaled_serial(Float *x, Float *y, npy_intp n,
 
 #ifdef WITH_OPENMP
 /**
- * @brief Parallel scaled Simpson's integration (double accumulator).
+ * @brief Integrate over the last axis using Simpson's rule (parallel).
+ *
+ * OpenMP-parallelized version of Simpson's integration. Handles non-uniform
+ * grids with Cartwright correction for even-length arrays.
+ *
+ * @param x: 1D x values (Float, length n).
+ * @param y: ND y values (Float, row-major, last axis = n).
+ * @param n: Length of last axis.
+ * @param num_elements: Product of all axes except the last.
+ * @param nthreads: Number of OpenMP threads to use.
+ * @param out_scale: Output scale factor (xscale * yscale).
+ *
+ * @return: Freshly-allocated double array of length num_elements.
  */
-static double *simps_last_axis_scaled_parallel(Float *x, Float *y,
-                                                npy_intp n,
-                                                npy_intp num_elements,
-                                                int nthreads,
-                                                double *out_scale) {
-  /* --- find xscale (1D, serial) --- */
+static double *simps_last_axis_scaled_parallel(Float *x, Float *y, npy_intp n,
+                                               npy_intp num_elements,
+                                               int nthreads,
+                                               double *out_scale) {
+
+  /* Find the maximum absolute value in x for scaling (1D scan). Sufficiently
+   * cheap to do in a simple loop. */
   double xscale = 0.0;
   for (npy_intp j = 0; j < n; ++j) {
     double ax = (double)x[j];
-    if (ax < 0.0) ax = -ax;
-    if (ax > xscale) xscale = ax;
+    if (ax < 0.0)
+      ax = -ax;
+    if (ax > xscale)
+      xscale = ax;
   }
 
-  /* --- find yscale (parallel max reduction) --- */
+  /* Find the maximum absolute value in y for scaling (parallel reduction) */
   npy_intp total = num_elements * n;
   double yscale = 0.0;
 #pragma omp parallel for num_threads(nthreads) reduction(max : yscale)
   for (npy_intp k = 0; k < total; ++k) {
     double ay = (double)y[k];
-    if (ay < 0.0) ay = -ay;
-    if (ay > yscale) yscale = ay;
+    if (ay < 0.0)
+      ay = -ay;
+    if (ay > yscale)
+      yscale = ay;
   }
 
+  /* Output the combined scale factor for caller's reference. */
   *out_scale = xscale * yscale;
 
+  /* If either scale is zero, the result is zero so move along. */
   if (xscale == 0.0 || yscale == 0.0) {
     return (double *)calloc(num_elements, sizeof(double));
   }
 
+  /* Otherwise, there's work to do. Get the result and scaling ready. */
   double inv_xs = 1.0 / xscale;
   double inv_ys = 1.0 / yscale;
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
-  /* Each row writes to integral[i] — no race, no reduction needed. */
+  /* Each row writes to integral[i] — no race conditions. Parallelize over
+   * rows with OpenMP and compute Simpson's integral with double casting
+   * for stability. */
 #pragma omp parallel for num_threads(nthreads)
   for (npy_intp i = 0; i < num_elements; ++i) {
-    if (n < 2) continue;
+    if (n < 2)
+      continue;
 
     /* n==2: only one interval, fall back to trapezoid (matches scipy). */
     if (n == 2) {
@@ -808,16 +942,16 @@ static double *simps_last_axis_scaled_parallel(Float *x, Float *y,
 
     /* Generalised Simpson panels (correct for non-uniform spacing). */
     for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
-      npy_intp k  = 2 * j;
-      double   h0 = ((double)x[k + 1] - (double)x[k]) * inv_xs;
-      double   h1 = ((double)x[k + 2] - (double)x[k + 1]) * inv_xs;
-      double   hs = h0 + h1;
-      double   y0 = (double)y[i * n + k] * inv_ys;
-      double   y1 = (double)y[i * n + k + 1] * inv_ys;
-      double   y2 = (double)y[i * n + k + 2] * inv_ys;
-      sum += hs / 6.0 * (y0 * (2.0 - h1 / h0) +
-                          y1 * (hs * hs / (h0 * h1)) +
-                          y2 * (2.0 - h0 / h1));
+      npy_intp k = 2 * j;
+      double h0 = ((double)x[k + 1] - (double)x[k]) * inv_xs;
+      double h1 = ((double)x[k + 2] - (double)x[k + 1]) * inv_xs;
+      double hs = h0 + h1;
+      double y0 = (double)y[i * n + k] * inv_ys;
+      double y1 = (double)y[i * n + k + 1] * inv_ys;
+      double y2 = (double)y[i * n + k + 2] * inv_ys;
+      sum += hs / 6.0 *
+             (y0 * (2.0 - h1 / h0) + y1 * (hs * hs / (h0 * h1)) +
+              y2 * (2.0 - h0 / h1));
     }
 
     /* Even n (odd intervals): Cartwright correction on last 3 points. */
@@ -825,11 +959,11 @@ static double *simps_last_axis_scaled_parallel(Float *x, Float *y,
       double h0 = ((double)x[n - 2] - (double)x[n - 3]) * inv_xs;
       double h1 = ((double)x[n - 1] - (double)x[n - 2]) * inv_xs;
       double alpha = (2.0 * h1 * h1 + 3.0 * h0 * h1) / (6.0 * (h0 + h1));
-      double beta  = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
-      double eta   = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
+      double beta = (h1 * h1 + 3.0 * h0 * h1) / (6.0 * h0);
+      double eta = (h1 * h1 * h1) / (6.0 * h0 * (h0 + h1));
       sum += alpha * (double)y[i * n + n - 1] * inv_ys +
-             beta  * (double)y[i * n + n - 2] * inv_ys -
-             eta   * (double)y[i * n + n - 3] * inv_ys;
+             beta * (double)y[i * n + n - 2] * inv_ys -
+             eta * (double)y[i * n + n - 3] * inv_ys;
     }
 
     integral[i] = sum;
@@ -840,118 +974,56 @@ static double *simps_last_axis_scaled_parallel(Float *x, Float *y,
 #endif
 
 /**
- * @brief Simpson's integration over the final axis of a ND array.
+ * @brief Python binding for scaled Simpson's integration.
  *
- * @param xs 1D array of x values.
- * @param ys ND array of y values.
- * @param nthreads Number of threads to use.
- */
-static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
-  (void)self; /* Unused variable */
-
-  PyArrayObject *xs, *ys;
-  int nthreads;
-
-  /* Parse the input tuple */
-  if (!PyArg_ParseTuple(args, "O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
-                        &nthreads)) {
-    return NULL; /* Return NULL in case of parsing error */
-  }
-
-  /* Get the array dimensions. */
-  npy_intp ndim = PyArray_NDIM(ys);
-  npy_intp *shape = PyArray_SHAPE(ys);
-
-  /* Number of elements along the last axis */
-  npy_intp n = shape[ndim - 1];
-
-  /* Get the data pointer of the xs array */
-  Float *x = extract_data_float(xs, "xs");
-  if (x == NULL) {
-    return NULL; /* Type error already set */
-  }
-
-  /* Get the data pointer of the ys array */
-  Float *y = extract_data_float(ys, "ys");
-  if (y == NULL) {
-    return NULL; /* Type error already set */
-  }
-
-  /* Number of elements excluding the last axis */
-  npy_intp num_elements = PyArray_SIZE(ys) / n;
-
-  /* Compute the integral with the appropriate function. */
-  Float *integral;
-#ifdef WITH_OPENMP
-  if (nthreads > 1) {
-    integral = simps_last_axis_parallel(x, y, n, num_elements, nthreads);
-  } else {
-    integral = simps_last_axis_serial(x, y, n, num_elements);
-  }
-#else
-  integral = simps_last_axis_serial(x, y, n, num_elements);
-#endif
-
-  /* Construct the output. */
-  npy_intp result_shape[NPY_MAXDIMS];
-  for (npy_intp i = 0; i < ndim - 1; ++i) {
-    result_shape[i] = shape[i];
-  }
-  PyArrayObject *result =
-      wrap_array_to_numpy<Float>(ndim - 1, result_shape, integral);
-
-  /* Create the output object. */
-  if (result == NULL) {
-    free(integral); /* Free the allocated memory on error */
-    return NULL;    /* Return NULL in case of error */
-  }
-  PyObject *output = (PyObject *)result;
-
-  return output;
-}
-
-/**
- * @brief Scaled Simpson's integration over the final axis of an ND array.
+ * Integrates over the last axis of an ND array using Simpson's rule
+ * with automatic scaling. Returns (integral, scale) where the physical
+ * result is integral * scale.
  *
- * Fused version: same contract as trapz_last_axis_scaled_integration.
- * Returns a 2-tuple (float64 integral_array, scale).
+ * @param xs: 1D array of x values (Float dtype, C-contiguous).
+ * @param ys: ND array of y values (Float dtype, C-contiguous).
+ * @param nthreads: Number of threads to use.
+ *
+ * @return: Tuple (integral_array, scale) where integral_array is float64
+ *          and scale is a Python float.
  */
 static PyObject *simps_last_axis_scaled_integration(PyObject *self,
-                                                     PyObject *args) {
+                                                    PyObject *args) {
   (void)self;
 
+  /* Parse Python arguments: two arrays and an integer. */
   PyArrayObject *xs, *ys;
   int nthreads;
-
   if (!PyArg_ParseTuple(args, "O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
                         &nthreads)) {
     return NULL;
   }
 
+  /* Validate inputs and extract data pointers. */
   npy_intp ndim = PyArray_NDIM(ys);
   npy_intp *shape = PyArray_SHAPE(ys);
   npy_intp n = shape[ndim - 1];
-
   if (!ensure_float_array(xs, "xs")) {
     return NULL;
   }
   if (!ensure_float_array(ys, "ys")) {
     return NULL;
   }
-
   Float *x = extract_data_float(xs, "xs");
-  if (x == NULL) return NULL;
+  if (x == NULL)
+    return NULL;
   Float *y = extract_data_float(ys, "ys");
-  if (y == NULL) return NULL;
-
+  if (y == NULL)
+    return NULL;
   npy_intp num_elements = PyArray_SIZE(ys) / n;
 
+  /* Perform the integration with automatic scaling. */
   double scale = 0.0;
   double *integral;
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
-    integral = simps_last_axis_scaled_parallel(x, y, n, num_elements,
-                                               nthreads, &scale);
+    integral = simps_last_axis_scaled_parallel(x, y, n, num_elements, nthreads,
+                                               &scale);
   } else {
     integral = simps_last_axis_scaled_serial(x, y, n, num_elements, &scale);
   }
@@ -983,35 +1055,125 @@ static PyObject *simps_last_axis_scaled_integration(PyObject *self,
   return out;
 }
 
+/**
+ * @brief Python binding for weighted Simpson's integration.
+ *
+ * Computes ∫ y(x) * w(x) dx over the last axis using Simpson's rule with
+ * automatic scaling. Returns (integral, scale) where the physical result
+ * is integral * scale.
+ *
+ * @param xs: 1D array of x values (Float dtype, C-contiguous).
+ * @param ys: ND array of y values (Float dtype, C-contiguous).
+ * @param ws: 1D weight vector (Float dtype, C-contiguous, same length as xs).
+ * @param nthreads: Number of threads to use.
+ *
+ * @return: Tuple (integral_array, scale) where integral_array is float64
+ *          and scale is a Python float.
+ */
+static PyObject *simps_last_axis_weighted_integration(PyObject *self,
+                                                      PyObject *args) {
+  (void)self;
+
+  /* Parse Python arguments: three arrays and an integer. */
+  PyArrayObject *xs, *ys, *ws;
+  int nthreads;
+  if (!PyArg_ParseTuple(args, "O!O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
+                        &PyArray_Type, &ws, &nthreads)) {
+    return NULL;
+  }
+
+  /* Validate inputs and extract data pointers. */
+  npy_intp ndim = PyArray_NDIM(ys);
+  npy_intp *shape = PyArray_SHAPE(ys);
+  npy_intp n = shape[ndim - 1];
+  if (!ensure_float_array(xs, "xs"))
+    return NULL;
+  if (!ensure_float_array(ys, "ys"))
+    return NULL;
+  if (!ensure_float_array(ws, "ws"))
+    return NULL;
+  Float *x = extract_data_float(xs, "xs");
+  if (x == NULL)
+    return NULL;
+  Float *y = extract_data_float(ys, "ys");
+  if (y == NULL)
+    return NULL;
+  Float *w = extract_data_float(ws, "ws");
+  if (w == NULL)
+    return NULL;
+  npy_intp num_elements = PyArray_SIZE(ys) / n;
+
+  /* Perform the weighted integration with automatic scaling. */
+  double scale = 0.0;
+  double *integral;
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    integral = simps_last_axis_weighted_parallel(x, y, w, n, num_elements,
+                                                 nthreads, &scale);
+  } else {
+    integral =
+        simps_last_axis_weighted_serial(x, y, w, n, num_elements, &scale);
+  }
+#else
+  integral = simps_last_axis_weighted_serial(x, y, w, n, num_elements, &scale);
+#endif
+
+  /* Wrap the double result into a NumPy float64 array. */
+  npy_intp result_shape[NPY_MAXDIMS];
+  for (npy_intp i = 0; i < ndim - 1; ++i) {
+    result_shape[i] = shape[i];
+  }
+  PyArrayObject *result =
+      wrap_array_to_numpy<double>(ndim - 1, result_shape, integral);
+  if (result == NULL) {
+    free(integral);
+    return NULL;
+  }
+
+  /* Return (integral_array, scale) tuple. */
+  PyObject *scale_obj = PyFloat_FromDouble(scale);
+  if (scale_obj == NULL) {
+    Py_DECREF(result);
+    return NULL;
+  }
+  PyObject *out = PyTuple_Pack(2, (PyObject *)result, scale_obj);
+  Py_DECREF(result);
+  Py_DECREF(scale_obj);
+  return out;
+}
+
+/* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef IntegrationMethods[] = {
-    {"trapz_last_axis", trapz_last_axis_integration, METH_VARARGS,
-     "Trapezoidal integration with OpenMP"},
     {"trapz_last_axis_scaled", trapz_last_axis_scaled_integration, METH_VARARGS,
-     "Scaled trapezoidal integration (fused scale+integrate) with OpenMP"},
-    {"simps_last_axis", simps_last_axis_integration, METH_VARARGS,
-     "Simpson's integration with OpenMP"},
+     "Scaled trapezoidal integration with OpenMP parallelization."},
     {"simps_last_axis_scaled", simps_last_axis_scaled_integration, METH_VARARGS,
-     "Scaled Simpson's integration (fused scale+integrate) with OpenMP"},
+     "Scaled Simpson's integration with OpenMP parallelization."},
     {"trapz_last_axis_weighted", trapz_last_axis_weighted_integration,
      METH_VARARGS,
-     "Weighted scaled trapezoidal integration (fused y*w+scale+integrate)"},
+     "Weighted scaled trapezoidal integration with OpenMP parallelization."},
+    {"simps_last_axis_weighted", simps_last_axis_weighted_integration,
+     METH_VARARGS,
+     "Weighted scaled Simpson's integration with OpenMP parallelization."},
     {NULL, NULL, 0, NULL}};
 
+/* Make this importable. */
 static struct PyModuleDef integrationmodule = {
     PyModuleDef_HEAD_INIT,
-    "integration", /* name of module */
-    NULL,
-    -1,
-    IntegrationMethods,
-    NULL,
-    NULL,
-    NULL,
-    NULL};
+    "integration",                                              /* m_name */
+    "A module for optimized numerical integration operations.", /* m_doc */
+    -1,                                                         /* m_size */
+    IntegrationMethods,                                         /* m_methods */
+    NULL,                                                       /* m_reload */
+    NULL,                                                       /* m_traverse */
+    NULL,                                                       /* m_clear */
+    NULL,                                                       /* m_free */
+};
 
 PyMODINIT_FUNC PyInit_integration(void) {
+  PyObject *m = PyModule_Create(&integrationmodule);
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     return NULL;
   }
-  return PyModule_Create(&integrationmodule);
+  return m;
 }

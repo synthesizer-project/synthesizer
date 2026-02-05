@@ -880,15 +880,19 @@ class Sed:
                 lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
 
         else:
-            # Luminosity integral
+            # Compute using weighted integration in a single pass:
+            # lum = ∫ lnu * (transmission/nu) dnu
+            # tran = ∫ (transmission/nu) dnu
+            weights = transmission / self.nu
             lum = integrate_last_axis(
                 self._nu,
-                self._lnu * transmission / self.nu,
+                self._lnu,
+                weights=weights,
                 nthreads=nthreads,
                 method=integration_method,
             )
 
-            # Transmission integral
+            # Also need the transmission integral for normalization
             tran = integrate_last_axis(
                 self._nu,
                 transmission / self.nu,

@@ -10,7 +10,7 @@ from synthesizer.extensions.doppler_particle_spectra import (
     compute_part_seds_with_vel_shift,
 )
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
-from synthesizer.extensions.integration import trapz_last_axis
+from synthesizer.extensions.integration import trapz_last_axis_scaled
 from synthesizer.extensions.particle_spectra import compute_particle_seds
 from synthesizer.extensions.sfzh import compute_sfzh
 from synthesizer.imaging.extensions.circular_aperture import (
@@ -29,7 +29,7 @@ def test_integration_rejects_wrong_dtype():
     ys = np.array([[0.0, 1.0, 4.0]], dtype=wrong_dtype)
 
     with pytest.raises(TypeError, match="incorrect dtype"):
-        trapz_last_axis(xs, ys, 1)
+        trapz_last_axis_scaled(xs, ys, 1)
 
 
 def test_integration_rejects_non_contiguous():
@@ -44,7 +44,7 @@ def test_integration_rejects_non_contiguous():
         pytest.skip("Could not create non-contiguous test array")
 
     with pytest.raises(ValueError, match="C contiguous"):
-        trapz_last_axis(xs, ys, 1)
+        trapz_last_axis_scaled(xs, ys, 1)
 
 
 def test_make_img_rejects_wrong_dtype():

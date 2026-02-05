@@ -35,11 +35,7 @@ from synthesizer._version import __version__
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.integrate import (
-    integrate_last_axis,
-    integrate_weighted,
-    trapezoid,
-)
+from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.precision import _NUMPY_DTYPE, accept_precisions
 
 
@@ -1925,8 +1921,8 @@ class Filter:
         # Numerator: ∫ arr(x) * t(x) / x  dx
         # The fused C kernel reads arr and weights_full in a single pass —
         # no compress, no temporary multiply/divide arrays.
-        sum_per_x = integrate_weighted(
-            xs, arr, self._cached_weights_full, nthreads=nthreads
+        sum_per_x = integrate_last_axis(
+            xs, arr, weights=self._cached_weights_full, nthreads=nthreads
         )
 
         return sum_per_x / self._cached_denom
