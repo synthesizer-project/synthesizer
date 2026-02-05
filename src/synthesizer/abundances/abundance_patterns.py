@@ -179,7 +179,7 @@ class Abundances:
                     raise exceptions.UnrecognisedOption(
                         "Depletion model not recognised!"
                     )
-           
+
             # Check if self.depletion_model is instantiated and
             # if not initialise class
             if isinstance(self.depletion_model, type):
