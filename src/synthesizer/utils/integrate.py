@@ -16,6 +16,7 @@ from synthesizer import exceptions
 from synthesizer.extensions.integration import (
     simps_last_axis_scaled,
     trapz_last_axis_scaled,
+    trapz_last_axis_weighted,
 )
 from synthesizer.utils.precision import _NUMPY_DTYPE
 
@@ -99,6 +100,52 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         _ys = np.ascontiguousarray(_ys, dtype=dtype)
 
     integral, scale = simps_last_axis_scaled(_xs, _ys, nthreads)
+    if scale == 0.0:
+        if _ys.ndim > 1:
+            return np.zeros(_ys.shape[:-1], dtype=np.float64)
+        return np.float64(0.0)
+    integral *= scale
+    return integral
+
+
+def integrate_weighted(xs, ys, weights, nthreads=1):
+    """Integrate ys * weights over the last axis using trapezoid rule.
+
+    Fused kernel: computes ∫ ys(x)*weights(x) dx in a single C pass.
+    Scaling, multiplication, and integration are all done inside C so
+    that no intermediate Python arrays are allocated.
+
+    Args:
+        xs (array-like):
+            1D x-values (length n).
+        ys (array-like):
+            ND y-values; last axis has length n.
+        weights (array-like):
+            1D weight vector (length n).  The integrand is ys * weights.
+        nthreads (int):
+            Number of threads.  -1 means all available.
+
+    Returns:
+        np.ndarray (float64):
+            Integrated values, shape = ys.shape[:-1].
+    """
+    if nthreads == -1:
+        nthreads = os.cpu_count()
+
+    dtype = _NUMPY_DTYPE
+
+    _xs = np.asarray(xs)
+    _ys = np.asarray(ys)
+    _ws = np.asarray(weights)
+
+    if _xs.dtype != dtype or not _xs.flags["C_CONTIGUOUS"]:
+        _xs = np.ascontiguousarray(_xs, dtype=dtype)
+    if _ys.dtype != dtype or not _ys.flags["C_CONTIGUOUS"]:
+        _ys = np.ascontiguousarray(_ys, dtype=dtype)
+    if _ws.dtype != dtype or not _ws.flags["C_CONTIGUOUS"]:
+        _ws = np.ascontiguousarray(_ws, dtype=dtype)
+
+    integral, scale = trapz_last_axis_weighted(_xs, _ys, _ws, nthreads)
     if scale == 0.0:
         if _ys.ndim > 1:
             return np.zeros(_ys.shape[:-1], dtype=np.float64)

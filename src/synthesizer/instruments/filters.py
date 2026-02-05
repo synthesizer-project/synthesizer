@@ -35,7 +35,11 @@ from synthesizer._version import __version__
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.integrate import (
+    integrate_last_axis,
+    integrate_weighted,
+    trapezoid,
+)
 from synthesizer.utils.precision import _NUMPY_DTYPE, accept_precisions
 
 
@@ -1864,8 +1868,15 @@ class Filter:
                     nthreads=nthreads,
                     method=integration_method,
                 )
+                # Full-length weight vector: t/xs inside the band, zero
+                # outside.  Passed to the fused C kernel so that no
+                # compress or intermediate multiply/divide arrays are
+                # needed on the hot path.
+                weights_full = np.zeros_like(xs)
+                weights_full[in_band] = t_in_band / xs_in_band
             else:
                 denom = None
+                weights_full = None
 
             # Store everything in the cache
             self._cached_denom = denom
@@ -1874,6 +1885,7 @@ class Filter:
             self._cached_in_band = in_band
             self._cached_xs_in_band = xs_in_band
             self._cached_t_in_band = t_in_band
+            self._cached_weights_full = weights_full
         else:
             t = self._cached_t
             in_band = self._cached_in_band
@@ -1891,11 +1903,17 @@ class Filter:
         # Store this observed frame transmission
         self._shifted_t = t
 
-        # Mask out wavelengths that don't contribute to this band
-        arr_in_band = arr.compress(in_band, axis=-1)
+        # If the filter has zero transmission (denom is None) return zero
+        # immediately — no array work needed.
+        if self._cached_denom is None:
+            return (
+                np.zeros(arr.shape[:-1], dtype=_NUMPY_DTYPE)
+                if arr.ndim > 1
+                else _NUMPY_DTYPE.type(0.0)
+            )
 
-        # Warn and exit if there are no array elements in this band
-        if arr_in_band.size == 0:
+        # Warn and return zero if the in-band slice is empty
+        if not np.any(in_band):
             if arr.shape[0] > 0:
                 warn(f"{self.filter_code} outside of emission array.")
             return (
@@ -1904,34 +1922,11 @@ class Filter:
                 else _NUMPY_DTYPE.type(0.0)
             )
 
-        # Multiply the array by the filter transmission curve
-        transmission = arr_in_band * t_in_band
-
-        # Ensure we actually have some transmission in this band, no point
-        # in calling the C extensions if not
-        if np.sum(transmission) == 0:
-            return (
-                np.zeros(arr.shape[:-1], dtype=_NUMPY_DTYPE)
-                if arr.ndim > 1
-                else _NUMPY_DTYPE.type(0.0)
-            )
-
-        # The denominator was already computed (and cached) above when we
-        # interpolated the transmission curve.  If it's None the filter has
-        # zero transmission — return zero.
-        if self._cached_denom is None:
-            return (
-                np.zeros(arr.shape[:-1], dtype=_NUMPY_DTYPE)
-                if arr.ndim > 1
-                else _NUMPY_DTYPE.type(0.0)
-            )
-
-        # Numerator: integrate (arr * t) / xs over the in-band region
-        sum_per_x = integrate_last_axis(
-            xs_in_band,
-            transmission / xs_in_band,
-            nthreads=nthreads,
-            method=integration_method,
+        # Numerator: ∫ arr(x) * t(x) / x  dx
+        # The fused C kernel reads arr and weights_full in a single pass —
+        # no compress, no temporary multiply/divide arrays.
+        sum_per_x = integrate_weighted(
+            xs, arr, self._cached_weights_full, nthreads=nthreads
         )
 
         return sum_per_x / self._cached_denom
