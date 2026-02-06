@@ -249,3 +249,142 @@ def test_invalid_method():
 
     with pytest.raises(Exception):  # Should raise InconsistentArguments
         integrate.integrate_last_axis(xs, ys, method="invalid_method")
+
+
+def test_auto_nthreads():
+    """Test that nthreads=-1 uses all available threads."""
+    dtype = precision.get_numpy_dtype()
+    xs = np.linspace(0, 10, 1000).astype(dtype)
+    ys = np.sin(xs).astype(dtype)
+
+    # Results should be identical regardless of thread count
+    result_serial = integrate.integrate_last_axis(
+        xs, ys, nthreads=1, method="trapz"
+    )
+    result_auto = integrate.integrate_last_axis(
+        xs, ys, nthreads=-1, method="trapz"
+    )
+
+    np.testing.assert_allclose(result_serial, result_auto, rtol=1e-10)
+
+
+def test_zero_result_1d():
+    """Test integration with near-zero result in 1D case."""
+    dtype = precision.get_numpy_dtype()
+    xs = np.linspace(0, 2 * np.pi, 1000).astype(dtype)
+    ys = np.sin(xs).astype(dtype)
+
+    result = integrate.integrate_last_axis(xs, ys, nthreads=1, method="trapz")
+
+    # sin integrated over 0 to 2π should be ~0 (within numerical error)
+    np.testing.assert_allclose(result, 0.0, atol=2e-8)
+    # Verify it's a scalar (1D case)
+    assert np.isscalar(result) or result.ndim == 0
+
+
+def test_zero_result_multidim():
+    """Test integration with near-zero result in multidimensional case."""
+    dtype = precision.get_numpy_dtype()
+    xs = np.linspace(0, 2 * np.pi, 1000).astype(dtype)
+    ys = np.sin(xs).astype(dtype)
+    ys = np.tile(ys, (10, 1))  # Make 2D
+
+    result = integrate.integrate_last_axis(xs, ys, nthreads=1, method="trapz")
+
+    # All rows should integrate to approximately zero
+    np.testing.assert_allclose(result, np.zeros(10), atol=2e-8)
+    # Verify shape
+    assert result.shape == (10,)
+
+
+def test_weighted_1d_consistency():
+    """Test that weighted integration is consistent across methods."""
+    dtype = precision.get_numpy_dtype()
+    xs = np.linspace(0, np.pi, 1000).astype(dtype)
+    ys = (xs**2).astype(dtype)
+    weights = np.exp(-xs / 2).astype(dtype)
+
+    result_trapz = integrate.integrate_last_axis(
+        xs, ys, weights=weights, nthreads=1, method="trapz"
+    )
+    result_simps = integrate.integrate_last_axis(
+        xs, ys, weights=weights, nthreads=1, method="simps"
+    )
+
+    # Both methods should give similar results for smooth functions
+    np.testing.assert_allclose(result_trapz, result_simps, rtol=1e-3)
+
+
+def test_asymmetric_weights():
+    """Test weighted integration with asymmetric weights."""
+    dtype = precision.get_numpy_dtype()
+    xs = np.linspace(0, 10, 1000).astype(dtype)
+    ys = np.ones_like(xs).astype(dtype)
+    weights = xs.copy().astype(dtype)  # Linear weights
+
+    # Integral of weight(x) over domain should match the integral of weights
+    result = integrate.integrate_last_axis(
+        xs, ys, weights=weights, nthreads=1, method="trapz"
+    )
+    expected = integrate.integrate_last_axis(
+        xs, weights, nthreads=1, method="trapz"
+    )
+
+    np.testing.assert_allclose(result, expected, rtol=1e-10)
+
+
+def test_integration_parallel_consistency():
+    """Test that parallel integration gives same results as serial."""
+    dtype = precision.get_numpy_dtype()
+    xs = np.linspace(0, 10, 5000).astype(dtype)
+    ys = np.random.rand(50, 5000).astype(dtype)
+    weights = np.random.rand(5000).astype(dtype)
+
+    # Test both methods with both thread counts
+    for method in ["trapz", "simps"]:
+        # Unweighted
+        result_serial = integrate.integrate_last_axis(
+            xs, ys, nthreads=1, method=method
+        )
+        result_parallel = integrate.integrate_last_axis(
+            xs, ys, nthreads=4, method=method
+        )
+        np.testing.assert_allclose(result_serial, result_parallel, rtol=1e-10)
+
+        # Weighted
+        result_serial = integrate.integrate_last_axis(
+            xs, ys, weights=weights, nthreads=1, method=method
+        )
+        result_parallel = integrate.integrate_last_axis(
+            xs, ys, weights=weights, nthreads=4, method=method
+        )
+        np.testing.assert_allclose(result_serial, result_parallel, rtol=1e-10)
+
+
+def test_constant_function_integral():
+    """Test integration of constant functions."""
+    dtype = precision.get_numpy_dtype()
+
+    # Test case: constant function c over [a, b] should integrate to c*(b-a)
+    a, b, c = 0.0, 5.0, 2.0
+    xs = np.linspace(a, b, 1000).astype(dtype)
+    ys = np.full_like(xs, c).astype(dtype)
+
+    result = integrate.integrate_last_axis(xs, ys, nthreads=1, method="trapz")
+    expected = c * (b - a)
+
+    np.testing.assert_allclose(result, expected, rtol=1e-5)
+
+
+def test_linear_function_integral():
+    """Test integration of linear functions."""
+    dtype = precision.get_numpy_dtype()
+
+    # Test case: f(x) = x over [0, 10] should integrate to 50
+    xs = np.linspace(0, 10, 1000).astype(dtype)
+    ys = xs.copy().astype(dtype)
+
+    result = integrate.integrate_last_axis(xs, ys, nthreads=1, method="trapz")
+    expected = 50.0
+
+    np.testing.assert_allclose(result, expected, rtol=1e-4)
