@@ -34,39 +34,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
 from synthesizer.utils.precision import (
     get_integer_dtype,
-    get_numpy_dtype,
 )
-
-
-def _max_abs_value(values):
-    data = values.value if hasattr(values, "value") else np.asarray(values)
-    if data.size == 0:
-        return 0.0
-    data = np.asarray(data, dtype=np.float64)
-    max_val = np.nanmax(np.abs(data))
-    if not np.isfinite(max_val):
-        return np.inf
-    return float(max_val)
-
-
-def _line_weight_scale(weight, line_lum_grid, line_cont_grid):
-    dtype = get_numpy_dtype()
-    if dtype != np.dtype(np.float32):
-        return 1.0
-
-    max_weight = _max_abs_value(weight)
-    max_grid = max(
-        _max_abs_value(line_lum_grid),
-        _max_abs_value(line_cont_grid),
-    )
-    if max_weight == 0.0 or max_grid == 0.0:
-        return 1.0
-
-    max_val = float(np.finfo(dtype).max)
-    product = max_weight * max_grid
-    if not np.isfinite(product) or product <= max_val:
-        return 1.0
-    return float(product / max_val)
 
 
 class Extractor(ABC):
@@ -144,7 +112,6 @@ class Extractor(ABC):
         self._weight_var = grid._weight_var
 
         # Attach the spectra and line grids to the Extractor object
-
         if extract in grid.available_spectra_emissions:
             self._spectra_grid = grid.spectra[extract]
         if grid.lines_available:
@@ -479,10 +446,6 @@ class IntegratedParticleExtractor(Extractor):
         line_cont_grid = self._line_cont_grid
         grid_axes = tuple(self._grid_axes)
         extracted = tuple(extracted)
-        scale = _line_weight_scale(weight, line_lum_grid, line_cont_grid)
-        if scale > 1.0:
-            weight = weight / np.asarray(scale, dtype=weight.dtype)
-            grid_weights = None
         lum, grid_weights = compute_integrated_sed(
             line_lum_grid,
             grid_axes,
@@ -519,18 +482,13 @@ class IntegratedParticleExtractor(Extractor):
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
         if (
-            scale == 1.0
-            and mask is None
+            mask is None
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
             emitter._grid_weights[grid_assignment_method.lower()][
                 self._grid.grid_name
             ] = grid_weights
-
-        if scale > 1.0:
-            lum = lum.astype(np.float64) * scale
-            cont = cont.astype(np.float64) * scale
 
         return LineCollection(
             line_ids=self._grid.line_ids,
@@ -1011,9 +969,6 @@ class ParticleExtractor(Extractor):
         line_cont_grid = self._line_cont_grid
         grid_axes = tuple(self._grid_axes)
         extracted = tuple(extracted)
-        scale = _line_weight_scale(weight, line_lum_grid, line_cont_grid)
-        if scale > 1.0:
-            weight = weight / np.asarray(scale, dtype=weight.dtype)
         lum, integrated_lum = compute_particle_seds(
             line_lum_grid,
             grid_axes,
@@ -1046,12 +1001,6 @@ class ParticleExtractor(Extractor):
         )
 
         # Make the LineCollection objects themselves
-        if scale > 1.0:
-            lum = lum.astype(np.float64) * scale
-            integrated_lum = integrated_lum.astype(np.float64) * scale
-            cont = cont.astype(np.float64) * scale
-            integrated_cont = integrated_cont.astype(np.float64) * scale
-
         part_line = LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
