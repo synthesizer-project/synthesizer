@@ -20,7 +20,7 @@ import copy
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Mpc, Msun, Myr, rad, unyt_quantity
+from unyt import Mpc, Msun, Myr, pc, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -1641,6 +1641,150 @@ class Galaxy(BaseGalaxy):
             return stellar_cube
         toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
+
+    def get_projected_angular_coordinates(self, cosmo, los_dists=None):
+        """Get projected angular coordinates for all attached components.
+
+        This is the galaxy-level wrapper around the per-component
+        ``Particles.get_projected_angular_coordinates`` method. It iterates
+        over every component (stars, gas, black_holes) that is attached to
+        this galaxy and returns their projected angular coordinates in a
+        single dictionary.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+            los_dists (dict, optional):
+                A dictionary of pre-computed line-of-sight distance arrays
+                keyed by component name (``"stars"``, ``"gas"``,
+                ``"black_holes"``).  When provided for a given component
+                the cosmology-based calculation is skipped for that
+                component.  If ``None`` (default) all distances are
+                computed internally.
+
+        Returns:
+            dict: A dictionary mapping component names to their projected
+                angular coordinate arrays (each an ``(N, 3)`` array in
+                radians with the z-column zeroed).
+        """
+        if los_dists is None:
+            los_dists = {}
+
+        results = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+            results[name] = component.get_projected_angular_coordinates(
+                cosmo=cosmo,
+                los_dists=los_dists.get(name),
+            )
+        return results
+
+    def get_projected_angular_smoothing_lengths(self, cosmo, los_dists=None):
+        """Get projected angular smoothing lengths for all components.
+
+        This is the galaxy-level wrapper around the per-component
+        ``Particles.get_projected_angular_smoothing_lengths`` method. It
+        iterates over every component (stars, gas, black_holes) that is
+        attached to this galaxy and returns their projected angular
+        smoothing lengths in a single dictionary.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+            los_dists (dict, optional):
+                A dictionary of pre-computed line-of-sight distance arrays
+                keyed by component name (``"stars"``, ``"gas"``,
+                ``"black_holes"``).  When provided for a given component
+                the cosmology-based calculation is skipped for that
+                component.  If ``None`` (default) all distances are
+                computed internally.
+
+        Returns:
+            dict: A dictionary mapping component names to their projected
+                angular smoothing length arrays (each an ``(N,)`` array in
+                radians).
+        """
+        if los_dists is None:
+            los_dists = {}
+
+        results = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+            results[name] = component.get_projected_angular_smoothing_lengths(
+                cosmo=cosmo,
+                los_dists=los_dists.get(name),
+            )
+        return results
+
+    def get_projected_angular_imaging_props(self, cosmo):
+        """Get projected angular imaging properties for all components.
+
+        This is a galaxy-level convenience method that mirrors the
+        per-component ``Particles.get_projected_angular_imaging_props``.
+        It pre-computes the per-particle line-of-sight distances for each
+        attached component exactly once and then passes them into both
+        ``get_projected_angular_coordinates`` and
+        ``get_projected_angular_smoothing_lengths``, avoiding redundant
+        angular diameter distance calculations.
+
+        The angular diameter distance is the same for every component
+        (determined solely by the galaxy redshift) but each component has
+        its own particle z-offsets, so the full ``los_dists`` array is
+        built per component.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+
+        Returns:
+            dict: A dictionary mapping each attached component name
+                (``"stars"``, ``"gas"``, ``"black_holes"``) to a tuple of
+                ``(projected_angular_coords, projected_angular_smls)``.
+        """
+        # The angular diameter distance is shared — it depends only on the
+        # galaxy redshift
+        ang_diam_dist = self.get_angular_diameter_distance(cosmo)
+
+        # Pre-compute per-component los_dists so we only pay for one
+        # angular diameter distance call total
+        los_dists = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+
+            # Combine the angular diameter distance with the particle
+            # z-offsets to get the full line-of-sight distances
+            cent_coords = component.centered_coordinates
+            dists = ang_diam_dist + cent_coords[:, 2]
+
+            # At redshift 0 shift so the closest particle sits at 10 pc
+            if self.redshift == 0.0:
+                z_min = np.min(cent_coords[:, 2])
+                dists += np.abs(z_min) + 10 * pc
+
+            los_dists[name] = dists
+
+        # Delegate to the two galaxy-level wrappers, passing pre-computed
+        # distances to avoid any repeat work
+        coords = self.get_projected_angular_coordinates(
+            cosmo=cosmo,
+            los_dists=los_dists,
+        )
+        smls = self.get_projected_angular_smoothing_lengths(
+            cosmo=cosmo,
+            los_dists=los_dists,
+        )
+
+        # Combine into per-component tuples
+        return {name: (coords[name], smls[name]) for name in coords}
 
     @accepts(phi=rad, theta=rad)
     def rotate_particles(

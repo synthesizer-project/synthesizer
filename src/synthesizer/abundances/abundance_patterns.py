@@ -20,6 +20,7 @@ import numpy as np
 from synthesizer import exceptions
 from synthesizer.abundances import (
     abundance_scalings,
+    depletion_models,
     elements,
     reference_abundance_patterns,
 )
@@ -55,6 +56,8 @@ class Abundances:
             The a synthesizer.depletion_models object or dictionary of
             depletion. Optional initialisation argument. Defaults to
             None.
+        depletion_scale (float):
+            A scaling factor to apply to the depletion pattern.
         helium_mass_fraction (float):
             The helium mass fraction (more commonly denoted as "Y").
         hydrogen_mass_fraction (float):
@@ -84,6 +87,7 @@ class Abundances:
         reference=reference_abundance_patterns.GalacticConcordance,
         depletion_pattern=None,
         depletion_model=None,
+        depletion_scale=None,
     ):
         """Initialise an abundance pattern.
 
@@ -107,6 +111,8 @@ class Abundances:
                 The depletion pattern
             depletion_model (class):
                 An instance of a synthesizer.depletion_models class.
+            depletion_scale (float):
+                A scaling factor to apply to the depletion model.
         """
         # Raise an exception if oxygen_to_hydrogen is used (not yet fully
         # implemented)
@@ -164,6 +170,27 @@ class Abundances:
 
         # Otherwise, if a depletion_model is provided...
         elif depletion_model:
+            if isinstance(depletion_model, str):
+                if depletion_model in depletion_models.available_patterns:
+                    self.depletion_model = getattr(
+                        depletion_models, depletion_model
+                    )
+                else:
+                    raise exceptions.UnrecognisedOption(
+                        "Depletion model not recognised!"
+                    )
+
+            # Check if self.depletion_model is instantiated and
+            # if not initialise class
+            if isinstance(self.depletion_model, type):
+                if depletion_scale is not None:
+                    self.depletion_model = self.depletion_model(
+                        scale=depletion_scale
+                    )
+                else:
+                    self.depletion_model = self.depletion_model()
+
+            # Get the depletion pattern from the depletion model
             self.depletion_pattern = self.depletion_model.depletion
 
         # If abundance pattern is provided as a string use this to extract the
