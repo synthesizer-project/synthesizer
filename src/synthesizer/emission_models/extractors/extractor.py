@@ -33,6 +33,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
 from synthesizer.utils.precision import (
+    _NUMPY_DTYPE,
     get_integer_dtype,
 )
 
@@ -396,6 +397,15 @@ class IntegratedParticleExtractor(Extractor):
                 because the check is extreme expensive.
         """
         start = tic()
+
+        # Lines must use double precision for now because of overflows
+        if _NUMPY_DTYPE == np.dtype("float32"):
+            raise exceptions.PrecisionError(
+                "Lines must use double precision for now because of overflows "
+                "in the standard line luminosity/continuum unit system. "
+                "Install without SINGLE_PRECISION and pester the devs to find "
+                "a better solution to this issue."
+            )
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -900,6 +910,15 @@ class ParticleExtractor(Extractor):
                 because the check is extreme expensive.
         """
         start = tic()
+
+        # Lines must use double precision for now because of overflows
+        if _NUMPY_DTYPE == np.dtype("float32"):
+            raise exceptions.PrecisionError(
+                "Lines must use double precision for now because of overflows "
+                "in the standard line luminosity/continuum unit system. "
+                "Install without SINGLE_PRECISION and pester the devs to find "
+                "a better solution to this issue."
+            )
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
