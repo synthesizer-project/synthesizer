@@ -23,6 +23,14 @@ from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import LineCollection
 from synthesizer.emissions.line_ratios import ratios
 from synthesizer.emissions.utils import O2, O3, Hb, O3b, O3r
+from synthesizer.utils.precision import get_precision
+
+# Skip all line tests when using SINGLE_PRECISION (lines require double
+# precision)
+pytestmark = pytest.mark.skipif(
+    get_precision() == "float32",
+    reason="Lines require double precision. Install without SINGLE_PRECISION.",
+)
 
 
 class TestLineCollectionInitialization:

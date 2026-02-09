@@ -22,6 +22,7 @@ from synthesizer.pipeline.pipeline_utils import (
     unify_dict_structure_across_ranks,
 )
 from synthesizer.units import Quantity
+from synthesizer.utils.precision import get_precision
 
 
 @pytest.fixture
@@ -636,6 +637,12 @@ class TestPipelineOperations:
             count_and_check_dict_recursive(pipeline_with_galaxies.fluxes) > 0
         ), "No fluxes were calculated"
 
+    @pytest.mark.skipif(
+        get_precision() == "float32",
+        reason=(
+            "Lines require double precision. Install without SINGLE_PRECISION."
+        ),
+    )
     def test_run_pipeline_lines(
         self,
         test_grid,
@@ -670,6 +677,12 @@ class TestPipelineOperations:
             "Line IDs not included"
         )
 
+    @pytest.mark.skipif(
+        get_precision() == "float32",
+        reason=(
+            "Lines require double precision. Install without SINGLE_PRECISION."
+        ),
+    )
     def test_run_pipeline_lines_flux(
         self,
         test_grid,
@@ -704,6 +717,12 @@ class TestPipelineOperations:
             "Line wavelengths not calculated"
         )
 
+    @pytest.mark.skipif(
+        get_precision() == "float32",
+        reason=(
+            "Lines require double precision. Install without SINGLE_PRECISION."
+        ),
+    )
     def test_run_pipeline_lines_luminosity_subset(
         self,
         test_grid,
