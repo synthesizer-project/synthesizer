@@ -10,7 +10,7 @@ This directory contains profiling scripts for Synthesizer, organized into three 
 
 ## Pipeline Profiling (`pipeline/`)
 
-Compare timing and memory performance across branches, precision settings, or other configurations. Use these to measure performance impact of code changes.
+Compare timing and memory performance across branches, precision settings, or other configurations. Use these to measure performance impact of code changes across various operations include in a `Pipeline` run.
 
 ### Quick Start: Compare Branches
 
@@ -41,17 +41,20 @@ python profiling/pipeline/analyze_timing.py \
 Profile pipeline execution time on current branch.
 
 **Usage:**
+
 ```bash
 python profiling/pipeline/profile_timing.py --basename "run_name" [--nparticles 1000] [--ngalaxies 10]
 ```
 
 **Arguments:**
+
 - `--basename` (required): Name for this profiling run
 - `--nparticles` (optional, default 1000): Number of particles per galaxy
 - `--ngalaxies` (optional, default 10): Number of galaxies
 - `--seed` (optional, default 42): Random seed
 
 **Output:**
+
 - `profiling/outputs/timing/{basename}/timing.csv`
 
 #### `profile_memory.py` - Memory Sampling
@@ -59,11 +62,13 @@ python profiling/pipeline/profile_timing.py --basename "run_name" [--nparticles 
 Profile memory usage with 1000 Hz continuous sampling.
 
 **Usage:**
+
 ```bash
 python profiling/pipeline/profile_memory.py --basename "run_name" [--nparticles 1000] [--ngalaxies 10]
 ```
 
 **Output:**
+
 - `profiling/outputs/memory/{basename}/memory.csv` (all raw 1000 Hz samples)
 
 #### `analyze_timing.py` - Compare Timing Results
@@ -71,6 +76,7 @@ python profiling/pipeline/profile_memory.py --basename "run_name" [--nparticles 
 Compare execution times across 2 or more runs.
 
 **Usage:**
+
 ```bash
 python profiling/pipeline/analyze_timing.py \
   --inputs timing1.csv timing2.csv [timing3.csv ...] \
@@ -79,6 +85,7 @@ python profiling/pipeline/analyze_timing.py \
 ```
 
 **Output:**
+
 - Stacked bar chart: `timing_comparison.png`
 - Summary statistics: `timing_summary.txt`
 
@@ -87,6 +94,7 @@ python profiling/pipeline/analyze_timing.py \
 Compare memory usage across 2 or more runs.
 
 **Usage:**
+
 ```bash
 python profiling/pipeline/analyze_memory.py \
   --inputs memory1.csv memory2.csv [memory3.csv ...] \
@@ -95,6 +103,7 @@ python profiling/pipeline/analyze_memory.py \
 ```
 
 **Output:**
+
 - Memory timelines overlay: `memory_comparison.png`
 - Summary statistics: `memory_summary.txt`
 
@@ -103,6 +112,7 @@ python profiling/pipeline/analyze_memory.py \
 Compare HDF5 output files and validate numerical precision.
 
 **Usage:**
+
 ```bash
 python profiling/pipeline/validate_precision.py \
   --inputs output1.h5 output2.h5 [output3.h5 ...] \
@@ -111,30 +121,10 @@ python profiling/pipeline/validate_precision.py \
 ```
 
 **Tolerance Levels:**
+
 - `default`: rtol=1e-6, atol=1e-8
 - `loose`: rtol=1e-4, atol=1e-6
 - `tight`: rtol=1e-7, atol=1e-9
-
-#### `compare_precision_builds.sh` - Automated Wrapper
-
-Automatically profile and compare three configurations:
-- main branch (double precision)
-- single-precision-option branch (double precision)
-- single-precision-option branch (single precision)
-
-**Usage:**
-```bash
-bash profiling/pipeline/compare_precision_builds.sh [--nparticles 1000] [--ngalaxies 10]
-bash profiling/pipeline/compare_precision_builds.sh --skip-build --skip-analysis
-```
-
-**Arguments:**
-- `--nparticles` (default 1000): Particles per galaxy
-- `--ngalaxies` (default 10): Number of galaxies
-- `--skip-build`: Skip compilation (use existing builds)
-- `--skip-timing`: Skip timing profile
-- `--skip-memory`: Skip memory profile
-- `--skip-analysis`: Skip analysis phase
 
 ---
 
@@ -144,14 +134,14 @@ Strong scaling analysis showing how performance scales with thread count and par
 
 ### Available Profilers
 
-| Script | Purpose | Output |
-|--------|---------|--------|
-| `profile_thread_scaling.py` | Thread count strong scaling | `plots/*_performance_threads.png` |
-| `spectral_cube_strong_scaling.py` | Spectral cube strong scaling with threads | `plots/scaling_*.png` |
-| `strong_scaling_images.py` | Image generation strong scaling | `plots/scaling_*.png` |
-| `strong_scaling_int_spectra.py` | Integrated spectra strong scaling | `plots/scaling_*.png` |
-| `strong_scaling_los_col_den.py` | Line-of-sight column density strong scaling | `plots/scaling_*.png` |
-| `strong_scaling_part_spectra.py` | Particle spectra strong scaling | `plots/scaling_*.png` |
+| Script                            | Purpose                                     | Output                            |
+| --------------------------------- | ------------------------------------------- | --------------------------------- |
+| `profile_thread_scaling.py`       | Thread count strong scaling                 | `plots/*_performance_threads.png` |
+| `spectral_cube_strong_scaling.py` | Spectral cube strong scaling with threads   | `plots/scaling_*.png`             |
+| `strong_scaling_images.py`        | Image generation strong scaling             | `plots/scaling_*.png`             |
+| `strong_scaling_int_spectra.py`   | Integrated spectra strong scaling           | `plots/scaling_*.png`             |
+| `strong_scaling_los_col_den.py`   | Line-of-sight column density strong scaling | `plots/scaling_*.png`             |
+| `strong_scaling_part_spectra.py`  | Particle spectra strong scaling             | `plots/scaling_*.png`             |
 
 ### Usage Examples
 
@@ -177,12 +167,12 @@ General performance scaling analysis showing how performance scales with problem
 
 ### Available Profilers
 
-| Script | Purpose | Output |
-|--------|---------|--------|
-| `profile_nparticles_scaling.py` | Particle count scaling (10³ to 10⁵) | `plots/nparticles_performance_*.png` |
-| `profile_nparticles_memory.py` | Particle count memory scaling | `plots/nparticles_performance_memory_*.png` |
-| `profile_wavelength_scaling.py` | Wavelength array size timing impact | `plots/wavelength_performance_*.png` |
-| `profile_wavelength_memory.py` | Wavelength array size memory impact | `plots/wavelength_performance_memory_*.png` |
+| Script                          | Purpose                             | Output                                      |
+| ------------------------------- | ----------------------------------- | ------------------------------------------- |
+| `profile_nparticles_scaling.py` | Particle count scaling (10³ to 10⁵) | `plots/nparticles_performance_*.png`        |
+| `profile_nparticles_memory.py`  | Particle count memory scaling       | `plots/nparticles_performance_memory_*.png` |
+| `profile_wavelength_scaling.py` | Wavelength array size timing impact | `plots/wavelength_performance_*.png`        |
+| `profile_wavelength_memory.py`  | Wavelength array size memory impact | `plots/wavelength_performance_memory_*.png` |
 
 ### Usage Examples
 
@@ -206,65 +196,7 @@ Generates documentation plots from profiling results. Used to create publication
 python profiling/general/make_all_plots.py
 ```
 
----
-
-## Common Workflows
-
-### Workflow 1: Quick Performance Impact Check
-
-```bash
-git checkout main && pip install -e .
-python profiling/pipeline/profile_timing.py --basename "main_100p" --nparticles 100
-
-git checkout my-feature && pip install -e .
-python profiling/pipeline/profile_timing.py --basename "feature_100p" --nparticles 100
-
-python profiling/pipeline/analyze_timing.py \
-  --inputs profiling/outputs/timing/main_100p/timing.csv \
-           profiling/outputs/timing/feature_100p/timing.csv \
-  --labels "main" "feature"
-```
-
-### Workflow 2: Full Branch Comparison
-
-```bash
-for branch in main my-feature; do
-  git checkout $branch && pip install -e .
-  python profiling/pipeline/profile_timing.py --basename "$branch" --nparticles 1000
-  python profiling/pipeline/profile_memory.py --basename "$branch" --nparticles 1000
-done
-
-python profiling/pipeline/analyze_timing.py \
-  --inputs profiling/outputs/timing/main/timing.csv \
-           profiling/outputs/timing/my-feature/timing.csv \
-  --labels "main" "feature"
-```
-
-### Workflow 3: Precision Impact Analysis
-
-```bash
-bash profiling/pipeline/compare_precision_builds.sh --nparticles 1000 --ngalaxies 10
-```
-
-### Workflow 4: General Performance Scaling Analysis
-
-```bash
-python profiling/general/profile_nparticles_scaling.py
-python profiling/general/profile_wavelength_scaling.py
-python profiling/general/make_all_plots.py
-```
-
-### Workflow 5: Strong Scaling Analysis
-
-```bash
-python profiling/scaling/profile_thread_scaling.py --max_threads 8
-python profiling/scaling/strong_scaling_images.py
-python profiling/scaling/strong_scaling_part_spectra.py
-```
-
----
-
-## Output Directory Structure
+## Profiling Directory Structure
 
 ```
 profiling/
@@ -299,64 +231,3 @@ profiling/
 │
 └── plots/                  # Output plots from scaling analysis
 ```
-
----
-
-## Key Design Principles
-
-### Pipeline Profiling (`pipeline/`)
-- **Separation of concerns**: Data collection vs analysis
-- **Composability**: Each script independent and reusable
-- **Flexibility**: N-way comparisons, custom labels
-- **User-controlled**: No automatic git operations
-- **Raw data**: All 1000 Hz memory samples preserved
-
-### Scaling Analysis (`scaling/`)
-- **Strong scaling focus**: Measures OpenMP parallelism efficiency
-- **Clean plots**: Titles removed for documentation captions
-- **Clear naming**: Distinguish particle vs integrated approaches
-- **Reproducibility**: Fixed seeds, standard test grids
-
-### General Performance (`general/`)
-- **Problem size scaling**: Understand algorithm complexity
-- **Parameter sweeps**: Particle count, wavelength array size
-- **Memory and timing**: Separate profiles for budget planning
-- **Reproducibility**: Fixed seeds, standard test grids
-
----
-
-## Troubleshooting
-
-### C Extension Build Errors
-
-```bash
-rm -rf build/
-pip install -e --force-reinstall --no-cache-dir .
-```
-
-### "Grid not found" Error
-
-```bash
-synthesizer-download --test-grids -d tests/test_grid
-```
-
-### Memory Profiler Hangs
-
-Press Ctrl+C to interrupt.
-
-### Wrapper Script Build Failures
-
-1. Check compilers: `gcc --version`, `g++-15 --version`
-2. Verify OpenMP: `ls /opt/homebrew/Cellar/libomp/`
-3. Clean builds: `rm -rf build/`
-4. Or use `--skip-build` to skip compilation
-
----
-
-## Dependencies
-
-- `numpy` - Numerical operations
-- `matplotlib` - Plot generation
-- `h5py` - HDF5 file handling
-- `psutil` - Memory sampling
-- `unyt` - Unit handling
