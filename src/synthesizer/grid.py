@@ -606,24 +606,19 @@ class Grid:
             lum_units = hf["lines"]["luminosity"].attrs.get("Units")
             cont_units = hf["lines"]["nebular_continuum"].attrs.get("Units")
 
-            dtype = get_numpy_dtype()
-            max_val = np.finfo(dtype).max
-
-            def _clip(values):
-                return np.clip(values, -max_val, max_val)
-
-            # Read the nebular line luminosities and continuums
+            # Read the nebular line luminosities and continua, these must be
+            # in double precision
             self.line_lums["nebular"] = unyt_array(
                 np.ascontiguousarray(
-                    _clip(hf["lines"]["luminosity"][...]),
-                    dtype=dtype,
+                    hf["lines"]["luminosity"][...],
+                    dtype=np.float64,
                 ),
                 lum_units,
             )
             self.line_conts["nebular"] = unyt_array(
                 np.ascontiguousarray(
-                    _clip(hf["lines"]["nebular_continuum"][...]),
-                    dtype=dtype,
+                    hf["lines"]["nebular_continuum"][...],
+                    dtype=np.float64,
                 ),
                 cont_units,
             )
@@ -633,15 +628,15 @@ class Grid:
             # nomenclature - the line emissions from the birth cloud)
             self.line_lums["linecont"] = unyt_array(
                 np.ascontiguousarray(
-                    _clip(hf["lines"]["luminosity"][...]),
-                    dtype=dtype,
+                    hf["lines"]["luminosity"][...],
+                    dtype=np.float64,
                 ),
                 lum_units,
             )
             self.line_conts["linecont"] = unyt_array(
                 np.zeros(
                     self.line_lums["nebular"].shape,
-                    dtype=get_numpy_dtype(),
+                    dtype=np.float64,
                 ),
                 cont_units,
             )
@@ -650,14 +645,14 @@ class Grid:
             self.line_lums["nebular_continuum"] = unyt_array(
                 np.zeros(
                     self.line_lums["nebular"].shape,
-                    dtype=get_numpy_dtype(),
+                    dtype=np.float64,
                 ),
                 lum_units,
             )
             self.line_conts["nebular_continuum"] = unyt_array(
                 np.ascontiguousarray(
-                    _clip(hf["lines"]["nebular_continuum"][...]),
-                    dtype=dtype,
+                    hf["lines"]["nebular_continuum"][...],
+                    dtype=get_numpy_dtype(),
                 ),
                 cont_units,
             )
@@ -667,14 +662,14 @@ class Grid:
             self.line_lums["transmitted"] = unyt_array(
                 np.zeros(
                     self.line_lums["nebular"].shape,
-                    dtype=get_numpy_dtype(),
+                    dtype=np.float64,
                 ),
                 lum_units,
             )
             self.line_conts["transmitted"] = unyt_array(
                 np.ascontiguousarray(
-                    _clip(hf["lines"]["transmitted"][...]),
-                    dtype=dtype,
+                    hf["lines"]["transmitted"][...],
+                    dtype=np.float64,
                 ),
                 cont_units,
             )
@@ -731,8 +726,8 @@ class Grid:
                     # and set above.
                     self.line_conts[spectra] = unyt_array(
                         np.ascontiguousarray(
-                            _clip(interp_func(self.line_lams)),
-                            dtype=dtype,
+                            interp_func(self.line_lams),
+                            dtype=np.float64,
                         ),
                         cont_units,
                     )
@@ -742,7 +737,7 @@ class Grid:
                     self.line_lums[spectra] = unyt_array(
                         np.zeros(
                             (*self.spectra[spectra].shape[:-1], self.nlines),
-                            dtype=dtype,
+                            dtype=np.float64,
                         ),
                         lum_units,
                     )
@@ -754,14 +749,14 @@ class Grid:
                 self.line_lums[spectra] = (
                     np.ascontiguousarray(
                         self.line_lums[spectra],
-                        dtype=dtype,
+                        dtype=np.float64,
                     )
                     * lum_units
                 )
                 self.line_conts[spectra] = (
                     np.ascontiguousarray(
                         self.line_conts[spectra],
-                        dtype=dtype,
+                        dtype=np.float64,
                     )
                     * cont_units
                 )
