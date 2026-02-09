@@ -31,6 +31,21 @@ from synthesizer.extensions.precision_info import (
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 
+# Module-level cached dtypes.  The compiled precision is fixed for the
+# lifetime of the process so we query the C extension exactly once and cache
+# the results.  Every hot-path function (ensure_arg_precision,
+# array_to_precision, integrate_last_axis, …) reads these instead of
+# calling get_precision() + string comparison on every invocation.
+_PRECISION_STR: str = _get_precision()
+_NUMPY_DTYPE: np.dtype = (
+    np.dtype(np.float32)
+    if _PRECISION_STR == "float32"
+    else np.dtype(np.float64)
+)
+_INTEGER_DTYPE: np.dtype = (
+    np.dtype(np.int32) if _PRECISION_STR == "float32" else np.dtype(np.int64)
+)
+
 
 def get_precision() -> str:
     """Return the compiled floating-point precision.
@@ -51,24 +66,6 @@ def get_float_bytes() -> int:
     """
     # Call the C++ extension function to get the byte size
     return _get_float_bytes()
-
-
-# ---------------------------------------------------------------------------
-# Module-level cached dtypes.  The compiled precision is fixed for the
-# lifetime of the process so we query the C extension exactly once and cache
-# the results.  Every hot-path function (ensure_arg_precision,
-# array_to_precision, integrate_last_axis, …) reads these instead of
-# calling get_precision() + string comparison on every invocation.
-# ---------------------------------------------------------------------------
-_PRECISION_STR: str = _get_precision()
-_NUMPY_DTYPE: np.dtype = (
-    np.dtype(np.float32)
-    if _PRECISION_STR == "float32"
-    else np.dtype(np.float64)
-)
-_INTEGER_DTYPE: np.dtype = (
-    np.dtype(np.int32) if _PRECISION_STR == "float32" else np.dtype(np.int64)
-)
 
 
 def get_numpy_dtype() -> np.dtype:
