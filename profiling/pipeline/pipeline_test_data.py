@@ -138,16 +138,22 @@ def get_test_instruments(grid: Grid):
             - 'spectroscopy': Instrument for unresolved spectroscopy
             - 'ifu': Instrument for resolved spectroscopy (data cubes)
     """
-    # Photometry/Imaging instrument (JWST NIRCam Wide)
-    # Uses grid wavelength and includes resolution for imaging
+    # Photometry instrument (JWST NIRCam Wide) - no resolution for photometry
     photometry_inst = JWSTNIRCamWide(
         filter_lams=grid.lam,
         label="JWST.NIRCam.Wide",
     )
 
-    # Spectroscopy instrument (just wavelength array, no filters)
+    # Imaging instrument (same filters, but physical resolution)
     from synthesizer.instruments import Instrument
 
+    imaging_inst = Instrument(
+        label="JWST.NIRCam.Wide.Imaging",
+        filters=photometry_inst.filters,
+        resolution=0.1 * kpc,  # Physical resolution for imaging
+    )
+
+    # Spectroscopy instrument (just wavelength array, no filters)
     spectroscopy_inst = Instrument(
         label="Spectrometer",
         lam=grid.lam,
@@ -162,6 +168,7 @@ def get_test_instruments(grid: Grid):
 
     return {
         "photometry": photometry_inst,
+        "imaging": imaging_inst,
         "spectroscopy": spectroscopy_inst,
         "ifu": ifu_inst,
     }
