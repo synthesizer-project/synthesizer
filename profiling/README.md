@@ -10,7 +10,11 @@ This directory contains profiling scripts for Synthesizer, organized into three 
 
 ## Pipeline Profiling (`pipeline/`)
 
-Compare timing and memory performance across branches, precision settings, or other configurations. Use these to measure performance impact of code changes.
+Profile timing and memory performance of full `Pipeline` runs across branches,
+precision settings, or other configurations. These scripts use the real
+`Pipeline` object and exercise all available operations (LOS optical depths,
+SFZH/SFH, spectra, photometry, lines, imaging, data cubes, spectroscopy) in
+both rest-frame and observer-frame variants.
 
 ### Quick Start: Compare Branches
 
@@ -38,30 +42,45 @@ python profiling/pipeline/analyze_timing.py \
 
 #### `profile_timing.py` - Measure Execution Time
 
-Profile pipeline execution time on current branch.
+Profile `Pipeline` execution time on current branch. Runs setup (grid load,
+galaxy/instrument build, emission model) + `pipeline.run()` for all
+operations, then extracts timing data from `pipeline._op_timing`.
 
 **Usage:**
 ```bash
-python profiling/pipeline/profile_timing.py --basename "run_name" [--nparticles 1000] [--ngalaxies 10]
+python profiling/pipeline/profile_timing.py --basename "run_name" \
+  [--nparticles 1000] [--ngalaxies 10] [--fov-kpc 60] \
+  [--include-observer-frame]
 ```
 
 **Arguments:**
 - `--basename` (required): Name for this profiling run
-- `--nparticles` (optional, default 1000): Number of particles per galaxy
+- `--nparticles` (optional, default 1000): Stellar particles per galaxy
 - `--ngalaxies` (optional, default 10): Number of galaxies
 - `--seed` (optional, default 42): Random seed
+- `--fov-kpc` (optional, default 60): Field of view for imaging in kpc
+- `--include-observer-frame`: Include observer-frame/flux operations
+  (get_observed_spectra, get_photometry_fluxes, get_observed_lines,
+  get_images_flux, get_data_cubes_fnu, get_spectroscopy_fnu)
 
 **Output:**
 - `profiling/outputs/timing/{basename}/timing.csv`
 
 #### `profile_memory.py` - Memory Sampling
 
-Profile memory usage with 1000 Hz continuous sampling.
+Profile memory usage with 1000 Hz continuous sampling during full `Pipeline`
+run (setup + execution). Samples RSS memory from setup through
+`pipeline.run()` completion.
 
 **Usage:**
 ```bash
-python profiling/pipeline/profile_memory.py --basename "run_name" [--nparticles 1000] [--ngalaxies 10]
+python profiling/pipeline/profile_memory.py --basename "run_name" \
+  [--nparticles 1000] [--ngalaxies 10] [--fov-kpc 60] \
+  [--include-observer-frame]
 ```
+
+**Arguments:**
+- Same as `profile_timing.py` above
 
 **Output:**
 - `profiling/outputs/memory/{basename}/memory.csv` (all raw 1000 Hz samples)
@@ -100,15 +119,26 @@ python profiling/pipeline/analyze_memory.py \
 
 #### `validate_precision.py` - Numerical Precision Validation
 
-Compare HDF5 output files and validate numerical precision.
+Compare HDF5 output files from `Pipeline.write()` and validate numerical
+precision. Auto-discovers datasets from the structured HDF5 layout
+(Galaxies/Spectra/..., Galaxies/Stars/..., etc.) and compares all numeric
+datasets across runs.
 
 **Usage:**
 ```bash
 python profiling/pipeline/validate_precision.py \
   --inputs output1.h5 output2.h5 [output3.h5 ...] \
   [--labels "label1" "label2" ...] \
-  [--tolerance default|loose|tight]
+  [--tolerance default|loose|tight] \
+  [--datasets path1 path2 ...]
 ```
+
+**Arguments:**
+- `--inputs`: HDF5 files to compare (from `Pipeline.write()`)
+- `--labels`: Optional labels for each file (default: use filenames)
+- `--tolerance`: Comparison tolerance (default: rtol=1e-6, atol=1e-8)
+- `--datasets`: Specific HDF5 dataset paths to compare (default:
+  auto-discover all numeric datasets from first file)
 
 **Tolerance Levels:**
 - `default`: rtol=1e-6, atol=1e-8
