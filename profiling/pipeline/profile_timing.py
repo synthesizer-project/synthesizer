@@ -1,4 +1,9 @@
-"""Profile pipeline execution timing."""
+"""Profile Pipeline execution timing using real Pipeline workflow.
+
+This script builds galaxies, instruments, and an emission model, then uses
+the Pipeline to run all requested operations and record timing data from
+both setup stages and Pipeline._op_timing.
+"""
 
 from __future__ import annotations
 
@@ -7,25 +12,42 @@ import csv
 import time
 from pathlib import Path
 
-import numpy as np
-from unyt import Msun, Myr
+from astropy.cosmology import Planck18
+from unyt import kpc
 
-from synthesizer.emission_models import PacmanEmission
 from synthesizer.grid import Grid
-from synthesizer.particle import Galaxy, Stars
+from synthesizer.pipeline import Pipeline
+
+from .pipeline_test_data import (
+    build_test_galaxies,
+    get_test_emission_model,
+    get_test_instruments,
+    get_test_kernel,
+)
 
 
-def run_pipeline(nparticles: int, ngalaxies: int, seed: int = 42) -> dict:
-    """Run full pipeline and return stage timings.
+def run_pipeline_profiling(
+    nparticles: int,
+    ngalaxies: int,
+    seed: int = 42,
+    fov_kpc: float = 60.0,
+    include_observer_frame: bool = False,
+) -> dict:
+    """Run full Pipeline profiling and return stage timings.
 
     Parameters
     ----------
     nparticles : int
-        Number of particles per galaxy
+        Number of stellar particles per galaxy
     ngalaxies : int
         Number of galaxies
     seed : int
         Random seed for reproducibility
+    fov_kpc : float
+        Field of view for imaging in kpc (default 60)
+    include_observer_frame : bool
+        If True, include observer-frame/flux operations in addition to
+        rest-frame/luminosity operations
 
     Returns:
     -------
@@ -39,56 +61,130 @@ def run_pipeline(nparticles: int, ngalaxies: int, seed: int = 42) -> dict:
     grid = Grid("test_grid")
     timings["grid_load"] = time.perf_counter() - t_start
 
-    # Build galaxies
+    # Build test data
     t_start = time.perf_counter()
-    rng = np.random.default_rng(seed)
-    galaxies = []
-    for i in range(ngalaxies):
-        initial_masses = rng.uniform(1e4, 1e6, nparticles) * Msun
-        ages = rng.uniform(1e6, 1e10, nparticles) * Myr
-        metallicities = rng.uniform(0.001, 0.02, nparticles)
+    galaxies = build_test_galaxies(grid, nparticles, ngalaxies, seed)
+    timings["build_galaxies"] = time.perf_counter() - t_start
 
-        stars = Stars(
-            initial_masses=initial_masses,
-            ages=ages,
-            metallicities=metallicities,
-            redshift=0.1,
-        )
-        gal = Galaxy(stars=stars, redshift=0.1)
-        galaxies.append(gal)
-
-    timings["build"] = time.perf_counter() - t_start
-
-    # Create emission model
     t_start = time.perf_counter()
-    model = PacmanEmission(
-        grid,
-        tau_v=0.1,
-        fesc=0.0,
-        fesc_ly_alpha=1.0,
-    )
+    instruments = get_test_instruments(grid)
+    kernel = get_test_kernel()
+    timings["build_instruments"] = time.perf_counter() - t_start
+
+    t_start = time.perf_counter()
+    model = get_test_emission_model(grid)
     timings["model_setup"] = time.perf_counter() - t_start
 
-    # Spectra
+    # Create Pipeline
     t_start = time.perf_counter()
-    for gal in galaxies:
-        gal.stars.get_spectra(model)
-    timings["spectra"] = time.perf_counter() - t_start
+    pipeline = Pipeline(
+        emission_model=model,
+        nthreads=1,
+        verbose=0,
+    )
+    pipeline.add_galaxies(galaxies)
+    timings["pipeline_setup"] = time.perf_counter() - t_start
 
-    # Photometry
+    # Signal operations
     t_start = time.perf_counter()
-    for gal in galaxies:
-        # Placeholder - just aggregate existing spectra
-        _ = gal.stars.spectra
-    timings["photometry"] = time.perf_counter() - t_start
 
-    # Imaging
+    # LOS optical depths (if we have gas and stars)
+    pipeline.get_los_optical_depths(kernel=kernel)
+
+    # SFZH and SFH
+    pipeline.get_sfzh(grid.log10ages, grid.metallicities)
+    pipeline.get_sfh(grid.log10ages)
+
+    # Spectra (rest frame)
+    pipeline.get_spectra()
+
+    # Photometry (rest frame)
+    pipeline.get_photometry_luminosities(
+        instruments["photometry"],
+        labels="intrinsic",
+    )
+
+    # Lines (rest frame)
+    pipeline.get_lines(line_ids=grid.available_lines)
+
+    # Imaging (rest frame)
+    fov = fov_kpc * kpc
+    pipeline.get_images_luminosity(
+        instruments["photometry"],
+        fov=fov,
+        kernel=kernel,
+        labels="intrinsic",
+    )
+
+    # Data cubes (rest frame)
+    pipeline.get_data_cubes_lnu(
+        instruments["ifu"],
+        fov=fov,
+        kernel=kernel,
+        labels="intrinsic",
+    )
+
+    # Spectroscopy (rest frame)
+    pipeline.get_spectroscopy_lnu(
+        instruments["spectroscopy"],
+        labels="intrinsic",
+    )
+
+    # Observer frame operations if requested
+    if include_observer_frame:
+        cosmo = Planck18
+
+        # Observed spectra
+        pipeline.get_observed_spectra(cosmo=cosmo)
+
+        # Photometric fluxes
+        pipeline.get_photometry_fluxes(
+            instruments["photometry"],
+            cosmo=cosmo,
+            labels="intrinsic",
+        )
+
+        # Observed lines
+        pipeline.get_observed_lines(cosmo=cosmo)
+
+        # Flux images
+        pipeline.get_images_flux(
+            instruments["photometry"],
+            fov=fov,
+            kernel=kernel,
+            cosmo=cosmo,
+            labels="intrinsic",
+        )
+
+        # Data cubes (flux)
+        pipeline.get_data_cubes_fnu(
+            instruments["ifu"],
+            fov=fov,
+            kernel=kernel,
+            cosmo=cosmo,
+            labels="intrinsic",
+        )
+
+        # Spectroscopy (flux)
+        pipeline.get_spectroscopy_fnu(
+            instruments["spectroscopy"],
+            cosmo=cosmo,
+            labels="intrinsic",
+        )
+
+    timings["signal_operations"] = time.perf_counter() - t_start
+
+    # Run the Pipeline
     t_start = time.perf_counter()
-    for gal in galaxies:
-        # Placeholder - just access the built spectra
-        _ = gal.stars.spectra
-    timings["imaging"] = time.perf_counter() - t_start
+    pipeline.run()
+    timings["pipeline_run"] = time.perf_counter() - t_start
 
+    # Extract operation timings from Pipeline
+    for op_name, op_time in pipeline._op_timing.items():
+        if op_time > 0:
+            timings[f"op_{op_name}"] = op_time
+
+    # Compute total
     timings["total"] = sum(v for k, v in timings.items() if k != "total")
 
     return timings
@@ -97,18 +193,32 @@ def run_pipeline(nparticles: int, ngalaxies: int, seed: int = 42) -> dict:
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Profile pipeline execution timing"
+        description="Profile Pipeline execution timing"
     )
     parser.add_argument(
         "--basename", type=str, required=True, help="Basename for output"
     )
     parser.add_argument(
-        "--nparticles", type=int, default=1000, help="Number of particles"
+        "--nparticles",
+        type=int,
+        default=1000,
+        help="Number of stellar particles per galaxy",
     )
     parser.add_argument(
         "--ngalaxies", type=int, default=10, help="Number of galaxies"
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--fov-kpc",
+        type=float,
+        default=60.0,
+        help="Field of view for imaging in kpc (default 60)",
+    )
+    parser.add_argument(
+        "--include-observer-frame",
+        action="store_true",
+        help="Include observer-frame/flux operations",
+    )
 
     args = parser.parse_args()
 
@@ -116,11 +226,23 @@ def main() -> None:
     output_dir = Path("profiling/outputs/timing") / args.basename
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    particles_str = f"particles={args.nparticles}, galaxies={args.ngalaxies}"
-    print(f"Profiling pipeline timing ({particles_str})...")
+    particles_str = (
+        f"particles={args.nparticles}, "
+        f"galaxies={args.ngalaxies}, "
+        f"fov={args.fov_kpc} kpc"
+    )
+    if args.include_observer_frame:
+        particles_str += ", observer-frame=True"
+    print(f"Profiling Pipeline timing ({particles_str})...")
 
-    # Run pipeline
-    timings = run_pipeline(args.nparticles, args.ngalaxies, args.seed)
+    # Run pipeline profiling
+    timings = run_pipeline_profiling(
+        args.nparticles,
+        args.ngalaxies,
+        args.seed,
+        args.fov_kpc,
+        args.include_observer_frame,
+    )
 
     # Write CSV
     csv_file = output_dir / "timing.csv"
