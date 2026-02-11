@@ -52,6 +52,14 @@ Runtime Performance
 
 The following plots show the time taken to complete various operations as the problem size scales.
 
+**Pipeline Scaling**
+
+This plot shows the runtime of the full ``Pipeline`` object running all operations (LOS optical depths, SFZH/SFH, spectra, photometry, emission lines) in both rest-frame and observer-frame as a function of the number of stellar particles per galaxy (100 to 10,000 particles, 10 galaxies).
+
+.. image:: plots/pipeline_timing_scaling.png
+   :width: 75%
+   :align: center
+
 **Particle Scaling**
 
 This plot shows how the runtime of spectra generation, photometry, and imaging scales with the number of stellar particles (from 10^3 to 10^5). These tests were run using a grid with 9244 wavelength elements. Imaging benchmarks include both smoothed and histogram-based methods at different pixel resolutions (100x100 and 1000x1000).
@@ -84,6 +92,14 @@ The following plots show the memory footprint of the **results** of various oper
 
 .. note::
    These plots measure the size of the final objects stored in memory (e.g., the generated spectra or photometry data). While these represent the permanent memory cost added to your session, there may be transient spikes in memory usage during the actual computation that are slightly higher than these values.
+
+**Pipeline Scaling (Memory)**
+
+This plot shows the memory usage (RSS sampling at 1kHz) of the full ``Pipeline`` execution across different particle counts. The memory footprint remains relatively constant as particle count increases, indicating efficient memory usage.
+
+.. image:: plots/pipeline_memory_scaling.png
+   :width: 75%
+   :align: center
 
 **Particle Scaling (Memory)**
 
