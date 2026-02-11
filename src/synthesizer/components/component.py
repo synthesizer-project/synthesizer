@@ -822,7 +822,8 @@ class Component(ABC):
             if label not in photometry_dict:
                 raise exceptions.MissingPhotometryType(
                     f"Photometry for model {label} not found on the "
-                    f"{self.component_type} component."
+                    f"{self.component_type} component. "
+                    f"Instrument: {instrument.label}"
                 )
 
             out_images[label] = _generate_image_collection_generic(
