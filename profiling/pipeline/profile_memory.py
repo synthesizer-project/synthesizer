@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import sys
 import threading
 import time
 from pathlib import Path
@@ -20,7 +21,9 @@ from unyt import kpc
 from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
 
-from .pipeline_test_data import (
+# Add profiling/pipeline to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+from pipeline_test_data import (
     build_test_galaxies,
     get_test_emission_model,
     get_test_instruments,
@@ -106,7 +109,6 @@ def run_pipeline_with_memory(
     # Photometry (rest frame)
     pipeline.get_photometry_luminosities(
         instruments["photometry"],
-        labels="intrinsic",
     )
 
     # Lines (rest frame)
@@ -114,10 +116,9 @@ def run_pipeline_with_memory(
 
     # Imaging (rest frame)
     pipeline.get_images_luminosity(
-        instruments["photometry"],
+        instruments["imaging"],
         fov=fov,
         kernel=kernel,
-        labels="intrinsic",
     )
 
     # Data cubes (rest frame)
@@ -125,13 +126,11 @@ def run_pipeline_with_memory(
         instruments["ifu"],
         fov=fov,
         kernel=kernel,
-        labels="intrinsic",
     )
 
     # Spectroscopy (rest frame)
     pipeline.get_spectroscopy_lnu(
         instruments["spectroscopy"],
-        labels="intrinsic",
     )
 
     # Observer frame operations if requested
@@ -142,27 +141,23 @@ def run_pipeline_with_memory(
         pipeline.get_photometry_fluxes(
             instruments["photometry"],
             cosmo=cosmo,
-            labels="intrinsic",
         )
         pipeline.get_observed_lines(cosmo=cosmo)
         pipeline.get_images_flux(
-            instruments["photometry"],
+            instruments["imaging"],
             fov=fov,
             kernel=kernel,
             cosmo=cosmo,
-            labels="intrinsic",
         )
         pipeline.get_data_cubes_fnu(
             instruments["ifu"],
             fov=fov,
             kernel=kernel,
             cosmo=cosmo,
-            labels="intrinsic",
         )
         pipeline.get_spectroscopy_fnu(
             instruments["spectroscopy"],
             cosmo=cosmo,
-            labels="intrinsic",
         )
 
     # Run the Pipeline
