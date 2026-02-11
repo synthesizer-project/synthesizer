@@ -117,61 +117,28 @@ def build_test_galaxies(
     return galaxies
 
 
-def get_test_instruments(grid: Grid):
-    """Get a standard set of instruments for profiling.
+def get_test_instrument(grid: Grid):
+    """Get photometry instrument for profiling.
 
-    This function returns instruments suitable for:
-        - Photometry (filters)
-        - Imaging (filters + resolution)
-        - Spectroscopy (wavelength array)
-        - Resolved spectroscopy (wavelength array + resolution)
-
-    All instruments use the grid wavelength array and work offline (no SVO).
+    Returns the JWST NIRCam Wide instrument which has filters and
+    angular resolution, suitable for both photometry and imaging operations.
+    The Pipeline automatically handles dependencies (imaging calls photometry
+    first).
 
     Args:
         grid (Grid):
             The SPS grid to use for filter resampling.
 
     Returns:
-        dict: Dictionary with keys:
-            - 'photometry': Instrument for photometry/imaging
-            - 'spectroscopy': Instrument for unresolved spectroscopy
-            - 'ifu': Instrument for resolved spectroscopy (data cubes)
+        Instrument: JWST NIRCam Wide instrument
     """
-    # Photometry instrument (JWST NIRCam Wide) - no resolution for photometry
+    # Single instrument for all operations
     photometry_inst = JWSTNIRCamWide(
         filter_lams=grid.lam,
         label="JWST.NIRCam.Wide",
     )
 
-    # Imaging instrument (same filters, but physical resolution)
-    from synthesizer.instruments import Instrument
-
-    imaging_inst = Instrument(
-        label="JWST.NIRCam.Wide.Imaging",
-        filters=photometry_inst.filters,
-        resolution=0.1 * kpc,  # Physical resolution for imaging
-    )
-
-    # Spectroscopy instrument (just wavelength array, no filters)
-    spectroscopy_inst = Instrument(
-        label="Spectrometer",
-        lam=grid.lam,
-    )
-
-    # IFU instrument (wavelength + resolution for data cubes)
-    ifu_inst = Instrument(
-        label="IFU",
-        lam=grid.lam,
-        resolution=0.1 * kpc,  # Physical resolution for data cubes
-    )
-
-    return {
-        "photometry": photometry_inst,
-        "imaging": imaging_inst,
-        "spectroscopy": spectroscopy_inst,
-        "ifu": ifu_inst,
-    }
+    return photometry_inst
 
 
 def get_test_kernel():
