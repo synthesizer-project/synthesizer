@@ -115,9 +115,8 @@ def main() -> None:
         markersize=8,
     )
 
-    # Add reference scaling lines (O(n), O(n^2)) anchored at first data point
+    # Add reference scaling line (O(n)) anchored at first data point
     npart_ref = np.array(nparticles)
-    # O(n): linear scaling from first point
     ax.plot(
         npart_ref,
         total_values[0] * (npart_ref / nparticles[0]),
@@ -125,15 +124,6 @@ def main() -> None:
         alpha=0.5,
         linewidth=1.5,
         label="O(n)",
-    )
-    # O(n²): quadratic scaling from first point
-    ax.plot(
-        npart_ref,
-        total_values[0] * (npart_ref / nparticles[0]) ** 2,
-        "k-.",
-        alpha=0.5,
-        linewidth=1.5,
-        label="O(n²)",
     )
 
     ax.set_xlabel("Number of Particles", fontsize=12)
