@@ -138,7 +138,8 @@ def get_test_instrument(grid: Grid):
     # Load the instrument if we can
     if os.path.exists(INSTRUMENT_PATH):
         # Load from file if it exists
-        photometry_inst = JWSTNIRCamWide.load(INSTRUMENT_PATH)
+        with h5py.File(INSTRUMENT_PATH, "r") as hdf:
+            photometry_inst = JWSTNIRCamWide.from_hdf5(hdf)
         return photometry_inst
 
     # Otherwise, create a new instance and save it for future use
