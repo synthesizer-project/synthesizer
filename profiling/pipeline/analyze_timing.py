@@ -66,33 +66,82 @@ def main() -> None:
     operations = list(next(iter(timing_data.values())).keys())
     operations = [op for op in operations if op != "total"]
 
-    # Create comparison plot
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # Filter operations: keep only those that contribute >=5% to at
+    # least one run
+    filtered_ops = []
     labels = list(timing_data.keys())
-    x = np.arange(len(labels))
-    width = 0.8 / len(operations)
+    for op in operations:
+        for label in labels:
+            total_time = timing_data[label].get("total", 1)
+            op_time = timing_data[label].get(op, 0)
+            contribution = (
+                (op_time / total_time * 100) if total_time > 0 else 0
+            )
+            if contribution >= 5.0:
+                filtered_ops.append(op)
+                break
 
-    colors = plt.cm.Set3(np.linspace(0, 1, len(operations)))
-    bottom = np.zeros(len(labels))
+    # Convert labels to integers (particle counts)
+    nparticles = [int(label) for label in labels]
 
-    for i, op in enumerate(operations):
+    # Create line plot showing scaling
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot filtered operations
+    colors = plt.cm.Set1(np.linspace(0, 1, len(filtered_ops) + 1))
+    for i, op in enumerate(filtered_ops):
         values = [timing_data[label].get(op, 0) for label in labels]
-        ax.bar(
-            x + i * width - width * len(operations) / 2,
+        display_name = op.replace("op_", "") if op.startswith("op_") else op
+        ax.plot(
+            nparticles,
             values,
-            width,
-            label=op,
+            marker="o",
+            linewidth=2,
+            label=display_name,
             color=colors[i],
-            bottom=bottom,
+            markersize=6,
         )
-        bottom += values
 
-    ax.set_xlabel("Run")
-    ax.set_ylabel("Time (seconds)")
-    ax.set_title("Timing Comparison")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    # Plot total time (dashed, thicker)
+    total_values = [timing_data[label].get("total", 0) for label in labels]
+    ax.plot(
+        nparticles,
+        total_values,
+        marker="s",
+        linewidth=3,
+        linestyle="--",
+        label="Total",
+        color="black",
+        markersize=8,
+    )
+
+    # Add reference scaling lines (O(n), O(n^2)) anchored at first data point
+    npart_ref = np.array(nparticles)
+    # O(n): linear scaling from first point
+    ax.plot(
+        npart_ref,
+        total_values[0] * (npart_ref / nparticles[0]),
+        "k:",
+        alpha=0.5,
+        linewidth=1.5,
+        label="O(n)",
+    )
+    # O(n²): quadratic scaling from first point
+    ax.plot(
+        npart_ref,
+        total_values[0] * (npart_ref / nparticles[0]) ** 2,
+        "k-.",
+        alpha=0.5,
+        linewidth=1.5,
+        label="O(n²)",
+    )
+
+    ax.set_xlabel("Number of Particles", fontsize=12)
+    ax.set_ylabel("Time (seconds)", fontsize=12)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.legend(loc="best", fontsize=10)
+    ax.grid(alpha=0.3, which="major")
     fig.tight_layout()
 
     plot_file = args.output_dir / "timing_comparison.png"
