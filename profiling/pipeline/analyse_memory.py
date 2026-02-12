@@ -111,6 +111,7 @@ def main() -> None:
     ax1.set_xlabel("Progress (%)", fontsize=12)
     ax1.set_ylabel("RSS Memory (MB)", fontsize=12)
     ax1.set_xlim(0, 100)
+    ax1.set_yscale("log")
     ax1.legend(loc="best", fontsize=10)
     ax1.grid(alpha=0.3, which="major")
     fig1.tight_layout()

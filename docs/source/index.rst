@@ -23,6 +23,7 @@ Contents
    observatories/observatories 
    observables/observables
    pipeline/pipeline_example
+   parallelism
    performance/performance
    advanced/advanced
    notebook_examples/cookbook
