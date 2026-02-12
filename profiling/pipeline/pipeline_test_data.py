@@ -33,14 +33,10 @@ def build_test_galaxies(
         - Smoothing lengths for imaging
 
     Args:
-        grid (Grid):
-            The SPS grid to use for sampling ages/metallicities.
-        nparticles (int):
-            Number of stellar particles per galaxy.
-        ngalaxies (int):
-            Number of galaxies to create.
-        seed (int):
-            Random seed for reproducibility. Default is 42.
+        grid (Grid): The SPS grid to use for sampling ages/metallicities.
+        nparticles (int): Number of stellar particles per galaxy.
+        ngalaxies (int): Number of galaxies to create.
+        seed (int, optional): Random seed for reproducibility. Defaults to 42.
 
     Returns:
         list[Galaxy]: List of Galaxy objects ready for Pipeline processing.
@@ -128,11 +124,10 @@ def get_test_instrument(grid: Grid):
     first).
 
     Args:
-        grid (Grid):
-            The SPS grid to use for filter resampling.
+        grid (Grid): The SPS grid to use for filter resampling.
 
     Returns:
-        Instrument: JWST NIRCam Wide instrument
+        Instrument: JWST NIRCam Wide instrument.
     """
     # Single instrument for all operations
     photometry_inst = JWSTNIRCamWide(
@@ -159,12 +154,11 @@ def get_test_emission_model(grid: Grid):
     Uses PacmanEmission to test dust attenuation with imaging operations.
 
     Args:
-        grid (Grid):
-            The SPS grid to use.
+        grid (Grid): The SPS grid to use.
 
     Returns:
         EmissionModel: A PacmanEmission model with escape fraction.
     """
-    model = PacmanEmission(grid, fesc=0.1)
+    model = PacmanEmission(grid=grid, tau_v="tau_v", fesc="fesc")
     model.set_per_particle(True)  # Per-particle emissions
     return model

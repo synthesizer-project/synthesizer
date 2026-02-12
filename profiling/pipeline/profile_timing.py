@@ -38,24 +38,18 @@ def run_pipeline_profiling(
 ) -> dict:
     """Run full Pipeline profiling and return stage timings.
 
-    Parameters
-    ----------
-    nparticles : int
-        Number of stellar particles per galaxy
-    ngalaxies : int
-        Number of galaxies
-    seed : int
-        Random seed for reproducibility
-    fov_kpc : float
-        Field of view for imaging in kpc (default 60)
-    include_observer_frame : bool
-        If True, include observer-frame/flux operations in addition to
-        rest-frame/luminosity operations
+    Args:
+        nparticles (int): Number of stellar particles per galaxy.
+        ngalaxies (int): Number of galaxies.
+        seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        fov_kpc (float, optional): Field of view for imaging in kpc.
+            Defaults to 60.0.
+        include_observer_frame (bool, optional): If True, include
+            observer-frame/flux operations in addition to rest-frame/luminosity
+            operations. Defaults to False.
 
     Returns:
-    -------
-    dict
-        Dictionary with stage names and timings in seconds
+        dict: A dictionary with stage names and timings in seconds.
     """
     timings = {}
 
@@ -164,7 +158,7 @@ def run_pipeline_profiling(
 
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point for the timing profiling script."""
     parser = argparse.ArgumentParser(
         description="Profile Pipeline execution timing"
     )

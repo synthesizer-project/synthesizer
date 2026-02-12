@@ -10,7 +10,15 @@ import numpy as np
 
 
 def load_timing(filepath: Path) -> dict:
-    """Load timing CSV file."""
+    """Loads timing data from a CSV file.
+
+    Args:
+        filepath (Path): The path to the timing CSV file.
+
+    Returns:
+        dict: A dictionary where keys are operation names and values are their
+              execution times in seconds.
+    """
     timings = {}
     with open(filepath) as f:
         lines = f.readlines()[1:]  # Skip header
@@ -23,7 +31,7 @@ def load_timing(filepath: Path) -> dict:
 
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point for the timing analysis script."""
     parser = argparse.ArgumentParser(
         description="Compare timing results from multiple profiling runs"
     )

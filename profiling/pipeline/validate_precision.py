@@ -1,4 +1,4 @@
-"""Validate and compare precision across N Pipeline HDF5 outputs.
+"""Validate and compare numerical precision across Pipeline HDF5 outputs.
 
 This script compares datasets from multiple Pipeline.write() outputs to
 validate numerical precision. It uses the structured HDF5 layout that
@@ -59,7 +59,7 @@ def discover_datasets(filepath: Path) -> list[str]:
 
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point for the precision validation script."""
     parser = argparse.ArgumentParser(
         description=(
             "Validate and compare precision across N Pipeline HDF5 outputs"
