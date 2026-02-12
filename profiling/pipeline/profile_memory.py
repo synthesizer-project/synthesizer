@@ -41,32 +41,28 @@ def run_pipeline_with_memory(
 ) -> tuple[list, float]:
     """Run full Pipeline and collect memory samples at specified frequency.
 
-    Parameters
-    ----------
-    nparticles : int
-        Number of stellar particles per galaxy
-    ngalaxies : int
-        Number of galaxies
-    seed : int
-        Random seed for reproducibility
-    fov_kpc : float
-        Field of view for imaging in kpc (default 60)
-    include_observer_frame : bool
-        If True, include observer-frame/flux operations
-    sample_freq_hz : float
-        Memory sampling frequency in Hz (default 1000)
+    Args:
+        nparticles (int): Number of stellar particles per galaxy.
+        ngalaxies (int): Number of galaxies.
+        seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        fov_kpc (float, optional): Field of view for imaging in kpc.
+            Defaults to 60.0.
+        include_observer_frame (bool, optional): If True, include
+            observer-frame/flux operations. Defaults to False.
+        sample_freq_hz (float, optional): Memory sampling frequency in Hz.
+            Defaults to 1000.0.
 
     Returns:
-    -------
-    tuple[list, float]
-        List of (timestamp_ms, rss_mb) tuples and total runtime in seconds
+        tuple[list, float]: A tuple containing:
+            - list: A list of (timestamp_ms, rss_mb) tuples.
+            - float: Total runtime in seconds.
     """
     samples = []
     stop_sampling = False
     sleep_time = 1.0 / sample_freq_hz
 
     def sample_memory():
-        """Background thread to sample memory."""
+        """Background thread to sample memory continuously."""
         timestamp_ms = 0
         dt_ms = 1000.0 / sample_freq_hz
         while not stop_sampling:
@@ -158,7 +154,7 @@ def run_pipeline_with_memory(
 
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point for the memory profiling script."""
     parser = argparse.ArgumentParser(
         description="Profile Pipeline memory usage with continuous sampling"
     )

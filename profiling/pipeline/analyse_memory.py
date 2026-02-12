@@ -10,7 +10,15 @@ import numpy as np
 
 
 def load_memory(filepath: Path) -> tuple[list, list]:
-    """Load memory CSV file, return timestamps and memory values."""
+    """Loads memory usage data from a CSV file.
+
+    Args:
+        filepath (Path): The path to the memory CSV file.
+
+    Returns:
+        tuple[list, list]: A tuple containing two lists: timestamps and memory
+                           values (in MB).
+    """
     timestamps = []
     memory = []
     with open(filepath) as f:
@@ -25,7 +33,7 @@ def load_memory(filepath: Path) -> tuple[list, list]:
 
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point for the memory analysis script."""
     parser = argparse.ArgumentParser(
         description="Compare memory profiles from multiple profiling runs"
     )
