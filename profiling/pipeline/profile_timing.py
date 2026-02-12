@@ -35,6 +35,7 @@ def run_pipeline_profiling(
     seed: int = 42,
     fov_kpc: float = 60.0,
     include_observer_frame: bool = False,
+    nthreads: int = 8,
 ) -> dict:
     """Run full Pipeline profiling and return stage timings.
 
@@ -47,6 +48,8 @@ def run_pipeline_profiling(
         include_observer_frame (bool, optional): If True, include
             observer-frame/flux operations in addition to rest-frame/luminosity
             operations. Defaults to False.
+        nthreads (int, optional): Number of threads for Pipeline.
+            Defaults to 8.
 
     Returns:
         dict: A dictionary with stage names and timings in seconds.
@@ -76,7 +79,7 @@ def run_pipeline_profiling(
     t_start = time.perf_counter()
     pipeline = Pipeline(
         emission_model=model,
-        nthreads=8,
+        nthreads=nthreads,
         verbose=0,
     )
     pipeline.add_galaxies(galaxies)
@@ -186,6 +189,12 @@ def main() -> None:
         action="store_true",
         help="Include observer-frame/flux operations",
     )
+    parser.add_argument(
+        "--nthreads",
+        type=int,
+        default=8,
+        help="Number of threads for Pipeline (default 8)",
+    )
 
     args = parser.parse_args()
 
@@ -196,7 +205,8 @@ def main() -> None:
     particles_str = (
         f"particles={args.nparticles}, "
         f"galaxies={args.ngalaxies}, "
-        f"fov={args.fov_kpc} kpc"
+        f"fov={args.fov_kpc} kpc, "
+        f"threads={args.nthreads}"
     )
     if args.include_observer_frame:
         particles_str += ", observer-frame=True"
@@ -209,6 +219,7 @@ def main() -> None:
         args.seed,
         args.fov_kpc,
         args.include_observer_frame,
+        args.nthreads,
     )
 
     # Write CSV
