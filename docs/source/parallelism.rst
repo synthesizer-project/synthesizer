@@ -49,7 +49,7 @@ The exact same would be true for any other function that supports OpenMP threadi
 Distributed Memory Parallelism (Pipeline)
 ------------------------------------------
 
-For processing large galaxy populations, Synthesizer's ``Pipeline`` object provides a framework for distributed parallelism, but **leaves the partitioning in your hands**. The Pipeline does not handle MPI communication directly; instead, you control how galaxies are distributed across processors.
+For processing large galaxy populations, Synthesizer's ``Pipeline`` object provides a framework for distributed parallelism, but **leaves the partitioning in your hands**. 
 
 **Why User-Controlled Partitioning?**
 
@@ -82,7 +82,7 @@ Here's a simple example of using MPI to process different galaxy subsets on diff
     my_galaxies = all_galaxies[rank::size]
     
     # Each rank processes its subset
-    pipeline = Pipeline(emission_model=model, nthreads=8)
+    pipeline = Pipeline(emission_model=model, nthreads=8, comm=comm)
     pipeline.add_galaxies(my_galaxies)
     # ... configure pipeline operations ...
     pipeline.run()
@@ -114,7 +114,7 @@ For optimal performance on HPC systems, combine distributed (MPI) and shared mem
     my_galaxies = all_galaxies[rank::size]
     
     # Use OpenMP threading within each galaxy
-    pipeline = Pipeline(emission_model=model, nthreads=8)
+    pipeline = Pipeline(emission_model=model, nthreads=8, comm=comm)
     pipeline.add_galaxies(my_galaxies)
     pipeline.run()
 
