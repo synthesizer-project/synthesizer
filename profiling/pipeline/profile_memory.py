@@ -2,7 +2,7 @@
 
 This script builds galaxies, instruments, and an emission model, then uses
 the Pipeline to run all requested operations while continuously sampling
-RSS memory at 1kHz to capture peak usage during setup and execution.
+RSS memory to capture peak usage during setup and execution.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from pipeline_test_data import (
     build_test_galaxies,
     get_test_emission_model,
-    get_test_instruments,
+    get_test_instrument,
     get_test_kernel,
 )
 
@@ -37,8 +37,9 @@ def run_pipeline_with_memory(
     seed: int = 42,
     fov_kpc: float = 60.0,
     include_observer_frame: bool = False,
+    sample_freq_hz: float = 1000.0,
 ) -> tuple[list, float]:
-    """Run full Pipeline and collect memory samples at 1000 Hz.
+    """Run full Pipeline and collect memory samples at specified frequency.
 
     Parameters
     ----------
@@ -52,6 +53,8 @@ def run_pipeline_with_memory(
         Field of view for imaging in kpc (default 60)
     include_observer_frame : bool
         If True, include observer-frame/flux operations
+    sample_freq_hz : float
+        Memory sampling frequency in Hz (default 1000)
 
     Returns:
     -------
@@ -60,15 +63,17 @@ def run_pipeline_with_memory(
     """
     samples = []
     stop_sampling = False
+    sleep_time = 1.0 / sample_freq_hz
 
     def sample_memory():
         """Background thread to sample memory."""
         timestamp_ms = 0
+        dt_ms = 1000.0 / sample_freq_hz
         while not stop_sampling:
             rss_mb = psutil.Process().memory_info().rss / 1024 / 1024
             samples.append((timestamp_ms, rss_mb))
-            timestamp_ms += 1
-            time.sleep(0.001)  # 1000 Hz
+            timestamp_ms += dt_ms
+            time.sleep(sleep_time)
 
     # Start sampling thread
     sampler = threading.Thread(target=sample_memory, daemon=True)
@@ -81,7 +86,7 @@ def run_pipeline_with_memory(
 
     # Build test data
     galaxies = build_test_galaxies(grid, nparticles, ngalaxies, seed)
-    instruments = get_test_instruments(grid)
+    instrument = get_test_instrument(grid)
     kernel = get_test_kernel()
     model = get_test_emission_model(grid)
 
@@ -108,29 +113,20 @@ def run_pipeline_with_memory(
 
     # Photometry (rest frame)
     pipeline.get_photometry_luminosities(
-        instruments["photometry"],
+        instrument,
     )
 
     # Lines (rest frame)
     pipeline.get_lines(line_ids=grid.available_lines)
 
     # Imaging (rest frame)
+    cosmo = Planck18
     pipeline.get_images_luminosity(
-        instruments["imaging"],
+        instrument,
         fov=fov,
         kernel=kernel,
-    )
-
-    # Data cubes (rest frame)
-    pipeline.get_data_cubes_lnu(
-        instruments["ifu"],
-        fov=fov,
-        kernel=kernel,
-    )
-
-    # Spectroscopy (rest frame)
-    pipeline.get_spectroscopy_lnu(
-        instruments["spectroscopy"],
+        cosmo=cosmo,
+        labels="intrinsic",
     )
 
     # Observer frame operations if requested
@@ -139,25 +135,16 @@ def run_pipeline_with_memory(
 
         pipeline.get_observed_spectra(cosmo=cosmo)
         pipeline.get_photometry_fluxes(
-            instruments["photometry"],
+            instrument,
             cosmo=cosmo,
         )
         pipeline.get_observed_lines(cosmo=cosmo)
         pipeline.get_images_flux(
-            instruments["imaging"],
+            instrument,
             fov=fov,
             kernel=kernel,
             cosmo=cosmo,
-        )
-        pipeline.get_data_cubes_fnu(
-            instruments["ifu"],
-            fov=fov,
-            kernel=kernel,
-            cosmo=cosmo,
-        )
-        pipeline.get_spectroscopy_fnu(
-            instruments["spectroscopy"],
-            cosmo=cosmo,
+            labels="intrinsic",
         )
 
     # Run the Pipeline
@@ -173,7 +160,7 @@ def run_pipeline_with_memory(
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Profile Pipeline memory usage (1000 Hz sampling)"
+        description="Profile Pipeline memory usage with continuous sampling"
     )
     parser.add_argument(
         "--basename", type=str, required=True, help="Basename for output"
@@ -199,6 +186,12 @@ def main() -> None:
         action="store_true",
         help="Include observer-frame/flux operations",
     )
+    parser.add_argument(
+        "--sample-freq",
+        type=float,
+        default=1000.0,
+        help="Memory sampling frequency in Hz (default 1000)",
+    )
 
     args = parser.parse_args()
 
@@ -209,7 +202,8 @@ def main() -> None:
     particles_str = (
         f"particles={args.nparticles}, "
         f"galaxies={args.ngalaxies}, "
-        f"fov={args.fov_kpc} kpc"
+        f"fov={args.fov_kpc} kpc, "
+        f"sample_freq={args.sample_freq:.0f} Hz"
     )
     if args.include_observer_frame:
         particles_str += ", observer-frame=True"
@@ -222,6 +216,7 @@ def main() -> None:
         args.seed,
         args.fov_kpc,
         args.include_observer_frame,
+        args.sample_freq,
     )
 
     # Write CSV with all samples

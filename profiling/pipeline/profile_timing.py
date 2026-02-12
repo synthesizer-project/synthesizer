@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from pipeline_test_data import (
     build_test_galaxies,
     get_test_emission_model,
-    get_test_instruments,
+    get_test_instrument,
     get_test_kernel,
 )
 
@@ -70,7 +70,7 @@ def run_pipeline_profiling(
     timings["build_galaxies"] = time.perf_counter() - t_start
 
     t_start = time.perf_counter()
-    instruments = get_test_instruments(grid)
+    instrument = get_test_instrument(grid)
     kernel = get_test_kernel()
     timings["build_instruments"] = time.perf_counter() - t_start
 
@@ -82,7 +82,7 @@ def run_pipeline_profiling(
     t_start = time.perf_counter()
     pipeline = Pipeline(
         emission_model=model,
-        nthreads=1,
+        nthreads=8,
         verbose=0,
     )
     pipeline.add_galaxies(galaxies)
@@ -103,7 +103,7 @@ def run_pipeline_profiling(
 
     # Photometry (rest frame)
     pipeline.get_photometry_luminosities(
-        instruments["photometry"],
+        instrument,
     )
 
     # Lines (rest frame)
@@ -113,22 +113,11 @@ def run_pipeline_profiling(
     fov = fov_kpc * kpc
     cosmo = Planck18
     pipeline.get_images_luminosity(
-        instruments["imaging"],
+        instrument,
         fov=fov,
         kernel=kernel,
         cosmo=cosmo,
-    )
-
-    # Data cubes (rest frame)
-    pipeline.get_data_cubes_lnu(
-        instruments["ifu"],
-        fov=fov,
-        kernel=kernel,
-    )
-
-    # Spectroscopy (rest frame)
-    pipeline.get_spectroscopy_lnu(
-        instruments["spectroscopy"],
+        labels="intrinsic",
     )
 
     # Observer frame operations if requested
@@ -140,7 +129,7 @@ def run_pipeline_profiling(
 
         # Photometric fluxes
         pipeline.get_photometry_fluxes(
-            instruments["photometry"],
+            instrument,
             cosmo=cosmo,
         )
 
@@ -149,24 +138,11 @@ def run_pipeline_profiling(
 
         # Flux images
         pipeline.get_images_flux(
-            instruments["imaging"],
+            instrument,
             fov=fov,
             kernel=kernel,
             cosmo=cosmo,
-        )
-
-        # Data cubes (flux)
-        pipeline.get_data_cubes_fnu(
-            instruments["ifu"],
-            fov=fov,
-            kernel=kernel,
-            cosmo=cosmo,
-        )
-
-        # Spectroscopy (flux)
-        pipeline.get_spectroscopy_fnu(
-            instruments["spectroscopy"],
-            cosmo=cosmo,
+            labels="intrinsic",
         )
 
     timings["signal_operations"] = time.perf_counter() - t_start
