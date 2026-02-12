@@ -38,6 +38,7 @@ def run_pipeline_with_memory(
     fov_kpc: float = 60.0,
     include_observer_frame: bool = False,
     sample_freq_hz: float = 1000.0,
+    nthreads: int = 1,
 ) -> tuple[list, float]:
     """Run full Pipeline and collect memory samples at specified frequency.
 
@@ -51,6 +52,8 @@ def run_pipeline_with_memory(
             observer-frame/flux operations. Defaults to False.
         sample_freq_hz (float, optional): Memory sampling frequency in Hz.
             Defaults to 1000.0.
+        nthreads (int, optional): Number of threads for Pipeline.
+            Defaults to 1.
 
     Returns:
         tuple[list, float]: A tuple containing:
@@ -89,7 +92,7 @@ def run_pipeline_with_memory(
     # Create Pipeline
     pipeline = Pipeline(
         emission_model=model,
-        nthreads=1,
+        nthreads=nthreads,
         verbose=0,
     )
     pipeline.add_galaxies(galaxies)
@@ -188,6 +191,12 @@ def main() -> None:
         default=1000.0,
         help="Memory sampling frequency in Hz (default 1000)",
     )
+    parser.add_argument(
+        "--nthreads",
+        type=int,
+        default=1,
+        help="Number of threads for Pipeline (default 1)",
+    )
 
     args = parser.parse_args()
 
@@ -213,6 +222,7 @@ def main() -> None:
         args.fov_kpc,
         args.include_observer_frame,
         args.sample_freq,
+        args.nthreads,
     )
 
     # Write CSV with all samples
