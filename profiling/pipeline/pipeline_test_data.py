@@ -8,6 +8,9 @@ same random seed.
 
 from __future__ import annotations
 
+import os
+
+import h5py
 import numpy as np
 from unyt import Msun, Myr, km, kpc, s
 
@@ -16,6 +19,9 @@ from synthesizer.grid import Grid
 from synthesizer.instruments.premade import JWSTNIRCamWide
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
+
+# Define the instrument file path
+INSTRUMENT_PATH = "jwst_pipeline_perf_inst.hdf5"
 
 
 def build_test_galaxies(
@@ -129,11 +135,21 @@ def get_test_instrument(grid: Grid):
     Returns:
         Instrument: JWST NIRCam Wide instrument.
     """
-    # Single instrument for all operations
+    # Load the instrument if we can
+    if os.path.exists(INSTRUMENT_PATH):
+        # Load from file if it exists
+        photometry_inst = JWSTNIRCamWide.load(INSTRUMENT_PATH)
+        return photometry_inst
+
+    # Otherwise, create a new instance and save it for future use
     photometry_inst = JWSTNIRCamWide(
         filter_lams=grid.lam,
         label="JWST.NIRCam.Wide",
     )
+
+    # Save the instrument to file for future runs
+    with h5py.File(INSTRUMENT_PATH, "w") as hdf:
+        photometry_inst.to_hdf5(hdf)
 
     return photometry_inst
 
