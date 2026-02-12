@@ -66,6 +66,7 @@ def build_test_galaxies(
             coordinates=star_coords,
             velocities=star_vels,
             smoothing_lengths=star_smls,
+            tau_v=0.5,  # V-band optical depth for dust attenuation
         )
 
         # Generate gas particles (fewer than stars)
@@ -111,6 +112,7 @@ def build_test_galaxies(
             black_holes=black_holes,
             redshift=1.0,
             centre=centre,
+            tau_v=0.5,  # V-band optical depth for dust attenuation
         )
         galaxies.append(galaxy)
 
@@ -154,16 +156,15 @@ def get_test_kernel():
 def get_test_emission_model(grid: Grid):
     """Get a standard PacmanEmission model for profiling.
 
+    Uses PacmanEmission to test dust attenuation with imaging operations.
+
     Args:
         grid (Grid):
             The SPS grid to use.
 
     Returns:
-        EmissionModel: A PacmanEmission model with typical parameters.
+        EmissionModel: A PacmanEmission model with escape fraction.
     """
-    return PacmanEmission(
-        grid,
-        tau_v=0.5,
-        fesc=0.0,
-        fesc_ly_alpha=1.0,
-    )
+    model = PacmanEmission(grid, fesc=0.1)
+    model.set_per_particle(True)  # Per-particle emissions
+    return model
