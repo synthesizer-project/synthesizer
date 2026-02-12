@@ -19,7 +19,7 @@ def load_memory(filepath: Path) -> tuple[list, list]:
             parts = line.strip().split(",")
             if len(parts) == 2:
                 ts, mem = parts
-                timestamps.append(int(ts))
+                timestamps.append(float(ts))
                 memory.append(float(mem))
     return timestamps, memory
 
