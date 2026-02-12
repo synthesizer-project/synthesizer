@@ -3,6 +3,7 @@ Performance
 
 To ensure Synthesizer is performant enough to handle the large dynamic range of possible input datasets we have put a lot of effort into optimising the codebase. 
 Needless to say, we are always looking for ways to improve performance further, so if you have any suggestions or find any bottlenecks, please do not hesitate to open an issue on GitHub.
+
 We have implemented a number of performance optimisations, including:
 
 - Using C++ extensions for computationally intensive tasks.
@@ -42,9 +43,6 @@ In the following sections we show some performance benchmarks to give an idea of
         Core(s) per socket:   32
         Socket(s):            2
 
-Performance
-^^^^^^^^^^^
-
 The following sections show how Synthesizer performs as a function of the size of the problem (number of particles and number of wavelength elements). These benchmarks were run using 8 threads on a test machine.
 
 Runtime Performance
@@ -54,10 +52,21 @@ The following plots show the time taken to complete various operations as the pr
 
 **Pipeline Scaling**
 
-This plot shows the runtime of the full ``Pipeline`` object running all operations (LOS optical depths, SFZH/SFH, spectra, photometry, emission lines) in both rest-frame and observer-frame as a function of the number of stellar particles per galaxy (100 to 10,000 particles, 10 galaxies).
+This plot shows the runtime of the full ``Pipeline`` object running all operations (LOS optical depths, SFZH/SFH, spectra, photometry, emission lines, imaging) in both rest-frame and observer-frame as a function of the number of stellar particles per galaxy (100 to 10,000 particles, 10 galaxies).
+
+**Test Configuration:**
+
+- **Emission Model**: ``PacmanEmission`` with dust attenuation (tau_v=0.5, fesc=0.1)
+- **Instrument**: JWST NIRCam Wide with 8 filters (F070W, F090W, F115W, F150W, F200W, F277W, F356W, F444W)
+- **Imaging**: 60 kpc FOV at z=1.0 with angular resolution (0.031 arcsec/pixel)
+- **Operations**: LOS optical depths, SFZH/SFH, rest-frame spectra (Lnu), observer-frame spectra (Fnu), photometry luminosities, photometry fluxes, emission line luminosities, emission line fluxes, rest-frame images, observer-frame images
+- **Galaxies**: 10 synthetic galaxies per run, each with stars, gas, and black holes
+- **Hardware**: AMD EPYC 7542 32-Core Processor, 8 threads used
+
+The plot shows only operations contributing ≥5% to the total runtime in at least one particle count. Reference lines show O(n) and O(n²) scaling behavior for comparison. Most operations scale between linear and quadratic with particle count, with spectra generation dominating the runtime (18-21% for Lnu spectra, up to 11% for Fnu spectra at 10k particles).
 
 .. image:: plots/pipeline_timing_scaling.png
-   :width: 75%
+   :width: 100%
    :align: center
 
 **Particle Scaling**
@@ -93,9 +102,19 @@ The following plots show the memory footprint of the **results** of various oper
 .. note::
    These plots measure the size of the final objects stored in memory (e.g., the generated spectra or photometry data). While these represent the permanent memory cost added to your session, there may be transient spikes in memory usage during the actual computation that are slightly higher than these values.
 
-**Pipeline Scaling (Memory)**
+**Pipeline Scaling (Memory Profile)**
 
-This plot shows the memory usage (RSS sampling at 1kHz) of the full ``Pipeline`` execution across different particle counts. The memory footprint remains relatively constant as particle count increases, indicating efficient memory usage.
+The following plots show the memory usage (RSS sampling at high frequency) of the full ``Pipeline`` execution across different particle counts using the same test configuration as the timing benchmarks above. Sampling frequencies range from 5 kHz for 100 particles down to 500 Hz for 10,000 particles to ensure adequate temporal resolution across all test cases.
+
+Memory usage normalised to execution progress (0-100%). This allows direct comparison of memory usage patterns across different particle counts. Peak memory is marked with circles. Memory usage grows steadily through execution, peaking around 60-80% completion when photometry and imaging operations are performed.
+
+.. image:: plots/pipeline_memory_normalized.png
+   :width: 75%
+   :align: center
+
+**Pipeline Scaling (Peak Memory)**
+
+Peak memory vs particle count on log-log axes with an O(n) reference line. Peak memory scales roughly linearly with particle count, indicating efficient memory usage. At 10,000 particles with the PacmanEmission model and JWST NIRCam imaging, peak memory reaches ~13 GB.
 
 .. image:: plots/pipeline_memory_scaling.png
    :width: 75%
