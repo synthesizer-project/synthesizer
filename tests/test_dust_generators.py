@@ -83,6 +83,7 @@ def mock_emitter():
             self.dust_to_gas_ratio = 0.01
             self.hydrogen_mass = 1e8 * Msun
             self.qpah = 0.025
+            self.model_param_cache = {}
 
     return MockEmitter()
 
@@ -273,6 +274,7 @@ class TestBlackbodyGenerator:
         class MockEmitterWithTemp:
             def __init__(self):
                 self.temperature = 50 * K  # Different from generator
+                self.model_param_cache = {}
 
         emitter = MockEmitterWithTemp()
 
@@ -1008,6 +1010,9 @@ class TestDustGeneratorErrorHandling:
         # Test with emitter temperature (should override generator)
         class MockEmitterWithTemp:
             temperature = 40 * K
+
+            def __init__(self):
+                self.model_param_cache = {}
 
         emitter_with_temp = MockEmitterWithTemp()
 

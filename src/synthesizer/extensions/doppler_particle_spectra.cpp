@@ -5,6 +5,7 @@
 /* C includes */
 #include <array>
 #include <math.h>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,7 +101,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
     const double shift_factor = 1.0 + vel / c;
 
     /* Shift wavelengths & map to bins once per particle. */
-    for (int il = 0; il < nlam; ++il) {
+    for (size_t il = 0; il < nlam; ++il) {
       const double lam_s = wavelength[il] * shift_factor;
       shifted_wavelengths[il] = lam_s;
       mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -134,10 +135,10 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
       /* Loop over wavelengths (we can't prepare the unmasked wavelengths
        * like we can in the non-shifted case, since the shifted wavelengths
        * are particle-dependent) */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         const int ils = mapped_indices[il];
         /* Skip out-of-bounds or masked */
-        if (ils <= 0 || ils >= nlam || grid_props->lam_is_masked(ils)) {
+        if (ils <= 0 || static_cast<size_t>(ils) >= nlam || grid_props->lam_is_masked(ils)) {
           continue;
         }
 
@@ -249,7 +250,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       const double shift_factor = 1.0 + vel / c;
 
       /* Shift wavelengths & map to bins once per particle */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         const double lam_s = wavelength[il] * shift_factor;
         shifted_wavelengths[il] = lam_s;
         mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -279,10 +280,10 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         /* Loop over wavelengths (we can't prepare the unmasked wavelengths like
          * we can in the non-shifted case, since the shifted wavelengths are
          * particle-dependent) */
-        for (int il = 0; il < nlam; ++il) {
+        for (size_t il = 0; il < nlam; ++il) {
           const int ils = mapped_indices[il];
           /* Skip out-of-bounds or masked bins */
-          if (ils <= 0 || ils >= nlam || grid_props->lam_is_masked(ils)) {
+          if (ils <= 0 || static_cast<size_t>(ils) >= nlam || grid_props->lam_is_masked(ils)) {
             continue;
           }
 
@@ -293,7 +294,6 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
           /* Base spectra contribution */
           const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
-          const size_t base_idx = p * nlam;
 
           /* Deposit into the thread's part spectra */
           this_part_spectra[ils - 1] =
@@ -303,7 +303,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       }
 
       /* Copy the entire spectrum at once  into the output array. */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         local_part_spectra[(p - start_idx) * nlam + il] = this_part_spectra[il];
       }
     }
@@ -372,7 +372,6 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
                                             const double c) {
 
   /* Unpack the grid properties. */
-  const int ndim = grid_props->ndim;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
 
@@ -396,7 +395,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
     double shift_factor = 1.0 + vel / c;
 
     /* Shift wavelengths & map to bins once per particle. */
-    for (int il = 0; il < nlam; ++il) {
+    for (size_t il = 0; il < nlam; ++il) {
       const double lam_s = wavelength[il] * shift_factor;
       shifted_wavelengths[il] = lam_s;
       mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -411,7 +410,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
     /* Loop over wavelengths (we can't prepare the unmasked wavelengths
      * like we can in the non-shifted case, since the shifted wavelengths
      * are particle-dependent) */
-    for (int ilam = 0; ilam < nlam; ilam++) {
+    for (size_t ilam = 0; ilam < nlam; ilam++) {
 
       /* Get the shifted wavelength and index. */
       int ilam_shifted = mapped_indices[ilam];
@@ -425,7 +424,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
       /* Compute the fraction of the shifted wavelength between the two
        * closest wavelength elements. */
       double frac_shifted = 0.0;
-      if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+      if (ilam_shifted > 0 && static_cast<size_t>(ilam_shifted) <= nlam - 1) {
         frac_shifted =
             (shifted_lambda - wavelength[ilam_shifted - 1]) /
             (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
@@ -462,7 +461,6 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
                                          int nthreads, const double c) {
 
   /* Unpack the grid properties. */
-  const int ndim = grid_props->ndim;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
 
@@ -507,7 +505,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
       double shift_factor = 1.0 + vel / c;
 
       /* Shift wavelengths & map to bins once per particle. */
-      for (int il = 0; il < nlam; ++il) {
+      for (size_t il = 0; il < nlam; ++il) {
         const double lam_s = wavelength[il] * shift_factor;
         shifted_wavelengths[il] = lam_s;
         mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
@@ -522,7 +520,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
       /* Loop over wavelengths (we can't prepare the unmasked wavelengths
        * like we can in the non-shifted case, since the shifted wavelengths
        * are particle-dependent) */
-      for (int ilam = 0; ilam < nlam; ilam++) {
+      for (size_t ilam = 0; ilam < nlam; ilam++) {
 
         /* Get the shifted wavelength and index. */
         int ilam_shifted = mapped_indices[ilam];
@@ -536,7 +534,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
         /* Compute the fraction of the shifted wavelength between the two
          * closest wavelength elements. */
         double frac_shifted = 0.0;
-        if (ilam_shifted > 0 && ilam_shifted <= nlam - 1) {
+        if (ilam_shifted > 0 && static_cast<size_t>(ilam_shifted) <= nlam - 1) {
           frac_shifted =
               (shifted_lambda - wavelength[ilam_shifted - 1]) /
               (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
@@ -666,8 +664,20 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Allocate the spectra. */
-  double *spectra = new double[grid_props->nlam]();
-  double *part_spectra = new double[npart * grid_props->nlam]();
+  double *spectra = new (std::nothrow) double[grid_props->nlam]();
+  double *part_spectra =
+      new (std::nothrow) double[npart * grid_props->nlam]();
+
+  if (spectra == NULL || part_spectra == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for spectra.");
+    delete part_props;
+    delete grid_props;
+    if (spectra)
+      delete[] spectra;
+    if (part_spectra)
+      delete[] part_spectra;
+    return NULL;
+  }
 
   /* Convert c to double */
   double c = PyFloat_AsDouble(py_c);
@@ -683,21 +693,17 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);
+    /* Clean up all allocated memory before returning NULL to propagate the ValueError. */
+    delete part_props;
+    delete grid_props;
+    delete[] spectra;
+    delete[] part_spectra;
     return NULL;
   }
   RETURN_IF_PYERR();
 
   /* Reduce the per-particle spectra to the integrated spectra. */
   reduce_spectra(spectra, part_spectra, nlam, npart, nthreads);
-
-  /* Check we got the spectra sucessfully. (Any error messages will already
-   * be set) */
-  if (spectra == NULL) {
-    return NULL;
-  }
-  if (part_spectra == NULL) {
-    return NULL;
-  }
 
   /* Clean up memory! */
   delete part_props;

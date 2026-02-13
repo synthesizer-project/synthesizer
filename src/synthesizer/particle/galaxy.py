@@ -20,7 +20,7 @@ import copy
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Mpc, Msun, Myr, rad, unyt_quantity
+from unyt import Mpc, Msun, Myr, pc, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -1462,6 +1462,7 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         quantity="lnu",
         nthreads=1,
+        cosmo=None,
     ):
         """Make a SpectralCube from an Sed held by this galaxy.
 
@@ -1499,6 +1500,11 @@ class Galaxy(BaseGalaxy):
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for unit conversions between angular
+                and Cartesian coordinates. Only needed when resolution and
+                fov have different unit systems (e.g., angular resolution
+                but Cartesian fov). Default is None.
 
         Returns:
             SpectralCube:
@@ -1515,25 +1521,84 @@ class Galaxy(BaseGalaxy):
                 " What component/s do you want a data cube of?"
             )
 
-        # Make stellar image if requested
+        # Validate cosmo parameter if mixed units are detected
+        if cosmo is None:
+            from unyt import arcsecond, kpc
+
+            from synthesizer.units import unit_is_compatible
+
+            resolution_is_angular = unit_is_compatible(resolution, arcsecond)
+            resolution_is_cartesian = unit_is_compatible(resolution, kpc)
+            fov_is_angular = unit_is_compatible(fov, arcsecond)
+            fov_is_cartesian = unit_is_compatible(fov, kpc)
+
+            # Check for mixed unit systems
+            if (resolution_is_angular and fov_is_cartesian) or (
+                resolution_is_cartesian and fov_is_angular
+            ):
+                raise exceptions.InconsistentArguments(
+                    "Mixed unit systems detected (angular resolution with "
+                    "Cartesian fov or vice versa) but no cosmology "
+                    "provided. Please provide a cosmology object via the "
+                    "cosmo parameter to enable unit conversion."
+                )
+
+        # Import unit standardization function
+        from synthesizer.imaging.image_generators import (
+            _standardize_imaging_units,
+        )
+
+        # Standardize units for stellar component if needed
         if stellar_spectra is not None:
-            # Instantiate the Image colection ready to make the image.
-            stellar_cube = SpectralCube(
-                resolution=resolution, fov=fov, lam=lam
+            needs_smoothing = cube_type == "smoothed"
+            (
+                stellar_resolution,
+                stellar_fov,
+                stellar_coords,
+                stellar_smls,
+            ) = _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=self.stars,
+                cosmo=cosmo,
+                include_smoothing_lengths=needs_smoothing,
             )
 
-            # Make the image using the requested method
+        # Standardize units for blackhole component if needed
+        if blackhole_spectra is not None:
+            needs_smoothing = cube_type == "smoothed"
+            (
+                bh_resolution,
+                bh_fov,
+                bh_coords,
+                bh_smls,
+            ) = _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=self.black_holes,
+                cosmo=cosmo,
+                include_smoothing_lengths=needs_smoothing,
+            )
+
+        # Make stellar image if requested
+        if stellar_spectra is not None:
+            # Instantiate the cube with standardized units
+            stellar_cube = SpectralCube(
+                resolution=stellar_resolution, fov=stellar_fov, lam=lam
+            )
+
+            # Make the cube using the requested method with standardized coords
             if cube_type == "hist":
                 stellar_cube.get_data_cube_hist(
                     sed=self.stars.particle_spectra[stellar_spectra],
-                    coordinates=self.stars.centered_coordinates,
+                    coordinates=stellar_coords,
                     quantity=quantity,
                 )
             else:
                 stellar_cube.get_data_cube_smoothed(
                     sed=self.stars.particle_spectra[stellar_spectra],
-                    coordinates=self.stars.centered_coordinates,
-                    smoothing_lengths=self.stars.smoothing_lengths,
+                    coordinates=stellar_coords,
+                    smoothing_lengths=stellar_smls,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
@@ -1542,23 +1607,23 @@ class Galaxy(BaseGalaxy):
 
         # Make blackhole image if requested
         if blackhole_spectra is not None:
-            # Instantiate the Image colection ready to make the image.
+            # Instantiate the cube with standardized units
             blackhole_cube = SpectralCube(
-                resolution=resolution, fov=fov, lam=lam
+                resolution=bh_resolution, fov=bh_fov, lam=lam
             )
 
-            # Make the image using the requested method
+            # Make the cube using the requested method with standardized coords
             if cube_type == "hist":
                 blackhole_cube.get_data_cube_hist(
-                    sed=self.blackhole.particle_spectra[blackhole_spectra],
-                    coordinates=self.blackhole.centered_coordinates,
+                    sed=self.black_holes.particle_spectra[blackhole_spectra],
+                    coordinates=bh_coords,
                     quantity=quantity,
                 )
             else:
                 blackhole_cube.get_data_cube_smoothed(
-                    sed=self.blackhole.particle_spectra[blackhole_spectra],
-                    coordinates=self.blackhole.centered_coordinates,
-                    smoothing_lengths=self.blackhole.smoothing_lengths,
+                    sed=self.black_holes.particle_spectra[blackhole_spectra],
+                    coordinates=bh_coords,
+                    smoothing_lengths=bh_smls,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
@@ -1574,6 +1639,150 @@ class Galaxy(BaseGalaxy):
             return stellar_cube
         toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
+
+    def get_projected_angular_coordinates(self, cosmo, los_dists=None):
+        """Get projected angular coordinates for all attached components.
+
+        This is the galaxy-level wrapper around the per-component
+        ``Particles.get_projected_angular_coordinates`` method. It iterates
+        over every component (stars, gas, black_holes) that is attached to
+        this galaxy and returns their projected angular coordinates in a
+        single dictionary.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+            los_dists (dict, optional):
+                A dictionary of pre-computed line-of-sight distance arrays
+                keyed by component name (``"stars"``, ``"gas"``,
+                ``"black_holes"``).  When provided for a given component
+                the cosmology-based calculation is skipped for that
+                component.  If ``None`` (default) all distances are
+                computed internally.
+
+        Returns:
+            dict: A dictionary mapping component names to their projected
+                angular coordinate arrays (each an ``(N, 3)`` array in
+                radians with the z-column zeroed).
+        """
+        if los_dists is None:
+            los_dists = {}
+
+        results = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+            results[name] = component.get_projected_angular_coordinates(
+                cosmo=cosmo,
+                los_dists=los_dists.get(name),
+            )
+        return results
+
+    def get_projected_angular_smoothing_lengths(self, cosmo, los_dists=None):
+        """Get projected angular smoothing lengths for all components.
+
+        This is the galaxy-level wrapper around the per-component
+        ``Particles.get_projected_angular_smoothing_lengths`` method. It
+        iterates over every component (stars, gas, black_holes) that is
+        attached to this galaxy and returns their projected angular
+        smoothing lengths in a single dictionary.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+            los_dists (dict, optional):
+                A dictionary of pre-computed line-of-sight distance arrays
+                keyed by component name (``"stars"``, ``"gas"``,
+                ``"black_holes"``).  When provided for a given component
+                the cosmology-based calculation is skipped for that
+                component.  If ``None`` (default) all distances are
+                computed internally.
+
+        Returns:
+            dict: A dictionary mapping component names to their projected
+                angular smoothing length arrays (each an ``(N,)`` array in
+                radians).
+        """
+        if los_dists is None:
+            los_dists = {}
+
+        results = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+            results[name] = component.get_projected_angular_smoothing_lengths(
+                cosmo=cosmo,
+                los_dists=los_dists.get(name),
+            )
+        return results
+
+    def get_projected_angular_imaging_props(self, cosmo):
+        """Get projected angular imaging properties for all components.
+
+        This is a galaxy-level convenience method that mirrors the
+        per-component ``Particles.get_projected_angular_imaging_props``.
+        It pre-computes the per-particle line-of-sight distances for each
+        attached component exactly once and then passes them into both
+        ``get_projected_angular_coordinates`` and
+        ``get_projected_angular_smoothing_lengths``, avoiding redundant
+        angular diameter distance calculations.
+
+        The angular diameter distance is the same for every component
+        (determined solely by the galaxy redshift) but each component has
+        its own particle z-offsets, so the full ``los_dists`` array is
+        built per component.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+
+        Returns:
+            dict: A dictionary mapping each attached component name
+                (``"stars"``, ``"gas"``, ``"black_holes"``) to a tuple of
+                ``(projected_angular_coords, projected_angular_smls)``.
+        """
+        # The angular diameter distance is shared — it depends only on the
+        # galaxy redshift
+        ang_diam_dist = self.get_angular_diameter_distance(cosmo)
+
+        # Pre-compute per-component los_dists so we only pay for one
+        # angular diameter distance call total
+        los_dists = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+
+            # Combine the angular diameter distance with the particle
+            # z-offsets to get the full line-of-sight distances
+            cent_coords = component.centered_coordinates
+            dists = ang_diam_dist + cent_coords[:, 2]
+
+            # At redshift 0 shift so the closest particle sits at 10 pc
+            if self.redshift == 0.0:
+                z_min = np.min(cent_coords[:, 2])
+                dists += np.abs(z_min) + 10 * pc
+
+            los_dists[name] = dists
+
+        # Delegate to the two galaxy-level wrappers, passing pre-computed
+        # distances to avoid any repeat work
+        coords = self.get_projected_angular_coordinates(
+            cosmo=cosmo,
+            los_dists=los_dists,
+        )
+        smls = self.get_projected_angular_smoothing_lengths(
+            cosmo=cosmo,
+            los_dists=los_dists,
+        )
+
+        # Combine into per-component tuples
+        return {name: (coords[name], smls[name]) for name in coords}
 
     @accepts(phi=rad, theta=rad)
     def rotate_particles(

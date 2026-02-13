@@ -788,13 +788,25 @@ class ImageCollection(ImagingBase):
         if vmin is None and not unique_norm_min:
             vmin = np.inf
             for f in self.imgs:
-                minimum = np.percentile(self.imgs[f].arr, 32)
+                # Use non-zero values for percentile calculation to handle
+                # sparse images (e.g., single particle images)
+                non_zero = self.imgs[f].arr[self.imgs[f].arr > 0]
+                if len(non_zero) > 0:
+                    minimum = np.percentile(non_zero, 32)
+                else:
+                    minimum = 0
                 if minimum < vmin:
                     vmin = minimum
         if vmax is None and not unique_norm_max:
             vmax = -np.inf
             for f in self.imgs:
-                maximum = np.percentile(self.imgs[f].arr, 99.9)
+                # Use non-zero values for percentile calculation to handle
+                # sparse images (e.g., single particle images)
+                non_zero = self.imgs[f].arr[self.imgs[f].arr > 0]
+                if len(non_zero) > 0:
+                    maximum = np.percentile(non_zero, 99.9)
+                else:
+                    maximum = np.max(self.imgs[f].arr)
                 if maximum > vmax:
                     vmax = maximum
 

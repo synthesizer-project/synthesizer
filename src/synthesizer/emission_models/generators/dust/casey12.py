@@ -1,6 +1,8 @@
 """A submodule defining Casey12 dust emission generators."""
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from unyt import (
@@ -18,13 +20,15 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.components.component import Component
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
+
+if TYPE_CHECKING:
+    from synthesizer.components.component import Component
 
 
 class Casey12(DustEmission):
@@ -142,6 +146,37 @@ class Casey12(DustEmission):
             do_cmb_heating,
             required_params=("temperature",),
         )
+
+    def __repr__(self):
+        """Return a string representation of the Casey12 object."""
+        # Start with base class repr components
+        base_parts = []
+        if self.is_energy_balance:
+            base_parts.append(
+                f"intrinsic={self._intrinsic.label}, "
+                f"attenuated={self._attenuated.label}"
+            )
+        elif self.is_scaled:
+            base_parts.append(f"scaler={self._scaler.label}")
+
+        # Add Casey12 specific parameters
+        parts = [
+            f"temperature={self.temperature}",
+            f"emissivity={self.emissivity}",
+            f"alpha={self.alpha}",
+            f"n_bb={self.n_bb}",
+            f"lam_0={self.lam_0}",
+        ]
+
+        # Add base parts if present
+        if base_parts:
+            parts = base_parts + parts
+
+        # Add CMB heating if enabled
+        if self.do_cmb_heating:
+            parts.append("do_cmb_heating=True")
+
+        return f"Casey12({', '.join(parts)})"
 
     @accepts(nu=Hz)
     def _lnu(self, nu: unyt_array, temperature: unyt_quantity) -> unyt_array:

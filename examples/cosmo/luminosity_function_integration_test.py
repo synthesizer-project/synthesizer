@@ -18,8 +18,8 @@ import numpy as np
 from synthesizer import TEST_DATA_DIR
 from synthesizer.conversions import lnu_to_absolute_mag
 from synthesizer.emission_models import IncidentEmission
-from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
+from synthesizer.instruments import FilterCollection
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 
 

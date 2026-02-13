@@ -35,7 +35,7 @@ from synthesizer._version import __version__
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.integrate import integrate_last_axis
+from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 
 
 @accepts(new_lam=angstrom)
@@ -1632,7 +1632,10 @@ class Filter:
                     "can sometimes occur where the effective "
                     "area is returned instead. Please check "
                     "that the filter you are querying returns "
-                    "the transmission / response."
+                    "the transmission / response. (Note that for the case "
+                    "of GALEX we provide an importable instrument that "
+                    "handles this correctly: "
+                    "`from synthesizer.instruments import GALEX`.)"
                 )
             )
 
@@ -1841,7 +1844,7 @@ class Filter:
         if arr_in_band.size == 0:
             if arr.shape[0] > 0:
                 warn(f"{self.filter_code} outside of emission array.")
-            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
+            return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
 
         # Multiply the array by the filter transmission curve
         transmission = arr_in_band * t_in_band
@@ -1849,7 +1852,7 @@ class Filter:
         # Ensure we actually have some transmission in this band, no point
         # in calling the C extensions if not
         if np.sum(transmission) == 0:
-            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
+            return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_per_x = integrate_last_axis(
@@ -1880,10 +1883,10 @@ class Filter:
         """
         return (
             np.sqrt(
-                np.trapezoid(
+                trapezoid(
                     self._original_lam * self.original_t, x=self._original_lam
                 )
-                / np.trapezoid(
+                / trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1916,13 +1919,13 @@ class Filter:
         """
         return (
             np.exp(
-                np.trapezoid(
+                trapezoid(
                     np.log(self._original_lam)
                     * self.original_t
                     / self._original_lam,
                     x=self._original_lam,
                 )
-                / np.trapezoid(
+                / trapezoid(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
             )
@@ -1941,7 +1944,7 @@ class Filter:
         """
         # Calculate the left and right hand side.
         A = np.sqrt(
-            np.trapezoid(
+            trapezoid(
                 (np.log(self._original_lam / self.meanwv().value) ** 2)
                 * self.original_t
                 / self._original_lam,
@@ -1950,7 +1953,7 @@ class Filter:
         )
 
         B = np.sqrt(
-            np.trapezoid(
+            trapezoid(
                 self.original_t / self._original_lam, x=self._original_lam
             )
         )
@@ -1990,9 +1993,7 @@ class Filter:
             float
                 The rectangular width.
         """
-        return (
-            np.trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
-        )
+        return trapezoid(self.original_t, x=self._original_lam) / self.Tpeak()
 
     def max(self):
         """Calculate the longest wavelength with transmission >0.01.
