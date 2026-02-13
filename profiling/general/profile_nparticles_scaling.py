@@ -16,7 +16,6 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -66,19 +65,13 @@ def profile_nparticles(nthreads=1, n_averages=3):
     # JWSTNIRCamWide has 8 filters total
     instrument = get_test_instrument(grid)
 
-    # Create FilterCollections from the instrument's filters
-    # Small set (3 filters) - select first 3 filter codes from instrument
-    filter_codes_3 = list(instrument.filter_codes)[:3]
-    filters_3 = FilterCollection(
-        filters=[instrument.filters[code] for code in filter_codes_3],
-        new_lam=grid.lam,
-    )
+    # Extract the FilterCollection from the instrument
+    # Small set (3 filters) - select first 3 filters
+    filter_codes_3 = instrument.available_filters[:3]
+    filters_3 = instrument.filters.select(*filter_codes_3)
 
-    # Large set (8 filters) - use all filter codes from instrument
-    filters_10 = FilterCollection(
-        filters=list(instrument.filters.values()),
-        new_lam=grid.lam,
-    )
+    # Large set (8 filters) - use all available filters
+    filters_10 = instrument.filters.select(*instrument.available_filters)
 
     # --- Setup Imaging ---
     kernel = Kernel().get_kernel()
