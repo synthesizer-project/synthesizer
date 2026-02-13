@@ -16,17 +16,33 @@ def load_timing(filepath: Path) -> dict:
         filepath (Path): The path to the timing CSV file.
 
     Returns:
-        dict: A dictionary where keys are operation names and values are their
-              execution times in seconds.
+        dict: A dictionary where keys are operation names and values are dicts
+            containing 'time' (float) and optionally 'source' (str).
     """
     timings = {}
     with open(filepath) as f:
-        lines = f.readlines()[1:]  # Skip header
-        for line in lines:
+        lines = f.readlines()
+        if not lines:
+            return timings
+
+        header = lines[0].strip().split(",")
+
+        # Check if new format with source column
+        has_source = "source" in header
+
+        for line in lines[1:]:
             parts = line.strip().split(",")
-            if len(parts) == 2:
-                operation, seconds = parts
-                timings[operation] = float(seconds)
+            if has_source and len(parts) >= 3:
+                operation, seconds, source = (
+                    parts[0],
+                    float(parts[1]),
+                    parts[2],
+                )
+                timings[operation] = {"time": seconds, "source": source}
+            elif len(parts) == 2:
+                operation, seconds = parts[0], float(parts[1])
+                # Old format without source - assume Python
+                timings[operation] = {"time": seconds, "source": "Python"}
     return timings
 
 
@@ -72,18 +88,21 @@ def main() -> None:
 
     # Get operations (from first profile)
     operations = list(next(iter(timing_data.values())).keys())
-    operations = [op for op in operations if op != "total"]
 
-    # Filter operations: keep only those that contribute >=5% to at
-    # least one run
+    # Filter operations: keep only those that contribute >=5% to one run
     filtered_ops = []
     labels = list(timing_data.keys())
     for op in operations:
         for label in labels:
-            total_time = timing_data[label].get("total", 1)
-            op_time = timing_data[label].get(op, 0)
+            op_data = timing_data[label].get(op, {})
+            op_time = op_data.get("time", 0)
+            # Use the label's total time (sum of its operations)
+            label_total = sum(
+                timing_data[label].get(o, {}).get("time", 0)
+                for o in operations
+            )
             contribution = (
-                (op_time / total_time * 100) if total_time > 0 else 0
+                (op_time / label_total * 100) if label_total > 0 else 0
             )
             if contribution >= 5.0:
                 filtered_ops.append(op)
@@ -95,35 +114,58 @@ def main() -> None:
     # Create line plot showing scaling
     fig, ax = plt.subplots(figsize=(12, 8))
 
-    # Plot filtered operations
-    colors = plt.cm.Set1(np.linspace(0, 1, len(filtered_ops) + 1))
-    for i, op in enumerate(filtered_ops):
-        values = [timing_data[label].get(op, 0) for label in labels]
-        display_name = op.replace("op_", "") if op.startswith("op_") else op
+    # Group operations by source for legend
+    c_ops = [
+        op
+        for op in filtered_ops
+        if timing_data[labels[0]].get(op, {}).get("source") == "C"
+    ]
+    py_ops = [
+        op
+        for op in filtered_ops
+        if timing_data[labels[0]].get(op, {}).get("source") != "C"
+    ]
+
+    # Plot C++ operations (solid lines)
+    colors_c = plt.cm.Blues(np.linspace(0.4, 0.8, len(c_ops) + 1))
+    for i, op in enumerate(c_ops):
+        values = [
+            timing_data[label].get(op, {}).get("time", 0) for label in labels
+        ]
         ax.plot(
             nparticles,
             values,
             marker="o",
             linewidth=2,
-            label=display_name,
-            color=colors[i],
+            label=op,
+            color=colors_c[i],
             markersize=6,
+            linestyle="-",
         )
 
-    # Plot total time (dashed, thicker)
-    total_values = [timing_data[label].get("total", 0) for label in labels]
-    ax.plot(
-        nparticles,
-        total_values,
-        marker="s",
-        linewidth=3,
-        linestyle="--",
-        label="Total",
-        color="black",
-        markersize=8,
-    )
+    # Plot Python operations (dashed lines)
+    colors_py = plt.cm.Oranges(np.linspace(0.4, 0.8, len(py_ops) + 1))
+    for i, op in enumerate(py_ops):
+        values = [
+            timing_data[label].get(op, {}).get("time", 0) for label in labels
+        ]
+        ax.plot(
+            nparticles,
+            values,
+            marker="s",
+            linewidth=2,
+            label=op,
+            color=colors_py[i],
+            markersize=6,
+            linestyle="--",
+        )
 
     # Add reference scaling line (O(n)) anchored at first data point
+    # Use sum of all operation times as total
+    total_values = [
+        sum(timing_data[label].get(op, {}).get("time", 0) for op in operations)
+        for label in labels
+    ]
     npart_ref = np.array(nparticles)
     ax.plot(
         npart_ref,
@@ -138,7 +180,7 @@ def main() -> None:
     ax.set_ylabel("Time (seconds)", fontsize=12)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.legend(loc="best", fontsize=10)
+    ax.legend(loc="best", fontsize=8, ncol=2)
     ax.grid(alpha=0.3, which="major")
     fig.tight_layout()
 
@@ -154,24 +196,11 @@ def main() -> None:
 
         for label in labels:
             f.write(f"{label}:\n")
-            for op in operations + ["total"]:
-                val = timing_data[label].get(op, 0)
-                f.write(f"  {op:20s}:   {val:8.3f}s\n")
+            for op in operations:
+                val = timing_data[label].get(op, {}).get("time", 0)
+                src = timing_data[label].get(op, {}).get("source", "?")
+                f.write(f"  {op:40s}: {val:8.3f}s [{src}]\n")
             f.write("\n")
-
-        # Relative performance
-        if len(labels) > 1:
-            f.write("Relative Performance:\n")
-            baseline_label = labels[0]
-            baseline = timing_data[baseline_label]
-            for label in labels[1:]:
-                f.write(f"  {label} vs {baseline_label}:\n")
-                for op in operations:
-                    baseline_val = baseline.get(op, 1e-10)
-                    val = timing_data[label].get(op, 1e-10)
-                    ratio = val / baseline_val if baseline_val > 0 else 0
-                    f.write(f"    {op:20s}:   {ratio:.2f}x\n")
-                f.write("\n")
 
     print(f"✓ Saved: {summary_file}")
 
