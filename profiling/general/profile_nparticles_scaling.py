@@ -16,13 +16,11 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
+from synthesizer.instruments import Instrument
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
-from synthesizer.utils.profiling_utils import (
-    get_instrument_profile,
-)
 
 # Add pipeline profiling to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
@@ -60,18 +58,13 @@ def profile_nparticles(nthreads=1, n_averages=3):
         grid, per_particle=False, label="int_shift", vel_shift=True
     )
 
-    # --- Setup Filters ---
+    # --- Setup Instrument and Filters ---
     # Get cached instrument from pipeline_test_data (no network access)
-    # JWSTNIRCamWide has 8 filters total
     instrument = get_test_instrument(grid)
 
-    # Extract the FilterCollection from the instrument
-    # Small set (3 filters) - select first 3 filters
-    filter_codes_3 = instrument.available_filters[:3]
-    filters_3 = instrument.filters.select(*filter_codes_3)
-
-    # Large set (8 filters) - use all available filters
-    filters_10 = instrument.filters.select(*instrument.available_filters)
+    # Use instrument's filters for different test cases
+    filters_3 = instrument.filters.select(*instrument.available_filters[:3])
+    filters_10 = instrument.filters
 
     # --- Setup Imaging ---
     kernel = Kernel().get_kernel()
@@ -81,19 +74,14 @@ def profile_nparticles(nthreads=1, n_averages=3):
     res_low = fov / npix_low
     res_high = fov / npix_high
 
-    # Create instruments for imaging
-    inst_dir = Path("profiling/instruments")
-    inst_dir.mkdir(parents=True, exist_ok=True)
-
-    inst_low = get_instrument_profile(
+    # Create high and low resolution instruments using the cached filters
+    inst_low = Instrument(
         label="low_res",
-        filepath=str(inst_dir / "low_res.hdf5"),
         filters=filters_3,
         resolution=res_low,
     )
-    inst_high = get_instrument_profile(
+    inst_high = Instrument(
         label="high_res",
-        filepath=str(inst_dir / "high_res.hdf5"),
         filters=filters_3,
         resolution=res_high,
     )

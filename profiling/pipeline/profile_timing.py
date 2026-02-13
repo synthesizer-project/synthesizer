@@ -2,20 +2,22 @@
 
 This script builds galaxies, instruments, and an emission model, then uses
 the Pipeline to run all requested operations and record timing data from
-both setup stages and Pipeline._op_timing.
+atomic timing output.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import os
 import sys
-import time
+import tempfile
 from pathlib import Path
 
 from astropy.cosmology import Planck18
 from unyt import kpc
 
+from synthesizer import check_atomic_timing
 from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
 
@@ -29,6 +31,40 @@ from pipeline_test_data import (
 )
 
 
+def parse_atomic_timing_output(output: str) -> dict:
+    """Parse atomic timing output to extract operation timings.
+
+    Args:
+        output (str): The captured stdout containing atomic timing lines.
+
+    Returns:
+        dict: A dictionary with operation names as keys and dicts containing
+            'time' and 'source' as values.
+    """
+    timings = {}
+    for line in output.splitlines():
+        if "took:" in line and ("[C]" in line or "[Python]" in line):
+            try:
+                # Split on "took:" to separate operation from time
+                key, value = line.split("took:")
+                # Determine source (C++ or Python)
+                source = "C" if "[C]" in key else "Python"
+                # Clean up operation name
+                operation = (
+                    key.replace("[Python]", "").replace("[C]", "").strip()
+                )
+                # Extract time value
+                time_str = value.replace("seconds", "").strip()
+                time_val = float(time_str)
+
+                # Store with source
+                timings[operation] = {"time": time_val, "source": source}
+            except (ValueError, AttributeError):
+                # Skip malformed lines
+                continue
+    return timings
+
+
 def run_pipeline_profiling(
     nparticles: int,
     ngalaxies: int,
@@ -38,6 +74,9 @@ def run_pipeline_profiling(
     nthreads: int = 8,
 ) -> dict:
     """Run full Pipeline profiling and return stage timings.
+
+    This function captures atomic timing output from the Pipeline operations
+    and parses it to extract individual operation timings.
 
     Args:
         nparticles (int): Number of stellar particles per galaxy.
@@ -52,116 +91,112 @@ def run_pipeline_profiling(
             Defaults to 8.
 
     Returns:
-        dict: A dictionary with stage names and timings in seconds.
+        dict: A dictionary with operation names and timings in seconds.
     """
-    timings = {}
-
     # Setup - load grid
-    t_start = time.perf_counter()
     grid = Grid("test_grid")
-    timings["grid_load"] = time.perf_counter() - t_start
 
     # Build test data
-    t_start = time.perf_counter()
     galaxies = build_test_galaxies(grid, nparticles, ngalaxies, seed)
-    timings["build_galaxies"] = time.perf_counter() - t_start
-
-    t_start = time.perf_counter()
     instrument = get_test_instrument(grid)
     kernel = get_test_kernel()
-    timings["build_instruments"] = time.perf_counter() - t_start
-
-    t_start = time.perf_counter()
     model = get_test_emission_model(grid)
-    timings["model_setup"] = time.perf_counter() - t_start
 
     # Create Pipeline
-    t_start = time.perf_counter()
     pipeline = Pipeline(
         emission_model=model,
         nthreads=nthreads,
         verbose=0,
     )
     pipeline.add_galaxies(galaxies)
-    timings["pipeline_setup"] = time.perf_counter() - t_start
 
-    # Signal operations
-    t_start = time.perf_counter()
+    # Redirect stdout to capture atomic timing output
+    original_stdout_fd = os.dup(sys.stdout.fileno())
+    temp_stdout = os.dup(original_stdout_fd)
 
-    # LOS optical depths (if we have gas and stars)
-    pipeline.get_los_optical_depths(kernel=kernel)
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        try:
+            # Redirect stdout to temp file
+            os.dup2(temp_file.fileno(), sys.stdout.fileno())
 
-    # SFZH and SFH
-    pipeline.get_sfzh(grid.log10ages, grid.metallicities)
-    pipeline.get_sfh(grid.log10ages)
+            # Signal operations
+            # LOS optical depths (if we have gas and stars)
+            pipeline.get_los_optical_depths(kernel=kernel)
 
-    # Spectra (rest frame)
-    pipeline.get_spectra()
+            # SFZH and SFH
+            pipeline.get_sfzh(grid.log10ages, grid.metallicities)
+            pipeline.get_sfh(grid.log10ages)
 
-    # Photometry (rest frame)
-    pipeline.get_photometry_luminosities(
-        instrument,
-    )
+            # Spectra (rest frame)
+            pipeline.get_spectra()
 
-    # Lines (rest frame)
-    pipeline.get_lines(line_ids=grid.available_lines)
+            # Photometry (rest frame)
+            pipeline.get_photometry_luminosities(instrument)
 
-    # Imaging (rest frame)
-    fov = fov_kpc * kpc
-    cosmo = Planck18
-    pipeline.get_images_luminosity(
-        instrument,
-        fov=fov,
-        kernel=kernel,
-        cosmo=cosmo,
-        labels="intrinsic",
-    )
+            # Lines (rest frame)
+            pipeline.get_lines(line_ids=grid.available_lines)
 
-    # Observer frame operations if requested
-    if include_observer_frame:
-        cosmo = Planck18
+            # Imaging (rest frame)
+            fov = fov_kpc * kpc
+            cosmo = Planck18
+            pipeline.get_images_luminosity(
+                instrument,
+                fov=fov,
+                kernel=kernel,
+                cosmo=cosmo,
+                labels="intrinsic",
+            )
 
-        # Observed spectra
-        pipeline.get_observed_spectra(cosmo=cosmo)
+            # Observer frame operations if requested
+            if include_observer_frame:
+                cosmo = Planck18
 
-        # Photometric fluxes
-        pipeline.get_photometry_fluxes(
-            instrument,
-            cosmo=cosmo,
-        )
+                # Observed spectra
+                pipeline.get_observed_spectra(cosmo=cosmo)
 
-        # Observed lines
-        pipeline.get_observed_lines(cosmo=cosmo)
+                # Photometric fluxes
+                pipeline.get_photometry_fluxes(instrument, cosmo=cosmo)
 
-        # Flux images
-        pipeline.get_images_flux(
-            instrument,
-            fov=fov,
-            kernel=kernel,
-            cosmo=cosmo,
-            labels="intrinsic",
-        )
+                # Observed lines
+                pipeline.get_observed_lines(cosmo=cosmo)
 
-    timings["signal_operations"] = time.perf_counter() - t_start
+                # Flux images
+                pipeline.get_images_flux(
+                    instrument,
+                    fov=fov,
+                    kernel=kernel,
+                    cosmo=cosmo,
+                    labels="intrinsic",
+                )
 
-    # Run the Pipeline
-    t_start = time.perf_counter()
-    pipeline.run()
-    timings["pipeline_run"] = time.perf_counter() - t_start
+            # Run the Pipeline
+            pipeline.run()
 
-    # Extract operation timings from Pipeline
-    for op_name, op_time in pipeline._op_timing.items():
-        if op_time > 0:
-            timings[f"op_{op_name}"] = op_time
+        finally:
+            # Restore stdout
+            os.dup2(temp_stdout, sys.stdout.fileno())
+            os.close(temp_stdout)
 
-    # Compute total
-    timings["total"] = sum(v for k, v in timings.items() if k != "total")
+        # Read captured atomic timing output
+        with open(temp_file.name, "r") as f:
+            output = f.read()
+        os.unlink(temp_file.name)
+
+    # Parse atomic timing output
+    timings = parse_atomic_timing_output(output)
 
     return timings
 
 
 def main() -> None:
     """Main entry point for the timing profiling script."""
+    # Check if atomic timing is available
+    if not check_atomic_timing():
+        raise RuntimeError(
+            "Atomic timing not available. Recompile with: "
+            "ATOMIC_TIMING=1 pip install -e ."
+        )
+
     parser = argparse.ArgumentParser(
         description="Profile Pipeline execution timing"
     )
@@ -222,17 +257,17 @@ def main() -> None:
         args.nthreads,
     )
 
-    # Write CSV
+    # Write CSV with source column
     csv_file = output_dir / "timing.csv"
     with open(csv_file, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["operation", "seconds"])
-        for operation, seconds in timings.items():
-            writer.writerow([operation, f"{seconds:.6f}"])
+        writer.writerow(["operation", "seconds", "source"])
+        for operation, data in timings.items():
+            writer.writerow([operation, f"{data['time']:.6f}", data["source"]])
 
     print(f"✓ Timing profile saved: {csv_file}")
-    for op, t in timings.items():
-        print(f"  {op}: {t:.3f}s")
+    for op, data in timings.items():
+        print(f"  {op}: {data['time']:.3f}s ({data['source']})")
 
 
 if __name__ == "__main__":

@@ -209,6 +209,15 @@ if __name__ == "__main__":
 
     args = args.parse_args()
 
+    # Check for atomic timing
+    from synthesizer import check_atomic_timing
+
+    if not check_atomic_timing():
+        raise RuntimeError(
+            "Atomic timing not available. Recompile with: "
+            "ATOMIC_TIMING=1 pip install -e ."
+        )
+
     los_surface_density_strong_scaling(
         args.basename,
         args.out_dir,
