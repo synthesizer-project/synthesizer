@@ -7,6 +7,7 @@ For further details see the documentation on the functions below.
 """
 
 import os
+import re
 import sys
 import tempfile
 import time
@@ -171,35 +172,22 @@ def parse_and_collect_runtimes(
 
     # Loop over the logs and collect the runtimes
     for line in output_lines:
-        if ":" in line:
-            # Get the key and value from the line
-            key, value = line.split(":")
+        # Use regex to match the atomic timing pattern:
+        # [C] or [Python] <operation> took: <number> seconds
+        match = re.search(r"\[([^\]]+)\]\s+(.+?)\s+took:\s+([\d.]+)\s*s", line)
+        if match:
+            source = match.group(1)
+            operation = match.group(2)
+            value = float(match.group(3))
 
-            # Get the stripped key
-            stripped_key = (
-                key.replace("[Python]", "")
-                .replace("[C]", "")
-                .replace("took", "")
-                .replace("took (in serial)", "")
-                .replace("[Total]", "")
-                .strip()
-            )
+            # Set linestyle based on source
+            if operation not in linestyles:
+                if source == "C" or operation == "Total":
+                    linestyles[operation] = "-"
+                elif source == "Python":
+                    linestyles[operation] = "--"
 
-            # Replace the total key
-            if "[Total]" in key:
-                stripped_key = "Total"
-
-            # Set the linestyle
-            if key not in linestyles:
-                if "[C]" in key or stripped_key == "Total":
-                    linestyles[stripped_key] = "-"
-                elif "[Python]" in key:
-                    linestyles[stripped_key] = "--"
-
-            # Convert the value to a float
-            value = float(value.replace("seconds", "").strip())
-
-            atomic_runtimes.setdefault(stripped_key, []).append(value)
+            atomic_runtimes.setdefault(operation, []).append(value)
         print(line)
 
     # Average every average_over runs

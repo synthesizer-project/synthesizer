@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -42,26 +43,15 @@ def parse_atomic_timing_output(output: str) -> dict:
             'time' and 'source' as values.
     """
     timings = {}
+    # Use regex to match: [C] or [Python] <operation> took: <number> seconds
+    pattern = re.compile(r"\[([^\]]+)\]\s+(.+?)\s+took:\s+([\d.]+)\s*s")
     for line in output.splitlines():
-        if "took:" in line and ("[C]" in line or "[Python]" in line):
-            try:
-                # Split on "took:" to separate operation from time
-                key, value = line.split("took:")
-                # Determine source (C++ or Python)
-                source = "C" if "[C]" in key else "Python"
-                # Clean up operation name
-                operation = (
-                    key.replace("[Python]", "").replace("[C]", "").strip()
-                )
-                # Extract time value
-                time_str = value.replace("seconds", "").strip()
-                time_val = float(time_str)
-
-                # Store with source
-                timings[operation] = {"time": time_val, "source": source}
-            except (ValueError, AttributeError):
-                # Skip malformed lines
-                continue
+        match = pattern.search(line)
+        if match:
+            source = match.group(1)
+            operation = match.group(2)
+            time_val = float(match.group(3))
+            timings[operation] = {"time": time_val, "source": source}
     return timings
 
 
