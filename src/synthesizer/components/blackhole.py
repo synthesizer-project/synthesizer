@@ -6,7 +6,7 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import G, Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Lsun, Msun, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -91,7 +91,7 @@ class BlackholesComponent(Component):
     accretion_rate = Quantity("mass_rate")
     inclination = Quantity("angle")
     bolometric_luminosity = Quantity("luminosity")
-    eddington_luminosity = Quantity("luminosity")
+    eddington_luminosity = Quantity("luminosity_solar")
     bb_temperature = Quantity("temperature")
     mass = Quantity("mass")
 
@@ -405,11 +405,6 @@ class BlackholesComponent(Component):
                 self.inclination.to("radian").value
             )
 
-    @property
-    def _torus_edgeon_cond(self):
-        """When this is > 90 deg the torus obscures the disc."""
-        return self.inclination + self.theta_torus
-
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.
 
@@ -445,11 +440,13 @@ class BlackholesComponent(Component):
 
         Returns:
             unyt_array
-                The black hole eddington luminosity
+                The black hole eddington luminosity in solar luminosities
         """
-        # Note: the factor 1.257E38 comes from:
-        # 4*pi*G*mp*c*Msun/sigma_thompson
-        self.eddington_luminosity = 1.257e38 * self._mass
+        # The Eddington luminosity is given by:
+        # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
+        # Converting to solar luminosities:
+        # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
+        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
 
         return self.eddington_luminosity
 
@@ -460,9 +457,13 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        self.eddington_ratio = (
-            self._bolometric_luminosity / self._eddington_luminosity
-        )
+        # Compute the eddington ratio but ensure both luminosities are in the
+        # same units.
+        bol_lum = self.bolometric_luminosity.to(
+            self.eddington_luminosity.units
+        ).ndview
+        edd_lum = self._eddington_luminosity
+        self.eddington_ratio = bol_lum / edd_lum
 
         return self.eddington_ratio
 

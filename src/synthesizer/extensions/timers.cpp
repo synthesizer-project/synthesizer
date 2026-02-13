@@ -34,6 +34,9 @@ void toc(const char *msg, double start_time) {
 #else
   printf("[C] %s took (in serial): %f seconds\n", msg, elapsed_time);
 #endif
+#else
+  (void)msg;
+  (void)start_time;
 #endif
 }
 
@@ -55,6 +58,8 @@ static PyObject *py_toc(PyObject *self, PyObject *args) {
   double end_time = GET_TIME();
   double elapsed_time = end_time - start_time;
   printf("[Python] %s took: %f seconds\n", msg, elapsed_time);
+#else
+  (void)args;
 #endif
   Py_RETURN_NONE;
 }

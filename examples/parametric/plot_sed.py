@@ -19,8 +19,8 @@ from synthesizer.emission_models import (
     ReprocessedEmission,
 )
 from synthesizer.emission_models.attenuation import PowerLaw
-from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
+from synthesizer.instruments import FilterCollection
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 

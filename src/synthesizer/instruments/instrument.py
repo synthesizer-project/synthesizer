@@ -32,6 +32,7 @@ from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_collection import InstrumentCollection
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.util_funcs import obj_to_hashable
 
 
 class Instrument:
@@ -96,10 +97,14 @@ class Instrument:
             lam (unyt_array, optional):
                 The wavelength array of the Instrument (with units). Default
                 is None.
-            depth (dict/float, optional):
-                The depth of the Instrument in apparent mags. If filters are
-                passed depth must be a dictionaries of depths with and entry
-                per filter. Default is None.
+            depth (dict/float/unyt_quantity, optional):
+                The depth of the Instrument. Can be specified as:
+                - float: apparent magnitude (dimensionless)
+                - unyt_quantity: flux or luminosity with units
+                - dict: mapping of filter names to depths (float or
+                  unyt_quantity)
+                If filters are passed, depth must be a dictionary with an
+                entry per filter. Default is None.
             depth_app_radius (unyt_quantity, optional):
                 The depth aperture radius of the Instrument (with units).
                 If this is omitted but SNRs and depths are provided, it is
@@ -113,12 +118,12 @@ class Instrument:
                 a dictionary of PSFs with an entry for each filter. If doing
                 resolved spectroscopy this should be an array.
                 Default is None.
-            noise_maps (unyt_array, optional):
-                The noise maps of the Instrument. If doing imaging this should
-                be a dictionary of noise maps with an entry for each filter.
-                If doing resolved spectroscopy this should be an array with
-                noise as a function of wavelength.
-                Default is None.
+            noise_maps (dict/unyt_array, optional):
+                The noise maps of the Instrument (must have units). Can be:
+                - unyt_array: noise as a function of wavelength (spectroscopy)
+                - dict: mapping of filter names to noise maps (imaging)
+                Units must be compatible with the image type (flux or
+                luminosity). Default is None.
         """
         # Set the label of the Instrument
         self.label = label
@@ -618,6 +623,81 @@ class Instrument:
         collection.add_instruments(self, other)
 
         return collection
+
+    def __hash__(self):
+        """Enable hashing of Instrument objects.
+
+        This enables instruments to be able to placed into a set for quick
+        removal of duplicates.
+        """
+        # Unpack all the annoyingly flexible options to a consistent hashable
+        # state
+        filters_hash = obj_to_hashable(
+            self.filters.filter_codes if self.filters else None
+        )
+        lam_hash = obj_to_hashable(self._lam)
+        depth_hash = obj_to_hashable(self.depth)
+        depth_app_radius_hash = obj_to_hashable(self.depth_app_radius)
+        snrs_hash = obj_to_hashable(self.snrs)
+        psfs_hash = obj_to_hashable(self.psfs)
+        noise_maps_hash = obj_to_hashable(self.noise_maps)
+        resolution_hash = obj_to_hashable(self.resolution)
+
+        # Define the hash based on the label and properties of the object
+        return hash(
+            (
+                self.label,
+                filters_hash,
+                resolution_hash,
+                lam_hash,
+                depth_hash,
+                depth_app_radius_hash,
+                snrs_hash,
+                psfs_hash,
+                noise_maps_hash,
+            )
+        )
+
+    def __eq__(self, other):
+        """Enable equality comparison of Instrument objects.
+
+        Two Instruments are considered equal if all their defining
+        properties match. This is consistent with __hash__ to ensure
+        proper behavior in sets and dictionaries.
+
+        Args:
+            other: The object to compare with.
+
+        Returns:
+            bool: True if the instruments are equal, False otherwise.
+            NotImplemented: If other is not an Instrument.
+        """
+        # Return NotImplemented for non-Instrument objects so Python
+        # can try the reverse comparison
+        if not isinstance(other, Instrument):
+            return NotImplemented
+
+        # Compare all fields used in __hash__ using the same normalized
+        # representations
+        return (
+            self.label == other.label
+            and obj_to_hashable(
+                self.filters.filter_codes if self.filters else None
+            )
+            == obj_to_hashable(
+                other.filters.filter_codes if other.filters else None
+            )
+            and obj_to_hashable(self._lam) == obj_to_hashable(other._lam)
+            and obj_to_hashable(self.depth) == obj_to_hashable(other.depth)
+            and obj_to_hashable(self.depth_app_radius)
+            == obj_to_hashable(other.depth_app_radius)
+            and obj_to_hashable(self.snrs) == obj_to_hashable(other.snrs)
+            and obj_to_hashable(self.psfs) == obj_to_hashable(other.psfs)
+            and obj_to_hashable(self.noise_maps)
+            == obj_to_hashable(other.noise_maps)
+            and obj_to_hashable(self.resolution)
+            == obj_to_hashable(other.resolution)
+        )
 
     def add_filters(self, filters, psfs=None, noise_maps=None):
         """Add filters to the Instrument.

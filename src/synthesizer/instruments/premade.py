@@ -58,11 +58,12 @@ Example usage:
 import os
 
 import h5py
-from unyt import arcsecond
+import numpy as np
+from unyt import angstrom, arcsecond
 
 from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
-from synthesizer.instruments import Instrument
-from synthesizer.instruments.filters import FilterCollection
+from synthesizer.instruments import Instrument, InstrumentCollection
+from synthesizer.instruments.filters import Filter, FilterCollection
 
 __all__ = [
     "JWSTNIRCamWide",
@@ -70,6 +71,8 @@ __all__ = [
     "JWSTNIRCamNarrow",
     "JWSTNIRCam",
     "JWSTMIRI",
+    "JWSTNIRSpec",
+    "JWST",
     "HSTWFC3UVISWide",
     "HSTWFC3UVISMedium",
     "HSTWFC3UVISNarrow",
@@ -82,8 +85,11 @@ __all__ = [
     "HSTACSWFCMedium",
     "HSTACSWFCNarrow",
     "HSTACSWFC",
+    "HST",
     "EuclidNISP",
     "EuclidVIS",
+    "Euclid",
+    "GALEX",
 ]
 
 
@@ -268,6 +274,60 @@ class PremadeInstrument(Instrument):
             noise_maps=noise_maps,
             **kwargs,
         )
+
+
+class PremadeInstrumentCollectionFactory:
+    """Base class for factory classes that create instrument collections.
+
+    This class provides a common pattern for creating
+    InstrumentCollections that contain multiple related instruments
+    (e.g., GALEX FUV and NUV).
+
+    Child classes should define an `instruments` class attribute as a
+    dictionary mapping instrument names to instrument classes. Kwargs
+    for individual instruments can be passed as `<name>_kwargs`.
+
+    Example:
+        ```python
+        class GALEX(PremadeInstrumentCollectionFactory):
+            instruments = {
+                "fuv": GALEXFUV,
+                "nuv": GALEXNUV,
+            }
+
+        # Create a GALEX collection with custom kwargs for each instrument
+        galex = GALEX(fuv_kwargs={"depth": 25.0}, nuv_kwargs={"depth": 26.0})
+        ```
+    """
+
+    _is_premade_factory = True
+    instruments = {}  # Override in child classes
+
+    def __new__(cls, **kwargs):
+        """Create an InstrumentCollection with all instruments.
+
+        Args:
+            **kwargs: Keyword arguments in the form `<name>_kwargs` where
+                <name> matches a key in the `instruments` class attribute.
+                Each `<name>_kwargs` should be a dictionary of keyword
+                arguments to pass to that instrument's constructor.
+
+        Returns:
+            InstrumentCollection: Collection containing all instruments
+                defined in the `instruments` class attribute.
+        """
+        collection = InstrumentCollection()
+
+        instruments_list = []
+        for name, inst_cls in cls.instruments.items():
+            inst_kwargs = kwargs.get(f"{name}_kwargs", {})
+            if inst_kwargs is None:
+                inst_kwargs = {}
+            instruments_list.append(inst_cls(**inst_kwargs))
+
+        collection.add_instruments(*instruments_list)
+
+        return collection
 
 
 class JWSTNIRCamWide(PremadeInstrument):
@@ -2528,3 +2588,399 @@ class EuclidVIS(PremadeInstrument):
             noise_maps=noise_maps,
             **kwargs,
         )
+
+
+class GALEXFUV(PremadeInstrument):
+    """A class containing the properties of the GALEX instrument.
+
+    Default label: "GALEXFUV"
+
+    Resolution: 6"
+
+    Available filters:
+        - FUV
+
+    For further details see the PremadeInstrument class.
+    """
+
+    # Define the available filters
+    available_filters = [
+        "GALEX/GALEX.FUV",
+    ]
+
+    @classmethod
+    def load(cls, *args, **kwargs):
+        raise NotImplementedError(
+            "GALEXFUV does not support loading from an instrument cache file. "
+            "Please instantiate it directly using GALEXFUV(...)."
+        )
+
+    def __init__(
+        self,
+        label="GALEXFUV",
+        filter_lams=None,
+        depth=None,
+        depth_app_radius=None,
+        snrs=None,
+        psfs=None,
+        noise_maps=None,
+        **kwargs,
+    ):
+        """Initialize the GALEX FUV instrument.
+
+        Args:
+            label (str):
+                The label of the instrument. Default is "GALEXFUV".
+            filter_lams (unyt_array):
+                An optional wavelength array to resample the filter
+                transmission curves to. This should be a unyt array. Default
+                is None.
+            depth (dict/float):
+                The depth of the instrument in apparent mags. If filters are
+                passed depth must be a dictionary of depths with an entry
+                per filter. Default is None.
+            depth_app_radius (unyt_quantity):
+                The depth aperture radius of the instrument (with units). If
+                this is omitted but SNRs and depths are provided, it is assumed
+                that the depth is a point source depth. Default is None.
+            snrs (unyt_array):
+                The signal-to-noise ratios of the instrument. Default is None.
+            psfs (unyt_array):
+                The PSFs of the instrument. If doing imaging this should be a
+                dictionary of PSFs with an entry for each filter. If doing
+                resolved spectroscopy this should be an array. Default is None.
+            noise_maps (unyt_array):
+                The noise maps of the instrument. If doing imaging this should
+                be a dictionary of noise maps with an entry for each filter.
+                If doing resolved spectroscopy this should be an array with
+                noise as a function of wavelength. Default is None.
+            **kwargs: Keyword arguments to pass to the Instrument class.
+        """
+        # Since SVO returns effective area rather than transmission curves
+        # for GALEX, here we define the transmission curves manually rather
+        # than using SVO
+        fuv_lam = (
+            np.array(
+                [
+                    1340.6205,
+                    1350.4851,
+                    1370.2143,
+                    1399.808,
+                    1449.131,
+                    1477.0806,
+                    1500.098,
+                    1519.8272,
+                    1549.4209,
+                    1608.6084,
+                    1648.0668,
+                    1705.6102,
+                    1750.0008,
+                    1810.8324,
+                ]
+            )
+            * angstrom
+        )
+
+        fuv_trans = np.array(
+            [
+                9.07e-07,
+                0.11537571,
+                0.17650714,
+                0.12312477,
+                0.33665425,
+                0.36851147,
+                0.35043035,
+                0.34698632,
+                0.26174673,
+                0.25485868,
+                0.16014802,
+                0.11881973,
+                0.10504364,
+                0.000860099,
+            ]
+        )
+
+        fuv_filter = Filter(
+            "GALEX/GALEX.FUV", transmission=fuv_trans, new_lam=fuv_lam
+        )
+
+        filters = FilterCollection(filters=[fuv_filter])
+
+        # Resample if requested
+        if filter_lams is not None:
+            filters.resample_filters(new_lam=filter_lams, verbose=False)
+
+        # Call the parent constructor with the appropriate parameters
+        PremadeInstrument.__init__(
+            self,
+            label=label,
+            filters=filters,
+            resolution=6 * arcsecond,
+            depth=depth,
+            depth_app_radius=depth_app_radius,
+            snrs=snrs,
+            psfs=psfs,
+            noise_maps=noise_maps,
+            **kwargs,
+        )
+
+
+class GALEXNUV(PremadeInstrument):
+    """A class containing the properties of the GALEX instrument.
+
+    Default label: "GALEXNUV"
+
+    Resolution: 8"
+
+    Available filters:
+        - NUV
+
+    For further details see the PremadeInstrument class.
+    """
+
+    # Define the available filters
+    available_filters = [
+        "GALEX/GALEX.NUV",
+    ]
+
+    @classmethod
+    def load(cls, *args, **kwargs):
+        raise NotImplementedError(
+            "GALEXNUV does not support loading from an instrument cache file. "
+            "Please instantiate it directly using GALEXNUV(...)."
+        )
+
+    def __init__(
+        self,
+        label="GALEXNUV",
+        filter_lams=None,
+        depth=None,
+        depth_app_radius=None,
+        snrs=None,
+        psfs=None,
+        noise_maps=None,
+        **kwargs,
+    ):
+        """Initialize the GALEX NUV instrument.
+
+        Args:
+            label (str):
+                The label of the instrument. Default is "GALEXNUV".
+            filter_lams (unyt_array):
+                An optional wavelength array to resample the filter
+                transmission curves to. This should be a unyt array. Default
+                is None.
+            depth (dict/float):
+                The depth of the instrument in apparent mags. If filters are
+                passed depth must be a dictionary of depths with an entry
+                per filter. Default is None.
+            depth_app_radius (unyt_quantity):
+                The depth aperture radius of the instrument (with units). If
+                this is omitted but SNRs and depths are provided, it is assumed
+                that the depth is a point source depth. Default is None.
+            snrs (unyt_array):
+                The signal-to-noise ratios of the instrument. Default is None.
+            psfs (unyt_array):
+                The PSFs of the instrument. If doing imaging this should be a
+                dictionary of PSFs with an entry for each filter. If doing
+                resolved spectroscopy this should be an array. Default is None.
+            noise_maps (unyt_array):
+                The noise maps of the instrument. If doing imaging this should
+                be a dictionary of noise maps with an entry for each filter.
+                If doing resolved spectroscopy this should be an array with
+                noise as a function of wavelength. Default is None.
+            **kwargs: Keyword arguments to pass to the Instrument class.
+        """
+        # Since SVO returns effective area rather than transmission curves for
+        # GALEX, here we define the transmission curves manually rather than
+        # using SVO
+        nuv_lam = (
+            np.array(
+                [
+                    1687.5251,
+                    1699.0338,
+                    1748.3567,
+                    1837.138,
+                    1899.6137,
+                    1948.9366,
+                    1998.2595,
+                    2050.8707,
+                    2151.1606,
+                    2200.4835,
+                    2253.0946,
+                    2300.7735,
+                    2348.4523,
+                    2445.4541,
+                    2553.9645,
+                    2595.0669,
+                    2646.0339,
+                    2697.001,
+                    2797.2909,
+                    2849.902,
+                    2897.5809,
+                    2999.5149,
+                    3007.7354,
+                ]
+            )
+            * angstrom
+        )
+
+        nuv_trans = np.array(
+            [
+                9.07e-07,
+                0.024109075,
+                0.031858129,
+                0.16100903,
+                0.26519076,
+                0.3289052,
+                0.44858503,
+                0.4718322,
+                0.59495605,
+                0.6164812,
+                0.56223782,
+                0.5303806,
+                0.47785924,
+                0.53468563,
+                0.51488249,
+                0.50024539,
+                0.46236113,
+                0.38056556,
+                0.11020967,
+                0.033580141,
+                0.012054991,
+                0.016360021,
+                9.07e-07,
+            ]
+        )
+
+        nuv_filter = Filter(
+            "GALEX/GALEX.NUV", transmission=nuv_trans, new_lam=nuv_lam
+        )
+
+        filters = FilterCollection(filters=[nuv_filter])
+
+        # Resample if requested
+        if filter_lams is not None:
+            filters.resample_filters(new_lam=filter_lams, verbose=False)
+
+        # Call the parent constructor with the appropriate parameters
+        PremadeInstrument.__init__(
+            self,
+            label=label,
+            filters=filters,
+            resolution=8 * arcsecond,
+            depth=depth,
+            depth_app_radius=depth_app_radius,
+            snrs=snrs,
+            psfs=psfs,
+            noise_maps=noise_maps,
+            **kwargs,
+        )
+
+
+class GALEX(PremadeInstrumentCollectionFactory):
+    """Factory class returning a GALEX InstrumentCollection.
+
+    Contains FUV and NUV instruments.
+
+    This allows the following:
+
+    from synthesizer.instruments import GALEX
+    galex = GALEX()
+    for inst in galex:
+        print(inst.label, inst.resolution)
+
+    which would return:
+
+    GALEXFUV 6 arcsec
+    GALEXNUV 8 arcsec
+
+    For further details see the PremadeInstrumentCollectionFactory class.
+    """
+
+    instruments = {
+        "fuv": GALEXFUV,
+        "nuv": GALEXNUV,
+    }
+
+
+class Euclid(PremadeInstrumentCollectionFactory):
+    """Factory class returning a Euclid InstrumentCollection.
+
+    Contains NISP and VIS instruments.
+
+    This allows the following:
+
+    from synthesizer.instruments import Euclid
+    euclid = Euclid()
+    for inst in euclid:
+        print(inst.label, inst.resolution)
+
+    which would return:
+
+    Euclid.NISP 0.3 arcsec
+    Euclid.VIS 0.1 arcsec
+
+    For further details see the PremadeInstrumentCollectionFactory class.
+    """
+
+    instruments = {
+        "nisp": EuclidNISP,
+        "vis": EuclidVIS,
+    }
+
+
+class HST(PremadeInstrumentCollectionFactory):
+    """Factory class returning a HST InstrumentCollection.
+
+    Contains WFC3 UVIS, WFC3 IR, and ACS WFC instruments.
+
+    This allows the following:
+
+    from synthesizer.instruments import HST
+    hst = HST()
+    for inst in hst:
+        print(inst.label, inst.resolution)
+
+    which would return:
+
+    HST.WFC3.UVIS 0.04 arcsec
+    HST.WFC3.IR 0.13 arcsec
+    HST.ACS.WFC 0.05 arcsec
+
+    For further details see the PremadeInstrumentCollectionFactory class.
+    """
+
+    instruments = {
+        "wfc3_uvis": HSTWFC3UVIS,
+        "wfc3_ir": HSTWFC3IR,
+        "acs_wfc": HSTACSWFC,
+    }
+
+
+class JWST(PremadeInstrumentCollectionFactory):
+    """Factory class returning a JWST InstrumentCollection.
+
+    Contains NIRCam, MIRI, and NIRSpec instruments.
+
+    This allows the following:
+
+    from synthesizer.instruments import JWST
+    jwst = JWST()
+    for inst in jwst:
+        print(inst.label, inst.resolution)
+
+    which would return:
+
+    JWST.NIRCam 0.031 arcsec
+    JWST.MIRI 0.11 arcsec
+    JWST.NIRSpec N/A (placeholder)
+
+    For further details see the PremadeInstrumentCollectionFactory class.
+    """
+
+    instruments = {
+        "nircam": JWSTNIRCam,
+        "miri": JWSTMIRI,
+        "nirspec": JWSTNIRSpec,
+    }
