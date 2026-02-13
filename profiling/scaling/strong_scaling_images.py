@@ -55,20 +55,8 @@ def images_strong_scaling(
     model.set_per_particle(True)
 
     # Get the filters from cached instrument (no network access)
-    instrument = get_test_instrument(grid)
-
-    # Extract desired filter codes from cached instrument
-    filter_codes = [
-        "JWST/NIRCam.F090W",
-        "JWST/NIRCam.F150W",
-        "JWST/NIRCam.F200W",
-        "JWST/NIRCam.F277W",
-        "JWST/NIRCam.F356W",
-        "JWST/NIRCam.F444W",
-    ]
-
-    # Create a filtered instrument with only the desired filters
-    webb_inst = instrument.select(*filter_codes)
+    # The cached instrument has all JWST NIRCam filters available
+    webb_inst = get_test_instrument(grid)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
