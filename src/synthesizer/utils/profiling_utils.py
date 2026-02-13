@@ -109,7 +109,7 @@ def _run_averaged_scaling_test(
                 operation_function(**kwargs, nthreads=nthreads)
                 execution_time = time.time() - spec_start
 
-                print(f"[Total] {total_msg}:", execution_time)
+                print(f"[Total] {total_msg} took: {execution_time} s")
 
                 if i == 0:
                     threads.append(nthreads)
@@ -124,7 +124,7 @@ def _run_averaged_scaling_test(
                     operation_function(**kwargs, nthreads=max_threads)
                     execution_time = time.time() - spec_start
 
-                    print(f"[Total] {total_msg}:", execution_time)
+                    print(f"[Total] {total_msg} took: {execution_time} s")
 
                     if i == 0:
                         threads.append(max_threads)
