@@ -7,6 +7,7 @@ showing how the peak memory usage of various operations scales from 10^3 to
 
 import argparse
 import gc
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -19,6 +20,10 @@ from synthesizer.instruments import FilterCollection
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
+
+# Add pipeline profiling to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
+from pipeline_test_data import get_test_instrument
 
 # Set style
 plt.rcParams["font.family"] = "DejaVu Serif"
@@ -93,33 +98,23 @@ def profile_nparticles_memory(nthreads=1, n_averages=3):
     )
 
     # --- Setup Filters ---
-    # Small set (3 filters)
+    # Get cached instrument from pipeline_test_data (no network access)
+    # JWSTNIRCamWide has 8 filters total
+    instrument = get_test_instrument(grid)
+
+    # Create FilterCollections from the instrument's filters
+    # Small set (3 filters) - select first 3 filter codes from instrument
+    filter_codes_3 = list(instrument.filter_codes)[:3]
     filters_3 = FilterCollection(
-        filter_codes=[
-            "JWST/NIRCam.F150W",
-            "JWST/NIRCam.F200W",
-            "JWST/NIRCam.F444W",
-        ],
-        new_lam=grid.lam,
-    )
-    # Large set (10 filters) - Mixing JWST and HST
-    filters_10 = FilterCollection(
-        filter_codes=[
-            "JWST/NIRCam.F070W",
-            "JWST/NIRCam.F090W",
-            "JWST/NIRCam.F115W",
-            "JWST/NIRCam.F150W",
-            "JWST/NIRCam.F200W",
-            "JWST/NIRCam.F277W",
-            "JWST/NIRCam.F356W",
-            "JWST/NIRCam.F444W",
-            "HST/ACS_WFC.F435W",
-            "HST/ACS_WFC.F814W",
-        ],
+        filters=[instrument.filters[code] for code in filter_codes_3],
         new_lam=grid.lam,
     )
 
-    # --- Setup Filters ---
+    # Large set (8 filters) - use all filter codes from instrument
+    filters_10 = FilterCollection(
+        filters=list(instrument.filters.values()),
+        new_lam=grid.lam,
+    )
 
     # Particle counts to test
     # Reduced max to 10^5 for memory safety/speed in this context,

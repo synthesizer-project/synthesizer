@@ -6,15 +6,16 @@ Usage:
 """
 
 import argparse
+import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr, angstrom, kpc
+from unyt import Msun, Myr, kpc
 
 from synthesizer import Grid
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -22,6 +23,10 @@ from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfzh
 from synthesizer.particle.utils import calculate_smoothing_lengths
 from synthesizer.utils.profiling_utils import run_scaling_test
+
+# Add pipeline profiling to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
+from pipeline_test_data import get_test_instrument
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -49,18 +54,21 @@ def images_strong_scaling(
     model = IncidentEmission(grid)
     model.set_per_particle(True)
 
-    # Get the filters
-    lam = np.linspace(10**3, 10**5, 1000) * angstrom
-    webb_filters = FilterCollection(
-        filter_codes=[
-            f"JWST/NIRCam.{f}"
-            for f in ["F090W", "F150W", "F200W", "F277W", "F356W", "F444W"]
-        ],
-        new_lam=lam,
-    )
+    # Get the filters from cached instrument (no network access)
+    instrument = get_test_instrument(grid)
 
-    # Instatiate the instruments
-    webb_inst = Instrument("JWST", filters=webb_filters, resolution=0.05 * kpc)
+    # Extract desired filter codes from cached instrument
+    filter_codes = [
+        "JWST/NIRCam.F090W",
+        "JWST/NIRCam.F150W",
+        "JWST/NIRCam.F200W",
+        "JWST/NIRCam.F277W",
+        "JWST/NIRCam.F356W",
+        "JWST/NIRCam.F444W",
+    ]
+
+    # Create a filtered instrument with only the desired filters
+    webb_inst = instrument.select(*filter_codes)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
