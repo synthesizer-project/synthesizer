@@ -254,6 +254,13 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
+        "synthesizer.extensions.atomic_timing_check",
+        ["src/synthesizer/extensions/atomic_timing_check.cpp"],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
         "synthesizer.extensions.integrated_spectra",
         [
             "src/synthesizer/extensions/integrated_spectra.cpp",
