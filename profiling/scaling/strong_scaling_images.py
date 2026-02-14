@@ -7,10 +7,12 @@ Usage:
 
 import argparse
 import sys
+from functools import partial
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.cosmology import Planck18
 from unyt import Msun, Myr, kpc
 
 from synthesizer import Grid
@@ -101,9 +103,10 @@ def images_strong_scaling(
         nthreads=max_threads,
     )
 
-    # Get photometry
+    # Get photometry - use only a single filter for faster imaging
+    single_filter = webb_inst.filters.select(webb_inst.filters.filter_codes[0])
     stars.get_particle_photo_lnu(
-        filters=webb_inst.filters,
+        filters=single_filter,
         nthreads=max_threads,
     )
 
@@ -114,10 +117,11 @@ def images_strong_scaling(
     # the first time the function is called
     print("Initial imaging spectra calculation")
     stars.get_images_luminosity(
-        webb_inst.resolution,
-        30 * kpc,
-        model,
+        "incident",
+        fov=30 * kpc,
+        instrument=webb_inst,
         kernel=kernel,
+        cosmo=Planck18,
         nthreads=max_threads,
     )
     print()
@@ -133,18 +137,22 @@ def images_strong_scaling(
     )
 
     # Run the scaling test
+    # Use partial to bind the label argument
+    get_images = partial(
+        stars.get_images_luminosity,
+        "incident",
+        fov=30 * kpc,
+        instrument=webb_inst,
+        kernel=kernel,
+        cosmo=Planck18,
+    )
     run_scaling_test(
         max_threads,
         average_over,
         log_outpath,
         plot_outpath,
-        stars.get_images_luminosity,
-        {
-            "resolution": webb_inst.resolution,
-            "fov": 30 * kpc,
-            "emission_model": model,
-            "kernel": kernel,
-        },
+        get_images,
+        {},
         total_msg="Generating images",
         low_thresh=low_thresh,
         paper_style=paper_style,
