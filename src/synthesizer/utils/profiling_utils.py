@@ -103,28 +103,35 @@ def _run_averaged_scaling_test(
         # Loop over the number of threads
         nthreads = 1
         while nthreads <= max_threads:
-            print(f"=== Testing with {nthreads} threads ===")
+            print(f"=== Testing with {nthreads} threads ===", flush=True)
             for i in range(average_over):
                 spec_start = time.time()
                 operation_function(**kwargs, nthreads=nthreads)
                 execution_time = time.time() - spec_start
 
-                print(f"[Total] {total_msg} took: {execution_time} s")
+                print(
+                    f"[Total] {total_msg} took: {execution_time} s", flush=True
+                )
 
                 if i == 0:
                     threads.append(nthreads)
 
             nthreads *= 2
-            print()
+            print(flush=True)
         else:
             if max_threads not in threads:
-                print(f"=== Testing with {max_threads} threads ===")
+                print(
+                    f"=== Testing with {max_threads} threads ===", flush=True
+                )
                 for i in range(average_over):
                     spec_start = time.time()
                     operation_function(**kwargs, nthreads=max_threads)
                     execution_time = time.time() - spec_start
 
-                    print(f"[Total] {total_msg} took: {execution_time} s")
+                    print(
+                        f"[Total] {total_msg} took: {execution_time} s",
+                        flush=True,
+                    )
 
                     if i == 0:
                         threads.append(max_threads)
@@ -262,14 +269,15 @@ def parse_and_collect_runtimes(
 
     # Remove any entries which are taking a tiny fraction of the time
     # and are not the total
-    minimum_time = atomic_runtimes["Total"][-1] * low_thresh
-    old_keys = list(atomic_runtimes.keys())
-    for key in old_keys:
-        if key == "Total":
-            continue
-        if np.mean(atomic_runtimes[key]) < minimum_time:
-            atomic_runtimes.pop(key)
-            linestyles.pop(key)
+    if "Total" in atomic_runtimes:
+        minimum_time = atomic_runtimes["Total"][-1] * low_thresh
+        old_keys = list(atomic_runtimes.keys())
+        for key in old_keys:
+            if key == "Total":
+                continue
+            if np.mean(atomic_runtimes[key]) < minimum_time:
+                atomic_runtimes.pop(key)
+                linestyles.pop(key)
 
     # Return the runtimes and linestyles
     return atomic_runtimes, linestyles
