@@ -53,8 +53,8 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("profiling/outputs/memory_analysis"),
-        help="Output directory for plots",
+        default=Path("./"),
+        help="Output directory for plots (default: current directory)",
     )
 
     args = parser.parse_args()
