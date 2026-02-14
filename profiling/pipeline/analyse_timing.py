@@ -17,7 +17,7 @@ def load_timing(filepath: Path) -> dict:
 
     Returns:
         dict: A dictionary where keys are operation names and values are dicts
-            containing 'time' (float) and optionally 'source' (str).
+            containing 'time' (float) and 'source' (str).
     """
     timings = {}
     with open(filepath) as f:
@@ -25,24 +25,17 @@ def load_timing(filepath: Path) -> dict:
         if not lines:
             return timings
 
-        header = lines[0].strip().split(",")
-
-        # Check if new format with source column
-        has_source = "source" in header
-
+        # Skip header
         for line in lines[1:]:
             parts = line.strip().split(",")
-            if has_source and len(parts) >= 3:
-                operation, seconds, source = (
-                    parts[0],
-                    float(parts[1]),
-                    parts[2],
-                )
-                timings[operation] = {"time": seconds, "source": source}
-            elif len(parts) == 2:
-                operation, seconds = parts[0], float(parts[1])
-                # Old format without source - assume Python
-                timings[operation] = {"time": seconds, "source": "Python"}
+            # Format: operation,seconds,count,source
+            operation, seconds, _, source = (
+                parts[0],
+                float(parts[1]),
+                int(parts[2]),  # count (unused here)
+                parts[3],
+            )
+            timings[operation] = {"time": seconds, "source": source}
     return timings
 
 
