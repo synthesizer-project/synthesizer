@@ -153,12 +153,24 @@ def main() -> None:
             linestyle="--",
         )
 
-    # Add reference scaling line (O(n)) anchored at first data point
-    # Use sum of all operation times as total
+    # Plot total time
     total_values = [
         sum(timing_data[label].get(op, {}).get("time", 0) for op in operations)
         for label in labels
     ]
+    ax.plot(
+        nparticles,
+        total_values,
+        marker="D",
+        linewidth=3,
+        label="Total",
+        color="black",
+        markersize=8,
+        linestyle="-",
+        alpha=0.7,
+    )
+
+    # Add reference scaling line (O(n)) anchored at first data point
     npart_ref = np.array(nparticles)
     ax.plot(
         npart_ref,
@@ -173,12 +185,43 @@ def main() -> None:
     ax.set_ylabel("Time (seconds)", fontsize=12)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.legend(loc="best", fontsize=8, ncol=2)
+
+    # Create main legend for operations
+    legend1 = ax.legend(loc="best", fontsize=9, ncol=2, framealpha=0.9)
+
+    # Add second legend for line styles (C vs Python)
+    from matplotlib.lines import Line2D
+
+    style_handles = [
+        Line2D(
+            [0],
+            [0],
+            color="black",
+            linestyle="-",
+            marker="o",
+            markersize=6,
+            label="C Extension",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="black",
+            linestyle="--",
+            marker="s",
+            markersize=6,
+            label="Python",
+        ),
+    ]
+    ax.add_artist(legend1)  # Keep first legend
+    ax.legend(
+        handles=style_handles, loc="lower right", fontsize=9, framealpha=0.9
+    )
+
     ax.grid(alpha=0.3, which="major")
     fig.tight_layout()
 
     plot_file = args.output_dir / "timing_comparison.png"
-    fig.savefig(plot_file, dpi=150)
+    fig.savefig(plot_file, dpi=200)
     print(f"✓ Saved: {plot_file}")
 
     # Create summary text
