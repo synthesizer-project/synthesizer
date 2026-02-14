@@ -180,15 +180,24 @@ def parse_and_collect_runtimes(
             operation = match.group(2)
             value = float(match.group(3))
 
+            # For [Total] lines, use "Total" as the operation name
+            if source == "Total":
+                operation = "Total"
+
             # Set linestyle based on source
             if operation not in linestyles:
-                if source == "C" or operation == "Total":
+                if source == "C" or source == "Total":
                     linestyles[operation] = "-"
                 elif source == "Python":
                     linestyles[operation] = "--"
 
             atomic_runtimes.setdefault(operation, []).append(value)
         print(line)
+
+    # Debug: Print all keys found
+    print(
+        f"DEBUG: Keys found in atomic_runtimes: {list(atomic_runtimes.keys())}"
+    )
 
     # Average every average_over runs
     for key in atomic_runtimes.keys():
@@ -211,17 +220,20 @@ def parse_and_collect_runtimes(
                 for i in range(0, len(atomic_runtimes[key]), n_repeats)
             ]
 
-    # Compute the overhead
-    overhead = [
-        atomic_runtimes["Total"][i]
-        for i in range(len(atomic_runtimes["Total"]))
-    ]
-    for key in atomic_runtimes.keys():
-        if key != "Total":
-            for i in range(len(atomic_runtimes[key])):
-                overhead[i] -= atomic_runtimes[key][i]
-    atomic_runtimes["Untimed Overhead"] = overhead
-    linestyles["Untimed Overhead"] = ":"
+    # Compute the overhead (only if Total exists)
+    if "Total" in atomic_runtimes:
+        overhead = [
+            atomic_runtimes["Total"][i]
+            for i in range(len(atomic_runtimes["Total"]))
+        ]
+        for key in atomic_runtimes.keys():
+            if key != "Total":
+                for i in range(len(atomic_runtimes[key])):
+                    overhead[i] -= atomic_runtimes[key][i]
+        atomic_runtimes["Untimed Overhead"] = overhead
+        linestyles["Untimed Overhead"] = ":"
+    else:
+        print("WARNING: No 'Total' timing found in output")
 
     # Temporarily add the threads to the dictionary for saving
     atomic_runtimes["Threads"] = threads
