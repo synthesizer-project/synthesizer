@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import csv
 import os
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -32,27 +31,91 @@ from pipeline_test_data import (
 )
 
 
-def parse_atomic_timing_output(output: str) -> dict:
-    """Parse atomic timing output to extract operation timings.
+def plot_time_vs_count_pipeline(
+    timings: dict, outpath: str, threshold: float = 0.001
+) -> None:
+    """Create time vs count scatter plot for pipeline operations.
+
+    Only includes operations that contribute more than threshold fraction
+    of the total time (default 0.1% = 0.001).
 
     Args:
-        output (str): The captured stdout containing atomic timing lines.
-
-    Returns:
-        dict: A dictionary with operation names as keys and dicts containing
-            'time' and 'source' as values.
+        timings (dict): Dictionary with operation timings.
+        outpath (str): Path to save the plot.
+        threshold (float): Minimum fraction of total time to include
+            (default 0.001 = 0.1%).
     """
-    timings = {}
-    # Use regex to match: [C] or [Python] <operation> took: <number> seconds
-    pattern = re.compile(r"\[([^\]]+)\]\s+(.+?)\s+took:\s+([\d.]+)\s*s")
-    for line in output.splitlines():
-        match = pattern.search(line)
-        if match:
-            source = match.group(1)
-            operation = match.group(2)
-            time_val = float(match.group(3))
-            timings[operation] = {"time": time_val, "source": source}
-    return timings
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+
+    # Calculate total time
+    total_time = sum(op_data.get("time", 0.0) for op_data in timings.values())
+    min_time = total_time * threshold
+
+    # Collect data for scatter plot
+    counts = []
+    times = []
+    labels = []
+    colors = []
+
+    for op_name, op_data in timings.items():
+        count = op_data.get("count", 0)
+        time_val = op_data.get("time", 0.0)
+        source = op_data.get("source", "Python")
+
+        # Only include if time exceeds threshold
+        if count > 0 and time_val > 0 and time_val >= min_time:
+            counts.append(count)
+            times.append(time_val)
+            labels.append(op_name)
+            # Color by source
+            if source == "C":
+                colors.append("blue")
+            else:
+                colors.append("orange")
+
+    if not counts:
+        print("No operations with counts > 0 to plot")
+        return
+
+    # Create scatter plot with higher alpha to see overlaps
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.scatter(counts, times, c=colors, s=150, alpha=0.8, edgecolors="black")
+
+    # Add labels for each point
+    for i, label in enumerate(labels):
+        ax.annotate(
+            label,
+            (counts[i], times[i]),
+            xytext=(5, 5),
+            textcoords="offset points",
+            fontsize=9,
+            alpha=0.8,
+        )
+
+    ax.set_xlabel("Number of Calls", fontsize=12)
+    ax.set_ylabel("Cumulative Time (s)", fontsize=12)
+    ax.set_title("Pipeline Operation Time vs Call Count", fontsize=14)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.grid(True, alpha=0.3)
+
+    # Add padding to axis limits so labels don't get cut off
+    if counts and times:
+        ax.set_xlim(min(counts) * 0.5, max(counts) * 2.0)
+        ax.set_ylim(min(times) * 0.5, max(times) * 2.0)
+
+    # Add legend for colors
+    legend_elements = [
+        Patch(facecolor="blue", edgecolor="black", label="C Extension"),
+        Patch(facecolor="orange", edgecolor="black", label="Python"),
+    ]
+    ax.legend(handles=legend_elements, loc="best", fontsize=10)
+
+    fig.tight_layout()
+    fig.savefig(outpath, dpi=300, bbox_inches="tight")
+    print(f"Saved time vs count plot to: {outpath}")
+    plt.close(fig)
 
 
 def run_pipeline_profiling(
@@ -65,8 +128,8 @@ def run_pipeline_profiling(
 ) -> dict:
     """Run full Pipeline profiling and return stage timings.
 
-    This function captures atomic timing output from the Pipeline operations
-    and parses it to extract individual operation timings.
+    This function uses OperationTimers to collect timing data from all
+    Pipeline operations without parsing stdout.
 
     Args:
         nparticles (int): Number of stellar particles per galaxy.
@@ -81,8 +144,11 @@ def run_pipeline_profiling(
             Defaults to 8.
 
     Returns:
-        dict: A dictionary with operation names and timings in seconds.
+        dict: A dictionary with operation names and timing data.
+            Each entry contains 'time', 'count', and 'source'.
     """
+    from synthesizer.utils.operation_timers import OperationTimers
+
     # Setup - load grid
     grid = Grid("test_grid")
 
@@ -100,7 +166,11 @@ def run_pipeline_profiling(
     )
     pipeline.add_galaxies(galaxies)
 
-    # Redirect stdout to capture atomic timing output
+    # Create and reset timers
+    timers = OperationTimers()
+    timers.reset()
+
+    # Redirect stdout to capture print output (for logging)
     original_stdout_fd = os.dup(sys.stdout.fileno())
     temp_stdout = os.dup(original_stdout_fd)
 
@@ -167,13 +237,18 @@ def run_pipeline_profiling(
             os.dup2(temp_stdout, sys.stdout.fileno())
             os.close(temp_stdout)
 
-        # Read captured atomic timing output
-        with open(temp_file.name, "r") as f:
-            output = f.read()
+        # Clean up temp file
         os.unlink(temp_file.name)
 
-    # Parse atomic timing output
-    timings = parse_atomic_timing_output(output)
+    # Extract timings from OperationTimers
+    timings = {}
+    for operation in timers.keys():
+        cumulative_time, call_count, source = timers[operation]
+        timings[operation] = {
+            "time": cumulative_time,
+            "count": call_count,
+            "source": source,
+        }
 
     return timings
 
@@ -220,11 +295,17 @@ def main() -> None:
         default=8,
         help="Number of threads for Pipeline (default 8)",
     )
+    parser.add_argument(
+        "--out_dir",
+        type=str,
+        default="./",
+        help="Output directory for CSV and plots (default: current directory)",
+    )
 
     args = parser.parse_args()
 
     # Create output directory
-    output_dir = Path("profiling/outputs/timing") / args.basename
+    output_dir = Path(args.out_dir) / args.basename
     output_dir.mkdir(parents=True, exist_ok=True)
 
     particles_str = (
@@ -247,17 +328,31 @@ def main() -> None:
         args.nthreads,
     )
 
-    # Write CSV with source column
+    # Write CSV with source and count columns
     csv_file = output_dir / "timing.csv"
     with open(csv_file, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["operation", "seconds", "source"])
+        writer.writerow(["operation", "seconds", "count", "source"])
         for operation, data in timings.items():
-            writer.writerow([operation, f"{data['time']:.6f}", data["source"]])
+            writer.writerow(
+                [
+                    operation,
+                    f"{data['time']:.6f}",
+                    data["count"],
+                    data["source"],
+                ]
+            )
 
     print(f"✓ Timing profile saved: {csv_file}")
     for op, data in timings.items():
-        print(f"  {op}: {data['time']:.3f}s ({data['source']})")
+        count_str = f"count={data['count']}"
+        source_str = data["source"]
+        print(f"  {op}: {data['time']:.3f}s ({count_str}, {source_str})")
+
+    # Generate time vs count plot
+    plot_file = output_dir / "time_vs_count.png"
+    plot_time_vs_count_pipeline(timings, str(plot_file))
+    print(f"✓ Time vs count plot saved: {plot_file}")
 
 
 if __name__ == "__main__":

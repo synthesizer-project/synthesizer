@@ -197,11 +197,17 @@ def main() -> None:
         default=1,
         help="Number of threads for Pipeline (default 1)",
     )
+    parser.add_argument(
+        "--out_dir",
+        type=str,
+        default="./",
+        help="Output directory for CSV and plots (default: current directory)",
+    )
 
     args = parser.parse_args()
 
     # Create output directory
-    output_dir = Path("profiling/outputs/memory") / args.basename
+    output_dir = Path(args.out_dir) / args.basename
     output_dir.mkdir(parents=True, exist_ok=True)
 
     particles_str = (

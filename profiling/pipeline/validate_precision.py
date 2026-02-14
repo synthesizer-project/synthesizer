@@ -81,8 +81,8 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("profiling/outputs/precision_validation"),
-        help="Output directory for plots",
+        default=Path("./"),
+        help="Output directory for plots (default: current directory)",
     )
     parser.add_argument(
         "--tolerance",
