@@ -63,7 +63,7 @@ Generating smoothed images from 10,000 stellar particles with varying thread cou
    :width: 75%
    :align: center
 
-Interpretation
+Considerations
 --------------
 
 **Ideal Strong Scaling**: With N threads, the runtime should be 1/N of the single-threaded time (i.e., perfect linear speedup). In practice, parallel overhead and serial portions of the code limit this ideal scaling.
