@@ -273,8 +273,8 @@ def parse_and_collect_runtimes(
                 averaged_counts.append(np.mean(counts_by_thread[nt]))
             else:
                 # Operation didn't appear in any runs for this thread count
-                averaged_times.append(0.0)
-                averaged_counts.append(0)
+                averaged_times.append(np.nan)
+                averaged_counts.append(np.nan)
 
         atomic_runtimes[operation] = averaged_times
         call_counts[operation] = averaged_counts
@@ -439,7 +439,10 @@ def _plot_speed_up_default(
     ax_speedup = fig.add_subplot(gs[1, 0], sharex=ax_main)
     for key in atomic_runtimes:
         t0 = atomic_runtimes[key][0]
-        speedup = [t0 / t for t in atomic_runtimes[key]]
+        speedup = [
+            t0 / t if t > 0 and not np.isnan(t) else np.nan
+            for t in atomic_runtimes[key]
+        ]
         ax_speedup.plot(
             threads,
             speedup,
@@ -506,7 +509,10 @@ def _plot_speed_up_paper(
     ax_speedup = fig.add_subplot(gs[1], sharex=ax_main)
     for key in atomic_runtimes:
         t0 = atomic_runtimes[key][0]
-        speedup = [t0 / t for t in atomic_runtimes[key]]
+        speedup = [
+            t0 / t if t > 0 and not np.isnan(t) else np.nan
+            for t in atomic_runtimes[key]
+        ]
         ax_speedup.plot(
             threads,
             speedup,

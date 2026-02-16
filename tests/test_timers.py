@@ -5,6 +5,7 @@ import unittest
 
 from synthesizer import check_atomic_timing
 from synthesizer.extensions.timers import (
+    _test_toc_from_c,
     get_operation_names,
     get_operation_timings,
     reset_timings,
@@ -317,6 +318,100 @@ class TestTimerSourceTracking(unittest.TestCase):
         source = self.timers.get_source("Python op")
         linestyle = "--" if source == "Python" else "-"
         self.assertEqual(linestyle, "--")
+
+
+class TestPyCapsuleArchitecture(unittest.TestCase):
+    """Test that the PyCapsule architecture correctly wires C++ extensions."""
+
+    def test_all_consuming_extensions_import(self):
+        """Test that all C++ extensions import without error.
+
+        Each consuming extension calls import_toc_capsule() in its PyInit_*
+        function. If the PyCapsule retrieval fails, the import would raise
+        an ImportError.
+        """
+        import synthesizer.extensions.column_density  # noqa: F401
+        import synthesizer.extensions.doppler_particle_spectra  # noqa: F401
+        import synthesizer.extensions.integrated_spectra  # noqa: F401
+        import synthesizer.extensions.integration  # noqa: F401
+        import synthesizer.extensions.particle_spectra  # noqa: F401
+        import synthesizer.extensions.sfzh  # noqa: F401
+        import synthesizer.extensions.weights  # noqa: F401
+        import synthesizer.imaging.extensions.circular_aperture  # noqa: F401
+        import synthesizer.imaging.extensions.image  # noqa: F401
+
+    def test_capsule_exists_on_timers_module(self):
+        """Test that the _toc_accumulate PyCapsule is exposed."""
+        import synthesizer.extensions.timers as tm
+
+        self.assertTrue(hasattr(tm, "_toc_accumulate"))
+        # PyCapsule objects have a specific type string
+        self.assertIn("PyCapsule", type(tm._toc_accumulate).__name__)
+
+
+class TestCppTimingEndToEnd(unittest.TestCase):
+    """Test that C++ toc() calls reach global_timings via the PyCapsule."""
+
+    def setUp(self):
+        """Reset timers before each test."""
+        reset_timings()
+
+    def test_c_source_accumulation(self):
+        """Test that toc_accumulate with source='C' is recorded correctly."""
+        _test_toc_from_c("C++ test operation", 0.042)
+
+        names = get_operation_names()
+        self.assertIn("C++ test operation", names)
+
+        cumtime, count, source = get_operation_timings("C++ test operation")
+        self.assertAlmostEqual(cumtime, 0.042, places=6)
+        self.assertEqual(count, 1)
+        self.assertEqual(source, "C")
+
+    def test_c_source_accumulates_multiple(self):
+        """Test that repeated C-source calls accumulate correctly."""
+        _test_toc_from_c("Repeated C op", 0.01)
+        _test_toc_from_c("Repeated C op", 0.02)
+        _test_toc_from_c("Repeated C op", 0.03)
+
+        cumtime, count, source = get_operation_timings("Repeated C op")
+        self.assertAlmostEqual(cumtime, 0.06, places=6)
+        self.assertEqual(count, 3)
+        self.assertEqual(source, "C")
+
+    def test_mixed_c_and_python_sources(self):
+        """Test that C and Python operations coexist with correct sources."""
+        # C operation
+        _test_toc_from_c("C operation", 0.1)
+
+        # Python operation
+        start = tic()
+        toc("Python operation", start)
+
+        # Both should be recorded
+        names = get_operation_names()
+        self.assertIn("C operation", names)
+        self.assertIn("Python operation", names)
+
+        # Sources should be distinct
+        _, _, c_source = get_operation_timings("C operation")
+        _, _, py_source = get_operation_timings("Python operation")
+        self.assertEqual(c_source, "C")
+        self.assertEqual(py_source, "Python")
+
+    def test_c_source_survives_reset(self):
+        """Test that C operations are cleared by reset and re-accumulable."""
+        _test_toc_from_c("Transient op", 0.5)
+        self.assertIn("Transient op", get_operation_names())
+
+        reset_timings()
+        self.assertNotIn("Transient op", get_operation_names())
+
+        # Re-accumulate after reset
+        _test_toc_from_c("Transient op", 0.25)
+        cumtime, count, _ = get_operation_timings("Transient op")
+        self.assertAlmostEqual(cumtime, 0.25, places=6)
+        self.assertEqual(count, 1)
 
 
 if __name__ == "__main__":

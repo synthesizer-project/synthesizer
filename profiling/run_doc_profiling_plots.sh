@@ -186,6 +186,15 @@ python profiling/pipeline/profile_memory.py \
     --sample-freq 500 \
     --include-observer-frame
 
+python profiling/pipeline/profile_memory.py \
+    --basename "npart_100000" \
+    --nparticles 100000 \
+    --ngalaxies 10 \
+    --nthreads $PIPELINE_THREADS \
+    --out_dir "$MEMORY_DIR" \
+    --sample-freq 250 \
+    --include-observer-frame
+
 echo ""
 echo "========================================"
 echo "Analysing Results and Generating Plots"
@@ -200,7 +209,8 @@ python profiling/pipeline/analyse_timing.py \
     "$TIMING_DIR/npart_1000/timing.csv" \
     "$TIMING_DIR/npart_5000/timing.csv" \
     "$TIMING_DIR/npart_10000/timing.csv" \
-    --labels "100" "500" "1000" "5000" "10000" \
+    "$TIMING_DIR/npart_100000/timing.csv" \
+    --labels "100" "500" "1000" "5000" "10000" "100000" \
     --output-dir "$TIMING_ANALYSIS_DIR"
 
 # Analyse memory results
@@ -212,7 +222,8 @@ python profiling/pipeline/analyse_memory.py \
     "$MEMORY_DIR/npart_1000/memory.csv" \
     "$MEMORY_DIR/npart_5000/memory.csv" \
     "$MEMORY_DIR/npart_10000/memory.csv" \
-    --labels "100" "500" "1000" "5000" "10000" \
+    "$MEMORY_DIR/npart_100000/memory.csv" \
+    --labels "100" "500" "1000" "5000" "10000" "100000" \
     --output-dir "$MEMORY_ANALYSIS_DIR"
 
 echo ""
@@ -235,7 +246,7 @@ python profiling/scaling/strong_scaling_int_spectra.py \
     --basename docs \
     --out_dir profiling/plots \
     --max_threads $STRONG_THREADS \
-    --nstars 100000 \
+    --nstars 1000000 \
     --average_over $STRONG_AVERAGES \
     --low_thresh 0.01
 
@@ -253,8 +264,8 @@ python profiling/scaling/strong_scaling_los_col_den.py \
     --basename docs \
     --out_dir profiling/plots \
     --max_threads $STRONG_THREADS \
-    --nstars 100000 \
-    --ngas 100000 \
+    --nstars 1000000 \
+    --ngas 1000000 \
     --average_over $STRONG_AVERAGES \
     --low_thresh 0.01
 
