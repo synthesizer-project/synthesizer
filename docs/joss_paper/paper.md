@@ -12,7 +12,7 @@ authors:
     corresponding: true
     equal-contrib: true
     affiliation: 1
-  - name: Christopher Lovell
+  - name: Christopher C. Lovell
     orcid: 0000-0001-7964-5933
     equal-contrib: true
     affiliation: 2
@@ -62,22 +62,26 @@ affiliations:
   - name: Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK
     index: 1
     ror: 00ayhx656
-  - name: Institute of Cosmology and Gravitation, University of Portsmouth, Burnaby Road, Portsmouth, PO1 3FX, UK
+  - name: Kavli Institute for Cosmology, University of Cambridge, Madingley Road, Cambridge CB3 0HA, UK
     index: 2
-  - name: Department of Astronomy, The University of Texas at Austin, Austin, TX 78712, USA
+  - name: Institute of Astronomy, University of Cambridge, Madingley Road, Cambridge CB3 0HA, UK
     index: 3
-  - name: School of Physics, University of Melbourne, Parkville, VIC 3010, Australia
+  - name: Institute of Cosmology and Gravitation, University of Portsmouth, Burnaby Road, Portsmouth, PO1 3FX, UK
     index: 4
-  - name: Institute of Space Sciences and Astronomy, University of Malta, Msida MSD 2080, Malta
+  - name: Department of Astronomy, The University of Texas at Austin, Austin, TX 78712, USA
     index: 5
-  - name: Jodrell Bank Centre for Astrophysics, University of Manchester, Oxford Road, Manchester M13 9PL, UK
+  - name: School of Physics, University of Melbourne, Parkville, VIC 3010, Australia
     index: 6
-  - name: Columbia Astrophysics Laboratory, Columbia University, 550 West 120th Street, New York, NY 10027, USA
+  - name: Institute of Space Sciences and Astronomy, University of Malta, Msida MSD 2080, Malta
     index: 7
-  - name: Leiden Observatory, Leiden University, PO Box 9513, NL-2300 RA Leiden, The Netherlands
+  - name: Jodrell Bank Centre for Astrophysics, University of Manchester, Oxford Road, Manchester M13 9PL, UK
     index: 8
-  - name: Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA
+  - name: Columbia Astrophysics Laboratory, Columbia University, 550 West 120th Street, New York, NY 10027, USA
     index: 9
+  - name: Leiden Observatory, Leiden University, PO Box 9513, NL-2300 RA Leiden, The Netherlands
+    index: 10
+  - name: Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA
+    index: 11
 
 date: 17 June 2025
 license: GPL-3.0
