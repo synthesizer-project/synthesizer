@@ -14,7 +14,6 @@
  *   - At runtime, timers.h calls the cached pointer directly (no GIL).
  *****************************************************************************/
 #include <Python.h>
-#include <stdio.h>
 #include <atomic>
 #include <mutex>
 #include <string>
@@ -133,14 +132,20 @@ extern "C" void toc_accumulate(const char *msg, double elapsed_time,
 static PyObject *py_tic(PyObject *self, PyObject *args) {
   (void)self;
   (void)args;
+#ifdef ATOMIC_TIMING
   return Py_BuildValue("d", GET_TIME());
+#else
+  return Py_BuildValue("d", 0.0);
+#endif
 }
 
 /**
  * @brief Python wrapper for toc - stop timer and accumulate timing data.
  *
  * This function is called from Python code to stop a timer started with tic().
- * It computes elapsed time, prints it, and accumulates it with source="Python".
+ * It computes elapsed time and accumulates it with source="Python".
+ *
+ * When ATOMIC_TIMING is not defined, this is a complete no-op.
  *
  * @param self Module object (unused).
  * @param args Python arguments: (msg, start_time).
@@ -156,10 +161,7 @@ static PyObject *py_toc(PyObject *self, PyObject *args) {
   double end_time = GET_TIME();
   double elapsed_time = end_time - start_time;
 
-  // Print for logging/debugging
-  printf("[Python] %s took: %f seconds\n", msg, elapsed_time);
-
-  // Accumulate via the shared function (same one exposed by PyCapsule)
+  /* Accumulate via the shared function (same one exposed by PyCapsule). */
   toc_accumulate(msg, elapsed_time, "Python");
 #else
   (void)args;
@@ -293,7 +295,7 @@ static PyObject *py_test_toc_from_c(PyObject *self, PyObject *args) {
 static PyMethodDef TimerMethods[] = {
     {"tic", py_tic, METH_NOARGS, "Start a timer and return the start time."},
     {"toc", py_toc, METH_VARARGS,
-     "Stop the timer, print elapsed time, and accumulate timing data."},
+     "Stop the timer and accumulate timing data."},
     {"get_operation_names", py_get_operation_names, METH_NOARGS,
      "Get list of all operation names with accumulated timing data."},
     {"get_operation_timings", py_get_operation_timings, METH_VARARGS,

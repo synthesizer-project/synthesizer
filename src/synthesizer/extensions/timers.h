@@ -26,7 +26,6 @@
 #ifndef TIMERS_H_
 #define TIMERS_H_
 
-#include <stdio.h>
 #include <time.h>
 
 #ifdef WITH_OPENMP
@@ -95,9 +94,9 @@ inline double tic() {
 }
 
 /**
- * @brief Stop a timer and print elapsed time.
+ * @brief Stop a timer and accumulate elapsed time.
  *
- * When ATOMIC_TIMING is enabled, this function also accumulates timing data
+ * When ATOMIC_TIMING is enabled, this function accumulates timing data
  * by calling the cached function pointer (set by init_timers()). This goes
  * directly to the global_timings map in timers.cpp without any Python API
  * or GIL interaction.
@@ -111,13 +110,6 @@ inline void toc(const char *msg, double start_time) {
 #ifdef ATOMIC_TIMING
   double end_time = GET_TIME();
   double elapsed_time = end_time - start_time;
-
-  /* Print for logging/debugging. */
-#ifdef WITH_OPENMP
-  printf("[C] %s took: %f seconds\n", msg, elapsed_time);
-#else
-  printf("[C] %s took (in serial): %f seconds\n", msg, elapsed_time);
-#endif
 
   /* Accumulate via the cached function pointer (no GIL required). */
   toc_accumulate_fn fn = _get_cached_toc_fn();
