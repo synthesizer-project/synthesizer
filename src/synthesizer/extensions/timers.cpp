@@ -19,13 +19,7 @@
 #include <string>
 #include <unordered_map>
 
-#ifdef WITH_OPENMP
-#include <omp.h>
-#define GET_TIME() omp_get_wtime()
-#else
-#include <time.h>
-#define GET_TIME() ((double)clock() / CLOCKS_PER_SEC)
-#endif
+#include "timers.h"
 
 /**
  * @brief Structure to hold timing data for a single operation.
@@ -180,6 +174,7 @@ static PyObject *py_get_operation_names(PyObject *self, PyObject *args) {
   (void)self;
   (void)args;
 
+  std::lock_guard<std::mutex> lock(timings_mutex);
   // Create Python list
   PyObject *list = PyList_New(global_timings.size());
   size_t i = 0;
@@ -205,6 +200,7 @@ static PyObject *py_get_operation_timings(PyObject *self, PyObject *args) {
   if (!PyArg_ParseTuple(args, "s", &operation))
     return NULL;
 
+  std::lock_guard<std::mutex> lock(timings_mutex);
   // Find operation in map
   auto it = global_timings.find(std::string(operation));
   if (it == global_timings.end()) {
@@ -235,6 +231,7 @@ static PyObject *py_get_operation_source(PyObject *self, PyObject *args) {
   if (!PyArg_ParseTuple(args, "s", &operation))
     return NULL;
 
+  std::lock_guard<std::mutex> lock(timings_mutex);
   // Find operation in map
   auto it = global_timings.find(std::string(operation));
   if (it == global_timings.end()) {
@@ -323,9 +320,6 @@ static struct PyModuleDef timermodule = {
     NULL,                                  /* m_clear */
     NULL,                                  /* m_free */
 };
-
-/* timers.h provides TOC_ACCUMULATE_CAPSULE_NAME (when ATOMIC_TIMING). */
-#include "timers.h"
 
 /* Module initialization function */
 PyMODINIT_FUNC PyInit_timers(void) {

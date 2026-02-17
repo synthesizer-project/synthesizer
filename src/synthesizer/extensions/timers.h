@@ -27,12 +27,25 @@
 #define TIMERS_H_
 
 #include <time.h>
+#include <chrono>
 
 #ifdef WITH_OPENMP
 #include <omp.h>
 #define GET_TIME() omp_get_wtime()
 #else
-#define GET_TIME() ((double)clock() / CLOCKS_PER_SEC)
+inline double get_wall_time() {
+#if defined(CLOCK_MONOTONIC)
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+    return static_cast<double>(ts.tv_sec)
+           + static_cast<double>(ts.tv_nsec) * 1.0e-9;
+  }
+#endif
+  auto now = std::chrono::steady_clock::now().time_since_epoch();
+  return std::chrono::duration_cast<std::chrono::duration<double>>(now)
+      .count();
+}
+#define GET_TIME() get_wall_time()
 #endif
 
 /* ---- Accumulation infrastructure (only when ATOMIC_TIMING is enabled) ---- */
