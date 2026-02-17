@@ -31,6 +31,7 @@ from synthesizer._version import __version__
 from synthesizer.emissions.line import LineCollection
 from synthesizer.emissions.sed import Sed
 from synthesizer.extensions.openmp_check import check_openmp
+from synthesizer.extensions.atomic_timing_check import check_atomic_timing
 from synthesizer.galaxy import galaxy
 from synthesizer.galaxy import galaxy as Galaxy  # add a convenient alias
 from synthesizer.grid import Grid
@@ -50,6 +51,7 @@ __all__ = [
     "galaxy",
     "Galaxy",
     "check_openmp",
+    "check_atomic_timing",
     "filters",
     "LineCollection",
     "__version__",

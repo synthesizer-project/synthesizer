@@ -820,9 +820,12 @@ class Component(ABC):
         for label in generate_labels:
             # If label isn't in the photometry dict raise an exception
             if label not in photometry_dict:
+                available_keys = list(photometry_dict.keys())
                 raise exceptions.MissingPhotometryType(
                     f"Photometry for model {label} not found on the "
-                    f"{self.component_type} component."
+                    f"{self.component_type} component. "
+                    f"Instrument: {instrument.label}. "
+                    f"Available photometry keys: {available_keys}"
                 )
 
             out_images[label] = _generate_image_collection_generic(
