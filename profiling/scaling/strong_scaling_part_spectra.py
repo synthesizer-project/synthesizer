@@ -9,18 +9,13 @@ import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr, angstrom, kpc
+from unyt import Msun, Myr, km, s
 
-from synthesizer import Grid
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
-from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfzh
-from synthesizer.particle.utils import calculate_smoothing_lengths
 from synthesizer.utils.profiling_utils import run_scaling_test
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -30,13 +25,15 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def images_strong_scaling(
+def part_spectra_strong_scaling(
     basename,
     out_dir,
     max_threads,
     nstars,
     average_over,
+    gam,
     low_thresh,
+    doppler,
     paper_style,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
@@ -46,21 +43,7 @@ def images_strong_scaling(
     grid = Grid(grid_name)
 
     # Get the emission model
-    model = IncidentEmission(grid)
-    model.set_per_particle(True)
-
-    # Get the filters
-    lam = np.linspace(10**3, 10**5, 1000) * angstrom
-    webb_filters = FilterCollection(
-        filter_codes=[
-            f"JWST/NIRCam.{f}"
-            for f in ["F090W", "F150W", "F200W", "F277W", "F356W", "F444W"]
-        ],
-        new_lam=lam,
-    )
-
-    # Instatiate the instruments
-    webb_inst = Instrument("JWST", filters=webb_filters, resolution=0.05 * kpc)
+    model = IncidentEmission(grid, vel_shift=doppler, per_particle=True)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
@@ -72,69 +55,41 @@ def images_strong_scaling(
         initial_mass=mass,
     )
 
-    # Generate some random coordinates
-    coords = (
-        CoordinateGenerator.generate_3D_gaussian(
-            nstars,
-            mean=np.array([50, 50, 50]),
-            cov=np.array([[10, 0, 0], [0, 10, 0], [0, 0, 10]]),
-        )
-        * kpc
-    )
-
-    # Calculate the smoothing lengths
-    smls = calculate_smoothing_lengths(coords, num_neighbours=56)
-
     # Sample the SFZH, producing a Stars object
-    # we will also pass some keyword arguments for attributes
-    # we will need for imaging
     stars = sample_sfzh(
         param_stars.sfzh,
         param_stars.log10ages,
         param_stars.log10metallicities,
         nstars,
-        coordinates=coords,
-        smoothing_lengths=smls,
         redshift=1,
-        centre=np.array([50, 50, 50]) * kpc,
+        velocities=np.random.normal(0.0, 100.0, size=(nstars, 3)) * km / s,
     )
 
-    # Get the spectra
-    stars.get_spectra(
-        model,
-        nthreads=max_threads,
-    )
-
-    # Get photometry
-    stars.get_particle_photo_lnu(
-        filters=webb_inst.filters,
-        nthreads=max_threads,
-    )
-
-    # Get the kernel
-    kernel = Kernel().get_kernel()
-
-    # Get images in serial first to get over any overhead due to linking
+    # Get spectra in serial first to get over any overhead due to linking
     # the first time the function is called
-    print("Initial imaging spectra calculation")
-    stars.get_images_luminosity(
-        webb_inst.resolution,
-        30 * kpc,
-        model,
-        kernel=kernel,
-        nthreads=max_threads,
-    )
+    print("Initial serial spectra calculation")
+    stars.get_spectra(model, nthreads=1, grid_assignment_method=gam)
     print()
 
     # Define the log and plot output paths
-    log_outpath = (
-        f"{out_dir}/{basename}_images_"
-        f"totThreads{max_threads}_nstars{nstars}.log"
-    )
-    plot_outpath = (
-        f"{out_dir}/{basename}_images_"
-        f"totThreads{max_threads}_nstars{nstars}.png"
-    )
+    if doppler:
+        log_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}_doppler.log"
+        )
+        plot_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}_doppler.png"
+        )
+    else:
+        log_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}.log"
+        )
+        plot_outpath = (
+            f"{out_dir}/{basename}_part_spectra_{gam}_"
+            f"totThreads{max_threads}_nstars{nstars}.png"
+        )
 
     # Run the scaling test
     run_scaling_test(
@@ -142,14 +97,12 @@ def images_strong_scaling(
         average_over,
         log_outpath,
         plot_outpath,
-        stars.get_images_luminosity,
+        stars.get_spectra,
         {
-            "resolution": webb_inst.resolution,
-            "fov": 30 * kpc,
             "emission_model": model,
-            "kernel": kernel,
+            "grid_assignment_method": gam,
         },
-        total_msg="Generating images",
+        total_msg="Generating spectra",
         low_thresh=low_thresh,
         paper_style=paper_style,
     )
@@ -196,6 +149,13 @@ if __name__ == "__main__":
     )
 
     args.add_argument(
+        "--grid_assign",
+        type=str,
+        default="cic",
+        help="The grid assignment method (cic or ngp).",
+    )
+
+    args.add_argument(
         "--low_thresh",
         type=float,
         default=0.1,
@@ -209,14 +169,31 @@ if __name__ == "__main__":
         "smaller proportions).",
     )
 
+    args.add_argument(
+        "--doppler",
+        action="store_true",
+        help="Whether to apply velocity shifts to the spectra calculation.",
+    )
+
     args = args.parse_args()
 
-    images_strong_scaling(
+    # Check for atomic timing
+    from synthesizer import check_atomic_timing
+
+    if not check_atomic_timing():
+        raise RuntimeError(
+            "Atomic timing not available. Recompile with: "
+            "ATOMIC_TIMING=1 pip install -e ."
+        )
+
+    part_spectra_strong_scaling(
         args.basename,
         args.out_dir,
         args.max_threads,
         args.nstars,
         args.average_over,
+        args.grid_assign,
         args.low_thresh,
+        args.doppler,
         args.paper_style,
     )
