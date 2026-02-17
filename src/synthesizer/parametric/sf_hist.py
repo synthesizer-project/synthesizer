@@ -973,9 +973,10 @@ class DenseBasis(Common):
             sys.stdout = original_stdout
         except ImportError:
             raise exceptions.UnmetDependency(
-                "dense_basis not found. Please install Synthesizer with "
-                " dense_basis support by running `pip install "
-                ".[dense_basis]`"
+                "dense_basis not found. Please install dense basis from the "
+                "repo to enable dense_basis SFH functionality. "
+                r"To install, run `pip install \"git+https://github.com/"
+                'kartheikiyer/dense_basis.git"`'
             )
 
         # Convert the dense basis tuple arguments to sfh in mass fraction units
