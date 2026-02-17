@@ -1243,7 +1243,7 @@ class Pipeline:
             ):
                 galaxy.get_stellar_los_tau_v(
                     kernel=op_kwargs["kernel"],
-                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     nthreads=self.nthreads,
@@ -1255,7 +1255,7 @@ class Pipeline:
             ):
                 galaxy.get_black_hole_los_tau_v(
                     kernel=op_kwargs["kernel"],
-                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     nthreads=self.nthreads,

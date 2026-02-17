@@ -14,6 +14,9 @@
 #include "cpp_to_python.h"
 #include "property_funcs.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 
 /**
  * @brief Serial trapezoidal integration.
@@ -277,5 +280,14 @@ PyMODINIT_FUNC PyInit_integration(void) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     return NULL;
   }
-  return PyModule_Create(&integrationmodule);
+  PyObject *m = PyModule_Create(&integrationmodule);
+  if (m == NULL)
+    return NULL;
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
+  return m;
 }
