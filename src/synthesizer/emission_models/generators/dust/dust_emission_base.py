@@ -20,6 +20,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.units import accepts
+from synthesizer.utils.integrate import trapezoid
 from synthesizer.utils.precision import get_numpy_dtype
 
 if TYPE_CHECKING:
@@ -315,7 +316,7 @@ class DustEmission(Generator):
         """
         nu_value = np.asarray(nu.to_value(Hz), dtype=np.float64)
         lnu_value = np.asarray(lnu.to_value(erg / s / Hz), dtype=np.float64)
-        return -np.trapz(lnu_value, x=nu_value, axis=-1)
+        return -trapezoid(lnu_value, x=nu_value, axis=-1)
 
     def _normalize_spectrum(self, nu, lnu):
         """Normalize spectrum using float64 integration.
