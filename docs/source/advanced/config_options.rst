@@ -7,7 +7,7 @@ Synthesizer uses C extensions for much of the heavy lifting done in the backgrou
 - ``SINGLE_PRECISION`` controls the compiled floating-point precision of the C extensions. Set to ``1`` to build in single precision (``float32``); omit or set to ``0`` for the default double precision (``float64``).
 - ``ENABLE_DEBUGGING_CHECKS`` turns on debugging checks within the C extensions. These (expensive) checks are extra consistency checks to ensure the code is behaving as expected. Turning these on will slow down the code significantly.
 - ``RUTHLESS`` turns on almost all compiler warnings and converts them into errors to ensure the C code in synthesizer is clean. Note, that this does not include the ``--pedantic`` flag because Python and Numpy themselves do not adhere to these rules and thus do not compile using ``gcc`` and this flag.
-- ``ATOMIC_TIMING`` turns on low level timings for expensive computations. This is required to use time related profiling scripts. 
+- ``ATOMIC_TIMING`` enables the internal timing system, which accumulates wall-clock times and call counts for named operations in both Python and C++ code paths. This is required by the profiling scripts under ``profiling/``. When not set, ``tic()`` and ``toc()`` are complete no-ops with zero runtime cost. See :doc:`timing_interface` for full details.
 - ``CFLAGS`` allows the user to override the flags passed to the C compiler. Simply pass your desired flags to this variable.
 - ``LDFLAGS`` allows the user to override the directories used during linking.
 - ``EXTRA_INCLUDES`` allows the user to provide any extra include directories that fail to be automatically picked up.

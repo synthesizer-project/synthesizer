@@ -23,8 +23,8 @@ def run_script(script_name, project_root, nthreads=1, n_averages=3):
         f"Running {script_name} (nthreads={nthreads}, "
         f"n_averages={n_averages})..."
     )
-    # script_name is relative to profiling/scaling dir
-    script_path = Path("profiling/scaling") / script_name
+    # script_name is relative to profiling/general dir
+    script_path = Path("profiling/general") / script_name
     try:
         cmd = [
             sys.executable,

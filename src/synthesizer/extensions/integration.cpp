@@ -37,6 +37,9 @@
 #include "numpy_helpers.h"
 #include "property_funcs.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 
 /**
  * @brief Integrate over the last axis using the trapezoidal rule (serial).
@@ -1175,5 +1178,14 @@ PyMODINIT_FUNC PyInit_integration(void) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     return NULL;
   }
+  PyObject *m = PyModule_Create(&integrationmodule);
+  if (m == NULL)
+    return NULL;
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
 }

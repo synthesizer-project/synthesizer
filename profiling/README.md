@@ -2,56 +2,78 @@
 
 This directory contains profiling scripts for Synthesizer, organized into three categories:
 
-1. **Pipeline Profiling** (`pipeline/`) - Compare timing and memory across implementations
-2. **Scaling Analysis** (`scaling/`) - Strong scaling with respect to parallelism (threads)
-3. **General Performance** (`general/`) - General performance scaling (particles, wavelength, etc.)
+1. **Pipeline Profiling** (`pipeline/`) - Profile timing and memory use across implementations using the `Pipeline` interface to compare to "real-world" performance.
+2. **Scaling Analysis** (`scaling/`) - Strong scaling of shared memory parallelism (OpenMP) implementations.
+3. **General Performance** (`general/`) - General performance scaling (particles, wavelength array size, etc.) for core algorithms.
 
 ---
 
 ## Pipeline Profiling (`pipeline/`)
 
-Compare timing and memory performance across branches, precision settings, or other configurations. Use these to measure performance impact of code changes across various operations include in a `Pipeline` run.
+Profile timing and memory performance of full `Pipeline` runs. This can be used to compare performance across branches, precision settings, or other configurations. These scripts use the real `Pipeline` object and provide the option to run all available operations (LOS optical depths, SFZH/SFH, spectra, photometry, lines, imaging, data cubes, spectroscopy) in both rest-frame and observer-frame variants.
 
 ### Quick Start: Compare Branches
+
+To use the pipeline profiling tools to compare two branches (e.g. `main` vs `feature-branch`), run the following commands:
 
 ```bash
 # Profile main branch
 git checkout main
-pip install -e .
+<INSTALL OPTIONS> pip install -e .
 python profiling/pipeline/profile_timing.py --basename "main_1000p"
 python profiling/pipeline/profile_memory.py --basename "main_1000p"
 
 # Profile feature branch
 git checkout feature-branch
-pip install -e .
+<INSTALL OPTIONS> pip install -e .
 python profiling/pipeline/profile_timing.py --basename "feature_1000p"
 python profiling/pipeline/profile_memory.py --basename "feature_1000p"
 
-# Compare
+# Compare timings
 python profiling/pipeline/analyze_timing.py \
   --inputs profiling/outputs/timing/main_1000p/timing.csv \
            profiling/outputs/timing/feature_1000p/timing.csv \
   --labels "main" "feature"
+
+# Compare memory profiles
+python profiling/pipeline/analyze_memory.py \
+  --inputs profiling/outputs/memory/main_1000p/memory.csv \
+           profiling/outputs/memory/feature_1000p/memory.csv \
+  --labels "main" "feature"
+
+
+# Validate numerical precision of outputs
+python profiling/pipeline/validate_precision.py \
+  --inputs profiling/outputs/timing/main_1000p/output.h5 \
+           profiling/outputs/timing/feature_1000p/output.h5 \
+  --labels "main" "feature" \
+  --tolerance default
 ```
 
-### Core Scripts
+### Core Profiling Tools
 
 #### `profile_timing.py` - Measure Execution Time
 
-Profile pipeline execution time on current branch.
+Profile `Pipeline` execution time. Runs setup (grid load, galaxy/instrument build, emission model) + `pipeline.run()` for all operations, then extracts timing data from `pipeline._op_timing`.
 
 **Usage:**
 
 ```bash
-python profiling/pipeline/profile_timing.py --basename "run_name" [--nparticles 1000] [--ngalaxies 10]
+python profiling/pipeline/profile_timing.py --basename "run_name" \
+  [--nparticles 1000] [--ngalaxies 10] [--fov-kpc 60] \
+  [--include-observer-frame]
 ```
 
 **Arguments:**
 
 - `--basename` (required): Name for this profiling run
-- `--nparticles` (optional, default 1000): Number of particles per galaxy
+- `--nparticles` (optional, default 1000): Stellar particles per galaxy
 - `--ngalaxies` (optional, default 10): Number of galaxies
 - `--seed` (optional, default 42): Random seed
+- `--fov-kpc` (optional, default 60): Field of view for imaging in kpc
+- `--include-observer-frame`: Include observer-frame/flux operations
+  (get_observed_spectra, get_photometry_fluxes, get_observed_lines,
+  get_images_flux, get_data_cubes_fnu, get_spectroscopy_fnu)
 
 **Output:**
 
@@ -59,17 +81,27 @@ python profiling/pipeline/profile_timing.py --basename "run_name" [--nparticles 
 
 #### `profile_memory.py` - Memory Sampling
 
-Profile memory usage with 1000 Hz continuous sampling.
+Profile memory usage with 1000 Hz continuous sampling during full `Pipeline`
+run (setup + execution). Samples RSS memory from setup through
+`pipeline.run()` completion.
 
 **Usage:**
 
 ```bash
-python profiling/pipeline/profile_memory.py --basename "run_name" [--nparticles 1000] [--ngalaxies 10]
+python profiling/pipeline/profile_memory.py --basename "run_name" \
+  [--nparticles 1000] [--ngalaxies 10] [--fov-kpc 60] \
+  [--include-observer-frame]
 ```
+
+**Arguments:**
+
+- Same as `profile_timing.py` above
 
 **Output:**
 
 - `profiling/outputs/memory/{basename}/memory.csv` (all raw 1000 Hz samples)
+
+### Analysing Profiling Tools
 
 #### `analyze_timing.py` - Compare Timing Results
 
@@ -109,7 +141,10 @@ python profiling/pipeline/analyze_memory.py \
 
 #### `validate_precision.py` - Numerical Precision Validation
 
-Compare HDF5 output files and validate numerical precision.
+Compare HDF5 output files from `Pipeline.write()` and validate numerical
+precision. Auto-discovers datasets from the structured HDF5 layout
+(Galaxies/Spectra/..., Galaxies/Stars/..., etc.) and compares all numeric
+datasets across runs.
 
 **Usage:**
 
@@ -117,8 +152,17 @@ Compare HDF5 output files and validate numerical precision.
 python profiling/pipeline/validate_precision.py \
   --inputs output1.h5 output2.h5 [output3.h5 ...] \
   [--labels "label1" "label2" ...] \
-  [--tolerance default|loose|tight]
+  [--tolerance default|loose|tight] \
+  [--datasets path1 path2 ...]
 ```
+
+**Arguments:**
+
+- `--inputs`: HDF5 files to compare (from `Pipeline.write()`)
+- `--labels`: Optional labels for each file (default: use filenames)
+- `--tolerance`: Comparison tolerance (default: rtol=1e-6, atol=1e-8)
+- `--datasets`: Specific HDF5 dataset paths to compare (default:
+  auto-discover all numeric datasets from first file)
 
 **Tolerance Levels:**
 
@@ -196,7 +240,9 @@ Generates documentation plots from profiling results. Used to create publication
 python profiling/general/make_all_plots.py
 ```
 
-## Profiling Directory Structure
+---
+
+## Output Directory Structure
 
 ```
 profiling/

@@ -6,15 +6,18 @@ Usage:
 """
 
 import argparse
+import sys
+from functools import partial
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr, angstrom, kpc
+from astropy.cosmology import Planck18
+from unyt import Msun, Myr, kpc
 
 from synthesizer import Grid
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -22,6 +25,10 @@ from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfzh
 from synthesizer.particle.utils import calculate_smoothing_lengths
 from synthesizer.utils.profiling_utils import run_scaling_test
+
+# Add pipeline profiling to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
+from pipeline_test_data import get_test_instrument
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -49,18 +56,9 @@ def images_strong_scaling(
     model = IncidentEmission(grid)
     model.set_per_particle(True)
 
-    # Get the filters
-    lam = np.linspace(10**3, 10**5, 1000) * angstrom
-    webb_filters = FilterCollection(
-        filter_codes=[
-            f"JWST/NIRCam.{f}"
-            for f in ["F090W", "F150W", "F200W", "F277W", "F356W", "F444W"]
-        ],
-        new_lam=lam,
-    )
-
-    # Instatiate the instruments
-    webb_inst = Instrument("JWST", filters=webb_filters, resolution=0.05 * kpc)
+    # Get the filters from cached instrument (no network access)
+    # The cached instrument has all JWST NIRCam filters available
+    webb_inst = get_test_instrument(grid)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
@@ -105,9 +103,10 @@ def images_strong_scaling(
         nthreads=max_threads,
     )
 
-    # Get photometry
+    # Get photometry - use only a single filter for faster imaging
+    single_filter = webb_inst.filters.select(webb_inst.filters.filter_codes[0])
     stars.get_particle_photo_lnu(
-        filters=webb_inst.filters,
+        filters=single_filter,
         nthreads=max_threads,
     )
 
@@ -118,10 +117,11 @@ def images_strong_scaling(
     # the first time the function is called
     print("Initial imaging spectra calculation")
     stars.get_images_luminosity(
-        webb_inst.resolution,
-        30 * kpc,
-        model,
+        "incident",
+        fov=30 * kpc,
+        instrument=webb_inst,
         kernel=kernel,
+        cosmo=Planck18,
         nthreads=max_threads,
     )
     print()
@@ -137,18 +137,22 @@ def images_strong_scaling(
     )
 
     # Run the scaling test
+    # Use partial to bind the label argument
+    get_images = partial(
+        stars.get_images_luminosity,
+        "incident",
+        fov=30 * kpc,
+        instrument=webb_inst,
+        kernel=kernel,
+        cosmo=Planck18,
+    )
     run_scaling_test(
         max_threads,
         average_over,
         log_outpath,
         plot_outpath,
-        stars.get_images_luminosity,
-        {
-            "resolution": webb_inst.resolution,
-            "fov": 30 * kpc,
-            "emission_model": model,
-            "kernel": kernel,
-        },
+        get_images,
+        {},
         total_msg="Generating images",
         low_thresh=low_thresh,
         paper_style=paper_style,
@@ -210,6 +214,15 @@ if __name__ == "__main__":
     )
 
     args = args.parse_args()
+
+    # Check for atomic timing
+    from synthesizer import check_atomic_timing
+
+    if not check_atomic_timing():
+        raise RuntimeError(
+            "Atomic timing not available. Recompile with: "
+            "ATOMIC_TIMING=1 pip install -e ."
+        )
 
     images_strong_scaling(
         args.basename,

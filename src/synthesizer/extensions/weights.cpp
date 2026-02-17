@@ -1,6 +1,11 @@
 /******************************************************************************
  * A C module containing all the weights functions common to all particle
  * spectra extensions.
+ *
+ * NOTE: This file serves a dual role. It is both a standalone extension
+ * module (PyInit_weights) AND compiled as a source file into
+ * integrated_spectra, particle_spectra, doppler_particle_spectra, and sfzh.
+ * When compiled into another extension, PyInit_weights is dead code.
  *****************************************************************************/
 /* C includes */
 #include <array>
@@ -19,6 +24,9 @@
 #include "index_utils.h"
 #include "numpy_helpers.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /* Optional openmp include. */
@@ -560,9 +568,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_weights(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
 }
