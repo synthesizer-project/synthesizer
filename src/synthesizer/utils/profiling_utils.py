@@ -67,6 +67,45 @@ def get_instrument_profile(label, filepath, filters=None, resolution=None):
     return instrument
 
 
+def _run_single(
+    timers,
+    operation_function,
+    kwargs,
+    nthreads,
+    run_idx,
+    total_msg,
+):
+    """Run a single profiling iteration and capture timing data."""
+    # Reset timers for this individual run
+    timers.reset()
+
+    # Time the operation
+    spec_start = time.time()
+    operation_function(**kwargs, nthreads=nthreads)
+    total_time = time.time() - spec_start
+
+    print(f"[Total] {total_msg} took: {total_time} s", flush=True)
+
+    # Extract timing data from this run
+    run_data = {
+        "nthreads": nthreads,
+        "run": run_idx,
+        "total_time": total_time,
+        "operations": {},
+    }
+
+    # Copy all accumulated operation timings from this run
+    for op in timers.keys():
+        cumulative_time, call_count, source = timers[op]
+        run_data["operations"][op] = {
+            "cumulative_time": cumulative_time,
+            "call_count": call_count,
+            "source": source,
+        }
+
+    return run_data
+
+
 def _run_averaged_scaling_test(
     max_threads,
     average_over,
@@ -75,7 +114,12 @@ def _run_averaged_scaling_test(
     kwargs,
     total_msg,
 ):
-    """Run a scaling test and average the result at each thread count.
+    """Run a scaling test and collect per-run timing data.
+
+    This function runs the operation_function multiple times with different
+    thread counts. For each individual run, it resets the atomic timers,
+    executes the operation, and extracts the accumulated timing data.
+    This allows Python to average the timings across multiple runs.
 
     Args:
         max_threads (int): The maximum number of threads to test.
@@ -86,46 +130,65 @@ def _run_averaged_scaling_test(
         total_msg (str): The message to print for the total time.
 
     Returns:
-        output (str): The captured output from the test.
+        output (str): The captured output from the test (for logging).
         threads (list): The list of thread counts used in the test.
+        run_data_list (list): List of dicts containing per-run timing data.
     """
+    from synthesizer.utils.operation_timers import OperationTimers
+
+    # Create timers instance
+    timers = OperationTimers()
+
+    # Store all run data
+    run_data_list = []
     # Save original stdout file descriptor and redirect stdout to a
-    # temporary file
+    # temporary file (for logging)
     original_stdout_fd = sys.stdout.fileno()
     temp_stdout = os.dup(original_stdout_fd)
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         os.dup2(temp_file.fileno(), original_stdout_fd)
 
-        # Setup lists for times
+        # Setup lists
         threads = []
 
         # Loop over the number of threads
         nthreads = 1
         while nthreads <= max_threads:
-            print(f"=== Testing with {nthreads} threads ===")
-            for i in range(average_over):
-                spec_start = time.time()
-                operation_function(**kwargs, nthreads=nthreads)
-                execution_time = time.time() - spec_start
+            print(f"=== Testing with {nthreads} threads ===", flush=True)
 
-                print(f"[Total] {total_msg}:", execution_time)
+            for run_idx in range(average_over):
+                run_data = _run_single(
+                    timers,
+                    operation_function,
+                    kwargs,
+                    nthreads,
+                    run_idx,
+                    total_msg,
+                )
+                run_data_list.append(run_data)
 
-                if i == 0:
+                if run_idx == 0:
                     threads.append(nthreads)
 
             nthreads *= 2
-            print()
+            print(flush=True)
         else:
             if max_threads not in threads:
-                print(f"=== Testing with {max_threads} threads ===")
-                for i in range(average_over):
-                    spec_start = time.time()
-                    operation_function(**kwargs, nthreads=max_threads)
-                    execution_time = time.time() - spec_start
+                print(
+                    f"=== Testing with {max_threads} threads ===", flush=True
+                )
+                for run_idx in range(average_over):
+                    run_data = _run_single(
+                        timers,
+                        operation_function,
+                        kwargs,
+                        max_threads,
+                        run_idx,
+                        total_msg,
+                    )
+                    run_data_list.append(run_data)
 
-                    print(f"[Total] {total_msg}:", execution_time)
-
-                    if i == 0:
+                    if run_idx == 0:
                         threads.append(max_threads)
 
     # Reset stdout to original
@@ -137,24 +200,29 @@ def _run_averaged_scaling_test(
         output = temp_file.read()
     os.unlink(temp_file.name)
 
-    return output, threads
+    return output, threads, run_data_list
 
 
 def parse_and_collect_runtimes(
-    output,
     threads,
+    run_data_list,
     average_over,
     log_outpath,
     low_thresh,
 ):
-    """Parse the output from the scaling test and collect runtimes.
+    """Process per-run timing data and prepare for plotting.
+
+    This function takes the list of per-run timing dictionaries and processes
+    them into the format expected by the plotting functions. It groups runs
+    by thread count, averages them, and filters out operations that don't
+    meet the low_thresh criterion.
 
     Args:
-        output (str): The captured output from the test.
         threads (list): The list of thread counts used in the test.
+        run_data_list (list): List of dicts with per-run timing data.
         average_over (int): The number of times to average the test over.
         log_outpath (str): The path to save the log file.
-        low_thresh (float): The threshold for low runtimes.
+        low_thresh (float): Fraction of total time threshold for inclusion.
 
     Returns:
         atomic_runtimes (dict):
@@ -162,78 +230,89 @@ def parse_and_collect_runtimes(
         linestyles (dict):
             A dictionary mapping keys to their respective linestyles.
     """
-    # Split the output into lines
-    output_lines = output.splitlines()
+    # Collect all operation names across all runs
+    all_operations = set()
+    for run_data in run_data_list:
+        all_operations.update(run_data["operations"].keys())
 
-    # Set up our output dictionaries
+    # Initialize dictionaries
     atomic_runtimes = {}
     linestyles = {}
+    call_counts = {}
 
-    # Loop over the logs and collect the runtimes
-    for line in output_lines:
-        if ":" in line:
-            # Get the key and value from the line
-            key, value = line.split(":")
+    # For each operation, collect times grouped by thread count
+    for operation in all_operations:
+        # Collect cumulative times for each run, grouped by thread count
+        times_by_thread = {nt: [] for nt in threads}
+        counts_by_thread = {nt: [] for nt in threads}
+        source = None
 
-            # Get the stripped key
-            stripped_key = (
-                key.replace("[Python]", "")
-                .replace("[C]", "")
-                .replace("took", "")
-                .replace("took (in serial)", "")
-                .replace("[Total]", "")
-                .strip()
-            )
+        for run_data in run_data_list:
+            if operation in run_data["operations"]:
+                op_data = run_data["operations"][operation]
+                times_by_thread[run_data["nthreads"]].append(
+                    op_data["cumulative_time"]
+                )
+                counts_by_thread[run_data["nthreads"]].append(
+                    op_data["call_count"]
+                )
+                # Capture source (same for all runs of this operation)
+                if source is None:
+                    source = op_data["source"]
 
-            # Replace the total key
-            if "[Total]" in key:
-                stripped_key = "Total"
+        # Average across runs for each thread count
+        averaged_times = []
+        averaged_counts = []
+        for nt in threads:
+            if times_by_thread[nt]:
+                averaged_times.append(np.mean(times_by_thread[nt]))
+                averaged_counts.append(np.mean(counts_by_thread[nt]))
+            else:
+                # Operation didn't appear in any runs for this thread count
+                averaged_times.append(np.nan)
+                averaged_counts.append(np.nan)
 
-            # Set the linestyle
-            if key not in linestyles:
-                if "[C]" in key or stripped_key == "Total":
-                    linestyles[stripped_key] = "-"
-                elif "[Python]" in key:
-                    linestyles[stripped_key] = "--"
+        atomic_runtimes[operation] = averaged_times
+        call_counts[operation] = averaged_counts
 
-            # Convert the value to a float
-            value = float(value.replace("seconds", "").strip())
+        # Set linestyle based on source
+        if source == "C":
+            linestyles[operation] = "-"
+        elif source == "Python":
+            linestyles[operation] = "--"
 
-            atomic_runtimes.setdefault(stripped_key, []).append(value)
-        print(line)
+    # Process Total times
+    total_times_by_thread = {nt: [] for nt in threads}
+    for run_data in run_data_list:
+        total_times_by_thread[run_data["nthreads"]].append(
+            run_data["total_time"]
+        )
 
-    # Average every average_over runs
-    for key in atomic_runtimes.keys():
-        atomic_runtimes[key] = [
-            np.mean(atomic_runtimes[key][i : i + average_over])
-            for i in range(0, len(atomic_runtimes[key]), average_over)
+    # Average Total across runs for each thread count
+    averaged_totals = []
+    for nt in threads:
+        averaged_totals.append(np.mean(total_times_by_thread[nt]))
+
+    atomic_runtimes["Total"] = averaged_totals
+    linestyles["Total"] = "-"
+
+    # Compute the overhead (only if Total exists)
+    if "Total" in atomic_runtimes:
+        overhead = [
+            atomic_runtimes["Total"][i]
+            for i in range(len(atomic_runtimes["Total"]))
         ]
-
-    # Some operations get repeated multiple times these will have
-    # more entries in atomic_runtimes lets split them
-    # into their own list
-    for key in atomic_runtimes.keys():
-        if len(atomic_runtimes[key]) > len(threads):
-            # How many times is it repeated
-            n_repeats = len(atomic_runtimes[key]) // len(threads)
-
-            # Average every n_repeats runs
-            atomic_runtimes[key] = [
-                np.sum(atomic_runtimes[key][i : i + n_repeats])
-                for i in range(0, len(atomic_runtimes[key]), n_repeats)
-            ]
-
-    # Compute the overhead
-    overhead = [
-        atomic_runtimes["Total"][i]
-        for i in range(len(atomic_runtimes["Total"]))
-    ]
-    for key in atomic_runtimes.keys():
-        if key != "Total":
-            for i in range(len(atomic_runtimes[key])):
-                overhead[i] -= atomic_runtimes[key][i]
-    atomic_runtimes["Untimed Overhead"] = overhead
-    linestyles["Untimed Overhead"] = ":"
+        for key in atomic_runtimes.keys():
+            if key != "Total":
+                for i in range(len(atomic_runtimes[key])):
+                    safe_value = np.nan_to_num(
+                        atomic_runtimes[key][i], nan=0.0
+                    )
+                    overhead[i] -= safe_value
+        atomic_runtimes["Untimed Overhead"] = overhead
+        linestyles["Untimed Overhead"] = ":"
+    else:
+        print("WARNING: No 'Total' timing found in output")
 
     # Temporarily add the threads to the dictionary for saving
     atomic_runtimes["Threads"] = threads
@@ -262,23 +341,26 @@ def parse_and_collect_runtimes(
 
     # Remove any entries which are taking a tiny fraction of the time
     # and are not the total
-    minimum_time = atomic_runtimes["Total"][-1] * low_thresh
-    old_keys = list(atomic_runtimes.keys())
-    for key in old_keys:
-        if key == "Total":
-            continue
-        if np.mean(atomic_runtimes[key]) < minimum_time:
-            atomic_runtimes.pop(key)
-            linestyles.pop(key)
+    if "Total" in atomic_runtimes:
+        minimum_time = atomic_runtimes["Total"][-1] * low_thresh
+        old_keys = list(atomic_runtimes.keys())
+        for key in old_keys:
+            if key == "Total" or key == "Untimed Overhead":
+                continue
+            if np.mean(atomic_runtimes[key]) < minimum_time:
+                atomic_runtimes.pop(key)
+                linestyles.pop(key)
+                call_counts.pop(key, None)  # Remove from counts too
 
-    # Return the runtimes and linestyles
-    return atomic_runtimes, linestyles
+    # Return the runtimes, linestyles, and call counts
+    return atomic_runtimes, linestyles, call_counts
 
 
 def plot_speed_up_plot(
     atomic_runtimes,
     threads,
     linestyles,
+    call_counts,
     outpath,
     paper_style,
 ):
@@ -291,6 +373,8 @@ def plot_speed_up_plot(
             A list of thread counts.
         linestyles (dict):
             A dictionary mapping keys to their respective linestyles.
+        call_counts (dict):
+            A dictionary containing call counts for each operation.
         outpath (str):
             The path to save the plot.
         paper_style (bool):
@@ -298,9 +382,13 @@ def plot_speed_up_plot(
             placed below the speedup plot's x-axis.
     """
     if paper_style:
-        _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath)
+        _plot_speed_up_paper(
+            atomic_runtimes, threads, linestyles, call_counts, outpath
+        )
     else:
-        _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath)
+        _plot_speed_up_default(
+            atomic_runtimes, threads, linestyles, call_counts, outpath
+        )
 
 
 def _wrap_label(label, max_length=20):
@@ -325,7 +413,10 @@ def _wrap_label(label, max_length=20):
     return wrapped_label
 
 
-def _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath):
+def _plot_speed_up_default(
+    atomic_runtimes, threads, linestyles, _call_counts, outpath
+):
+    # _call_counts is unused; kept for API symmetry.
     # Default full-size layout
     fig = plt.figure(figsize=(12, 10))
     gs = gridspec.GridSpec(
@@ -348,7 +439,10 @@ def _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath):
     ax_speedup = fig.add_subplot(gs[1, 0], sharex=ax_main)
     for key in atomic_runtimes:
         t0 = atomic_runtimes[key][0]
-        speedup = [t0 / t for t in atomic_runtimes[key]]
+        speedup = [
+            t0 / t if t > 0 and not np.isnan(t) else np.nan
+            for t in atomic_runtimes[key]
+        ]
         ax_speedup.plot(
             threads,
             speedup,
@@ -391,7 +485,10 @@ def _plot_speed_up_default(atomic_runtimes, threads, linestyles, outpath):
     plt.show()
 
 
-def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
+def _plot_speed_up_paper(
+    atomic_runtimes, threads, linestyles, _call_counts, outpath
+):
+    # _call_counts is unused; kept for API symmetry.
     # Compact paper-style layout
     fig = plt.figure(figsize=(3.5, 7))
     gs = gridspec.GridSpec(3, 1, height_ratios=[2, 1.1, 1], hspace=0.0)
@@ -413,7 +510,10 @@ def _plot_speed_up_paper(atomic_runtimes, threads, linestyles, outpath):
     ax_speedup = fig.add_subplot(gs[1], sharex=ax_main)
     for key in atomic_runtimes:
         t0 = atomic_runtimes[key][0]
-        speedup = [t0 / t for t in atomic_runtimes[key]]
+        speedup = [
+            t0 / t if t > 0 and not np.isnan(t) else np.nan
+            for t in atomic_runtimes[key]
+        ]
         ax_speedup.plot(
             threads,
             speedup,
@@ -492,7 +592,7 @@ def run_scaling_test(
             the main legend placed below the speedup plot's x-axis.
     """
     # Run the scaling test itself
-    output, threads = _run_averaged_scaling_test(
+    output, threads, run_data_list = _run_averaged_scaling_test(
         max_threads,
         average_over,
         log_outpath,
@@ -502,9 +602,9 @@ def run_scaling_test(
     )
 
     # Parse the output
-    runtimes, linestyles = parse_and_collect_runtimes(
-        output,
+    runtimes, linestyles, call_counts = parse_and_collect_runtimes(
         threads,
+        run_data_list,
         average_over,
         log_outpath,
         low_thresh,
@@ -515,6 +615,7 @@ def run_scaling_test(
         runtimes,
         threads,
         linestyles,
+        call_counts,
         plot_outpath,
         paper_style,
     )

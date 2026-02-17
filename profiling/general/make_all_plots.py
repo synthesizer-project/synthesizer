@@ -23,8 +23,8 @@ def run_script(script_name, project_root, nthreads=1, n_averages=3):
         f"Running {script_name} (nthreads={nthreads}, "
         f"n_averages={n_averages})..."
     )
-    # script_name is relative to profiling dir
-    script_path = Path("profiling") / script_name
+    # script_name is relative to profiling/general dir
+    script_path = Path("profiling/general") / script_name
     try:
         cmd = [
             sys.executable,
@@ -48,9 +48,10 @@ def run_script(script_name, project_root, nthreads=1, n_averages=3):
 def make_all_plots(nthreads=1, n_averages=3):
     """Run all profiling scripts and move plots."""
     # Define directories
-    profiling_dir = Path(__file__).parent
-    project_root = profiling_dir.parent
-    source_dir = project_root / "profiling/plots"
+    general_dir = Path(__file__).parent  # profiling/general/
+    profiling_dir = general_dir.parent  # profiling/
+    project_root = profiling_dir.parent  # repo root
+    source_dir = profiling_dir / "plots"
     dest_dir = project_root / "docs/source/performance/plots"
 
     # List of scripts to run (relative to profiling dir)

@@ -6,6 +6,7 @@ showing how various operations scale from 10^3 to 10^5 particles.
 
 import argparse
 import gc
+import sys
 import time
 from pathlib import Path
 
@@ -15,14 +16,15 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection
+from synthesizer.instruments import Instrument
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
-from synthesizer.utils.profiling_utils import (
-    get_instrument_profile,
-)
+
+# Add pipeline profiling to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
+from pipeline_test_data import get_test_instrument
 
 # Set style
 plt.rcParams["font.family"] = "DejaVu Serif"
@@ -56,32 +58,13 @@ def profile_nparticles(nthreads=1, n_averages=3):
         grid, per_particle=False, label="int_shift", vel_shift=True
     )
 
-    # --- Setup Filters ---
-    # Small set (3 filters)
-    filters_3 = FilterCollection(
-        filter_codes=[
-            "JWST/NIRCam.F150W",
-            "JWST/NIRCam.F200W",
-            "JWST/NIRCam.F444W",
-        ],
-        new_lam=grid.lam,
-    )
-    # Large set (10 filters) - Mixing JWST and HST
-    filters_10 = FilterCollection(
-        filter_codes=[
-            "JWST/NIRCam.F070W",
-            "JWST/NIRCam.F090W",
-            "JWST/NIRCam.F115W",
-            "JWST/NIRCam.F150W",
-            "JWST/NIRCam.F200W",
-            "JWST/NIRCam.F277W",
-            "JWST/NIRCam.F356W",
-            "JWST/NIRCam.F444W",
-            "HST/ACS_WFC.F435W",
-            "HST/ACS_WFC.F814W",
-        ],
-        new_lam=grid.lam,
-    )
+    # --- Setup Instrument and Filters ---
+    # Get cached instrument from pipeline_test_data (no network access)
+    instrument = get_test_instrument(grid)
+
+    # Use instrument's filters for different test cases
+    filters_3 = instrument.filters.select(*instrument.available_filters[:3])
+    filters_10 = instrument.filters
 
     # --- Setup Imaging ---
     kernel = Kernel().get_kernel()
@@ -91,19 +74,14 @@ def profile_nparticles(nthreads=1, n_averages=3):
     res_low = fov / npix_low
     res_high = fov / npix_high
 
-    # Create instruments for imaging
-    inst_dir = Path("profiling/instruments")
-    inst_dir.mkdir(parents=True, exist_ok=True)
-
-    inst_low = get_instrument_profile(
+    # Create high and low resolution instruments using the cached filters
+    inst_low = Instrument(
         label="low_res",
-        filepath=str(inst_dir / "low_res.hdf5"),
         filters=filters_3,
         resolution=res_low,
     )
-    inst_high = get_instrument_profile(
+    inst_high = Instrument(
         label="high_res",
-        filepath=str(inst_dir / "high_res.hdf5"),
         filters=filters_3,
         resolution=res_high,
     )
