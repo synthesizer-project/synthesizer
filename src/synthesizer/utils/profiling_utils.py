@@ -67,6 +67,45 @@ def get_instrument_profile(label, filepath, filters=None, resolution=None):
     return instrument
 
 
+def _run_single(
+    timers,
+    operation_function,
+    kwargs,
+    nthreads,
+    run_idx,
+    total_msg,
+):
+    """Run a single profiling iteration and capture timing data."""
+    # Reset timers for this individual run
+    timers.reset()
+
+    # Time the operation
+    spec_start = time.time()
+    operation_function(**kwargs, nthreads=nthreads)
+    total_time = time.time() - spec_start
+
+    print(f"[Total] {total_msg} took: {total_time} s", flush=True)
+
+    # Extract timing data from this run
+    run_data = {
+        "nthreads": nthreads,
+        "run": run_idx,
+        "total_time": total_time,
+        "operations": {},
+    }
+
+    # Copy all accumulated operation timings from this run
+    for op in timers.keys():
+        cumulative_time, call_count, source = timers[op]
+        run_data["operations"][op] = {
+            "cumulative_time": cumulative_time,
+            "call_count": call_count,
+            "source": source,
+        }
+
+    return run_data
+
+
 def _run_averaged_scaling_test(
     max_threads,
     average_over,
@@ -118,33 +157,14 @@ def _run_averaged_scaling_test(
             print(f"=== Testing with {nthreads} threads ===", flush=True)
 
             for run_idx in range(average_over):
-                # Reset timers for this individual run
-                timers.reset()
-
-                # Time the operation
-                spec_start = time.time()
-                operation_function(**kwargs, nthreads=nthreads)
-                total_time = time.time() - spec_start
-
-                print(f"[Total] {total_msg} took: {total_time} s", flush=True)
-
-                # Extract timing data from this run
-                run_data = {
-                    "nthreads": nthreads,
-                    "run": run_idx,
-                    "total_time": total_time,
-                    "operations": {},
-                }
-
-                # Copy all accumulated operation timings from this run
-                for op in timers.keys():
-                    cumulative_time, call_count, source = timers[op]
-                    run_data["operations"][op] = {
-                        "cumulative_time": cumulative_time,
-                        "call_count": call_count,
-                        "source": source,
-                    }
-
+                run_data = _run_single(
+                    timers,
+                    operation_function,
+                    kwargs,
+                    nthreads,
+                    run_idx,
+                    total_msg,
+                )
                 run_data_list.append(run_data)
 
                 if run_idx == 0:
@@ -158,36 +178,14 @@ def _run_averaged_scaling_test(
                     f"=== Testing with {max_threads} threads ===", flush=True
                 )
                 for run_idx in range(average_over):
-                    # Reset timers for this individual run
-                    timers.reset()
-
-                    # Time the operation
-                    spec_start = time.time()
-                    operation_function(**kwargs, nthreads=max_threads)
-                    total_time = time.time() - spec_start
-
-                    print(
-                        f"[Total] {total_msg} took: {total_time} s",
-                        flush=True,
+                    run_data = _run_single(
+                        timers,
+                        operation_function,
+                        kwargs,
+                        max_threads,
+                        run_idx,
+                        total_msg,
                     )
-
-                    # Extract timing data from this run
-                    run_data = {
-                        "nthreads": max_threads,
-                        "run": run_idx,
-                        "total_time": total_time,
-                        "operations": {},
-                    }
-
-                    # Copy all accumulated operation timings from this run
-                    for op in timers.keys():
-                        cumulative_time, call_count, source = timers[op]
-                        run_data["operations"][op] = {
-                            "cumulative_time": cumulative_time,
-                            "call_count": call_count,
-                            "source": source,
-                        }
-
                     run_data_list.append(run_data)
 
                     if run_idx == 0:
@@ -206,7 +204,6 @@ def _run_averaged_scaling_test(
 
 
 def parse_and_collect_runtimes(
-    output,
     threads,
     run_data_list,
     average_over,
@@ -221,7 +218,6 @@ def parse_and_collect_runtimes(
     meet the low_thresh criterion.
 
     Args:
-        output (str): The captured output from the test (for logging).
         threads (list): The list of thread counts used in the test.
         run_data_list (list): List of dicts with per-run timing data.
         average_over (int): The number of times to average the test over.
@@ -309,7 +305,10 @@ def parse_and_collect_runtimes(
         for key in atomic_runtimes.keys():
             if key != "Total":
                 for i in range(len(atomic_runtimes[key])):
-                    overhead[i] -= atomic_runtimes[key][i]
+                    safe_value = np.nan_to_num(
+                        atomic_runtimes[key][i], nan=0.0
+                    )
+                    overhead[i] -= safe_value
         atomic_runtimes["Untimed Overhead"] = overhead
         linestyles["Untimed Overhead"] = ":"
     else:
@@ -415,8 +414,9 @@ def _wrap_label(label, max_length=20):
 
 
 def _plot_speed_up_default(
-    atomic_runtimes, threads, linestyles, call_counts, outpath
+    atomic_runtimes, threads, linestyles, _call_counts, outpath
 ):
+    # _call_counts is unused; kept for API symmetry.
     # Default full-size layout
     fig = plt.figure(figsize=(12, 10))
     gs = gridspec.GridSpec(
@@ -486,8 +486,9 @@ def _plot_speed_up_default(
 
 
 def _plot_speed_up_paper(
-    atomic_runtimes, threads, linestyles, call_counts, outpath
+    atomic_runtimes, threads, linestyles, _call_counts, outpath
 ):
+    # _call_counts is unused; kept for API symmetry.
     # Compact paper-style layout
     fig = plt.figure(figsize=(3.5, 7))
     gs = gridspec.GridSpec(3, 1, height_ratios=[2, 1.1, 1], hspace=0.0)
@@ -602,7 +603,6 @@ def run_scaling_test(
 
     # Parse the output
     runtimes, linestyles, call_counts = parse_and_collect_runtimes(
-        output,
         threads,
         run_data_list,
         average_over,
