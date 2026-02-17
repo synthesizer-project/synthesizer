@@ -18,8 +18,6 @@ Example usage:
 """
 
 import inspect
-import io
-import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -961,23 +959,15 @@ class DenseBasis(Common):
                 maximum age of SFH grid
         """
         # Attempt to import dense_basis, if missing they need to
-        # install the optional dependency
+        # install from our fork (for now)
         try:
-            # This import is in quarantine because it insists on printing
-            # "Starting dense_basis" to the console on import! It can stay here
-            # until a PR is raised to fix this.
-            original_stdout = sys.stdout
-            sys.stdout = io.StringIO()
             import dense_basis as db
-
-            sys.stdout = original_stdout
-        except ImportError:
+        except ImportError as e:
             raise exceptions.UnmetDependency(
-                "dense_basis not found. Please install dense basis from the "
-                "repo to enable dense_basis SFH functionality. "
-                r"To install, run `pip install \"git+https://github.com/"
-                'kartheikiyer/dense_basis.git"`'
-            )
+                "dense_basis not found. Please install dense_basis via this "
+                r"command: pip install \"git+https://github.com/WillJRoper/"
+                r"dense_basis.git\" for our fork"
+            ) from e
 
         # Convert the dense basis tuple arguments to sfh in mass fraction units
         tempsfh, temptime = db.tuple_to_sfh(
