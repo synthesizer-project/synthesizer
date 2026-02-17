@@ -1174,13 +1174,13 @@ static struct PyModuleDef integrationmodule = {
 
 PyMODINIT_FUNC PyInit_integration(void) {
   PyObject *m = PyModule_Create(&integrationmodule);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
+    Py_DECREF(m);
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     return NULL;
   }
-  PyObject *m = PyModule_Create(&integrationmodule);
-  if (m == NULL)
-    return NULL;
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);
