@@ -965,8 +965,8 @@ class DenseBasis(Common):
         except ImportError as e:
             raise exceptions.UnmetDependency(
                 "dense_basis not found. Please install dense_basis from our "
-                r"fork via this command: pip install \"git+https://github."
-                r"com/WillJRoper/dense_basis.git\""
+                'fork via this command: pip install "git+https://github.'
+                'com/WillJRoper/dense_basis.git"'
             ) from e
 
         # Convert the dense basis tuple arguments to sfh in mass fraction units
