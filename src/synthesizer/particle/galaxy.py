@@ -145,16 +145,8 @@ class Galaxy(BaseGalaxy):
                 )
             else:
                 self.stellar_mass_weighted_age = None
-                warn(
-                    "Ages of stars not provided, "
-                    "setting stellar_mass_weighted_age to `None`"
-                )
         else:
             self.stellar_mass_weighted_age = None
-            warn(
-                "Current mass of stars not provided, "
-                "setting stellar_mass_weighted_age to `None`"
-            )
 
     def calculate_integrated_gas_properties(self):
         """Calculate integrated gas properties."""
@@ -169,10 +161,6 @@ class Galaxy(BaseGalaxy):
             )
         else:
             self.mass_weighted_gas_metallicity = None
-            warn(
-                "Mass of gas particles not provided, "
-                "setting mass_weighted_gas_metallicity to `None`"
-            )
 
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
@@ -192,10 +180,6 @@ class Galaxy(BaseGalaxy):
         else:
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
-            warn(
-                "Star forming gas particle mask not provided, "
-                "setting sf_gas_mass and sf_gas_metallicity to `None`"
-            )
 
     @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
