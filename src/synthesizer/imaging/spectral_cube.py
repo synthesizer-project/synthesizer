@@ -371,6 +371,8 @@ class SpectralCube(ImagingBase):
             and sed is not None
         ):
             sed = sed.get_resampled_sed(new_lam=self.lam)
+            self.sed = sed
+            self.quantity = quantity
             spectra = getattr(sed, quantity, None)
             if spectra is None:
                 raise exceptions.MissingSpectraType(
