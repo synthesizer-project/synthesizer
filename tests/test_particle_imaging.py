@@ -185,7 +185,6 @@ class TestImageCollection:
                 erg / s / Hz,
             ),
             filter_codes=["g_band", "r_band", "i_band"],
-            filter_axis=0,
         )
 
     @pytest.fixture
@@ -579,7 +578,6 @@ class TestImageIntegration:
                 erg / s / Hz,
             ),
             filter_codes=["F435W", "F606W", "F814W"],
-            filter_axis=0,
         )
 
         # Create image collection

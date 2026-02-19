@@ -1219,7 +1219,6 @@ class Sed:
                 self.__class__.__dict__["lnu"].unit,
                 bypass_validation=True,
             ),
-            filter_axis=-1,
         )
         toc("Stacking Photometry", stack_start)
 
@@ -1275,7 +1274,6 @@ class Sed:
                 self.__class__.__dict__["fnu"].unit,
                 bypass_validation=True,
             ),
-            filter_axis=-1,
         )
         toc("Stacking Photometry", stack_start)
 

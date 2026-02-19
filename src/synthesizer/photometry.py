@@ -11,11 +11,10 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import unyt_array, unyt_quantity
-from unyt.unit_object import Unit
+from unyt import Hz, cm, erg, s
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity, default_units, unyt_to_ndview
+from synthesizer.units import Quantity, accepts
 
 
 class PhotometryCollection:
@@ -25,7 +24,7 @@ class PhotometryCollection:
     association and plotting functionality.
 
     This is a utility class returned by functions elsewhere. Although not
-    an issue if it is this should never really be directly instantiated.
+    an issue if it is, this should never really be directly instantiated.
 
     Attributes:
         photometry (Quantity):
@@ -48,42 +47,14 @@ class PhotometryCollection:
     photo_lnu = Quantity("luminosity_density_frequency")
     photo_fnu = Quantity("flux_density_frequency")
 
-    def __init__(
-        self,
-        filters,
-        photometry,
-        units=None,
-        filter_codes=None,
-        filter_axis=0,
-    ):
-        """Instantiate the photometry collection.
-
-        To enable quantities a PhotometryCollection will store the data
-        as arrays but enable access via dictionary syntax.
-
-        Whether the photometry is flux or luminosity is determined by the
-        units of the photometry passed.
-
-        Args:
-            filters (FilterCollection):
-                The FilterCollection used to produce the photometry.
-            photometry (unyt_array, optional):
-                A photometry array. This can have filters along any axis,
-                specified by `filter_axis`.
-            units (unyt.Unit, optional):
-                Units for `photometry` when `photometry` is passed as a plain
-                numpy array.
-            filter_codes (list, optional):
-                Filter codes corresponding to the filter axis in `photometry`.
-                If omitted, this defaults to `filters.filter_codes`.
-            filter_axis (int, optional):
-                The axis of `photometry` corresponding to filters.
-        """
-        if photometry is None:
-            raise exceptions.InconsistentArguments(
-                "Photometry must be provided as an array."
-            )
-
+    @accepts(
+        photometry=(
+            erg / s / Hz,
+            erg / s / cm**2 / Hz,
+        )
+    )
+    def __init__(self, filters, photometry, filter_codes=None):
+        """Instantiate the photometry collection."""
         # Store the filter collection
         self.filters = filters
 
@@ -95,78 +66,17 @@ class PhotometryCollection:
             filter_codes = list(filters.filter_codes)
 
         self.filter_codes = list(filter_codes)
-        self._filter_axis = filter_axis
-
-        if isinstance(photometry, (unyt_quantity, unyt_array)):
-            has_unyt_input = True
-            unyt_input = photometry
-            phot_unit = photometry.units
-            phot_shape = unyt_input.shape
-        else:
-            has_unyt_input = False
-            unyt_input = None
-            if units is None:
-                raise exceptions.InconsistentArguments(
-                    "Photometry passed as a numpy array requires units."
-                )
-            photometry = np.asarray(photometry)
-            phot_shape = photometry.shape
-            phot_unit = Unit(units)
-
-        if phot_shape[filter_axis] != len(self.filter_codes):
+        if photometry.shape[0] != len(self.filter_codes):
             raise exceptions.InconsistentArguments(
-                "The filter axis of photometry does not match the number "
-                f"of filter codes ({phot_shape[filter_axis]} != "
+                "The leading photometry axis does not match the number "
+                f"of filter codes ({photometry.shape[0]} != "
                 f"{len(self.filter_codes)})."
             )
 
-        # Get the dimensions of a flux for testing
-        flux_dimensions = default_units[
-            "flux_density_frequency"
-        ].units.dimensions
+        is_flux = photometry.units == self.__class__.__dict__["photo_fnu"].unit
 
-        # Check if the photometry is flux or luminosity
-        if phot_unit.dimensions == flux_dimensions:
-            is_flux = True
-            target_unit = self.__class__.__dict__["photo_fnu"].unit
-            if phot_unit != target_unit:
-                if has_unyt_input:
-                    photometry = unyt_to_ndview(unyt_input, target_unit)
-                else:
-                    photometry = unyt_array(
-                        photometry,
-                        units=phot_unit,
-                    ).to_value(target_unit)
-            elif has_unyt_input:
-                photometry = unyt_input.ndview
-
-        else:
-            is_flux = False
-            target_unit = self.__class__.__dict__["photo_lnu"].unit
-            if phot_unit != target_unit:
-                if has_unyt_input:
-                    photometry = unyt_to_ndview(unyt_input, target_unit)
-                else:
-                    photometry = unyt_array(
-                        photometry,
-                        units=phot_unit,
-                    ).to_value(target_unit)
-            elif has_unyt_input:
-                photometry = unyt_input.ndview
-
-        # Canonical internal layout is always filter-first. moveaxis returns a
-        # view, so this does not copy the C++ output data.
-        if self._filter_axis != 0:
-            photometry = np.moveaxis(photometry, self._filter_axis, 0)
-        self._filter_axis = 0
-
-        # Keep raw data and construct unit-attached arrays lazily.
-        self._photometry_data = (
-            photometry
-            if isinstance(photometry, np.ndarray)
-            else np.asarray(photometry)
-        )
-        self._photometry = None
+        # Keep raw ndarray storage and rely on Quantity descriptors for units.
+        self._photometry_data = photometry.ndview
 
         if is_flux:
             self.photo_fnu = self._photometry_data
@@ -178,24 +88,10 @@ class PhotometryCollection:
         # Construct an index lookup into the photometry array.
         self._code_to_index = {f: i for i, f in enumerate(self.filter_codes)}
 
-        # Attach the units for convenience
-        self.units = target_unit
-
-    def _with_units(self, values):
-        """Attach collection units to scalar/array values."""
-        arr = np.asarray(values)
-        if arr.ndim == 0:
-            return unyt_quantity(arr.item(), self.units)
-
-        return unyt_array(arr, units=self.units, bypass_validation=True)
-
     @property
     def photometry(self):
         """Return photometry values with units attached."""
-        if self._photometry is None:
-            self._photometry = self._with_units(self._photometry_data)
-
-        return self._photometry
+        return self.photo_fnu if self.photo_fnu is not None else self.photo_lnu
 
     def __getitem__(self, filter_code):
         """Enable dictionary key look up syntax to extract specific photometry.
@@ -214,9 +110,7 @@ class PhotometryCollection:
         """
         # Perform the look up
         if filter_code in self._code_to_index:
-            return self._with_units(
-                self._photometry_data[self._code_to_index[filter_code]]
-            )
+            return self.photometry[self._code_to_index[filter_code]]
 
         # We may be being asked for all the photometry for an observatory, e.g.
         # "JWST", in which case we should return all the photometry for that
@@ -301,10 +195,6 @@ class PhotometryCollection:
         """
         return iter(self.items())
 
-    def as_filter_first(self):
-        """Return photometry with filter axis as the first axis."""
-        return self._with_units(self._photometry_data)
-
     def __str__(self):
         """Allow for a summary to be printed.
 
@@ -386,21 +276,20 @@ class PhotometryCollection:
                     f"Filter code {code} not found in photometry collection."
                 )
 
-        # Get the photometry for the specified filters
-        # Also extract a subset of the filters
-        filters = self.filters.select(*filter_codes)
+        # Extract a subset of the filters when available.
+        filters = (
+            self.filters.select(*filter_codes)
+            if self.filters is not None
+            else None
+        )
 
         # Slice the underlying array by filter index.
         idx = [self._code_to_index[code] for code in filter_codes]
-        photometry = self._photometry_data[idx]
-
         # Return a new PhotometryCollection with the specified photometry
         return PhotometryCollection(
             filters,
-            photometry=photometry,
-            units=self.units,
+            photometry=self.photometry[idx],
             filter_codes=list(filter_codes),
-            filter_axis=0,
         )
 
     def plot_photometry(
