@@ -25,6 +25,9 @@
 #include "property_funcs.h"
 #include "reductions.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /**
@@ -751,9 +754,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_doppler_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
-};
+}

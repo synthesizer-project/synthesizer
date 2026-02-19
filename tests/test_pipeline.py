@@ -455,6 +455,17 @@ class TestPipelineNotReady:
         """
         # Should not raise during signalling
         base_pipeline.get_photometry_fluxes(uvj_nircam_insts, cosmo=None)
+
+        # Ensure non-zero redshift so missing cosmo triggers an error
+        for gal in list_of_random_particle_galaxies:
+            gal.redshift = 1.0
+            if gal.stars is not None:
+                gal.stars.redshift = 1.0
+            if gal.gas is not None:
+                gal.gas.redshift = 1.0
+            if gal.black_holes is not None:
+                gal.black_holes.redshift = 1.0
+
         base_pipeline.add_galaxies(list_of_random_particle_galaxies)
 
         # Should raise during run() when trying to get observed spectra
