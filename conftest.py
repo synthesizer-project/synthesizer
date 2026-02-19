@@ -362,11 +362,17 @@ def unit_emission_stars():
     )
     stars.particle_photo_lnu["FAKE"] = PhotometryCollection(
         filters=None,
-        fake=np.ones(3) * erg / s / Hz,
+        photometry=np.ones((1, 3)),
+        units=erg / s / Hz,
+        filter_codes=["fake"],
+        filter_axis=0,
     )
     stars.particle_photo_fnu["FAKE"] = PhotometryCollection(
         filters=None,
-        fake=np.ones(3) * erg / s / cm**2 / Hz,
+        photometry=np.ones((1, 3)),
+        units=erg / s / cm**2 / Hz,
+        filter_codes=["fake"],
+        filter_axis=0,
     )
     return stars
 
