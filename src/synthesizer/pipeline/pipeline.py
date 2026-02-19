@@ -185,6 +185,7 @@ class Pipeline:
         # will use (this is only used for book keeping, the kwarg handler
         # deals with where to apply different instruments)
         self.instruments = InstrumentCollection()
+        self._instruments_prepared = False
 
         # How many threads are we using for shared memory parallelism?
         self.nthreads = nthreads
@@ -1172,8 +1173,40 @@ class Pipeline:
         # Add the new instruments to the instrument collection
         new_instruments = set(_instruments) - current_instruments
         self.instruments.add_instruments(*new_instruments)
+        if len(new_instruments) > 0:
+            self._instruments_prepared = False
 
         return _instruments
+
+    def _prepare_instruments(self):
+        """Prewarm instrument filters onto the emission-model grid.
+
+        This prepares filters once per pipeline setup so repeated photometry
+        operations can avoid interpolation and reuse precomputed integration
+        weights.
+        """
+        if self._instruments_prepared:
+            return
+
+        # Nothing to do if we have no instruments attached.
+        if len(self.instruments) == 0:
+            self._instruments_prepared = True
+            return
+
+        # If the emission model has no wavelength grid we can only precompute
+        # on each filter's native grid.
+        model_lam = getattr(self.emission_model, "lam", None)
+
+        for inst in self.instruments:
+            if not inst.can_do_photometry:
+                continue
+
+            if model_lam is not None:
+                inst.filters.prepare_for_grid(lam=model_lam)
+            else:
+                inst.filters.prepare_for_grid()
+
+        self._instruments_prepared = True
 
     def get_los_optical_depths(
         self,
@@ -3491,6 +3524,9 @@ class Pipeline:
         # Ok we are good to go! Report the last metadata and then get going
         if self.rank == 0:
             self._report_instruments()
+
+        # Prewarm instruments before processing galaxies.
+        self._prepare_instruments()
 
         # Print the header for the pipeline run to the console
         self._print_progress_header()
