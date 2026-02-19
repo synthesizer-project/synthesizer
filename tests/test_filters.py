@@ -1110,7 +1110,7 @@ class TestFilterCollectionBatching:
                 )
                 for code in fc.filter_codes
             ],
-            axis=-1,
+            axis=0,
         )
         np.testing.assert_allclose(batched, expected, rtol=2e-4, atol=1e-8)
 
