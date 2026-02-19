@@ -23,6 +23,14 @@ from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import LineCollection
 from synthesizer.emissions.line_ratios import ratios
 from synthesizer.emissions.utils import O2, O3, Hb, O3b, O3r
+from synthesizer.utils.precision import get_precision
+
+# Skip all line tests when using SINGLE_PRECISION (lines require double
+# precision)
+pytestmark = pytest.mark.skipif(
+    get_precision() == "float32",
+    reason="Lines require double precision. Install without SINGLE_PRECISION.",
+)
 
 
 class TestLineCollectionInitialization:
@@ -116,7 +124,7 @@ class TestLineCollectionOperations:
         )
         assert np.allclose(
             scaled_lines.continuum.value,
-            simple_line_collection.continuum.value
+            simple_line_collection.continuum.value.astype(np.float64)
             * 2.0
             / simple_line_collection.nu.value,
         ), (
@@ -198,7 +206,7 @@ class TestLineCollectionOperations:
         )
         assert np.allclose(
             scaled_lines.continuum.value,
-            lines.continuum.value * 2.0 / lines.nu.value,
+            lines.continuum.value.astype(np.float64) * 2.0 / lines.nu.value,
         ), (
             "Scaled continuum doesn't match "
             f"{scaled_lines.continuum.value} !="

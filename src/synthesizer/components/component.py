@@ -29,6 +29,7 @@ from synthesizer.instruments import Instrument
 from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.precision import accept_precisions
 
 
 class Component(ABC):
@@ -58,6 +59,7 @@ class Component(ABC):
             A cache for parameters calculated by emission models.
     """
 
+    @accept_precisions()
     def __init__(
         self,
         component_type,

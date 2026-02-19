@@ -28,9 +28,7 @@ from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils import (
-    ensure_array_c_compatible_double,
-)
+from synthesizer.utils.precision import get_numpy_dtype
 
 _CENTERING_TOLERANCE = 1e-6
 
@@ -563,10 +561,12 @@ def _generate_image_particle_smoothed(
 
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
-    _coords = cent_coords.to(spatial_units).value
+    _coords = cent_coords.to(spatial_units).value.astype(get_numpy_dtype())
     _coords[:, 0] += fov[0] / 2.0
     _coords[:, 1] += fov[1] / 2.0
-    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+    _smoothing_lengths = smoothing_lengths.to_value(spatial_units).astype(
+        get_numpy_dtype()
+    )
 
     # Apply normalisation to original signal if needed
     if normalisation is not None:
@@ -575,13 +575,19 @@ def _generate_image_particle_smoothed(
         signal = signal.copy()
         signal *= normalisation.value
 
+    signal_units = None
+    if isinstance(signal, (unyt_quantity, unyt_array)):
+        signal_units = signal.units
+
+    signal = np.asarray(signal)
+
     toc("Setting up smoothed image inputs", start)
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signal),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        signal,
+        _smoothing_lengths,
+        _coords,
         kernel,
         res,
         img.npix[0],
@@ -595,11 +601,7 @@ def _generate_image_particle_smoothed(
 
     # Store the image array into the image object
     img.arr = imgs_arr[:, :, 0]
-    img.units = (
-        signal.units
-        if isinstance(signal, (unyt_quantity, unyt_array))
-        else None
-    )
+    img.units = signal_units
 
     # Apply the normalisation if needed
     if normalisation is not None:
@@ -633,6 +635,7 @@ def _generate_images_particle_smoothed(
     kernel_threshold,
     nthreads,
     normalisations=None,
+    signals_transposed=False,
 ):
     """Generate smoothed images for a particle emitter.
 
@@ -665,6 +668,8 @@ def _generate_images_particle_smoothed(
             The normalisations to use for the images. The keys must match the
             labels of the signals. If not provided, normalisation is set to
             None.
+        signals_transposed (bool):
+            If True, signals are already shaped as (Nparticles, Nimg).
 
     Returns:
         ImageCollection: An image collection containing the smoothed images.
@@ -681,29 +686,54 @@ def _generate_images_particle_smoothed(
             "Signals must be a 2D array for a smoothed image"
             f" (got {signals.ndim})."
         )
-    if signals.shape[1] != cent_coords.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Signals and coordinates must be the same size"
-            f" for a smoothed image (got {signals.shape[1]} and "
-            f"{cent_coords.shape[0]})."
-        )
-    if signals.shape[1] != smoothing_lengths.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Signals and smoothing lengths must be the same size"
-            f" for a smoothed image (got {signals.shape[1]} and "
-            f"{smoothing_lengths.shape[0]})."
-        )
-    if cent_coords.shape[0] != smoothing_lengths.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Coordinates and smoothing lengths must be the same size"
-            f" for a smoothed image (got {cent_coords.shape[0]} and "
-            f"{smoothing_lengths.shape[0]})."
-        )
-    if signals.shape[0] != len(labels):
-        raise exceptions.InconsistentArguments(
-            "Signals should have an entry for each signal "
-            f"label (got {signals.shape[0]} and {len(labels)})."
-        )
+    if signals_transposed:
+        if signals.shape[0] != cent_coords.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signals and coordinates must be the same size"
+                f" for a smoothed image (got {signals.shape[0]} and "
+                f"{cent_coords.shape[0]})."
+            )
+        if signals.shape[0] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signals and smoothing lengths must be the same size"
+                f" for a smoothed image (got {signals.shape[0]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if cent_coords.shape[0] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Coordinates and smoothing lengths must be the same size"
+                f" for a smoothed image (got {cent_coords.shape[0]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if signals.shape[1] != len(labels):
+            raise exceptions.InconsistentArguments(
+                "Signals should have an entry for each signal "
+                f"label (got {signals.shape[1]} and {len(labels)})."
+            )
+    else:
+        if signals.shape[1] != cent_coords.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signals and coordinates must be the same size"
+                f" for a smoothed image (got {signals.shape[1]} and "
+                f"{cent_coords.shape[0]})."
+            )
+        if signals.shape[1] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signals and smoothing lengths must be the same size"
+                f" for a smoothed image (got {signals.shape[1]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if cent_coords.shape[0] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Coordinates and smoothing lengths must be the same size"
+                f" for a smoothed image (got {cent_coords.shape[0]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if signals.shape[0] != len(labels):
+            raise exceptions.InconsistentArguments(
+                "Signals should have an entry for each signal "
+                f"label (got {signals.shape[0]} and {len(labels)})."
+            )
 
     # Ensure the coordinates are compatible with the fov/resolution
     # Note that the resolution and fov are already guaranteed to be
@@ -736,10 +766,15 @@ def _generate_images_particle_smoothed(
 
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
-    _coords = cent_coords.to(spatial_units).value
+    # Cast to compiled dtype here (matching the single-band path at line 564)
+    # so the C extension receives the expected Float* type without a hidden
+    # copy inside the extension's ensure_float_array check.
+    _coords = cent_coords.to(spatial_units).value.astype(get_numpy_dtype())
     _coords[:, 0] += fov[0] / 2.0
     _coords[:, 1] += fov[1] / 2.0
-    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+    _smoothing_lengths = smoothing_lengths.to_value(spatial_units).astype(
+        get_numpy_dtype()
+    )
 
     # Apply normalisation to original signal if needed
     if normalisations is not None:
@@ -749,19 +784,29 @@ def _generate_images_particle_smoothed(
 
         # Apply the normalisation to the corresponding signal
         for ind, key in enumerate(labels):
-            signals[ind, :] *= normalisations[key].value
+            if signals_transposed:
+                signals[:, ind] *= normalisations[key].value
+            else:
+                signals[ind, :] *= normalisations[key].value
 
     # In the C++ extension we want to be dealing with (Npart, Nimg) signals
     # to make the most of cache locality, so we transpose the signals
-    signals = signals.T
+    signal_units = None
+    if isinstance(signals, (unyt_quantity, unyt_array)):
+        signal_units = signals.units
+
+    if not signals_transposed:
+        signals = np.asarray(signals).T
+    else:
+        signals = np.asarray(signals)
 
     toc("Setting up smoothed image inputs", start)
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signals),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        signals,
+        _smoothing_lengths,
+        _coords,
         kernel,
         res,
         imgs.npix[0],
@@ -774,11 +819,11 @@ def _generate_images_particle_smoothed(
     )
 
     # Apply units if needs be
-    if isinstance(signals, (unyt_quantity, unyt_array)):
+    if signal_units is not None:
         unit_start = tic()
         imgs_arr = unyt_array(
             imgs_arr,
-            units=signals.units,
+            units=signal_units,
         )
         toc("Applying units to smoothed images", unit_start)
 
@@ -998,6 +1043,7 @@ def _generate_image_collection_generic(
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
+            signals_transposed=True,
         )
 
     elif img_type == "smoothed":
@@ -1159,18 +1205,19 @@ def _generate_ifu_particle_hist(
     # arrays.
     _coords[:, 0] += fov[0] / 2
     _coords[:, 1] += fov[1] / 2
-    smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
+    dtype = get_numpy_dtype()
+    smls = np.zeros(cent_coords.shape[0], dtype=dtype)
 
     # Get the kernel
     # TODO: We should do away with this and write a histogram backend
-    kernel = Kernel().get_kernel()
+    kernel = np.ascontiguousarray(Kernel().get_kernel(), dtype=dtype)
 
     toc("Setting up histogram IFU inputs", start)
 
     ifu.arr = make_img(
-        ensure_array_c_compatible_double(spectra),
+        spectra,
         smls,
-        ensure_array_c_compatible_double(_coords),
+        _coords,
         kernel,
         res,
         ifu.npix[0],
@@ -1187,8 +1234,8 @@ def _generate_ifu_particle_hist(
 
 def _generate_ifu_particle_smoothed(
     ifu,
-    sed,
-    quantity,
+    spectra,
+    spectra_units,
     cent_coords,
     smoothing_lengths,
     kernel,
@@ -1200,14 +1247,11 @@ def _generate_ifu_particle_smoothed(
     Args:
         ifu (SpectralCube):
             The SpectralCube object to populate with the ifu.
-        sed (Sed):
-            The Sed containing the spectra to sort into the IFU. For a
-            particle emitter this should be a spectrum per particle, i.e.
-            a 2D array of spectra with shape (Nparticles, Nlam).
-        quantity (str):
-            The quantity to use for the spectra. This can be any valid
-            spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
-            'flux', etc.
+        spectra (array_like):
+            The spectra to sort into the IFU. For a particle emitter this
+            should be a 2D array with shape (Nparticles, Nlam).
+        spectra_units (unyt_quantity):
+            The units associated with the spectra array.
         cent_coords (unyt_array of float):
             The centered coordinates of the particles.
         smoothing_lengths (unyt_array of float):
@@ -1227,31 +1271,15 @@ def _generate_ifu_particle_smoothed(
     """
     start = tic()
 
-    # Sample the spectra onto the wavelength grid
-    sed = sed.get_resampled_sed(new_lam=ifu.lam)
-
-    # Store the Sed and quantity
-    ifu.sed = sed
-    ifu.quantity = quantity
-
-    # Get the spectra we will be sorting into the spectral cube
-    spectra = getattr(sed, quantity, None)
-    if spectra is None:
-        raise exceptions.MissingSpectraType(
-            f"Can't make an image for {quantity},"
-            " it does not exist in the Sed."
-        )
-
-    # Strip off and store the units on the spectra for later
-    ifu.units = spectra.units
-    spectra = spectra.value.T
+    # Store the spectra units for later
+    ifu.units = spectra_units
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:
         raise exceptions.InconsistentArguments(
             f"Spectra must be a 2D array for an IFU (got {spectra.ndim})."
         )
-    if spectra.shape[1] != cent_coords.shape[0]:
+    if spectra.shape[0] != cent_coords.shape[0]:
         raise exceptions.InconsistentArguments(
             "Spectra and coordinates must be the same size"
             f" for an IFU (got {spectra.shape[0]} and "
@@ -1301,10 +1329,8 @@ def _generate_ifu_particle_smoothed(
     # Generate the IFU
     ifu.arr = make_img(
         spectra,
-        ensure_array_c_compatible_double(
-            smoothing_lengths.to_value(spatial_units)
-        ),
-        ensure_array_c_compatible_double(_coords),
+        smoothing_lengths.to_value(spatial_units),
+        _coords,
         kernel,
         res,
         ifu.npix[0],
@@ -1312,7 +1338,7 @@ def _generate_ifu_particle_smoothed(
         cent_coords.shape[0],
         kernel_threshold,
         kernel.size,
-        sed.nlam,
+        spectra.shape[1],
         nthreads,
     )
 
@@ -1513,10 +1539,19 @@ def _generate_ifu_generic(
     elif img_type == "smoothed" and isinstance(emitter, Particles):
         # Use the standardized coordinates and smoothing lengths
         # (already in correct units)
+        sed = sed.get_resampled_sed(new_lam=ifu.lam)
+        spectra = getattr(sed, quantity, None)
+        if spectra is None:
+            raise exceptions.MissingSpectraType(
+                f"Can't make an image for {quantity},"
+                " it does not exist in the Sed."
+            )
+        spectra_units = spectra.units
+        spectra = spectra.value
         return _generate_ifu_particle_smoothed(
             ifu,
-            sed=sed,
-            quantity=quantity,
+            spectra=spectra,
+            spectra_units=spectra_units,
             cent_coords=coords,
             smoothing_lengths=smls,
             kernel=kernel,

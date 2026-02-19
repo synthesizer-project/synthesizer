@@ -453,7 +453,7 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                 if isinstance(inst.depth, dict):
                     for filt, depth_val in inst.depth.items():
                         # Skip plain floats/ints (apparent magnitudes)
-                        if isinstance(depth_val, (float, int)):
+                        if isinstance(depth_val, (float, int, np.floating)):
                             continue
                         # Validate unyt quantities
                         if isinstance(depth_val, unyt_quantity):
@@ -476,7 +476,7 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                                 f"instrument {inst.label}."
                             )
                 # Skip plain floats/ints (apparent magnitudes)
-                elif isinstance(inst.depth, (float, int)):
+                elif isinstance(inst.depth, (float, int, np.floating)):
                     pass  # Apparent magnitudes are valid for both types
                 # Validate unyt quantities
                 elif isinstance(inst.depth, unyt_quantity):

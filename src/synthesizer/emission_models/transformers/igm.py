@@ -16,7 +16,7 @@ from unyt import angstrom
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.exceptions import UnimplementedFunctionality
 from synthesizer.units import accepts
-from synthesizer.utils import sigmoid
+from synthesizer.utils.distributions import sigmoid
 
 # Define the path to the data files
 filepath = os.path.abspath(__file__)

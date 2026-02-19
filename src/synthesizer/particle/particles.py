@@ -17,8 +17,12 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
+from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.precision import (
+    _NUMPY_DTYPE,
+    accept_precisions,
+)
 
 
 class Particles:
@@ -72,6 +76,7 @@ class Particles:
         softening_length=Mpc,
         centre=Mpc,
     )
+    @accept_precisions()  # use default precision
     def __init__(
         self,
         coordinates,
@@ -111,8 +116,8 @@ class Particles:
                 The name of the particle type.
         """
         # Set phase space coordinates
-        self.coordinates = ensure_array_c_compatible_double(coordinates)
-        self.velocities = ensure_array_c_compatible_double(velocities)
+        self.coordinates = coordinates
+        self.velocities = velocities
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
@@ -127,12 +132,10 @@ class Particles:
         # Set unit information
 
         # Set the softening length
-        self.softening_lengths = ensure_array_c_compatible_double(
-            softening_lengths
-        )
+        self.softening_lengths = softening_lengths
 
         # Set the particle masses
-        self.masses = ensure_array_c_compatible_double(masses)
+        self.masses = masses
 
         # Set the redshift of the particles
         self.redshift = redshift
@@ -141,7 +144,7 @@ class Particles:
         self.nparticles = nparticles
 
         # Set the centre of the particle distribution
-        self.centre = ensure_array_c_compatible_double(centre)
+        self.centre = centre
 
         # Set the radius to None, this will be populated when needed and
         # can then be subsequently accessed
@@ -192,8 +195,13 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 "Can't centre coordinates without a centre."
             )
+        # Both self.coordinates and self.centre were converted to compiled
+        # precision by @accept_precisions on __init__; subtraction preserves
+        # the dtype so no explicit conversion is needed here.
         return self.coordinates - self.centre
 
+    @accepts(los_dists=Mpc)
+    @accept_precisions()  # use default precision
     def get_projected_angular_coordinates(
         self,
         cosmo=None,
@@ -267,15 +275,15 @@ class Particles:
         d = los_dists.to_value(cent_coords.units)
 
         # Get the angular coordinates and store them in a (N, 3) array
-        coords = np.zeros((self.nparticles, 3), dtype=np.float64)
+        # in the compiled precision (matches everything else in the pipeline).
+        coords = np.zeros((self.nparticles, 3), dtype=_NUMPY_DTYPE)
         coords[:, 0] = np.arctan2(x, d)
         coords[:, 1] = np.arctan2(y, d)
 
-        # Ensure the array is C-contiguous
-        coords = ensure_array_c_compatible_double(coords)
-
         return coords * rad
 
+    @accepts(los_dists=Mpc)
+    @accept_precisions()  # use default precision
     def get_projected_angular_smoothing_lengths(
         self,
         cosmo=None,
@@ -345,11 +353,6 @@ class Particles:
 
         # Calculate and return the projected angular smoothing lengths
         projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
-
-        # Ensure the array is C-contiguous
-        projected_smoothing_lengths = ensure_array_c_compatible_double(
-            projected_smoothing_lengths
-        )
 
         return projected_smoothing_lengths * rad
 
@@ -452,7 +455,7 @@ class Particles:
         """Calculate flux photometry using a FilterCollection object.
 
         Args:
-            filters (object):
+            filters (FilterCollection):
                 A FilterCollection object.
             verbose (bool):
                 Are we talking?
@@ -479,6 +482,7 @@ class Particles:
 
         return self.particle_photo_fnu
 
+    @accept_precisions(mask=np.bool_)
     def get_mask(
         self,
         attr,
@@ -912,7 +916,6 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
         kdim = kernel.size
 
         # Get particle counts
@@ -920,20 +923,12 @@ class Particles:
         npart_j = other_parts.nparticles
 
         # Set up the inputs from this particle instance.
-        pos_i = np.ascontiguousarray(
-            self._coordinates[mask, :], dtype=np.float64
-        )
+        pos_i = self._coordinates[mask, :]
 
         # Set up the inputs from the other particle instance.
-        pos_j = np.ascontiguousarray(
-            other_parts._coordinates, dtype=np.float64
-        )
-        smls = np.ascontiguousarray(
-            other_parts._smoothing_lengths, dtype=np.float64
-        )
-        surf_den_vals = np.ascontiguousarray(
-            getattr(other_parts, attr), dtype=np.float64
-        )
+        pos_j = other_parts._coordinates
+        smls = other_parts._smoothing_lengths
+        surf_den_vals = getattr(other_parts, attr)
 
         return (
             kernel,
@@ -950,6 +945,8 @@ class Particles:
             nthreads,
         )
 
+    @accepts()
+    @accept_precisions(mask=np.bool_)
     def get_los_column_density(
         self,
         other_parts,
@@ -1038,6 +1035,7 @@ class Particles:
         return col_den
 
     @accepts(phi=rad, theta=rad)
+    @accept_precisions(inplace=np.bool_)
     def rotate_particles(
         self,
         phi=0 * rad,
@@ -1216,7 +1214,17 @@ class Particles:
         if hasattr(weights_vals, "units"):
             weights_vals = weights_vals.value
 
-        return np.average(attr_vals, weights=weights_vals, axis=axis)
+        weights_vals = np.asarray(weights_vals, dtype=np.float64)
+        if hasattr(attr_vals, "units"):
+            attr_units = attr_vals.units
+            attr_values = np.asarray(attr_vals.value, dtype=np.float64)
+            return (
+                np.average(attr_values, weights=weights_vals, axis=axis)
+                * attr_units
+            )
+
+        attr_values = np.asarray(attr_vals, dtype=np.float64)
+        return np.average(attr_values, weights=weights_vals, axis=axis)
 
     def get_lum_weighted_attr(
         self, attr, spectra_type, filter_code, axis=None

@@ -20,6 +20,9 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
+from synthesizer.utils.precision import get_numpy_dtype
+
+PRECISION_DTYPE = get_numpy_dtype()
 
 
 class DummyImaging(ImagingBase):
@@ -39,20 +42,22 @@ class TestImagingGeometry:
 
     def test_init_cartesian(self):
         """Test initialization with Cartesian units."""
-        res = 1 * kpc
-        fov = 10 * kpc
+        res = PRECISION_DTYPE.type(1) * kpc
+        fov = PRECISION_DTYPE.type(10) * kpc
         img = DummyImaging(resolution=res, fov=fov)
 
         assert img.has_cartesian_units, "Should have Cartesian units"
         assert not img.has_angular_units, "Should not have angular units"
 
-        assert img.cart_resolution == res, (
-            "stored cart_resolution should be same as input"
-        )
+        assert np.isclose(
+            img.cart_resolution.to_value(kpc),
+            res.to_value(kpc),
+        ), "stored cart_resolution should be same as input"
         assert img.ang_resolution is None, "should not have angular resolution"
-        assert np.allclose(img.cart_fov, unyt_array([10, 10], kpc)), (
-            "fov should be same"
-        )
+        assert np.allclose(
+            img.cart_fov.to_value(kpc),
+            unyt_array([10, 10], kpc, dtype=PRECISION_DTYPE).to_value(kpc),
+        ), "fov should be same"
         assert img.ang_fov is None, "should not have angular fov"
 
         # npix = ceil(fov / resolution) = [10, 10]
@@ -60,7 +65,10 @@ class TestImagingGeometry:
         assert img.shape == (10, 10)
 
         # orig_* preserved
-        assert img.orig_resolution == res
+        assert np.isclose(
+            img.orig_resolution.to_value(kpc),
+            res.to_value(kpc),
+        )
         assert np.array_equal(img.orig_npix, img.npix)
 
     def test_init_angular(self):
@@ -72,9 +80,15 @@ class TestImagingGeometry:
         assert img.has_angular_units, "Should have angular units"
         assert not img.has_cartesian_units, "Should not have Cartesian units"
 
-        assert img.ang_resolution == res
+        assert np.isclose(
+            img.ang_resolution.to_value(arcsecond),
+            res.to_value(arcsecond),
+        )
         assert img.cart_resolution is None
-        assert np.allclose(img.ang_fov, unyt_array([100, 100], arcsecond))
+        assert np.allclose(
+            img.ang_fov.to_value(arcsecond),
+            unyt_array([100, 100], arcsecond).to_value(arcsecond),
+        )
         assert img.cart_fov is None
 
         # npix = ceil(100 / 2) = [50, 50]
@@ -97,34 +111,51 @@ class TestImagingGeometry:
         img = DummyImaging(1 * kpc, 10 * kpc)
         img.set_resolution(2 * kpc)
 
-        assert img.cart_resolution == 2 * kpc
-        assert np.allclose(img.cart_fov, unyt_array([10, 10], kpc))
+        assert np.isclose(
+            img.cart_resolution.to_value(kpc),
+            (2 * kpc).to_value(kpc),
+        )
+        assert np.allclose(
+            img.cart_fov.to_value(kpc),
+            unyt_array([10, 10], kpc).to_value(kpc),
+        )
         assert np.array_equal(img.npix, np.array([5, 5], dtype=np.int32))
 
     def test_set_fov(self):
         """Test setting a new FOV updates npix while preserving resolution."""
-        img = DummyImaging(1 * kpc, 10 * kpc)
-        img.set_fov(20 * kpc)
+        img = DummyImaging(
+            PRECISION_DTYPE.type(1) * kpc,
+            PRECISION_DTYPE.type(10) * kpc,
+        )
+        img.set_fov(PRECISION_DTYPE.type(20) * kpc)
 
-        assert np.allclose(img.cart_fov, unyt_array([20, 20], kpc)), (
-            f"FOV should be same as arguments but found {img.cart_fov}"
-        )
-        assert img.cart_resolution == 1 * kpc, (
-            "resolution should be same as arguments"
-        )
+        assert np.allclose(
+            img.cart_fov.to_value(kpc),
+            unyt_array([20, 20], kpc, dtype=PRECISION_DTYPE).to_value(kpc),
+        ), f"FOV should be same as arguments but found {img.cart_fov}"
+        assert np.isclose(
+            img.cart_resolution.to_value(kpc),
+            (PRECISION_DTYPE.type(1) * kpc).to_value(kpc),
+        ), "resolution should be same as arguments"
         assert np.array_equal(img.npix, np.array([20, 20], dtype=np.int32)), (
             f"npix should be same as arguments but found {img.npix}"
         )
 
     def test_set_npix(self):
         """Test setting npix updates resolution and FOV consistently."""
-        img = DummyImaging(1 * kpc, 10 * kpc)
+        img = DummyImaging(
+            PRECISION_DTYPE.type(1) * kpc,
+            PRECISION_DTYPE.type(10) * kpc,
+        )
         img.set_npix(5)
 
         assert np.array_equal(img.npix, np.array([5, 5], dtype=np.int32)), (
             f"npix should be same as arguments but found {img.npix}"
         )
-        assert img.cart_resolution == 2 * kpc, (
+        assert np.isclose(
+            img.cart_resolution.to_value(kpc),
+            (PRECISION_DTYPE.type(2) * kpc).to_value(kpc),
+        ), (
             f"resolution should be same as arguments but found "
             f"{img.cart_resolution}"
         )
@@ -134,7 +165,10 @@ class TestImagingGeometry:
         img = DummyImaging(1 * kpc, 10 * kpc)
         img._resample_resolution(2)
 
-        assert img.cart_resolution == 0.5 * kpc
+        assert np.isclose(
+            img.cart_resolution.to_value(kpc),
+            (0.5 * kpc).to_value(kpc),
+        )
         assert np.array_equal(img.npix, np.array([20, 20], dtype=np.int32))
 
     def test_invalid_set_resolution_type_raises(self):
@@ -161,15 +195,19 @@ class TestImageCreation:
 
     def test_image_init_cartesian(self):
         """Test Image initialization with Cartesian units."""
-        from synthesizer.imaging.image import Image
-
         res = 0.1 * kpc
         fov = 1.0 * kpc
         img = Image(resolution=res, fov=fov)
 
         assert img.has_cartesian_units
-        assert img.cart_resolution == res
-        assert np.allclose(img.cart_fov, unyt_array([1.0, 1.0], kpc))
+        assert np.isclose(
+            img.cart_resolution.to_value(kpc),
+            res.to_value(kpc),
+        )
+        assert np.allclose(
+            img.cart_fov.to_value(kpc),
+            unyt_array([1.0, 1.0], kpc).to_value(kpc),
+        )
         assert np.array_equal(img.npix, np.array([10, 10], dtype=np.int32))
         assert img.arr is None  # No image data yet
         assert img.units is None
@@ -178,19 +216,26 @@ class TestImageCreation:
         """Test Image initialization with angular units."""
         from synthesizer.imaging.image import Image
 
-        res = 0.1 * arcsecond
-        fov = 1.0 * arcsecond
+        res = PRECISION_DTYPE.type(0.1) * arcsecond
+        fov = PRECISION_DTYPE.type(1.0) * arcsecond
         img = Image(resolution=res, fov=fov)
 
         assert img.has_angular_units, (
             f"Should have angular units but found {img.units}"
         )
-        assert img.ang_resolution == res, (
+        assert np.isclose(
+            img.ang_resolution.to_value(arcsecond),
+            res.to_value(arcsecond),
+        ), (
             f"Stored ang_resolution should be same as input but "
             f"found {img.ang_resolution}"
         )
         # FOV might be stored in different units, so convert for comparison
-        expected_fov = unyt_array([1.0, 1.0], arcsecond).to("degree")
+        expected_fov = unyt_array(
+            [1.0, 1.0],
+            arcsecond,
+            dtype=PRECISION_DTYPE,
+        ).to("degree")
         assert np.allclose(img.fov, expected_fov), (
             f"FOV should be same as arguments but found {img.ang_fov} "
             f"and expected {expected_fov}"
@@ -212,7 +257,7 @@ class TestImageCreation:
         img = Image(resolution=res, fov=fov, img=test_array)
 
         assert img.arr is not None
-        assert np.array_equal(img.arr, test_array.value)
+        assert np.allclose(img.arr, test_array.value)
         assert img.units == test_array.units
 
     def test_image_init_with_plain_array(self):
@@ -226,7 +271,7 @@ class TestImageCreation:
         img = Image(resolution=res, fov=fov, img=test_array)
 
         assert img.arr is not None
-        assert np.array_equal(img.arr, test_array)
+        assert np.allclose(img.arr, test_array)
         assert img.units is None
 
 
@@ -239,7 +284,10 @@ class TestImageBasics:
 
         assert img.has_cartesian_units, "Should have Cartesian units"
         assert not img.has_angular_units, "Should not have angular units"
-        assert np.all(img.cart_resolution == 0.1 * kpc), (
+        assert np.isclose(
+            img.cart_resolution.to_value(kpc),
+            (PRECISION_DTYPE.type(0.1) * kpc).to_value(kpc),
+        ), (
             "Stored cart_resolution should be same as input but "
             f"found {img.cart_resolution}"
         )
@@ -253,7 +301,10 @@ class TestImageBasics:
 
         assert img.has_angular_units, "Should have angular units"
         assert not img.has_cartesian_units, "Should not have Cartesian units"
-        assert img.ang_resolution == 0.1 * arcsecond, (
+        assert np.isclose(
+            img.ang_resolution.to_value(arcsecond),
+            (PRECISION_DTYPE.type(0.1) * arcsecond).to_value(arcsecond),
+        ), (
             "Stored ang_resolution should be same as input but "
             f"found {img.ang_resolution}"
         )
@@ -272,5 +323,5 @@ class TestImageBasics:
         assert np.all(img.arr.shape == (20, 20)), (
             f"Image shape should be (20, 20) but found {img.arr.shape}"
         )
-        assert np.array_equal(img.arr, data.value)
+        assert np.allclose(img.arr, data.value)
         assert img.units == data.units

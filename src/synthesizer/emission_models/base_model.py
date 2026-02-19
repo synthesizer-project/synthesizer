@@ -46,7 +46,7 @@ import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import unyt_quantity
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.operations import (
@@ -58,6 +58,33 @@ from synthesizer.emission_models.operations import (
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity
+from synthesizer.utils.precision import (
+    array_to_precision,
+    ensure_arg_precision,
+)
+
+
+def _normalize_fixed_parameter(value):
+    """Normalize fixed parameter precision on assignment.
+
+    Args:
+        value: The fixed parameter value.
+
+    Returns:
+        The value converted to compiled precision when numeric.
+    """
+    if isinstance(value, (unyt_array, unyt_quantity, np.ndarray)):
+        return ensure_arg_precision(value)
+
+    if isinstance(value, (float, int, np.floating, np.integer)):
+        return ensure_arg_precision(value)
+
+    if isinstance(value, (list, tuple)):
+        arr = np.asarray(value)
+        if np.issubdtype(arr.dtype, np.number):
+            return array_to_precision(arr)
+
+    return value
 
 
 class EmissionModel(Extraction, Generation, Transformation, Combination):
@@ -284,7 +311,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             self.lam = None
 
         # Store any fixed parameters
-        self.fixed_parameters = fixed_parameters
+        self.fixed_parameters = {
+            key: _normalize_fixed_parameter(value)
+            for key, value in fixed_parameters.items()
+        }
 
         # Ensure we have been given an emitter
         if emitter is None:
@@ -1463,7 +1493,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             **kwargs:
                 The parameters to fix.
         """
-        self.fixed_parameters.update(kwargs)
+        self.fixed_parameters.update(
+            {
+                key: _normalize_fixed_parameter(value)
+                for key, value in kwargs.items()
+            }
+        )
 
     def to_hdf5(self, group):
         """Save the model to an HDF5 group.

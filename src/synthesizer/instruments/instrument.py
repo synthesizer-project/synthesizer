@@ -32,6 +32,7 @@ from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_collection import InstrumentCollection
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.precision import accept_precisions
 from synthesizer.utils.util_funcs import obj_to_hashable
 
 
@@ -73,6 +74,7 @@ class Instrument:
     lam = Quantity("wavelength")
 
     @accepts(resolution=(kpc, arcsecond), lam=angstrom)
+    @accept_precisions()
     def __init__(
         self,
         label,

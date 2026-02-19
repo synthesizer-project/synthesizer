@@ -49,6 +49,7 @@ from synthesizer.imaging.image_generators import (
 )
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.precision import accept_precisions
 
 
 class SpectralCube(ImagingBase):
@@ -84,6 +85,7 @@ class SpectralCube(ImagingBase):
     lam = Quantity("wavelength")
 
     @accepts(lam=angstrom)
+    @accept_precisions()
     def __init__(
         self,
         resolution,
@@ -262,6 +264,8 @@ class SpectralCube(ImagingBase):
 
         return new_cube
 
+    @accepts()
+    @accept_precisions()
     def get_data_cube_hist(
         self,
         sed,
@@ -298,6 +302,8 @@ class SpectralCube(ImagingBase):
             nthreads=nthreads,
         )
 
+    @accepts()
+    @accept_precisions()
     def get_data_cube_smoothed(
         self,
         sed,
@@ -364,10 +370,23 @@ class SpectralCube(ImagingBase):
             and kernel_threshold is not None
             and sed is not None
         ):
+            sed = sed.get_resampled_sed(new_lam=self.lam)
+            self.sed = sed
+            self.quantity = quantity
+            spectra = getattr(sed, quantity, None)
+            if spectra is None:
+                raise exceptions.MissingSpectraType(
+                    f"Can't make an image for {quantity},"
+                    " it does not exist in the Sed."
+                )
+
+            spectra_units = spectra.units
+            spectra = spectra.value
+
             return _generate_ifu_particle_smoothed(
                 ifu=self,
-                sed=sed,
-                quantity=quantity,
+                spectra=spectra,
+                spectra_units=spectra_units,
                 cent_coords=coordinates,
                 smoothing_lengths=smoothing_lengths,
                 kernel=kernel,

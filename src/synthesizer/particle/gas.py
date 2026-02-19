@@ -22,6 +22,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.precision import accept_precisions
 from synthesizer.utils.util_funcs import combine_arrays
 
 
@@ -90,6 +91,10 @@ class Gas(Particles, Component):
         softening_length=Mpc,
         dust_masses=Msun.in_base("galactic"),
         centre=Mpc,
+    )
+    @accept_precisions(
+        star_forming=np.bool_,
+        verbose=np.bool_,
     )
     def __init__(
         self,

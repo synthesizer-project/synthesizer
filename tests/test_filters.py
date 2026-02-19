@@ -222,8 +222,14 @@ class TestFilterCollectionAddition:
         # Should create new combined wavelength array
         assert fc_combined.nfilters == 2
         # New wavelength array should span both ranges
-        assert fc_combined.lam.min() <= lam_uv.min()
-        assert fc_combined.lam.max() >= lam_ir.max()
+        assert fc_combined.lam.min() <= lam_uv.min() or np.isclose(
+            fc_combined.lam.min().value,
+            lam_uv.min().value,
+        )
+        assert fc_combined.lam.max() >= lam_ir.max() or np.isclose(
+            fc_combined.lam.max().value,
+            lam_ir.max().value,
+        )
         # Both filters should have non-zero transmission
         for f in fc_combined:
             assert np.sum(f.t > 0) > 0

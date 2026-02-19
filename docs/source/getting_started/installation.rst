@@ -72,6 +72,23 @@ In this situation, and any others where the automatic locating of OpenMP fails, 
 
 Note that the path should point to the directory containing the ``include`` and ``lib`` directories.
 
+Installing with single precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Synthesizer defaults to double precision (``float64``) in its C extensions. This is overkill in a lot of situations and leads to increased memory usage. To reduce memory usage Synthesizer can be compiled in single precision (``float32``).
+To compile in single precision (``float32``), set the ``SINGLE_PRECISION``
+environment variable before installing.
+
+.. code-block:: bash
+
+    SINGLE_PRECISION=1 pip install .
+
+This reduces memory usage and can speed up some workloads at the cost of
+numerical accuracy. You can check the compiled precision at runtime via
+``synthesizer.utils.precision.get_precision()``.
+
+Note that we internally test if we need conversions between single and double precision when handling input data in areas of the codebase that are sensitive to precision (e.g. C extensions). This means that if you compile in single precision but provide double precision input data, Synthesizer will automatically convert the data to single precision before processing. 
+
 Optional Dependencies
 ##################### 
 

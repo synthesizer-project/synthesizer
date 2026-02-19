@@ -8,12 +8,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.utils import (
-    depluralize,
-    ensure_array_c_compatible_double,
-    get_attr_c_compatible_double,
-    pluralize,
-)
+from synthesizer.utils import depluralize, pluralize
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -200,29 +195,19 @@ def get_param(
 
     # Check the model's fixed parameters first
     if model is not None and param in model.fixed_parameters:
-        if not isinstance(
-            model.fixed_parameters[param], str
-        ) and not isinstance(
-            model.fixed_parameters[param],
-            ParameterFunction,
-        ):
-            value = ensure_array_c_compatible_double(
-                model.fixed_parameters[param]
-            )
-        else:
-            value = model.fixed_parameters[param]
+        value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = get_attr_c_compatible_double(emission, param)
+        value = getattr(emission, param)
 
     # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = get_attr_c_compatible_double(emitter, param)
+        value = getattr(emitter, param)
 
     # Finally, if we have an additional object, check that
     elif obj is not None and hasattr(obj, param):
-        value = get_attr_c_compatible_double(obj, param)
+        value = getattr(obj, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)

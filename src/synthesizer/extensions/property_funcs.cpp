@@ -10,6 +10,8 @@
 
 /* Header */
 #include "property_funcs.h"
+#include "data_types.h"
+#include "numpy_helpers.h"
 
 /**
  * @brief Extract double data from a numpy array.
@@ -19,8 +21,38 @@
  */
 double *extract_data_double(PyArrayObject *np_arr, const char *name) {
 
+  if (!ensure_double_array(np_arr, name)) {
+    return NULL;
+  }
+
   /* Extract a pointer to the spectra grids */
   double *data = reinterpret_cast<double *>(PyArray_DATA(np_arr));
+  if (data == NULL) {
+    char error_msg[100];
+    snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
+    PyErr_SetString(PyExc_ValueError, error_msg);
+    return NULL;
+  }
+  /* Success. */
+  return data;
+}
+
+/**
+ * @brief Extract Float data from a numpy array.
+ *
+ * This extracts data matching the compiled precision (float32 or float64).
+ *
+ * @param np_arr: The numpy array to extract.
+ * @param name: The name of the numpy array. (For error messages)
+ */
+Float *extract_data_float(PyArrayObject *np_arr, const char *name) {
+
+  if (!ensure_float_array(np_arr, name)) {
+    return NULL;
+  }
+
+  /* Extract a pointer to the data */
+  Float *data = reinterpret_cast<Float *>(PyArray_DATA(np_arr));
   if (data == NULL) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
@@ -37,10 +69,14 @@ double *extract_data_double(PyArrayObject *np_arr, const char *name) {
  * @param np_arr: The numpy array to extract.
  * @param name: The name of the numpy array. (For error messages)
  */
-int *extract_data_int(PyArrayObject *np_arr, const char *name) {
+Int *extract_data_int(PyArrayObject *np_arr, const char *name) {
+
+  if (!ensure_int_array(np_arr, name)) {
+    return NULL;
+  }
 
   /* Extract a pointer to the spectra grids */
-  int *data = reinterpret_cast<int *>(PyArray_DATA(np_arr));
+  Int *data = reinterpret_cast<Int *>(PyArray_DATA(np_arr));
   if (data == NULL) {
     char error_msg[100];
     snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
@@ -62,6 +98,11 @@ int *extract_data_int(PyArrayObject *np_arr, const char *name) {
  * @return Pointer to the npy_bool data, or NULL on error.
  */
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name) {
+
+  if (!ensure_bool_array(np_arr, name)) {
+    return NULL;
+  }
+
   npy_bool *data = reinterpret_cast<npy_bool *>(PyArray_DATA(np_arr));
   if (data == NULL) {
     char error_msg[100];

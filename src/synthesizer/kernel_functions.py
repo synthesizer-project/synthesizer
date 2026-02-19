@@ -22,6 +22,8 @@ Example usage:
 import numpy as np
 from scipy import integrate
 
+from synthesizer.utils.precision import get_numpy_dtype
+
 
 class Kernel:
     """A class describing a SPH kernel integrated along the line-of-sight.
@@ -94,7 +96,7 @@ class Kernel:
         Returns:
             np.ndarray: The kernel values for each impact parameter.
         """
-        kernel = np.zeros(self.binsize + 1)
+        kernel = np.zeros(self.binsize + 1, dtype=get_numpy_dtype())
 
         bins = np.arange(0, 1.0, 1.0 / self.binsize)
         bins = np.append(bins, 1.0)

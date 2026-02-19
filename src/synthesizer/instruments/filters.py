@@ -36,9 +36,11 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.precision import _NUMPY_DTYPE, accept_precisions
 
 
 @accepts(new_lam=angstrom)
+@accept_precisions()
 def UVJ(new_lam=None):
     """Return a FilterCollection of UVJ top hat filters.
 
@@ -104,8 +106,8 @@ class FilterCollection:
     mean_lams = Quantity("wavelength")
     pivot_lams = Quantity("wavelength")
 
-    accepts(new_lam=angstrom)
-
+    @accepts(new_lam=angstrom)
+    @accept_precisions(verbose=np.bool_)
     def __init__(
         self,
         filter_codes=None,
@@ -1295,6 +1297,7 @@ class Filter:
         lam_fwhm=angstrom,
         new_lam=angstrom,
     )
+    @accept_precisions()
     def __init__(
         self,
         filter_code,
@@ -1354,6 +1357,19 @@ class Filter:
         self.original_lam = new_lam
         self.original_t = transmission
         self._shifted_t = None
+
+        # Cache for apply_filter: stores the interpolated transmission,
+        # in-band mask, masked xs/t, and the denominator integral.  All
+        # are filter-intrinsic (independent of SED data) and reused across
+        # repeated calls with the same xs grid.  Keyed on
+        # (id(xs), id(self.original_t)); auto-invalidates when either
+        # array is replaced (e.g. after _interpolate_wavelength).
+        self._cached_denom = None
+        self._cached_denom_key = None
+        self._cached_t = None
+        self._cached_in_band = None
+        self._cached_xs_in_band = None
+        self._cached_t_in_band = None
 
         # Are loading from a hdf5 group?
         if hdf is not None:
@@ -1783,23 +1799,29 @@ class Filter:
         elif lam is not None:
             # If we have lams we are integrating over llam or flam
 
-            # Ensure the passed wavelengths have units
-            if not isinstance(lam, unyt_array):
-                lam *= angstrom
-
-            # Use the passed wavelength and original lam
-            xs = lam.to(angstrom).value
+            # Strip to a plain ndarray in Angstrom.  Avoid wrapping a plain
+            # ndarray in unyt_array just to immediately strip it.
+            if isinstance(lam, unyt_array):
+                xs = lam.to(angstrom).value
+            elif isinstance(lam, np.ndarray):
+                xs = lam  # already unitless Angstrom
+            else:
+                xs = np.asarray(lam)
             original_xs = self._original_lam
 
         elif nu is not None:
             # If we've been handed nu we are integrating over lnu or fnu
 
-            # Ensure the passed frequencies have units
-            if not isinstance(nu, unyt_array):
-                nu *= Hz
-
-            # Use the passed frequency and original frequency
-            xs = nu.to(Hz).value
+            # Strip to a plain ndarray in Hz.  The common path is
+            # Sed.get_photo_lnu which passes self._nu (already a plain
+            # ndarray in Hz) — avoid the unyt_array allocation + .to()
+            # round-trip in that case.
+            if isinstance(nu, unyt_array):
+                xs = nu.to(Hz).value
+            elif isinstance(nu, np.ndarray):
+                xs = nu  # already unitless Hz from Sed._nu
+            else:
+                xs = np.asarray(nu)
             original_xs = self._original_nu
 
         else:
@@ -1809,17 +1831,62 @@ class Filter:
                 "provided, frequencies take priority over wavelengths"
                 " for filter convolution."
             )
-            xs = self._nu.to(Hz).value
+            # self._nu is already a plain ndarray in Hz (set in __init__)
+            xs = self._nu
             original_xs = self._original_nu
 
-        # Interpolate the transmission curve onto the provided frequencies
-        func = interp1d(
-            original_xs,
-            self.original_t,
-            kind="linear",
-            bounds_error=False,
-        )
-        t = func(xs)
+        # Interpolate the transmission curve onto xs and derive the in-band
+        # mask.  Both the interpolation and the mask depend only on
+        # (original_xs, self.original_t, xs) — none of which change across
+        # repeated calls in the particle-SED photometry loop.  Cache the
+        # results keyed on (id(xs), id(self.original_t)) so we skip scipy
+        # interp1d entirely after the first call.
+        cache_key = (id(xs), id(self.original_t))
+        if self._cached_denom_key != cache_key:
+            # interp1d always returns float64; cast immediately to compiled
+            # precision so that all subsequent operations stay in that dtype.
+            func = interp1d(
+                original_xs,
+                self.original_t,
+                kind="linear",
+                bounds_error=False,
+            )
+            t = func(xs).astype(_NUMPY_DTYPE, copy=False)
+            in_band = t > 0
+            xs_in_band = xs[in_band]
+            t_in_band = t[in_band]
+
+            # Compute the denominator integral (filter-intrinsic, no SED data)
+            if t_in_band.size > 0 and np.sum(t_in_band) > 0:
+                denom = integrate_last_axis(
+                    xs_in_band,
+                    t_in_band / xs_in_band,
+                    nthreads=nthreads,
+                    method=integration_method,
+                )
+                # Full-length weight vector: t/xs inside the band, zero
+                # outside.  Passed to the fused C kernel so that no
+                # compress or intermediate multiply/divide arrays are
+                # needed on the hot path.
+                weights_full = np.zeros_like(xs)
+                weights_full[in_band] = t_in_band / xs_in_band
+            else:
+                denom = None
+                weights_full = None
+
+            # Store everything in the cache
+            self._cached_denom = denom
+            self._cached_denom_key = cache_key
+            self._cached_t = t
+            self._cached_in_band = in_band
+            self._cached_xs_in_band = xs_in_band
+            self._cached_t_in_band = t_in_band
+            self._cached_weights_full = weights_full
+        else:
+            t = self._cached_t
+            in_band = self._cached_in_band
+            xs_in_band = self._cached_xs_in_band
+            t_in_band = self._cached_t_in_band
 
         # Ensure the xs array and arr are a compatible shape
         if arr.shape[-1] != t.shape[0]:
@@ -1832,44 +1899,33 @@ class Filter:
         # Store this observed frame transmission
         self._shifted_t = t
 
-        # Get the mask that removes wavelengths we don't currently care about
-        in_band = t > 0
+        # If the filter has zero transmission (denom is None) return zero
+        # immediately — no array work needed.
+        if self._cached_denom is None:
+            return (
+                np.zeros(arr.shape[:-1], dtype=_NUMPY_DTYPE)
+                if arr.ndim > 1
+                else _NUMPY_DTYPE.type(0.0)
+            )
 
-        # Mask out wavelengths that don't contribute to this band
-        arr_in_band = arr.compress(in_band, axis=-1)
-        xs_in_band = xs[in_band]
-        t_in_band = t[in_band]
-
-        # Warn and exit if there are no array elements in this band
-        if arr_in_band.size == 0:
+        # Warn and return zero if the in-band slice is empty
+        if not np.any(in_band):
             if arr.shape[0] > 0:
                 warn(f"{self.filter_code} outside of emission array.")
-            return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
+            return (
+                np.zeros(arr.shape[:-1], dtype=_NUMPY_DTYPE)
+                if arr.ndim > 1
+                else _NUMPY_DTYPE.type(0.0)
+            )
 
-        # Multiply the array by the filter transmission curve
-        transmission = arr_in_band * t_in_band
-
-        # Ensure we actually have some transmission in this band, no point
-        # in calling the C extensions if not
-        if np.sum(transmission) == 0:
-            return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
-
-        # Sum over the final axis to "collect" transmission in this filer
+        # Numerator: ∫ arr(x) * t(x) / x  dx
+        # The fused C kernel reads arr and weights_full in a single pass —
+        # no compress, no temporary multiply/divide arrays.
         sum_per_x = integrate_last_axis(
-            xs_in_band,
-            transmission / xs_in_band,
-            nthreads=nthreads,
-            method=integration_method,
+            xs, arr, weights=self._cached_weights_full, nthreads=nthreads
         )
-        sum_den = integrate_last_axis(
-            xs_in_band,
-            t_in_band / xs_in_band,
-            nthreads=nthreads,
-            method=integration_method,
-        )
-        sum_in_band = sum_per_x / sum_den
 
-        return sum_in_band
+        return sum_per_x / self._cached_denom
 
     def pivwv(self):
         """Calculate the pivot wavelength.

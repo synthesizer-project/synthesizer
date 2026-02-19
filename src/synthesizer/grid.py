@@ -43,6 +43,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
 
 class Grid:
@@ -102,6 +103,7 @@ class Grid:
     line_lams = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
+    @accept_precisions()
     def __init__(
         self,
         grid_name,
@@ -436,7 +438,10 @@ class Grid:
                     )
 
                 # Get the values
-                values = hf["axes"][axis][:]
+                values = np.ascontiguousarray(
+                    hf["axes"][axis][:],
+                    dtype=get_numpy_dtype(),
+                )
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
@@ -465,17 +470,19 @@ class Grid:
             if "log10_specific_ionising_luminosity" in hf.keys():
                 self.log10_specific_ionising_lum = {}
                 for ion in hf["log10_specific_ionising_luminosity"].keys():
-                    self.log10_specific_ionising_lum[ion] = hf[
-                        "log10_specific_ionising_luminosity"
-                    ][ion][:]
+                    self.log10_specific_ionising_lum[ion] = np.asarray(
+                        hf["log10_specific_ionising_luminosity"][ion][:],
+                        dtype=get_numpy_dtype(),
+                    )
 
             # Old name for backwards compatibility (DEPRECATED)
             if "log10Q" in hf.keys():
                 self.log10_specific_ionising_lum = {}
                 for ion in hf["log10Q"].keys():
-                    self.log10_specific_ionising_lum[ion] = hf["log10Q"][ion][
-                        :
-                    ]
+                    self.log10_specific_ionising_lum[ion] = np.asarray(
+                        hf["log10Q"][ion][:],
+                        dtype=get_numpy_dtype(),
+                    )
 
     @property
     def stellar_fraction(self):
@@ -540,11 +547,17 @@ class Grid:
                 )
 
             # Read the wavelengths
-            self.lam = hf["spectra/wavelength"][:]
+            self.lam = np.ascontiguousarray(
+                hf["spectra/wavelength"][:],
+                dtype=get_numpy_dtype(),
+            )
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+                self.spectra[spectra_id] = np.ascontiguousarray(
+                    hf["spectra"][spectra_id][:],
+                    dtype=get_numpy_dtype(),
+                )
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
@@ -581,7 +594,10 @@ class Grid:
             )
 
             # Read the line wavelengths
-            lams = hf["lines"]["wavelength"][...]
+            lams = np.ascontiguousarray(
+                hf["lines"]["wavelength"][...],
+                dtype=get_numpy_dtype(),
+            )
             lam_units = hf["lines"]["wavelength"].attrs.get("Units")
             self.line_lams = unyt_array(lams, lam_units).to(angstrom)
 
@@ -590,13 +606,20 @@ class Grid:
             lum_units = hf["lines"]["luminosity"].attrs.get("Units")
             cont_units = hf["lines"]["nebular_continuum"].attrs.get("Units")
 
-            # Read the nebular line luminosities and continuums
+            # Read the nebular line luminosities and continua, these must be
+            # in double precision
             self.line_lums["nebular"] = unyt_array(
-                hf["lines"]["luminosity"][...],
+                np.ascontiguousarray(
+                    hf["lines"]["luminosity"][...],
+                    dtype=np.float64,
+                ),
                 lum_units,
             )
             self.line_conts["nebular"] = unyt_array(
-                hf["lines"]["nebular_continuum"][...],
+                np.ascontiguousarray(
+                    hf["lines"]["nebular_continuum"][...],
+                    dtype=np.float64,
+                ),
                 cont_units,
             )
 
@@ -604,32 +627,50 @@ class Grid:
             # called by cloudy, this is the same as nebular in our
             # nomenclature - the line emissions from the birth cloud)
             self.line_lums["linecont"] = unyt_array(
-                hf["lines"]["luminosity"][...],
+                np.ascontiguousarray(
+                    hf["lines"]["luminosity"][...],
+                    dtype=np.float64,
+                ),
                 lum_units,
             )
             self.line_conts["linecont"] = unyt_array(
-                np.zeros(self.line_lums["nebular"].shape),
+                np.zeros(
+                    self.line_lums["nebular"].shape,
+                    dtype=np.float64,
+                ),
                 cont_units,
             )
 
             # Read the nebular continuum luminosities and continuums
             self.line_lums["nebular_continuum"] = unyt_array(
-                np.zeros(self.line_lums["nebular"].shape),
+                np.zeros(
+                    self.line_lums["nebular"].shape,
+                    dtype=np.float64,
+                ),
                 lum_units,
             )
             self.line_conts["nebular_continuum"] = unyt_array(
-                hf["lines"]["nebular_continuum"][...],
+                np.ascontiguousarray(
+                    hf["lines"]["nebular_continuum"][...],
+                    dtype=get_numpy_dtype(),
+                ),
                 cont_units,
             )
 
             # Read the transmitted line luminosities and continuums (the
             # emission transmitted through the birth cloud)
             self.line_lums["transmitted"] = unyt_array(
-                np.zeros(self.line_lums["nebular"].shape),
+                np.zeros(
+                    self.line_lums["nebular"].shape,
+                    dtype=np.float64,
+                ),
                 lum_units,
             )
             self.line_conts["transmitted"] = unyt_array(
-                hf["lines"]["transmitted"][...],
+                np.ascontiguousarray(
+                    hf["lines"]["transmitted"][...],
+                    dtype=np.float64,
+                ),
                 cont_units,
             )
 
@@ -684,7 +725,10 @@ class Grid:
                     # interpolation). The linecont continuum is explicitly 0
                     # and set above.
                     self.line_conts[spectra] = unyt_array(
-                        interp_func(self.line_lams),
+                        np.ascontiguousarray(
+                            interp_func(self.line_lams),
+                            dtype=np.float64,
+                        ),
                         cont_units,
                     )
 
@@ -692,7 +736,8 @@ class Grid:
                     # already been set
                     self.line_lums[spectra] = unyt_array(
                         np.zeros(
-                            (*self.spectra[spectra].shape[:-1], self.nlines)
+                            (*self.spectra[spectra].shape[:-1], self.nlines),
+                            dtype=np.float64,
                         ),
                         lum_units,
                     )

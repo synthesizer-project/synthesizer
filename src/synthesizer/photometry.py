@@ -14,7 +14,9 @@ import numpy as np
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.units import Quantity, default_units
+from synthesizer.utils.precision import _NUMPY_DTYPE
 
 
 class PhotometryCollection:
@@ -63,6 +65,8 @@ class PhotometryCollection:
                 A dictionary of keyword arguments containing all the photometry
                 of the form {"filter_code": photometry}.
         """
+        start = tic()
+
         # Store the filter collection
         self.filters = filters
 
@@ -79,11 +83,21 @@ class PhotometryCollection:
                 f"or unyt_arrays. Got {type(photometry[0])} instead."
             )
 
-        # Convert it from a list of unyt_quantities to a unyt_array
+        # Stack the values into a contiguous array with filters last and
+        # cast to compiled precision in a single allocation.  This avoids
+        # the overhead of the @accept_precisions() decorator converting
+        # each kwarg individually before np.stack discards those
+        # intermediates anyway.
+        stack_start = tic()
+        values = [val.value for val in photometry]
+        photometry_values = np.stack(values, axis=-1).astype(
+            _NUMPY_DTYPE, copy=False
+        )
         photometry = unyt_array(
-            np.array(photometry, dtype=np.float64),
+            photometry_values,
             units=photometry[0].units,
         )
+        toc("Stacking Photometry", stack_start)
 
         # Get the dimensions of a flux for testing
         flux_dimensions = default_units[
@@ -103,15 +117,13 @@ class PhotometryCollection:
         # Construct a dict for the look up, importantly we here store
         # the values in photometry not _photometry meaning they have units.
         self._look_up = {
-            f: val
-            for f, val in zip(
-                self.filter_codes,
-                self.photometry,
-            )
+            f: self.photometry[..., i] for i, f in enumerate(self.filter_codes)
         }
 
         # Attach the units for convenience
         self.units = self.photometry.units
+
+        toc("Creating PhotometryCollection", start)
 
     def __getitem__(self, filter_code):
         """Enable dictionary key look up syntax to extract specific photometry.

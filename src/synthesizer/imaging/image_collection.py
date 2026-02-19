@@ -59,6 +59,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_smoothed,
 )
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.precision import accept_precisions, get_numpy_dtype
 
 
 class ImageCollection(ImagingBase):
@@ -82,6 +83,7 @@ class ImageCollection(ImagingBase):
             The RGB image array.
     """
 
+    @accept_precisions()
     def __init__(
         self,
         resolution,
@@ -387,6 +389,7 @@ class ImageCollection(ImagingBase):
 
         return composite_img
 
+    @accept_precisions()
     def get_imgs_hist(
         self,
         photometry,
@@ -418,6 +421,7 @@ class ImageCollection(ImagingBase):
             normalisations=normalisations,
         )
 
+    @accept_precisions()
     def get_imgs_smoothed(
         self,
         photometry,
@@ -495,6 +499,7 @@ class ImageCollection(ImagingBase):
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
                 normalisations=normalisations,
+                signals_transposed=True,
             )
         else:
             raise exceptions.InconsistentArguments(
@@ -558,6 +563,7 @@ class ImageCollection(ImagingBase):
             imgs=psfed_imgs,
         )
 
+    @accept_precisions()
     def apply_noise_arrays(self, noise_arrs):
         """Apply an existing noise array to each image.
 
@@ -601,6 +607,7 @@ class ImageCollection(ImagingBase):
             imgs=noisy_imgs,
         )
 
+    @accept_precisions()
     def apply_noise_from_stds(self, noise_stds):
         """Apply noise based on standard deviations of the noise distribution.
 
@@ -646,6 +653,7 @@ class ImageCollection(ImagingBase):
             imgs=noisy_imgs,
         )
 
+    @accept_precisions()
     def apply_noise_from_snrs(self, snrs, depths, aperture_radius=None):
         """Apply noise based on SNRs and depths for each image.
 
@@ -943,7 +951,10 @@ class ImageCollection(ImagingBase):
                 weights[f] /= w_sum
 
         # Set up the rgb image
-        rgb_img = np.zeros((self.npix[0], self.npix[1], 3), dtype=np.float64)
+        rgb_img = np.zeros(
+            (self.npix[0], self.npix[1], 3),
+            dtype=get_numpy_dtype(),
+        )
 
         # Loop over each filter calcualting the RGB channels
         for rgb_ind, rgb in enumerate(rgb_filters):

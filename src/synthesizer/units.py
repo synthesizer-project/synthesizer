@@ -6,6 +6,20 @@ The Quantity is a descriptor object which uses the Units class to attach units
 to attributes of a class. The Quantity descriptor can be used to attach units
 to class attributes.
 
+This module also provides decorators for checking and converting function
+argument units and precision:
+
+- @accepts(**units): Check/convert units to match expected values
+- @accepts_both(**units): Check/convert both units and precision (combined)
+- @accept_precisions(**precisions): Check/convert precision only
+
+For custom decorators combining unit and precision checks, use the precision
+utilities from synthesizer.utils.precision:
+
+- get_numpy_dtype(): Get the compiled floating-point precision
+- get_integer_dtype(): Get integer precision matching float precision
+  (int32 when float is float32, int64 when float is float64)
+
 Example definition:
 
     class Foo:
@@ -38,6 +52,7 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 
 # Define the path to your YAML file
@@ -725,13 +740,19 @@ def _check_arg(units, name, value):
 
 
 def accepts(**units):
-    """Check arguments passed to the wrapped function have compatible units.
+    """Check wrapped function arguments have compatible units and precision.
 
     This decorator will cross check any of the arguments passed to the wrapped
     function with the units defined in this decorators kwargs. If units are
     not compatible or are missing an error will be raised. If the units don't
     match the defined units in units then the values will be converted to the
     correct units.
+
+    If the argument is a float/int/numpy array/unyt_array/unyt_quantity then
+    the precision of the argument will be checked and, if required, it will
+    be converted to match the compiled precision of the C extensions, e.g.
+    float64 (double) by default or float32 (single) if installed with the
+    SINGLE_PRECISION flag.
 
     This is inspired by the accepts decorator in the unyt package, but includes
     Synthesizer specific errors and conversion functionality.
@@ -777,6 +798,8 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
+            start = tic()
+
             # Convert the positional arguments to a list (it must be mutable
             # for what comes next)
             args = list(args)
@@ -789,7 +812,9 @@ def accepts(**units):
             for name, value in kwargs.items():
                 kwargs[name] = _check_arg(units, name, value)
 
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            toc("Accepting Units", start)
+            return result
 
         return wrapped
 

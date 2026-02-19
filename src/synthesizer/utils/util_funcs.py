@@ -2,47 +2,15 @@
 
 Example usage:
 
-    planck(frequency, temperature=10000 * K)
     rebin_1d(arr, 10, func=np.sum)
 """
 
 import numpy as np
-import unyt.physical_constants as const
-from unyt import Hz, K, erg, pc, s, unyt_array, unyt_quantity
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
-
-
-@accepts(frequency=Hz, temperature=K)
-def planck(frequency, temperature):
-    """Compute the planck distribution for a given frequency and temperature.
-
-    This function computes the spectral radiance of a black body at a given
-    frequency and temperature using Planck's law. The spectral radiance is
-    then converted to spectral luminosity density assuming a luminosity
-    distance of 10 pc.
-
-    Parameters:
-        frequency (float or unyt_quantity): Frequency of the radiation in Hz.
-        temperature (float or unyt_quantity): Temperature in Kelvin.
-
-    Returns:
-        unyt_quantity: Spectral luminosity density in erg/s/Hz.
-    """
-    # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
-    exponent = (const.h * frequency) / (const.kb * temperature)
-    spectral_radiance = (2 * const.h * frequency**3) / (
-        const.c**2 * (np.exp(exponent) - 1)
-    )
-
-    # Convert from spectral radiance density to spectral luminosity density,
-    # here we'll assume a luminosity distance of 10 pc
-    lnu = spectral_radiance * 4 * np.pi * (10 * pc) ** 2
-
-    # Convert the result to erg/s/Hz and return
-    return lnu.to(erg / s / Hz)
+from synthesizer.utils.precision import get_numpy_dtype
 
 
 def rebin_1d(arr, resample_factor, func=np.sum):
@@ -448,11 +416,11 @@ def ensure_double_precision(value):
         )
 
 
-def is_c_compatible_double(arr):
+def is_c_compatible_float(arr):
     """Check if the input array is compatible with our C extensions.
 
     Being "compatible" means that the numpy array is both C contiguous and
-    is a double array for floating point numbers.
+    is a float array of the correct precision.
 
     If we don't do this then the C extensions will produce garbage due to the
     mismatch between the data types.
@@ -461,10 +429,10 @@ def is_c_compatible_double(arr):
         arr (np.ndarray): The input array to be checked.
 
     Returns:
-        bool: True if the array is C contiguous and of double precision,
+        bool: True if the array is C contiguous and of correct precision,
               False otherwise.
     """
-    return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.float64
+    return arr.flags["C_CONTIGUOUS"] and arr.dtype == get_numpy_dtype()
 
 
 def is_c_compatible_int(arr):
@@ -484,120 +452,6 @@ def is_c_compatible_int(arr):
               False otherwise.
     """
     return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.intc
-
-
-def ensure_array_c_compatible_double(arr):
-    """Ensure that the input array is compatible with our C extensions.
-
-    Being "compatible" means that the numpy array is both C contiguous and
-    is a double array for floating point numbers.
-
-    If we don't do this then the C extensions will produce garbage due to the
-    mismatch between the data types.
-
-    Args:
-        arr (np.ndarray): The input array to be checked.
-    """
-    # If the array is None, return it as is
-    if arr is None:
-        return arr
-
-    # Convert a list to a numpy array before we move on
-    if isinstance(arr, list):
-        arr = np.array(arr)
-
-    # If we have units we need to strip them off temporarily
-    units = None
-    if isinstance(arr, (unyt_array, unyt_quantity)):
-        units = arr.units
-        arr = arr.ndview
-
-    # If its a scalar then just return it as a double
-    if np.isscalar(arr):
-        return np.float64(arr)
-
-    # Do we need to do anything?
-    need_contiguous = False
-    need_double = False
-    if not arr.flags["C_CONTIGUOUS"]:
-        need_contiguous = True
-    if arr.dtype != np.float64:
-        need_double = True
-
-    # If there's nothing to do then just return
-    if not need_double and not need_contiguous:
-        return arr
-
-    # If we need both we can do it all at once
-    if need_double and need_contiguous:
-        arr = np.ascontiguousarray(arr, dtype=np.float64)
-
-    # If we only need to make it contiguous then do that
-    elif need_contiguous:
-        arr = np.ascontiguousarray(arr)
-
-    # If we only need to make it double then do that
-    elif need_double:
-        arr = arr.astype(np.float64)
-
-    # If we had units then reattach them
-    if units is not None:
-        arr = unyt_array(arr, units)
-
-    return arr
-
-
-def get_attr_c_compatible_double(obj, attr):
-    """Ensure an attribute of an object is compatible with our C extensions.
-
-    This function checks if the attribute of the object is a numpy array and
-    ensures that it is both C contiguous and of double precision. If the
-    attribute is not compatible, it modifies it in place.
-
-    Args:
-        obj (object): The object containing the attribute to be checked.
-        attr (str): The name of the attribute to be checked.
-    """
-    # Get the attribute from the object
-    arr = getattr(obj, attr)
-
-    # Just return it if it's None
-    if arr is None:
-        return arr
-
-    # Handle singular floats
-    if np.isscalar(arr):
-        return np.float64(arr)
-
-    # Ensure the attribute is compatible with C extensions
-    if not is_c_compatible_double(arr):
-        # It's not compatible, make it compatible
-        arr = ensure_array_c_compatible_double(arr)
-
-        # Assign it inplace so we only do this conversion once (but only if we
-        # can actually set it)
-        if hasattr(obj, attr):
-            # Set the attribute to the new array
-            setattr(obj, attr, arr)
-
-    # Also return the array
-    return arr
-
-
-def sigmoid(x, A, a, c, center):
-    """Sigmoid function.
-
-    Args:
-        x (float): Input value.
-        A (float): Amplitude parameter.
-        a (float): Slope parameter.
-        c (float): Offset parameter.
-        center (float): Center of the sigmoid function.
-
-    Returns:
-        float: Sigmoid function value.
-    """
-    return A / (1 + np.exp(-a * (x - center))) + c
 
 
 def obj_to_hashable(obj):

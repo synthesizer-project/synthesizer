@@ -1776,7 +1776,10 @@ class TestComprehensiveImagingCoverage:
         smooth_flux = np.sum(smooth_img.arr)
         expected_flux = np.sum(signal)
 
-        assert np.isclose(hist_flux, expected_flux, rtol=1e-10), (
+        from synthesizer.utils.precision import get_numpy_dtype
+
+        rtol = 1e-6 if get_numpy_dtype() == np.float32 else 1e-10
+        assert np.isclose(hist_flux, expected_flux, rtol=rtol), (
             f"Histogram flux {hist_flux} != expected {expected_flux}"
         )
         # Flux MUST be conserved - 1% tolerance for numerical precision only

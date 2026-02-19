@@ -16,6 +16,7 @@ from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
+from synthesizer.utils.precision import accept_precisions, get_integer_dtype
 
 
 class ImagingBase(ABC):
@@ -64,6 +65,7 @@ class ImagingBase(ABC):
     ang_fov = Quantity("angle")
 
     @accepts(resolution=(kpc, arcsecond), fov=(kpc, degree))
+    @accept_precisions()
     def __init__(
         self,
         resolution,
@@ -127,12 +129,17 @@ class ImagingBase(ABC):
         """
         # Compute how many pixels fall in the FOV
         self.npix = np.round(self.fov / self.resolution + 1e-10).astype(
-            np.int32
+            get_integer_dtype()
         )
 
-        # Ensure that the npix is an array of 2 values
+        # Ensure that the npix is an array of 2 values.  self.npix already
+        # has the compiled integer dtype from the round+astype above; mirror
+        # it directly rather than calling get_integer_dtype() again.
         if self.npix.size == 1:
-            self.npix = np.array((self.npix, self.npix), dtype=np.int32)
+            self.npix = np.array(
+                (self.npix, self.npix),
+                dtype=self.npix.dtype,
+            )
 
         # Redefine the FOV based on npix
         if compute_fov:
@@ -278,13 +285,13 @@ class ImagingBase(ABC):
         """
         # Ensure we have a number of pix per axis
         if isinstance(npix, int):
-            npix = np.array((npix, npix), dtype=np.int32)
+            npix = np.array((npix, npix), dtype=get_integer_dtype())
         elif isinstance(npix, tuple):
             if len(npix) != 2:
                 raise exceptions.InconsistentArguments(
                     "npix must contain exactly two elements (nx, ny)."
                 )
-            npix = np.array(npix, dtype=np.int32)
+            npix = np.array(npix, dtype=get_integer_dtype())
         else:
             raise exceptions.InconsistentArguments(
                 "The npix must be given as an int or tuple."

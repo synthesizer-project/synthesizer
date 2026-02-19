@@ -48,6 +48,10 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.precision import (
+    accept_precisions,
+    ensure_arg_precision,
+)
 
 
 class Sed:
@@ -89,6 +93,7 @@ class Sed:
     obslam = Quantity("wavelength")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
+    @accept_precisions()
     def __init__(self, lam, lnu=None, description=None):
         """Initialise a new spectral energy distribution object.
 
@@ -114,9 +119,11 @@ class Sed:
         self.nu = c / self.lam
 
         # If no lnu is provided create an empty array with the same shape as
-        # lam.
+        # lam.  self.lam is already in compiled precision (via
+        # @accept_precisions on this __init__) so mirror its dtype
+        # directly — no extension call.
         if lnu is None:
-            self.lnu = np.zeros(self.lam.shape)
+            self.lnu = np.zeros(self.lam.shape, dtype=self.lam.dtype)
         else:
             self.lnu = lnu
 
@@ -844,9 +851,12 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Define a pseudo transmission function
+        # Define a pseudo transmission function.  Cast the boolean mask to
+        # the compiled float precision so multiplication with self._lnu stays
+        # in that dtype (plain `float` would unconditionally promote to
+        # float64).
         transmission = (self.lam > window[0]) & (self.lam < window[1])
-        transmission = transmission.astype(float)
+        transmission = transmission.astype(self._lnu.dtype)
 
         # Apply the correct method
         if integration_method == "average":
@@ -870,15 +880,19 @@ class Sed:
                 lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
 
         else:
-            # Luminosity integral
+            # Compute using weighted integration in a single pass:
+            # lum = ∫ lnu * (transmission/nu) dnu
+            # tran = ∫ (transmission/nu) dnu
+            weights = transmission / self.nu
             lum = integrate_last_axis(
                 self._nu,
-                self._lnu * transmission / self.nu,
+                self._lnu,
+                weights=weights,
                 nthreads=nthreads,
                 method=integration_method,
             )
 
-            # Transmission integral
+            # Also need the transmission integral for normalization
             tran = integrate_last_axis(
                 self._nu,
                 transmission / self.nu,
@@ -1197,19 +1211,24 @@ class Sed:
             photo_lnu (dict):
                 A dictionary of rest frame broadband luminosities.
         """
+        start = tic()
+
         # Intialise result dictionary
         photo_lnu = {}
 
-        # Loop over filters
+        # Loop over filters applying the transmission curve
+        loop_start = tic()
         for f in filters:
             # Apply the filter transmission curve and store the resulting
             # luminosity
             bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
             photo_lnu[f.filter_code] = bb_lum * self.lnu.units
+        toc("Applying Filters (lnu loop)", loop_start)
 
         # Create the photometry collection and store it in the object
         self.photo_lnu = PhotometryCollection(filters, **photo_lnu)
 
+        toc("Getting Photometry (lnu)", start)
         return self.photo_lnu
 
     def get_photo_fnu(self, filters, verbose=True, nthreads=1):
@@ -1238,10 +1257,13 @@ class Sed:
                 )
             )
 
+        start = tic()
+
         # Set up flux dictionary
         photo_fnu = {}
 
-        # Loop over filters in filter collection
+        # Loop over filters in filter collection applying the transmission
+        loop_start = tic()
         for f in filters:
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(
@@ -1250,10 +1272,12 @@ class Sed:
                 nthreads=nthreads,
             )
             photo_fnu[f.filter_code] = bb_flux * self.fnu.units
+        toc("Applying Filters (fnu loop)", loop_start)
 
         # Create the photometry collection and store it in the object
         self.photo_fnu = PhotometryCollection(filters, **photo_fnu)
 
+        toc("Getting Photometry (fnu)", start)
         return self.photo_fnu
 
     def measure_colour(self, f1, f2):
@@ -1399,11 +1423,25 @@ class Sed:
         if resample_factor is not None and new_lam is not None:
             warn("Got resample_factor and new_lam, ignoring resample_factor")
 
-        # Resample the wavelength array
+        # Resample the wavelength array.  If new_lam was computed internally
+        # from self.lam (already compiled precision) we strip units to get a
+        # plain ndarray (rebin_1d preserves unyt_array wrapping); only
+        # user-supplied new_lam needs ensure_arg_precision.
         if new_lam is None:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
+            # rebin_1d on a unyt_array returns a unyt_array; strip to plain
+            # ndarray so spectres sees consistent types with self._lam.
+            if hasattr(new_lam, "ndview"):
+                new_lam = new_lam.ndview
+        else:
+            new_lam = ensure_arg_precision(new_lam, copy=True)
+            # Same strip for user-supplied unyt_arrays after conversion
+            if hasattr(new_lam, "ndview"):
+                new_lam = new_lam.ndview
 
-        # Evaluate the function at the desired wavelengths
+        # Evaluate the function at the desired wavelengths.
+        # spectres returns a fresh contiguous array; only a dtype cast is
+        # needed (not ascontiguousarray which would allocate twice).
         new_spectra = spectres(
             new_lam,
             self._lam,
@@ -1411,6 +1449,7 @@ class Sed:
             fill=0,
             verbose=False,
         )
+        new_spectra = new_spectra.astype(self._lam.dtype, copy=False)
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra * self.lnu.units)
@@ -1420,16 +1459,15 @@ class Sed:
         if self.fnu is not None:
             sed.obslam = sed.lam * (1.0 + self.redshift)
             sed.obsnu = sed.nu / (1.0 + self.redshift)
-            sed.fnu = (
-                spectres(
-                    sed._obslam,
-                    self._obslam,
-                    self._fnu,
-                    fill=0.0,
-                    verbose=False,
-                )
-                * self.fnu.units
+            resampled_fnu = spectres(
+                sed._obslam,
+                self._obslam,
+                self._fnu,
+                fill=0.0,
+                verbose=False,
             )
+            resampled_fnu = resampled_fnu.astype(self._lam.dtype, copy=False)
+            sed.fnu = resampled_fnu * self.fnu.units
             sed.redshift = self.redshift
 
         # Clean up nans, we shouldn't get them but they do appear sometimes...
