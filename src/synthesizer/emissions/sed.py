@@ -1197,18 +1197,35 @@ class Sed:
             photo_lnu (dict):
                 A dictionary of rest frame broadband luminosities.
         """
-        # Intialise result dictionary
-        photo_lnu = {}
+        start = tic()
 
-        # Loop over filters
-        for f in filters:
-            # Apply the filter transmission curve and store the resulting
-            # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
-            photo_lnu[f.filter_code] = bb_lum * self.lnu.units
+        filter_start = tic()
+
+        # Apply all filters in one batched integration call.
+        bb_lums = filters.apply_filters(
+            self._lnu,
+            nu=self._nu,
+            nthreads=nthreads,
+            integration_method="trapz",
+        )
+        toc("Applying Filters (lnu loop)", filter_start)
 
         # Create the photometry collection and store it in the object
-        self.photo_lnu = PhotometryCollection(filters, **photo_lnu)
+        # Note that we want the filter axis to be the first axis of the
+        # photometry collection so we move the last axis of the bb_fluxes to
+        # the front. Importantly, this does not make a copy of the data,
+        # or make it incorrect in any way, it just changes the way we index it.
+        stack_start = tic()
+        self.photo_lnu = PhotometryCollection(
+            filters,
+            photometry=np.moveaxis(bb_lums, -1, 0),
+            units=self.__class__.__dict__["lnu"].unit,
+            filter_codes=filters.filter_codes,
+            filter_axis=0,
+        )
+        toc("Stacking Photometry", stack_start)
+
+        toc("Getting Photometry (lnu)", start)
 
         return self.photo_lnu
 
@@ -1228,6 +1245,8 @@ class Sed:
             (dict):
                 A dictionary of fluxes in each filter in filters.
         """
+        start = tic()
+
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             raise ValueError(
@@ -1238,21 +1257,33 @@ class Sed:
                 )
             )
 
-        # Set up flux dictionary
-        photo_fnu = {}
+        filter_start = tic()
 
-        # Loop over filters in filter collection
-        for f in filters:
-            # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(
-                self._fnu,
-                nu=self._obsnu,
-                nthreads=nthreads,
-            )
-            photo_fnu[f.filter_code] = bb_flux * self.fnu.units
+        # Apply all filters in one batched integration call.
+        bb_fluxes = filters.apply_filters(
+            self._fnu,
+            nu=self._obsnu,
+            nthreads=nthreads,
+            integration_method="trapz",
+        )
+        toc("Applying Filters (fnu loop)", filter_start)
 
         # Create the photometry collection and store it in the object
-        self.photo_fnu = PhotometryCollection(filters, **photo_fnu)
+        # Note that we want the filter axis to be the first axis of the
+        # photometry collection so we move the last axis of the bb_fluxes to
+        # the front. Importantly, this does not make a copy of the data,
+        # or make it incorrect in any way, it just changes the way we index it.
+        stack_start = tic()
+        self.photo_fnu = PhotometryCollection(
+            filters,
+            photometry=np.moveaxis(bb_fluxes, -1, 0),
+            units=self.__class__.__dict__["fnu"].unit,
+            filter_codes=filters.filter_codes,
+            filter_axis=0,
+        )
+        toc("Stacking Photometry", stack_start)
+
+        toc("Getting Photometry (fnu)", start)
 
         return self.photo_fnu
 
