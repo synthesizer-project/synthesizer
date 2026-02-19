@@ -21,21 +21,25 @@ Example usage::
 """
 
 import urllib.request
+from collections import OrderedDict
 from urllib.error import URLError
 from xml.etree import ElementTree
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import interp1d
 from unyt import Hz, angstrom, c, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
+from synthesizer.extensions.photometry import compute_photometry
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
-from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.integrate import (
+    integrate_weighted_last_axis,
+    trapezoid,
+)
 
 
 @accepts(new_lam=angstrom)
@@ -59,6 +63,99 @@ def UVJ(new_lam=None):
     }
 
     return FilterCollection(tophat_dict=tophat_dict, new_lam=new_lam)
+
+
+class FilterCache:
+    """Simple cache for filter integration artifacts.
+
+    This is an internal cache used by both ``Filter`` and
+    ``FilterCollection``. We intentionally keep this cache unbounded because
+    the number of distinct filter grids encountered in typical workflows is
+    small (normally bounded by prepared filter grids), and recomputing
+    interpolation/integration artifacts is relatively expensive.
+    """
+
+    def __init__(self):
+        """Initialise an empty cache."""
+        self._entries = OrderedDict()
+
+    @staticmethod
+    def as_ndarray(xs):
+        """Return ndarray view, preferring unyt ndview when available."""
+        if isinstance(xs, (unyt_array, unyt_quantity)):
+            return xs.ndview
+        if isinstance(xs, np.ndarray):
+            return xs
+        return np.asarray(xs)
+
+    @classmethod
+    def key(cls, xs, space):
+        """Build a lightweight key for an array/grid."""
+        arr = cls.as_ndarray(xs)
+        if arr.size == 0:
+            signature = (None,)
+        else:
+            idx = np.array(
+                [
+                    0,
+                    arr.size // 4,
+                    arr.size // 2,
+                    3 * arr.size // 4,
+                    arr.size - 1,
+                ]
+            )
+            signature = tuple(float(arr[i]) for i in idx)
+
+        return (
+            space,
+            arr.shape,
+            arr.dtype.str,
+            arr.strides,
+            signature,
+        )
+
+    @classmethod
+    def identity(cls, xs):
+        """Return identity metadata for an array view."""
+        arr = cls.as_ndarray(xs)
+        return (
+            arr.__array_interface__["data"][0],
+            arr.shape,
+            arr.dtype.str,
+            arr.strides,
+        )
+
+    def get(self, key):
+        """Get a cached value by key."""
+        return self._entries.get(key)
+
+    def set(self, key, value):
+        """Store a cache value by key."""
+        if key in self._entries:
+            self._entries[key] = value
+            return
+
+        self._entries[key] = value
+
+    def clear(self):
+        """Clear all cache entries."""
+        self._entries.clear()
+
+    def __len__(self):
+        """Return current cache size."""
+        return len(self._entries)
+
+    def __contains__(self, key):
+        """Support ``key in cache`` checks."""
+        return key in self._entries
+
+    def __getitem__(self, key):
+        """Return cached value for a key."""
+        return self._entries[key]
+
+    def __iter__(self):
+        """Iterate over cache keys."""
+        return iter(self._entries)
 
 
 class FilterCollection:
@@ -163,6 +260,7 @@ class FilterCollection:
         # Define lists to hold our filters and filter codes
         self.filters = {}
         self.filter_codes = []
+        self._batch_cache = FilterCache()
 
         # Attribute for looping
         self._current_ind = 0
@@ -233,6 +331,9 @@ class FilterCollection:
         # so we just do it here outside the logic
         if new_lam is not None:
             self.resample_filters(new_lam=new_lam, verbose=verbose)
+
+        # Build cached 2D transmission matrix for the current collection grid.
+        self._refresh_batch_cache()
 
     def _load_filters(self, path=None):
         """Load a `FilterCollection` from a HDF5 file.
@@ -543,6 +644,8 @@ class FilterCollection:
         # and photometry would be impossible.
         if resample:
             self.resample_filters(new_lam=new_lam)
+        else:
+            self._refresh_batch_cache()
 
         return self
 
@@ -875,6 +978,244 @@ class FilterCollection:
 
         # Set the wavelength array
         self.lam = new_lam
+        self._refresh_batch_cache()
+
+    @staticmethod
+    def _as_ndarray(xs):
+        """Return ndarray view, preferring unyt ndview when available."""
+        return FilterCache.as_ndarray(xs)
+
+    @staticmethod
+    def _grid_cache_key(xs, space):
+        """Build a cache key describing a grid array."""
+        return FilterCache.key(xs, space)
+
+    @staticmethod
+    def _same_array_view(a, b):
+        """Return True when two arrays share identity metadata."""
+        return FilterCache.identity(a) == FilterCache.identity(b)
+
+    def _refresh_batch_cache(self):
+        """Refresh collection-level batched transmission/cache arrays."""
+        self._batch_cache.clear()
+        native_key = ("__native__",)
+
+        if self.lam is None or self.nfilters == 0:
+            return
+
+        trans_2d = np.ascontiguousarray(
+            np.vstack([self.filters[code].t for code in self.filter_codes]),
+            dtype=np.float64,
+        )
+        nu_native = (c / self.lam).to("Hz").value
+
+        self._batch_cache.set(
+            native_key,
+            {
+                "transmission_2d": trans_2d,
+                "nu_native": nu_native,
+                "lam_keys": {
+                    "trapz": self._grid_cache_key(self.lam, "lam_trapz"),
+                    "simps": self._grid_cache_key(self.lam, "lam_simps"),
+                },
+                "nu_keys": {
+                    "trapz": self._grid_cache_key(nu_native, "nu_trapz"),
+                    "simps": self._grid_cache_key(nu_native, "nu_simps"),
+                },
+            },
+        )
+
+    def _get_batched_weights(
+        self,
+        xs,
+        space="nu",
+        method="trapz",
+    ):
+        """Get cached batched weights/denominators for a grid.
+
+        Args:
+            xs (np.ndarray): Integration grid.
+            space (str): Either "lam" or "nu".
+            method (str): Integration method.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: (weights_2d, denominators)
+        """
+        if method not in ("trapz", "simps"):
+            raise exceptions.InconsistentArguments(
+                "Batched filter integration supports only 'trapz' and 'simps'."
+            )
+
+        xarr = self._as_ndarray(xs)
+        cache_space = f"{space}_{method}"
+        cache_key = self._grid_cache_key(xarr, cache_space)
+        cached = self._batch_cache.get(cache_key)
+        if cached is not None:
+            return (
+                cached["weights"],
+                cached["denominators"],
+                cached["starts"],
+                cached["ends"],
+            )
+
+        # Native fast-path uses the cached transmission matrix directly.
+        native_payload = self._batch_cache.get(("__native__",))
+        trans = None
+        if native_payload is not None:
+            native_key = (
+                native_payload["nu_keys"][method]
+                if space == "nu"
+                else native_payload["lam_keys"][method]
+            )
+            if self._grid_cache_key(xarr, cache_space) == native_key:
+                trans = native_payload["transmission_2d"]
+
+        if trans is None:
+            trans = np.ascontiguousarray(
+                np.vstack(
+                    [
+                        self.filters[code]._interpolate_transmission(
+                            xarr,
+                            self.filters[code]._original_nu
+                            if space == "nu"
+                            else self.filters[code]._original_lam,
+                        )
+                        for code in self.filter_codes
+                    ]
+                ),
+                dtype=np.float64,
+            )
+
+        weights = np.ascontiguousarray(trans / xarr, dtype=np.float64)
+
+        starts = np.zeros(self.nfilters, dtype=np.int64)
+        ends = np.zeros(self.nfilters, dtype=np.int64)
+        denominators = np.zeros(self.nfilters, dtype=np.float64)
+        for i in range(self.nfilters):
+            nonzero = np.flatnonzero(weights[i] != 0)
+            if nonzero.size == 0:
+                starts[i] = 0
+                ends[i] = 0
+            else:
+                starts[i] = int(nonzero[0])
+                ends[i] = int(nonzero[-1]) + 1
+                j0 = starts[i]
+                j1 = ends[i]
+                if method == "trapz":
+                    denominators[i] = 0.5 * np.sum(
+                        (xarr[j0 + 1 : j1] - xarr[j0 : j1 - 1])
+                        * (weights[i, j0 + 1 : j1] + weights[i, j0 : j1 - 1])
+                    )
+                else:
+                    xloc = xarr[j0:j1]
+                    wloc = weights[i, j0:j1]
+                    m = xloc.shape[0]
+                    npairs = (m - 1) // 2
+
+                    den = 0.0
+                    for p in range(npairs):
+                        k = 2 * p
+                        den += (
+                            (xloc[k + 2] - xloc[k])
+                            * (wloc[k] + 4.0 * wloc[k + 1] + wloc[k + 2])
+                            / 6.0
+                        )
+
+                    if (m - 1) % 2 != 0:
+                        den += (
+                            0.5 * (xloc[-1] - xloc[-2]) * (wloc[-1] + wloc[-2])
+                        )
+
+                    denominators[i] = den
+
+        self._batch_cache.set(
+            cache_key,
+            {
+                "weights": weights,
+                "denominators": denominators,
+                "starts": starts,
+                "ends": ends,
+            },
+        )
+        return weights, denominators, starts, ends
+
+    def apply_filters(
+        self,
+        arr,
+        lam=None,
+        nu=None,
+        nthreads=1,
+        integration_method="trapz",
+    ):
+        """Apply all filters to an array in a single batched integration.
+
+        Args:
+            arr (np.ndarray): Array with wavelength/frequency on final axis.
+            lam (np.ndarray): Wavelength grid.
+            nu (np.ndarray): Frequency grid.
+            nthreads (int): Number of threads.
+            integration_method (str): Integration method.
+
+        Returns:
+            np.ndarray:
+                Broadband values with shape (nfilters, *arr.shape[:-1]).
+        """
+        if lam is None and nu is None:
+            native_payload = self._batch_cache.get(("__native__",))
+            xs = (
+                None if native_payload is None else native_payload["nu_native"]
+            )
+            if xs is None:
+                raise exceptions.InconsistentArguments(
+                    "No native frequency grid is cached. Provide lam/nu "
+                    "or call prepare_for_grid first."
+                )
+            space = "nu"
+        elif nu is not None:
+            xs = (
+                nu.ndview
+                if isinstance(nu, unyt_array) and nu.units == Hz
+                else (
+                    nu.to(Hz).value
+                    if isinstance(nu, unyt_array)
+                    else self._as_ndarray(nu)
+                )
+            )
+            space = "nu"
+        else:
+            xs = (
+                lam.ndview
+                if isinstance(lam, unyt_array) and lam.units == angstrom
+                else (
+                    lam.to(angstrom).value
+                    if isinstance(lam, unyt_array)
+                    else self._as_ndarray(lam)
+                )
+            )
+            space = "lam"
+
+        if arr.shape[-1] != xs.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "The shape of the integration grid and final axis of arr do "
+                f"not match (arr.shape={arr.shape}, xs.shape={np.shape(xs)})."
+            )
+
+        weights, denominators, starts, ends = self._get_batched_weights(
+            xs,
+            space=space,
+            method=integration_method,
+        )
+
+        return compute_photometry(
+            xs,
+            arr,
+            weights,
+            denominators,
+            starts,
+            ends,
+            nthreads,
+            integration_method,
+        )
 
     def unify_with_grid(self, grid, loop_spectra=False):
         """Unify a grid with this FilterCollection.
@@ -892,6 +1233,50 @@ class FilterCollection:
         """
         # Interpolate the grid onto this wavelength grid
         grid.interp_spectra(self.lam, loop_spectra)
+
+    @accepts(lam=angstrom)
+    def prepare_for_grid(self, lam=None):
+        """Prepare filter integration caches for a wavelength grid.
+
+        Args:
+            lam (np.ndarray of float):
+                The wavelength grid to prepare for. If None, the collection's
+                current wavelength grid is used.
+        """
+        # Default to the collection's wavelength grid.
+        if lam is None:
+            lam = self.lam
+
+        if lam is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot prepare filters without a wavelength grid."
+            )
+
+        # Ensure filter transmission arrays match the target grid first.
+        self.resample_filters(new_lam=lam, verbose=False)
+
+        # Precompute both wavelength- and frequency-space integration data.
+        for filt in self.filters.values():
+            filt.prepare_for_grid(lam=lam)
+
+        # Precompute collection-level batched weights and denominators.
+        lam_vals = (
+            lam.ndview
+            if isinstance(lam, unyt_array) and lam.units == angstrom
+            else (
+                lam.to(angstrom).value
+                if isinstance(lam, unyt_array)
+                else self._as_ndarray(lam)
+            )
+        )
+        native_payload = self._batch_cache.get(("__native__",))
+        if native_payload is None:
+            raise exceptions.InconsistentArguments(
+                "Failed to prepare native filter cache for this grid."
+            )
+        nu_vals = native_payload["nu_native"]
+        self._get_batched_weights(lam_vals, space="lam", method="trapz")
+        self._get_batched_weights(nu_vals, space="nu", method="trapz")
 
     def _transmission_curve_ax(self, ax, **kwargs):
         """Add filter transmission curves to a given axes.
@@ -1354,6 +1739,8 @@ class Filter:
         self.original_lam = new_lam
         self.original_t = transmission
         self._shifted_t = None
+        self._integration_cache = FilterCache()
+        self._native_grid_keys = {}
 
         # Are loading from a hdf5 group?
         if hdf is not None:
@@ -1395,6 +1782,7 @@ class Filter:
         # Calculate frequencies
         self.nu = (c / self.lam).to("Hz").value
         self.original_nu = (c / self.original_lam).to("Hz").value
+        self._update_native_grid_keys()
 
         # Ensure transmission curves are in a valid range (we expect 0-1,
         # some SVO curves return strange values above this e.g. ~60-80)
@@ -1712,6 +2100,254 @@ class Filter:
         # And ensure transmission is in expected range
         self.clip_transmission()
 
+        # Keep dependent frequency grid in sync with the wavelength grid.
+        self.nu = (c / self.lam).to("Hz").value
+        self._update_native_grid_keys()
+
+        # Reset any cached integration data because the transmission curve has
+        # changed.
+        self._reset_integration_cache()
+
+    def _reset_integration_cache(self):
+        """Clear cached integration data."""
+        self._integration_cache.clear()
+
+    def _update_native_grid_keys(self):
+        """Update signatures for native wavelength/frequency grids."""
+        self._native_grid_keys = {
+            "lam": self._grid_cache_key(self._lam, "lam"),
+            "nu": self._grid_cache_key(self._nu, "nu"),
+        }
+
+    def _grid_cache_key(self, xs, space):
+        """Build a cache key for a grid array."""
+        return FilterCache.key(xs, space)
+
+    @staticmethod
+    def _same_array_view(a, b):
+        """Return True when two arrays share identity metadata."""
+        return FilterCache.identity(a) == FilterCache.identity(b)
+
+    def _interpolate_transmission(self, xs, original_xs):
+        """Interpolate the transmission curve onto a target grid."""
+        xp = self._as_ndarray(original_xs)
+        fp = self.original_t
+        x_eval = self._as_ndarray(xs)
+
+        # np.interp requires ascending xp; frequencies are often descending.
+        if xp[0] > xp[-1]:
+            xp = xp[::-1]
+            fp = fp[::-1]
+
+        # Preserve x ordering from caller while still feeding ascending x to
+        # np.interp.
+        if x_eval[0] > x_eval[-1]:
+            return np.interp(x_eval[::-1], xp, fp, left=0.0, right=0.0)[::-1]
+
+        return np.interp(x_eval, xp, fp, left=0.0, right=0.0)
+
+    def _is_native_grid(self, xs, space):
+        """Return whether xs matches this filter's native grid in space."""
+        xarr = self._as_ndarray(xs)
+        native = self._lam if space == "lam" else self._nu
+        if self._same_array_view(xarr, native):
+            return True
+
+        if self._grid_cache_key(xarr, space) != self._native_grid_keys[space]:
+            return False
+        return True
+
+    def _get_weighted_integration_data(self, xs, original_xs, space):
+        """Return transmission and integration weights for a target grid."""
+        # Fast-path: if xs matches the filter's native grid, we can use self.t
+        # directly and avoid interpolation.
+        if self._is_native_grid(xs, space):
+            xarr = self._as_ndarray(xs)
+            native_key = self._native_grid_keys[space]
+            cached_native = self._integration_cache.get(native_key)
+            if cached_native is not None:
+                return (
+                    cached_native["t"],
+                    cached_native["weights"],
+                    cached_native["has_transmission"],
+                    cached_native["band_slice"],
+                    cached_native["band_indices"],
+                )
+
+            weights = self.t / xarr
+            has_transmission = np.any(weights != 0)
+            band_slice, band_indices = self._get_band_selection(weights)
+
+            self._integration_cache.set(
+                native_key,
+                {
+                    "t": self.t,
+                    "weights": weights,
+                    "has_transmission": has_transmission,
+                    "band_slice": band_slice,
+                    "band_indices": band_indices,
+                },
+            )
+
+            return (
+                self.t,
+                weights,
+                has_transmission,
+                band_slice,
+                band_indices,
+            )
+
+        # General path: reuse cached interpolation if the grid buffer matches.
+        xarr = self._as_ndarray(xs)
+        cache_key = self._grid_cache_key(xarr, space)
+        cached = self._integration_cache.get(cache_key)
+        if cached is not None:
+            return (
+                cached["t"],
+                cached["weights"],
+                cached["has_transmission"],
+                cached["band_slice"],
+                cached["band_indices"],
+            )
+
+        t = self._interpolate_transmission(xarr, original_xs)
+        weights = t / xarr
+        has_transmission = np.any(weights != 0)
+        band_slice, band_indices = self._get_band_selection(weights)
+
+        self._integration_cache.set(
+            cache_key,
+            {
+                "t": t,
+                "weights": weights,
+                "has_transmission": has_transmission,
+                "band_slice": band_slice,
+                "band_indices": band_indices,
+            },
+        )
+
+        return (
+            t,
+            weights,
+            has_transmission,
+            band_slice,
+            band_indices,
+        )
+
+    @staticmethod
+    def _get_band_selection(weights):
+        """Return efficient selection metadata for non-zero filter weights."""
+        nonzero = np.flatnonzero(weights != 0)
+        if nonzero.size == 0:
+            return None, None
+
+        # Contiguous non-zero region -> use slicing (view, no copy).
+        if nonzero[-1] - nonzero[0] + 1 == nonzero.size:
+            return slice(nonzero[0], nonzero[-1] + 1), None
+
+        # Non-contiguous region -> fall back to explicit index selection.
+        return None, nonzero
+
+    @accepts(lam=angstrom)
+    def prepare_for_grid(self, lam=None, nu=None):
+        """Precompute interpolation/weight data for a target grid.
+
+        If both lam and nu are None, this prepares the filter's native grid.
+
+        Args:
+            lam (np.ndarray of float): Wavelength grid.
+            nu (np.ndarray of float): Frequency grid.
+        """
+        if lam is None and nu is None:
+            # Prepare native wavelength and frequency grids.
+            self._get_weighted_integration_data(
+                self._lam, self._original_lam, "lam"
+            )
+            self._get_weighted_integration_data(
+                self._nu, self._original_nu, "nu"
+            )
+            return
+
+        if lam is not None:
+            if isinstance(lam, unyt_array):
+                xs = (
+                    lam.ndview
+                    if lam.units == angstrom
+                    else lam.to(angstrom).value
+                )
+            else:
+                xs = self._as_ndarray(lam)
+            self._get_weighted_integration_data(xs, self._original_lam, "lam")
+            # If we have a wavelength grid we can also precompute the matching
+            # frequency-grid cache entries.
+            nu = (c / (xs * angstrom)).to("Hz")
+            self._get_weighted_integration_data(
+                nu.value,
+                self._original_nu,
+                "nu",
+            )
+
+        if nu is not None:
+            if isinstance(nu, unyt_array):
+                xs = nu.ndview if nu.units == Hz else nu.to(Hz).value
+            else:
+                xs = self._as_ndarray(nu)
+            self._get_weighted_integration_data(xs, self._original_nu, "nu")
+
+    def _resolve_integration_grid(self, lam=None, nu=None):
+        """Resolve integration grid arrays for filter convolution.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray, str]:
+                The integration grid, corresponding original grid,
+                and integration space label ("lam" or "nu").
+        """
+        if lam is None and nu is None:
+            return self._nu, self._original_nu, "nu"
+
+        if nu is not None:
+            if lam is not None:
+                warn(
+                    "Both wavelengths and frequencies were provided, "
+                    "frequencies take priority over wavelengths for "
+                    "filter convolution."
+                )
+
+            if isinstance(nu, unyt_array):
+                xs = nu.ndview if nu.units == Hz else nu.to(Hz).value
+            else:
+                xs = self._as_ndarray(nu)
+
+            return xs, self._original_nu, "nu"
+
+        if isinstance(lam, unyt_array):
+            xs = (
+                lam.ndview if lam.units == angstrom else lam.to(angstrom).value
+            )
+        else:
+            xs = self._as_ndarray(lam)
+
+        return xs, self._original_lam, "lam"
+
+    @staticmethod
+    def _select_weighted_inputs(arr, xs, weights, band_slice, band_indices):
+        """Select the active integration band with minimal copying."""
+        if band_slice is not None:
+            return (
+                arr[..., band_slice],
+                xs[band_slice],
+                weights[band_slice],
+            )
+
+        if band_indices is not None:
+            return (
+                np.take(arr, band_indices, axis=-1),
+                xs[band_indices],
+                weights[band_indices],
+            )
+
+        return arr, xs, weights
+
     def apply_filter(
         self,
         arr,
@@ -1767,107 +2403,53 @@ class Filter:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Initialise the xs were about to set and use
-        xs = None
-        original_xs = None
-
-        # Get the right x array to integrate over
-        if lam is None and nu is None:
-            # If we haven't been handed anything we'll use the filter's
-            # frequencies
-
-            # Use the filters frequency array
-            xs = self._nu
-            original_xs = self._original_nu
-
-        elif lam is not None:
-            # If we have lams we are integrating over llam or flam
-
-            # Ensure the passed wavelengths have units
-            if not isinstance(lam, unyt_array):
-                lam *= angstrom
-
-            # Use the passed wavelength and original lam
-            xs = lam.to(angstrom).value
-            original_xs = self._original_lam
-
-        elif nu is not None:
-            # If we've been handed nu we are integrating over lnu or fnu
-
-            # Ensure the passed frequencies have units
-            if not isinstance(nu, unyt_array):
-                nu *= Hz
-
-            # Use the passed frequency and original frequency
-            xs = nu.to(Hz).value
-            original_xs = self._original_nu
-
-        else:
-            # If both have been handed then frequencies take precedence
-            warn(
-                "Both wavelengths and frequencies were "
-                "provided, frequencies take priority over wavelengths"
-                " for filter convolution."
-            )
-            xs = self._nu.to(Hz).value
-            original_xs = self._original_nu
-
-        # Interpolate the transmission curve onto the provided frequencies
-        func = interp1d(
-            original_xs,
-            self.original_t,
-            kind="linear",
-            bounds_error=False,
-        )
-        t = func(xs)
+        xs, original_xs, space = self._resolve_integration_grid(lam, nu)
 
         # Ensure the xs array and arr are a compatible shape
-        if arr.shape[-1] != t.shape[0]:
+        if arr.shape[-1] != xs.shape[0]:
             raise exceptions.InconsistentArguments(
                 "The shape of the transmission curve and the final axis of "
                 "the array to be convolved do not match. "
-                f"(arr.shape={arr.shape}, transmission.shape={t.shape})"
+                f"(arr.shape={arr.shape}, xs.shape={xs.shape})"
             )
 
-        # Store this observed frame transmission
+        # Get transmission and weights, using cached/prepared values where
+        # possible.
+        (
+            t,
+            weights,
+            has_transmission,
+            band_slice,
+            band_indices,
+        ) = self._get_weighted_integration_data(xs, original_xs, space)
+
+        # Store this shifted transmission for external diagnostics/inspection.
         self._shifted_t = t
 
-        # Get the mask that removes wavelengths we don't currently care about
-        in_band = t > 0
-
-        # Mask out wavelengths that don't contribute to this band
-        arr_in_band = arr.compress(in_band, axis=-1)
-        xs_in_band = xs[in_band]
-        t_in_band = t[in_band]
-
-        # Warn and exit if there are no array elements in this band
-        if arr_in_band.size == 0:
+        # If there is no transmission on this grid, avoid C extension calls.
+        if not has_transmission:
             if arr.shape[0] > 0:
                 warn(f"{self.filter_code} outside of emission array.")
             return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
 
-        # Multiply the array by the filter transmission curve
-        transmission = arr_in_band * t_in_band
+        arr_integrate, xs_integrate, weights_integrate = (
+            self._select_weighted_inputs(
+                arr,
+                xs,
+                weights,
+                band_slice,
+                band_indices,
+            )
+        )
 
-        # Ensure we actually have some transmission in this band, no point
-        # in calling the C extensions if not
-        if np.sum(transmission) == 0:
-            return np.zeros(arr.shape[:-1]) if arr.ndim > 1 else 0
-
-        # Sum over the final axis to "collect" transmission in this filer
-        sum_per_x = integrate_last_axis(
-            xs_in_band,
-            transmission / xs_in_band,
+        # Integrate in one weighted pass over the final axis.
+        sum_in_band = integrate_weighted_last_axis(
+            xs_integrate,
+            arr_integrate,
+            weights_integrate,
             nthreads=nthreads,
             method=integration_method,
         )
-        sum_den = integrate_last_axis(
-            xs_in_band,
-            t_in_band / xs_in_band,
-            nthreads=nthreads,
-            method=integration_method,
-        )
-        sum_in_band = sum_per_x / sum_den
 
         return sum_in_band
 
@@ -2032,3 +2614,12 @@ class Filter:
                 The maximum wavelength.
         """
         return (self.original_lam.min(), self.original_lam.max())
+
+    @staticmethod
+    def _as_ndarray(xs):
+        """Return ndarray view, preferring unyt ndview when available."""
+        if isinstance(xs, (unyt_array, unyt_quantity)):
+            return xs.ndview
+        if isinstance(xs, np.ndarray):
+            return xs
+        return np.asarray(xs)
