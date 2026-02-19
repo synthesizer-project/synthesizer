@@ -43,7 +43,7 @@ python profiling/pipeline/analyze_memory.py \
 
 
 # Validate numerical precision of outputs
-python profiling/pipeline/validate_precision.py \
+python profiling/pipeline/validate_results.py \
   --inputs profiling/outputs/timing/main_1000p/output.h5 \
            profiling/outputs/timing/feature_1000p/output.h5 \
   --labels "main" "feature" \
@@ -139,7 +139,7 @@ python profiling/pipeline/analyze_memory.py \
 - Memory timelines overlay: `memory_comparison.png`
 - Summary statistics: `memory_summary.txt`
 
-#### `validate_precision.py` - Numerical Precision Validation
+#### `validate_results.py` - Numerical Precision Validation
 
 Compare HDF5 output files from `Pipeline.write()` and validate numerical
 precision. Auto-discovers datasets from the structured HDF5 layout
@@ -149,7 +149,7 @@ datasets across runs.
 **Usage:**
 
 ```bash
-python profiling/pipeline/validate_precision.py \
+python profiling/pipeline/validate_results.py \
   --inputs output1.h5 output2.h5 [output3.h5 ...] \
   [--labels "label1" "label2" ...] \
   [--tolerance default|loose|tight] \
@@ -252,7 +252,7 @@ profiling/
 │   ├── profile_memory.py
 │   ├── analyze_timing.py
 │   ├── analyze_memory.py
-│   ├── validate_precision.py
+│   ├── validate_results.py
 │   └── compare_precision_builds.sh
 │
 ├── scaling/                # Strong scaling analysis tools
