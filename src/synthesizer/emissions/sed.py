@@ -1211,17 +1211,15 @@ class Sed:
         toc("Applying Filters (lnu loop)", filter_start)
 
         # Create the photometry collection and store it in the object
-        # Note that we want the filter axis to be the first axis of the
-        # photometry collection so we move the last axis of the bb_fluxes to
-        # the front. Importantly, this does not make a copy of the data,
-        # or make it incorrect in any way, it just changes the way we index it.
         stack_start = tic()
         self.photo_lnu = PhotometryCollection(
             filters,
-            photometry=np.moveaxis(bb_lums, -1, 0),
-            units=self.__class__.__dict__["lnu"].unit,
-            filter_codes=filters.filter_codes,
-            filter_axis=0,
+            photometry=unyt_array(
+                bb_lums,
+                self.__class__.__dict__["lnu"].unit,
+                bypass_validation=True,
+            ),
+            filter_axis=-1,
         )
         toc("Stacking Photometry", stack_start)
 
@@ -1269,17 +1267,15 @@ class Sed:
         toc("Applying Filters (fnu loop)", filter_start)
 
         # Create the photometry collection and store it in the object
-        # Note that we want the filter axis to be the first axis of the
-        # photometry collection so we move the last axis of the bb_fluxes to
-        # the front. Importantly, this does not make a copy of the data,
-        # or make it incorrect in any way, it just changes the way we index it.
         stack_start = tic()
         self.photo_fnu = PhotometryCollection(
             filters,
-            photometry=np.moveaxis(bb_fluxes, -1, 0),
-            units=self.__class__.__dict__["fnu"].unit,
-            filter_codes=filters.filter_codes,
-            filter_axis=0,
+            photometry=unyt_array(
+                bb_fluxes,
+                self.__class__.__dict__["fnu"].unit,
+                bypass_validation=True,
+            ),
+            filter_axis=-1,
         )
         toc("Stacking Photometry", stack_start)
 
