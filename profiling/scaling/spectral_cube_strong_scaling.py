@@ -167,8 +167,8 @@ def cube_strong_scaling(
                 execution_time = time.time() - spec_start
 
                 print(
-                    "[Total] Getting data cube execution time:",
-                    execution_time,
+                    f"[Total] Getting data cube execution time took: "
+                    f"{execution_time} s"
                 )
 
                 times.append(execution_time)
@@ -196,8 +196,8 @@ def cube_strong_scaling(
                     execution_time = time.time() - spec_start
 
                     print(
-                        "[Total] Getting data cube execution time:",
-                        execution_time,
+                        f"[Total] Getting data cube execution time took: "
+                        f"{execution_time} s"
                     )
 
                     times.append(execution_time)
