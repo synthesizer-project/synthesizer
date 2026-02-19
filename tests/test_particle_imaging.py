@@ -174,17 +174,18 @@ class TestImageCollection:
                 },
                 new_lam=np.linspace(4000, 8000, 1000) * angstrom,
             ),
-            **{
-                "g_band": unyt_array(
-                    np.random.rand(n_particles) * 1e30, erg / s / Hz
+            photometry=unyt_array(
+                np.vstack(
+                    [
+                        np.random.rand(n_particles) * 1e30,
+                        np.random.rand(n_particles) * 1.2e30,
+                        np.random.rand(n_particles) * 1.5e30,
+                    ]
                 ),
-                "r_band": unyt_array(
-                    np.random.rand(n_particles) * 1.2e30, erg / s / Hz
-                ),
-                "i_band": unyt_array(
-                    np.random.rand(n_particles) * 1.5e30, erg / s / Hz
-                ),
-            },
+                erg / s / Hz,
+            ),
+            filter_codes=["g_band", "r_band", "i_band"],
+            filter_axis=0,
         )
 
     @pytest.fixture
@@ -567,17 +568,18 @@ class TestImageIntegration:
                 },
                 new_lam=np.linspace(4000, 8000, 1000) * angstrom,
             ),
-            **{
-                "F435W": unyt_array(
-                    np.random.rand(n_particles) * 1e30, erg / s / Hz
+            photometry=unyt_array(
+                np.vstack(
+                    [
+                        np.random.rand(n_particles) * 1e30,
+                        np.random.rand(n_particles) * 1.5e30,
+                        np.random.rand(n_particles) * 2e30,
+                    ]
                 ),
-                "F606W": unyt_array(
-                    np.random.rand(n_particles) * 1.5e30, erg / s / Hz
-                ),
-                "F814W": unyt_array(
-                    np.random.rand(n_particles) * 2e30, erg / s / Hz
-                ),
-            },
+                erg / s / Hz,
+            ),
+            filter_codes=["F435W", "F606W", "F814W"],
+            filter_axis=0,
         )
 
         # Create image collection
