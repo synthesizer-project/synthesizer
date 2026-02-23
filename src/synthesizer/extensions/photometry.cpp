@@ -11,11 +11,10 @@
  *   - Composite Simpson's rule with trapezoidal tail ("simps")
  *
  * Serial and parallel (OpenMP) versions are provided for each method. The
- * parallel versions use manual thread partitioning (not omp parallel for) so
- * that each thread writes to a completely independent region of memory,
- * avoiding false sharing and minimising OpenMP scheduling overhead. This
- * matches the parallelisation pattern used by the other synthesizer C
- * extensions (e.g. particle_spectra, integrated_spectra).
+ * parallel versions use OpenMP parallel-for over (entry, filter) pairs to
+ * maximize available parallelism and improve load balancing, especially for
+ * small numbers of entries. Each work item is independent so no synchronization
+ * is required.
  *****************************************************************************/
 
 /* Python includes */
@@ -426,63 +425,39 @@ static double *compute_photometry_trapz_parallel(
   /* How many filters are active? */
   const npy_intp nactive = (npy_intp)filter_work.size();
 
-#pragma omp parallel num_threads(nthreads)
-  {
-    /* What thread is this? */
-    const int tid = omp_get_thread_num();
+  /* Parallelize over (entry, filter) pairs to maximize available parallelism.
+   * With nentries * nactive work items, we get much better load balancing
+   * especially for small nentries (e.g., 100 particles × 10 filters = 1000
+   * work items vs just 100). OpenMP's parallel for handles scheduling. */
+  const npy_intp total_work = nentries * nactive;
 
-    /* Split the entries evenly across threads. No single entry is more
-     * expensive than another (they all have the same wavelength count
-     * and the same set of active filters), so a uniform split is
-     * optimal. */
-    const npy_intp entries_per_thread = nentries / nthreads;
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  for (npy_intp work_idx = 0; work_idx < total_work; ++work_idx) {
+    /* Decompose the linear work index into (entry, filter) indices. */
+    const npy_intp entry = work_idx / nactive;
+    const npy_intp af = work_idx % nactive;
 
-    /* Calculate the start and end entry indices for this thread.
-     * The last thread picks up any remainder from integer division. */
-    const npy_intp start_entry = tid * entries_per_thread;
-    const npy_intp end_entry =
-        (tid == nthreads - 1) ? nentries : start_entry + entries_per_thread;
+    /* Get the filter work descriptor. */
+    const FilterWork &work = filter_work[(size_t)af];
 
-    /* Thread-local buffer to hold one entry's worth of filter results.
-     * This avoids scattered writes during the inner loop; we do one
-     * contiguous scatter pass afterwards. */
-    std::vector<double> entry_results((size_t)nactive);
+    /* Get a pointer to this entry's spectrum. */
+    const double *spectrum = &spectra_values[entry * wavelength_count];
 
-    /* Loop over this thread's entries. */
-    for (npy_intp entry = start_entry; entry < end_entry; ++entry) {
-
-      /* Get a pointer to this entry's spectrum. */
-      const double *spectrum = &spectra_values[entry * wavelength_count];
-
-      /* Compute all active filters for this entry. */
-      for (npy_intp af = 0; af < nactive; ++af) {
-        const FilterWork &work = filter_work[(size_t)af];
-
-        /* Accumulate the trapezoidal quadrature numerator over the
-         * filter's non-zero support range [start, end). */
-        double numerator = 0.0;
-        for (npy_int64 wavelength = work.start; wavelength < work.end - 1;
-             ++wavelength) {
-          numerator +=
-              0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
-              (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
-               spectrum[wavelength] * work.weights[wavelength]);
-        }
-
-        /* Store the normalised result in the thread-local buffer. */
-        entry_results[(size_t)af] = numerator * work.inv_denominator;
-      }
-
-      /* Scatter the thread-local results into the filter-major output.
-       * Because each thread owns a disjoint range of 'entry', the writes
-       * to filter_major[f * nentries + entry] are guaranteed
-       * non-overlapping across threads -- no synchronisation needed. */
-      for (npy_intp af = 0; af < nactive; ++af) {
-        const FilterWork &work = filter_work[(size_t)af];
-        filter_major[work.filter_index * nentries + entry] =
-            entry_results[(size_t)af];
-      }
+    /* Accumulate the trapezoidal quadrature numerator over the
+     * filter's non-zero support range [start, end). */
+    double numerator = 0.0;
+    for (npy_int64 wavelength = work.start; wavelength < work.end - 1;
+         ++wavelength) {
+      numerator +=
+          0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
+          (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
+           spectrum[wavelength] * work.weights[wavelength]);
     }
+
+    /* Write directly to the output. Each work_idx maps to a unique
+     * (entry, filter) pair, so no synchronization is needed. */
+    filter_major[work.filter_index * nentries + entry] =
+        numerator * work.inv_denominator;
   }
 
   return filter_major;
@@ -521,75 +496,58 @@ static double *compute_photometry_simps_parallel(
   /* How many filters are active? */
   const npy_intp nactive = (npy_intp)filter_work.size();
 
-#pragma omp parallel num_threads(nthreads)
-  {
-    /* What thread is this? */
-    const int tid = omp_get_thread_num();
+  /* Parallelize over (entry, filter) pairs to maximize available parallelism.
+   * With nentries * nactive work items, we get much better load balancing
+   * especially for small nentries (e.g., 100 particles × 10 filters = 1000
+   * work items vs just 100). OpenMP's parallel for handles scheduling. */
+  const npy_intp total_work = nentries * nactive;
 
-    /* Split the entries evenly across threads (uniform cost per entry). */
-    const npy_intp entries_per_thread = nentries / nthreads;
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  for (npy_intp work_idx = 0; work_idx < total_work; ++work_idx) {
+    /* Decompose the linear work index into (entry, filter) indices. */
+    const npy_intp entry = work_idx / nactive;
+    const npy_intp af = work_idx % nactive;
 
-    /* Calculate the start and end entry indices for this thread.
-     * The last thread picks up any remainder from integer division. */
-    const npy_intp start_entry = tid * entries_per_thread;
-    const npy_intp end_entry =
-        (tid == nthreads - 1) ? nentries : start_entry + entries_per_thread;
+    /* Get the filter work descriptor. */
+    const FilterWork &work = filter_work[(size_t)af];
 
-    /* Thread-local buffer to hold one entry's worth of filter results. */
-    std::vector<double> entry_results((size_t)nactive);
+    /* Get a pointer to this entry's spectrum. */
+    const double *spectrum = &spectra_values[entry * wavelength_count];
 
-    /* Loop over this thread's entries. */
-    for (npy_intp entry = start_entry; entry < end_entry; ++entry) {
+    /* How many wavelength samples does this filter span? */
+    const npy_int64 sample_count = work.end - work.start;
 
-      /* Get a pointer to this entry's spectrum. */
-      const double *spectrum = &spectra_values[entry * wavelength_count];
+    /* How many pairs of intervals can Simpson's rule cover? */
+    const npy_int64 npairs = (sample_count - 1) / 2;
 
-      /* Compute all active filters for this entry. */
-      for (npy_intp af = 0; af < nactive; ++af) {
-        const FilterWork &work = filter_work[(size_t)af];
+    /* Is there a leftover single interval for a trapezoidal tail? */
+    const bool has_tail = ((sample_count - 1) % 2) != 0;
 
-        /* How many wavelength samples does this filter span? */
-        const npy_int64 sample_count = work.end - work.start;
-
-        /* How many pairs of intervals can Simpson's rule cover? */
-        const npy_int64 npairs = (sample_count - 1) / 2;
-
-        /* Is there a leftover single interval for a trapezoidal tail? */
-        const bool has_tail = ((sample_count - 1) % 2) != 0;
-
-        /* Accumulate the Simpson's quadrature numerator. */
-        double numerator = 0.0;
-        for (npy_int64 pair_index = 0; pair_index < npairs; ++pair_index) {
-          const npy_int64 k = work.start + 2 * pair_index;
-          numerator +=
-              (x_values[k + 2] - x_values[k]) *
-              (spectrum[k] * work.weights[k] +
-               4.0 * spectrum[k + 1] * work.weights[k + 1] +
-               spectrum[k + 2] * work.weights[k + 2]) /
-              6.0;
-        }
-
-        /* If there is a leftover interval, add a trapezoidal step. */
-        if (has_tail) {
-          const npy_int64 k0 = work.end - 2;
-          const npy_int64 k1 = work.end - 1;
-          numerator += 0.5 * (x_values[k1] - x_values[k0]) *
-                       (spectrum[k1] * work.weights[k1] +
-                        spectrum[k0] * work.weights[k0]);
-        }
-
-        /* Store the normalised result in the thread-local buffer. */
-        entry_results[(size_t)af] = numerator * work.inv_denominator;
-      }
-
-      /* Scatter the thread-local results into the filter-major output.
-       * No synchronisation needed -- disjoint entry ranges per thread. */
-      for (npy_intp af = 0; af < nactive; ++af) {
-        const FilterWork &work = filter_work[(size_t)af];
-        filter_major[work.filter_index * nentries + entry] =
-            entry_results[(size_t)af];
-      }
+    /* Accumulate the Simpson's quadrature numerator. */
+    double numerator = 0.0;
+    for (npy_int64 pair_index = 0; pair_index < npairs; ++pair_index) {
+      const npy_int64 k = work.start + 2 * pair_index;
+      numerator +=
+          (x_values[k + 2] - x_values[k]) *
+          (spectrum[k] * work.weights[k] +
+           4.0 * spectrum[k + 1] * work.weights[k + 1] +
+           spectrum[k + 2] * work.weights[k + 2]) /
+          6.0;
     }
+
+    /* If there is a leftover interval, add a trapezoidal step. */
+    if (has_tail) {
+      const npy_int64 k0 = work.end - 2;
+      const npy_int64 k1 = work.end - 1;
+      numerator += 0.5 * (x_values[k1] - x_values[k0]) *
+                   (spectrum[k1] * work.weights[k1] +
+                    spectrum[k0] * work.weights[k0]);
+    }
+
+    /* Write directly to the output. Each work_idx maps to a unique
+     * (entry, filter) pair, so no synchronization is needed. */
+    filter_major[work.filter_index * nentries + entry] =
+        numerator * work.inv_denominator;
   }
 
   return filter_major;
