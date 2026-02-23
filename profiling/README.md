@@ -186,12 +186,16 @@ Strong scaling analysis showing how performance scales with thread count and par
 | `strong_scaling_int_spectra.py`   | Integrated spectra strong scaling           | `plots/scaling_*.png`             |
 | `strong_scaling_los_col_den.py`   | Line-of-sight column density strong scaling | `plots/scaling_*.png`             |
 | `strong_scaling_part_spectra.py`  | Particle spectra strong scaling             | `plots/scaling_*.png`             |
+| `strong_scaling_photometry.py`    | Photometry strong scaling                   | `plots/scaling_*.png`             |
 
 ### Usage Examples
 
 ```bash
 # Profile thread scaling (strong scaling)
 python profiling/scaling/profile_thread_scaling.py --max_threads 8 --nstars 100000
+
+# Profile photometry scaling
+python profiling/scaling/strong_scaling_photometry.py --max_threads 8 --nstars 100000 --nfilters 10
 
 # Run all strong scaling tests
 python profiling/scaling/strong_scaling_images.py
