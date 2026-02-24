@@ -18,6 +18,7 @@ from synthesizer.extensions.integration import (
     trapz_last_axis,
     weighted_simps_last_axis,
     weighted_trapz_last_axis,
+    weighted_trapz_last_axis_many,
 )
 
 # Import trapezoid or trapz based on numpy version
@@ -137,3 +138,77 @@ def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
         return np.zeros(out_shape) if out_shape else 0.0
 
     return integration_function(_xs, _ys, _weights, nthreads)
+
+
+def integrate_weighted_many_last_axis(
+    xs,
+    ys,
+    weights,
+    denominators,
+    starts,
+    ends,
+    nthreads=1,
+    method="trapz",
+):
+    """Compute weighted averages for many filters in one pass.
+
+    This computes, for each filter i:
+        integral(ys * weights[i], xs) / denominators[i]
+
+    Args:
+        xs (array-like):
+            1D integration axis.
+        ys (array-like):
+            ND array whose final axis matches xs.
+        weights (array-like):
+            2D weight matrix with shape (nfilters, xs.size).
+        denominators (array-like):
+            1D denominator array with shape (nfilters,).
+        starts (array-like):
+            Start indices (inclusive) per filter along xs.
+        ends (array-like):
+            End indices (exclusive) per filter along xs.
+        nthreads (int):
+            Number of threads to use. If -1, all available threads are used.
+        method (str):
+            Integration method. Currently only "trapz" is supported.
+
+    Returns:
+        array-like:
+            Array of shape ys.shape[:-1] + (nfilters,).
+    """
+    if method != "trapz":
+        raise exceptions.InconsistentArguments(
+            "Batched weighted integration currently only supports 'trapz'."
+        )
+
+    if nthreads == -1:
+        nthreads = os.cpu_count()
+
+    _xs = np.ascontiguousarray(xs, dtype=np.float64)
+    _ys = np.ascontiguousarray(ys, dtype=np.float64)
+    _weights = np.ascontiguousarray(weights, dtype=np.float64)
+    _denominators = np.ascontiguousarray(denominators, dtype=np.float64)
+    _starts = np.ascontiguousarray(starts, dtype=np.int64)
+    _ends = np.ascontiguousarray(ends, dtype=np.int64)
+
+    if (
+        _xs.size == 0
+        or _ys.size == 0
+        or _weights.size == 0
+        or _denominators.size == 0
+        or _starts.size == 0
+        or _ends.size == 0
+    ):
+        out_shape = ys.shape[:-1] + (_weights.shape[0],)
+        return np.zeros(out_shape) if out_shape else 0.0
+
+    return weighted_trapz_last_axis_many(
+        _xs,
+        _ys,
+        _weights,
+        _denominators,
+        _starts,
+        _ends,
+        nthreads,
+    )
