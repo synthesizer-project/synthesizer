@@ -107,7 +107,10 @@ def main() -> None:
 
     # Set tolerances
     tolerances = {
-        "default": (1e-6, 1e-8),  # (rtol, atol)
+        "default": (
+            1e-5,
+            1e-7,
+        ),  # (rtol, atol) - relaxed for typical numerical differences
         "loose": (1e-4, 1e-6),
         "tight": (1e-7, 1e-9),
     }

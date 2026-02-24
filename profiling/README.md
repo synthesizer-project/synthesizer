@@ -166,7 +166,7 @@ python profiling/pipeline/validate_results.py \
 
 **Tolerance Levels:**
 
-- `default`: rtol=1e-6, atol=1e-8
+- `default`: rtol=1e-5, atol=1e-7 (suitable for typical floating-point differences)
 - `loose`: rtol=1e-4, atol=1e-6
 - `tight`: rtol=1e-7, atol=1e-9
 

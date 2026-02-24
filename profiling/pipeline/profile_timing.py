@@ -125,7 +125,7 @@ def run_pipeline_profiling(
     fov_kpc: float = 60.0,
     include_observer_frame: bool = False,
     nthreads: int = 8,
-) -> dict:
+) -> tuple:
     """Run full Pipeline profiling and return stage timings.
 
     This function uses OperationTimers to collect timing data from all
@@ -144,8 +144,10 @@ def run_pipeline_profiling(
             Defaults to 8.
 
     Returns:
-        dict: A dictionary with operation names and timing data.
-            Each entry contains 'time', 'count', and 'source'.
+        tuple: A tuple containing:
+            - dict: A dictionary with operation names and timing data.
+                Each entry contains 'time', 'count', and 'source'.
+            - Pipeline: The pipeline object with all computed results.
     """
     from synthesizer.utils.operation_timers import OperationTimers
 
@@ -250,7 +252,7 @@ def run_pipeline_profiling(
             "source": source,
         }
 
-    return timings
+    return timings, pipeline
 
 
 def main() -> None:
@@ -319,7 +321,7 @@ def main() -> None:
     print(f"Profiling Pipeline timing ({particles_str})...")
 
     # Run pipeline profiling
-    timings = run_pipeline_profiling(
+    timings, pipeline = run_pipeline_profiling(
         args.nparticles,
         args.ngalaxies,
         args.seed,
@@ -348,6 +350,11 @@ def main() -> None:
         count_str = f"count={data['count']}"
         source_str = data["source"]
         print(f"  {op}: {data['time']:.3f}s ({count_str}, {source_str})")
+
+    # Write pipeline output to HDF5
+    h5_file = output_dir / "output.h5"
+    pipeline.write(str(h5_file))
+    print(f"✓ Pipeline output saved: {h5_file}")
 
     # Generate time vs count plot
     plot_file = output_dir / "time_vs_count.png"
