@@ -360,15 +360,19 @@ def unit_emission_stars():
         * kpc,
         current_masses=np.ones(3) * Msun,
     )
+    fake_filters = FilterCollection(
+        tophat_dict={
+            "fake": {"lam_eff": 1500 * angstrom, "lam_fwhm": 200 * angstrom}
+        },
+        new_lam=np.linspace(1000, 2000, 200) * angstrom,
+    )
     stars.particle_photo_lnu["FAKE"] = PhotometryCollection(
-        filters=None,
+        filters=fake_filters,
         photometry=np.ones((1, 3)) * erg / s / Hz,
-        filter_codes=["fake"],
     )
     stars.particle_photo_fnu["FAKE"] = PhotometryCollection(
-        filters=None,
+        filters=fake_filters,
         photometry=np.ones((1, 3)) * erg / s / cm**2 / Hz,
-        filter_codes=["fake"],
     )
     return stars
 
