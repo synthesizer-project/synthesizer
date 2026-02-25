@@ -37,7 +37,7 @@ class PhotometryCollection:
         filters (FilterCollection):
             The FilterCollection used to produce the photometry.
         filter_codes (list):
-            List of filter codes.
+            List of filter codes taken from the FilterCollection.
         _code_to_index (dict):
             A dictionary mapping filter code to index in the internal
             photometry array.
@@ -53,19 +53,24 @@ class PhotometryCollection:
             erg / s / cm**2 / Hz,
         )
     )
-    def __init__(self, filters, photometry, filter_codes=None):
-        """Instantiate the photometry collection."""
+    def __init__(self, filters, photometry):
+        """Instantiate the photometry collection.
+
+        Args:
+            filters (FilterCollection):
+                FilterCollection used to produce the photometry.
+            photometry (Quantity):
+                Array of photometry values with units.
+        """
+        if filters is None:
+            raise exceptions.InconsistentArguments(
+                "filters must be provided for PhotometryCollection."
+            )
+
         # Store the filter collection
         self.filters = filters
 
-        if filter_codes is None:
-            if filters is None:
-                raise exceptions.InconsistentArguments(
-                    "filter_codes must be provided when filters is None."
-                )
-            filter_codes = list(filters.filter_codes)
-
-        self.filter_codes = list(filter_codes)
+        self.filter_codes = list(filters.filter_codes)
         if photometry.shape[0] != len(self.filter_codes):
             raise exceptions.InconsistentArguments(
                 "The leading photometry axis does not match the number "
@@ -277,20 +282,12 @@ class PhotometryCollection:
                 )
 
         # Extract a subset of the filters when available.
-        filters = (
-            self.filters.select(*filter_codes)
-            if self.filters is not None
-            else None
-        )
+        filters = self.filters.select(*filter_codes)
 
         # Slice the underlying array by filter index.
         idx = [self._code_to_index[code] for code in filter_codes]
         # Return a new PhotometryCollection with the specified photometry
-        return PhotometryCollection(
-            filters,
-            photometry=self.photometry[idx],
-            filter_codes=list(filter_codes),
-        )
+        return PhotometryCollection(filters, photometry=self.photometry[idx])
 
     def plot_photometry(
         self,

@@ -29,7 +29,6 @@ def test_photometry_collection_array_constructor_filter_first():
     pc = PhotometryCollection(
         filters,
         photometry=arr,
-        filter_codes=filters.filter_codes,
     )
 
     assert pc.shape == (3, 2)
@@ -48,7 +47,6 @@ def test_photometry_collection_requires_units_on_input_array():
         PhotometryCollection(
             filters,
             photometry=arr,
-            filter_codes=filters.filter_codes,
         )
 
 
@@ -69,7 +67,6 @@ def test_photometry_collection_select_preserves_lookup():
     pc = PhotometryCollection(
         filters,
         photometry=bb * erg / s / Hz,
-        filter_codes=filters.filter_codes,
     )
 
     sub = pc.select("f2", "f3")
