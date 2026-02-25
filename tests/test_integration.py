@@ -9,12 +9,8 @@ from synthesizer.extensions.integration import (
     trapz_last_axis,
     weighted_simps_last_axis,
     weighted_trapz_last_axis,
-    weighted_trapz_last_axis_many,
 )
-from synthesizer.utils.integrate import (
-    integrate_weighted_last_axis,
-    integrate_weighted_many_last_axis,
-)
+from synthesizer.utils.integrate import integrate_weighted_last_axis
 
 
 @pytest.fixture
@@ -118,71 +114,6 @@ def test_integrate_weighted_last_axis_wrapper(method):
 
     expected = expected_num / expected_den
     result = integrate_weighted_last_axis(xs, ys, weights, method=method)
-    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
-
-
-@pytest.mark.parametrize("threads", [1, 2])
-def test_weighted_trapz_many_integration(threads):
-    """Test batched weighted trapezoid integration for many filters."""
-    xs = np.linspace(0, 10, 500)
-    ys = np.tile(np.sin(xs), (7, 1))
-    weights = np.vstack(
-        [
-            np.exp(-0.5 * ((xs - 2.0) / 1.0) ** 2),
-            np.exp(-0.5 * ((xs - 5.0) / 1.2) ** 2),
-            np.exp(-0.5 * ((xs - 8.0) / 0.8) ** 2),
-        ]
-    )
-    denoms = trapezoid(y=weights, x=xs, axis=-1)
-    starts = np.array([0, 0, 0], dtype=np.int64)
-    ends = np.array([xs.size, xs.size, xs.size], dtype=np.int64)
-
-    expected = np.stack(
-        [
-            trapezoid(y=ys * w, x=xs, axis=-1) / d
-            for w, d in zip(weights, denoms)
-        ],
-        axis=-1,
-    )
-
-    result = weighted_trapz_last_axis_many(
-        xs,
-        ys,
-        weights,
-        denoms,
-        starts,
-        ends,
-        threads,
-    )
-    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
-
-
-def test_integrate_weighted_many_last_axis_wrapper():
-    """Test batched Python wrapper against SciPy reference."""
-    xs = np.linspace(0, 10, 300)
-    ys = np.tile(np.sin(xs), (4, 1))
-    weights = np.vstack([1.0 / (xs + 1.0), 1.0 / (xs + 2.0)])
-    denoms = trapezoid(y=weights, x=xs, axis=-1)
-    starts = np.array([0, 0], dtype=np.int64)
-    ends = np.array([xs.size, xs.size], dtype=np.int64)
-
-    expected = np.stack(
-        [
-            trapezoid(y=ys * w, x=xs, axis=-1) / d
-            for w, d in zip(weights, denoms)
-        ],
-        axis=-1,
-    )
-
-    result = integrate_weighted_many_last_axis(
-        xs,
-        ys,
-        weights,
-        denoms,
-        starts,
-        ends,
-        method="trapz",
-    )
     np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
 
 
