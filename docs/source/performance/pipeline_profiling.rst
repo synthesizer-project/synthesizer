@@ -2,7 +2,6 @@ Pipeline Profiling
 ==================
 
 These benchmarks represent "real-world" usage patterns where multiple operations are performed in sequence using the ``Pipeline`` object. This tests how the full pipeline scales with problem size when performing all typical analysis tasks together.
-Pipeline photometry paths cache filter integration artifacts per prepared grid so repeated filter applications can reuse precomputed weights and denominators.
 
 Test Configuration
 ------------------
