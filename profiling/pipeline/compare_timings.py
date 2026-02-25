@@ -49,7 +49,16 @@ def compare_many(
     top_n: int,
     min_fraction: float,
 ) -> None:
-    """Generate comparison plot and summary text for N runs."""
+    """Generate a named timing comparison plot and summary.
+
+    Args:
+        timing_data (dict[str, dict[str, dict[str, float | str]]]):
+            Mapping of label to operation timing entries.
+        labels (list[str]): Ordered run labels; first entry is reference.
+        output_dir (Path): Output directory for plot and summary text.
+        top_n (int): Maximum number of operations to include.
+        min_fraction (float): Minimum percent of total runtime to keep an op.
+    """
     if len(labels) < 2:
         raise ValueError("Need at least two timing profiles to compare.")
 
@@ -189,7 +198,7 @@ def compare_many(
 
 
 def main() -> None:
-    """Parse arguments and run named timing comparison."""
+    """Parse CLI arguments and compare timing CSV profiles."""
     parser = argparse.ArgumentParser(
         description="Compare one or more timing CSV profiles by name"
     )
