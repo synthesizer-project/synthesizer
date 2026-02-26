@@ -20,6 +20,7 @@ Example usage::
 
 """
 
+import hashlib
 import urllib.request
 from collections import OrderedDict
 from urllib.error import URLError
@@ -73,56 +74,42 @@ class FilterCache:
     the number of distinct filter grids encountered in typical workflows is
     small (normally bounded by prepared filter grids), and recomputing
     interpolation/integration artifacts is relatively expensive.
+
+    Attributes:
+        _entries (OrderedDict):
+            The cache entries, stored as an ordered dictionary to preserve
+            insertion order. Keys are lightweight metadata tuples describing
+            the wavelengths, and values are the cached artifacts
+            (e.g., 2D transmission arrays).
     """
 
     def __init__(self):
         """Initialise an empty cache."""
+        # The cache entries look up
         self._entries = OrderedDict()
-
-    @staticmethod
-    def as_ndarray(xs):
-        """Return ndarray view, preferring unyt ndview when available."""
-        if isinstance(xs, (unyt_array, unyt_quantity)):
-            return xs.ndview
-        if isinstance(xs, np.ndarray):
-            return xs
-        return np.asarray(xs)
 
     @classmethod
     def key(cls, xs, space):
         """Build a lightweight key for an array/grid."""
-        arr = cls.as_ndarray(xs)
-        if arr.size == 0:
-            signature = (None,)
-        else:
-            idx = np.array(
-                [
-                    0,
-                    arr.size // 4,
-                    arr.size // 2,
-                    3 * arr.size // 4,
-                    arr.size - 1,
-                ]
-            )
-            signature = tuple(float(arr[i]) for i in idx)
+        xs = np.ascontiguousarray(xs)
+        digest = hashlib.sha256(xs.tobytes()).hexdigest()
 
         return (
             space,
-            arr.shape,
-            arr.dtype.str,
-            arr.strides,
-            signature,
+            xs.shape,
+            xs.dtype.str,
+            xs.strides,
+            digest,
         )
 
     @classmethod
     def identity(cls, xs):
         """Return identity metadata for an array view."""
-        arr = cls.as_ndarray(xs)
         return (
-            arr.__array_interface__["data"][0],
-            arr.shape,
-            arr.dtype.str,
-            arr.strides,
+            xs.__array_interface__["data"][0],
+            xs.shape,
+            xs.dtype.str,
+            xs.strides,
         )
 
     def get(self, key):
@@ -981,11 +968,6 @@ class FilterCollection:
         self._refresh_batch_cache()
 
     @staticmethod
-    def _as_ndarray(xs):
-        """Return ndarray view, preferring unyt ndview when available."""
-        return FilterCache.as_ndarray(xs)
-
-    @staticmethod
     def _grid_cache_key(xs, space):
         """Build a cache key describing a grid array."""
         return FilterCache.key(xs, space)
@@ -1046,7 +1028,7 @@ class FilterCollection:
                 "Batched filter integration supports only 'trapz' and 'simps'."
             )
 
-        xarr = self._as_ndarray(xs)
+        xarr = xs
         cache_space = f"{space}_{method}"
         cache_key = self._grid_cache_key(xarr, cache_space)
         cached = self._batch_cache.get(cache_key)
@@ -1172,26 +1154,18 @@ class FilterCollection:
                 )
             space = "nu"
         elif nu is not None:
-            xs = (
-                nu.ndview
-                if isinstance(nu, unyt_array) and nu.units == Hz
-                else (
-                    nu.to(Hz).value
-                    if isinstance(nu, unyt_array)
-                    else self._as_ndarray(nu)
-                )
-            )
+            if not isinstance(nu, np.ndarray):
+                nu = nu.ndview if nu.units == Hz else nu.to(Hz).value
+            xs = nu
             space = "nu"
         else:
-            xs = (
-                lam.ndview
-                if isinstance(lam, unyt_array) and lam.units == angstrom
-                else (
-                    lam.to(angstrom).value
-                    if isinstance(lam, unyt_array)
-                    else self._as_ndarray(lam)
+            if not isinstance(lam, np.ndarray):
+                lam = (
+                    lam.ndview
+                    if lam.units == angstrom
+                    else lam.to(angstrom).value
                 )
-            )
+            xs = lam
             space = "lam"
 
         if arr.shape[-1] != xs.shape[0]:
@@ -1261,13 +1235,7 @@ class FilterCollection:
 
         # Precompute collection-level batched weights and denominators.
         lam_vals = (
-            lam.ndview
-            if isinstance(lam, unyt_array) and lam.units == angstrom
-            else (
-                lam.to(angstrom).value
-                if isinstance(lam, unyt_array)
-                else self._as_ndarray(lam)
-            )
+            lam.ndview if lam.units == angstrom else lam.to(angstrom).value
         )
         native_payload = self._batch_cache.get(("__native__",))
         if native_payload is None:
@@ -2130,9 +2098,9 @@ class Filter:
 
     def _interpolate_transmission(self, xs, original_xs):
         """Interpolate the transmission curve onto a target grid."""
-        xp = self._as_ndarray(original_xs)
+        xp = original_xs
         fp = self.original_t
-        x_eval = self._as_ndarray(xs)
+        x_eval = xs
 
         # np.interp requires ascending xp; frequencies are often descending.
         if xp[0] > xp[-1]:
@@ -2148,7 +2116,7 @@ class Filter:
 
     def _is_native_grid(self, xs, space):
         """Return whether xs matches this filter's native grid in space."""
-        xarr = self._as_ndarray(xs)
+        xarr = xs
         native = self._lam if space == "lam" else self._nu
         if self._same_array_view(xarr, native):
             return True
@@ -2162,7 +2130,7 @@ class Filter:
         # Fast-path: if xs matches the filter's native grid, we can use self.t
         # directly and avoid interpolation.
         if self._is_native_grid(xs, space):
-            xarr = self._as_ndarray(xs)
+            xarr = xs
             native_key = self._native_grid_keys[space]
             cached_native = self._integration_cache.get(native_key)
             if cached_native is not None:
@@ -2198,7 +2166,7 @@ class Filter:
             )
 
         # General path: reuse cached interpolation if the grid buffer matches.
-        xarr = self._as_ndarray(xs)
+        xarr = xs
         cache_key = self._grid_cache_key(xarr, space)
         cached = self._integration_cache.get(cache_key)
         if cached is not None:
@@ -2269,14 +2237,9 @@ class Filter:
             return
 
         if lam is not None:
-            if isinstance(lam, unyt_array):
-                xs = (
-                    lam.ndview
-                    if lam.units == angstrom
-                    else lam.to(angstrom).value
-                )
-            else:
-                xs = self._as_ndarray(lam)
+            xs = (
+                lam.ndview if lam.units == angstrom else lam.to(angstrom).value
+            )
             self._get_weighted_integration_data(xs, self._original_lam, "lam")
             # If we have a wavelength grid we can also precompute the matching
             # frequency-grid cache entries.
@@ -2288,10 +2251,7 @@ class Filter:
             )
 
         if nu is not None:
-            if isinstance(nu, unyt_array):
-                xs = nu.ndview if nu.units == Hz else nu.to(Hz).value
-            else:
-                xs = self._as_ndarray(nu)
+            xs = nu.ndview if nu.units == Hz else nu.to(Hz).value
             self._get_weighted_integration_data(xs, self._original_nu, "nu")
 
     def _resolve_integration_grid(self, lam=None, nu=None):
@@ -2313,19 +2273,11 @@ class Filter:
                     "filter convolution."
                 )
 
-            if isinstance(nu, unyt_array):
-                xs = nu.ndview if nu.units == Hz else nu.to(Hz).value
-            else:
-                xs = self._as_ndarray(nu)
+            xs = nu.ndview if nu.units == Hz else nu.to(Hz).value
 
             return xs, self._original_nu, "nu"
 
-        if isinstance(lam, unyt_array):
-            xs = (
-                lam.ndview if lam.units == angstrom else lam.to(angstrom).value
-            )
-        else:
-            xs = self._as_ndarray(lam)
+        xs = lam.ndview if lam.units == angstrom else lam.to(angstrom).value
 
         return xs, self._original_lam, "lam"
 
@@ -2614,12 +2566,3 @@ class Filter:
                 The maximum wavelength.
         """
         return (self.original_lam.min(), self.original_lam.max())
-
-    @staticmethod
-    def _as_ndarray(xs):
-        """Return ndarray view, preferring unyt ndview when available."""
-        if isinstance(xs, (unyt_array, unyt_quantity)):
-            return xs.ndview
-        if isinstance(xs, np.ndarray):
-            return xs
-        return np.asarray(xs)

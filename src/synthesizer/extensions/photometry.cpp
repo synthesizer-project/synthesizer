@@ -112,6 +112,47 @@ build_filter_work(const double *weight_matrix, const double *denominators,
 }
 
 /**
+ * @brief Extract an int64-compatible 1D index array.
+ *
+ * Accepts NPY_INT64 or NPY_INTP (when sizes match). The array must be
+ * C-contiguous.
+ */
+static const npy_int64 *extract_index_array(PyArrayObject *np_arr,
+                                            const char *name) {
+  if (np_arr == NULL) {
+    PyErr_Format(PyExc_ValueError, "%s array is NULL.", name);
+    return NULL;
+  }
+
+  if (PyArray_NDIM(np_arr) != 1) {
+    PyErr_Format(PyExc_ValueError, "%s must be a 1D array.", name);
+    return NULL;
+  }
+
+  if (!PyArray_IS_C_CONTIGUOUS(np_arr)) {
+    PyErr_Format(PyExc_ValueError, "%s must be C-contiguous.", name);
+    return NULL;
+  }
+
+  const int dtype = PyArray_TYPE(np_arr);
+  if (dtype == NPY_INT64) {
+    return (npy_int64 *)PyArray_DATA(np_arr);
+  }
+
+  if (dtype == NPY_INTP) {
+    if (sizeof(npy_intp) != sizeof(npy_int64)) {
+      PyErr_Format(PyExc_TypeError,
+                   "%s has incompatible intp size for int64 use.", name);
+      return NULL;
+    }
+    return (npy_int64 *)PyArray_DATA(np_arr);
+  }
+
+  PyErr_Format(PyExc_TypeError, "%s must be int64 or intp.", name);
+  return NULL;
+}
+
+/**
  * @brief Transpose an entry-major buffer to filter-major layout (serial).
  *
  * The integration kernels compute results in entry-major order because that
@@ -618,6 +659,12 @@ static PyObject *compute_photometry_integration(PyObject *self, PyObject *args) 
   const npy_intp wavelength_count = spectra_shape[spectra_ndim - 1];
   const npy_intp nfilters = PyArray_DIM(np_weight_matrix, 0);
 
+  if (wavelength_count == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "Input spectra wavelength axis must be non-empty.");
+    return NULL;
+  }
+
   /* Validate that all shapes are consistent. */
   if (PyArray_DIM(np_x_values, 0) != wavelength_count ||
       PyArray_DIM(np_weight_matrix, 1) != wavelength_count ||
@@ -636,7 +683,11 @@ static PyObject *compute_photometry_integration(PyObject *self, PyObject *args) 
     return NULL;
   }
 
-  const double *spectra_values = (double *)PyArray_DATA(np_spectra_values);
+  const double *spectra_values =
+      extract_data_double(np_spectra_values, "spectra");
+  if (spectra_values == NULL) {
+    return NULL;
+  }
 
   const double *weight_matrix =
       extract_data_double(np_weight_matrix, "weights");
@@ -650,8 +701,14 @@ static PyObject *compute_photometry_integration(PyObject *self, PyObject *args) 
     return NULL;
   }
 
-  const npy_int64 *starts = (npy_int64 *)PyArray_DATA(np_starts);
-  const npy_int64 *ends = (npy_int64 *)PyArray_DATA(np_ends);
+  const npy_int64 *starts = extract_index_array(np_starts, "starts");
+  if (starts == NULL) {
+    return NULL;
+  }
+  const npy_int64 *ends = extract_index_array(np_ends, "ends");
+  if (ends == NULL) {
+    return NULL;
+  }
 
   /* The total number of spectra is the product of all leading dimensions.
    * We flatten them for the C kernel and reshape on return. */
