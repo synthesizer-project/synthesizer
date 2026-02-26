@@ -7,7 +7,7 @@ Once photometry has been generated it can be used to produce images; for more de
 
 .. note::
 
-   For performance, filter-specific integration "artifacts" (i.e. constant values related to the integration of the transmisison curve) are cached and reused when repeated photometry is evaluated on the same prepared wavelength/frequency grids.
+   For performance, filter-specific integration "artifacts" (i.e. constant values related to the integration of the transmission curve) are cached and reused when repeated photometry is evaluated on the same prepared wavelength/frequency grids.
 
 In the pages below we demonstrate how to produce and use photometry.
 
