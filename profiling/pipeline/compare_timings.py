@@ -30,13 +30,18 @@ def load_timing(filepath: Path) -> dict[str, dict[str, float | str]]:
             return timings
 
         for line in lines[1:]:
+            if not line.strip():
+                continue
             parts = line.strip().split(",")
-            operation, seconds, _, source = (
-                parts[0],
-                float(parts[1]),
-                int(parts[2]),
-                parts[3],
-            )
+            if len(parts) < 4:
+                continue
+            try:
+                operation = parts[0]
+                seconds = float(parts[1])
+                int(parts[2])
+                source = parts[3]
+            except ValueError:
+                continue
             timings[operation] = {"time": seconds, "source": source}
 
     return timings
@@ -255,6 +260,16 @@ def main() -> None:
         if args.labels is not None
         else [path.parent.name for path in args.inputs]
     )
+
+    if len(labels) != len(set(labels)):
+        duplicates = sorted(
+            {label for label in labels if labels.count(label) > 1}
+        )
+        dup_list = ", ".join(duplicates)
+        raise ValueError(
+            "Duplicate labels detected; provide unique --labels. "
+            f"Duplicates: {dup_list}"
+        )
 
     timing_data = {
         label: load_timing(path) for label, path in zip(labels, args.inputs)

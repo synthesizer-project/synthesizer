@@ -1211,7 +1211,7 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (lnu loop)", filter_start)
+        toc("Applying Filters", filter_start)
 
         # Create the photometry collection and store it in the object
         stack_start = tic()
@@ -1269,7 +1269,7 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (fnu loop)", filter_start)
+        toc("Applying Filters", filter_start)
 
         # Create the photometry collection and store it in the object
         stack_start = tic()
