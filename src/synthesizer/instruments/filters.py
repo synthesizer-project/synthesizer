@@ -25,6 +25,7 @@ Example usage::
 """
 
 import hashlib
+import os
 import urllib.request
 from collections import OrderedDict
 from urllib.error import URLError
@@ -1147,6 +1148,9 @@ class FilterCollection:
         else:
             xs = lam
             space = "lam"
+
+        if nthreads == -1:
+            nthreads = os.cpu_count()
 
         if arr.shape[-1] != xs.shape[0]:
             raise exceptions.InconsistentArguments(

@@ -710,6 +710,16 @@ static PyObject *compute_photometry_integration(PyObject *self, PyObject *args) 
     return NULL;
   }
 
+  for (npy_intp f = 0; f < nfilters; ++f) {
+    if (starts[f] < 0 || ends[f] < 0 || starts[f] > ends[f] ||
+        ends[f] > wavelength_count) {
+      PyErr_SetString(PyExc_ValueError,
+                      "Filter band indices must satisfy 0 <= start <= end <= "
+                      "wavelength_count.");
+      return NULL;
+    }
+  }
+
   /* The total number of spectra is the product of all leading dimensions.
    * We flatten them for the C kernel and reshape on return. */
   const npy_intp nentries = PyArray_SIZE(np_spectra_values) / wavelength_count;
