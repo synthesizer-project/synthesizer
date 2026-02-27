@@ -11,7 +11,6 @@ import argparse
 from pathlib import Path
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -82,7 +81,7 @@ def main() -> None:
         "--output-dir",
         type=Path,
         default=Path("./"),
-        help="Output directory for plots (default: current directory)",
+        help="Output directory for summary (default: current directory)",
     )
     parser.add_argument(
         "--tolerance",
@@ -177,7 +176,6 @@ def main() -> None:
 
         # Compare all pairs
         first_label = list(data_dict.keys())[0]
-        had_numeric_pair = False
         for label in list(data_dict.keys())[1:]:
             ref = data_dict[first_label]
             comp = data_dict[label]
@@ -193,8 +191,6 @@ def main() -> None:
                 )
                 skipped_non_numeric += 1
                 continue
-
-            had_numeric_pair = True
 
             # Ensure shapes match
             if ref.shape != comp.shape:
@@ -245,33 +241,6 @@ def main() -> None:
                         "mean_diff": float(mean_diff),
                         "max_rel_diff": max_rel_diff,
                     }
-                )
-
-        # Create plot (limit to smaller datasets for clarity)
-        if had_numeric_pair and ref.size <= 10000:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            for label, data in data_dict.items():
-                ax.plot(data.flat, label=label, alpha=0.7)
-            ax.set_xlabel("Index")
-            ax.set_ylabel("Value")
-            # Use dataset path as title (shorten if needed)
-            title = dataset_path.replace("/", " / ")
-            if len(title) > 60:
-                title = "..." + title[-57:]
-            ax.set_title(title)
-            ax.legend()
-            fig.tight_layout()
-
-            # Safe filename from dataset path
-            safe_name = dataset_path.replace("/", "_").replace(" ", "_")
-            plot_file = args.output_dir / f"{safe_name}.png"
-            fig.savefig(plot_file, dpi=150)
-            plt.close(fig)
-            print(f"  ✓ Saved: {plot_file}")
-        else:
-            if had_numeric_pair:
-                print(
-                    f"  (Skipped plot: dataset too large, {ref.size} elements)"
                 )
 
     # Summary
