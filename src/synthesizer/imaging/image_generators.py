@@ -1244,7 +1244,9 @@ def _generate_ifu_particle_smoothed(
 
     # Strip off and store the units on the spectra for later
     ifu.units = spectra.units
-    spectra = spectra.value.T
+    # TODO: Rethink IFU path to avoid transpose + contiguous copy.
+    # Consider an IFU-specific backend that consumes native layout.
+    spectra = ensure_array_c_compatible_double(spectra.value.T)
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:

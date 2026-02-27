@@ -1097,7 +1097,7 @@ class TestFilterCollectionBatching:
                 np.linspace(0.1, 1.0, len(lam_linear)),
             ]
         )
-        nu = (c / lam_linear).to("Hz").value
+        nu = (c / lam_linear).to("Hz")
 
         batched = fc.apply_filters(spectrum, nu=nu, integration_method="trapz")
 
