@@ -1181,7 +1181,9 @@ class Sed:
 
         return self.fnu
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1, integration_method='trapz'):
+    def get_photo_lnu(
+        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+    ):
         """Calculate broadband luminosities using a FilterCollection object.
 
         Args:
@@ -1192,9 +1194,9 @@ class Sed:
             nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            integration_method (str)
-                The integration method used to calculate the luminosities over the 
-                filter profile. Options include 'trapz' and 'simps'.
+            integration_method (str):
+                The integration method used to calculate the luminosities over
+                the filter profile. Options include "trapz" and "simps".
 
         Returns:
             photo_lnu (dict):
@@ -1229,7 +1231,9 @@ class Sed:
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1, integration_method='trapz'):
+    def get_photo_fnu(
+        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+    ):
         """Calculate broadband fluxes using a FilterCollection object.
 
         Args:
@@ -1240,9 +1244,9 @@ class Sed:
             nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            integration_method (str)
-                The integration method used to calculate the fluxes over the 
-                filter profile. Options include 'trapz' and 'simps'.
+            integration_method (str):
+                The integration method used to calculate the fluxes over the
+                filter profile. Options include "trapz" and "simps".
 
         Returns:
             (dict):
