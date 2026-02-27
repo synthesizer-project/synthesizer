@@ -367,6 +367,10 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
 
   /* Get the ys array dimensions. */
   npy_intp ndim = PyArray_NDIM(ys);
+  if (ndim < 1) {
+    PyErr_SetString(PyExc_ValueError, "ys must have at least 1 dimension.");
+    return NULL;
+  }
   npy_intp *shape = PyArray_SHAPE(ys);
 
   /* Number of elements along the last axis */
@@ -548,6 +552,10 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
 
   /* Get the ys array dimensions. */
   npy_intp ndim = PyArray_NDIM(ys);
+  if (ndim < 1) {
+    PyErr_SetString(PyExc_ValueError, "ys must have at least 1 dimension.");
+    return NULL;
+  }
   npy_intp *shape = PyArray_SHAPE(ys);
 
   /* Number of elements along the last axis */
