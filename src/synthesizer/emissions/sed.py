@@ -1199,8 +1199,8 @@ class Sed:
                 the filter profile. Options include "trapz" and "simps".
 
         Returns:
-            photo_lnu (dict):
-                A dictionary of rest frame broadband luminosities.
+            (PhotometryCollection):
+                Rest-frame broadband luminosities.
         """
         start = tic()
 
@@ -1213,7 +1213,7 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters", filter_start)
+        toc("Applying Filters (Fnu)", filter_start)
 
         # Create the photometry collection and store it in the object
         stack_start = tic()
@@ -1225,7 +1225,7 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry", stack_start)
+        toc("Stacking Photometry (Fnu)", stack_start)
 
         toc("Getting Photometry (lnu)", start)
 
@@ -1249,8 +1249,8 @@ class Sed:
                 filter profile. Options include "trapz" and "simps".
 
         Returns:
-            (dict):
-                A dictionary of fluxes in each filter in filters.
+            (PhotometryCollection):
+                Fluxes in each filter in filters.
         """
         start = tic()
 
@@ -1273,7 +1273,7 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters", filter_start)
+        toc("Applying Filters (Lnu)", filter_start)
 
         # Create the photometry collection and store it in the object
         stack_start = tic()
@@ -1285,7 +1285,7 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry", stack_start)
+        toc("Stacking Photometry (Lnu)", stack_start)
 
         toc("Getting Photometry (fnu)", start)
 
