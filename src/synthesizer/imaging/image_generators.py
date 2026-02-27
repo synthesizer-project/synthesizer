@@ -1244,16 +1244,16 @@ def _generate_ifu_particle_smoothed(
 
     # Strip off and store the units on the spectra for later
     ifu.units = spectra.units
-    # TODO: Rethink IFU path to avoid transpose + contiguous copy.
+    # TODO: Rethink IFU path to avoid contiguous conversion.
     # Consider an IFU-specific backend that consumes native layout.
-    spectra = ensure_array_c_compatible_double(spectra.value.T)
+    spectra = ensure_array_c_compatible_double(spectra.ndview)
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:
         raise exceptions.InconsistentArguments(
             f"Spectra must be a 2D array for an IFU (got {spectra.ndim})."
         )
-    if spectra.shape[1] != cent_coords.shape[0]:
+    if spectra.shape[0] != cent_coords.shape[0]:
         raise exceptions.InconsistentArguments(
             "Spectra and coordinates must be the same size"
             f" for an IFU (got {spectra.shape[0]} and "
