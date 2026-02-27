@@ -1213,7 +1213,7 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Fnu)", filter_start)
+        toc("Applying Filters (Lnu)", filter_start)
 
         # Create the photometry collection and store it in the object
         stack_start = tic()
@@ -1225,7 +1225,7 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Fnu)", stack_start)
+        toc("Stacking Photometry (Lnu)", stack_start)
 
         toc("Getting Photometry (lnu)", start)
 
@@ -1273,7 +1273,7 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Lnu)", filter_start)
+        toc("Applying Filters (Fnu)", filter_start)
 
         # Create the photometry collection and store it in the object
         stack_start = tic()
@@ -1285,7 +1285,7 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Lnu)", stack_start)
+        toc("Stacking Photometry (Fnu)", stack_start)
 
         toc("Getting Photometry (fnu)", start)
 

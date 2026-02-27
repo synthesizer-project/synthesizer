@@ -6,7 +6,7 @@ Usage:
 """
 
 import argparse
-import sys
+import importlib.util
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -20,9 +20,15 @@ from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
 from synthesizer.utils.profiling_utils import run_scaling_test
 
-# Add pipeline profiling to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
-from pipeline_test_data import get_test_instrument
+pipeline_path = (
+    Path(__file__).parent.parent / "pipeline" / "pipeline_test_data.py"
+)
+spec = importlib.util.spec_from_file_location(
+    "pipeline_test_data", pipeline_path
+)
+pipeline_test_data = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(pipeline_test_data)
+get_test_instrument = pipeline_test_data.get_test_instrument
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]

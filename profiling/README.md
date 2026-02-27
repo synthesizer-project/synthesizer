@@ -181,7 +181,7 @@ python profiling/pipeline/validate_results.py \
 
 - `--inputs`: HDF5 files to compare (from `Pipeline.write()`)
 - `--labels`: Optional labels for each file (default: use filenames)
-- `--tolerance`: Comparison tolerance (default: rtol=1e-6, atol=1e-8)
+- `--tolerance`: Comparison tolerance (default: rtol=1e-5, atol=1e-7)
 - `--datasets`: Specific HDF5 dataset paths to compare (default:
   auto-discover all numeric datasets from first file)
 

@@ -141,7 +141,7 @@ class PhotometryCollection:
             list
                 A list of filter codes.
         """
-        return self.filter_codes
+        return list(self.filter_codes)
 
     def values(self):
         """Return the photometry values.

@@ -71,11 +71,11 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
 
     # If either input is empty or trivially zero, return zeros
     if _xs.size == 0 or _ys.size == 0:
-        out_shape = ys.shape[:-1]
+        out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
     if _xs.max() == 0 or _ys.max() == 0:
-        out_shape = ys.shape[:-1]
+        out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
     return integration_function(_xs, _ys, nthreads)
@@ -129,11 +129,11 @@ def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
     _weights = np.ascontiguousarray(weights, dtype=np.float64)
 
     if _xs.size == 0 or _ys.size == 0 or _weights.size == 0:
-        out_shape = ys.shape[:-1]
+        out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
     if _weights.max() == 0:
-        out_shape = ys.shape[:-1]
+        out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
     return integration_function(_xs, _ys, _weights, nthreads)
