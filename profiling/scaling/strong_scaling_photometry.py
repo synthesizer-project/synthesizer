@@ -2,7 +2,7 @@
 
 Usage:
     python strong_scaling_photometry.py --basename test --max_threads 8
-       --nstars 10**5 --nfilters 10
+       --nstars 100000 --nfilters 10
 """
 
 import argparse
