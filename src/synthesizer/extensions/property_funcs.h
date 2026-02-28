@@ -136,6 +136,7 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
 double *extract_data_double(PyArrayObject *np_arr, const char *name);
 int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
+const npy_int64 *extract_index_array(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 
 #endif // PROPERTY_FUNCS_H_

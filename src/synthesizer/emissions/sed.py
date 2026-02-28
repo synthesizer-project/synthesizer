@@ -1181,7 +1181,9 @@ class Sed:
 
         return self.fnu
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_lnu(
+        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+    ):
         """Calculate broadband luminosities using a FilterCollection object.
 
         Args:
@@ -1192,27 +1194,46 @@ class Sed:
             nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
+            integration_method (str):
+                The integration method used to calculate the luminosities over
+                the filter profile. Options include "trapz" and "simps".
 
         Returns:
-            photo_lnu (dict):
-                A dictionary of rest frame broadband luminosities.
+            (PhotometryCollection):
+                Rest-frame broadband luminosities.
         """
-        # Intialise result dictionary
-        photo_lnu = {}
+        start = tic()
 
-        # Loop over filters
-        for f in filters:
-            # Apply the filter transmission curve and store the resulting
-            # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
-            photo_lnu[f.filter_code] = bb_lum * self.lnu.units
+        filter_start = tic()
+
+        # Apply all filters in one batched integration call.
+        bb_lums = filters.apply_filters(
+            self._lnu,
+            nu=self._nu,
+            nthreads=nthreads,
+            integration_method=integration_method,
+        )
+        toc("Applying Filters (Lnu)", filter_start)
 
         # Create the photometry collection and store it in the object
-        self.photo_lnu = PhotometryCollection(filters, **photo_lnu)
+        stack_start = tic()
+        self.photo_lnu = PhotometryCollection(
+            filters,
+            photometry=unyt_array(
+                bb_lums,
+                self.__class__.__dict__["lnu"].unit,
+                bypass_validation=True,
+            ),
+        )
+        toc("Stacking Photometry (Lnu)", stack_start)
+
+        toc("Getting Photometry (lnu)", start)
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_fnu(
+        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+    ):
         """Calculate broadband fluxes using a FilterCollection object.
 
         Args:
@@ -1223,11 +1244,16 @@ class Sed:
             nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
+            integration_method (str):
+                The integration method used to calculate the fluxes over the
+                filter profile. Options include "trapz" and "simps".
 
         Returns:
-            (dict):
-                A dictionary of fluxes in each filter in filters.
+            (PhotometryCollection):
+                Fluxes in each filter in filters.
         """
+        start = tic()
+
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             raise ValueError(
@@ -1238,21 +1264,30 @@ class Sed:
                 )
             )
 
-        # Set up flux dictionary
-        photo_fnu = {}
+        filter_start = tic()
 
-        # Loop over filters in filter collection
-        for f in filters:
-            # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(
-                self._fnu,
-                nu=self._obsnu,
-                nthreads=nthreads,
-            )
-            photo_fnu[f.filter_code] = bb_flux * self.fnu.units
+        # Apply all filters in one batched integration call.
+        bb_fluxes = filters.apply_filters(
+            self._fnu,
+            nu=self._obsnu,
+            nthreads=nthreads,
+            integration_method=integration_method,
+        )
+        toc("Applying Filters (Fnu)", filter_start)
 
         # Create the photometry collection and store it in the object
-        self.photo_fnu = PhotometryCollection(filters, **photo_fnu)
+        stack_start = tic()
+        self.photo_fnu = PhotometryCollection(
+            filters,
+            photometry=unyt_array(
+                bb_fluxes,
+                self.__class__.__dict__["fnu"].unit,
+                bypass_validation=True,
+            ),
+        )
+        toc("Stacking Photometry (Fnu)", stack_start)
+
+        toc("Getting Photometry (fnu)", start)
 
         return self.photo_fnu
 
