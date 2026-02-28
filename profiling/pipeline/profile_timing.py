@@ -82,16 +82,109 @@ def plot_time_vs_count_pipeline(
     fig, ax = plt.subplots(figsize=(12, 8))
     ax.scatter(counts, times, c=colors, s=150, alpha=0.8, edgecolors="black")
 
-    # Add labels for each point
-    for i, label in enumerate(labels):
-        ax.annotate(
-            label,
-            (counts[i], times[i]),
-            xytext=(5, 5),
-            textcoords="offset points",
-            fontsize=9,
-            alpha=0.8,
+    # Add labels for each point with intelligent placement to avoid overlaps.
+    # Try to use adjustText if available; otherwise use custom algorithm.
+    try:
+        from adjustText import adjust_text
+
+        # Create text annotations
+        texts = []
+        for i, label in enumerate(labels):
+            text = ax.annotate(
+                label,
+                (counts[i], times[i]),
+                xytext=(5, 5),
+                textcoords="offset points",
+                fontsize=9,
+                alpha=0.8,
+            )
+            texts.append(text)
+
+        # Adjust positions to avoid overlaps
+        adjust_text(
+            texts,
+            arrowprops=dict(arrowstyle="-", color="gray", lw=0.5, alpha=0.5),
+            expand_points=(1.5, 1.5),
+            expand_text=(1.2, 1.2),
+            force_text=(0.5, 0.5),
+            force_points=(0.3, 0.3),
         )
+
+    except ImportError:
+        # Fall back to custom overlap avoidance algorithm
+        import numpy as np
+
+        log_counts = np.log10(counts)
+        log_times = np.log10(times)
+
+        # Define label offset positions (cycle through these to avoid overlaps)
+        offset_positions = [
+            (5, 5),  # top-right
+            (5, -15),  # bottom-right
+            (-5, 5),  # top-left
+            (-5, -15),  # bottom-left
+            (15, 0),  # right
+            (-15, 0),  # left
+            (0, 15),  # top
+            (0, -20),  # bottom
+        ]
+
+        # Track used positions in log-space to detect overlaps
+        # Threshold in log-space units for considering points "close"
+        overlap_threshold = 0.15  # adjust this to be more/less aggressive
+
+        used_positions = []
+        label_offsets = []
+
+        for i in range(len(labels)):
+            pos = (log_counts[i], log_times[i])
+
+            # Find the best offset that doesn't overlap with existing labels
+            best_offset = offset_positions[0]
+            min_overlaps = float("inf")
+
+            for offset in offset_positions:
+                # Check how many existing labels this would overlap with
+                num_overlaps = 0
+                for used_pos, used_offset in zip(
+                    used_positions, label_offsets
+                ):
+                    # Rough distance check in log-space
+                    pos_dist = np.sqrt(
+                        (pos[0] - used_pos[0]) ** 2
+                        + (pos[1] - used_pos[1]) ** 2
+                    )
+
+                    # If points are close, check if labels would overlap
+                    if pos_dist < overlap_threshold:
+                        # Labels would likely overlap if offsets are similar
+                        offset_dist = np.sqrt(
+                            (offset[0] - used_offset[0]) ** 2
+                            + (offset[1] - used_offset[1]) ** 2
+                        )
+                        if offset_dist < 15:  # pixels
+                            num_overlaps += 1
+
+                if num_overlaps < min_overlaps:
+                    min_overlaps = num_overlaps
+                    best_offset = offset
+                    if num_overlaps == 0:
+                        break  # Found a non-overlapping position
+
+            used_positions.append(pos)
+            label_offsets.append(best_offset)
+
+            # Place the label with the chosen offset
+            ax.annotate(
+                labels[i],
+                (counts[i], times[i]),
+                xytext=best_offset,
+                textcoords="offset points",
+                fontsize=9,
+                alpha=0.8,
+                ha="left" if best_offset[0] >= 0 else "right",
+                va="bottom" if best_offset[1] >= 0 else "top",
+            )
 
     ax.set_xlabel("Number of Calls", fontsize=12)
     ax.set_ylabel("Cumulative Time (s)", fontsize=12)
@@ -125,7 +218,7 @@ def run_pipeline_profiling(
     fov_kpc: float = 60.0,
     include_observer_frame: bool = False,
     nthreads: int = 8,
-) -> dict:
+) -> tuple:
     """Run full Pipeline profiling and return stage timings.
 
     This function uses OperationTimers to collect timing data from all
@@ -144,8 +237,10 @@ def run_pipeline_profiling(
             Defaults to 8.
 
     Returns:
-        dict: A dictionary with operation names and timing data.
-            Each entry contains 'time', 'count', and 'source'.
+        tuple: A tuple containing:
+            - dict: A dictionary with operation names and timing data.
+                Each entry contains 'time', 'count', and 'source'.
+            - Pipeline: The pipeline object with all computed results.
     """
     from synthesizer.utils.operation_timers import OperationTimers
 
@@ -250,7 +345,7 @@ def run_pipeline_profiling(
             "source": source,
         }
 
-    return timings
+    return timings, pipeline
 
 
 def main() -> None:
@@ -319,7 +414,7 @@ def main() -> None:
     print(f"Profiling Pipeline timing ({particles_str})...")
 
     # Run pipeline profiling
-    timings = run_pipeline_profiling(
+    timings, pipeline = run_pipeline_profiling(
         args.nparticles,
         args.ngalaxies,
         args.seed,
@@ -348,6 +443,11 @@ def main() -> None:
         count_str = f"count={data['count']}"
         source_str = data["source"]
         print(f"  {op}: {data['time']:.3f}s ({count_str}, {source_str})")
+
+    # Write pipeline output to HDF5
+    h5_file = output_dir / "output.h5"
+    pipeline.write(str(h5_file))
+    print(f"✓ Pipeline output saved: {h5_file}")
 
     # Generate time vs count plot
     plot_file = output_dir / "time_vs_count.png"

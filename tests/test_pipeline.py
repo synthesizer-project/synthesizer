@@ -624,6 +624,32 @@ class TestPipelineOperations:
             > 0
         ), "No luminosities were calculated"
 
+    def test_prepare_instruments_prewarms_filter_grids(
+        self,
+        pipeline_with_galaxies,
+        uvj_nircam_insts,
+    ):
+        """Pipeline should prewarm instrument filters onto model grid."""
+        pipeline_with_galaxies.get_photometry_luminosities(uvj_nircam_insts)
+
+        assert not pipeline_with_galaxies._instruments_prepared
+        pipeline_with_galaxies._prepare_instruments()
+        assert pipeline_with_galaxies._instruments_prepared
+
+        model_lam = pipeline_with_galaxies.emission_model.lam.value
+
+        for inst in pipeline_with_galaxies.instruments:
+            if not inst.can_do_photometry:
+                continue
+
+            np.testing.assert_allclose(inst.filters.lam.value, model_lam)
+            for filt in inst.filters.filters.values():
+                assert any(key[0] == "lam" for key in filt._integration_cache)
+                have_nu_cache = any(
+                    key[0] == "nu" for key in filt._integration_cache
+                )
+                assert have_nu_cache
+
     def test_run_pipeline_photometry_fluxes(
         self,
         pipeline_with_galaxies,

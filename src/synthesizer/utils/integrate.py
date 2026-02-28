@@ -13,13 +13,34 @@ import os
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
+from synthesizer.extensions.integration import (
+    simps_last_axis,
+    trapz_last_axis,
+    weighted_simps_last_axis,
+    weighted_trapz_last_axis,
+)
 
 # Import trapezoid or trapz based on numpy version
 if np.__version__.startswith("1."):
     from numpy import trapz as trapezoid
 else:
     from numpy import trapezoid  # noqa: F401, I001
+
+
+def _normalize_nthreads(nthreads):
+    """Normalize thread count for C-extension calls."""
+    if nthreads == -1:
+        cpu = os.cpu_count() or 1
+        nthreads = int(cpu) if int(cpu) > 0 else 1
+    elif isinstance(nthreads, (int, np.integer)):
+        nthreads = int(nthreads)
+    else:
+        raise ValueError("nthreads must be an integer > 0 or -1")
+
+    if nthreads <= 0:
+        raise ValueError("nthreads must be an integer > 0 or -1")
+
+    return nthreads
 
 
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
@@ -53,26 +74,80 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         )
 
     # Handle nthreads
-    if nthreads == -1:
-        nthreads = os.cpu_count()
+    nthreads = _normalize_nthreads(nthreads)
 
     integration_function = (
         trapz_last_axis if method == "trapz" else simps_last_axis
     )
 
-    # We need to make a copy of xs and ys to avoid modifying in place
-    _xs = xs.copy()
-    _ys = ys.copy()
+    # Ensure arrays are C-contiguous float64 for C extension safety/performance
+    _xs = np.ascontiguousarray(xs, dtype=np.float64)
+    _ys = np.ascontiguousarray(ys, dtype=np.float64)
 
-    # Scale the integrand and xs to avoid numerical issues
-    xscale = _xs.max()
-    yscale = _ys.max()
-    _xs /= xscale
-    _ys /= yscale
+    # If either input is empty or trivially zero, return zeros
+    if _xs.size == 0 or _ys.size == 0:
+        out_shape = _ys.shape[:-1]
+        return np.zeros(out_shape) if out_shape else 0.0
 
-    # If the maximum is zero, we return zero
-    if xscale == 0 or yscale == 0:
-        ndim = ys.ndim - 1
-        return np.zeros(ndim) if ndim > 0 else 0.0
+    if not np.any(_xs) or not np.any(_ys):
+        out_shape = _ys.shape[:-1]
+        return np.zeros(out_shape) if out_shape else 0.0
 
-    return integration_function(_xs, _ys, nthreads) * xscale * yscale
+    return integration_function(_xs, _ys, nthreads)
+
+
+def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
+    """Compute a weighted average over the final axis of an ND array.
+
+    This computes:
+        integral(ys * weights, xs) / integral(weights, xs)
+
+    in a single C-extension pass over ys.
+
+    Args:
+        xs (array-like):
+            The x-values to integrate over.
+        ys (array-like):
+            The y-values to integrate over the final axis.
+        weights (array-like):
+            1D weights defined over xs.
+        nthreads (int):
+            Number of threads to use. If -1, all available threads are used.
+        method (str):
+            Integration method: 'trapz' or 'simps'.
+
+    Returns:
+        array-like:
+            Weighted average over the final axis.
+
+    Raises:
+        InconsistentArguments:
+            If an invalid method is passed.
+    """
+    if method not in ["trapz", "simps"]:
+        raise exceptions.InconsistentArguments(
+            f"Unrecognised integration method ({method}). "
+            "Options are 'trapz' or 'simps'"
+        )
+
+    nthreads = _normalize_nthreads(nthreads)
+
+    integration_function = (
+        weighted_trapz_last_axis
+        if method == "trapz"
+        else weighted_simps_last_axis
+    )
+
+    _xs = np.ascontiguousarray(xs, dtype=np.float64)
+    _ys = np.ascontiguousarray(ys, dtype=np.float64)
+    _weights = np.ascontiguousarray(weights, dtype=np.float64)
+
+    if _xs.size == 0 or _ys.size == 0 or _weights.size == 0:
+        out_shape = _ys.shape[:-1]
+        return np.zeros(out_shape) if out_shape else 0.0
+
+    if not np.any(_weights):
+        out_shape = _ys.shape[:-1]
+        return np.zeros(out_shape) if out_shape else 0.0
+
+    return integration_function(_xs, _ys, _weights, nthreads)

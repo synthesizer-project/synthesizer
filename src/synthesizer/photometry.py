@@ -11,10 +11,10 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import unyt_array, unyt_quantity
+from unyt import Hz, cm, erg, s
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity, default_units
+from synthesizer.units import Quantity, accepts
 
 
 class PhotometryCollection:
@@ -24,7 +24,7 @@ class PhotometryCollection:
     association and plotting functionality.
 
     This is a utility class returned by functions elsewhere. Although not
-    an issue if it is this should never really be directly instantiated.
+    an issue if it is, this should never really be directly instantiated.
 
     Attributes:
         photometry (Quantity):
@@ -37,81 +37,66 @@ class PhotometryCollection:
         filters (FilterCollection):
             The FilterCollection used to produce the photometry.
         filter_codes (list):
-            List of filter codes.
-        _look_up (dict):
-            A dictionary for easy access to photometry values using
-            filter codes.
+            List of filter codes taken from the FilterCollection.
+        _code_to_index (dict):
+            A dictionary mapping filter code to index in the internal
+            photometry array.
     """
 
     # Define quantities (there has to be one for rest and observer frame)
     photo_lnu = Quantity("luminosity_density_frequency")
     photo_fnu = Quantity("flux_density_frequency")
 
-    def __init__(self, filters, **kwargs):
+    @accepts(
+        photometry=(
+            erg / s / Hz,
+            erg / s / cm**2 / Hz,
+        )
+    )
+    def __init__(self, filters, photometry):
         """Instantiate the photometry collection.
-
-        To enable quantities a PhotometryCollection will store the data
-        as arrays but enable access via dictionary syntax.
-
-        Whether the photometry is flux or luminosity is determined by the
-        units of the photometry passed.
 
         Args:
             filters (FilterCollection):
-                The FilterCollection used to produce the photometry.
-            kwargs (dict):
-                A dictionary of keyword arguments containing all the photometry
-                of the form {"filter_code": photometry}.
+                FilterCollection used to produce the photometry.
+            photometry (Quantity):
+                Array of photometry values with units.
         """
+        if filters is None:
+            raise exceptions.InconsistentArguments(
+                "filters must be provided for PhotometryCollection."
+            )
+
         # Store the filter collection
         self.filters = filters
 
-        # Get the filter codes
-        self.filter_codes = list(kwargs.keys())
-
-        # Get the photometry
-        photometry = list(kwargs.values())
-
-        # Ensure we have units, if not something terrible has happened
-        if not isinstance(photometry[0], (unyt_quantity, unyt_array)):
+        self.filter_codes = list(filters.filter_codes)
+        if photometry.shape[0] != len(self.filter_codes):
             raise exceptions.InconsistentArguments(
-                "Photometry must be passed as a dict of unyt_quantities "
-                f"or unyt_arrays. Got {type(photometry[0])} instead."
+                "The leading photometry axis does not match the number "
+                f"of filter codes ({photometry.shape[0]} != "
+                f"{len(self.filter_codes)})."
             )
 
-        # Convert it from a list of unyt_quantities to a unyt_array
-        photometry = unyt_array(
-            np.array(photometry, dtype=np.float64),
-            units=photometry[0].units,
-        )
+        is_flux = photometry.units == self.__class__.__dict__["photo_fnu"].unit
 
-        # Get the dimensions of a flux for testing
-        flux_dimensions = default_units[
-            "flux_density_frequency"
-        ].units.dimensions
+        # Keep raw ndarray storage and rely on Quantity descriptors for units.
+        self._photometry_data = photometry.ndview
 
-        # Check if the photometry is flux or luminosity
-        if photometry[0].units.dimensions == flux_dimensions:
-            self.photo_fnu = photometry
+        if is_flux:
+            self.photo_fnu = self._photometry_data
             self.photo_lnu = None
-            self.photometry = self.photo_fnu
         else:
-            self.photo_lnu = photometry
+            self.photo_lnu = self._photometry_data
             self.photo_fnu = None
-            self.photometry = self.photo_lnu
 
-        # Construct a dict for the look up, importantly we here store
-        # the values in photometry not _photometry meaning they have units.
-        self._look_up = {
-            f: val
-            for f, val in zip(
-                self.filter_codes,
-                self.photometry,
-            )
-        }
+        # Construct an index lookup into the photometry array.
+        self._code_to_index = {f: i for i, f in enumerate(self.filter_codes)}
 
-        # Attach the units for convenience
-        self.units = self.photometry.units
+    @property
+    def photometry(self):
+        """Return photometry values with units attached."""
+        return self.photo_fnu if self.photo_fnu is not None else self.photo_lnu
 
     def __getitem__(self, filter_code):
         """Enable dictionary key look up syntax to extract specific photometry.
@@ -129,8 +114,8 @@ class PhotometryCollection:
                 The filter code of the desired photometry.
         """
         # Perform the look up
-        if filter_code in self._look_up:
-            return self._look_up[filter_code]
+        if filter_code in self._code_to_index:
+            return self.photometry[self._code_to_index[filter_code]]
 
         # We may be being asked for all the photometry for an observatory, e.g.
         # "JWST", in which case we should return all the photometry for that
@@ -138,7 +123,7 @@ class PhotometryCollection:
         out = {}
         for key in self.filter_codes:
             if filter_code in key:
-                out[key.replace(filter_code + "/", "")] = self._look_up[key]
+                out[key.replace(filter_code + "/", "")] = self[key]
 
         # If we have found some photometry return it
         if len(out) > 0:
@@ -156,35 +141,26 @@ class PhotometryCollection:
             list
                 A list of filter codes.
         """
-        return self._look_up.keys()
+        return list(self.filter_codes)
 
     def values(self):
         """Return the photometry values.
 
         Returns:
-            dict_values
-                A dict_values object containing the photometry.
+            list
+                A list containing the photometry values.
         """
-        return self._look_up.values()
-
-    def __len__(self):
-        """Return the number of photometry filters in the collection.
-
-        Returns:
-            int
-                The number of filters in the collection.
-        """
-        return len(self._look_up)
+        return [self[code] for code in self.filter_codes]
 
     def items(self):
         """Return a tuple of both the filter codes and photometry.
 
         Returns:
-            dict_items
-                A dict_items object containing the filter codes and
+            list
+                A list of tuples containing the filter codes and
                 photometry.
         """
-        return self._look_up.items()
+        return [(code, self[code]) for code in self.filter_codes]
 
     def __len__(self):
         """Enable len() behaviour.
@@ -193,7 +169,7 @@ class PhotometryCollection:
             int
                 The number of filter codes.
         """
-        return len(self._look_up)
+        return len(self.filter_codes)
 
     @property
     def shape(self):
@@ -203,7 +179,7 @@ class PhotometryCollection:
             tuple
                 The shape of the photometry array.
         """
-        return self.photometry.shape
+        return self._photometry_data.shape
 
     @property
     def ndim(self):
@@ -213,7 +189,7 @@ class PhotometryCollection:
             int
                 The number of dimensions of the photometry array.
         """
-        return self.photometry.ndim
+        return self._photometry_data.ndim
 
     def __iter__(self):
         """Enable dict iter behaviour.
@@ -222,7 +198,7 @@ class PhotometryCollection:
             iter
                 An iterator over the filter codes and photometry.
         """
-        return iter(self._look_up.items())
+        return iter(self.items())
 
     def __str__(self):
         """Allow for a summary to be printed.
@@ -305,14 +281,13 @@ class PhotometryCollection:
                     f"Filter code {code} not found in photometry collection."
                 )
 
-        # Get the photometry for the specified filters
-        photometry = {code: self._look_up[code] for code in filter_codes}
-
-        # Also extract a subset of the filters
+        # Extract a subset of the filters when available.
         filters = self.filters.select(*filter_codes)
 
+        # Slice the underlying array by filter index.
+        idx = [self._code_to_index[code] for code in filter_codes]
         # Return a new PhotometryCollection with the specified photometry
-        return PhotometryCollection(filters, **photometry)
+        return PhotometryCollection(filters, photometry=self.photometry[idx])
 
     def plot_photometry(
         self,
