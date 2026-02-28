@@ -112,163 +112,6 @@ build_filter_work(const double *weight_matrix, const double *denominators,
 }
 
 /**
- * @brief Extract an int64-compatible 1D index array.
- *
- * Accepts NPY_INT64 or NPY_INTP (when sizes match). The array must be
- * C-contiguous.
- */
-static const npy_int64 *extract_index_array(PyArrayObject *np_arr,
-                                            const char *name) {
-  if (np_arr == NULL) {
-    PyErr_Format(PyExc_ValueError, "%s array is NULL.", name);
-    return NULL;
-  }
-
-  if (PyArray_NDIM(np_arr) != 1) {
-    PyErr_Format(PyExc_ValueError, "%s must be a 1D array.", name);
-    return NULL;
-  }
-
-  if (!PyArray_IS_C_CONTIGUOUS(np_arr)) {
-    PyErr_Format(PyExc_ValueError, "%s must be C-contiguous.", name);
-    return NULL;
-  }
-
-  const int dtype = PyArray_TYPE(np_arr);
-  if (dtype == NPY_INT64) {
-    return (npy_int64 *)PyArray_DATA(np_arr);
-  }
-
-  if (dtype == NPY_INTP) {
-    if (sizeof(npy_intp) != sizeof(npy_int64)) {
-      PyErr_Format(PyExc_TypeError,
-                   "%s has incompatible intp size for int64 use.", name);
-      return NULL;
-    }
-    return (npy_int64 *)PyArray_DATA(np_arr);
-  }
-
-  PyErr_Format(PyExc_TypeError, "%s must be int64 or intp.", name);
-  return NULL;
-}
-
-/**
- * @brief Transpose an entry-major buffer to filter-major layout (serial).
- *
- * The integration kernels compute results in entry-major order because that
- * gives cache-friendly *reads* of the spectra array (spectra are stored
- * contiguously per entry). However, the Python API requires filter-major
- * output, so we transpose after the computation.
- *
- * @param entry_major: Input buffer, shape (nentries, nfilters). Freed on
- *                     return regardless of success or failure.
- * @param nentries:    Number of spectra (entries).
- * @param nfilters:    Total number of filters (including inactive ones).
- *
- * @return Newly allocated filter-major buffer (nfilters, nentries), or NULL
- *         on allocation failure.
- */
-static double *transpose_entry_to_filter_serial(double *entry_major,
-                                                npy_intp nentries,
-                                                npy_intp nfilters) {
-
-  /* Allocate the transposed output. */
-  double *filter_major =
-      (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (filter_major == NULL) {
-    free(entry_major);
-    return NULL;
-  }
-
-  /* Walk entry-by-entry, scattering each row into the correct filter
-   * column of the output. */
-  for (npy_intp entry = 0; entry < nentries; ++entry) {
-    const double *source_row = &entry_major[entry * nfilters];
-    for (npy_intp filter_index = 0; filter_index < nfilters; ++filter_index) {
-      filter_major[filter_index * nentries + entry] = source_row[filter_index];
-    }
-  }
-
-  /* The entry-major scratch buffer is no longer needed. */
-  free(entry_major);
-  return filter_major;
-}
-
-/**
- * @brief Dispatch wrapper for entry-to-filter transpose (serial path).
- *
- * @param entry_major: Input buffer (freed on return).
- * @param nentries:    Number of spectra.
- * @param nfilters:    Total number of filters.
- *
- * @return Filter-major output buffer, or NULL on failure.
- */
-static double *transpose_entry_to_filter(double *entry_major, npy_intp nentries,
-                                         npy_intp nfilters) {
-  return transpose_entry_to_filter_serial(entry_major, nentries, nfilters);
-}
-
-#ifdef WITH_OPENMP
-/**
- * @brief Transpose an entry-major buffer to filter-major layout (parallel).
- *
- * Each thread is given a contiguous block of *filters* to transpose, so
- * every thread writes to a completely independent region of the output
- * array. This eliminates false sharing between threads.
- *
- * @param entry_major: Input buffer, shape (nentries, nfilters). Freed on
- *                     return regardless of success or failure.
- * @param nentries:    Number of spectra (entries).
- * @param nfilters:    Total number of filters.
- * @param nthreads:    Number of OpenMP threads to use.
- *
- * @return Newly allocated filter-major buffer (nfilters, nentries), or NULL
- *         on allocation failure.
- */
-static double *transpose_entry_to_filter_parallel(double *entry_major,
-                                                  npy_intp nentries,
-                                                  npy_intp nfilters,
-                                                  int nthreads) {
-
-  /* Allocate the transposed output. */
-  double *filter_major =
-      (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (filter_major == NULL) {
-    free(entry_major);
-    return NULL;
-  }
-
-#pragma omp parallel num_threads(nthreads)
-  {
-    /* What thread is this? */
-    const int tid = omp_get_thread_num();
-
-    /* How many filters should each thread transpose? */
-    const npy_intp filters_per_thread = nfilters / nthreads;
-
-    /* Calculate the start and end filter indices for this thread.
-     * The last thread picks up any remainder from integer division. */
-    const npy_intp start_filter = tid * filters_per_thread;
-    const npy_intp end_filter =
-        (tid == nthreads - 1) ? nfilters : start_filter + filters_per_thread;
-
-    /* Each thread writes its own contiguous slab of the output
-     * (a block of complete filter columns). */
-    for (npy_intp f = start_filter; f < end_filter; ++f) {
-      double *__restrict output_column = &filter_major[f * nentries];
-      for (npy_intp entry = 0; entry < nentries; ++entry) {
-        output_column[entry] = entry_major[entry * nfilters + f];
-      }
-    }
-  }
-
-  /* The entry-major scratch buffer is no longer needed. */
-  free(entry_major);
-  return filter_major;
-}
-#endif /* WITH_OPENMP */
-
-/**
  * @brief Compute batched photometry using the trapezoidal rule (serial).
  *
  * For each spectrum (entry) and each active filter, this evaluates:
@@ -279,8 +122,7 @@ static double *transpose_entry_to_filter_parallel(double *entry_major,
  * denominator. The trapezoidal rule approximates the integral as
  * sum of 0.5 * (x[j+1] - x[j]) * (y[j+1]*w[j+1] + y[j]*w[j]).
  *
- * Results are accumulated in entry-major order (cache-friendly reads of the
- * spectra array) and then transposed to filter-major layout before return.
+ * Results are written directly in filter-major layout.
  *
  * @param x_values:         1D wavelength/frequency grid.
  * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
@@ -296,15 +138,11 @@ static double *compute_photometry_trapz_serial(
     const std::vector<FilterWork> &filter_work, npy_intp wavelength_count,
     npy_intp nentries, npy_intp nfilters) {
 
-  /* Suppress unused-parameter warning (wavelength_count is used
-   * indirectly via the spectrum pointer arithmetic). */
-  (void)wavelength_count;
-
-  /* Allocate a scratch buffer in entry-major layout. calloc zeroes the
+  /* Allocate output directly in filter-major layout. calloc zeroes the
    * memory so inactive filter slots are already 0. */
-  double *entry_major =
+  double *filter_major =
       (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (entry_major == NULL) {
+  if (filter_major == NULL) {
     return NULL;
   }
 
@@ -313,9 +151,6 @@ static double *compute_photometry_trapz_serial(
 
     /* Get a pointer to this entry's spectrum. */
     const double *spectrum = &spectra_values[entry * wavelength_count];
-
-    /* Get a pointer to this entry's output row. */
-    double *output_row = &entry_major[entry * nfilters];
 
     /* Loop over active filters. */
     for (const FilterWork &work : filter_work) {
@@ -331,13 +166,14 @@ static double *compute_photometry_trapz_serial(
              spectrum[wavelength] * work.weights[wavelength]);
       }
 
-      /* Divide by the precomputed denominator and store. */
-      output_row[work.filter_index] = numerator * work.inv_denominator;
+      /* Divide by the precomputed denominator and store directly in
+       * filter-major layout. */
+      filter_major[work.filter_index * nentries + entry] =
+          numerator * work.inv_denominator;
     }
   }
 
-  /* Transpose from entry-major to filter-major before returning. */
-  return transpose_entry_to_filter(entry_major, nentries, nfilters);
+  return filter_major;
 }
 
 /**
@@ -348,6 +184,8 @@ static double *compute_photometry_trapz_serial(
  * 1/3 rule for improved accuracy on smooth integrands. If the number of
  * intervals is odd, the last interval falls back to a single trapezoidal
  * step (the "tail").
+ *
+ * Results are written directly in filter-major layout.
  *
  * @param x_values:         1D wavelength/frequency grid.
  * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
@@ -363,13 +201,10 @@ static double *compute_photometry_simps_serial(
     const std::vector<FilterWork> &filter_work, npy_intp wavelength_count,
     npy_intp nentries, npy_intp nfilters) {
 
-  /* Suppress unused-parameter warning. */
-  (void)wavelength_count;
-
-  /* Allocate a scratch buffer in entry-major layout. */
-  double *entry_major =
+  /* Allocate output directly in filter-major layout. */
+  double *filter_major =
       (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (entry_major == NULL) {
+  if (filter_major == NULL) {
     return NULL;
   }
 
@@ -378,9 +213,6 @@ static double *compute_photometry_simps_serial(
 
     /* Get a pointer to this entry's spectrum. */
     const double *spectrum = &spectra_values[entry * wavelength_count];
-
-    /* Get a pointer to this entry's output row. */
-    double *output_row = &entry_major[entry * nfilters];
 
     /* Loop over active filters. */
     for (const FilterWork &work : filter_work) {
@@ -417,28 +249,24 @@ static double *compute_photometry_simps_serial(
                       spectrum[k0] * work.weights[k0]);
       }
 
-      /* Divide by the precomputed denominator and store. */
-      output_row[work.filter_index] = numerator * work.inv_denominator;
+      /* Divide by the precomputed denominator and store directly in
+       * filter-major layout. */
+      filter_major[work.filter_index * nentries + entry] =
+          numerator * work.inv_denominator;
     }
   }
 
-  /* Transpose from entry-major to filter-major before returning. */
-  return transpose_entry_to_filter(entry_major, nentries, nfilters);
+  return filter_major;
 }
 
 #ifdef WITH_OPENMP
 /**
  * @brief Compute batched photometry using the trapezoidal rule (parallel).
  *
- * This is the parallel version of compute_photometry_trapz_serial. Each
- * thread is assigned a contiguous, non-overlapping block of entries
- * (spectra) and writes directly into filter-major output. Because entry
- * ranges are disjoint, no two threads ever write to the same memory
- * location, so no atomics or reductions are needed.
- *
- * Within each entry, the thread loops over all active filters, accumulates
- * results into a small thread-local buffer, and then scatters the buffer
- * into the correct positions in the filter-major output array.
+ * This is the parallel version of compute_photometry_trapz_serial. Work is
+ * parallelized over flattened (entry, active_filter) pairs, so even cases
+ * with few entries and many wavelengths (e.g. integrated photometry) can
+ * still exploit thread-level parallelism across filters.
  *
  * @param x_values:         1D wavelength/frequency grid.
  * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
@@ -508,9 +336,9 @@ static double *compute_photometry_trapz_parallel(
  * @brief Compute batched photometry using composite Simpson's rule (parallel).
  *
  * This is the parallel version of compute_photometry_simps_serial. The
- * parallelisation strategy is identical to the trapezoidal version: each
- * thread owns a contiguous, non-overlapping block of entries and writes
- * directly into filter-major output without any synchronisation.
+ * parallelisation strategy is identical to the trapezoidal version:
+ * flattened (entry, active_filter) pairs are distributed across threads and
+ * each work item writes to a unique output location.
  *
  * @param x_values:         1D wavelength/frequency grid.
  * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
