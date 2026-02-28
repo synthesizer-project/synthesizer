@@ -333,7 +333,7 @@ void shifted_spectra_loop_cic(GridProps *grid_props, Particles *parts,
   /* First get the grid indices and fractions for all particles. */
   get_particle_indices_and_fracs(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("Cloud in Cell particle loop");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -356,7 +356,7 @@ void shifted_spectra_loop_cic(GridProps *grid_props, Particles *parts,
   shifted_spectra_loop_cic_serial(grid_props, parts, part_spectra, c);
 
 #endif
-  toc("Cloud in Cell particle loop", start_time);
+  toc("Cloud in Cell particle loop");
 }
 
 /**
@@ -588,7 +588,7 @@ void shifted_spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   /* First get the grid indices for all particles. */
   get_particle_indices(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("Nearest Grid Point particle spectra loop");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -611,7 +611,7 @@ void shifted_spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   shifted_spectra_loop_ngp_serial(grid_props, parts, part_spectra, c);
 
 #endif
-  toc("Nearest Grid Point particle spectra loop", start_time);
+  toc("Nearest Grid Point particle spectra loop");
 }
 
 /**
@@ -633,8 +633,8 @@ void shifted_spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  */
 PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
-  double start_time = tic();
-  double setup_start = tic();
+  tic("Computing particle and integrated lnus");
+  tic("Extracting Python data");
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -685,7 +685,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* Convert c to double */
   double c = PyFloat_AsDouble(py_c);
 
-  toc("Extracting Python data", setup_start);
+  toc("Extracting Python data");
 
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
@@ -726,7 +726,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyObject *out_tuple =
       Py_BuildValue("NN", out_part_spectra, out_integrated_spectra);
 
-  toc("Computing particle and integrated lnus", start_time);
+  toc("Computing particle and integrated lnus");
 
   return out_tuple;
 }
