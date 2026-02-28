@@ -89,6 +89,12 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   /* Number of elements along the last axis */
   npy_intp n = shape[ndim - 1];
 
+  if (n == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "ys final axis must contain at least one element.");
+    return NULL;
+  }
+
   /* Get the data pointer of the xs array */
   double *x = extract_data_double(xs, "xs");
 
@@ -409,6 +415,12 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
   result_arr = weighted_trapz_last_axis_serial(x, y, w, n, num_elements);
 #endif
 
+  if (result_arr == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate output for weighted trapz.");
+    return NULL;
+  }
+
   /* Construct the output. */
   npy_intp result_shape[NPY_MAXDIMS];
   for (npy_intp i = 0; i < ndim - 1; ++i) {
@@ -561,6 +573,12 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
   /* Number of elements along the last axis */
   npy_intp n = shape[ndim - 1];
 
+  if (n == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "ys final axis must contain at least one element.");
+    return NULL;
+  }
+
   if (PyArray_DIM(xs, 0) != n || PyArray_DIM(ws, 0) != n) {
     PyErr_SetString(PyExc_ValueError,
                     "xs and weights must match ys along the final axis.");
@@ -593,6 +611,12 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
 #else
   result_arr = weighted_simps_last_axis_serial(x, y, w, n, num_elements);
 #endif
+
+  if (result_arr == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate output for weighted simps.");
+    return NULL;
+  }
 
   /* Construct the output. */
   npy_intp result_shape[NPY_MAXDIMS];
