@@ -382,6 +382,12 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
   /* Number of elements along the last axis */
   npy_intp n = shape[ndim - 1];
 
+  if (n == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "ys final axis must contain at least one element.");
+    return NULL;
+  }
+
   if (PyArray_DIM(xs, 0) != n || PyArray_DIM(ws, 0) != n) {
     PyErr_SetString(PyExc_ValueError,
                     "xs and weights must match ys along the final axis.");
@@ -401,7 +407,6 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
 
   /* Number of elements excluding the last axis */
   npy_intp num_elements = PyArray_SIZE(ys) / n;
-
   /* Compute the weighted result with the appropriate function. */
   double *result_arr;
 #ifdef WITH_OPENMP
