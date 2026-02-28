@@ -27,6 +27,22 @@ else:
     from numpy import trapezoid  # noqa: F401, I001
 
 
+def _normalize_nthreads(nthreads):
+    """Normalize thread count for C-extension calls."""
+    if nthreads == -1:
+        cpu = os.cpu_count() or 1
+        nthreads = int(cpu) if int(cpu) > 0 else 1
+    elif isinstance(nthreads, (int, np.integer)):
+        nthreads = int(nthreads)
+    else:
+        raise ValueError("nthreads must be an integer > 0 or -1")
+
+    if nthreads <= 0:
+        raise ValueError("nthreads must be an integer > 0 or -1")
+
+    return nthreads
+
+
 def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
     """Integrate the last axis of an N-dimensional array.
 
@@ -58,8 +74,7 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         )
 
     # Handle nthreads
-    if nthreads == -1:
-        nthreads = os.cpu_count()
+    nthreads = _normalize_nthreads(nthreads)
 
     integration_function = (
         trapz_last_axis if method == "trapz" else simps_last_axis
@@ -74,7 +89,7 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
-    if np.allclose(_xs, 0) or np.allclose(_ys, 0):
+    if not np.any(_xs) or not np.any(_ys):
         out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
@@ -115,8 +130,7 @@ def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
             "Options are 'trapz' or 'simps'"
         )
 
-    if nthreads == -1:
-        nthreads = os.cpu_count()
+    nthreads = _normalize_nthreads(nthreads)
 
     integration_function = (
         weighted_trapz_last_axis
@@ -132,7 +146,7 @@ def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
         out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
-    if np.allclose(_weights, 0):
+    if not np.any(_weights):
         out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 

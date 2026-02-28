@@ -30,7 +30,7 @@ pipeline_test_data = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pipeline_test_data)
 get_test_instrument = pipeline_test_data.get_test_instrument
 
-plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
