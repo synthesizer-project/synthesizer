@@ -18,6 +18,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "timers.h"
 
@@ -88,6 +89,29 @@ static std::unordered_map<std::string, OperationTimingData> global_timings;
 static std::mutex timings_mutex;
 
 /**
+ * @brief Active timer entry used to support nested timing.
+ *
+ * Each thread has its own stack of active timers. The currently active
+ * timer accrues exclusive wall-clock time until it is paused by a nested
+ * timer or stopped by toc().
+ */
+struct ActiveTimer {
+  std::string operation;
+  std::string source;
+  double resume_time;
+  double accumulated_exclusive;
+
+  ActiveTimer(const char *op, const char *src, double now)
+      : operation(op == nullptr ? "" : op), source(src == nullptr ? "" : src),
+        resume_time(now), accumulated_exclusive(0.0) {}
+};
+
+/**
+ * @brief Thread-local stack of active timers.
+ */
+static thread_local std::vector<ActiveTimer> active_timer_stack;
+
+/**
  * @brief Accumulate timing data for an operation (pure C++, no Python API).
  *
  * This is the core accumulation function shared by all extensions via
@@ -118,6 +142,77 @@ extern "C" void toc_accumulate(const char *msg, double elapsed_time,
   it->second.call_count.fetch_add(1, std::memory_order_relaxed);
 }
 
+/**
+ * @brief Start a named timer and pause the currently active timer.
+ *
+ * This function is pure C++ (no Python API) and does not require the GIL.
+ *
+ * @param msg The timer label/operation name.
+ * @param source The source identifier ("C" or "Python").
+ */
+extern "C" void tic_start(const char *msg, const char *source) {
+#ifdef ATOMIC_TIMING
+  const double now = GET_TIME();
+
+  if (!active_timer_stack.empty()) {
+    ActiveTimer &parent = active_timer_stack.back();
+    parent.accumulated_exclusive += now - parent.resume_time;
+  }
+
+  active_timer_stack.emplace_back(msg, source, now);
+#else
+  (void)msg;
+  (void)source;
+#endif
+}
+
+/**
+ * @brief Stop the active timer, accumulate, and resume its parent timer.
+ *
+ * This function is pure C++ (no Python API) and does not require the GIL.
+ *
+ * @param msg The timer label (used as a fallback for legacy call patterns).
+ * @param source The source identifier ("C" or "Python").
+ */
+extern "C" void toc_stop(const char *msg, const char *source) {
+#ifdef ATOMIC_TIMING
+  if (active_timer_stack.empty()) {
+    return;
+  }
+
+  const double now = GET_TIME();
+  ActiveTimer timer = active_timer_stack.back();
+  active_timer_stack.pop_back();
+
+  timer.accumulated_exclusive += now - timer.resume_time;
+
+  const char *operation = timer.operation.c_str();
+  if (operation[0] == '\0' && msg != nullptr && msg[0] != '\0') {
+    operation = msg;
+  }
+  if (operation[0] == '\0') {
+    operation = "Unlabelled operation";
+  }
+
+  const char *final_source = timer.source.c_str();
+  if (final_source[0] == '\0' && source != nullptr && source[0] != '\0') {
+    final_source = source;
+  }
+  if (final_source[0] == '\0') {
+    final_source = "Unknown";
+  }
+
+  toc_accumulate(operation, timer.accumulated_exclusive, final_source);
+
+  if (!active_timer_stack.empty()) {
+    active_timer_stack.back().resume_time = now;
+  }
+#else
+  (void)msg;
+  (void)source;
+#endif
+}
+
 /* ========================================================================= */
 /* Python wrappers                                                           */
 /* ========================================================================= */
@@ -125,40 +220,36 @@ extern "C" void toc_accumulate(const char *msg, double elapsed_time,
 /* Python wrapper for tic */
 static PyObject *py_tic(PyObject *self, PyObject *args) {
   (void)self;
-  (void)args;
+  char *msg;
+  if (!PyArg_ParseTuple(args, "s", &msg))
+    return NULL;
 #ifdef ATOMIC_TIMING
-  return Py_BuildValue("d", GET_TIME());
-#else
-  return Py_BuildValue("d", 0.0);
+  tic_start(msg, "Python");
 #endif
+  Py_RETURN_NONE;
 }
 
 /**
  * @brief Python wrapper for toc - stop timer and accumulate timing data.
  *
- * This function is called from Python code to stop a timer started with tic().
- * It computes elapsed time and accumulates it with source="Python".
+ * This function is called from Python code to stop a named timer started
+ * with tic("...").
  *
  * When ATOMIC_TIMING is not defined, this is a complete no-op.
  *
  * @param self Module object (unused).
- * @param args Python arguments: (msg, start_time).
+ * @param args Python arguments: (msg, [legacy_start_time]).
  * @return None.
  */
 static PyObject *py_toc(PyObject *self, PyObject *args) {
   (void)self;
-#ifdef ATOMIC_TIMING
   char *msg;
-  double start_time;
-  if (!PyArg_ParseTuple(args, "sd", &msg, &start_time))
+  double legacy_start_time;
+  if (!PyArg_ParseTuple(args, "s|d", &msg, &legacy_start_time))
     return NULL;
-  double end_time = GET_TIME();
-  double elapsed_time = end_time - start_time;
-
-  /* Accumulate via the shared function (same one exposed by PyCapsule). */
-  toc_accumulate(msg, elapsed_time, "Python");
-#else
-  (void)args;
+  (void)legacy_start_time;
+#ifdef ATOMIC_TIMING
+  toc_stop(msg, "Python");
 #endif
   Py_RETURN_NONE;
 }
@@ -259,6 +350,9 @@ static PyObject *py_reset_timings(PyObject *self, PyObject *args) {
   std::lock_guard<std::mutex> lock(timings_mutex);
   global_timings.clear();
 
+  /* Clear active timers for this thread so profiling restarts cleanly. */
+  active_timer_stack.clear();
+
   Py_RETURN_NONE;
 }
 
@@ -290,9 +384,10 @@ static PyObject *py_test_toc_from_c(PyObject *self, PyObject *args) {
 
 /* Module method table */
 static PyMethodDef TimerMethods[] = {
-    {"tic", py_tic, METH_NOARGS, "Start a timer and return the start time."},
+    {"tic", py_tic, METH_VARARGS,
+     "Start a timer for a named operation."},
     {"toc", py_toc, METH_VARARGS,
-     "Stop the timer and accumulate timing data."},
+     "Stop a named timer and accumulate timing data."},
     {"get_operation_names", py_get_operation_names, METH_NOARGS,
      "Get list of all operation names with accumulated timing data."},
     {"get_operation_timings", py_get_operation_timings, METH_VARARGS,
@@ -328,16 +423,41 @@ PyMODINIT_FUNC PyInit_timers(void) {
     return NULL;
 
 #ifdef ATOMIC_TIMING
-  /* Expose toc_accumulate as a PyCapsule so other extensions can call it
-   * directly from C without the GIL. */
-  PyObject *capsule = PyCapsule_New((void *)toc_accumulate,
-                                    TOC_ACCUMULATE_CAPSULE_NAME, NULL);
-  if (capsule == NULL) {
+  /* Expose timer start callback for C++ extensions. */
+  PyObject *tic_capsule =
+      PyCapsule_New((void *)tic_start, TIC_START_CAPSULE_NAME, NULL);
+  if (tic_capsule == NULL) {
     Py_DECREF(m);
     return NULL;
   }
-  if (PyModule_AddObject(m, "_toc_accumulate", capsule) < 0) {
-    Py_DECREF(capsule);
+  if (PyModule_AddObject(m, "_tic_start", tic_capsule) < 0) {
+    Py_DECREF(tic_capsule);
+    Py_DECREF(m);
+    return NULL;
+  }
+
+  /* Expose timer stop callback for C++ extensions. */
+  PyObject *toc_capsule =
+      PyCapsule_New((void *)toc_stop, TOC_STOP_CAPSULE_NAME, NULL);
+  if (toc_capsule == NULL) {
+    Py_DECREF(m);
+    return NULL;
+  }
+  if (PyModule_AddObject(m, "_toc_stop", toc_capsule) < 0) {
+    Py_DECREF(toc_capsule);
+    Py_DECREF(m);
+    return NULL;
+  }
+
+  /* Keep exposing toc_accumulate for testing helpers. */
+  PyObject *acc_capsule = PyCapsule_New((void *)toc_accumulate,
+                                        TOC_ACCUMULATE_CAPSULE_NAME, NULL);
+  if (acc_capsule == NULL) {
+    Py_DECREF(m);
+    return NULL;
+  }
+  if (PyModule_AddObject(m, "_toc_accumulate", acc_capsule) < 0) {
+    Py_DECREF(acc_capsule);
     Py_DECREF(m);
     return NULL;
   }

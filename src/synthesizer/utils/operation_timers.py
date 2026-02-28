@@ -22,7 +22,7 @@ class OperationTimers:
     Example:
         >>> timers = OperationTimers()
         >>> timers.reset()
-        >>> # ... run some operations that call toc() ...
+        >>> # ... run some operations that call tic()/toc() ...
         >>> print(timers.keys())
         ['Finding particle grid indices', 'Creating Sed', ...]
         >>> cumulative_time, count, source = timers['Creating Sed']
