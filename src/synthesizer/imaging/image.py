@@ -81,7 +81,7 @@ class Image(ImagingBase):
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
-        start = tic()
+        tic("Creating Image")
 
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
@@ -101,7 +101,7 @@ class Image(ImagingBase):
         self.noise_arr = None
         self.weight_map = None
 
-        toc("Creating Image", start)
+        toc("Creating Image")
 
     @property
     def img(self):

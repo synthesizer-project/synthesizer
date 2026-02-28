@@ -212,7 +212,7 @@ static void construct_particles(struct particle *particles, const double *pos,
                                 const double *sml, const double *surf_den_vals,
                                 const int npart, struct cell *root) {
 
-  double part_start = tic();
+  tic("Particle construction and assignment");
 
   /* Create an array to hold the bounds of the particle distribution. */
   double bounds[6] = {FLT_MAX, 0, FLT_MAX, 0, FLT_MAX, 0};
@@ -278,7 +278,7 @@ static void construct_particles(struct particle *particles, const double *pos,
   root->particles = particles;
   root->part_count = npart;
 
-  toc("Particle construction and assignment", part_start);
+  toc("Particle construction and assignment");
 }
 
 /**
@@ -303,7 +303,7 @@ void construct_cell_tree(const double *pos, const double *sml,
                          struct cell *root, int ncells, int maxdepth,
                          int min_count) {
 
-  double cell_tree_start = tic();
+  tic("Cell tree construction");
 
   /* Set the root cell properties. */
   root->loc[0] = 0;
@@ -332,7 +332,7 @@ void construct_cell_tree(const double *pos, const double *sml,
          root->loc[2], root->loc[2] + root->width);
 #endif
 
-  toc("Cell tree construction", cell_tree_start);
+  toc("Cell tree construction");
 }
 
 /**
