@@ -17,7 +17,8 @@ The timing system is a simple ``tic``/``toc`` pattern:
 
 When ``ATOMIC_TIMING`` is enabled at compile time, ``toc()`` accumulates the measurement into a global C++ map keyed by the operation name.
 Each entry in the map stores the cumulative time, the number of calls, and whether the timing originated from C++ or Python.
-When ``ATOMIC_TIMING`` is **not** enabled, both ``tic("...")`` and ``toc("...")`` are complete no-ops with zero runtime cost.
+When ``ATOMIC_TIMING`` is **not** enabled, both ``tic("...")`` and
+``toc("...")`` perform no timing accumulation and add only minimal overhead.
 
 Nested timers are handled internally. Starting a nested timer pauses the
 currently active timer, and closing it resumes the parent timer. This means
@@ -30,7 +31,8 @@ Enabling Timing
 ^^^^^^^^^^^^^^^
 
 The timing accumulation is controlled by the ``ATOMIC_TIMING`` compile-time flag.
-When this flag is **not** set, ``tic("...")`` and ``toc("...")`` compile down to no-ops with zero runtime cost.
+When this flag is **not** set, ``tic("...")`` and ``toc("...")`` perform no
+timing accumulation and add only minimal overhead.
 
 To enable timing, install with:
 
@@ -70,7 +72,8 @@ Import ``tic`` and ``toc`` from the timers extension and wrap the code you want 
         toc("My expensive operation")
         return result
 
-When ``ATOMIC_TIMING`` is off, both calls are no-ops and the operation name string is never evaluated at the C level, so there is no overhead in production builds.
+When ``ATOMIC_TIMING`` is off, both calls skip timing accumulation. Python call
+sites still incur normal function-call overhead.
 
 Adding Timings to C++ Code
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

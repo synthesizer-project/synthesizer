@@ -157,31 +157,4 @@ inline void toc(const char *msg) {
 #endif
 }
 
-/**
- * @brief Legacy compatibility overload (deprecated): start unnamed timer.
- *
- * This exists to avoid breaking extensions that still use tic() with no
- * arguments. New code should use tic("Operation name").
- *
- * @return Always returns 0.0.
- */
-inline double tic() {
-  tic("Unlabelled operation");
-  return 0.0;
-}
-
-/**
- * @brief Legacy compatibility overload (deprecated): ignore start_time.
- *
- * This exists to avoid breaking call sites that still pass start_time.
- * New code should use toc("Operation name").
- *
- * @param msg The operation name.
- * @param start_time Ignored.
- */
-inline void toc(const char *msg, double start_time) {
-  (void)start_time;
-  toc(msg);
-}
-
 #endif /* TIMERS_H_ */
