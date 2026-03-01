@@ -5,7 +5,10 @@ Strong scaling tests measure how performance improves when using more threads on
 
 The performance should scale with the number of threads used, up to the number of physical cores on your machine. Beyond the physical core count, you may see diminishing returns due to hyperthreading overhead.
 
+Note that super-linear scaling can appear in low-cost operations due to run-to-run variance, cache effects, and scheduling overheads becoming less dominant. These cases should be interpreted as measurement noise around near-linear scaling, not as true algorithmic better-than-linear scaling. We use averaging and a low-threshold filter to reduce clutter, but small operations remain noisier than dominant kernels.
+
 All tests were run on AMD EPYC 7542 32-Core Processor hardware with up to 32 threads.
+
 
 Integrated Spectra Scaling
 ---------------------------
