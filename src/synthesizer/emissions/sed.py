@@ -1202,7 +1202,7 @@ class Sed:
             (PhotometryCollection):
                 Rest-frame broadband luminosities.
         """
-        tic("Getting Photometry (lnu)")
+        tic("Getting Photometry (Lnu)")
 
         tic("Applying Filters (Lnu)")
 
@@ -1227,7 +1227,7 @@ class Sed:
         )
         toc("Stacking Photometry (Lnu)")
 
-        toc("Getting Photometry (lnu)")
+        toc("Getting Photometry (Lnu)")
 
         return self.photo_lnu
 
@@ -1252,7 +1252,7 @@ class Sed:
             (PhotometryCollection):
                 Fluxes in each filter in filters.
         """
-        tic("Getting Photometry (fnu)")
+        tic("Getting Photometry (Fnu)")
 
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
@@ -1287,7 +1287,7 @@ class Sed:
         )
         toc("Stacking Photometry (Fnu)")
 
-        toc("Getting Photometry (fnu)")
+        toc("Getting Photometry (Fnu)")
 
         return self.photo_fnu
 
