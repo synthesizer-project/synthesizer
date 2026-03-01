@@ -2,7 +2,7 @@
 
 Usage:
     python strong_scaling_photometry.py --basename test --max_threads 8
-       --nstars 10**5 --nfilters 10
+       --nstars 100000 --nfilters 10
 """
 
 import argparse
@@ -30,7 +30,7 @@ pipeline_test_data = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pipeline_test_data)
 get_test_instrument = pipeline_test_data.get_test_instrument
 
-plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed

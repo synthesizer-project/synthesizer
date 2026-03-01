@@ -278,6 +278,9 @@ static double *weighted_trapz_last_axis_serial(double *x, double *y, double *w,
                                                npy_intp n,
                                                npy_intp num_elements) {
   double *result = (double *)calloc(num_elements, sizeof(double));
+  if (result == NULL) {
+    return NULL;
+  }
 
   /* Compute denominator once; it is shared by all spectra. */
   double den = 0.0;
@@ -315,10 +318,13 @@ static double *weighted_trapz_last_axis_serial(double *x, double *y, double *w,
  */
 #ifdef WITH_OPENMP
 static double *weighted_trapz_last_axis_parallel(double *x, double *y, double *w,
-                                                 npy_intp n,
-                                                 npy_intp num_elements,
-                                                 int nthreads) {
+                                                  npy_intp n,
+                                                  npy_intp num_elements,
+                                                  int nthreads) {
   double *result = (double *)calloc(num_elements, sizeof(double));
+  if (result == NULL) {
+    return NULL;
+  }
 
   /* Compute denominator once; it is shared by all spectra. */
   double den = 0.0;
@@ -382,6 +388,12 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
   /* Number of elements along the last axis */
   npy_intp n = shape[ndim - 1];
 
+  if (n == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "ys final axis must contain at least one element.");
+    return NULL;
+  }
+
   if (PyArray_DIM(xs, 0) != n || PyArray_DIM(ws, 0) != n) {
     PyErr_SetString(PyExc_ValueError,
                     "xs and weights must match ys along the final axis.");
@@ -393,7 +405,10 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
   if (x == NULL) {
     return NULL;
   }
-  double *y = (double *)PyArray_DATA(ys);
+  double *y = extract_data_double(ys, "ys");
+  if (y == NULL) {
+    return NULL;
+  }
   double *w = extract_data_double(ws, "weights");
   if (w == NULL) {
     return NULL;
@@ -401,7 +416,6 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
 
   /* Number of elements excluding the last axis */
   npy_intp num_elements = PyArray_SIZE(ys) / n;
-
   /* Compute the weighted result with the appropriate function. */
   double *result_arr;
 #ifdef WITH_OPENMP
@@ -446,6 +460,9 @@ static double *weighted_simps_last_axis_serial(double *x, double *y, double *w,
                                                npy_intp n,
                                                npy_intp num_elements) {
   double *result = (double *)calloc(num_elements, sizeof(double));
+  if (result == NULL) {
+    return NULL;
+  }
 
   if (n < 2) {
     return result;
@@ -491,10 +508,13 @@ static double *weighted_simps_last_axis_serial(double *x, double *y, double *w,
  */
 #ifdef WITH_OPENMP
 static double *weighted_simps_last_axis_parallel(double *x, double *y, double *w,
-                                                 npy_intp n,
-                                                 npy_intp num_elements,
-                                                 int nthreads) {
+                                                  npy_intp n,
+                                                  npy_intp num_elements,
+                                                  int nthreads) {
   double *result = (double *)calloc(num_elements, sizeof(double));
+  if (result == NULL) {
+    return NULL;
+  }
 
   if (n < 2) {
     return result;
@@ -590,7 +610,10 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
   if (x == NULL) {
     return NULL;
   }
-  double *y = (double *)PyArray_DATA(ys);
+  double *y = extract_data_double(ys, "ys");
+  if (y == NULL) {
+    return NULL;
+  }
   double *w = extract_data_double(ws, "weights");
   if (w == NULL) {
     return NULL;
