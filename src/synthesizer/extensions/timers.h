@@ -10,12 +10,12 @@
  * compiled out entirely.
  *
  * Architecture (ATOMIC_TIMING enabled):
- *   - toc_accumulate_fn is a typedef for the accumulation function living in
- *     timers.cpp (the timers extension module).
- *   - init_timers() caches a pointer to that function at module-init time
+ *   - timer_start_fn/timer_stop_fn are typedefs for start/stop callbacks
+ *     living in timers.cpp (the timers extension module).
+ *   - init_timers() caches pointers to those functions at module-init time
  *     (when the GIL is naturally held). See timers_init.h for the helper
  *     that retrieves the pointer from a PyCapsule.
- *   - At runtime, toc() calls the cached pointer directly — no GIL, no
+ *   - At runtime, tic()/toc() call cached pointers directly — no GIL, no
  *     Python API.
  *
  * The cached pointer is stored as a static local inside an inline (non-static)
@@ -48,25 +48,35 @@ inline double get_wall_time() {
 #define GET_TIME() get_wall_time()
 #endif
 
-/* ---- Accumulation infrastructure (only when ATOMIC_TIMING is enabled) ---- */
+/* ---- Timer callback infrastructure (ATOMIC_TIMING enabled only) ---- */
 #ifdef ATOMIC_TIMING
 
 /**
- * @brief Function pointer type for the accumulation callback.
- *
- * Matches the signature of toc_accumulate() in timers.cpp:
- *   void toc_accumulate(const char *msg, double elapsed, const char *source)
+ * @brief Function pointer type for timer start callback.
  */
-typedef void (*toc_accumulate_fn)(const char *, double, const char *);
+typedef void (*timer_start_fn)(const char *, const char *);
 
-/** PyCapsule name for the toc_accumulate function pointer.
+/**
+ * @brief Function pointer type for timer stop callback.
+ */
+typedef void (*timer_stop_fn)(const char *, const char *);
+
+/** PyCapsule name for the timer start function pointer.
  *  Defined here (once) so timers.cpp and timers_init.h both use the
  *  same string. */
+#define TIC_START_CAPSULE_NAME                                                 \
+  "synthesizer.extensions.timers._tic_start"
+
+/** PyCapsule name for the timer stop function pointer. */
+#define TOC_STOP_CAPSULE_NAME                                                  \
+  "synthesizer.extensions.timers._toc_stop"
+
+/** PyCapsule name for the accumulation helper function pointer. */
 #define TOC_ACCUMULATE_CAPSULE_NAME                                            \
   "synthesizer.extensions.timers._toc_accumulate"
 
 /**
- * @brief Access the cached toc_accumulate function pointer.
+ * @brief Access the cached timer start function pointer.
  *
  * Uses a static local inside a (non-static) inline function so that all
  * translation units linked into the same shared object share a single
@@ -75,34 +85,51 @@ typedef void (*toc_accumulate_fn)(const char *, double, const char *);
  *
  * @return Reference to the cached function pointer.
  */
-inline toc_accumulate_fn &_get_cached_toc_fn() {
-  static toc_accumulate_fn fn = NULL;
+inline timer_start_fn &_get_cached_tic_fn() {
+  static timer_start_fn fn = NULL;
   return fn;
 }
 
 /**
- * @brief Store the accumulation function pointer for later use by toc().
+ * @brief Access the cached timer stop function pointer.
+ *
+ * @return Reference to the cached function pointer.
+ */
+inline timer_stop_fn &_get_cached_toc_fn() {
+  static timer_stop_fn fn = NULL;
+  return fn;
+}
+
+/**
+ * @brief Store timer callback pointers for later use by tic()/toc().
  *
  * Must be called once at extension module initialisation (inside PyInit_*)
  * before any toc() calls are made. At that point the GIL is naturally held,
  * so retrieving the PyCapsule is safe.
  *
- * @param fn Pointer to toc_accumulate() obtained from the PyCapsule.
+ * @param tic_fn Pointer to timer start callback from PyCapsule.
+ * @param toc_fn Pointer to timer stop callback from PyCapsule.
  */
-inline void init_timers(toc_accumulate_fn fn) { _get_cached_toc_fn() = fn; }
+inline void init_timers(timer_start_fn tic_fn, timer_stop_fn toc_fn) {
+  _get_cached_tic_fn() = tic_fn;
+  _get_cached_toc_fn() = toc_fn;
+}
 
 #endif /* ATOMIC_TIMING */
 
 /**
- * @brief Start a timer — inline implementation.
+ * @brief Start a timer for a named operation.
  *
- * @return The current time.
+ * @param msg The operation name.
  */
-inline double tic() {
+inline void tic(const char *msg) {
 #ifdef ATOMIC_TIMING
-  return GET_TIME();
+  timer_start_fn fn = _get_cached_tic_fn();
+  if (fn != NULL) {
+    fn(msg, "C");
+  }
 #else
-  return 0.0;
+  (void)msg;
 #endif
 }
 
@@ -117,22 +144,44 @@ inline double tic() {
  * When ATOMIC_TIMING is not defined, this is a complete no-op.
  *
  * @param msg The operation name/message to identify this timing.
- * @param start_time The start time returned by tic().
  */
-inline void toc(const char *msg, double start_time) {
+inline void toc(const char *msg) {
 #ifdef ATOMIC_TIMING
-  double end_time = GET_TIME();
-  double elapsed_time = end_time - start_time;
-
-  /* Accumulate via the cached function pointer (no GIL required). */
-  toc_accumulate_fn fn = _get_cached_toc_fn();
+  /* Stop via cached function pointer (no GIL required). */
+  timer_stop_fn fn = _get_cached_toc_fn();
   if (fn != NULL) {
-    fn(msg, elapsed_time, "C");
+    fn(msg, "C");
   }
 #else
   (void)msg;
-  (void)start_time;
 #endif
+}
+
+/**
+ * @brief Legacy compatibility overload (deprecated): start unnamed timer.
+ *
+ * This exists to avoid breaking extensions that still use tic() with no
+ * arguments. New code should use tic("Operation name").
+ *
+ * @return Always returns 0.0.
+ */
+inline double tic() {
+  tic("Unlabelled operation");
+  return 0.0;
+}
+
+/**
+ * @brief Legacy compatibility overload (deprecated): ignore start_time.
+ *
+ * This exists to avoid breaking call sites that still pass start_time.
+ * New code should use toc("Operation name").
+ *
+ * @param msg The operation name.
+ * @param start_time Ignored.
+ */
+inline void toc(const char *msg, double start_time) {
+  (void)start_time;
+  toc(msg);
 }
 
 #endif /* TIMERS_H_ */
