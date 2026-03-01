@@ -158,7 +158,7 @@ if __name__ == "__main__":
     args.add_argument(
         "--low_thresh",
         type=float,
-        default=0.1,
+        default=0.01,
         help="the lower threshold on time for an operation to "
         "be included in the scaling test plot.",
     )

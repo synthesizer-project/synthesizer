@@ -110,7 +110,7 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
         stars.get_spectra,
         {"emission_model": model_int},
         total_msg="Integrated Spectra",
-        low_thresh=0.1,
+        low_thresh=0.01,
         paper_style=True,
     )
 
@@ -126,7 +126,7 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
         stars.get_spectra,
         {"emission_model": model_part},
         total_msg="Particle Spectra",
-        low_thresh=0.1,
+        low_thresh=0.01,
         paper_style=True,
     )
 
@@ -152,7 +152,7 @@ def profile_threads(max_threads=8, nstars=10**5, average_over=3):
             "kernel": kernel,
         },
         total_msg="Smoothed Imaging",
-        low_thresh=0.1,
+        low_thresh=0.01,
         paper_style=True,
     )
 
