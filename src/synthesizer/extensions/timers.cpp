@@ -238,16 +238,14 @@ static PyObject *py_tic(PyObject *self, PyObject *args) {
  * When ATOMIC_TIMING is not defined, this is a complete no-op.
  *
  * @param self Module object (unused).
- * @param args Python arguments: (msg, [legacy_start_time]).
+ * @param args Python arguments: (msg).
  * @return None.
  */
 static PyObject *py_toc(PyObject *self, PyObject *args) {
   (void)self;
   char *msg;
-  double legacy_start_time;
-  if (!PyArg_ParseTuple(args, "s|d", &msg, &legacy_start_time))
+  if (!PyArg_ParseTuple(args, "s", &msg))
     return NULL;
-  (void)legacy_start_time;
 #ifdef ATOMIC_TIMING
   toc_stop(msg, "Python");
 #endif

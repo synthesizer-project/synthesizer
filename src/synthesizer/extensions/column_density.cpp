@@ -530,7 +530,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
                         &threshold, &force_loop, &min_count, &nthreads))
     return NULL;
 
-  tic("Calculating surface densities (with a loop)");
+  tic("Calculating surface densities");
 
   /* Quick check to make sure our inputs are valid. */
   if (npart_i == 0) {
@@ -581,7 +581,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
     los_loop(pos_i, pos_j, smls, surf_den_val, kernel, surf_dens, npart_i,
              npart_j, kdim, threshold, nthreads);
 
-    toc("Calculating surface densities (with a loop)");
+    toc("Calculating surface densities");
 
     return Py_BuildValue("N", np_surf_dens);
   }
@@ -601,7 +601,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   /* Clean up. */
   cleanup_cell_tree(root);
 
-  toc("Calculating surface densities (with cells)");
+  toc("Calculating surface densities");
 
   return Py_BuildValue("N", np_surf_dens);
 }

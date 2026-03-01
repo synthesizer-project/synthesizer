@@ -301,14 +301,18 @@ cp profiling/plots/wavelength_performance_*.png docs/source/performance/plots/
 
 # Copy strong scaling plots
 echo "Copying strong scaling plots..."
+test -n "${STRONG_THREADS}" || {
+	echo "STRONG_THREADS not set"
+	exit 1
+}
 cp profiling/plots/exclusive_docs_int_spectra_cic_totThreads${STRONG_THREADS}_nstars1000000.png \
-	docs/source/performance/plots/exclusive_docs_int_spectra_cic_totThreads32_nstars1000000.png
+	docs/source/performance/plots/exclusive_docs_int_spectra_cic_totThreads${STRONG_THREADS}_nstars1000000.png
 cp profiling/plots/exclusive_docs_part_spectra_cic_totThreads${STRONG_THREADS}_nstars10000.png \
-	docs/source/performance/plots/exclusive_docs_part_spectra_cic_totThreads32_nstars10000.png
+	docs/source/performance/plots/exclusive_docs_part_spectra_cic_totThreads${STRONG_THREADS}_nstars10000.png
 cp profiling/plots/exclusive_docs_los_column_density_totThreads${STRONG_THREADS}_nstars1000000_ngas1000000.png \
-	docs/source/performance/plots/exclusive_docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
+	docs/source/performance/plots/exclusive_docs_los_column_density_totThreads${STRONG_THREADS}_nstars1000000_ngas1000000.png
 cp profiling/plots/exclusive_docs_images_totThreads${STRONG_THREADS}_nstars10000.png \
-	docs/source/performance/plots/exclusive_docs_images_totThreads32_nstars10000.png
+	docs/source/performance/plots/exclusive_docs_images_totThreads${STRONG_THREADS}_nstars10000.png
 
 echo ""
 echo "========================================"
@@ -324,10 +328,10 @@ echo "  Particle/Wavelength Scaling ($SCALING_THREADS threads):"
 echo "    - nparticles_performance_*.png (6 plots)"
 echo "    - wavelength_performance_*.png (2 plots)"
 echo "  Strong Scaling (up to $STRONG_THREADS threads, $STRONG_AVERAGES averages):"
-echo "    - exclusive_docs_int_spectra_cic_totThreads32_nstars1000000.png"
-echo "    - exclusive_docs_part_spectra_cic_totThreads32_nstars10000.png"
-echo "    - exclusive_docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png"
-echo "    - exclusive_docs_images_totThreads32_nstars10000.png"
+echo "    - exclusive_docs_int_spectra_cic_totThreads${STRONG_THREADS}_nstars1000000.png"
+echo "    - exclusive_docs_part_spectra_cic_totThreads${STRONG_THREADS}_nstars10000.png"
+echo "    - exclusive_docs_los_column_density_totThreads${STRONG_THREADS}_nstars1000000_ngas1000000.png"
+echo "    - exclusive_docs_images_totThreads${STRONG_THREADS}_nstars10000.png"
 echo ""
 echo "All plots have been copied to docs/source/performance/plots/"
 echo ""
