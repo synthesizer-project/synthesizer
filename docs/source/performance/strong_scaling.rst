@@ -5,7 +5,10 @@ Strong scaling tests measure how performance improves when using more threads on
 
 The performance should scale with the number of threads used, up to the number of physical cores on your machine. Beyond the physical core count, you may see diminishing returns due to hyperthreading overhead.
 
+Note that super-linear scaling can appear in low-cost operations due to run-to-run variance, cache effects, and scheduling overheads becoming less dominant. These cases should be interpreted as measurement noise around near-linear scaling, not as true algorithmic better-than-linear scaling. We use averaging and a low-threshold filter to reduce clutter, but small operations remain noisier than dominant kernels.
+
 All tests were run on AMD EPYC 7542 32-Core Processor hardware with up to 32 threads.
+
 
 Integrated Spectra Scaling
 ---------------------------
@@ -14,10 +17,10 @@ Generating integrated (galaxy-level) spectra from 1,000,000 stellar particles wi
 
 .. code-block:: bash
 
-    python strong_scaling_int_spectra.py --basename docs --nstars 1000000 \
+    python strong_scaling_int_spectra.py --basename exclusive_docs --nstars 1000000 \
         --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/docs_int_spectra_cic_totThreads32_nstars1000000.png
+.. image:: plots/exclusive_docs_int_spectra_cic_totThreads32_nstars1000000.png
     :width: 75%
     :align: center
 
@@ -28,10 +31,10 @@ Generating per-particle spectra from 10,000 stellar particles with varying threa
 
 .. code-block:: bash
 
-    python strong_scaling_part_spectra.py --basename docs --nstars 10000 \
+    python strong_scaling_part_spectra.py --basename exclusive_docs --nstars 10000 \
         --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/docs_part_spectra_cic_totThreads32_nstars10000.png
+.. image:: plots/exclusive_docs_part_spectra_cic_totThreads32_nstars10000.png
    :width: 75%
    :align: center
 
@@ -42,10 +45,10 @@ Computing LOS column densities for 1,000,000 star and 1,000,000 gas particles wi
 
 .. code-block:: bash
 
-    python strong_scaling_los_col_den.py --basename docs --nstars 1000000 \
+    python strong_scaling_los_col_den.py --basename exclusive_docs --nstars 1000000 \
         --ngas 1000000 --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
+.. image:: plots/exclusive_docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
    :width: 75%
    :align: center
 
@@ -56,10 +59,10 @@ Generating smoothed images from 10,000 stellar particles with varying thread cou
 
 .. code-block:: bash
 
-    python strong_scaling_images.py --basename docs --nstars 10000 \
+    python strong_scaling_images.py --basename exclusive_docs --nstars 10000 \
         --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/test_images_totThreads32_nstars10000.png
+.. image:: plots/exclusive_docs_images_totThreads32_nstars10000.png
    :width: 75%
    :align: center
 
