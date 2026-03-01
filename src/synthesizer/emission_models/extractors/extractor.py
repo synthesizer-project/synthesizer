@@ -295,7 +295,7 @@ class IntegratedParticleExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        tic("Setting up integrated lnu calculation")
+        tic("Setting up integrated Lnu calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -324,7 +324,7 @@ class IntegratedParticleExtractor(Extractor):
         else:
             grid_weights = None
 
-        toc("Setting up integrated lnu calculation")
+        toc("Setting up integrated Lnu calculation")
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
@@ -537,7 +537,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        tic("Setting up particle lnu (with velocity shift) calculation")
+        tic("Setting up particle Lnu (with velocity shift) calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -572,7 +572,7 @@ class DopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up particle lnu (with velocity shift) calculation")
+        toc("Setting up particle Lnu (with velocity shift) calculation")
 
         # Compute the lnu array
         spec, integrated_spec = compute_part_seds_with_vel_shift(
@@ -656,7 +656,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        tic("Setting up integrated lnu (with velocity shift) calculation")
+        tic("Setting up integrated Lnu (with velocity shift) calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -685,7 +685,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up integrated lnu (with velocity shift) calculation")
+        toc("Setting up integrated Lnu (with velocity shift) calculation")
 
         # Compute the lnu array
         _, integrated_spec = compute_part_seds_with_vel_shift(
@@ -761,7 +761,7 @@ class ParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        tic("Setting up particle lnu calculation")
+        tic("Setting up particle Lnu calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -810,7 +810,7 @@ class ParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up particle lnu calculation")
+        toc("Setting up particle Lnu calculation")
 
         # Compute the lnu array
         spec, integrated_spec = compute_particle_seds(
@@ -1030,7 +1030,7 @@ class IntegratedParametricExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        tic("Generating integrated lnu")
+        tic("Generating integrated Lnu")
 
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
@@ -1048,7 +1048,7 @@ class IntegratedParametricExtractor(Extractor):
         # grid spectra
         spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0)
 
-        toc("Generating integrated lnu")
+        toc("Generating integrated Lnu")
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -1085,7 +1085,7 @@ class IntegratedParametricExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        tic("Generating integrated lnu")
+        tic("Generating integrated Lnu")
 
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
@@ -1112,7 +1112,7 @@ class IntegratedParametricExtractor(Extractor):
             lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
             cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
 
-        toc("Generating integrated lnu")
+        toc("Generating integrated Lnu")
 
         return LineCollection(
             line_ids=self._grid.line_ids,

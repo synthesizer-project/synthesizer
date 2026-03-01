@@ -600,7 +600,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   toc("Extracting Python data");
 
-  tic("Constructing cell tree");
+  tic("Cell tree construction");
 
   /* Allocate cells array. The first cell will be the root and then we
    * will dynamically nibble off cells for the progeny. */
@@ -611,7 +611,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   construct_cell_tree(pos, smoothing_lengths, smoothing_lengths, npart, root,
                       ncells, MAX_DEPTH, 100);
 
-  toc("Constructing cell tree");
+  toc("Cell tree construction");
 
   tic("Creating output image array");
 

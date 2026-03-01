@@ -633,7 +633,7 @@ void shifted_spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  */
 PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
-  tic("Computing particle and integrated lnus");
+  tic("Computing particle and integrated Lnus");
   tic("Extracting Python data");
 
   /* We don't need the self argument but it has to be there. Tell the
@@ -726,7 +726,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyObject *out_tuple =
       Py_BuildValue("NN", out_part_spectra, out_integrated_spectra);
 
-  toc("Computing particle and integrated lnus");
+  toc("Computing particle and integrated Lnus");
 
   return out_tuple;
 }

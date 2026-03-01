@@ -511,7 +511,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  * @param c: speed of light
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
-  tic("Computing particle and integrated lnus");
+  tic("Computing particle and integrated Lnus");
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -579,7 +579,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Construct the output tuple. */
   PyObject *out_tuple = Py_BuildValue("NN", np_part_spectra, np_spectra);
 
-  toc("Computing particle and integrated lnus");
+  toc("Computing particle and integrated Lnus");
 
   return out_tuple;
 }
