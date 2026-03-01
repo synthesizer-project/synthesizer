@@ -15,6 +15,13 @@ from synthesizer.extensions.timers import (
 from synthesizer.utils.operation_timers import OperationTimers
 
 
+def _spin_wait(duration):
+    """Busy-wait for approximately ``duration`` seconds."""
+    start = time.perf_counter()
+    while (time.perf_counter() - start) < duration:
+        pass
+
+
 def setUpModule():
     """Check if atomic timing is available before running any tests.
 
@@ -337,6 +344,76 @@ class TestNestedTimers(unittest.TestCase):
 
         self.assertEqual(parent_count, 3)
         self.assertEqual(child_count, 3)
+
+    def test_nested_time_conservation_two_levels(self):
+        """Exclusive parent + child times should match outer walltime."""
+        outer_start = time.perf_counter()
+
+        tic("Outer operation")
+        _spin_wait(0.01)
+
+        tic("Inner operation")
+        _spin_wait(0.02)
+        toc("Inner operation")
+
+        _spin_wait(0.01)
+        toc("Outer operation")
+
+        outer_walltime = time.perf_counter() - outer_start
+
+        outer_time, outer_count, _ = get_operation_timings("Outer operation")
+        inner_time, inner_count, _ = get_operation_timings("Inner operation")
+
+        self.assertEqual(outer_count, 1)
+        self.assertEqual(inner_count, 1)
+
+        # Outer timer should only include its two exclusive sections.
+        self.assertGreater(outer_time, 0.015)
+        self.assertLess(outer_time, 0.035)
+
+        # Inner timer should include only the inner section.
+        self.assertGreater(inner_time, 0.015)
+        self.assertLess(inner_time, 0.035)
+
+        # Exclusive accounting should roughly conserve elapsed walltime.
+        self.assertAlmostEqual(
+            outer_time + inner_time, outer_walltime, delta=0.02
+        )
+
+    def test_nested_time_conservation_three_levels(self):
+        """Three-level nesting should remain exclusive at every level."""
+        total_start = time.perf_counter()
+
+        tic("L1")
+        _spin_wait(0.005)
+
+        tic("L2")
+        _spin_wait(0.005)
+
+        tic("L3")
+        _spin_wait(0.01)
+        toc("L3")
+
+        _spin_wait(0.005)
+        toc("L2")
+
+        _spin_wait(0.005)
+        toc("L1")
+
+        total_walltime = time.perf_counter() - total_start
+
+        l1, c1, _ = get_operation_timings("L1")
+        l2, c2, _ = get_operation_timings("L2")
+        l3, c3, _ = get_operation_timings("L3")
+
+        self.assertEqual((c1, c2, c3), (1, 1, 1))
+
+        # Expected exclusive segments are ~0.01 (L1), ~0.01 (L2), ~0.01 (L3).
+        for value in (l1, l2, l3):
+            self.assertGreater(value, 0.007)
+            self.assertLess(value, 0.02)
+
+        self.assertAlmostEqual(l1 + l2 + l3, total_walltime, delta=0.02)
 
 
 class TestTimerSourceTracking(unittest.TestCase):
