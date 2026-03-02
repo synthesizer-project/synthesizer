@@ -43,7 +43,7 @@ python profiling/pipeline/analyze_memory.py \
 
 
 # Validate numerical precision of outputs
-python profiling/pipeline/validate_precision.py \
+python profiling/pipeline/validate_results.py \
   --inputs profiling/outputs/timing/main_1000p/output.h5 \
            profiling/outputs/timing/feature_1000p/output.h5 \
   --labels "main" "feature" \
@@ -121,6 +121,27 @@ python profiling/pipeline/analyze_timing.py \
 - Stacked bar chart: `timing_comparison.png`
 - Summary statistics: `timing_summary.txt`
 
+#### `compare_timings.py` - Named Timing Comparison
+
+Compare one or more timing profiles with explicit labels. This is useful for
+side-by-side branch comparisons where you want a log-scaled bar chart of the
+largest operations across runs.
+
+**Usage:**
+
+```bash
+python profiling/pipeline/compare_timings.py \
+  --inputs timing_main.csv timing_feature.csv [timing_extra.csv ...] \
+  --labels "main" "feature" ["extra" ...] \
+  [--top-n 18] [--min-fraction 1.0] \
+  [--output-dir output_dir]
+```
+
+**Output:**
+
+- Horizontal bar chart: `timing_comparison.png`
+- Summary statistics: `timing_summary.txt`
+
 #### `analyze_memory.py` - Compare Memory Profiles
 
 Compare memory usage across 2 or more runs.
@@ -139,7 +160,7 @@ python profiling/pipeline/analyze_memory.py \
 - Memory timelines overlay: `memory_comparison.png`
 - Summary statistics: `memory_summary.txt`
 
-#### `validate_precision.py` - Numerical Precision Validation
+#### `validate_results.py` - Numerical Precision Validation
 
 Compare HDF5 output files from `Pipeline.write()` and validate numerical
 precision. Auto-discovers datasets from the structured HDF5 layout
@@ -149,7 +170,7 @@ datasets across runs.
 **Usage:**
 
 ```bash
-python profiling/pipeline/validate_precision.py \
+python profiling/pipeline/validate_results.py \
   --inputs output1.h5 output2.h5 [output3.h5 ...] \
   [--labels "label1" "label2" ...] \
   [--tolerance default|loose|tight] \
@@ -160,13 +181,13 @@ python profiling/pipeline/validate_precision.py \
 
 - `--inputs`: HDF5 files to compare (from `Pipeline.write()`)
 - `--labels`: Optional labels for each file (default: use filenames)
-- `--tolerance`: Comparison tolerance (default: rtol=1e-6, atol=1e-8)
+- `--tolerance`: Comparison tolerance (default: rtol=1e-5, atol=1e-7)
 - `--datasets`: Specific HDF5 dataset paths to compare (default:
   auto-discover all numeric datasets from first file)
 
 **Tolerance Levels:**
 
-- `default`: rtol=1e-6, atol=1e-8
+- `default`: rtol=1e-5, atol=1e-7 (suitable for typical floating-point differences)
 - `loose`: rtol=1e-4, atol=1e-6
 - `tight`: rtol=1e-7, atol=1e-9
 
@@ -186,12 +207,16 @@ Strong scaling analysis showing how performance scales with thread count and par
 | `strong_scaling_int_spectra.py`   | Integrated spectra strong scaling           | `plots/scaling_*.png`             |
 | `strong_scaling_los_col_den.py`   | Line-of-sight column density strong scaling | `plots/scaling_*.png`             |
 | `strong_scaling_part_spectra.py`  | Particle spectra strong scaling             | `plots/scaling_*.png`             |
+| `strong_scaling_photometry.py`    | Photometry strong scaling                   | `plots/scaling_*.png`             |
 
 ### Usage Examples
 
 ```bash
 # Profile thread scaling (strong scaling)
 python profiling/scaling/profile_thread_scaling.py --max_threads 8 --nstars 100000
+
+# Profile photometry scaling
+python profiling/scaling/strong_scaling_photometry.py --max_threads 8 --nstars 100000 --nfilters 10
 
 # Run all strong scaling tests
 python profiling/scaling/strong_scaling_images.py
@@ -252,7 +277,8 @@ profiling/
 │   ├── profile_memory.py
 │   ├── analyze_timing.py
 │   ├── analyze_memory.py
-│   ├── validate_precision.py
+│   ├── compare_timings.py
+│   ├── validate_results.py
 │   └── compare_precision_builds.sh
 │
 ├── scaling/                # Strong scaling analysis tools

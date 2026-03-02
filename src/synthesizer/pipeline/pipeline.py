@@ -34,6 +34,7 @@ import numpy as np
 from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
@@ -185,6 +186,7 @@ class Pipeline:
         # will use (this is only used for book keeping, the kwarg handler
         # deals with where to apply different instruments)
         self.instruments = InstrumentCollection()
+        self._instruments_prepared = False
 
         # How many threads are we using for shared memory parallelism?
         self.nthreads = nthreads
@@ -1172,8 +1174,40 @@ class Pipeline:
         # Add the new instruments to the instrument collection
         new_instruments = set(_instruments) - current_instruments
         self.instruments.add_instruments(*new_instruments)
+        if len(new_instruments) > 0:
+            self._instruments_prepared = False
 
         return _instruments
+
+    def _prepare_instruments(self):
+        """Prewarm instrument filters onto the emission-model grid.
+
+        This prepares filters once per pipeline setup so repeated photometry
+        operations can avoid interpolation and reuse precomputed integration
+        weights.
+        """
+        if self._instruments_prepared:
+            return
+
+        # Nothing to do if we have no instruments attached.
+        if len(self.instruments) == 0:
+            self._instruments_prepared = True
+            return
+
+        # If the emission model has no wavelength grid we can only precompute
+        # on each filter's native grid.
+        model_lam = getattr(self.emission_model, "lam", None)
+
+        for inst in self.instruments:
+            if not inst.can_do_photometry:
+                continue
+
+            if model_lam is not None:
+                inst.filters.prepare_for_grid(lam=model_lam)
+            else:
+                inst.filters.prepare_for_grid()
+
+        self._instruments_prepared = True
 
     def get_los_optical_depths(
         self,
@@ -1230,6 +1264,7 @@ class Pipeline:
                 The galaxy to compute the optical depths for.
         """
         start = time.perf_counter()
+        tic("Pipeline: LOS optical depths")
 
         # Iterate over all queued operation configurations
         for model_label, op_kwargs in self._operation_kwargs[
@@ -1270,6 +1305,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
+        toc("Pipeline: LOS optical depths")
 
     def get_sfzh(self, log10ages, metallicities, write=True):
         """Flag that the Pipeline should compute the SFZH grid.
@@ -1313,6 +1349,7 @@ class Pipeline:
                 The galaxy to compute the SFZH grid for.
         """
         start = time.perf_counter()
+        tic("Pipeline: SFZH")
 
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
@@ -1321,6 +1358,7 @@ class Pipeline:
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfzh", None) is not None:
             self.sfzhs.append(galaxy.sfzh)
+            toc("Pipeline: SFZH")
             return
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
@@ -1339,6 +1377,7 @@ class Pipeline:
                 )
             )
 
+            toc("Pipeline: SFZH")
             return
 
         # Count the number of SFZH grids we have generated
@@ -1346,6 +1385,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["SFZH"] += time.perf_counter() - start
+        toc("Pipeline: SFZH")
 
     def get_sfh(self, log10ages, write=True):
         """Flag that the Pipeline should compute the binned SFH.
@@ -1384,6 +1424,7 @@ class Pipeline:
                 The galaxy to compute the SFH for.
         """
         start = time.perf_counter()
+        tic("Pipeline: SFH")
 
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
@@ -1392,6 +1433,7 @@ class Pipeline:
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfh", None) is not None:
             self.sfhs.append(galaxy.sfh)
+            toc("Pipeline: SFH")
             return
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
@@ -1402,6 +1444,7 @@ class Pipeline:
             # No stars, no SFH, store a zeroed grid
             self.sfhs.append(np.zeros(len(op_kwargs["log10ages"])))
 
+            toc("Pipeline: SFH")
             return
 
         # Count the number of SFH grids we have generated
@@ -1409,6 +1452,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["SFH"] += time.perf_counter() - start
+        toc("Pipeline: SFH")
 
     def get_spectra(self, write=True):
         """Flag that the Pipeline should compute the rest frame spectra.
@@ -1447,6 +1491,7 @@ class Pipeline:
                 The galaxy to generate the spectra for.
         """
         start = time.perf_counter()
+        tic("Pipeline: Lnu Spectra")
 
         # Get the spectra
         galaxy.get_spectra(self.emission_model, nthreads=self.nthreads)
@@ -1466,6 +1511,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Lnu Spectra"] += time.perf_counter() - start
+        toc("Pipeline: Lnu Spectra")
 
     def get_observed_spectra(self, cosmo, igm=None, write=True):
         """Flag that the Pipeline should compute the observed spectra.
@@ -1513,6 +1559,7 @@ class Pipeline:
                 The galaxy to compute the observed spectra for.
         """
         start = time.perf_counter()
+        tic("Pipeline: Fnu Spectra")
 
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs(
@@ -1540,6 +1587,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Fnu Spectra"] += time.perf_counter() - start
+        toc("Pipeline: Fnu Spectra")
 
     def get_photometry_luminosities(
         self,
@@ -1617,6 +1665,7 @@ class Pipeline:
                 The galaxy to compute the photometric luminosities for.
         """
         start = time.perf_counter()
+        tic("Pipeline: Luminosities")
 
         # Loop over all queued operation configurations
         for model_label, op_kwargs in self._operation_kwargs[
@@ -1647,6 +1696,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Luminosities"] += time.perf_counter() - start
+        toc("Pipeline: Luminosities")
 
     def get_photometry_fluxes(
         self,
@@ -1734,6 +1784,7 @@ class Pipeline:
                 The galaxy to compute the photometric fluxes for.
         """
         start = time.perf_counter()
+        tic("Pipeline: Fluxes")
 
         # Loop over all queued operation configurations
         for model_label, op_kwargs in self._operation_kwargs[
@@ -1764,6 +1815,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Fluxes"] += time.perf_counter() - start
+        toc("Pipeline: Fluxes")
 
     def get_lines(self, line_ids, write=True):
         """Flag that the Pipeline should compute the emission lines.
@@ -1819,6 +1871,7 @@ class Pipeline:
                 The galaxy to generate the emission lines for.
         """
         start = time.perf_counter()
+        tic("Pipeline: Emission Line Luminosities")
 
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs("get_lines")
@@ -1864,6 +1917,7 @@ class Pipeline:
         self._op_timing["Emission Line Luminosities"] += (
             time.perf_counter() - start
         )
+        toc("Pipeline: Emission Line Luminosities")
 
     def get_observed_lines(
         self,
@@ -1935,6 +1989,7 @@ class Pipeline:
                 The galaxy to compute the observed emission lines for.
         """
         start = time.perf_counter()
+        tic("Pipeline: Emission Line Fluxes")
 
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs(
@@ -1979,6 +2034,7 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Emission Line Fluxes"] += time.perf_counter() - start
+        toc("Pipeline: Emission Line Fluxes")
 
     def get_images_luminosity(
         self,
@@ -2123,6 +2179,7 @@ class Pipeline:
                 The galaxy to generate the luminosity images for.
         """
         start = time.perf_counter()
+        tic("Pipeline: Luminosity Images")
 
         # We want to time PSF application and noise application separately
         psf_time = 0
@@ -2210,6 +2267,7 @@ class Pipeline:
         )
         self._op_timing["Luminosity Images (With PSF)"] += psf_time
         self._op_timing["Luminosity Images (With Noise)"] += noise_time
+        toc("Pipeline: Luminosity Images")
 
     def get_images_flux(
         self,
@@ -2373,6 +2431,7 @@ class Pipeline:
                 The galaxy to generate the flux images for (all components).
         """
         start = time.perf_counter()
+        tic("Pipeline: Flux Images")
 
         # We want to time PSF application and noise application separately
         psf_time = 0
@@ -2460,6 +2519,7 @@ class Pipeline:
         )
         self._op_timing["Flux Images (With PSF)"] += psf_time
         self._op_timing["Flux Images (With Noise)"] += noise_time
+        toc("Pipeline: Flux Images")
 
     def get_data_cubes_lnu(
         self,
@@ -3491,6 +3551,9 @@ class Pipeline:
         # Ok we are good to go! Report the last metadata and then get going
         if self.rank == 0:
             self._report_instruments()
+
+        # Prewarm instruments before processing galaxies.
+        self._prepare_instruments()
 
         # Print the header for the pipeline run to the console
         self._print_progress_header()

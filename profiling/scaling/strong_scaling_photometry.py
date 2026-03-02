@@ -1,64 +1,67 @@
-"""A script to test the strong scaling of the particle spectra calculation.
+"""A script to test the strong scaling of the photometry calculation.
 
 Usage:
-    python part_spectra_strong_scaling.py --basename test --max_threads 8
-       --nstars 10**5
+    python strong_scaling_photometry.py --basename test --max_threads 8
+       --nstars 100000 --nfilters 10
 """
 
 import argparse
-import sys
-from functools import partial
+import importlib.util
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from astropy.cosmology import Planck18
-from unyt import Msun, Myr, kpc
+from unyt import Msun, Myr
 
-from synthesizer import Grid
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
-from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfzh
-from synthesizer.particle.utils import calculate_smoothing_lengths
 from synthesizer.utils.profiling_utils import run_scaling_test
 
-# Add pipeline profiling to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
-from pipeline_test_data import get_test_instrument
+pipeline_path = (
+    Path(__file__).parent.parent / "pipeline" / "pipeline_test_data.py"
+)
+spec = importlib.util.spec_from_file_location(
+    "pipeline_test_data", pipeline_path
+)
+pipeline_test_data = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(pipeline_test_data)
+get_test_instrument = pipeline_test_data.get_test_instrument
 
-plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
 np.random.seed(42)
 
 
-def images_strong_scaling(
+def photometry_strong_scaling(
     basename,
     out_dir,
     max_threads,
     nstars,
+    nfilters,
     average_over,
     low_thresh,
     paper_style,
 ):
-    """Profile the cpu time usage of the particle spectra calculation."""
+    """Profile the cpu time usage of the photometry calculation."""
     # Define the grid
     grid_name = "test_grid"
 
     grid = Grid(grid_name)
 
-    # Get the emission model
-    model = IncidentEmission(grid)
-    model.set_per_particle(True)
+    # Get the emission model - use per_particle=True for particle photometry
+    model = IncidentEmission(grid, per_particle=True)
 
     # Get the filters from cached instrument (no network access)
-    # The cached instrument has all JWST NIRCam filters available
     webb_inst = get_test_instrument(grid)
+
+    # Select the requested number of filters
+    available_filters = webb_inst.available_filters[:nfilters]
+    filters = webb_inst.filters.select(*available_filters)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
@@ -70,90 +73,47 @@ def images_strong_scaling(
         initial_mass=mass,
     )
 
-    # Generate some random coordinates
-    coords = (
-        CoordinateGenerator.generate_3D_gaussian(
-            nstars,
-            mean=np.array([50, 50, 50]),
-            cov=np.array([[10, 0, 0], [0, 10, 0], [0, 0, 10]]),
-        )
-        * kpc
-    )
-
-    # Calculate the smoothing lengths
-    smls = calculate_smoothing_lengths(coords, num_neighbours=56)
-
     # Sample the SFZH, producing a Stars object
-    # we will also pass some keyword arguments for attributes
-    # we will need for imaging
     stars = sample_sfzh(
         param_stars.sfzh,
         param_stars.log10ages,
         param_stars.log10metallicities,
         nstars,
-        coordinates=coords,
-        smoothing_lengths=smls,
         redshift=1,
-        centre=np.array([50, 50, 50]) * kpc,
     )
 
-    # Get the spectra
-    stars.get_spectra(
-        model,
-        nthreads=max_threads,
-    )
+    # Get spectra first so photometry has something to work with
+    print("Generating initial per-particle spectra")
+    stars.get_spectra(model)
+    print()
 
-    # Get photometry - use only a single filter for faster imaging
-    single_filter = webb_inst.filters.select(webb_inst.filters.filter_codes[0])
-    stars.get_particle_photo_lnu(
-        filters=single_filter,
-        nthreads=max_threads,
-    )
-
-    # Get the kernel
-    kernel = Kernel().get_kernel()
-
-    # Get images in serial first to get over any overhead due to linking
+    # Get photometry in serial first to get over any overhead due to linking
     # the first time the function is called
-    print("Initial imaging spectra calculation")
-    stars.get_images_luminosity(
-        "incident",
-        fov=30 * kpc,
-        instrument=webb_inst,
-        kernel=kernel,
-        cosmo=Planck18,
-        nthreads=max_threads,
-    )
+    print("Initial serial particle photometry calculation")
+    stars.get_particle_photo_lnu(filters, nthreads=1)
     print()
 
     # Define the log and plot output paths
     log_outpath = (
-        f"{out_dir}/{basename}_images_"
-        f"totThreads{max_threads}_nstars{nstars}.log"
+        f"{out_dir}/{basename}_photometry_"
+        f"totThreads{max_threads}_nstars{nstars}_nfilters{nfilters}.log"
     )
     plot_outpath = (
-        f"{out_dir}/{basename}_images_"
-        f"totThreads{max_threads}_nstars{nstars}.png"
+        f"{out_dir}/{basename}_photometry_"
+        f"totThreads{max_threads}_nstars{nstars}_nfilters{nfilters}.png"
     )
 
-    # Run the scaling test
-    # Use partial to bind the label argument
-    get_images = partial(
-        stars.get_images_luminosity,
-        "incident",
-        fov=30 * kpc,
-        instrument=webb_inst,
-        kernel=kernel,
-        cosmo=Planck18,
-    )
+    # Run the scaling test on particle photometry
     run_scaling_test(
         max_threads,
         average_over,
         log_outpath,
         plot_outpath,
-        get_images,
-        {},
-        total_msg="Generating images",
+        stars.get_particle_photo_lnu,
+        {
+            "filters": filters,
+        },
+        total_msg="Getting Particle Photometry (lnu)",
         low_thresh=low_thresh,
         paper_style=paper_style,
     )
@@ -193,6 +153,13 @@ if __name__ == "__main__":
     )
 
     args.add_argument(
+        "--nfilters",
+        type=int,
+        default=10,
+        help="The number of filters to use for photometry.",
+    )
+
+    args.add_argument(
         "--average_over",
         type=int,
         default=10,
@@ -224,11 +191,12 @@ if __name__ == "__main__":
             "ATOMIC_TIMING=1 pip install -e ."
         )
 
-    images_strong_scaling(
+    photometry_strong_scaling(
         args.basename,
         args.out_dir,
         args.max_threads,
         args.nstars,
+        args.nfilters,
         args.average_over,
         args.low_thresh,
         args.paper_style,

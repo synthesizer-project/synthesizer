@@ -341,6 +341,7 @@ def pluralize(word: str) -> str:
         "mass": "masses",
         "gas": "gases",
         "axis": "axes",
+        "accretion_rate_eddington": "accretion_rates_eddington",
     }
     if word in special_cases:
         return special_cases[word]
@@ -372,6 +373,7 @@ def depluralize(word: str) -> str:
         "gases": "gas",
         "gas": "gas",  # Already singular
         "axes": "axis",
+        "accretion_rates_eddington": "accretion_rate_eddington",
     }
     if word in special_cases:
         return special_cases[word]

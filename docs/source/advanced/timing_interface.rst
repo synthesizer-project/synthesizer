@@ -11,13 +11,17 @@ How It Works
 
 The timing system is a simple ``tic``/``toc`` pattern:
 
-1. Call ``tic()`` to record a start time.
+1. Call ``tic("Operation name")`` to start a named timer.
 2. Perform the work you want to measure.
-3. Call ``toc("Operation name", start)`` to record the elapsed time.
+3. Call ``toc("Operation name")`` to stop the timer.
 
 When ``ATOMIC_TIMING`` is enabled at compile time, ``toc()`` accumulates the measurement into a global C++ map keyed by the operation name.
 Each entry in the map stores the cumulative time, the number of calls, and whether the timing originated from C++ or Python.
-When ``ATOMIC_TIMING`` is **not** enabled, both ``tic()`` and ``toc()`` are complete no-ops with zero runtime cost.
+When ``ATOMIC_TIMING`` is **not** enabled, both ``tic("...")`` and ``toc("...")`` are complete no-ops with zero runtime cost.
+
+Nested timers are handled internally. Starting a nested timer pauses the
+currently active timer, and closing it resumes the parent timer. This means
+parent timings are exclusive and do not double-count nested work.
 
 The same ``tic``/``toc`` interface is available in both Python and C++.
 C++ extensions call the accumulation function via a cached function pointer (retrieved at module-init time through a PyCapsule), so **no GIL is acquired during timing**.
@@ -26,7 +30,7 @@ Enabling Timing
 ^^^^^^^^^^^^^^^
 
 The timing accumulation is controlled by the ``ATOMIC_TIMING`` compile-time flag.
-When this flag is **not** set, ``tic()`` and ``toc()`` compile down to no-ops with zero runtime cost.
+When this flag is **not** set, ``tic("...")`` and ``toc("...")`` compile down to no-ops with zero runtime cost.
 
 To enable timing, install with:
 
@@ -58,12 +62,12 @@ Import ``tic`` and ``toc`` from the timers extension and wrap the code you want 
     from synthesizer.extensions.timers import tic, toc
 
     def my_expensive_function(data):
-        start = tic()
+        tic("My expensive operation")
 
         # ... do the work ...
         result = compute(data)
 
-        toc("My expensive operation", start)
+        toc("My expensive operation")
         return result
 
 When ``ATOMIC_TIMING`` is off, both calls are no-ops and the operation name string is never evaluated at the C level, so there is no overhead in production builds.
@@ -78,11 +82,11 @@ In C++ extension source files, include ``timers.h`` and use the same pattern:
     #include "timers.h"
 
     void my_function(...) {
-        double start = tic();
+        tic("My C++ operation");
 
         // ... do the work ...
 
-        toc("My C++ operation", start);
+        toc("My C++ operation");
     }
 
 If your ``.cpp`` file is the **main file of an extension module** (i.e. it contains ``PyInit_*``), you also need to initialise the timing function pointer at module-init time.
@@ -160,10 +164,9 @@ Low-Level C Extension Functions
 
 These are exposed directly from ``synthesizer.extensions.timers``:
 
-- ``tic()`` — Returns the current wall-clock time as a ``float``.
-- ``toc(msg, start_time)`` — Accumulates elapsed time for operation ``msg`` (a string) since ``start_time``.
+- ``tic(msg)`` — Starts a timer for operation ``msg``.
+- ``toc(msg)`` — Stops the active timer for operation ``msg`` and accumulates elapsed time.
 - ``reset_timings()`` — Clears all accumulated timing data. Call this before each profiling run.
 - ``get_operation_names()`` — Returns a ``list`` of all recorded operation names.
 - ``get_operation_timings(name)`` — Returns ``(cumulative_time, call_count, source)`` for the given operation. Raises ``KeyError`` if the operation does not exist.
 - ``get_operation_source(name)`` — Returns ``"C"`` or ``"Python"`` for the given operation.
-

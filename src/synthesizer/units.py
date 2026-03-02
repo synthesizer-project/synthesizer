@@ -798,7 +798,7 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
-            start = tic()
+            tic("Accepting Units")
 
             # Convert the positional arguments to a list (it must be mutable
             # for what comes next)
@@ -813,7 +813,7 @@ def accepts(**units):
                 kwargs[name] = _check_arg(units, name, value)
 
             result = func(*args, **kwargs)
-            toc("Accepting Units", start)
+            toc("Accepting Units")
             return result
 
         return wrapped

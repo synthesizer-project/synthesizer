@@ -88,7 +88,7 @@ static std::vector<weighted_cell>
 build_balanced_work_list(struct cell *root, int nthreads,
                          Float balance_tolerance = 2.0) {
 
-  double start_time = tic();
+  tic("Splitting cell tree over threads");
 
   std::vector<weighted_cell> work_list;
   work_list.emplace_back(root);
@@ -164,7 +164,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
     final_min_cost = std::min(final_min_cost, wc.cost);
   }
 
-  toc("Splitting cell tree over threads", start_time);
+  toc("Splitting cell tree over threads");
 
   return work_list;
 }
@@ -512,7 +512,7 @@ void populate_smoothed_image(const Float *pix_values, const Float *kernel,
                              const Float threshold, const int kdim,
                              Float *img, const int nimgs, struct cell *root,
                              const int nthreads) {
-  double start = tic();
+  tic("Populating smoothed image");
 
   /* Compute normalization to conserve flux when truncating kernel. */
   Float norm_factor = compute_kernel_norm(kernel, kdim, threshold);
@@ -542,7 +542,7 @@ void populate_smoothed_image(const Float *pix_values, const Float *kernel,
                                  root);
 #endif
 
-  toc("Populating smoothed image", start);
+  toc("Populating smoothed image");
 }
 
 /**
@@ -568,7 +568,7 @@ void populate_smoothed_image(const Float *pix_values, const Float *kernel,
  */
 PyObject *make_img(PyObject *self, PyObject *args) {
 
-  double start_time = tic();
+  tic("Extracting Python data");
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -603,9 +603,9 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  toc("Extracting Python data", start_time);
+  toc("Extracting Python data");
 
-  double tree_start = tic();
+  tic("Cell tree construction");
 
   /* Allocate cells array. The first cell will be the root and then we
    * will dynamically nibble off cells for the progeny. */
@@ -616,9 +616,9 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   construct_cell_tree(pos, smoothing_lengths, smoothing_lengths, npart, root,
                       ncells, MAX_DEPTH, 100);
 
-  toc("Constructing cell tree", tree_start);
+  toc("Cell tree construction");
 
-  double out_start = tic();
+  tic("Creating output image array");
 
   /* Create the zeroed image numpy array. */
   npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
@@ -626,7 +626,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
       (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_FLOAT_T, 0);
   Float *img = (Float *)PyArray_DATA(np_img);
 
-  toc("Creating output image array", out_start);
+  toc("Creating output image array");
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
@@ -635,7 +635,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   /* Cleanup the cell tree. */
   cleanup_cell_tree(root);
 
-  toc("Computing smoothed image", start_time);
+  toc("Computing smoothed image");
 
   return Py_BuildValue("N", np_img);
 }

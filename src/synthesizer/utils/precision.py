@@ -155,7 +155,7 @@ def ensure_compatible_precision(
     if value is None:
         return
 
-    start = tic()
+    tic("Ensuring Compatible Precision")
 
     # Get the info about the target dtype to check overflow limits
     if np.issubdtype(target_dtype, np.floating):
@@ -191,7 +191,7 @@ def ensure_compatible_precision(
             "If you are seeing this message for a numeric type, please report "
             "an issue to the Synthesizer developers.",
         )
-        toc("Ensuring Compatible Precision", start)
+        toc("Ensuring Compatible Precision")
         return
 
     # For floating-point dtypes, only check finite values
@@ -222,7 +222,7 @@ def ensure_compatible_precision(
                 f"{target_dtype}."
             )
 
-    toc("Ensuring Compatible Precision", start)
+    toc("Ensuring Compatible Precision")
 
 
 def array_to_precision(
@@ -250,7 +250,7 @@ def array_to_precision(
         TypeError: If copy=False and the input dtype doesn't match
             the compiled precision.
     """
-    start = tic()
+    tic("Converting Array Precision")
 
     # Ensure input is a numpy array
     arr = np.asanyarray(arr)
@@ -259,7 +259,7 @@ def array_to_precision(
     # Check if the array already has the correct dtype and is contiguous;
     # this is the common fast path after initial construction.
     if arr.dtype == target_dtype and arr.flags["C_CONTIGUOUS"]:
-        toc("Converting Array Precision", start)
+        toc("Converting Array Precision")
         return arr
 
     # Ensure the array is C-contiguous (handles both dtype and layout in one)
@@ -269,7 +269,7 @@ def array_to_precision(
                 f"Array has dtype {arr.dtype} but expected {target_dtype}."
             )
         result = np.ascontiguousarray(arr, dtype=target_dtype)
-        toc("Converting Array Precision", start)
+        toc("Converting Array Precision")
         return result
 
     # OK, convert the array to the target dtype making a copy and return it
@@ -278,7 +278,7 @@ def array_to_precision(
             f"Array has dtype {arr.dtype} but expected {target_dtype}."
         )
     result = arr.astype(target_dtype)
-    toc("Converting Array Precision", start)
+    toc("Converting Array Precision")
     return result
 
 
@@ -311,7 +311,7 @@ def scalar_to_precision(
     # Get the target dtype if not provided
     target_dtype = _NUMPY_DTYPE if target_dtype is None else target_dtype
 
-    start = tic()
+    tic("Converting Scalar Precision")
 
     # Convert to numpy scalar for dtype checking
     scalar_arr = np.asarray(scalar)
@@ -322,7 +322,7 @@ def scalar_to_precision(
         result = (
             scalar if isinstance(scalar, np.generic) else scalar_arr.item()
         )
-        toc("Converting Scalar Precision", start)
+        toc("Converting Scalar Precision")
         return result
 
     # If copy is False and dtypes don't match, raise an error
@@ -334,7 +334,7 @@ def scalar_to_precision(
     # Convert the scalar to the target dtype
     converted = np.asarray(scalar, dtype=target_dtype)
     result = converted[()]
-    toc("Converting Scalar Precision", start)
+    toc("Converting Scalar Precision")
     return result
 
 
@@ -357,7 +357,7 @@ def unyt_array_to_precision(
     Returns:
         unyt.unyt_array: unyt_array with the compiled precision dtype.
     """
-    start = tic()
+    tic("Converting Unyt Array Precision")
 
     # Ensure input is a unyt_array
     if not isinstance(arr, unyt_array):
@@ -368,7 +368,7 @@ def unyt_array_to_precision(
 
     # Fast path: already correct dtype and contiguous — no work needed
     if arr.dtype == target_dtype and arr.flags["C_CONTIGUOUS"]:
-        toc("Converting Unyt Array Precision", start)
+        toc("Converting Unyt Array Precision")
         return arr
 
     # Convert the underlying ndview; array_to_precision handles both the
@@ -381,7 +381,7 @@ def unyt_array_to_precision(
         ),
         arr.units,
     )
-    toc("Converting Unyt Array Precision", start)
+    toc("Converting Unyt Array Precision")
     return result
 
 
@@ -411,7 +411,7 @@ def ensure_arg_precision(
     Returns:
         Any: Argument converted to the compiled precision if applicable.
     """
-    start = tic()
+    tic("Ensuring Argument Precision")
 
     # If the argument is a unyt_array or unyt_quantity, fast-path: if it
     # already has the right dtype and is contiguous, skip the conversion
@@ -419,14 +419,14 @@ def ensure_arg_precision(
     if isinstance(arg, unyt_array):
         _target = target_dtype if target_dtype is not None else _NUMPY_DTYPE
         if arg.dtype == _target and arg.flags["C_CONTIGUOUS"]:
-            toc("Ensuring Argument Precision", start)
+            toc("Ensuring Argument Precision")
             return arg
         result = unyt_array_to_precision(
             arg,
             copy=copy,
             target_dtype=_target,
         )
-        toc("Ensuring Argument Precision", start)
+        toc("Ensuring Argument Precision")
         return result
 
     # If the argument is a numpy array, resolve target once and check fast path
@@ -441,12 +441,12 @@ def ensure_arg_precision(
             _target = _NUMPY_DTYPE if target_dtype is None else target_dtype
         else:
             # Non-numeric array (e.g. string), return unchanged
-            toc("Ensuring Argument Precision", start)
+            toc("Ensuring Argument Precision")
             return arg
 
         # Fast path: already correct dtype and contiguous
         if arg.dtype == _target and arg.flags["C_CONTIGUOUS"]:
-            toc("Ensuring Argument Precision", start)
+            toc("Ensuring Argument Precision")
             return arg
 
         result = array_to_precision(
@@ -454,28 +454,28 @@ def ensure_arg_precision(
             copy=copy,
             target_dtype=_target,
         )
-        toc("Ensuring Argument Precision", start)
+        toc("Ensuring Argument Precision")
         return result
 
     # Scalar paths
     if isinstance(arg, (bool, np.bool_)):
         _target = np.dtype(np.bool_) if target_dtype is None else target_dtype
         result = scalar_to_precision(arg, copy=True, target_dtype=_target)
-        toc("Ensuring Argument Precision", start)
+        toc("Ensuring Argument Precision")
         return result
     if isinstance(arg, (int, np.integer)):
         _target = _INTEGER_DTYPE if target_dtype is None else target_dtype
         result = scalar_to_precision(arg, copy=True, target_dtype=_target)
-        toc("Ensuring Argument Precision", start)
+        toc("Ensuring Argument Precision")
         return result
     if isinstance(arg, (float, np.floating)):
         _target = _NUMPY_DTYPE if target_dtype is None else target_dtype
         result = scalar_to_precision(arg, copy=True, target_dtype=_target)
-        toc("Ensuring Argument Precision", start)
+        toc("Ensuring Argument Precision")
         return result
 
     # Otherwise, return the argument unchanged
-    toc("Ensuring Argument Precision", start)
+    toc("Ensuring Argument Precision")
     return arg
 
 
@@ -552,7 +552,7 @@ def accept_precisions(allow_copies=True, **precisions):
             Returns:
                 The result of the wrapped function.
             """
-            start = tic()
+            tic("Accepting Precisions")
 
             # Convert the positional arguments to a list (it must be mutable
             # for what comes next)
@@ -614,7 +614,7 @@ def accept_precisions(allow_copies=True, **precisions):
                 )
 
             result = func(*args, **kwargs)
-            toc("Accepting Precisions", start)
+            toc("Accepting Precisions")
             return result
 
         return wrapped

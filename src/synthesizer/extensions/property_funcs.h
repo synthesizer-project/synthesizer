@@ -182,6 +182,6 @@ double *extract_data_double(PyArrayObject *np_arr, const char *name);
 Float *extract_data_float(PyArrayObject *np_arr, const char *name);
 Int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
-Float **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
+const npy_int64 *extract_index_array(PyArrayObject *np_arr, const char *name);
 
 #endif // PROPERTY_FUNCS_H_

@@ -284,7 +284,7 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
   /* First get the grid indices and fractions for all particles. */
   get_particle_indices_and_fracs(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("Cloud in Cell particle spectra loop");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -307,7 +307,7 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
   spectra_loop_cic_serial(grid_props, parts, part_spectra);
 
 #endif
-  toc("Cloud in Cell particle spectra loop", start_time);
+  toc("Cloud in Cell particle spectra loop");
 }
 
 /**
@@ -468,7 +468,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   /* First get the grid indices for all particles. */
   get_particle_indices(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("Nearest Grid Point particle spectra loop");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -491,7 +491,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   spectra_loop_ngp_serial(grid_props, parts, part_spectra);
 
 #endif
-  toc("Nearest Grid Point particle spectra loop", start_time);
+  toc("Nearest Grid Point particle spectra loop");
 }
 
 /**
@@ -512,7 +512,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  * @param c: speed of light
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
-  double start_time = tic();
+  tic("Computing particle and integrated Lnus");
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -557,7 +557,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
                                         np_mask, part_tuple, npart);
   RETURN_IF_PYERR();
 
-  double out_tic = tic();
+  tic("Setting up output arrays");
 
   /* Define the output dimensions. */
   npy_intp np_int_dims[1] = {nlam};
@@ -582,7 +582,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   }
   Float *part_spectra = static_cast<Float *>(PyArray_DATA(np_part_spectra));
 
-  toc("Setting up output arrays", out_tic);
+  toc("Setting up output arrays");
 
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
@@ -607,7 +607,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Construct the output tuple. */
   PyObject *out_tuple = Py_BuildValue("NN", np_part_spectra, np_spectra);
 
-  toc("Computing particle and integrated lnus", start_time);
+  toc("Computing particle and integrated Lnus");
 
   return out_tuple;
 }

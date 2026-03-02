@@ -514,7 +514,7 @@ class Particles:
             mask (np.ndarray):
                 The mask array.
         """
-        start = tic()
+        tic("Generating mask")
 
         # Get the attribute
         attr_str = attr
@@ -577,7 +577,7 @@ class Particles:
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
 
-        toc("Generating mask", start)
+        toc("Generating mask")
 
         return new_mask
 

@@ -44,7 +44,7 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       np_lam_(np_lam), np_lam_mask_(np_lam_mask),
       np_grid_weights_(np_grid_weights) {
 
-  double start_time = tic();
+  tic("Constructing C++ grid properties");
 
   if (np_spectra != NULL && !ensure_float_array(np_spectra, "spectra")) {
     return;
@@ -115,7 +115,7 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
     need_grid_weights_ = true;
   }
 
-  toc("Constructing C++ grid properties", start_time);
+  toc("Constructing C++ grid properties");
 }
 
 /**

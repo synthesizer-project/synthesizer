@@ -93,7 +93,7 @@ class Extractor(ABC):
                 The emission type to extract from the grid.
 
         """
-        start = tic()
+        tic("Setting up the Extractor (including grid axis extraction)")
 
         # Get the attribute names we will have to extract from the emitter
         self._emitter_attributes = grid._extract_axes
@@ -138,7 +138,7 @@ class Extractor(ABC):
         # Finally, attach a pointer to the grid object
         self._grid = grid
 
-        toc("Setting up the Extractor (including grid axis extraction)", start)
+        toc("Setting up the Extractor (including grid axis extraction)")
 
     def get_emitter_attrs(self, emitter, model, do_grid_check):
         """Get the attributes from the emitter.
@@ -158,7 +158,7 @@ class Extractor(ABC):
             tuple
                 The extracted attributes and the weight variable.
         """
-        start = tic()
+        tic("Preparing particle data for extraction")
 
         # Set up a list to store the extracted attributes
         extracted = []
@@ -201,7 +201,7 @@ class Extractor(ABC):
         if isinstance(weight, (unyt_array, unyt_quantity)):
             weight = weight.ndview
 
-        toc("Preparing particle data for extraction", start)
+        toc("Preparing particle data for extraction")
 
         return tuple(extracted), weight
 
@@ -217,7 +217,7 @@ class Extractor(ABC):
             extracted_attrs (tuple):
                 The extracted attributes from the emitter.
         """
-        start = tic()
+        tic("Checking the particle data against the grid axes")
 
         # Loop over the extracted attributes and check if they are outside the
         # grid axes, we'll do this by updating a mask for each attribute
@@ -238,7 +238,7 @@ class Extractor(ABC):
                 " the grid axes."
             )
 
-        toc("Checking the particle data against the grid axes", start)
+        toc("Checking the particle data against the grid axes")
 
     @abstractmethod
     def generate_lnu(self, *args, **kwargs):
@@ -297,7 +297,7 @@ class IntegratedParticleExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        start = tic()
+        tic("Setting up integrated Lnu calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -326,7 +326,7 @@ class IntegratedParticleExtractor(Extractor):
         else:
             grid_weights = None
 
-        toc("Setting up integrated lnu calculation", start)
+        toc("Setting up integrated Lnu calculation")
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
@@ -396,7 +396,7 @@ class IntegratedParticleExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        start = tic()
+        tic("Setting up particle line calculation")
 
         # Lines must use double precision for now because of overflows
         if _NUMPY_DTYPE == np.dtype("float32"):
@@ -449,7 +449,7 @@ class IntegratedParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
-        toc("Setting up particle line calculation", start)
+        toc("Setting up particle line calculation")
 
         # Compute the integrated line lum array
         line_lum_grid = self._line_lum_grid
@@ -556,7 +556,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        start = tic()
+        tic("Setting up particle Lnu (with velocity shift) calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -591,7 +591,7 @@ class DopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up particle lnu (with velocity shift) calculation", start)
+        toc("Setting up particle Lnu (with velocity shift) calculation")
 
         # Compute the lnu array
         spectra_grid = self._spectra_grid
@@ -681,7 +681,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        start = tic()
+        tic("Setting up integrated Lnu (with velocity shift) calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -710,10 +710,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc(
-            "Setting up integrated lnu (with velocity shift) calculation",
-            start,
-        )
+        toc("Setting up integrated Lnu (with velocity shift) calculation")
 
         # Compute the lnu array
         spectra_grid = self._spectra_grid
@@ -795,7 +792,7 @@ class ParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        start = tic()
+        tic("Setting up particle Lnu calculation")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
@@ -844,7 +841,7 @@ class ParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up particle lnu calculation", start)
+        toc("Setting up particle Lnu calculation")
 
         # Compute the lnu array
         spectra_grid = self._spectra_grid
@@ -909,7 +906,7 @@ class ParticleExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        start = tic()
+        tic("Setting up particle line calculation")
 
         # Lines must use double precision for now because of overflows
         if _NUMPY_DTYPE == np.dtype("float32"):
@@ -981,7 +978,7 @@ class ParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
-        toc("Setting up particle line calculation", start)
+        toc("Setting up particle line calculation")
 
         # Compute the integrated line lum array
         line_lum_grid = self._line_lum_grid
@@ -1081,7 +1078,7 @@ class IntegratedParametricExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        start = tic()
+        tic("Generating integrated Lnu")
 
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
@@ -1099,7 +1096,7 @@ class IntegratedParametricExtractor(Extractor):
         # grid spectra
         spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0)
 
-        toc("Generating integrated lnu", start)
+        toc("Generating integrated Lnu")
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -1136,7 +1133,7 @@ class IntegratedParametricExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        start = tic()
+        tic("Generating integrated Lnu")
 
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
@@ -1163,7 +1160,7 @@ class IntegratedParametricExtractor(Extractor):
             lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
             cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
 
-        toc("Generating integrated lnu", start)
+        toc("Generating integrated Lnu")
 
         return LineCollection(
             line_ids=self._grid.line_ids,
