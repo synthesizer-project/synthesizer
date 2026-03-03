@@ -15,6 +15,13 @@ from synthesizer.extensions.timers import (
 from synthesizer.utils.operation_timers import OperationTimers
 
 
+def _spin_wait(duration):
+    """Busy-wait for approximately ``duration`` seconds."""
+    start = time.perf_counter()
+    while (time.perf_counter() - start) < duration:
+        pass
+
+
 def setUpModule():
     """Check if atomic timing is available before running any tests.
 
@@ -36,17 +43,19 @@ class TestTimerBasics(unittest.TestCase):
         """Reset timers before each test."""
         reset_timings()
 
-    def test_tic_returns_time(self):
-        """Test that tic returns a time value."""
-        start = tic()
-        self.assertIsInstance(start, float)
-        self.assertGreater(start, 0)
+    def test_tic_starts_named_operation(self):
+        """Test that tic starts a named timer operation."""
+        tic("Start only operation")
+        toc("Start only operation")
+
+        names = get_operation_names()
+        self.assertIn("Start only operation", names)
 
     def test_toc_accumulates_single_operation(self):
         """Test that toc accumulates timing for a single operation."""
-        start = tic()
+        tic("Test operation")
         time.sleep(0.001)  # Sleep 1ms
-        toc("Test operation", start)
+        toc("Test operation")
 
         # Check that operation was recorded
         names = get_operation_names()
@@ -62,9 +71,9 @@ class TestTimerBasics(unittest.TestCase):
         """Test that toc accumulates multiple calls to same operation."""
         # Call operation twice
         for _ in range(2):
-            start = tic()
+            tic("Repeated operation")
             time.sleep(0.001)
-            toc("Repeated operation", start)
+            toc("Repeated operation")
 
         # Check accumulation
         cumtime, count, source = get_operation_timings("Repeated operation")
@@ -74,12 +83,12 @@ class TestTimerBasics(unittest.TestCase):
     def test_toc_multiple_operations(self):
         """Test that toc tracks multiple different operations."""
         # Time operation A
-        start = tic()
-        toc("Operation A", start)
+        tic("Operation A")
+        toc("Operation A")
 
         # Time operation B
-        start = tic()
-        toc("Operation B", start)
+        tic("Operation B")
+        toc("Operation B")
 
         # Check both are recorded
         names = get_operation_names()
@@ -98,10 +107,10 @@ class TestTimerReset(unittest.TestCase):
     def test_reset_clears_all_data(self):
         """Test that reset clears all accumulated timing data."""
         # Accumulate some data
-        start = tic()
-        toc("Operation 1", start)
-        start = tic()
-        toc("Operation 2", start)
+        tic("Operation 1")
+        toc("Operation 1")
+        tic("Operation 2")
+        toc("Operation 2")
 
         # Verify data exists
         names = get_operation_names()
@@ -117,15 +126,15 @@ class TestTimerReset(unittest.TestCase):
     def test_reset_allows_fresh_accumulation(self):
         """Test that reset allows fresh accumulation."""
         # First accumulation
-        start = tic()
-        toc("Test op", start)
+        tic("Test op")
+        toc("Test op")
         _, count1, _ = get_operation_timings("Test op")
         self.assertEqual(count1, 1)
 
         # Reset and accumulate again
         reset_timings()
-        start = tic()
-        toc("Test op", start)
+        tic("Test op")
+        toc("Test op")
 
         # Should have count of 1, not 2
         _, count2, _ = get_operation_timings("Test op")
@@ -146,10 +155,10 @@ class TestOperationTimersClass(unittest.TestCase):
         self.assertEqual(len(self.timers.keys()), 0)
 
         # Add some operations
-        start = tic()
-        toc("Op1", start)
-        start = tic()
-        toc("Op2", start)
+        tic("Op1")
+        toc("Op1")
+        tic("Op2")
+        toc("Op2")
 
         # Check keys
         keys = self.timers.keys()
@@ -160,8 +169,8 @@ class TestOperationTimersClass(unittest.TestCase):
 
     def test_getitem_returns_tuple(self):
         """Test that __getitem__ returns (cumtime, count, source) tuple."""
-        start = tic()
-        toc("Test op", start)
+        tic("Test op")
+        toc("Test op")
 
         result = self.timers["Test op"]
         self.assertIsInstance(result, tuple)
@@ -179,16 +188,16 @@ class TestOperationTimersClass(unittest.TestCase):
 
     def test_contains_operator(self):
         """Test that 'in' operator works correctly."""
-        start = tic()
-        toc("Existing op", start)
+        tic("Existing op")
+        toc("Existing op")
 
         self.assertIn("Existing op", self.timers)
         self.assertNotIn("Missing op", self.timers)
 
     def test_get_source(self):
         """Test get_source method."""
-        start = tic()
-        toc("Python op", start)
+        tic("Python op")
+        toc("Python op")
 
         source = self.timers.get_source("Python op")
         self.assertEqual(source, "Python")
@@ -201,10 +210,10 @@ class TestOperationTimersClass(unittest.TestCase):
     def test_items_iteration(self):
         """Test that items() allows iteration over (name, data) pairs."""
         # Add operations
-        start = tic()
-        toc("Op1", start)
-        start = tic()
-        toc("Op2", start)
+        tic("Op1")
+        toc("Op1")
+        tic("Op2")
+        toc("Op2")
 
         # Iterate
         items_list = list(self.timers.items())
@@ -220,18 +229,18 @@ class TestOperationTimersClass(unittest.TestCase):
         """Test __len__ method."""
         self.assertEqual(len(self.timers), 0)
 
-        start = tic()
-        toc("Op1", start)
+        tic("Op1")
+        toc("Op1")
         self.assertEqual(len(self.timers), 1)
 
-        start = tic()
-        toc("Op2", start)
+        tic("Op2")
+        toc("Op2")
         self.assertEqual(len(self.timers), 2)
 
     def test_repr(self):
         """Test __repr__ method."""
-        start = tic()
-        toc("Op1", start)
+        tic("Op1")
+        toc("Op1")
 
         repr_str = repr(self.timers)
         self.assertIn("OperationTimers", repr_str)
@@ -240,8 +249,8 @@ class TestOperationTimersClass(unittest.TestCase):
     def test_reset_method(self):
         """Test reset method on OperationTimers instance."""
         # Add data
-        start = tic()
-        toc("Op1", start)
+        tic("Op1")
+        toc("Op1")
         self.assertEqual(len(self.timers), 1)
 
         # Reset via timers instance
@@ -259,15 +268,15 @@ class TestTimerAccumulation(unittest.TestCase):
     def test_cumulative_time_increases(self):
         """Test that cumulative time increases with repeated calls."""
         # First call
-        start = tic()
+        tic("Accumulating op")
         time.sleep(0.001)
-        toc("Accumulating op", start)
+        toc("Accumulating op")
         cumtime1, count1, _ = get_operation_timings("Accumulating op")
 
         # Second call
-        start = tic()
+        tic("Accumulating op")
         time.sleep(0.001)
-        toc("Accumulating op", start)
+        toc("Accumulating op")
         cumtime2, count2, _ = get_operation_timings("Accumulating op")
 
         # Cumulative time should increase
@@ -277,8 +286,8 @@ class TestTimerAccumulation(unittest.TestCase):
     def test_call_count_increments(self):
         """Test that call count increments correctly."""
         for i in range(5):
-            start = tic()
-            toc("Counted op", start)
+            tic("Counted op")
+            toc("Counted op")
 
         _, count, _ = get_operation_timings("Counted op")
         self.assertEqual(count, 5)
@@ -286,10 +295,125 @@ class TestTimerAccumulation(unittest.TestCase):
     def test_source_preserved(self):
         """Test that source is set correctly and preserved."""
         # Python source (via toc wrapper)
-        start = tic()
-        toc("Python op", start)
+        tic("Python op")
+        toc("Python op")
         _, _, source = get_operation_timings("Python op")
         self.assertEqual(source, "Python")
+
+
+class TestNestedTimers(unittest.TestCase):
+    """Test nested timer pause/resume behaviour."""
+
+    def setUp(self):
+        """Reset timers before each test."""
+        reset_timings()
+
+    def test_parent_excludes_child_runtime(self):
+        """Parent timer should exclude time spent in nested child timer."""
+        tic("Parent operation")
+        time.sleep(0.001)
+
+        tic("Child operation")
+        time.sleep(0.003)
+        toc("Child operation")
+
+        time.sleep(0.001)
+        toc("Parent operation")
+
+        parent_time, parent_count, _ = get_operation_timings(
+            "Parent operation"
+        )
+        child_time, child_count, _ = get_operation_timings("Child operation")
+
+        self.assertEqual(parent_count, 1)
+        self.assertEqual(child_count, 1)
+        self.assertGreater(parent_time, 0.001)
+        self.assertGreater(child_time, 0.002)
+        self.assertLess(parent_time, child_time)
+
+    def test_nested_timers_accumulate_counts_once_per_close(self):
+        """Nested pause/resume should not inflate parent call counts."""
+        for _ in range(3):
+            tic("Parent operation")
+            tic("Child operation")
+            toc("Child operation")
+            toc("Parent operation")
+
+        _, parent_count, _ = get_operation_timings("Parent operation")
+        _, child_count, _ = get_operation_timings("Child operation")
+
+        self.assertEqual(parent_count, 3)
+        self.assertEqual(child_count, 3)
+
+    def test_nested_time_conservation_two_levels(self):
+        """Exclusive parent + child times should match outer walltime."""
+        outer_start = time.perf_counter()
+
+        tic("Outer operation")
+        _spin_wait(0.01)
+
+        tic("Inner operation")
+        _spin_wait(0.02)
+        toc("Inner operation")
+
+        _spin_wait(0.01)
+        toc("Outer operation")
+
+        outer_walltime = time.perf_counter() - outer_start
+
+        outer_time, outer_count, _ = get_operation_timings("Outer operation")
+        inner_time, inner_count, _ = get_operation_timings("Inner operation")
+
+        self.assertEqual(outer_count, 1)
+        self.assertEqual(inner_count, 1)
+
+        # Outer timer should only include its two exclusive sections.
+        self.assertGreater(outer_time, 0.015)
+        self.assertLess(outer_time, 0.035)
+
+        # Inner timer should include only the inner section.
+        self.assertGreater(inner_time, 0.015)
+        self.assertLess(inner_time, 0.035)
+
+        # Exclusive accounting should roughly conserve elapsed walltime.
+        self.assertAlmostEqual(
+            outer_time + inner_time, outer_walltime, delta=0.02
+        )
+
+    def test_nested_time_conservation_three_levels(self):
+        """Three-level nesting should remain exclusive at every level."""
+        total_start = time.perf_counter()
+
+        tic("L1")
+        _spin_wait(0.005)
+
+        tic("L2")
+        _spin_wait(0.005)
+
+        tic("L3")
+        _spin_wait(0.01)
+        toc("L3")
+
+        _spin_wait(0.005)
+        toc("L2")
+
+        _spin_wait(0.005)
+        toc("L1")
+
+        total_walltime = time.perf_counter() - total_start
+
+        l1, c1, _ = get_operation_timings("L1")
+        l2, c2, _ = get_operation_timings("L2")
+        l3, c3, _ = get_operation_timings("L3")
+
+        self.assertEqual((c1, c2, c3), (1, 1, 1))
+
+        # Expected exclusive segments are ~0.01 (L1), ~0.01 (L2), ~0.01 (L3).
+        for value in (l1, l2, l3):
+            self.assertGreater(value, 0.007)
+            self.assertLess(value, 0.02)
+
+        self.assertAlmostEqual(l1 + l2 + l3, total_walltime, delta=0.02)
 
 
 class TestTimerSourceTracking(unittest.TestCase):
@@ -302,8 +426,8 @@ class TestTimerSourceTracking(unittest.TestCase):
 
     def test_python_source_via_toc(self):
         """Test that Python toc() sets source to 'Python'."""
-        start = tic()
-        toc("Python operation", start)
+        tic("Python operation")
+        toc("Python operation")
 
         source = self.timers.get_source("Python operation")
         self.assertEqual(source, "Python")
@@ -311,8 +435,8 @@ class TestTimerSourceTracking(unittest.TestCase):
     def test_linestyle_determination(self):
         """Test that source can be used to determine linestyle."""
         # Add Python operation
-        start = tic()
-        toc("Python op", start)
+        tic("Python op")
+        toc("Python op")
 
         # Check we can determine linestyle from source
         source = self.timers.get_source("Python op")
@@ -341,10 +465,15 @@ class TestPyCapsuleArchitecture(unittest.TestCase):
         import synthesizer.imaging.extensions.image  # noqa: F401
 
     def test_capsule_exists_on_timers_module(self):
-        """Test that the _toc_accumulate PyCapsule is exposed."""
+        """Test that timer callback capsules are exposed."""
         import synthesizer.extensions.timers as tm
 
+        self.assertTrue(hasattr(tm, "_tic_start"))
+        self.assertTrue(hasattr(tm, "_toc_stop"))
         self.assertTrue(hasattr(tm, "_toc_accumulate"))
+
+        self.assertIn("PyCapsule", type(tm._tic_start).__name__)
+        self.assertIn("PyCapsule", type(tm._toc_stop).__name__)
         # PyCapsule objects have a specific type string
         self.assertIn("PyCapsule", type(tm._toc_accumulate).__name__)
 
@@ -385,8 +514,8 @@ class TestCppTimingEndToEnd(unittest.TestCase):
         _test_toc_from_c("C operation", 0.1)
 
         # Python operation
-        start = tic()
-        toc("Python operation", start)
+        tic("Python operation")
+        toc("Python operation")
 
         # Both should be recorded
         names = get_operation_names()

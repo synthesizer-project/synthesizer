@@ -102,7 +102,7 @@ class Sed:
             description (str):
                 An optional descriptive string defining the Sed.
         """
-        start = tic()
+        tic("Creating Sed")
 
         # Set the description
         self.description = description
@@ -132,7 +132,7 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
-        toc("Creating Sed", start)
+        toc("Creating Sed")
 
     def sum(self):
         """Sum the SED over all dimensions.
@@ -144,7 +144,7 @@ class Sed:
             sed (object, Sed):
                 Summed 1D SED.
         """
-        start = tic()
+        tic("Summing Sed")
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
@@ -165,7 +165,7 @@ class Sed:
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
 
-            toc("Summing Sed", start)
+            toc("Summing Sed")
 
             return new_sed
         else:
@@ -758,7 +758,7 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        start = tic()
+        tic("Calculating bolometric luminosity")
 
         # Calculate the bolometric luminosity
         # NOTE: the integration is done "backwards" when integrating over
@@ -770,7 +770,7 @@ class Sed:
             nthreads=nthreads,
             method=integration_method,
         )
-        toc("Calculating bolometric luminosity", start)
+        toc("Calculating bolometric luminosity")
 
         return integral * self.lnu.units * self.nu.units
 
@@ -1202,9 +1202,9 @@ class Sed:
             (PhotometryCollection):
                 Rest-frame broadband luminosities.
         """
-        start = tic()
+        tic("Getting Photometry (Lnu)")
 
-        filter_start = tic()
+        tic("Applying Filters (Lnu)")
 
         # Apply all filters in one batched integration call.
         bb_lums = filters.apply_filters(
@@ -1213,10 +1213,10 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Lnu)", filter_start)
+        toc("Applying Filters (Lnu)")
 
         # Create the photometry collection and store it in the object
-        stack_start = tic()
+        tic("Stacking Photometry (Lnu)")
         self.photo_lnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1225,9 +1225,9 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Lnu)", stack_start)
+        toc("Stacking Photometry (Lnu)")
 
-        toc("Getting Photometry (lnu)", start)
+        toc("Getting Photometry (Lnu)")
 
         return self.photo_lnu
 
@@ -1252,7 +1252,7 @@ class Sed:
             (PhotometryCollection):
                 Fluxes in each filter in filters.
         """
-        start = tic()
+        tic("Getting Photometry (Fnu)")
 
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
@@ -1264,7 +1264,7 @@ class Sed:
                 )
             )
 
-        filter_start = tic()
+        tic("Applying Filters (Fnu)")
 
         # Apply all filters in one batched integration call.
         bb_fluxes = filters.apply_filters(
@@ -1273,10 +1273,10 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Fnu)", filter_start)
+        toc("Applying Filters (Fnu)")
 
         # Create the photometry collection and store it in the object
-        stack_start = tic()
+        tic("Stacking Photometry (Fnu)")
         self.photo_fnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1285,9 +1285,9 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Fnu)", stack_start)
+        toc("Stacking Photometry (Fnu)")
 
-        toc("Getting Photometry (fnu)", start)
+        toc("Getting Photometry (Fnu)")
 
         return self.photo_fnu
 
@@ -1422,7 +1422,7 @@ class Sed:
                 Either resample factor or new_lam must be supplied. If neither
                 or both are passed an error is raised.
         """
-        start = tic()
+        tic("Resampling Sed")
 
         # Ensure we have what we need
         if resample_factor is None and new_lam is None:
@@ -1475,7 +1475,7 @@ class Sed:
         sed._obslam = np.nan_to_num(sed._obslam)
         sed._obsnu = np.nan_to_num(sed._obsnu)
 
-        toc("Resampling Sed", start)
+        toc("Resampling Sed")
 
         return sed
 

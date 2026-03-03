@@ -417,7 +417,7 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        start = tic()
+        tic("Calculating LOS tau_v")
 
         # Ensure we have stars and gas
         if self.stars is None:
@@ -460,7 +460,7 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
 
-        toc("Calculating stellar LOS tau_v", start)
+        toc("Calculating LOS tau_v")
 
         return tau_v
 
@@ -516,7 +516,7 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        start = tic()
+        tic("Calculating LOS tau_v")
 
         # Ensure we have black holes and gas
         if self.black_holes is None:
@@ -559,7 +559,7 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.black_holes
         setattr(self.black_holes, "tau_v", tau_vs)
 
-        toc("Calculating black hole LOS tau_v", start)
+        toc("Calculating LOS tau_v")
 
         return tau_v
 
@@ -615,7 +615,7 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        start = tic()
+        tic("Calculating LOS tau_v")
 
         # Ensure we have stars and gas
         if self.stars is None:
@@ -658,7 +658,7 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
 
-        toc("Calculating LOS tau_v", start)
+        toc("Calculating LOS tau_v")
 
         return tau_v
 
@@ -1495,7 +1495,7 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
-        start = tic()
+        tic("Computing spectral data cubes")
 
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
@@ -1616,12 +1616,12 @@ class Galaxy(BaseGalaxy):
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
-            toc("Computing stellar and blackhole spectral data cubes", start)
+            toc("Computing spectral data cubes")
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
-            toc("Computing stellar spectral data cube", start)
+            toc("Computing spectral data cubes")
             return stellar_cube
-        toc("Computing blackhole spectral data cube", start)
+        toc("Computing spectral data cubes")
         return blackhole_cube
 
     def get_projected_angular_coordinates(self, cosmo, los_dists=None):
