@@ -42,7 +42,7 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       np_lam_(np_lam), np_lam_mask_(np_lam_mask),
       np_grid_weights_(np_grid_weights) {
 
-  double start_time = tic();
+  tic("Constructing C++ grid properties");
 
   /* The number of dimensions is the length of the axis tuple. */
   ndim = PyTuple_Size(axes_tuple);
@@ -96,7 +96,7 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
     need_grid_weights_ = true;
   }
 
-  toc("Constructing C++ grid properties", start_time);
+  toc("Constructing C++ grid properties");
 }
 
 /**

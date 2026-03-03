@@ -132,7 +132,7 @@ class LineCollection:
             description (str):
                 A optional description of the line collection.
         """
-        start = tic()
+        tic("Creating LineCollection")
 
         # Set the description
         self.description = description
@@ -185,7 +185,7 @@ class LineCollection:
         self.available_diagrams = []
         self._which_diagrams()
 
-        toc("Creating LineCollection", start)
+        toc("Creating LineCollection")
 
     @property
     def id(self):

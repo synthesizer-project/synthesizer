@@ -189,7 +189,7 @@ class BlackHole(BlackholesComponent):
             mask (np.ndarray):
                 The mask array.
         """
-        start = tic()
+        tic("Generating parametric mask")
 
         # Get the attribute
         attr = get_param(attr, attr_override_obj, None, self)
@@ -217,7 +217,7 @@ class BlackHole(BlackholesComponent):
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
 
-        toc("Generating parametric mask", start)
+        toc("Generating parametric mask")
 
         return new_mask
 

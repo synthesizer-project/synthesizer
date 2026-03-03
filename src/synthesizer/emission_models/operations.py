@@ -114,7 +114,7 @@ class Extraction:
         emitter = emitters[this_model.emitter]
 
         # Do we have to define a property mask?
-        mask_start = tic()
+        tic("Getting the mask")
         this_mask = None
         for mask_dict in this_model.masks:
             this_mask = emitter.get_mask(
@@ -122,10 +122,10 @@ class Extraction:
                 mask=this_mask,
                 attr_override_obj=this_model,
             )
-        toc("Getting the mask", mask_start)
+        toc("Getting the mask")
 
         # Get the appropriate extractor
-        extractor_start = tic()
+        tic("Getting the extractor")
         if this_model.per_particle and this_model.vel_shift:
             extractor = DopplerShiftedParticleExtractor(
                 this_model.grid,
@@ -151,7 +151,7 @@ class Extraction:
                 this_model.grid,
                 this_model.extract,
             )
-        toc("Getting the extractor", extractor_start)
+        toc("Getting the extractor")
 
         # Get the spectra (note that result is a tuple containing the
         # particle spectra and the integrated spectra if per_particle
