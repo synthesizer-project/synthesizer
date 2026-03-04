@@ -464,12 +464,23 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_part_mass, *np_ndims;
+  PyObject *py_part_mass;
   char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
-                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
+                        &py_part_mass, &np_ndims, &ndim, &npart, &method,
                         &nthreads))
     return nullptr;
+
+  np_part_mass = array_or_none(py_part_mass, "part_mass");
+  RETURN_IF_PYERR();
+  if (np_part_mass == nullptr) {
+    PyErr_SetString(PyExc_TypeError, "part_mass must be a NumPy array");
+    return nullptr;
+  }
+  if (!ensure_float64_array(np_part_mass, "part_mass")) {
+    return nullptr;
+  }
 
   /* Extract the grid struct. */
   GridProps *grid_props =

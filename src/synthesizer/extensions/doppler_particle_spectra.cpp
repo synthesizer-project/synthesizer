@@ -647,14 +647,33 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyArrayObject *np_velocities;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
+  PyObject *py_mask, *py_lam_mask;
   char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOO", &np_grid_spectra, &np_lam,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_velocities,
                         &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
-                        &py_c, &np_mask, &np_lam_mask)) {
+                        &py_c, &py_mask, &py_lam_mask)) {
     return NULL;
   }
+
+  np_mask = array_or_none(py_mask, "mask");
+  RETURN_IF_PYERR();
+  np_lam_mask = array_or_none(py_lam_mask, "lam_mask");
+  RETURN_IF_PYERR();
+
+  if (!ensure_float64_array(np_grid_spectra, "grid_spectra"))
+    return NULL;
+  if (!ensure_float64_array(np_lam, "lam"))
+    return NULL;
+  if (!ensure_float64_array(np_part_mass, "part_mass"))
+    return NULL;
+  if (!ensure_float64_array(np_velocities, "velocities"))
+    return NULL;
+  if (np_mask != NULL && !ensure_bool_array(np_mask, "mask"))
+    return NULL;
+  if (np_lam_mask != NULL && !ensure_bool_array(np_lam_mask, "lam_mask"))
+    return NULL;
 
   /* Extract the grid struct. */
   GridProps *grid_props =

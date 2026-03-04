@@ -8,6 +8,7 @@
 #endif
 
 // Local includes
+#include "cpp_to_python.h"
 #include "grid_props.h"
 #include "part_props.h"
 #include "timers.h"
@@ -33,6 +34,61 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
 
   /* Assign the number of particles. */
   npart = npart_;
+
+  if (!ensure_float64_array(np_weights_, "part_mass")) {
+    return;
+  }
+  if (!ensure_1d_array_size(np_weights_, npart, "part_mass")) {
+    return;
+  }
+
+  if (np_velocities_ != NULL) {
+    if (!ensure_float64_array(np_velocities_, "velocities")) {
+      return;
+    }
+    if (!ensure_1d_array_size(np_velocities_, npart, "velocities")) {
+      return;
+    }
+  }
+
+  if (np_mask_ != NULL) {
+    if (!ensure_bool_array(np_mask_, "mask")) {
+      return;
+    }
+    if (!ensure_1d_array_size(np_mask_, npart, "mask")) {
+      return;
+    }
+  }
+
+  if (!PyTuple_Check(part_tuple_)) {
+    PyErr_SetString(PyExc_TypeError, "part_tuple must be a tuple of arrays");
+    return;
+  }
+
+  const Py_ssize_t nprops = PyTuple_Size(part_tuple_);
+  for (Py_ssize_t i = 0; i < nprops; i++) {
+    PyObject *part_obj = PyTuple_GetItem(part_tuple_, i);
+    if (!PyArray_Check(part_obj)) {
+      PyErr_SetString(PyExc_TypeError,
+                      "part_tuple entries must be NumPy arrays");
+      return;
+    }
+
+    PyArrayObject *np_part_arr = reinterpret_cast<PyArrayObject *>(part_obj);
+    if (!ensure_float64_array(np_part_arr, "part_property")) {
+      return;
+    }
+    if (!ensure_1d_array(np_part_arr, "part_property")) {
+      return;
+    }
+
+    npy_intp arr_size = PyArray_DIM(np_part_arr, 0);
+    if (arr_size != 1 && arr_size != npart) {
+      PyErr_SetString(PyExc_ValueError,
+                      "part_property arrays must have length 1 or npart");
+      return;
+    }
+  }
 
   toc("Constructing C++ Particles object");
 }

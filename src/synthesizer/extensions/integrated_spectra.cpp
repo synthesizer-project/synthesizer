@@ -202,12 +202,32 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   PyArrayObject *np_grid_spectra, *np_grid_weights;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
+  PyObject *py_grid_weights, *py_mask, *py_lam_mask;
   char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOOiiisiOOO", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads, &np_grid_weights, &np_mask,
-                        &np_lam_mask))
+                        &nlam, &method, &nthreads, &py_grid_weights, &py_mask,
+                        &py_lam_mask))
+    return NULL;
+
+  np_grid_weights = array_or_none(py_grid_weights, "grid_weights");
+  RETURN_IF_PYERR();
+  np_mask = array_or_none(py_mask, "mask");
+  RETURN_IF_PYERR();
+  np_lam_mask = array_or_none(py_lam_mask, "lam_mask");
+  RETURN_IF_PYERR();
+
+  if (!ensure_float64_array(np_grid_spectra, "grid_spectra"))
+    return NULL;
+  if (!ensure_float64_array(np_part_mass, "part_mass"))
+    return NULL;
+  if (np_grid_weights != NULL &&
+      !ensure_float64_array(np_grid_weights, "grid_weights"))
+    return NULL;
+  if (np_mask != NULL && !ensure_bool_array(np_mask, "mask"))
+    return NULL;
+  if (np_lam_mask != NULL && !ensure_bool_array(np_lam_mask, "lam_mask"))
     return NULL;
 
   /* Extract the grid struct. */

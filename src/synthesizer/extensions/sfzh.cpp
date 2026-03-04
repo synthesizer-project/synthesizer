@@ -53,11 +53,20 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask;
+  PyObject *py_mask;
   char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOiisiO", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads, &np_mask))
+                        &nthreads, &py_mask))
+    return NULL;
+
+  np_mask = array_or_none(py_mask, "mask");
+  RETURN_IF_PYERR();
+
+  if (!ensure_float64_array(np_part_mass, "part_mass"))
+    return NULL;
+  if (np_mask != NULL && !ensure_bool_array(np_mask, "mask"))
     return NULL;
 
   /* Extract the grid struct. */

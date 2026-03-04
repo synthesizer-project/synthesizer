@@ -47,6 +47,23 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
   /* The number of dimensions is the length of the axis tuple. */
   ndim = PyTuple_Size(axes_tuple);
 
+  if (np_spectra_ != nullptr && !ensure_float64_array(np_spectra_, "spectra")) {
+    return;
+  }
+
+  if (np_lam_ != nullptr && !ensure_float64_array(np_lam_, "lam")) {
+    return;
+  }
+
+  if (np_lam_mask_ != nullptr && !ensure_bool_array(np_lam_mask_, "lam_mask")) {
+    return;
+  }
+
+  if (np_grid_weights_ != nullptr &&
+      !ensure_float64_array(np_grid_weights_, "grid_weights")) {
+    return;
+  }
+
   /* If ndim is less than or equal to 0, we have an invalid grid. */
   if (ndim <= 0) {
     PyErr_SetString(PyExc_ValueError,
@@ -74,6 +91,14 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
                       "[GridProps::GridProps]: Failed to extract axis array.");
       return;
     }
+
+    if (!ensure_float64_array(np_axis_arr, "grid_axis")) {
+      return;
+    }
+    if (!ensure_1d_array(np_axis_arr, "grid_axis")) {
+      return;
+    }
+
     dims[idim] = PyArray_DIM(np_axis_arr, 0);
   }
 
@@ -89,8 +114,31 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
   }
   spectra_dims_[ndim] = nlam;
 
+  if (np_spectra_ != nullptr &&
+      (PyArray_NDIM(np_spectra_) != ndim + 1 ||
+       PyArray_DIM(np_spectra_, ndim) != nlam)) {
+    PyErr_SetString(PyExc_ValueError,
+                    "spectra has incompatible shape for grid dimensions");
+    return;
+  }
+
+  if (np_lam_ != nullptr && !ensure_1d_array_size(np_lam_, nlam, "lam")) {
+    return;
+  }
+
+  if (np_lam_mask_ != nullptr &&
+      !ensure_1d_array_size(np_lam_mask_, nlam, "lam_mask")) {
+    return;
+  }
+
   /* Flag whether we need to populate the grid weights */
   if (has_grid_weights()) {
+    if (PyArray_SIZE(np_grid_weights_) != size) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "grid_weights has incompatible size for the grid dimensions");
+      return;
+    }
     need_grid_weights_ = false;
   } else {
     need_grid_weights_ = true;
