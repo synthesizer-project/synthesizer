@@ -29,6 +29,20 @@ PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims,
 
 PyArrayObject *array_or_none(PyObject *obj, const char *name = "argument");
 
+bool ensure_dtype(PyArrayObject *arr, int expected_typenum,
+                  const char *name = "argument");
+
+bool ensure_c_contiguous(PyArrayObject *arr, const char *name = "argument");
+
+bool ensure_float64_array(PyArrayObject *arr, const char *name = "argument");
+
+bool ensure_bool_array(PyArrayObject *arr, const char *name = "argument");
+
+bool ensure_1d_array(PyArrayObject *arr, const char *name = "argument");
+
+bool ensure_1d_array_size(PyArrayObject *arr, npy_intp expected_size,
+                          const char *name = "argument");
+
 #define RETURN_IF_PYERR()                                                      \
   do {                                                                         \
     if (PyErr_Occurred())                                                      \

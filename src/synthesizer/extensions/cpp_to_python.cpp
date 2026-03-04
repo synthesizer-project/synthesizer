@@ -5,6 +5,7 @@
 #include "numpy_init.h"
 
 #include "cpp_to_python.h"
+#include "timers.h"
 
 // Map C++ type T to NumPy typenum at compile time
 template <typename T> struct NumpyTypenum;
@@ -119,4 +120,104 @@ PyArrayObject *array_or_none(PyObject *obj, const char *name) {
   }
 
   return reinterpret_cast<PyArrayObject *>(obj);
+}
+
+bool ensure_dtype(PyArrayObject *arr, int expected_typenum, const char *name) {
+  if (arr == nullptr) {
+    PyErr_Format(PyExc_TypeError, "%s must be a NumPy array", name);
+    return false;
+  }
+
+  const int arr_typenum = PyArray_TYPE(arr);
+  if (arr_typenum != expected_typenum) {
+    PyArray_Descr *expected = PyArray_DescrFromType(expected_typenum);
+    PyArray_Descr *got = PyArray_DescrFromType(arr_typenum);
+
+    const char *expected_name = (expected && expected->typeobj)
+                                    ? expected->typeobj->tp_name
+                                    : "unknown";
+    const char *got_name =
+        (got && got->typeobj) ? got->typeobj->tp_name : "unknown";
+
+    PyErr_Format(PyExc_TypeError,
+                 "%s has incorrect dtype (expected %s, got %s)", name,
+                 expected_name, got_name);
+
+    Py_XDECREF(expected);
+    Py_XDECREF(got);
+    return false;
+  }
+
+  return true;
+}
+
+bool ensure_c_contiguous(PyArrayObject *arr, const char *name) {
+  if (arr == nullptr) {
+    PyErr_Format(PyExc_TypeError, "%s must be a NumPy array", name);
+    return false;
+  }
+
+  if (!PyArray_ISCARRAY(arr)) {
+    PyErr_Format(PyExc_ValueError, "%s must be C contiguous", name);
+    return false;
+  }
+
+  return true;
+}
+
+bool ensure_float64_array(PyArrayObject *arr, const char *name) {
+  tic("Verifying C++ inputs");
+  const bool ok =
+      ensure_dtype(arr, NPY_FLOAT64, name) && ensure_c_contiguous(arr, name);
+  toc("Verifying C++ inputs");
+  return ok;
+}
+
+bool ensure_bool_array(PyArrayObject *arr, const char *name) {
+  tic("Verifying C++ inputs");
+  const bool ok =
+      ensure_dtype(arr, NPY_BOOL, name) && ensure_c_contiguous(arr, name);
+  toc("Verifying C++ inputs");
+  return ok;
+}
+
+bool ensure_1d_array(PyArrayObject *arr, const char *name) {
+  tic("Verifying C++ inputs");
+
+  if (arr == nullptr) {
+    PyErr_Format(PyExc_TypeError, "%s must be a NumPy array", name);
+    toc("Verifying C++ inputs");
+    return false;
+  }
+
+  if (PyArray_NDIM(arr) != 1) {
+    PyErr_Format(PyExc_ValueError, "%s must be 1D", name);
+    toc("Verifying C++ inputs");
+    return false;
+  }
+
+  toc("Verifying C++ inputs");
+  return true;
+}
+
+bool ensure_1d_array_size(PyArrayObject *arr, npy_intp expected_size,
+                          const char *name) {
+  tic("Verifying C++ inputs");
+
+  if (!ensure_1d_array(arr, name)) {
+    toc("Verifying C++ inputs");
+    return false;
+  }
+
+  if (PyArray_DIM(arr, 0) != expected_size) {
+    PyErr_Format(PyExc_ValueError,
+                 "%s has incorrect length (expected %lld, got %lld)", name,
+                 static_cast<long long>(expected_size),
+                 static_cast<long long>(PyArray_DIM(arr, 0)));
+    toc("Verifying C++ inputs");
+    return false;
+  }
+
+  toc("Verifying C++ inputs");
+  return true;
 }
