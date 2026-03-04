@@ -28,11 +28,14 @@ from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils import (
-    ensure_array_c_compatible_double,
-)
 
 _CENTERING_TOLERANCE = 1e-6
+
+
+def _raw_ndarray(arr):
+    if isinstance(arr, (unyt_array, unyt_quantity)):
+        return arr.ndview
+    return arr
 
 
 def _validate_centered_coordinates(cent_coords, *, warn_only=False):
@@ -579,9 +582,9 @@ def _generate_image_particle_smoothed(
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signal),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        _raw_ndarray(signal),
+        _raw_ndarray(_smoothing_lengths),
+        _raw_ndarray(_coords),
         kernel,
         res,
         img.npix[0],
@@ -751,17 +754,23 @@ def _generate_images_particle_smoothed(
         for ind, key in enumerate(labels):
             signals[ind, :] *= normalisations[key].value
 
+    signal_units = (
+        signals.units
+        if isinstance(signals, (unyt_quantity, unyt_array))
+        else None
+    )
+
     # In the C++ extension we want to be dealing with (Npart, Nimg) signals
     # to make the most of cache locality, so we transpose the signals
-    signals = signals.T
+    signals = np.ascontiguousarray(signals.T)
 
     toc("Setting up smoothed image inputs")
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signals),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        _raw_ndarray(signals),
+        _raw_ndarray(_smoothing_lengths),
+        _raw_ndarray(_coords),
         kernel,
         res,
         imgs.npix[0],
@@ -774,11 +783,11 @@ def _generate_images_particle_smoothed(
     )
 
     # Apply units if needs be
-    if isinstance(signals, (unyt_quantity, unyt_array)):
+    if signal_units is not None:
         tic("Applying units to smoothed images")
         imgs_arr = unyt_array(
             imgs_arr,
-            units=signals.units,
+            units=signal_units,
         )
         toc("Applying units to smoothed images")
 
@@ -1168,9 +1177,9 @@ def _generate_ifu_particle_hist(
     toc("Setting up histogram IFU inputs")
 
     ifu.arr = make_img(
-        ensure_array_c_compatible_double(spectra),
+        _raw_ndarray(spectra),
         smls,
-        ensure_array_c_compatible_double(_coords),
+        _raw_ndarray(_coords),
         kernel,
         res,
         ifu.npix[0],
@@ -1246,7 +1255,7 @@ def _generate_ifu_particle_smoothed(
     ifu.units = spectra.units
     # TODO: Rethink IFU path to avoid contiguous conversion.
     # Consider an IFU-specific backend that consumes native layout.
-    spectra = ensure_array_c_compatible_double(spectra.ndview)
+    spectra = spectra.ndview
 
     # Ensure the spectra is 2D with a spectra per particle
     if spectra.ndim != 2:
@@ -1303,10 +1312,8 @@ def _generate_ifu_particle_smoothed(
     # Generate the IFU
     ifu.arr = make_img(
         spectra,
-        ensure_array_c_compatible_double(
-            smoothing_lengths.to_value(spatial_units)
-        ),
-        ensure_array_c_compatible_double(_coords),
+        _raw_ndarray(smoothing_lengths.to_value(spatial_units)),
+        _raw_ndarray(_coords),
         kernel,
         res,
         ifu.npix[0],

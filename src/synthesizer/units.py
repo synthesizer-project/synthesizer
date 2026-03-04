@@ -38,6 +38,7 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 
 # Define the path to your YAML file
@@ -777,6 +778,8 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
+            tic("Applying units")
+
             # Convert the positional arguments to a list (it must be mutable
             # for what comes next)
             args = list(args)
@@ -789,7 +792,10 @@ def accepts(**units):
             for name, value in kwargs.items():
                 kwargs[name] = _check_arg(units, name, value)
 
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            toc("Applying units")
+
+            return result
 
         return wrapped
 

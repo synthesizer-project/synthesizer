@@ -487,13 +487,13 @@ def is_c_compatible_int(arr):
 
 
 def ensure_array_c_compatible_double(arr):
-    """Ensure that the input array is compatible with our C extensions.
+    """Check that the input array is compatible with our C extensions.
 
     Being "compatible" means that the numpy array is both C contiguous and
     is a double array for floating point numbers.
 
-    If we don't do this then the C extensions will produce garbage due to the
-    mismatch between the data types.
+    If the input is incompatible this raises immediately rather than copying
+    or converting the data.
 
     Args:
         arr (np.ndarray): The input array to be checked.
@@ -502,86 +502,57 @@ def ensure_array_c_compatible_double(arr):
     if arr is None:
         return arr
 
-    # Convert a list to a numpy array before we move on
-    if isinstance(arr, list):
-        arr = np.array(arr)
+    arr_to_check = arr
+    has_units = isinstance(arr, (unyt_array, unyt_quantity))
+    if has_units:
+        arr_to_check = arr.ndview
 
-    # If we have units we need to strip them off temporarily
-    units = None
-    if isinstance(arr, (unyt_array, unyt_quantity)):
-        units = arr.units
-        arr = arr.ndview
+    # Scalars are allowed if they are floating-point compatible
+    if np.isscalar(arr_to_check):
+        if isinstance(arr_to_check, (float, np.floating, int, np.integer)):
+            return arr
+        raise exceptions.InconsistentArguments(
+            "Scalar has incorrect type for C extension input: "
+            f"{type(arr_to_check)}"
+        )
 
-    # If its a scalar then just return it as a double
-    if np.isscalar(arr):
-        return np.float64(arr)
+    if not isinstance(arr_to_check, np.ndarray):
+        raise TypeError(
+            "Expected a NumPy array (or unyt array/quantity) for C extension "
+            f"input but got {type(arr_to_check)}"
+        )
 
-    # Do we need to do anything?
-    need_contiguous = False
-    need_double = False
-    if not arr.flags["C_CONTIGUOUS"]:
-        need_contiguous = True
-    if arr.dtype != np.float64:
-        need_double = True
+    if not arr_to_check.flags["C_CONTIGUOUS"]:
+        raise exceptions.InconsistentArguments(
+            "Array is not C contiguous. Convert before passing to C++ "
+            "extensions."
+        )
 
-    # If there's nothing to do then just return
-    if not need_double and not need_contiguous:
-        return arr
-
-    # If we need both we can do it all at once
-    if need_double and need_contiguous:
-        arr = np.ascontiguousarray(arr, dtype=np.float64)
-
-    # If we only need to make it contiguous then do that
-    elif need_contiguous:
-        arr = np.ascontiguousarray(arr)
-
-    # If we only need to make it double then do that
-    elif need_double:
-        arr = arr.astype(np.float64)
-
-    # If we had units then reattach them
-    if units is not None:
-        arr = unyt_array(arr, units)
+    if arr_to_check.dtype != np.float64:
+        raise exceptions.InconsistentArguments(
+            "Array has incorrect dtype. Expected float64, got "
+            f"{arr_to_check.dtype}."
+        )
 
     return arr
 
 
 def get_attr_c_compatible_double(obj, attr):
-    """Ensure an attribute of an object is compatible with our C extensions.
+    """Check an attribute of an object for C extension compatibility.
 
-    This function checks if the attribute of the object is a numpy array and
-    ensures that it is both C contiguous and of double precision. If the
-    attribute is not compatible, it modifies it in place.
+    This validates that an attribute is C contiguous and float64-compatible
+    without mutating the underlying object.
 
     Args:
         obj (object): The object containing the attribute to be checked.
         attr (str): The name of the attribute to be checked.
     """
-    # Get the attribute from the object
     arr = getattr(obj, attr)
 
-    # Just return it if it's None
     if arr is None:
         return arr
 
-    # Handle singular floats
-    if np.isscalar(arr):
-        return np.float64(arr)
-
-    # Ensure the attribute is compatible with C extensions
-    if not is_c_compatible_double(arr):
-        # It's not compatible, make it compatible
-        arr = ensure_array_c_compatible_double(arr)
-
-        # Assign it inplace so we only do this conversion once (but only if we
-        # can actually set it)
-        if hasattr(obj, attr):
-            # Set the attribute to the new array
-            setattr(obj, attr, arr)
-
-    # Also return the array
-    return arr
+    return ensure_array_c_compatible_double(arr)
 
 
 def sigmoid(x, A, a, c, center):

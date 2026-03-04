@@ -32,7 +32,6 @@ from synthesizer.extensions.particle_spectra import (
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
-from synthesizer.utils import get_attr_c_compatible_double
 
 
 class Extractor(ABC):
@@ -581,7 +580,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             self._grid_axes,
             extracted,
             weight,
-            get_attr_c_compatible_double(emitter, "_velocities"),
+            emitter._velocities,
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -694,7 +693,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             self._grid_axes,
             extracted,
             weight,
-            get_attr_c_compatible_double(emitter, "_velocities"),
+            emitter._velocities,
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
