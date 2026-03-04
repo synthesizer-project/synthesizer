@@ -1563,7 +1563,7 @@ class BaseGalaxy:
 
             # Verify filters was found
             if filters is None:
-                raise exceptions.MissingPhotometry(
+                raise exceptions.MissingPhotometryType(
                     f"No photometry found for label '{first_label}' with "
                     f"type '{phot_type}'. Ensure photometry has been "
                     "generated before creating images."
