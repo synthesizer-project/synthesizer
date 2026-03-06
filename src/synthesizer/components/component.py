@@ -528,8 +528,8 @@ class Component(ABC):
         self,
         *labels,
         fov,
+        instrument,
         img_type="smoothed",
-        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
@@ -564,12 +564,12 @@ class Component(ABC):
                 particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -590,8 +590,14 @@ class Component(ABC):
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label.
         """
-        # Convert labels tuple to a list
+        # Convert labels tuple to a list and validate they are strings
         labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
 
         # Are we doing a parametric image?
         is_param = hasattr(self, "morphology")
@@ -602,12 +608,6 @@ class Component(ABC):
             raise exceptions.InconsistentArguments(
                 f"Parametric {self.component_type} can only produce "
                 "smoothed images."
-            )
-
-        # Ensure we have an instrument
-        if instrument is None:
-            raise exceptions.InconsistentArguments(
-                "An Instrument must be provided to generate images."
             )
 
         # Ensure we have a cosmology if we need it
@@ -718,8 +718,8 @@ class Component(ABC):
         self,
         *labels,
         fov,
+        instrument,
         img_type="smoothed",
-        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
@@ -752,12 +752,12 @@ class Component(ABC):
                 particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -778,8 +778,8 @@ class Component(ABC):
         return self._get_images(
             *labels,
             fov=fov,
-            img_type=img_type,
             instrument=instrument,
+            img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
@@ -791,8 +791,8 @@ class Component(ABC):
         self,
         *labels,
         fov,
+        instrument,
         img_type="smoothed",
-        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
@@ -825,12 +825,12 @@ class Component(ABC):
                 particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -851,8 +851,8 @@ class Component(ABC):
         return self._get_images(
             *labels,
             fov=fov,
-            img_type=img_type,
             instrument=instrument,
+            img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
