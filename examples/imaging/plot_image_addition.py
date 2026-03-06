@@ -38,8 +38,8 @@ if __name__ == "__main__":
     # histories
     stellar_mass = 1e10 * Msun
     stars = Stars(
-        grid.log10age,
-        grid.metallicity,
+        grid.log10ages,
+        grid.metallicities,
         sf_hist=10.0 * Myr,
         metal_dist=0.01,
         initial_mass=stellar_mass,

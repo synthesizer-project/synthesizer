@@ -70,12 +70,12 @@ if __name__ == "__main__":
     ratio_id = "R23"
     ia = 0  # 1 Myr old for test grid
     ratios = []
-    for iZ, Z in enumerate(grid.metallicity):
+    for iZ, Z in enumerate(grid.metallicities):
         grid_point = (ia, iZ)
         lines = grid.get_lines_at_grid_point(grid_point, grid.available_lines)
         ratios.append(lines.get_ratio(ratio_id))
 
-    Zsun = grid.metallicity / 0.0124
+    Zsun = grid.metallicities / 0.0124
     plt.plot(Zsun, ratios)
     plt.xlim([0.01, 1])
     plt.ylim([1, 20])
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     ia = 0  # 1 Myr old for test grid
     x = []
     y = []
-    for iZ, Z in enumerate(grid.metallicity):
+    for iZ, Z in enumerate(grid.metallicities):
         grid_point = (ia, iZ)
         lines = grid.get_lines_at_grid_point(grid_point, grid.available_lines)
         x_, y_ = lines.get_diagram(diagram_id)
