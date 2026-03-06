@@ -2036,7 +2036,6 @@ class TestCombinedModelImaging:
             instrument=instrument,
             kernel=kernel,
             fov=fov,
-            resolution=resolution,
             phot_type="lnu",
         )
 
