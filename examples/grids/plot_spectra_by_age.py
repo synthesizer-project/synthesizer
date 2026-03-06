@@ -27,14 +27,14 @@ norm = mpl.colors.Normalize(vmin=5.0, vmax=11.0)
 def plot_spectra_age(grid, target_Z, spec_name="incident"):
     # get closest metallicity grid point
     grid_point = grid.get_grid_point(
-        log10ages=grid.log10age[0],
+        log10ages=grid.log10ages[0],
         metallicity=target_Z,
     )
     # metallicity grid point
     iZ = grid_point[1]
 
     # get actual metallicity for that grid point and print it
-    Z = grid.metallicity[iZ]
+    Z = grid.metallicities[iZ]
     print(f"target metallicity: {target_Z:.2f}")
     print(f"metallicity: {Z:.2f}")
 
@@ -65,7 +65,7 @@ def plot_spectra_age(grid, target_Z, spec_name="incident"):
     cax.set_xlabel(r"$\rm \log_{10}(age/yr)$")
 
     # loop over log10ages
-    for ia, log10age in enumerate(grid.log10age):
+    for ia, log10age in enumerate(grid.log10ages):
         # get spectra
         Lnu = grid.spectra[spec_name][ia, iZ, :]
         # Lnu = fnu_to_flam(grid.lam, Lnu)
