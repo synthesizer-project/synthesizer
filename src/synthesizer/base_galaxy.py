@@ -11,7 +11,6 @@ from synthesizer.cosmology import (
     get_angular_diameter_distance,
     get_luminosity_distance,
 )
-from synthesizer.emission_models import EmissionModel
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
@@ -20,7 +19,7 @@ from synthesizer.imaging.image_generators import (
     _prepare_galaxy_image_labels,
 )
 from synthesizer.instruments import Instrument
-from synthesizer.synth_warnings import deprecated, deprecation, warn
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 
@@ -156,34 +155,6 @@ class BaseGalaxy:
 
         # A container for caching parameters calculated by emission models
         self.model_param_cache = {}
-
-    @property
-    def photo_fluxes(self):
-        """Get the photometry fluxes.
-
-        Returns:
-            dict
-                The photometry fluxes.
-        """
-        deprecation(
-            "The `photo_fluxes` attribute is deprecated. Use "
-            "`photo_fnu` instead. Will be removed in v1.0.0"
-        )
-        return self.photo_fnu
-
-    @property
-    def photo_luminosities(self):
-        """Get the photometry luminosities.
-
-        Returns:
-            dict
-                The photometry luminosities.
-        """
-        deprecation(
-            "The `photo_luminosities` attribute is deprecated. Use "
-            "`photo_lnu` instead. Will be removed in v1.0.0"
-        )
-        return self.photo_lnu
 
     def __str__(self):
         """Return a string representation of the galaxy object.
@@ -618,30 +589,6 @@ class BaseGalaxy:
                 nthreads=nthreads,
             )
 
-    @deprecated(
-        "The `get_photo_luminosities` method is deprecated. Use "
-        "`get_photo_lnu` instead. Will be removed in v1.0.0"
-    )
-    def get_photo_luminosities(self, filters, verbose=True):
-        """Calculate luminosity photometry using a FilterCollection object.
-
-        Alias to get_photo_lnu.
-
-        Photometry is calculated in spectral luminosity density units.
-
-        Args:
-            filters (FilterCollection):
-                A FilterCollection object.
-            verbose (bool):
-                Are we talking?
-
-        Returns:
-            PhotometryCollection:
-                A PhotometryCollection object containing the luminosity
-                photometry in each filter in filters.
-        """
-        return self.get_photo_lnu(filters, verbose)
-
     def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
         """Calculate flux photometry using a FilterCollection object.
 
@@ -766,30 +713,6 @@ class BaseGalaxy:
             population in Msun.
         """
         return self.stars.calculate_surviving_mass(grid, **kwargs)
-
-    @deprecated(
-        "The `get_photo_fluxes` method is deprecated. Use "
-        "`get_photo_fnu` instead. Will be removed in v1.0.0"
-    )
-    def get_photo_fluxes(self, filters, verbose=True):
-        """Calculate flux photometry using a FilterCollection object.
-
-        Alias to get_photo_fnu.
-
-        Photometry is calculated in spectral flux density units.
-
-        Args:
-            filters (FilterCollection):
-                A FilterCollection object.
-            verbose (bool):
-                Are we talking?
-
-        Returns:
-            PhotometryCollection:
-                A PhotometryCollection object containing the flux photometry
-                in each filter in filters.
-        """
-        return self.get_photo_fnu(filters, verbose)
 
     def plot_spectra(
         self,
@@ -1467,33 +1390,10 @@ class BaseGalaxy:
         # Convert labels tuple to a list
         labels = list(labels)
 
-        # If limit_to is passed, flag that this is deprecated
-        if limit_to is not None:
-            deprecation(
-                "The `limit_to` argument in `get_images_luminosity` is "
-                "deprecated and will be removed in v1.0.0. You now pass "
-                "the desired model label(s) as positional arguments."
-            )
-            labels.extend(
-                limit_to if isinstance(limit_to, list) else [limit_to]
-            )
-
-        # Similarly, if labels contain an emission_model raise a deprecation
-        # warning and extract that models label. We will make an image for
-        # that model only.
         _labels = []
         while len(labels) > 0:
             label = labels.pop(0)
-            if isinstance(label, EmissionModel):
-                deprecation(
-                    "Passing an EmissionModel to `get_images_luminosity` is "
-                    "deprecated and will be removed in v1.0.0. You now pass "
-                    "the desired model label(s) as positional arguments. We'll"
-                    f" just make an image for the root model {label.label}."
-                )
-                _labels.append(label.label)
-            else:
-                _labels.append(label)
+            _labels.append(label)
         labels = _labels
 
         # Ensure we aren't trying to make a histogram for a parametric galaxy
