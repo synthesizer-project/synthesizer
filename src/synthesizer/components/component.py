@@ -26,7 +26,7 @@ from synthesizer.imaging.image_generators import (
     _prepare_component_image_labels,
 )
 from synthesizer.instruments import Instrument
-from synthesizer.synth_warnings import deprecated, deprecation
+from synthesizer.synth_warnings import deprecation
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils.ascii_table import TableFormatter
 
@@ -113,34 +113,6 @@ class Component(ABC):
 
         # A container for caching parameters calculated by emission models
         self.model_param_cache = {}
-
-    @property
-    def photo_fluxes(self):
-        """Get the photometric fluxes.
-
-        Returns:
-            dict
-                The photometry fluxes.
-        """
-        deprecation(
-            "The `photo_fluxes` attribute is deprecated. Use "
-            "`photo_fnu` instead. Will be removed in v1.0.0"
-        )
-        return self.photo_fnu
-
-    @property
-    def photo_luminosities(self):
-        """Get the photometric luminosities.
-
-        Returns:
-            dict
-                The photometry luminosities.
-        """
-        deprecation(
-            "The `photo_luminosities` attribute is deprecated. Use "
-            "`photo_lnu` instead. Will be removed in v1.0.0"
-        )
-        return self.photo_lnu
 
     @abstractmethod
     def get_mask(
@@ -333,30 +305,6 @@ class Component(ABC):
 
         return self.photo_lnu
 
-    @deprecated(
-        "The `get_photo_luminosities` method is deprecated. Use "
-        "`get_photo_lnu` instead. Will be removed in v1.0.0"
-    )
-    def get_photo_luminosities(self, filters, verbose=True):
-        """Calculate luminosity photometry using a FilterCollection object.
-
-        Alias to get_photo_lnu.
-
-        Photometry is calculated in spectral luminosity density units.
-
-        Args:
-            filters (FilterCollection):
-                A FilterCollection object.
-            verbose (bool):
-                Are we talking?
-
-        Returns:
-            PhotometryCollection
-                A PhotometryCollection object containing the luminosity
-                photometry in each filter in filters.
-        """
-        return self.get_photo_lnu(filters, verbose)
-
     def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
         """Calculate flux photometry using a FilterCollection object.
 
@@ -390,30 +338,6 @@ class Component(ABC):
             )
 
         return self.photo_fnu
-
-    @deprecated(
-        "The `get_photo_fluxes` method is deprecated. Use "
-        "`get_photo_fnu` instead. Will be removed in v1.0.0"
-    )
-    def get_photo_fluxes(self, filters, verbose=True):
-        """Calculate flux photometry using a FilterCollection object.
-
-        Alias to get_photo_fnu.
-
-        Photometry is calculated in spectral flux density units.
-
-        Args:
-            filters (FilterCollection):
-                A FilterCollection object.
-            verbose (bool):
-                Are we talking?
-
-        Returns:
-            PhotometryCollection:
-                A PhotometryCollection object containing the flux photometry
-                in each filter in filters.
-        """
-        return self.get_photo_fnu(filters, verbose)
 
     def get_spectra(
         self,
@@ -612,7 +536,6 @@ class Component(ABC):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
-        limit_to=None,
         resolution=None,
         cosmo=None,
         phot_type="lnu",
@@ -664,10 +587,6 @@ class Component(ABC):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
-            limit_to (str/list):
-                [DEPRECATED] If not None, defines a specific model (or list of
-                models) to limit the image generation to. Otherwise, all
-                models with saved spectra will have images generated.
             phot_type (str):
                 The type of photometry to use, either 'lnu' for luminosity
                 units or 'fnu' for flux units.
@@ -679,14 +598,6 @@ class Component(ABC):
         """
         # Convert labels tuple to a list
         labels = list(labels)
-
-        # If limit_to is passed flag that this is deprecated
-        if limit_to is not None:
-            deprecation(
-                "The `limit_to` argument in `get_images_luminosity` is "
-                "deprecated and will be removed in v1.0.0. You now pass "
-                "the desired model label(s) as positional arguments."
-            )
 
         # Similarly, if labels contain an emission_model raise a deprecation
         # warning and extract that models label. We will make an image for
