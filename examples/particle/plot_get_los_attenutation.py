@@ -124,7 +124,7 @@ kernel = Kernel().get_kernel()
 
 # Calculate the tau_vs
 start = time.time()
-loop_tau_v = galaxy.calculate_los_tau_v(
+loop_tau_v = galaxy.get_stellar_los_tau_v(
     kappa=0.07,
     kernel=kernel,
     force_loop=1,
@@ -134,7 +134,7 @@ loop_sum = np.sum(loop_tau_v)
 
 # Calculate the tau_vs
 start = time.time()
-tree_tau_v = galaxy.calculate_los_tau_v(
+tree_tau_v = galaxy.get_stellar_los_tau_v(
     kappa=0.07,
     kernel=kernel,
     min_count=100,
