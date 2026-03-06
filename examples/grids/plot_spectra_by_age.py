@@ -144,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("-all", "--all", action=argparse.BooleanOptionalAction)
 
     # Get dictionary of arguments
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # If all grids are requested get a list of the grids in the grid_dir
     # directory.
