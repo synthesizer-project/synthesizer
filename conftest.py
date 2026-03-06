@@ -435,8 +435,8 @@ def single_star_particle():
 def single_star_parametric(test_grid):
     """Return a parametric Stars object with a single star."""
     return ParametricStars(
-        test_grid.log10age,
-        test_grid.metallicity,
+        test_grid.log10ages,
+        test_grid.metallicities,
         sf_hist=1e7 * yr,
         metal_dist=0.01,
         initial_mass=1 * Msun,

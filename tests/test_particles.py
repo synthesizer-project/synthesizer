@@ -195,7 +195,7 @@ class TestParticlesPhotometry:
         return sp
 
     def test_get_particle_photo_lnu_and_property(self, phot_parts):
-        """Deprecated property should match."""
+        """Test particle photometry luminosity calculation."""
         sp = phot_parts
         out = sp.get_particle_photo_lnu(
             filters=None, verbose=False, nthreads=1
@@ -203,10 +203,9 @@ class TestParticlesPhotometry:
         assert "D" in out
         assert "D" in sp.particle_photo_lnu
         assert str(out["D"]["F"].units) == "erg/(Hz*s)"
-        assert sp.particle_photo_luminosities is sp.particle_photo_lnu
 
     def test_get_particle_photo_fnu_and_property(self, phot_parts):
-        """Deprecated property should match."""
+        """Test particle photometry flux calculation."""
         sp = phot_parts
         out = sp.get_particle_photo_fnu(
             filters=None, verbose=False, nthreads=1
@@ -214,7 +213,6 @@ class TestParticlesPhotometry:
         assert "D" in out
         assert "D" in sp.particle_photo_fnu
         assert str(out["D"]["F"].units) == "erg/(Hz*cm**2*s)"
-        assert sp.particle_photo_fluxes is sp.particle_photo_fnu
 
 
 class TestParticlesProjection:
