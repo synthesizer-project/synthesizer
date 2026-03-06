@@ -86,8 +86,10 @@ if __name__ == "__main__":
     plt.show()
 
     # We can also do the same with a helper function on the galaxy object
-    # First create an instrument with the desired resolution
-    instrument = Instrument(resolution=resolution)
+    # First create an instrument with the desired resolution and filters
+    instrument = Instrument(
+        "DemoInstrument", resolution=resolution, filters=filters
+    )
     img = galaxy.get_images_luminosity(
         "reprocessed",
         fov=fov,

@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # get the grid point for this log10age and metallicity
     grid_point = grid.get_grid_point(
         log10ages=args.log10age,
-        metallicity=args.metallicity,
+        metallicities=args.metallicity,
     )
 
     # loop over available spectra and plot
