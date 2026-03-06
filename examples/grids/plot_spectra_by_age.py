@@ -28,7 +28,7 @@ def plot_spectra_age(grid, target_Z, spec_name="incident"):
     # get closest metallicity grid point
     grid_point = grid.get_grid_point(
         log10ages=grid.log10ages[0],
-        metallicity=target_Z,
+        metallicities=target_Z,
     )
     # metallicity grid point
     iZ = grid_point[1]
