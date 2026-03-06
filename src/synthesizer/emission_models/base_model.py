@@ -56,7 +56,7 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.synth_warnings import deprecation, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity
 
 
@@ -328,13 +328,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Initialise the lam mask
         self._lam_mask = lam_mask
 
-        # Temporarily handle old apply_dust_to argument
+        # Reject removed apply_dust_to compatibility argument
         if "apply_dust_to" in fixed_parameters:
-            deprecation(
-                "The apply_dust_to argument has been deprecated. "
-                "Please use the apply_to argument instead."
+            raise exceptions.InconsistentArguments(
+                "The apply_dust_to argument has been removed. "
+                "Please use apply_to instead."
             )
-            apply_to = fixed_parameters.pop("apply_dust_to")
 
         # Get operation flags
         self._get_operation_flags(
