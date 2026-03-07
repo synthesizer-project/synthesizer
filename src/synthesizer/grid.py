@@ -1203,10 +1203,18 @@ class Grid:
 
     def _where_axis(self, axis_name):
         """Return the dimension index of a given axis name."""
-        if axis_name in self.axes:
-            return self.axes.index(axis_name)
-        if axis_name in self._extract_axes:
-            return self._extract_axes.index(axis_name)
+        candidate_names = [axis_name]
+        if axis_name == "metallicity":
+            candidate_names.append("metallicities")
+        elif axis_name == "metallicities":
+            candidate_names.append("metallicity")
+
+        for candidate in candidate_names:
+            if candidate in self.axes:
+                return self.axes.index(candidate)
+            if candidate in self._extract_axes:
+                return self._extract_axes.index(candidate)
+
         raise exceptions.InconsistentArguments(
             f"Axis {axis_name} not found in grid. Available axes: "
             f"{self.axes} or {self._extract_axes}"
@@ -1363,32 +1371,57 @@ class Grid:
             tuple
                 A tuple of integers specifying the closest grid point.
         """
+        # Normalize accepted aliases first
+        normalized_kwargs = {}
+        valid_axis_keys = set(self.axes)
+        valid_axis_keys.update(f"log10{axis}" for axis in self.axes)
+
+        alias_pairs = {
+            "metallicity": "metallicities",
+            "metallicities": "metallicity",
+            "log10metallicity": "log10metallicities",
+            "log10metallicities": "log10metallicity",
+        }
+
+        for key, value in kwargs.items():
+            normalized_key = key
+            if normalized_key not in valid_axis_keys:
+                alias_key = alias_pairs.get(normalized_key)
+                if alias_key in valid_axis_keys:
+                    normalized_key = alias_key
+
+            if normalized_key in normalized_kwargs:
+                raise TypeError(
+                    f"Multiple values provided for axis '{normalized_key}'."
+                )
+            normalized_kwargs[normalized_key] = value
+
         # Create a list we will return
         indices = []
 
         # Loop over axes and get the nearest index for each
         for axis in self.axes:
             log10_axis = f"log10{axis}"
-            if axis in kwargs:
+            if axis in normalized_kwargs:
                 indices.append(
                     self.get_nearest_index(
-                        kwargs.pop(axis), getattr(self, axis)
+                        normalized_kwargs.pop(axis), getattr(self, axis)
                     )
                 )
-            elif log10_axis in kwargs:
+            elif log10_axis in normalized_kwargs:
                 indices.append(
                     self.get_nearest_index(
-                        kwargs.pop(log10_axis), getattr(self, log10_axis)
+                        normalized_kwargs.pop(log10_axis),
+                        getattr(self, log10_axis),
                     )
                 )
             else:
                 indices.append(slice(None))
 
-        # Warn the user is any kwargs weren't a grid axis
-        if len(kwargs) > 0:
-            warn(
-                "The following axes are not on the grid:"
-                f" {list(kwargs.keys())}"
+        # Error if any kwargs weren't valid grid axes
+        if len(normalized_kwargs) > 0:
+            raise TypeError(
+                f"Invalid grid axis name(s): {list(normalized_kwargs.keys())}"
             )
 
         return tuple(indices)

@@ -65,7 +65,7 @@ ax.grid(True)
 x, y = np.meshgrid(grid.log10ages, grid.log10metallicities)
 ax.scatter(
     x.flatten(),
-    np.log10(y.flatten()),
+    y.flatten(),
     marker=".",
     color="grey",
     alpha=0.3,
