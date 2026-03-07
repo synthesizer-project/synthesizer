@@ -1462,6 +1462,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             **kwargs:
                 The parameters to fix.
         """
+        if "apply_dust_to" in kwargs:
+            raise exceptions.InconsistentArguments(
+                "The apply_dust_to argument has been removed. "
+                "Please use apply_to instead."
+            )
         self.fixed_parameters.update(kwargs)
 
     def to_hdf5(self, group):
@@ -1507,6 +1512,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if len(self.fixed_parameters) > 0:
             fixed_parameters = group.create_group("FixedParameters")
             for key, value in self.fixed_parameters.items():
+                if key == "apply_dust_to":
+                    raise exceptions.InconsistentArguments(
+                        "The apply_dust_to argument has been removed. "
+                        "Please use apply_to instead."
+                    )
                 fixed_parameters.attrs[key] = value
 
         # Save the children

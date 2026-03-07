@@ -1378,8 +1378,14 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
-        # Convert labels tuple to a list
+        # Convert labels tuple to a list and validate they are strings
         labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
 
         _labels = []
         while len(labels) > 0:
