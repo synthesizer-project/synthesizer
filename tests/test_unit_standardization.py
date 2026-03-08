@@ -227,11 +227,12 @@ class TestStandardizeImagingUnits:
 
     def test_conversion_preserves_coordinate_centering(self):
         """Test that coordinate centering is preserved after conversion."""
-        # Setup - create centered coordinates
+        # Setup - create centered coordinates (seeded for determinism)
+        rng = np.random.default_rng(42)
         resolution = 0.1 * arcsecond
         fov = 10.0 * kpc
         coords = (
-            unyt_array(np.random.rand(100, 3), "kpc") - 0.5 * kpc
+            unyt_array(rng.random((100, 3)), "kpc") - 0.5 * kpc
         )  # Centered at origin
         emitter = MockEmitter(coords, redshift=2.0)
 
