@@ -227,12 +227,17 @@ class TestStandardizeImagingUnits:
 
     def test_conversion_preserves_coordinate_centering(self):
         """Test that coordinate centering is preserved after conversion."""
-        # Setup - create centered coordinates
+        # Setup - create coordinates that are exactly centered at the
+        # origin by subtracting the sample mean. This lets us test that
+        # the unit conversion (a linear scaling) preserves the zero mean,
+        # rather than testing whether a finite random sample happens to
+        # have a mean near zero.
+        rng = np.random.default_rng(42)
         resolution = 0.1 * arcsecond
         fov = 10.0 * kpc
-        coords = (
-            unyt_array(np.random.rand(100, 3), "kpc") - 0.5 * kpc
-        )  # Centered at origin
+        raw = rng.random((100, 3)) - 0.5
+        raw -= raw.mean(axis=0)  # Exactly zero mean by construction
+        coords = unyt_array(raw, "kpc")
         emitter = MockEmitter(coords, redshift=2.0)
 
         # Execute
@@ -244,10 +249,9 @@ class TestStandardizeImagingUnits:
             include_smoothing_lengths=False,
         )
 
-        # Assert coordinates are still centered (mean should be near 0)
-        # Use a more relaxed tolerance since unit conversion can introduce
-        # small numerical errors
-        assert np.allclose(coords_out.mean(axis=0).value, 0.0, atol=0.01)
+        # Assert coordinates are still centered (mean should be ~0 to
+        # floating-point precision after the linear kpc->arcsec scaling)
+        assert np.allclose(coords_out.mean(axis=0).value, 0.0, atol=1e-10)
 
     def test_incompatible_resolution_units_raises_error(self):
         """Test that incompatible resolution units raise an error."""

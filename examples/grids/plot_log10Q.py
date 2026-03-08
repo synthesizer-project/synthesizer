@@ -34,7 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("-ion", type=str, required=False, default="HI")
 
     # Get dictionary of arguments
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # initialise grid
     grid = Grid(args.grid_name)

@@ -10,6 +10,7 @@ This example demonstrates how to:
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from synthesizer.emissions.line_ratios import (
     get_diagram_labels,
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     # get the grid point for this log10age and metallicity
     grid_point = grid.get_grid_point(
         log10ages=log10age,
-        metallicity=metallicity,
+        metallicities=metallicity,
     )
 
     # get information on one line
@@ -58,24 +59,24 @@ if __name__ == "__main__":
     # we can measure line ratios
     ratio_id = "BalmerDecrement"
     ratio = lines.get_ratio(ratio_id)  # R23, R2, R3, ...
-    print(f"{ratio_id}: {ratio:.2f}")
+    print(f"{ratio_id}: {float(np.squeeze(ratio)):.2f}")
 
     # or loop over availalable ratios
     for ratio_id in lines.available_ratios:
         ratio = lines.get_ratio(ratio_id)
-        print(f"{ratio_id}: {ratio:.2f}")
+        print(f"{ratio_id}: {float(np.squeeze(ratio)):.2f}")
 
     # we can plot a ratio against metallicity by looping over the metallicity
     # grid
     ratio_id = "R23"
     ia = 0  # 1 Myr old for test grid
     ratios = []
-    for iZ, Z in enumerate(grid.metallicity):
+    for iZ, Z in enumerate(grid.metallicities):
         grid_point = (ia, iZ)
         lines = grid.get_lines_at_grid_point(grid_point, grid.available_lines)
         ratios.append(lines.get_ratio(ratio_id))
 
-    Zsun = grid.metallicity / 0.0124
+    Zsun = grid.metallicities / 0.0124
     plt.plot(Zsun, ratios)
     plt.xlim([0.01, 1])
     plt.ylim([1, 20])
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     ia = 0  # 1 Myr old for test grid
     x = []
     y = []
-    for iZ, Z in enumerate(grid.metallicity):
+    for iZ, Z in enumerate(grid.metallicities):
         grid_point = (ia, iZ)
         lines = grid.get_lines_at_grid_point(grid_point, grid.available_lines)
         x_, y_ = lines.get_diagram(diagram_id)

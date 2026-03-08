@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument("-log10age", type=float, required=False, default=6.0)
 
     # Get dictionary of arguments
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # initialise grid
     grid = Grid(args.grid_name)
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # get the grid point for this log10age and metallicity
     grid_point = grid.get_grid_point(
         log10ages=args.log10age,
-        metallicity=args.metallicity,
+        metallicities=args.metallicity,
     )
 
     # loop over available spectra and plot

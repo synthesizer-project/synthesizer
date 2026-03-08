@@ -56,7 +56,7 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.synth_warnings import deprecation, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity
 
 
@@ -328,13 +328,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Initialise the lam mask
         self._lam_mask = lam_mask
 
-        # Temporarily handle old apply_dust_to argument
+        # Reject removed apply_dust_to compatibility argument
         if "apply_dust_to" in fixed_parameters:
-            deprecation(
-                "The apply_dust_to argument has been deprecated. "
-                "Please use the apply_to argument instead."
+            raise exceptions.InconsistentArguments(
+                "The apply_dust_to argument has been removed. "
+                "Please use apply_to instead."
             )
-            apply_to = fixed_parameters.pop("apply_dust_to")
 
         # Get operation flags
         self._get_operation_flags(
@@ -1463,6 +1462,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             **kwargs:
                 The parameters to fix.
         """
+        if "apply_dust_to" in kwargs:
+            raise exceptions.InconsistentArguments(
+                "The apply_dust_to argument has been removed. "
+                "Please use apply_to instead."
+            )
         self.fixed_parameters.update(kwargs)
 
     def to_hdf5(self, group):
@@ -1508,6 +1512,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if len(self.fixed_parameters) > 0:
             fixed_parameters = group.create_group("FixedParameters")
             for key, value in self.fixed_parameters.items():
+                if key == "apply_dust_to":
+                    raise exceptions.InconsistentArguments(
+                        "The apply_dust_to argument has been removed. "
+                        "Please use apply_to instead."
+                    )
                 fixed_parameters.attrs[key] = value
 
         # Save the children
