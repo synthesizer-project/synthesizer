@@ -10,6 +10,7 @@ Contents
    :maxdepth: 1
    
    config_options
+   timing_interface
    units
    abundances
    creating_grids

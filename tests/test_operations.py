@@ -29,7 +29,7 @@ def test_single_star_extraction(
     # First ensure the sfzh's are equivalent
     single_star_particle.get_sfzh(
         test_grid.log10ages,
-        test_grid.metallicity,
+        test_grid.metallicities,
     )
     assert np.isclose(np.sum(single_star_particle.sfzh.sfzh), 1.0), (
         "The unit particle SFZH does not sum to 1"

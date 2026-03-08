@@ -25,6 +25,9 @@
 /* Local includes */
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
+#ifdef ATOMIC_TIMING
+#include "../../extensions/timers_init.h"
+#endif
 
 /* It's possible we don't have PI... if so define it. */
 #ifndef M_PI
@@ -354,7 +357,7 @@ static double calculate_overlap(const double res, const double r, const int nx,
  */
 static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
 
-  double start = tic();
+  tic("Calculating signal in aperture");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -392,7 +395,7 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   /* Construct the ouput. */
   PyObject *np_signal = Py_BuildValue("d", signal);
 
-  toc("Calculating signal in aperture", start);
+  toc("Calculating signal in aperture");
 
   return np_signal;
 }
@@ -422,5 +425,14 @@ PyMODINIT_FUNC PyInit_circular_aperture(void) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     return NULL;
   }
-  return PyModule_Create(&circularoverlapmodule);
+  PyObject *m = PyModule_Create(&circularoverlapmodule);
+  if (m == NULL)
+    return NULL;
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
+  return m;
 }

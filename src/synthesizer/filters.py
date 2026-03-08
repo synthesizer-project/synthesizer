@@ -1,17 +1,8 @@
-"""A bridge module to handle the move of the filters module.
+"""A bridge module for the filters module.
 
-The filters module is now a submodule of the instruments module.
-This module is a bridge to handle the move of the filters module
-with a deprecation warning.
+The filters module is a submodule of the instruments module.
+This module provides a convenient import path for backwards compatibility.
 """
-
-from synthesizer.synth_warnings import deprecation
-
-deprecation(
-    "The filters module has been moved to the instruments module. "
-    "Please update your imports "
-    "synthesizer.filters -> synthesizer.instruments"
-)
 
 from synthesizer.instruments.filters import UVJ, Filter, FilterCollection
 

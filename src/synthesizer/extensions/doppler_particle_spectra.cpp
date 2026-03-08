@@ -25,6 +25,9 @@
 #include "property_funcs.h"
 #include "reductions.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /**
@@ -330,7 +333,7 @@ void shifted_spectra_loop_cic(GridProps *grid_props, Particles *parts,
   /* First get the grid indices and fractions for all particles. */
   get_particle_indices_and_fracs(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("Cloud in Cell particle loop");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -353,7 +356,7 @@ void shifted_spectra_loop_cic(GridProps *grid_props, Particles *parts,
   shifted_spectra_loop_cic_serial(grid_props, parts, part_spectra, c);
 
 #endif
-  toc("Cloud in Cell particle loop", start_time);
+  toc("Cloud in Cell particle loop");
 }
 
 /**
@@ -585,7 +588,7 @@ void shifted_spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   /* First get the grid indices for all particles. */
   get_particle_indices(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("Nearest Grid Point particle spectra loop");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -608,7 +611,7 @@ void shifted_spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   shifted_spectra_loop_ngp_serial(grid_props, parts, part_spectra, c);
 
 #endif
-  toc("Nearest Grid Point particle spectra loop", start_time);
+  toc("Nearest Grid Point particle spectra loop");
 }
 
 /**
@@ -630,8 +633,8 @@ void shifted_spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  */
 PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
-  double start_time = tic();
-  double setup_start = tic();
+  tic("Computing particle and integrated Lnus");
+  tic("Extracting Python data");
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -682,7 +685,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* Convert c to double */
   double c = PyFloat_AsDouble(py_c);
 
-  toc("Extracting Python data", setup_start);
+  toc("Extracting Python data");
 
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
@@ -723,7 +726,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyObject *out_tuple =
       Py_BuildValue("NN", out_part_spectra, out_integrated_spectra);
 
-  toc("Computing particle and integrated lnus", start_time);
+  toc("Computing particle and integrated Lnus");
 
   return out_tuple;
 }
@@ -751,9 +754,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_doppler_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
-};
+}

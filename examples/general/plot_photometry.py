@@ -59,8 +59,8 @@ if __name__ == "__main__":
     # get the 2D star formation and metal enrichment history for the given
     # SPS grid. This is (age, Z).
     stars = Stars(
-        grid.log10age,
-        grid.metallicity,
+        grid.log10ages,
+        grid.metallicities,
         sf_hist=sfh,
         metal_dist=metal_dist,
         initial_mass=stellar_mass,
@@ -161,7 +161,7 @@ if __name__ == "__main__":
         # Loop over the filters
         for f in filters:
             # Calculate the photometry
-            phot = f.apply_filter(seds[z]._fnu, nu=seds[z]._obsnu)
+            phot = f.apply_filter(seds[z]._fnu, nu=seds[z].obsnu)
 
             # Plot the transmitted portion of the SED
             if ind == len(zs) - 1:

@@ -22,6 +22,9 @@
 #include "part_props.h"
 #include "property_funcs.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /**
@@ -40,7 +43,7 @@
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
-  double start_time = tic();
+  tic("Computing SFZH");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -90,7 +93,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   delete parts;
   delete grid_props;
 
-  toc("Computing SFZH", start_time);
+  toc("Computing SFZH");
 
   return Py_BuildValue("N", np_sfzh);
 }
@@ -116,9 +119,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_sfzh(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
 }

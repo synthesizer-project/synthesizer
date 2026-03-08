@@ -29,7 +29,7 @@ from synthesizer.imaging import Image, SpectralCube
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
-from synthesizer.synth_warnings import deprecated, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 from synthesizer.utils.geometry import get_rotation_matrix
 
@@ -143,16 +143,8 @@ class Galaxy(BaseGalaxy):
                 )
             else:
                 self.stellar_mass_weighted_age = None
-                warn(
-                    "Ages of stars not provided, "
-                    "setting stellar_mass_weighted_age to `None`"
-                )
         else:
             self.stellar_mass_weighted_age = None
-            warn(
-                "Current mass of stars not provided, "
-                "setting stellar_mass_weighted_age to `None`"
-            )
 
     def calculate_integrated_gas_properties(self):
         """Calculate integrated gas properties."""
@@ -167,10 +159,6 @@ class Galaxy(BaseGalaxy):
             )
         else:
             self.mass_weighted_gas_metallicity = None
-            warn(
-                "Mass of gas particles not provided, "
-                "setting mass_weighted_gas_metallicity to `None`"
-            )
 
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
@@ -190,10 +178,6 @@ class Galaxy(BaseGalaxy):
         else:
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
-            warn(
-                "Star forming gas particle mask not provided, "
-                "setting sf_gas_mass and sf_gas_metallicity to `None`"
-            )
 
     @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
@@ -433,7 +417,7 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        start = tic()
+        tic("Calculating LOS tau_v")
 
         # Ensure we have stars and gas
         if self.stars is None:
@@ -476,7 +460,7 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
 
-        toc("Calculating stellar LOS tau_v", start)
+        toc("Calculating LOS tau_v")
 
         return tau_v
 
@@ -532,7 +516,7 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        start = tic()
+        tic("Calculating LOS tau_v")
 
         # Ensure we have black holes and gas
         if self.black_holes is None:
@@ -575,106 +559,7 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.black_holes
         setattr(self.black_holes, "tau_v", tau_vs)
 
-        toc("Calculating black hole LOS tau_v", start)
-
-        return tau_v
-
-    @deprecated()
-    def calculate_los_tau_v(
-        self,
-        kappa,
-        kernel,
-        tau_v_attr="tau_v",
-        mask=None,
-        threshold=1,
-        force_loop=0,
-        min_count=100,
-        nthreads=1,
-    ):
-        """Calculate the LOS optical depth for each star particle.
-
-        This will calculate the optical depth for each star particle based on
-        the gas particle distribution. The stars are considered to interact
-        with a gas particle if gas_z > star_z and the star postion is within
-        the SPH kernel of the gas particle.
-
-        Note: the resulting tau_vs will be associated to the stars object at
-        self.stars.tau_v.
-
-        Args:
-            kappa (float):
-                The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
-            tau_v_attr (str):
-                The attribute to store the tau_v values in the stars object.
-                Defaults to "tau_v".
-            mask (bool):
-                A mask to be applied to the stars. Surface densities will only
-                be computed and returned for stars with True in the mask.
-            threshold (float):
-                The threshold above which the SPH kernel is 0. This is normally
-                at a value of the impact parameter of q = r / h = 1.
-            force_loop (bool):
-                By default (False) the C function will only loop over nearby
-                gas particles to search for contributions to the LOS surface
-                density. This forces the loop over *all* gas particles.
-            min_count (int):
-                The minimum number of particles in a leaf cell of the tree
-                used to search for gas particles. Can be used to tune the
-                performance of the tree search in extreme cases. If there are
-                fewer particles in a leaf cell than this value, the search
-                will be performed with a brute force loop.
-            nthreads (int):
-                The number of threads to use in the tree search. Default is 1.
-        """
-        start = tic()
-
-        # Ensure we have stars and gas
-        if self.stars is None:
-            raise exceptions.InconsistentArguments(
-                "No Stars object has been provided! We can't calculate line "
-                "of sight dust attenuation without a Stars object containing "
-                "the stellar particles!"
-            )
-        if self.gas is None:
-            raise exceptions.InconsistentArguments(
-                "No Gas object has been provided! We can't calculate line of "
-                "sight dust attenuation without a Gas object containing the "
-                "dust!"
-            )
-
-        # Compute the dust surface densities
-        los_dustsds = self.stars.get_los_column_density(
-            self.gas,
-            "dust_masses",
-            kernel,
-            mask=mask,
-            threshold=threshold,
-            force_loop=force_loop,
-            min_count=min_count,
-            nthreads=nthreads,
-        )  # Msun / Mpc**2
-
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
-        # Finalise the calculation
-        tau_v = kappa * los_dustsds
-
-        # Apply the mask if provided
-        if mask is not None:
-            tau_vs = np.zeros(self.stars.nparticles)
-            tau_vs[mask] = tau_v
-        else:
-            tau_vs = tau_v
-
-        # Store the result in self.stars
-        setattr(self.stars, tau_v_attr, tau_vs)
-
-        toc("Calculating LOS tau_v", start)
+        toc("Calculating LOS tau_v")
 
         return tau_v
 
@@ -1511,7 +1396,7 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
-        start = tic()
+        tic("Computing spectral data cubes")
 
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
@@ -1632,12 +1517,12 @@ class Galaxy(BaseGalaxy):
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
-            toc("Computing stellar and blackhole spectral data cubes", start)
+            toc("Computing spectral data cubes")
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
-            toc("Computing stellar spectral data cube", start)
+            toc("Computing spectral data cubes")
             return stellar_cube
-        toc("Computing blackhole spectral data cube", start)
+        toc("Computing spectral data cubes")
         return blackhole_cube
 
     def get_projected_angular_coordinates(self, cosmo, los_dists=None):
