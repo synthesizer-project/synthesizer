@@ -1316,8 +1316,8 @@ class BaseGalaxy:
         self,
         *labels,
         fov,
+        instrument,
         img_type="smoothed",
-        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
@@ -1351,12 +1351,12 @@ class BaseGalaxy:
                 present in the particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -1397,12 +1397,6 @@ class BaseGalaxy:
         if self.galaxy_type == "Parametric" and img_type == "hist":
             raise exceptions.InconsistentArguments(
                 "Parametric Galaxies can only produce smoothed images."
-            )
-
-        # Ensure we have an instrument
-        if instrument is None:
-            raise exceptions.InconsistentArguments(
-                "An Instrument must be provided to generate images."
             )
 
         # Ensure we have a cosmology if we need it
@@ -1705,12 +1699,12 @@ class BaseGalaxy:
                 present in the particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.

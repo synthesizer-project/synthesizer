@@ -610,12 +610,6 @@ class Component(ABC):
                 "smoothed images."
             )
 
-        # Ensure we have an instrument
-        if instrument is None:
-            raise exceptions.InconsistentArguments(
-                "An Instrument must be provided to generate images."
-            )
-
         # Ensure we have a cosmology if we need it
         if unit_is_compatible(instrument.resolution, arcsecond):
             if cosmo is None:
