@@ -18,7 +18,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from unyt import Hz, angstrom, erg, s
+from unyt import Hz, angstrom, c, erg, s
 
 from synthesizer import exceptions
 from synthesizer.instruments import Filter, FilterCollection
@@ -1024,6 +1024,111 @@ class TestFilterApply:
         result = filt.apply_filter(spectrum, nu=nu, integration_method="trapz")
 
         assert np.isscalar(result) or result.shape == ()
+
+    def test_apply_filter_native_grid_skips_interpolation(
+        self, lam_linear, monkeypatch
+    ):
+        """Native-grid convolution should not invoke interpolation."""
+        filt = Filter(
+            "test_filter",
+            lam_eff=3000 * angstrom,
+            lam_fwhm=500 * angstrom,
+            new_lam=lam_linear,
+        )
+        spectrum = np.ones(len(lam_linear))
+
+        def _raise_interp(*args, **kwargs):
+            raise RuntimeError("np.interp should not be called")
+
+        monkeypatch.setattr(np, "interp", _raise_interp)
+
+        result = filt.apply_filter(
+            spectrum, lam=lam_linear, integration_method="trapz"
+        )
+        assert np.isscalar(result) or result.shape == ()
+
+    def test_apply_filter_reuses_cached_interpolation(
+        self, lam_linear, monkeypatch
+    ):
+        """Repeated use of the same non-native grid should hit cache."""
+        filt = Filter(
+            "test_filter",
+            lam_eff=3000 * angstrom,
+            lam_fwhm=500 * angstrom,
+            new_lam=lam_linear,
+        )
+        spectrum = np.ones(len(lam_linear))
+        shifted_lam = (lam_linear.value * 1.001) * angstrom
+
+        calls = {"n": 0}
+        original_interp = np.interp
+
+        def _counting_interp(*args, **kwargs):
+            calls["n"] += 1
+            return original_interp(*args, **kwargs)
+
+        monkeypatch.setattr(np, "interp", _counting_interp)
+
+        filt.apply_filter(
+            spectrum, lam=shifted_lam, integration_method="trapz"
+        )
+        filt.apply_filter(
+            spectrum, lam=shifted_lam, integration_method="trapz"
+        )
+
+        assert calls["n"] == 1
+
+
+class TestFilterCollectionBatching:
+    """Tests for batched filter application on FilterCollection."""
+
+    def test_apply_filters_matches_individual(self, lam_linear):
+        """Batched filter application should match per-filter results."""
+        tophat_dict = {
+            "f1": {"lam_eff": 2000 * angstrom, "lam_fwhm": 400 * angstrom},
+            "f2": {"lam_eff": 3000 * angstrom, "lam_fwhm": 500 * angstrom},
+            "f3": {"lam_eff": 4200 * angstrom, "lam_fwhm": 600 * angstrom},
+        }
+        fc = FilterCollection(tophat_dict=tophat_dict, new_lam=lam_linear)
+
+        spectrum = np.vstack(
+            [
+                np.ones(len(lam_linear)),
+                np.linspace(0.1, 1.0, len(lam_linear)),
+            ]
+        )
+        nu = (c / lam_linear).to("Hz")
+
+        batched = fc.apply_filters(spectrum, nu=nu, integration_method="trapz")
+
+        expected = np.stack(
+            [
+                fc.filters[code].apply_filter(
+                    spectrum,
+                    nu=nu,
+                    integration_method="trapz",
+                )
+                for code in fc.filter_codes
+            ],
+            axis=0,
+        )
+        np.testing.assert_allclose(batched, expected, rtol=2e-4, atol=1e-8)
+
+    def test_prepare_for_grid_populates_batched_cache(self, lam_linear):
+        """Preparing grid should cache batched weights and denominators."""
+        tophat_dict = {
+            "f1": {"lam_eff": 2500 * angstrom, "lam_fwhm": 500 * angstrom},
+            "f2": {"lam_eff": 3500 * angstrom, "lam_fwhm": 500 * angstrom},
+        }
+        fc = FilterCollection(tophat_dict=tophat_dict, new_lam=lam_linear)
+        fc.prepare_for_grid(lam=lam_linear)
+
+        lam_keys = [k for k in fc._batch_cache if k[0] == "lam_trapz"]
+        nu_keys = [k for k in fc._batch_cache if k[0] == "nu_trapz"]
+
+        assert len(lam_keys) > 0
+        assert len(nu_keys) > 0
+        assert "denominators" in fc._batch_cache[nu_keys[0]]
 
 
 class TestFilterCollectionEdgeCases:

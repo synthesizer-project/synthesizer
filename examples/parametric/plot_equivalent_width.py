@@ -85,7 +85,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     # Define the parameters of the star formation and metal
     # enrichment histories.
     grid = Grid(grids)
-    Z = grid.metallicity
+    Z = grid.metallicities
     stellar_mass = 1e8 * Msun
 
     # -- Calculate the equivalent width for each defined index
@@ -128,10 +128,10 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         plt.title(label, fontsize=8, transform=plt.gca().transAxes, y=0.8)
 
         if len(np.array(eqw).shape) != 1:
-            grid.metallicity = [[x, x] for x in grid.metallicity]
+            grid.metallicities = [[x, x] for x in grid.metallicities]
 
         plt.scatter(
-            grid.metallicity,
+            grid.metallicities,
             eqw,
             color="white",
             edgecolors="grey",
@@ -140,9 +140,9 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
             linewidth=0.5,
             s=10,
         )
-        plt.semilogx(grid.metallicity, eqw, linewidth=0.75, color="grey")
+        plt.semilogx(grid.metallicities, eqw, linewidth=0.75, color="grey")
         eqw.clear()
-        grid.metallicity = Z
+        grid.metallicities = Z
 
         plt.tight_layout()
 
@@ -182,8 +182,8 @@ def measure_equivalent_width(
     # --- get 2D star formation and metal enrichment history for the
     # given SPS grid. This is (age, Z).
     sfzh = Stars(
-        grid.log10age,
-        grid.metallicity,
+        grid.log10ages,
+        grid.metallicities,
         sf_hist=sfh,
         metal_dist=metal_dist,
         initial_mass=stellar_mass,

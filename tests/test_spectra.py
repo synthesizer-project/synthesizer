@@ -637,8 +637,8 @@ def test_param_stars_from_parts(
         verbose=True,
     )
     param_stars = stars.get_sfzh(
-        log10ages=grid.log10age,
-        metallicities=grid.metallicity,
+        log10ages=grid.log10ages,
+        metallicities=grid.metallicities,
         grid_assignment_method="cic",
     )
     param_spectra = param_stars.get_spectra(incident, verbose=True)

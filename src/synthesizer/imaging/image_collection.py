@@ -104,7 +104,7 @@ class ImageCollection(ImagingBase):
             imgs (dict):
                 A dictionary of images to be turned into a collection.
         """
-        start = tic()
+        tic("Creating ImageCollection")
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
 
@@ -131,7 +131,7 @@ class ImageCollection(ImagingBase):
                 self.imgs[f] = img
                 self.filter_codes.append(f)
 
-        toc("Creating ImageCollection", start)
+        toc("Creating ImageCollection")
 
     @property
     def shape(self):

@@ -56,7 +56,7 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.synth_warnings import deprecation, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity
 
 
@@ -328,13 +328,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Initialise the lam mask
         self._lam_mask = lam_mask
 
-        # Temporarily handle old apply_dust_to argument
+        # Reject removed apply_dust_to compatibility argument
         if "apply_dust_to" in fixed_parameters:
-            deprecation(
-                "The apply_dust_to argument has been deprecated. "
-                "Please use the apply_to argument instead."
+            raise exceptions.InconsistentArguments(
+                "The apply_dust_to argument has been removed. "
+                "Please use apply_to instead."
             )
-            apply_to = fixed_parameters.pop("apply_dust_to")
 
         # Get operation flags
         self._get_operation_flags(
@@ -1463,6 +1462,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             **kwargs:
                 The parameters to fix.
         """
+        if "apply_dust_to" in kwargs:
+            raise exceptions.InconsistentArguments(
+                "The apply_dust_to argument has been removed. "
+                "Please use apply_to instead."
+            )
         self.fixed_parameters.update(kwargs)
 
     def to_hdf5(self, group):
@@ -1508,6 +1512,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if len(self.fixed_parameters) > 0:
             fixed_parameters = group.create_group("FixedParameters")
             for key, value in self.fixed_parameters.items():
+                if key == "apply_dust_to":
+                    raise exceptions.InconsistentArguments(
+                        "The apply_dust_to argument has been removed. "
+                        "Please use apply_to instead."
+                    )
                 fixed_parameters.attrs[key] = value
 
         # Save the children
@@ -2512,7 +2521,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        start = tic()
+        tic("Generating all spectra")
 
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
@@ -2528,7 +2537,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Apply any overrides we have
-        start_overrides = tic()
+        tic("Applying model overrides")
         if not _is_related:
             self._apply_overrides(
                 emission_model,
@@ -2539,7 +2548,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 mask=mask,
                 vel_shift=vel_shift,
             )
-        toc("Applying model overrides", start_overrides)
+        toc("Applying model overrides")
 
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
@@ -2557,7 +2566,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
         # Get any existing spectra we are reusing
-        start_existing = tic()
+        tic("Getting existing emissions")
         if not _is_related:
             spectra, particle_spectra = self._get_existing_emissions(
                 emitters,
@@ -2565,7 +2574,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 particle_spectra,
                 emission_type="spectra",
             )
-        toc("Getting existing emissions", start_existing)
+        toc("Getting existing emissions")
 
         # Perform all extractions
         for label, spectra_key in emission_model._extract_keys.items():
@@ -2775,7 +2784,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_spectra:
                         del particle_spectra[model.label]
 
-        toc("Generating all spectra", start)
+        toc("Generating all spectra")
 
         return spectra, particle_spectra
 
@@ -2887,7 +2896,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
-        start = tic()
+        tic("Generating all lines")
 
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
@@ -3110,7 +3119,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model.per_particle and model.label in particle_lines:
                         del particle_lines[model.label]
 
-        toc("Generating all lines", start)
+        toc("Generating all lines")
 
         return lines, particle_lines
 

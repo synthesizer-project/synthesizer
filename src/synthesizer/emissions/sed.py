@@ -102,7 +102,7 @@ class Sed:
             description (str):
                 An optional descriptive string defining the Sed.
         """
-        start = tic()
+        tic("Creating Sed")
 
         # Set the description
         self.description = description
@@ -132,7 +132,7 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
-        toc("Creating Sed", start)
+        toc("Creating Sed")
 
     def sum(self):
         """Sum the SED over all dimensions.
@@ -144,7 +144,7 @@ class Sed:
             sed (object, Sed):
                 Summed 1D SED.
         """
-        start = tic()
+        tic("Summing Sed")
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
@@ -165,7 +165,7 @@ class Sed:
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
 
-            toc("Summing Sed", start)
+            toc("Summing Sed")
 
             return new_sed
         else:
@@ -758,7 +758,7 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        start = tic()
+        tic("Calculating bolometric luminosity")
 
         # Calculate the bolometric luminosity
         # NOTE: the integration is done "backwards" when integrating over
@@ -770,7 +770,7 @@ class Sed:
             nthreads=nthreads,
             method=integration_method,
         )
-        toc("Calculating bolometric luminosity", start)
+        toc("Calculating bolometric luminosity")
 
         return integral * self.lnu.units * self.nu.units
 
@@ -1181,7 +1181,9 @@ class Sed:
 
         return self.fnu
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_lnu(
+        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+    ):
         """Calculate broadband luminosities using a FilterCollection object.
 
         Args:
@@ -1192,27 +1194,46 @@ class Sed:
             nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
+            integration_method (str):
+                The integration method used to calculate the luminosities over
+                the filter profile. Options include "trapz" and "simps".
 
         Returns:
-            photo_lnu (dict):
-                A dictionary of rest frame broadband luminosities.
+            (PhotometryCollection):
+                Rest-frame broadband luminosities.
         """
-        # Intialise result dictionary
-        photo_lnu = {}
+        tic("Getting Photometry (Lnu)")
 
-        # Loop over filters
-        for f in filters:
-            # Apply the filter transmission curve and store the resulting
-            # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu, nthreads=nthreads)
-            photo_lnu[f.filter_code] = bb_lum * self.lnu.units
+        tic("Applying Filters (Lnu)")
+
+        # Apply all filters in one batched integration call.
+        bb_lums = filters.apply_filters(
+            self._lnu,
+            nu=self._nu,
+            nthreads=nthreads,
+            integration_method=integration_method,
+        )
+        toc("Applying Filters (Lnu)")
 
         # Create the photometry collection and store it in the object
-        self.photo_lnu = PhotometryCollection(filters, **photo_lnu)
+        tic("Stacking Photometry (Lnu)")
+        self.photo_lnu = PhotometryCollection(
+            filters,
+            photometry=unyt_array(
+                bb_lums,
+                self.__class__.__dict__["lnu"].unit,
+                bypass_validation=True,
+            ),
+        )
+        toc("Stacking Photometry (Lnu)")
+
+        toc("Getting Photometry (Lnu)")
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
+    def get_photo_fnu(
+        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+    ):
         """Calculate broadband fluxes using a FilterCollection object.
 
         Args:
@@ -1223,11 +1244,16 @@ class Sed:
             nthreads (int):
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
+            integration_method (str):
+                The integration method used to calculate the fluxes over the
+                filter profile. Options include "trapz" and "simps".
 
         Returns:
-            (dict):
-                A dictionary of fluxes in each filter in filters.
+            (PhotometryCollection):
+                Fluxes in each filter in filters.
         """
+        tic("Getting Photometry (Fnu)")
+
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             raise ValueError(
@@ -1238,21 +1264,30 @@ class Sed:
                 )
             )
 
-        # Set up flux dictionary
-        photo_fnu = {}
+        tic("Applying Filters (Fnu)")
 
-        # Loop over filters in filter collection
-        for f in filters:
-            # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(
-                self._fnu,
-                nu=self._obsnu,
-                nthreads=nthreads,
-            )
-            photo_fnu[f.filter_code] = bb_flux * self.fnu.units
+        # Apply all filters in one batched integration call.
+        bb_fluxes = filters.apply_filters(
+            self._fnu,
+            nu=self._obsnu,
+            nthreads=nthreads,
+            integration_method=integration_method,
+        )
+        toc("Applying Filters (Fnu)")
 
         # Create the photometry collection and store it in the object
-        self.photo_fnu = PhotometryCollection(filters, **photo_fnu)
+        tic("Stacking Photometry (Fnu)")
+        self.photo_fnu = PhotometryCollection(
+            filters,
+            photometry=unyt_array(
+                bb_fluxes,
+                self.__class__.__dict__["fnu"].unit,
+                bypass_validation=True,
+            ),
+        )
+        toc("Stacking Photometry (Fnu)")
+
+        toc("Getting Photometry (Fnu)")
 
         return self.photo_fnu
 
@@ -1387,7 +1422,7 @@ class Sed:
                 Either resample factor or new_lam must be supplied. If neither
                 or both are passed an error is raised.
         """
-        start = tic()
+        tic("Resampling Sed")
 
         # Ensure we have what we need
         if resample_factor is None and new_lam is None:
@@ -1440,7 +1475,7 @@ class Sed:
         sed._obslam = np.nan_to_num(sed._obslam)
         sed._obsnu = np.nan_to_num(sed._obsnu)
 
-        toc("Resampling Sed", start)
+        toc("Resampling Sed")
 
         return sed
 

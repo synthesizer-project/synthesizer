@@ -15,7 +15,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
-from synthesizer.synth_warnings import deprecation, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
@@ -156,34 +156,6 @@ class Particles:
 
         # Attach the name of the particle type
         self.name = name
-
-    @property
-    def particle_photo_fluxes(self):
-        """Get the particle photometry fluxes.
-
-        Returns:
-            dict
-                The photometry fluxes.
-        """
-        deprecation(
-            "The `particle_photo_fluxes` attribute is deprecated. Use "
-            "`particle_photo_fnu` instead. Will be removed in v1.0.0"
-        )
-        return self.particle_photo_fnu
-
-    @property
-    def particle_photo_luminosities(self):
-        """Get the photometry luminosities.
-
-        Returns:
-            dict
-                The photometry luminosities.
-        """
-        deprecation(
-            "The `particle_photo_luminosities` attribute is deprecated. Use "
-            "`particle_photo_lnu` instead. Will be removed in v1.0.0"
-        )
-        return self.particle_photo_lnu
 
     @property
     def centered_coordinates(self):
@@ -510,7 +482,7 @@ class Particles:
             mask (np.ndarray):
                 The mask array.
         """
-        start = tic()
+        tic("Generating mask")
 
         # Get the attribute
         attr_str = attr
@@ -573,7 +545,7 @@ class Particles:
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
 
-        toc("Generating mask", start)
+        toc("Generating mask")
 
         return new_mask
 

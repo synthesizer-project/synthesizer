@@ -20,6 +20,9 @@
 #include "octree.h"
 #include "property_funcs.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 
 /**
  * @brief Computes the line of sight surface densities with a loop.
@@ -234,7 +237,7 @@ static void los_loop(const double *pos_i, const double *pos_j,
                      const int npart_j, const int kdim, const double threshold,
                      const int nthreads) {
 
-  double start = tic();
+  tic("Loop surface density calculation");
 
 #ifdef WITH_OPENMP
 
@@ -256,7 +259,7 @@ static void los_loop(const double *pos_i, const double *pos_j,
                   npart_j, kdim, threshold);
 
 #endif
-  toc("Loop surface density calculation", start);
+  toc("Loop surface density calculation");
 }
 
 /**
@@ -475,7 +478,7 @@ static void los_tree(struct cell *root, const double *pos_i,
                      const int kdim, const double threshold,
                      const int nthreads) {
 
-  double start = tic();
+  tic("Recursive surface density calculation");
 
 #ifdef WITH_OPENMP
 
@@ -495,7 +498,7 @@ static void los_tree(struct cell *root, const double *pos_i,
   los_tree_serial(root, pos_i, kernel, surf_dens, npart_i, kdim, threshold);
 
 #endif
-  toc("Recursive surface density calculation", start);
+  toc("Recursive surface density calculation");
 }
 
 /**
@@ -527,7 +530,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
                         &threshold, &force_loop, &min_count, &nthreads))
     return NULL;
 
-  double start = tic();
+  tic("Calculating surface densities");
 
   /* Quick check to make sure our inputs are valid. */
   if (npart_i == 0) {
@@ -578,7 +581,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
     los_loop(pos_i, pos_j, smls, surf_den_val, kernel, surf_dens, npart_i,
              npart_j, kdim, threshold, nthreads);
 
-    toc("Calculating surface densities (with a loop)", start);
+    toc("Calculating surface densities");
 
     return Py_BuildValue("N", np_surf_dens);
   }
@@ -598,7 +601,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   /* Clean up. */
   cleanup_cell_tree(root);
 
-  toc("Calculating surface densities (with cells)", start);
+  toc("Calculating surface densities");
 
   return Py_BuildValue("N", np_surf_dens);
 }
@@ -624,9 +627,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_column_density(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
 }

@@ -1,63 +1,379 @@
 /******************************************************************************
  * C extension for timing code execution.
+ *
+ * This module provides the central timing accumulation infrastructure.
+ * It owns the global_timings map and exposes a pure-C accumulation function
+ * (toc_accumulate) via a PyCapsule so that other C++ extensions can call it
+ * directly without acquiring the GIL.
+ *
+ * Architecture:
+ *   - toc_accumulate() is the pure-C++ function that writes to global_timings.
+ *   - PyInit_timers() wraps toc_accumulate in a PyCapsule ("_toc_accumulate").
+ *   - Other extensions (integrated_spectra, etc.) retrieve the capsule at
+ *     their own init time and cache the raw function pointer in timers.h.
+ *   - At runtime, timers.h calls the cached pointer directly (no GIL).
  *****************************************************************************/
 #include <Python.h>
-#include <stdio.h>
+#include <atomic>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-#ifdef WITH_OPENMP
-#include <omp.h>
-#define GET_TIME() omp_get_wtime()
-#else
-#include <time.h>
-#define GET_TIME() ((double)clock() / CLOCKS_PER_SEC)
-#endif
+#include "timers.h"
 
 /**
- * @brief Start a timer.
+ * @brief Structure to hold timing data for a single operation.
  *
- * @return The current time.
+ * This structure stores cumulative timing information using atomics for
+ * thread-safe accumulation as a defensive measure, in case toc() is
+ * called from within OpenMP parallel regions in future. The source field
+ * is set once at creation and treated as read-only thereafter.
+ *
+ * Note: We use atomic<double> for cumulative_time, but fetch_add is only
+ * available in C++20. For C++17, we use compare_exchange_weak in a loop.
  */
-double tic() { return GET_TIME(); }
+struct OperationTimingData {
+  std::atomic<double> cumulative_time; /**< Sum of all timing measurements */
+  std::atomic<int> call_count;         /**< Number of times operation called */
+  std::string source; /**< Source of timing: "C" or "Python" */
+
+  /**
+   * @brief Default constructor.
+   */
+  OperationTimingData()
+      : cumulative_time(0.0), call_count(0), source("") {}
+
+  /**
+   * @brief Constructor with source specification.
+   *
+   * @param src The source identifier ("C" or "Python").
+   */
+  OperationTimingData(const std::string &src)
+      : cumulative_time(0.0), call_count(0), source(src) {}
+
+  /**
+   * @brief Atomically add to cumulative_time.
+   *
+   * Uses compare-exchange loop for C++17 compatibility.
+   *
+   * @param value The value to add.
+   */
+  void add_time(double value) {
+    double old_val = cumulative_time.load(std::memory_order_relaxed);
+    while (!cumulative_time.compare_exchange_weak(
+        old_val, old_val + value, std::memory_order_relaxed)) {
+      // Retry if another thread modified it
+    }
+  }
+};
 
 /**
- * @brief Stop a timer and print the elapsed time.
+ * @brief Global map storing accumulated timing data for all operations.
  *
- * @param msg: The message to print.
- * @param start_time: The start time.
+ * This map is shared across all threads. A mutex protects ALL map access
+ * (find, insert, iterate) since std::unordered_map is not thread-safe for
+ * concurrent read/write. The atomic fields on OperationTimingData are a
+ * second line of defence for future use when we may move to a concurrent
+ * container or fine-grained locking.
  */
-void toc(const char *msg, double start_time) {
+static std::unordered_map<std::string, OperationTimingData> global_timings;
+
+/**
+ * @brief Mutex protecting all access to global_timings.
+ *
+ * Held by toc_accumulate() and py_reset_timings(). Currently toc() is
+ * only called outside OpenMP parallel regions so the mutex is uncontended,
+ * but it guards against future call-site changes.
+ */
+static std::mutex timings_mutex;
+
+/**
+ * @brief Active timer entry used to support nested timing.
+ *
+ * Each thread has its own stack of active timers. The currently active
+ * timer accrues exclusive wall-clock time until it is paused by a nested
+ * timer or stopped by toc().
+ */
+struct ActiveTimer {
+  std::string operation;
+  std::string source;
+  double resume_time;
+  double accumulated_exclusive;
+
+  ActiveTimer(const char *op, const char *src, double now)
+      : operation(op == nullptr ? "" : op), source(src == nullptr ? "" : src),
+        resume_time(now), accumulated_exclusive(0.0) {}
+};
+
+/**
+ * @brief Thread-local stack of active timers.
+ */
+static thread_local std::vector<ActiveTimer> active_timer_stack;
+
+/**
+ * @brief Accumulate timing data for an operation (pure C++, no Python API).
+ *
+ * This is the core accumulation function shared by all extensions via
+ * PyCapsule. It does NOT touch the Python API and does NOT require the GIL.
+ *
+ * Thread safety is provided by a mutex that serialises all map access.
+ * Currently toc() is only called outside OpenMP parallel regions so the
+ * mutex is uncontended, but it guards against future call-site changes.
+ *
+ * @param msg The operation name.
+ * @param elapsed_time The elapsed time in seconds.
+ * @param source The source identifier ("C" or "Python").
+ */
+extern "C" void toc_accumulate(const char *msg, double elapsed_time,
+                               const char *source) {
+  std::string operation(msg);
+  std::lock_guard<std::mutex> lock(timings_mutex);
+
+  auto it = global_timings.find(operation);
+  if (it == global_timings.end()) {
+    auto result = global_timings.emplace(
+        std::piecewise_construct, std::forward_as_tuple(operation),
+        std::forward_as_tuple(std::string(source)));
+    it = result.first;
+  }
+
+  it->second.add_time(elapsed_time);
+  it->second.call_count.fetch_add(1, std::memory_order_relaxed);
+}
+
+/**
+ * @brief Start a named timer and pause the currently active timer.
+ *
+ * This function is pure C++ (no Python API) and does not require the GIL.
+ *
+ * @param msg The timer label/operation name.
+ * @param source The source identifier ("C" or "Python").
+ */
+extern "C" void tic_start(const char *msg, const char *source) {
 #ifdef ATOMIC_TIMING
-  double end_time = GET_TIME();
-  double elapsed_time = end_time - start_time;
-#ifdef WITH_OPENMP
-  printf("[C] %s took: %f seconds\n", msg, elapsed_time);
-#else
-  printf("[C] %s took (in serial): %f seconds\n", msg, elapsed_time);
-#endif
+  const double now = GET_TIME();
+
+  if (!active_timer_stack.empty()) {
+    ActiveTimer &parent = active_timer_stack.back();
+    parent.accumulated_exclusive += now - parent.resume_time;
+  }
+
+  active_timer_stack.emplace_back(msg, source, now);
 #else
   (void)msg;
-  (void)start_time;
+  (void)source;
 #endif
 }
+
+/**
+ * @brief Stop the active timer, accumulate, and resume its parent timer.
+ *
+ * This function is pure C++ (no Python API) and does not require the GIL.
+ *
+ * @param msg The timer label (used as a fallback for legacy call patterns).
+ * @param source The source identifier ("C" or "Python").
+ */
+extern "C" void toc_stop(const char *msg, const char *source) {
+#ifdef ATOMIC_TIMING
+  if (active_timer_stack.empty()) {
+    return;
+  }
+
+  const double now = GET_TIME();
+  ActiveTimer timer = active_timer_stack.back();
+  active_timer_stack.pop_back();
+
+  timer.accumulated_exclusive += now - timer.resume_time;
+
+  const char *operation = timer.operation.c_str();
+  if (operation[0] == '\0' && msg != nullptr && msg[0] != '\0') {
+    operation = msg;
+  }
+  if (operation[0] == '\0') {
+    operation = "Unlabelled operation";
+  }
+
+  const char *final_source = timer.source.c_str();
+  if (final_source[0] == '\0' && source != nullptr && source[0] != '\0') {
+    final_source = source;
+  }
+  if (final_source[0] == '\0') {
+    final_source = "Unknown";
+  }
+
+  toc_accumulate(operation, timer.accumulated_exclusive, final_source);
+
+  if (!active_timer_stack.empty()) {
+    active_timer_stack.back().resume_time = now;
+  }
+#else
+  (void)msg;
+  (void)source;
+#endif
+}
+
+/* ========================================================================= */
+/* Python wrappers                                                           */
+/* ========================================================================= */
 
 /* Python wrapper for tic */
 static PyObject *py_tic(PyObject *self, PyObject *args) {
   (void)self;
-  (void)args;
-  return Py_BuildValue("d", tic());
+  char *msg;
+  if (!PyArg_ParseTuple(args, "s", &msg))
+    return NULL;
+#ifdef ATOMIC_TIMING
+  tic_start(msg, "Python");
+#endif
+  Py_RETURN_NONE;
 }
 
-/* Python wrapper for toc */
+/**
+ * @brief Python wrapper for toc - stop timer and accumulate timing data.
+ *
+ * This function is called from Python code to stop a named timer started
+ * with tic("...").
+ *
+ * When ATOMIC_TIMING is not defined, this is a complete no-op.
+ *
+ * @param self Module object (unused).
+ * @param args Python arguments: (msg).
+ * @return None.
+ */
 static PyObject *py_toc(PyObject *self, PyObject *args) {
+  (void)self;
+  char *msg;
+  if (!PyArg_ParseTuple(args, "s", &msg))
+    return NULL;
+#ifdef ATOMIC_TIMING
+  toc_stop(msg, "Python");
+#endif
+  Py_RETURN_NONE;
+}
+
+/**
+ * @brief Get list of all operation names with accumulated timing data.
+ *
+ * @param self Module object (unused).
+ * @param args Python arguments (none expected).
+ * @return Python list of operation names (strings).
+ */
+static PyObject *py_get_operation_names(PyObject *self, PyObject *args) {
+  (void)self;
+  (void)args;
+
+  std::lock_guard<std::mutex> lock(timings_mutex);
+  // Create Python list
+  PyObject *list = PyList_New(global_timings.size());
+  size_t i = 0;
+  for (const auto &pair : global_timings) {
+    PyList_SetItem(list, i++, PyUnicode_FromString(pair.first.c_str()));
+  }
+  return list;
+}
+
+/**
+ * @brief Get accumulated timing data for a specific operation.
+ *
+ * Returns a tuple of (cumulative_time, call_count, source).
+ *
+ * @param self Module object (unused).
+ * @param args Python arguments: (operation_name,).
+ * @return Python tuple (cumulative_time, call_count, source) or raises
+ * KeyError.
+ */
+static PyObject *py_get_operation_timings(PyObject *self, PyObject *args) {
+  (void)self;
+  const char *operation;
+  if (!PyArg_ParseTuple(args, "s", &operation))
+    return NULL;
+
+  std::lock_guard<std::mutex> lock(timings_mutex);
+  // Find operation in map
+  auto it = global_timings.find(std::string(operation));
+  if (it == global_timings.end()) {
+    PyErr_SetString(PyExc_KeyError, operation);
+    return NULL;
+  }
+
+  // Load atomic values
+  double cumulative_time =
+      it->second.cumulative_time.load(std::memory_order_relaxed);
+  int call_count = it->second.call_count.load(std::memory_order_relaxed);
+  const char *source = it->second.source.c_str();
+
+  // Return tuple (cumulative_time, call_count, source)
+  return Py_BuildValue("(dis)", cumulative_time, call_count, source);
+}
+
+/**
+ * @brief Get source ("C" or "Python") for a specific operation.
+ *
+ * @param self Module object (unused).
+ * @param args Python arguments: (operation_name,).
+ * @return Python string "C" or "Python", or raises KeyError.
+ */
+static PyObject *py_get_operation_source(PyObject *self, PyObject *args) {
+  (void)self;
+  const char *operation;
+  if (!PyArg_ParseTuple(args, "s", &operation))
+    return NULL;
+
+  std::lock_guard<std::mutex> lock(timings_mutex);
+  // Find operation in map
+  auto it = global_timings.find(std::string(operation));
+  if (it == global_timings.end()) {
+    PyErr_SetString(PyExc_KeyError, operation);
+    return NULL;
+  }
+
+  return PyUnicode_FromString(it->second.source.c_str());
+}
+
+/**
+ * @brief Reset all accumulated timing data.
+ *
+ * Clears the global timing map, resetting all accumulated times and counts.
+ * This should be called before each profiling run.
+ *
+ * @param self Module object (unused).
+ * @param args Python arguments (none expected).
+ * @return None.
+ */
+static PyObject *py_reset_timings(PyObject *self, PyObject *args) {
+  (void)self;
+  (void)args;
+
+  std::lock_guard<std::mutex> lock(timings_mutex);
+  global_timings.clear();
+
+  /* Clear active timers for this thread so profiling restarts cleanly. */
+  active_timer_stack.clear();
+
+  Py_RETURN_NONE;
+}
+
+/**
+ * @brief Testing helper: call toc_accumulate with source="C".
+ *
+ * This simulates what a C++ extension's toc() call does, allowing tests
+ * to verify the full accumulation pipeline without needing real particle
+ * data. Takes (operation_name, elapsed_time) as arguments.
+ *
+ * @param self Module object (unused).
+ * @param args Python arguments: (msg, elapsed_time).
+ * @return None.
+ */
+static PyObject *py_test_toc_from_c(PyObject *self, PyObject *args) {
   (void)self;
 #ifdef ATOMIC_TIMING
   char *msg;
-  double start_time;
-  if (!PyArg_ParseTuple(args, "sd", &msg, &start_time))
+  double elapsed_time;
+  if (!PyArg_ParseTuple(args, "sd", &msg, &elapsed_time))
     return NULL;
-  double end_time = GET_TIME();
-  double elapsed_time = end_time - start_time;
-  printf("[Python] %s took: %f seconds\n", msg, elapsed_time);
+
+  toc_accumulate(msg, elapsed_time, "C");
 #else
   (void)args;
 #endif
@@ -66,16 +382,30 @@ static PyObject *py_toc(PyObject *self, PyObject *args) {
 
 /* Module method table */
 static PyMethodDef TimerMethods[] = {
-    {"tic", py_tic, METH_NOARGS, "Start a timer and return the start time."},
-    {"toc", py_toc, METH_VARARGS, "Stop the timer and print the elapsed time."},
+    {"tic", py_tic, METH_VARARGS,
+     "Start a timer for a named operation."},
+    {"toc", py_toc, METH_VARARGS,
+     "Stop a named timer and accumulate timing data."},
+    {"get_operation_names", py_get_operation_names, METH_NOARGS,
+     "Get list of all operation names with accumulated timing data."},
+    {"get_operation_timings", py_get_operation_timings, METH_VARARGS,
+     "Get timing data for an operation as (cumulative_time, call_count, "
+     "source)."},
+    {"get_operation_source", py_get_operation_source, METH_VARARGS,
+     "Get source ('C' or 'Python') for a specific operation."},
+    {"reset_timings", py_reset_timings, METH_NOARGS,
+     "Clear all accumulated timing data."},
+    {"_test_toc_from_c", py_test_toc_from_c, METH_VARARGS,
+     "Testing helper: call toc_accumulate with source='C'. "
+     "Simulates what a C++ extension's toc() does."},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 
 /* Module definition */
 static struct PyModuleDef timermodule = {
     PyModuleDef_HEAD_INIT,
-    "timer",                               /* name of module */
-    "A module containing timer functions", /* module documentation*/
+    "timers",                             /* name of module */
+    "A module containing timer functions", /* module documentation */
     -1,                                    /* m_size */
     TimerMethods,                          /* m_methods */
     NULL,                                  /* m_reload */
@@ -85,4 +415,51 @@ static struct PyModuleDef timermodule = {
 };
 
 /* Module initialization function */
-PyMODINIT_FUNC PyInit_timers(void) { return PyModule_Create(&timermodule); }
+PyMODINIT_FUNC PyInit_timers(void) {
+  PyObject *m = PyModule_Create(&timermodule);
+  if (m == NULL)
+    return NULL;
+
+#ifdef ATOMIC_TIMING
+  /* Expose timer start callback for C++ extensions. */
+  PyObject *tic_capsule =
+      PyCapsule_New((void *)tic_start, TIC_START_CAPSULE_NAME, NULL);
+  if (tic_capsule == NULL) {
+    Py_DECREF(m);
+    return NULL;
+  }
+  if (PyModule_AddObject(m, "_tic_start", tic_capsule) < 0) {
+    Py_DECREF(tic_capsule);
+    Py_DECREF(m);
+    return NULL;
+  }
+
+  /* Expose timer stop callback for C++ extensions. */
+  PyObject *toc_capsule =
+      PyCapsule_New((void *)toc_stop, TOC_STOP_CAPSULE_NAME, NULL);
+  if (toc_capsule == NULL) {
+    Py_DECREF(m);
+    return NULL;
+  }
+  if (PyModule_AddObject(m, "_toc_stop", toc_capsule) < 0) {
+    Py_DECREF(toc_capsule);
+    Py_DECREF(m);
+    return NULL;
+  }
+
+  /* Keep exposing toc_accumulate for testing helpers. */
+  PyObject *acc_capsule = PyCapsule_New((void *)toc_accumulate,
+                                        TOC_ACCUMULATE_CAPSULE_NAME, NULL);
+  if (acc_capsule == NULL) {
+    Py_DECREF(m);
+    return NULL;
+  }
+  if (PyModule_AddObject(m, "_toc_accumulate", acc_capsule) < 0) {
+    Py_DECREF(acc_capsule);
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
+
+  return m;
+}
