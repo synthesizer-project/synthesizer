@@ -55,8 +55,8 @@ if __name__ == "__main__":
         # Create a parametric stars object
         stars.append(
             Stars(
-                grid.log10age,
-                grid.metallicity,
+                grid.log10ages,
+                grid.metallicities,
                 sf_hist=sfh,
                 metal_dist=gal.stars.metallicities[_pmask],
                 initial_mass=gal.stars.initial_masses[_pmask],

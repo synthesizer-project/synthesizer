@@ -15,7 +15,7 @@ from unyt import Msun, Myr, kpc
 from synthesizer.emission_models import ReprocessedEmission
 from synthesizer.grid import Grid
 from synthesizer.imaging import ImageCollection
-from synthesizer.instruments import UVJ
+from synthesizer.instruments import UVJ, Instrument
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import Sersic2D
@@ -42,8 +42,8 @@ if __name__ == "__main__":
     sfh_p = {"max_age": 100 * Myr}
     sfh = SFH.Constant(**sfh_p)  # constant star formation
     sfzh = Stars(
-        grid.log10age,
-        grid.metallicity,
+        grid.log10ages,
+        grid.metallicities,
         sf_hist=sfh,
         metal_dist=metal_dist,
         initial_mass=10**9 * Msun,
@@ -86,10 +86,14 @@ if __name__ == "__main__":
     plt.show()
 
     # We can also do the same with a helper function on the galaxy object
+    # First create an instrument with the desired resolution and filters
+    instrument = Instrument(
+        "DemoInstrument", resolution=resolution, filters=filters
+    )
     img = galaxy.get_images_luminosity(
         "reprocessed",
-        resolution=resolution,
         fov=fov,
+        instrument=instrument,
     )
 
     # and... print an ASCII representation

@@ -44,7 +44,7 @@ log10ages = np.arange(6.0, 10.5, 0.1)
 metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
 Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
-sfh_p = {"duration": 100 * Myr}
+sfh_p = {"max_age": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
 
 # Generate the star formation metallicity history
@@ -124,7 +124,7 @@ kernel = Kernel().get_kernel()
 
 # Calculate the tau_vs
 start = time.time()
-loop_tau_v = galaxy.calculate_los_tau_v(
+loop_tau_v = galaxy.get_stellar_los_tau_v(
     kappa=0.07,
     kernel=kernel,
     force_loop=1,
@@ -134,7 +134,7 @@ loop_sum = np.sum(loop_tau_v)
 
 # Calculate the tau_vs
 start = time.time()
-tree_tau_v = galaxy.calculate_los_tau_v(
+tree_tau_v = galaxy.get_stellar_los_tau_v(
     kappa=0.07,
     kernel=kernel,
     min_count=100,

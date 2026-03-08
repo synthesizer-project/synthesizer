@@ -59,7 +59,7 @@ class MorphologyBase(ABC):
 
         xx, yy = np.meshgrid(bins, bins)
 
-        img = self.compute_density_grid(xx, yy)
+        img = self.compute_density_grid(xx, yy)[0]
 
         plt.figure()
         plt.imshow(
