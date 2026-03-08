@@ -10,6 +10,8 @@
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![PyPI version](https://img.shields.io/pypi/v/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
 [![status](https://joss.theoj.org/papers/cc4f37b2d2fec7d1bd48af22c01d78a7/status.svg)](https://joss.theoj.org/papers/cc4f37b2d2fec7d1bd48af22c01d78a7)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18910099.svg)](https://doi.org/10.5281/zenodo.18910099)
+
 <!--
 This will also display the number of downloads but lets hide for now...
 [![Downloads](https://img.shields.io/pypi/dm/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
@@ -73,7 +75,6 @@ Please cite **both** of the following papers ([Lovell et al. 2025](https://astro
            adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R},
           adsnote = {Provided by the SAO/NASA Astrophysics Data System}
     }
-
 
 ## Licence
 
