@@ -693,8 +693,8 @@ class Stars(Particles, StarsComponent):
         for i, _pmask in enumerate(np.where(pmask)[0]):
             # Create a parametric Stars object
             stars[i] = Para_Stars(
-                grid.log10age,
-                grid.metallicity,
+                grid.log10ages,
+                grid.metallicities,
                 sf_hist=sfh,
                 metal_dist=self.metallicities[_pmask],
                 initial_mass=self.initial_masses[_pmask],
@@ -711,8 +711,8 @@ class Stars(Particles, StarsComponent):
         # Create index pairs for the SFZH
         index_pairs = np.asarray(
             [
-                [[j, i] for i in np.arange(len(grid.metallicity))]
-                for j in np.arange(len(grid.log10age))
+                [[j, i] for i in np.arange(len(grid.metallicities))]
+                for j in np.arange(len(grid.log10ages))
             ]
         )
 
@@ -723,7 +723,7 @@ class Stars(Particles, StarsComponent):
         new_stars = self.__class__(
             stars.sfzh[stars.sfzh > 0] * Msun,
             10 ** grid.log10ages[grid_indexes[:, 0]] * yr,
-            grid.metallicity[grid_indexes[:, 1]],
+            grid.metallicities[grid_indexes[:, 1]],
             redshift=self.redshift,
             masses=np.zeros(np.sum(stars.sfzh > 0)) * Msun,
         )

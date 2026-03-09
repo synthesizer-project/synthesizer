@@ -48,8 +48,8 @@ if __name__ == "__main__":
     # Get the 2D star formation and metal enrichment history for the given SPS
     # grid.
     stars = Stars(
-        grid.log10age,
-        grid.metallicity,
+        grid.log10ages,
+        grid.metallicities,
         sf_hist=sfh,
         metal_dist=metal_dist,
         initial_mass=stellar_mass,
