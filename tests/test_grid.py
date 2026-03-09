@@ -77,11 +77,13 @@ class TestGridAxes:
         assert isinstance(test_grid._ages, np.ndarray)
         assert np.allclose(test_grid._ages, 10**test_grid.log10ages)
 
-        # Test the silly singular and plural nonsense works (hopefully we can
-        # remove this in the future)
-        assert np.allclose(test_grid._ages, test_grid._age)
-        assert np.allclose(test_grid._metallicities, test_grid._metallicity)
-        assert np.allclose(test_grid.log10ages, test_grid.log10age)
+        # Singular aliases are no longer supported
+        with pytest.raises(AttributeError):
+            _ = test_grid._age
+        with pytest.raises(AttributeError):
+            _ = test_grid._metallicity
+        with pytest.raises(AttributeError):
+            _ = test_grid.log10age
 
     def test_axes_values_property(self, test_grid):
         """Test the axes_values property."""
@@ -914,41 +916,6 @@ class TestGridCollapseAxisNaming:
         with pytest.raises(AttributeError):
             getattr(collapsed_grid, axis_name)
 
-    def test_collapse_with_singular_axis_names(self, test_grid_name):
-        """Test collapse with singular forms of axis names."""
-        grid = Grid(test_grid_name)
-        original_naxes = grid.naxes
-
-        # Test with singular form "age" (should work for "ages" axis)
-        axis_name = "age"  # singular of "ages"
-        axis_values = getattr(grid, "ages")  # Get values from plural form
-        middle_value = axis_values[len(axis_values) // 2]
-
-        # Test interpolate method with singular axis name
-        collapsed_grid = grid.collapse(
-            axis_name, method="interpolate", value=middle_value
-        )
-
-        # Check dimensionality reduction
-        assert collapsed_grid.naxes == original_naxes - 1
-        assert "ages" not in collapsed_grid.axes  # The actual axis name
-
-        # Test with singular form "metallicity"
-        grid_copy = Grid(test_grid_name)
-        axis_name = "metallicity"  # singular of "metallicities"
-        axis_values = getattr(
-            grid_copy, "metallicities"
-        )  # Get values from plural form
-        middle_value = axis_values[len(axis_values) // 2]
-
-        collapsed_grid = grid_copy.collapse(
-            axis_name, method="nearest", value=middle_value
-        )
-
-        # Check dimensionality reduction
-        assert collapsed_grid.naxes == original_naxes - 1
-        assert "metallicities" not in collapsed_grid.axes
-
     def test_collapse_with_log10_axis_names(self, test_grid_name):
         """Test collapse with log10 axis names."""
         grid = Grid(test_grid_name)
@@ -982,110 +949,37 @@ class TestGridCollapseAxisNaming:
         assert collapsed_grid.naxes == original_naxes - 1
         assert "metallicities" not in collapsed_grid.axes
 
-    def test_collapse_with_log10_singular_axis_names(self, test_grid_name):
-        """Test collapse with log10 singular axis names."""
-        grid = Grid(test_grid_name)
-        original_naxes = grid.naxes
-
-        # Test with log10age (singular)
-        axis_name = "log10age"
-        log_axis_values = getattr(grid, "log10ages")  # Get from plural form
-        middle_value = log_axis_values[len(log_axis_values) // 2]
-
-        collapsed_grid = grid.collapse(
-            axis_name, method="nearest", value=middle_value
-        )
-
-        # Check dimensionality reduction
-        assert collapsed_grid.naxes == original_naxes - 1
-        assert "ages" not in collapsed_grid.axes
-
-        # Test with log10metallicity (singular)
-        grid_copy = Grid(test_grid_name)
-        axis_name = "log10metallicity"
-        log_axis_values = getattr(grid_copy, "log10metallicities")
-        middle_value = log_axis_values[len(log_axis_values) // 2]
-
-        collapsed_grid = grid_copy.collapse(
-            axis_name, method="interpolate", value=middle_value
-        )
-
-        # Check dimensionality reduction
-        assert collapsed_grid.naxes == original_naxes - 1
-        assert "metallicities" not in collapsed_grid.axes
-
     def test_collapse_axis_name_variations_consistency(self, test_grid_name):
-        """Test that different axis name variations give consistent results."""
-        # Test that collapsing with different name variations of the same axis
-        # gives the same result (for the same collapse method and value)
-
+        """Test that canonical axis names are consistent."""
         axis_variations = [
-            ("ages", "age", "log10ages", "log10age"),
-            (
-                "metallicities",
-                "metallicity",
-                "log10metallicities",
-                "log10metallicity",
-            ),
+            ("ages", "log10ages"),
+            ("metallicities", "log10metallicities"),
         ]
 
-        for variations in axis_variations:
-            regular_axis, singular_axis, log_axis, log_singular_axis = (
-                variations
-            )
-
-            # Get a test value for interpolation (use regular axis values)
+        for regular_axis, log_axis in axis_variations:
             grid_test = Grid(test_grid_name)
             axis_values = getattr(grid_test, regular_axis)
             middle_value = axis_values[len(axis_values) // 2]
-
-            # For log10 axes, we need the log10 of the middle value
             log_middle_value = getattr(grid_test, log_axis)[
                 len(axis_values) // 2
             ]
 
-            results = []
-            axis_names_to_test = [regular_axis, singular_axis]
-            values_to_use = [middle_value, middle_value]
+            regular_grid = Grid(test_grid_name).collapse(
+                regular_axis, method="interpolate", value=middle_value
+            )
+            log_grid = Grid(test_grid_name).collapse(
+                log_axis, method="interpolate", value=log_middle_value
+            )
 
-            # Add log variants
-            axis_names_to_test.extend([log_axis, log_singular_axis])
-            values_to_use.extend([log_middle_value, log_middle_value])
-
-            for axis_name, value in zip(axis_names_to_test, values_to_use):
-                grid_copy = Grid(test_grid_name)
-                collapsed_grid = grid_copy.collapse(
-                    axis_name, method="interpolate", value=value
-                )
-
-                # Store the resulting grid shape and a sample spectrum value
-                result_shape = collapsed_grid.shape
-                if collapsed_grid.has_spectra:
-                    sample_spectrum = collapsed_grid.spectra[
-                        collapsed_grid.available_spectra[0]
-                    ][0, 100]  # Sample point
-                else:
-                    sample_spectrum = 0
-
-                results.append((result_shape, sample_spectrum))
-
-            # All results should be the same (within numerical tolerance)
-            reference_result = results[0]
-            for i, result in enumerate(results[1:], 1):
-                assert result[0] == reference_result[0], (
-                    "Shape mismatch for axis variation "
-                    f"{axis_names_to_test[i]}: "
-                    f"got {result[0]}, expected {reference_result[0]}"
-                )
-
-                if isinstance(result[1], (int, float)) and isinstance(
-                    reference_result[1], (int, float)
-                ):
-                    assert abs(result[1] - reference_result[1]) < 1e-10, (
-                        "Spectrum value mismatch for axis variation "
-                        f"{axis_names_to_test[i]}: "
-                        f"got {result[1]}, expected {reference_result[1]}"
-                    )
+            assert regular_grid.shape == log_grid.shape
+            if regular_grid.has_spectra:
+                sample_regular = regular_grid.spectra[
+                    regular_grid.available_spectra[0]
+                ][0, 100]
+                sample_log = log_grid.spectra[log_grid.available_spectra[0]][
+                    0, 100
+                ]
+                assert abs(sample_regular - sample_log) < 1e-10
 
     def test_collapse_invalid_axis_names(self, test_grid_name):
         """Test collapse with invalid axis names."""
@@ -1102,29 +996,35 @@ class TestGridCollapseAxisNaming:
         with pytest.raises(exceptions.InconsistentParameter):
             grid.collapse("log10ages_typo", method="marginalize")
 
+        with pytest.raises(exceptions.InconsistentParameter):
+            grid.collapse("age", method="marginalize")
+
+        with pytest.raises(exceptions.InconsistentParameter):
+            grid.collapse("log10age", method="marginalize")
+
     def test_collapse_preserves_grid_consistency(self, test_grid_name):
         """Test collapse preserves grid naming conventions."""
         grid = Grid(test_grid_name)
 
         # Test that after collapsing one axis, the remaining axis still works
-        # with all naming conventions
+        # with canonical naming conventions
         collapsed_grid = grid.collapse("ages", method="marginalize")
 
-        # The remaining axis should still be accessible by all its name
-        # variations
+        # The remaining axis should still be accessible by canonical names
         remaining_axis = "metallicities"
 
         # These should all work and return the same values
         values_regular = getattr(collapsed_grid, remaining_axis)
-        values_singular = getattr(collapsed_grid, "metallicity")
         values_log = getattr(collapsed_grid, "log10metallicities")
-        values_log_singular = getattr(collapsed_grid, "log10metallicity")
 
         # Check consistency
-        assert len(values_regular) == len(values_singular)
-        assert len(values_log) == len(values_log_singular)
-        assert np.allclose(values_regular, values_singular)
-        assert np.allclose(values_log, values_log_singular)
+        assert len(values_regular) == len(values_log)
+
+        with pytest.raises(AttributeError):
+            _ = getattr(collapsed_grid, "metallicity")
+
+        with pytest.raises(AttributeError):
+            _ = getattr(collapsed_grid, "log10metallicity")
 
 
 class TestGridUtilities:

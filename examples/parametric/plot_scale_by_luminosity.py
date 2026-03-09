@@ -55,8 +55,8 @@ metal_dist = ZDist.Normal(mean=0.01, sigma=0.005)
 
 # Get the stellar population
 stars = Stars(
-    grid.log10age,
-    grid.metallicity,
+    grid.log10ages,
+    grid.metallicities,
     sf_hist=sfh,
     metal_dist=metal_dist,
     initial_mass=10**9 * Msun,

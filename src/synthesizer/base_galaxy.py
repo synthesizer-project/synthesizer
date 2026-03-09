@@ -18,8 +18,7 @@ from synthesizer.imaging.image_generators import (
     _combine_image_collections,
     _prepare_galaxy_image_labels,
 )
-from synthesizer.instruments import Instrument
-from synthesizer.synth_warnings import deprecation, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 
@@ -1317,13 +1316,11 @@ class BaseGalaxy:
         self,
         *labels,
         fov,
+        instrument,
         img_type="smoothed",
-        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
-        limit_to=None,
-        resolution=None,
         cosmo=None,
         phot_type="lnu",
     ):
@@ -1354,12 +1351,12 @@ class BaseGalaxy:
                 present in the particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -1367,16 +1364,10 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            resolution (unyt_quantity of float):
-                [DEPRECATED] The size of a pixel.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
-            limit_to (str/list):
-                If not None, defines a specific model (or list of models) to
-                limit the image generation to. Otherwise, all models with saved
-                spectra will have images generated.
             phot_type (str):
                 The type of photometry to use for the images. Either "lnu"
                 for luminosity per unit frequency images, or "fnu" for flux.
@@ -1387,8 +1378,14 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
-        # Convert labels tuple to a list
+        # Convert labels tuple to a list and validate they are strings
         labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
 
         _labels = []
         while len(labels) > 0:
@@ -1400,80 +1397,6 @@ class BaseGalaxy:
         if self.galaxy_type == "Parametric" and img_type == "hist":
             raise exceptions.InconsistentArguments(
                 "Parametric Galaxies can only produce smoothed images."
-            )
-
-        # If we haven't got an instrument create one
-        # TODO: we need to eventually fully pivot to taking only an instrument
-        # this will be done when we introduced some premade instruments
-        if instrument is None:
-            deprecation(
-                "Not passing an Instrument to `get_images_luminosity` is "
-                "deprecated and will be removed in v1.0.0. Please create/load "
-                "and pass an Instrument instance."
-            )
-            if resolution is None or fov is None:
-                raise ValueError(
-                    "If instrument not provided, a resolution and fov must "
-                    "be specified."
-                )
-
-            # Guard against empty labels list
-            if not labels:
-                raise ValueError(
-                    "No labels provided for instrument fallback. "
-                    "Please provide at least one label."
-                )
-
-            # Get the first label to extract filters for the fallback
-            # instrument
-            first_label = labels[0]
-
-            # Get the filters from the emitters
-            filters = None
-            if phot_type == "lnu":
-                if first_label in self.photo_lnu:
-                    filters = self.photo_lnu[first_label].filters
-                elif (
-                    self.stars is not None
-                    and first_label in self.stars.photo_lnu
-                ):
-                    filters = self.stars.photo_lnu[first_label].filters
-                elif (
-                    self.black_holes is not None
-                    and first_label in self.black_holes.photo_lnu
-                ):
-                    filters = self.black_holes.photo_lnu[first_label].filters
-            elif phot_type == "fnu":
-                if first_label in self.photo_fnu:
-                    filters = self.photo_fnu[first_label].filters
-                elif (
-                    self.stars is not None
-                    and first_label in self.stars.photo_fnu
-                ):
-                    filters = self.stars.photo_fnu[first_label].filters
-                elif (
-                    self.black_holes is not None
-                    and first_label in self.black_holes.photo_fnu
-                ):
-                    filters = self.black_holes.photo_fnu[first_label].filters
-            else:
-                raise ValueError(
-                    f"Unknown phot_type '{phot_type}'. Must be 'lnu' or 'fnu'."
-                )
-
-            # Verify filters was found
-            if filters is None:
-                raise exceptions.MissingPhotometryType(
-                    f"No photometry found for label '{first_label}' with "
-                    f"type '{phot_type}'. Ensure photometry has been "
-                    "generated before creating images."
-                )
-
-            # Make the place holder instrument
-            instrument = Instrument(
-                "GenericInstrument",
-                resolution=resolution,
-                filters=filters,
             )
 
         # Ensure we have a cosmology if we need it
@@ -1538,7 +1461,6 @@ class BaseGalaxy:
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
-                resolution=resolution,
                 fov=fov,
                 cosmo=cosmo,
                 phot_type=phot_type,
@@ -1669,13 +1591,11 @@ class BaseGalaxy:
         self,
         *labels,
         fov,
+        instrument,
         img_type="smoothed",
-        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
-        limit_to=None,
-        resolution=None,
         cosmo=None,
     ):
         """Make an ImageCollection from luminosities.
@@ -1705,12 +1625,12 @@ class BaseGalaxy:
                 present in the particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -1718,19 +1638,10 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            resolution (unyt_quantity of float):
-                [DEPRECATED] The size of a pixel.
-             resolution (unyt_quantity of float):
-                 [DEPRECATED] The size of a pixel.
-             cosmo (astropy.cosmology):
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
-            limit_to (str/list):
-                If not None, defines a specific model (or list of models) to
-                limit the image generation to. Otherwise, all models with saved
-                spectra will have images generated.
 
         Returns:
             ImageCollection/dict
@@ -1741,13 +1652,11 @@ class BaseGalaxy:
         return self._get_images(
             *labels,
             fov=fov,
-            img_type=img_type,
             instrument=instrument,
+            img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
-            limit_to=limit_to,
-            resolution=resolution,
             cosmo=cosmo,
             phot_type="lnu",
         )
@@ -1756,13 +1665,11 @@ class BaseGalaxy:
         self,
         *labels,
         fov,
+        instrument,
         img_type="smoothed",
-        instrument=None,
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
-        limit_to=None,
-        resolution=None,
         cosmo=None,
     ):
         """Make an ImageCollection from fluxes.
@@ -1792,12 +1699,12 @@ class BaseGalaxy:
                 present in the particle photometry dicts.
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image.
             img_type (str):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
-            instrument (Instrument):
-                The instrument to use for the image.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
@@ -1805,16 +1712,10 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
-            resolution (unyt_quantity of float):
-                [DEPRECATED] The size of a pixel.
             cosmo (astropy.cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
-            limit_to (str/list):
-                If not None, defines a specific model (or list of models) to
-                limit the image generation to. Otherwise, all models with saved
-                spectra will have images generated.
 
         Returns:
             ImageCollection/dict
@@ -1825,13 +1726,11 @@ class BaseGalaxy:
         return self._get_images(
             *labels,
             fov=fov,
-            img_type=img_type,
             instrument=instrument,
+            img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
-            limit_to=limit_to,
-            resolution=resolution,
             cosmo=cosmo,
             phot_type="fnu",
         )
