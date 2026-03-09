@@ -248,17 +248,46 @@ _INDEX_FIELD_TYPES = {"index", "deposit"}
 
 
 def _is_dataset(obj):
-    """Return `True` if the object looks like a yt dataset."""
+    """Check whether an object looks like a yt dataset.
+
+    Args:
+        obj (object):
+            The object to inspect.
+
+    Returns:
+        bool:
+            `True` if the object exposes the expected yt dataset interface.
+    """
     return hasattr(obj, "all_data") and hasattr(obj, "field_list")
 
 
 def _is_data_container(obj):
-    """Return `True` if the object looks like a yt data container."""
+    """Check whether an object looks like a yt data container.
+
+    Args:
+        obj (object):
+            The object to inspect.
+
+    Returns:
+        bool:
+            `True` if the object exposes the expected yt data container
+            interface.
+    """
     return hasattr(obj, "ds") and hasattr(obj, "__getitem__")
 
 
 def _ensure_sequence(value):
-    """Normalise scalars into a list without splitting strings."""
+    """Normalise a scalar or sequence into a list.
+
+    Args:
+        value (object):
+            A scalar, sequence, or `None`.
+
+    Returns:
+        list:
+            A list representation of the input. Strings and paths are treated
+            as scalars rather than iterables of characters.
+    """
     if value is None:
         return []
     if isinstance(value, (str, os.PathLike)):
@@ -269,7 +298,16 @@ def _ensure_sequence(value):
 
 
 def _available_fields(ds):
-    """Return the union of native and derived fields on a yt dataset."""
+    """Collect the native and derived fields on a yt dataset.
+
+    Args:
+        ds:
+            The yt dataset.
+
+    Returns:
+        set[tuple[str, str]]:
+            The union of ``field_list`` and ``derived_field_list``.
+    """
     fields = set()
     for attr in ("field_list", "derived_field_list"):
         for field in getattr(ds, attr, []):
@@ -279,7 +317,16 @@ def _available_fields(ds):
 
 
 def _native_fields(ds):
-    """Return the native fields on a yt dataset."""
+    """Collect the native fields on a yt dataset.
+
+    Args:
+        ds:
+            The yt dataset.
+
+    Returns:
+        set[tuple[str, str]]:
+            The fields present in ``ds.field_list``.
+    """
     fields = set()
     for field in getattr(ds, "field_list", []):
         if isinstance(field, tuple) and len(field) == 2:
@@ -288,7 +335,23 @@ def _native_fields(ds):
 
 
 def _resolve_container_spec(ds, selector):
-    """Resolve a selector into a yt data container."""
+    """Resolve a selector specification into a yt data container.
+
+    Args:
+        ds:
+            The yt dataset used to construct new selectors.
+        selector (object):
+            Either a yt data container, a callable returning one, or a
+            dictionary specification.
+
+    Returns:
+        object:
+            A yt data container.
+
+    Raises:
+        InconsistentArguments:
+            If the selector specification is not understood.
+    """
     if _is_data_container(selector):
         return selector
 
@@ -328,7 +391,23 @@ def _resolve_container_spec(ds, selector):
 
 
 def _resolve_dataset_and_containers(data_source, data_containers=None):
-    """Resolve user input into a yt dataset and a list of data containers."""
+    """Resolve loader inputs into a yt dataset and data containers.
+
+    Args:
+        data_source (object):
+            A yt dataset path, a loaded yt dataset, a yt data container, or a
+            sequence of yt data containers.
+        data_containers (object, optional):
+            Optional container selectors to apply to a loaded dataset.
+
+    Returns:
+        tuple:
+            The loaded yt dataset and a list of yt data containers.
+
+    Raises:
+        InconsistentArguments:
+            If the input combination cannot be resolved cleanly.
+    """
     if data_containers is None:
         if isinstance(data_source, (str, os.PathLike)):
             ds = yt.load(str(data_source))
@@ -376,7 +455,17 @@ def _resolve_dataset_and_containers(data_source, data_containers=None):
 
 
 def _merge_field_map(field_map):
-    """Merge user-provided field overrides with the loader defaults."""
+    """Merge user-provided field overrides with the defaults.
+
+    Args:
+        field_map (dict or None):
+            Optional user field mapping overrides.
+
+    Returns:
+        dict:
+            A merged copy of the default field map with any user overrides
+            applied.
+    """
     merged = {
         key: value.copy() if isinstance(value, dict) else value
         for key, value in _DEFAULT_FIELD_MAP.items()
@@ -398,7 +487,18 @@ def _merge_field_map(field_map):
 
 
 def _field_candidates(component_map, property_name):
-    """Return a list of field candidates for a component property."""
+    """Return the candidate field list for a component property.
+
+    Args:
+        component_map (dict):
+            Mapping from Synthesizer property names to yt field candidates.
+        property_name (str):
+            The component property being requested.
+
+    Returns:
+        list:
+            The candidate field specifications for the requested property.
+    """
     value = component_map.get(property_name, [])
     if isinstance(value, list):
         return value
@@ -406,12 +506,37 @@ def _field_candidates(component_map, property_name):
 
 
 def _vector_candidates(component_map, property_name):
-    """Return vector field candidates for a component property."""
+    """Return vector-field candidates for a component property.
+
+    Args:
+        component_map (dict):
+            Mapping from Synthesizer property names to yt field candidates.
+        property_name (str):
+            The component property being requested.
+
+    Returns:
+        dict:
+            A dictionary containing vector candidates and x/y/z triplets.
+    """
     return component_map.get(property_name, {"vectors": [], "components": []})
 
 
 def _find_vector_fields(available_fields, field_types, vector_map):
-    """Find a vector field or a matching x/y/z triplet."""
+    """Find a vector field or matching x/y/z triplet.
+
+    Args:
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        field_types (list[str]):
+            yt field types to search within.
+        vector_map (dict):
+            Candidate vector field names and component triplets.
+
+    Returns:
+        tuple or None:
+            Either a single yt field tuple, a triplet of yt field tuples, or
+            `None` if no candidate is available.
+    """
     vector_field = _find_field(
         available_fields,
         field_types,
@@ -432,7 +557,19 @@ def _find_vector_fields(available_fields, field_types, vector_map):
 
 
 def _get_vector(container, field_spec):
-    """Return a vector field or a stacked x/y/z triplet."""
+    """Read a vector field from a yt data container.
+
+    Args:
+        container:
+            The yt data container.
+        field_spec (tuple or None):
+            Either a single vector field or a triplet of scalar component
+            fields.
+
+    Returns:
+        unyt_array or np.ndarray or None:
+            A `(N, 3)` array containing the requested vector data.
+    """
     if field_spec is None:
         return None
 
@@ -455,7 +592,21 @@ def _get_vector(container, field_spec):
 
 
 def _to_unit(data, unit, reference=None):
-    """Convert a yt/unyt array into the requested unit if possible."""
+    """Convert an array into the requested unit.
+
+    Args:
+        data (array-like):
+            The array to convert.
+        unit:
+            The target unit.
+        reference (array-like, optional):
+            Optional reference array whose units should be adopted if `data`
+            is dimensionless but semantically shares the same unit system.
+
+    Returns:
+        unyt_array or None:
+            The converted array, or `None` if no data were provided.
+    """
     if data is None:
         return None
     if hasattr(data, "to"):
@@ -473,7 +624,16 @@ def _to_unit(data, unit, reference=None):
 
 
 def _to_dimensionless(data):
-    """Convert a field to a plain NumPy array."""
+    """Convert an array-like field to a plain NumPy array.
+
+    Args:
+        data (array-like):
+            The input field data.
+
+    Returns:
+        np.ndarray or None:
+            The input converted to a dimensionless NumPy array, or `None`.
+    """
     if data is None:
         return None
     if hasattr(data, "to_value"):
@@ -482,7 +642,16 @@ def _to_dimensionless(data):
 
 
 def _sanitize_attr_name(field_name):
-    """Convert a yt field name into a safe Python attribute name."""
+    """Convert a yt field name into a safe Python attribute name.
+
+    Args:
+        field_name (str):
+            The raw yt field name.
+
+    Returns:
+        str:
+            A lower-case attribute-safe name.
+    """
     attr = re.sub(r"\W+", "_", field_name.strip()).strip("_").lower()
     if not attr or attr[0].isdigit():
         attr = f"yt_{attr}"
@@ -490,7 +659,18 @@ def _sanitize_attr_name(field_name):
 
 
 def _dataset_redshift(ds, redshift):
-    """Return the galaxy redshift to use for the current dataset."""
+    """Return the redshift to use for a galaxy load.
+
+    Args:
+        ds:
+            The yt dataset.
+        redshift (float or None):
+            An explicit override redshift.
+
+    Returns:
+        float:
+            The supplied redshift, the dataset redshift, or 0.0.
+    """
     if redshift is not None:
         return float(redshift)
 
@@ -502,12 +682,30 @@ def _dataset_redshift(ds, redshift):
 
 
 def _dataset_is_cosmological(ds):
-    """Return `True` if the dataset carries cosmological metadata."""
+    """Check whether a dataset carries cosmological metadata.
+
+    Args:
+        ds:
+            The yt dataset.
+
+    Returns:
+        bool:
+            `True` if the dataset is cosmological.
+    """
     return bool(getattr(ds, "cosmological_simulation", 0))
 
 
 def _get_astropy_cosmology(ds):
     """Construct an astropy cosmology from yt dataset metadata.
+
+    Args:
+        ds:
+            The yt dataset.
+
+    Returns:
+        astropy.cosmology.LambdaCDM or None:
+            A cosmology constructed from yt metadata, or `None` if the
+            required metadata are unavailable.
 
     Uses the general ``LambdaCDM`` rather than ``FlatLambdaCDM`` because yt
     exposes ``omega_matter`` and ``omega_lambda`` independently and does not
@@ -600,7 +798,18 @@ def _resolve_stellar_ages(ds, birth_quantity, mode):
 
 
 def _mask_component_arrays(kwargs, mask):
-    """Apply a particle mask to all array-like entries of matching length."""
+    """Apply a particle mask to all matching array-like entries.
+
+    Args:
+        kwargs (dict):
+            Component keyword arguments.
+        mask (array-like):
+            Boolean mask selecting the particles to keep.
+
+    Returns:
+        dict:
+            A masked copy of the component keyword arguments.
+    """
     if mask is None:
         return kwargs
 
@@ -625,7 +834,21 @@ def _mask_component_arrays(kwargs, mask):
 
 
 def _infer_particle_type(available_fields, component, candidates):
-    """Infer the most likely yt particle type for a component."""
+    """Infer the most likely yt particle type for a component.
+
+    Args:
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        component (str):
+            The Synthesizer component name.
+        candidates (dict):
+            Candidate field mapping for the component.
+
+    Returns:
+        str or None:
+            The inferred yt field type, or `None` if no plausible type is
+            found.
+    """
     best_type = None
     best_score = 0
     best_specific_matches = 0
@@ -700,7 +923,18 @@ def _infer_particle_type(available_fields, component, candidates):
 
 
 def _has_fluid_gas(available_fields, component_map):
-    """Return `True` if fluid gas fields are available."""
+    """Check whether fluid gas fields are available.
+
+    Args:
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        component_map (dict):
+            The gas-fluid field mapping.
+
+    Returns:
+        bool:
+            `True` if the dataset appears to expose fluid gas fields.
+    """
     coords = component_map.get(
         "coordinates", {"vectors": [], "components": []}
     )
@@ -714,7 +948,22 @@ def _has_fluid_gas(available_fields, component_map):
 
 
 def _collect_extra_fields(container, field_types, field_pool, consumed_fields):
-    """Collect unconsumed yt fields as extra component attributes."""
+    """Collect unconsumed yt fields as extra component attributes.
+
+    Args:
+        container:
+            The yt data container.
+        field_types (set[str]):
+            yt field types to preserve.
+        field_pool (set[tuple[str, str]]):
+            The fields that are eligible to be preserved.
+        consumed_fields (set[tuple[str, str]]):
+            Fields already consumed by the core mapping.
+
+    Returns:
+        dict:
+            Extra component attributes keyed by sanitized field name.
+    """
     extras = {}
 
     for field in sorted(field_pool):
@@ -726,6 +975,8 @@ def _collect_extra_fields(container, field_types, field_pool, consumed_fields):
         if attr_name in extras:
             attr_name = f"yt_{attr_name}"
 
+        # Some yt particle fields are scalar metadata that cannot be sliced
+        # through a selection object. Skip these rather than aborting the load.
         try:
             value = container[field]
         except Exception as exc:
@@ -747,7 +998,18 @@ def _collect_extra_fields(container, field_types, field_pool, consumed_fields):
 
 
 def _compute_fluid_cell_masses(container, available_fields):
-    """Compute gas cell masses from available yt fluid fields."""
+    """Compute gas cell masses from fluid density and cell volume.
+
+    Args:
+        container:
+            The yt data container.
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+
+    Returns:
+        unyt_array or None:
+            Gas cell masses, or `None` if they cannot be derived.
+    """
     if ("index", "cell_volume") not in available_fields:
         return None
 
@@ -765,7 +1027,18 @@ def _compute_fluid_cell_masses(container, available_fields):
 
 
 def _compute_fluid_smoothing_lengths(container, available_fields):
-    """Compute an effective cell smoothing length for fluid gas."""
+    """Compute an effective smoothing length for fluid gas cells.
+
+    Args:
+        container:
+            The yt data container.
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+
+    Returns:
+        unyt_array or None:
+            Effective cell smoothing lengths, or `None` if unavailable.
+    """
     if ("index", "dx") in available_fields:
         return container[("index", "dx")]
 
@@ -776,7 +1049,16 @@ def _compute_fluid_smoothing_lengths(container, available_fields):
 
 
 def _coerce_bool_array(data):
-    """Convert an array-like object into a boolean NumPy array."""
+    """Convert an array-like object into a boolean NumPy array.
+
+    Args:
+        data (array-like):
+            The input data.
+
+    Returns:
+        np.ndarray or None:
+            A boolean array, or `None` if no data were provided.
+    """
     if data is None:
         return None
     array = np.asarray(data)
@@ -796,7 +1078,34 @@ def _build_stellar_component(
     load_derived_extra_fields,
     metallicity_floor,
 ):
-    """Build stellar particle data from a yt data container."""
+    """Build stellar particle data from a yt data container.
+
+    Args:
+        container:
+            The yt data container.
+        ds:
+            The parent yt dataset.
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        native_fields (set[tuple[str, str]]):
+            Native, on-disk fields available on the dataset.
+        component_map (dict):
+            Stellar field mapping.
+        particle_type (str or None):
+            The yt particle type to load for stars.
+        load_extra_fields (bool):
+            Whether to preserve extra yt fields on the star component.
+        load_derived_extra_fields (bool):
+            Whether derived yt fields may also be preserved as extras.
+        metallicity_floor (float):
+            Default metallicity to use when no stellar metallicity field is
+            available.
+
+    Returns:
+        dict or None:
+            Keyword arguments for `Galaxy.load_stars`, or `None` if no stellar
+            component could be constructed.
+    """
     if particle_type is None:
         return None
 
@@ -871,6 +1180,9 @@ def _build_stellar_component(
         consumed_fields.add(field)
         ages = _resolve_stellar_ages(ds, ages, "ages")
 
+    # yt frontends disagree on whether stellar "age" fields are ages,
+    # formation scale factors, or formation times, so we resolve these
+    # through a shared helper before instantiating the Stars object.
     if ages is None:
         for property_name in (
             "formation_time",
@@ -959,7 +1271,20 @@ def _build_stellar_component(
 
 
 def _find_field(available_fields, field_types, *candidate_groups):
-    """Find the first matching field across one or more candidate groups."""
+    """Find the first matching field across one or more candidate groups.
+
+    Args:
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        field_types (list[str]):
+            yt field types to search within.
+        *candidate_groups:
+            Candidate field names or exact field tuples.
+
+    Returns:
+        tuple or None:
+            The first matching yt field tuple, or `None`.
+    """
     for candidates in candidate_groups:
         field = _find_field_from_group(
             available_fields, field_types, candidates
@@ -970,7 +1295,20 @@ def _find_field(available_fields, field_types, *candidate_groups):
 
 
 def _find_field_from_group(available_fields, field_types, candidates):
-    """Find the first matching field in a candidate group."""
+    """Find the first matching field within a candidate group.
+
+    Args:
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        field_types (list[str]):
+            yt field types to search within.
+        candidates (list or tuple):
+            Candidate field names or exact field tuples.
+
+    Returns:
+        tuple or None:
+            The first matching yt field tuple, or `None`.
+    """
     for candidate in _ensure_sequence(candidates):
         if isinstance(candidate, tuple):
             if candidate in available_fields:
@@ -997,7 +1335,36 @@ def _build_gas_component(
     metallicity_floor,
     dtm,
 ):
-    """Build gas data from particle or fluid yt fields."""
+    """Build gas data from particle or fluid yt fields.
+
+    Args:
+        container:
+            The yt data container.
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        native_fields (set[tuple[str, str]]):
+            Native, on-disk fields available on the dataset.
+        component_map (dict):
+            Particle-gas field mapping.
+        fluid_map (dict):
+            Fluid-gas field mapping.
+        particle_type (str or None):
+            The yt field type to use for gas, or `"fluid"`.
+        load_extra_fields (bool):
+            Whether to preserve extra yt fields on the gas component.
+        load_derived_extra_fields (bool):
+            Whether derived yt fields may also be preserved as extras.
+        metallicity_floor (float):
+            Default metallicity to use when no gas metallicity field is
+            available.
+        dtm (float):
+            Default dust-to-metals ratio.
+
+    Returns:
+        dict or None:
+            Keyword arguments for `Galaxy.load_gas`, or `None` if no gas
+            component could be constructed.
+    """
     if particle_type is None:
         return None
 
@@ -1043,6 +1410,8 @@ def _build_gas_component(
     if field is not None:
         consumed_fields.add(field)
     if masses is None and particle_type == "fluid":
+        # For grid/cell gas, derive masses from density and cell volume if yt
+        # does not provide a direct cell-mass field.
         masses = _compute_fluid_cell_masses(container, available_fields)
         if masses is not None:
             consumed_fields.add(("index", "cell_volume"))
@@ -1163,7 +1532,31 @@ def _build_black_hole_component(
     load_derived_extra_fields,
     default_black_hole_metallicity,
 ):
-    """Build black hole particle data from a yt data container."""
+    """Build black hole particle data from a yt data container.
+
+    Args:
+        container:
+            The yt data container.
+        available_fields (set[tuple[str, str]]):
+            Fields available on the dataset.
+        native_fields (set[tuple[str, str]]):
+            Native, on-disk fields available on the dataset.
+        component_map (dict):
+            Black-hole field mapping.
+        particle_type (str or None):
+            The yt particle type to load for black holes.
+        load_extra_fields (bool):
+            Whether to preserve extra yt fields on the black-hole component.
+        load_derived_extra_fields (bool):
+            Whether derived yt fields may also be preserved as extras.
+        default_black_hole_metallicity (float):
+            Default black-hole metallicity to use when none is available.
+
+    Returns:
+        dict or None:
+            Keyword arguments for `BlackHoles`, or `None` if no black-hole
+            component could be constructed.
+    """
     if particle_type is None:
         return None
 
@@ -1261,7 +1654,21 @@ def _build_black_hole_component(
 
 
 def _infer_centre(stars, gas, black_holes):
-    """Infer a galaxy centre from whichever component is available."""
+    """Infer a galaxy centre from the loaded components.
+
+    Args:
+        stars (dict or None):
+            Stellar component keyword arguments.
+        gas (dict or None):
+            Gas component keyword arguments.
+        black_holes (dict or None):
+            Black-hole component keyword arguments.
+
+    Returns:
+        unyt_array or None:
+            An inferred galaxy centre, or `None` if no coordinates are
+            available.
+    """
     weighted_components = (
         ("stars", stars, "current_masses"),
         ("gas", gas, "masses"),
