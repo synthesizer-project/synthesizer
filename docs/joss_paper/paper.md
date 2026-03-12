@@ -93,8 +93,8 @@ affiliations:
     index: 11
   - name: Max-Planck-Institut für Astrophysik, Karl-Schwarzschild-Strasse 1, D-85748 Garching, Germany
     index: 12
-  - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland 
-    index 13
+  - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland
+    index: 13
   - name: Centre for Astrophysics Research, Department of Physics, Astronomy and Mathematics, University of Hertfordshire, College Lane, Hatfield AL10 9AB, UK
     index: 14
 
