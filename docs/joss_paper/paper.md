@@ -15,7 +15,7 @@ authors:
   - name: Christopher C. Lovell
     orcid: 0000-0001-7964-5933
     equal-contrib: true
-    affiliation: 2
+    affiliation: "2, 3"
   - name: Aswin Vijayan
     orcid: 0000-0002-1905-4194
     equal-contrib: true
@@ -57,6 +57,15 @@ authors:
   - name: Laura Sommovigo
     orcid: 0000-0002-2906-2200
     affiliation: 9
+  - name: Paurush Punyasheel
+    orcid: 0009-0006-0037-1014
+    affiliation: 14
+  - name: Adrien Aufan Stoffels d'Hautefort
+    orcid: 0009-0003-9019-1380
+    affiliation: 1
+  - name: Alex Rawlings
+    orcid: 0000-0003-1807-6321
+    affiliation: "12, 13"
 
 affiliations:
   - name: Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK
@@ -82,6 +91,12 @@ affiliations:
     index: 10
   - name: Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA
     index: 11
+  - name: Max-Planck-Institut für Astrophysik, Karl-Schwarzschild-Strasse 1, D-85748 Garching, Germany
+    index: 12
+  - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland 
+    index 13
+  - name: Centre for Astrophysics Research, Department of Physics, Astronomy and Mathematics, University of Hertfordshire, College Lane, Hatfield AL10 9AB, UK
+    index: 14
 
 date: 17 June 2025
 license: GPL-3.0
