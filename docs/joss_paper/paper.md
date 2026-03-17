@@ -1,5 +1,5 @@
 ---
-title: "Synthesizer: Synthetic Observables For Modern Astronomy"
+title: "Synthesizer: Synthetic Observables for Modern Astronomy"
 tags:
   - Python
   - astronomy
@@ -30,7 +30,8 @@ authors:
   - name: Sabrina Berger
     orcid: 0000-0002-4064-7883
     affiliation: 4
-  - name: Connor Sant Fournier
+  - given-names: Connor
+    surname: Sant Fournier
     orcid: 0009-0004-0771-4476
     affiliation: 5
   - name: Thomas Harvey
@@ -59,13 +60,13 @@ authors:
     affiliation: 9
   - name: Paurush Punyasheel
     orcid: 0009-0006-0037-1014
-    affiliation: 14
+    affiliation: 10
   - name: Adrien Aufan Stoffels d'Hautefort
     orcid: 0009-0003-9019-1380
     affiliation: 1
   - name: Alex Rawlings
     orcid: 0000-0003-1807-6321
-    affiliation: "12, 13"
+    affiliation: "11, 12"
 
 affiliations:
   - name: Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK
@@ -87,16 +88,12 @@ affiliations:
     index: 8
   - name: Columbia Astrophysics Laboratory, Columbia University, 550 West 120th Street, New York, NY 10027, USA
     index: 9
-  - name: Leiden Observatory, Leiden University, PO Box 9513, NL-2300 RA Leiden, The Netherlands
-    index: 10
-  - name: Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA
-    index: 11
-  - name: Max-Planck-Institut für Astrophysik, Karl-Schwarzschild-Strasse 1, D-85748 Garching, Germany
-    index: 12
-  - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland
-    index: 13
   - name: Centre for Astrophysics Research, Department of Physics, Astronomy and Mathematics, University of Hertfordshire, College Lane, Hatfield AL10 9AB, UK
-    index: 14
+    index: 10
+  - name: Max-Planck-Institut für Astrophysik, Karl-Schwarzschild-Strasse 1, D-85748 Garching, Germany
+    index: 11
+  - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland
+    index: 12
 
 date: 17 June 2025
 license: GPL-3.0
@@ -105,7 +102,7 @@ bibliography: synthesizer.bib
 
 # Summary
 
-Synthesizer is a fast, flexible, modular, and extensible Python package that empowers astronomers to turn theoretical galaxy models into realistic synthetic observations - including spectra, photometry, images, and spectral cubes - with a focus on interchangeable modelling assumptions. By offloading computationally intensive tasks to threaded C++ extensions, Synthesizer delivers both simplicity and speed, enabling rapid forward-modelling workflows without requiring users to manage low-level data processing and computational details.
+Synthesizer is a fast, flexible, modular, and extensible Python package that empowers astronomers to turn theoretical galaxy models into realistic synthetic observations—including spectra, photometry, images, and spectral cubes—with a focus on interchangeable modelling assumptions. By offloading computationally intensive tasks to threaded C++ extensions, Synthesizer delivers both simplicity and speed, enabling rapid forward-modelling workflows without requiring users to manage low-level data processing and computational details.
 
 # Statement of need
 
@@ -125,7 +122,7 @@ Synthesizer addresses these shortcomings by offering:
 
 - Extensibility: Extensive documentation and a clear API enable users to extend the package with their own calculations, parameterisations and subclasses. From the beginning, Synthesizer has been designed to be expanded to fit the needs of all users, even as astronomy and astrophysics evolve.
 
-Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations [e.g. @FLARESXVIII], permits exhaustive tests of the impact of parameter choices [e.g. @LTU-ILI], enables the forward modelling of large datasets previously considered impractical [e.g. @LTU-LOVELL], and promotes open and reproducible science. Synthesizer's combination of modularity and performance is also critical for emerging inference techniques such as simulation-based inference (SBI), which require large training datasets of forward-modelled observables generated rapidly under flexible modelling assumptions, a regime where neither flexibility nor performance alone suffices. For example, @Harvey2025 use Synthesizer to inexpensively generate the training data needed for SBI-based SED fitting of galaxy photometry.
+Synthesizer's design facilitates apples-to-apples comparisons between simulations and observations [e.g. @FLARESXVIII], permits exhaustive tests of the impact of parameter choices [e.g. @LTU-ILI], enables the forward modelling of large datasets previously considered impractical [e.g. @LTU-LOVELL], and promotes open and reproducible science. Synthesizer's combination of modularity and performance is also critical for emerging inference techniques such as simulation-based inference (SBI), which require large training datasets of forward-modelled observables generated rapidly under flexible modelling assumptions, a regime where neither flexibility nor performance alone suffices. For example, @Harvey2026 use Synthesizer to inexpensively generate the training data needed for SBI-based SED fitting of galaxy photometry.
 
 # Package overview
 
@@ -133,7 +130,7 @@ Synthesizer is structured around a set of core abstractions. Here we give a brie
 
 - **Components**: Represent [stars](https://synthesizer-project.github.io/synthesizer/galaxy_components/stars.html), [gas](https://synthesizer-project.github.io/synthesizer/galaxy_components/gas.html), and [black holes](https://synthesizer-project.github.io/synthesizer/galaxy_components/blackholes.html), encapsulating physical properties, and emission generation methods. For more details, see the [components documentation](https://synthesizer-project.github.io/synthesizer/galaxy_components/galaxy_components.html#components).
 - **Galaxies**: Combine multiple components into a single object, allowing for cohesive calculations with all components, taking account of their interdependencies. For more details, see the [galaxies documentation](https://synthesizer-project.github.io/synthesizer/galaxy_components/galaxy_components.html#the-galaxy-object).
-- **Emission Grids**: N-dimensional lookup tables of precomputed spectra and lines. Precomputed grids are available for stellar population synthesis models, including BC03 [@bc03], BPASS [@bpass], FSPS (@fsps1, @fsps2), Maraston (@maraston05, @newman25), all reprocessed using Cloudy [@cloudy]. Grids of AGN emission can also be calculated and explored. Users can generate custom grids via the accompanying [grid-generation package](https://github.com/synthesizer-project/grid-generation). For more details, see the [grids documentation](https://synthesizer-project.github.io/synthesizer/emission_grids/grids.html).
+- **Emission Grids**: N-dimensional lookup tables of precomputed spectra and lines. Precomputed grids are available for stellar population synthesis models, including BC03 [@bc03], BPASS [@bpass], FSPS [@fsps1; @fsps2], Maraston [@maraston05; @newman26], all reprocessed using Cloudy [@cloudy]. Grids of AGN emission can also be calculated and explored. Users can generate custom grids via the accompanying [grid-generation package](https://github.com/synthesizer-project/grid-generation). For more details, see the [grids documentation](https://synthesizer-project.github.io/synthesizer/emission_grids/grids.html).
 - **Emission Models**: Modular templates defining the process of producing emissions from components. These models can be used to extract, generate, transform, or combine emissions. These are the backbone of Synthesizer's flexibility and modularity. For more details, see the [emission models documentation](https://synthesizer-project.github.io/synthesizer/emission_models/emission_models.html).
 - **Emissions**: The output of combining components with an emission model. These emissions are either spectra stored in [`Sed` objects](https://synthesizer-project.github.io/synthesizer/emissions/emission_objects/sed_example.html), or line emissions stored in [`LineCollection` objects](https://synthesizer-project.github.io/synthesizer/emissions/emission_objects/lines_example.html).
 - **Instruments**: Definitions of filters, resolutions, PSFs, and noise models to convert emissions into photometry, spectroscopy, images, and data cubes. For more details, see the [instruments documentation](https://synthesizer-project.github.io/synthesizer/observatories/observatories.html) and [filters documentation](https://synthesizer-project.github.io/synthesizer/observatories/filters.html).
@@ -145,12 +142,12 @@ Synthesizer is hosted on [GitHub](https://github.com/synthesizer-project/synthes
 
 Several packages either overlap with Synthesizer’s functionality or complement it in end-to-end workflows. Some already interface with Synthesizer as plugins (e.g. SPS grids, PSF tools), while others are fully independent codes with conceptually similar goals:
 
-- **Synthetic observation codes**: A number of codes produce synthetic observables from simulated galaxies, each targeting specific use cases. **FORECAST** [@Fortuni2023] and **GalaxyGenius** [@Zhou2025] generate mock images from hydrodynamical simulations for specific telescopes; **RealSim-IFS** [@Bottrell2022] and **SimSpin** [@Harborne2023] produce synthetic IFU datacubes; **py-ananke** [@Thob2024] creates stellar catalogs for Milky Way-like simulations; **pyMGal** [@Janulewicz2025] generates mock optical observations; **popkinmocks** [@Jethwa2023] produces mock IFU datacubes for stellar population and kinematic modelling; and **synphot** [@synphot] provides synthetic photometry utilities. While these share conceptual overlap with Synthesizer, they each target narrower use cases; Synthesizer aims to provide a general-purpose, modular framework spanning the full pipeline from theoretical models to multi-wavelength observables.
+- **Synthetic observation codes**: A number of codes produce synthetic observables from simulated galaxies, each targeting specific use cases. **FORECAST** [@Fortuni2023] and **GalaxyGenius** [@Zhou2025] generate mock images from hydrodynamical simulations for specific telescopes; **RealSim-IFS** [@Bottrell2022] and **SimSpin** [@Harborne2023] produce synthetic IFU datacubes; **py-ananke** [@Thob2024] creates stellar catalogs for Milky Way-like simulations; **pyMGal** [@Janulewicz2025] generates mock optical observations; **popkinmocks** [@Jethwa2023] produces mock IFU datacubes for stellar population and kinematic modelling; and **synphot** [@synphot] provides synthetic photometry utilities. While these share conceptual overlap with Synthesizer, they each target narrower use cases. Synthesizer aims to provide a general-purpose, modular framework spanning the full pipeline from theoretical models to multi-wavelength observables.
 - **SPS & photoionisation**: Libraries for stellar spectra—**BC03** [@bc03], **FSPS** [@fsps1; @fsps2], **Maraston** [@maraston05], **BPASS** [@bpass]—paired with dust/nebular models, plus **Cloudy** [@cloudy] or **MAPPINGS** [@MAPPINGS] for reprocessing. These serve as inputs to Synthesizer’s emission grids.
 - **Monte Carlo RT**: Photon–dust/gas simulators like **SKIRT** [@SKIRT], **Powderday** [@POWDERDAY], **Hyperion** [@hyperion]. These produce SEDs and images that can be ingested by Synthesizer.
-- **PSF & instrument tools**: **STPSF** [@stpsf] (JWST, Roman, HST) and **GalSim** [@galsim] model telescope optics, detector effects, and noise. These integrate directly with Synthesizer’s instrument pipeline.
-- **Pre/post-processing**: **YT** [@YT] for volumetric data analysis and visualization of simulation outputs; **Astroquery** [@astroquery] for automated querying of astronomical archives and catalogs; **Dense Basis** [@dense_basis] offers SED-/SFH-tailored basis functions.
-- **Inverse modeling & SED fitting**: **EAZY** [@EAZY], **BAGPIPES** [@BAGPIPES], **PROSPECTOR** [@PROSPECTOR] extract galaxy properties from SEDs.
+- **PSF & instrument tools**: **STPSF** [@stpsf, JWST, Roman, HST] and **GalSim** [@galsim] model telescope optics, detector effects, and noise. These integrate directly with Synthesizer’s instrument pipeline.
+- **Pre/post-processing**: **YT** [@YT] for volumetric data analysis and visualization of simulation outputs; **Astroquery** [@astroquery] for automated querying of astronomical archives and catalogs; and **Dense Basis** [@dense_basis] offers SED-/SFH-tailored basis functions.
+- **Inverse modeling & SED fitting**: **EAZY** [@EAZY], **BAGPIPES** [@BAGPIPES] and **PROSPECTOR** [@PROSPECTOR] extract galaxy properties from SEDs.
 
 # Acknowledgements
 
