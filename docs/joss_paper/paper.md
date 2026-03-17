@@ -42,7 +42,7 @@ authors:
     affiliation: 7
   - name: Marco Leonardi
     orcid: 0009-0008-3592-7830
-    affiliation: 8
+    affiliation: 13
   - name: Sophie Newman
     orcid: 0009-0001-3422-3048
     affiliation: 2
@@ -94,6 +94,8 @@ affiliations:
     index: 11
   - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland
     index: 12
+  - name: Leiden Observatory, Leiden University, PO Box 9513, NL-2300 RA Leiden, The Netherlands
+    index: 13
 
 date: 17 June 2025
 license: GPL-3.0
