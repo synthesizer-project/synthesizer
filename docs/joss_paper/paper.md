@@ -26,26 +26,26 @@ authors:
     affiliation: 1
   - name: Hollis Akins
     orcid: 0000-0003-3596-8794
-    affiliation: 3
+    affiliation: 4
   - name: Sabrina Berger
     orcid: 0000-0002-4064-7883
-    affiliation: 4
+    affiliation: 5
   - given-names: Connor
     surname: Sant Fournier
     orcid: 0009-0004-0771-4476
-    affiliation: 5
+    affiliation: 6
   - name: Thomas Harvey
     orcid: 0000-0002-4130-636X
-    affiliation: 6
+    affiliation: 7
   - name: Kartheik Iyer
     orcid: 0000-0001-9298-3523
-    affiliation: 7
+    affiliation: 8
   - name: Marco Leonardi
     orcid: 0009-0008-3592-7830
-    affiliation: 13
+    affiliation: 9
   - name: Sophie Newman
     orcid: 0009-0001-3422-3048
-    affiliation: 2
+    affiliation: 10
   - name: Borja Pautasso
     orcid: 0009-0003-1839-591X
     affiliation: 1
@@ -57,16 +57,16 @@ authors:
     affiliation: 1
   - name: Laura Sommovigo
     orcid: 0000-0002-2906-2200
-    affiliation: 9
+    affiliation: 8
   - name: Paurush Punyasheel
     orcid: 0009-0006-0037-1014
-    affiliation: 10
+    affiliation: 11
   - name: Adrien Aufan Stoffels d'Hautefort
     orcid: 0009-0003-9019-1380
     affiliation: 1
   - name: Alex Rawlings
     orcid: 0000-0003-1807-6321
-    affiliation: "11, 12"
+    affiliation: "12, 13"
 
 affiliations:
   - name: Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK
@@ -76,25 +76,25 @@ affiliations:
     index: 2
   - name: Institute of Astronomy, University of Cambridge, Madingley Road, Cambridge CB3 0HA, UK
     index: 3
-  - name: Institute of Cosmology and Gravitation, University of Portsmouth, Burnaby Road, Portsmouth, PO1 3FX, UK
-    index: 4
   - name: Department of Astronomy, The University of Texas at Austin, Austin, TX 78712, USA
-    index: 5
+    index: 4
   - name: School of Physics, University of Melbourne, Parkville, VIC 3010, Australia
-    index: 6
+    index: 5
   - name: Institute of Space Sciences and Astronomy, University of Malta, Msida MSD 2080, Malta
-    index: 7
+    index: 6
   - name: Jodrell Bank Centre for Astrophysics, University of Manchester, Oxford Road, Manchester M13 9PL, UK
-    index: 8
+    index: 7
   - name: Columbia Astrophysics Laboratory, Columbia University, 550 West 120th Street, New York, NY 10027, USA
-    index: 9
-  - name: Centre for Astrophysics Research, Department of Physics, Astronomy and Mathematics, University of Hertfordshire, College Lane, Hatfield AL10 9AB, UK
-    index: 10
-  - name: Max-Planck-Institut für Astrophysik, Karl-Schwarzschild-Strasse 1, D-85748 Garching, Germany
-    index: 11
-  - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland
-    index: 12
+    index: 8
   - name: Leiden Observatory, Leiden University, PO Box 9513, NL-2300 RA Leiden, The Netherlands
+    index: 9
+  - name: Institute of Cosmology and Gravitation, University of Portsmouth, Burnaby Road, Portsmouth, PO1 3FX, UK
+    index: 10
+  - name: Centre for Astrophysics Research, Department of Physics, Astronomy and Mathematics, University of Hertfordshire, College Lane, Hatfield AL10 9AB, UK
+    index: 11
+  - name: Max-Planck-Institut für Astrophysik, Karl-Schwarzschild-Strasse 1, D-85748 Garching, Germany
+    index: 12
+  - name: Department of Physics, Gustaf Hällströmin katu 2, FI-00014, University of Helsinki, Finland
     index: 13
 
 date: 17 June 2025
