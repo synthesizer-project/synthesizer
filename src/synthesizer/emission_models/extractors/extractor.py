@@ -193,7 +193,14 @@ class Extractor(ABC):
             self.check_emitter_attrs(extracted)
 
         # Also extract the weight variable
-        weight = get_param(self._weight_var, model, None, emitter)
+        if self._weight_var in [None, "None"]:
+            # If no weight variable is provided, use a weight of 1.0
+            if hasattr(emitter, "nparticles"):
+                weight = np.ones(emitter.nparticles)
+            else:
+                weight = 1.0
+        else:
+            weight = get_param(self._weight_var, model, None, emitter)
 
         # Remove the units from the weight if necessary
         if isinstance(weight, (unyt_array, unyt_quantity)):
