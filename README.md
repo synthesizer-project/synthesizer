@@ -57,20 +57,16 @@ Please cite **both** of the following papers ([Lovell et al. 2025](https://astro
     	volume = {8},
     }
 
-    @ARTICLE{2025arXiv250615811R,
-       author = {{Roper}, Will J. and {Lovell}, Christopher and {Vijayan}, Aswin and {Wilkins}, Stephen and {Akins}, Hollis and {Berger}, Sabrina and {Sant Fournier}, Connor and {Harvey}, Thomas and {Iyer}, Kartheik and {Leonardi}, Marco and {Newman}, Sophie and {Pautasso}, Borja and {Perry}, Ashley and {Seeyave}, Louise and {Sommovigo}, Laura},
-        title = "{Synthesizer: Synthetic Observables For Modern Astronomy}",
-      journal = {arXiv e-prints},
-     keywords = {Instrumentation and Methods for Astrophysics, Astrophysics of Galaxies},
-         year = 2025,
-        month = jun,
-          eid = {arXiv:2506.15811},
-        pages = {arXiv:2506.15811},
-    archivePrefix = {arXiv},
-           eprint = {2506.15811},
-     primaryClass = {astro-ph.IM},
-           adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R},
-          adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+    @article{Roper2026Synthesizer,
+        author = {Roper, Will J. and Lovell, Christopher C. and Vijayan, Aswin and Wilkins, Stephen and Akins, Hollis and Berger, Sabrina and Sant Fournier, Connor and Harvey, Thomas and Iyer, Kartheik and Leonardi, Marco and Newman, Sophie and Pautasso, Borja and Perry, Ashley and Seeyave, Louise and Sommovigo, Laura and Punyasheel, Paurush and d'Hautefort, Adrien Aufan Stoffels and Rawlings, Alex},
+        journal = {Journal of Open Source Software},
+        doi = {10.21105/joss.09436},
+        year = {2026},
+        publisher = {Open Journals},
+        title = {Synthesizer: Synthetic Observables for Modern Astronomy},
+        volume = {11},
+        number = {119},
+        pages = {9436},
     }
 
 ## Licence
