@@ -1,0 +1,78 @@
+cff-version: "1.2.0"
+type: software
+title: "Synthesizer: Synthetic Observables for Modern Astronomy"
+
+message: >-
+  If you use this software, please cite BOTH papers listed in the README.
+  The GitHub citation interface cannot represent multiple required citations.
+
+authors:
+- family-names: Roper
+  given-names: Will J.
+  orcid: "https://orcid.org/0000-0002-3257-8806"
+- family-names: Lovell
+  given-names: Christopher C.
+  orcid: "https://orcid.org/0000-0001-7964-5933"
+- family-names: Vijayan
+  given-names: Aswin
+  orcid: "https://orcid.org/0000-0002-1905-4194"
+- family-names: Wilkins
+  given-names: Stephen
+  orcid: "https://orcid.org/0000-0003-3903-6935"
+- family-names: Akins
+  given-names: Hollis
+  orcid: "https://orcid.org/0000-0003-3596-8794"
+- family-names: Berger
+  given-names: Sabrina
+  orcid: "https://orcid.org/0000-0002-4064-7883"
+- family-names: Sant Fournier
+  given-names: Connor
+  orcid: "https://orcid.org/0009-0004-0771-4476"
+- family-names: Harvey
+  given-names: Thomas
+  orcid: "https://orcid.org/0000-0002-4130-636X"
+- family-names: Iyer
+  given-names: Kartheik
+  orcid: "https://orcid.org/0000-0001-9298-3523"
+- family-names: Leonardi
+  given-names: Marco
+  orcid: "https://orcid.org/0009-0008-3592-7830"
+- family-names: Newman
+  given-names: Sophie
+  orcid: "https://orcid.org/0009-0001-3422-3048"
+- family-names: Pautasso
+  given-names: Borja
+  orcid: "https://orcid.org/0009-0003-1839-591X"
+- family-names: Perry
+  given-names: Ashley
+  orcid: "https://orcid.org/0009-0001-0739-6162"
+- family-names: Seeyave
+  given-names: Louise
+  orcid: "https://orcid.org/0000-0002-7020-3079"
+- family-names: Sommovigo
+  given-names: Laura
+  orcid: "https://orcid.org/0000-0002-2906-2200"
+- family-names: Punyasheel
+  given-names: Paurush
+  orcid: "https://orcid.org/0009-0006-0037-1014"
+- family-names: d'Hautefort
+  given-names: Adrien Aufan Stoffels
+  orcid: "https://orcid.org/0009-0003-9019-1380"
+- family-names: Rawlings
+  given-names: Alex
+  orcid: "https://orcid.org/0000-0003-1807-6321"
+
+contact:
+- family-names: Roper
+  given-names: Will J.
+  orcid: "https://orcid.org/0000-0002-3257-8806"
+
+doi: 10.5281/zenodo.18910099
+
+references:
+- type: article
+  doi: 10.33232/001c.145766
+  title: "Synthesizer: a Software Package for Synthetic Astronomical Observables"
+- type: article
+  doi: 10.21105/joss.09436
+  title: "Synthesizer: Synthetic Observables for Modern Astronomy"
