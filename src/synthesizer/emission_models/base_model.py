@@ -1297,10 +1297,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             set_all (bool):
                 Whether to add the mask to all models.
         """
-        # Ensure we have units
-        if not isinstance(thresh, unyt_quantity):
+        # Ensure we have units, or a string alias resolved at generation time
+        if not isinstance(thresh, (unyt_quantity, str)):
             raise exceptions.MissingUnits(
-                "Mask threshold must be given with units."
+                "Mask threshold must be given with units (or as a string "
++                "attribute name to be resolved from the emitter)."
             )
 
         # Ensure operation is valid
