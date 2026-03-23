@@ -546,10 +546,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             and mask_thresh is not None
             and mask_op is not None
         ):
-            # Ensure mask_thresh comes with units
-            if not isinstance(mask_thresh, unyt_quantity):
+            # Ensure mask_thresh comes with units (or is a string alias
+            # that will be resolved to a unyt_quantity at generation time)
+            if not isinstance(mask_thresh, (unyt_quantity, str)):
                 raise exceptions.MissingUnits(
-                    "Mask threshold must be given with units."
+                    "Mask threshold must be given with units (or as a string "
+                    "attribute name to be resolved from the emitter)."
                 )
             self.masks.append(
                 {"attr": mask_attr, "thresh": mask_thresh, "op": mask_op}
