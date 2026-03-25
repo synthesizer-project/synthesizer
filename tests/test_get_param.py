@@ -987,6 +987,44 @@ class TestCacheModelParamsWithDifferentTransformers:
         assert "Asada25" in emitter.model_param_cache["asada25"]["transformer"]
 
 
+class TestStringAliasMaskThreshold:
+    """Test string alias support for mask thresholds."""
+
+    def test_add_mask_accepts_string_thresh(self, test_grid):
+        """Test that add_mask accepts a string alias as thresh."""
+        from synthesizer.emission_models import IncidentEmission
+
+        model = IncidentEmission(grid=test_grid, label="incident_str_thresh")
+        # Should not raise — string is a valid thresh alias
+        model.add_mask(attr="ages", op=">", thresh="age_thresh_attr")
+        assert any(m["thresh"] == "age_thresh_attr" for m in model.masks)
+
+    def test_add_mask_string_thresh_cached_correctly(self, test_grid):
+        """Test that a string alias thresh is cached as-is in the mask string."""
+        from synthesizer.emission_models import IncidentEmission
+
+        model = IncidentEmission(grid=test_grid, label="incident_str_cache")
+        model.add_mask(attr="ages", op=">", thresh="age_thresh_attr")
+        emitter = MockEmitter()
+
+        cache_model_params(model, emitter)
+
+        assert model.label in emitter.model_param_cache
+        mask_str = emitter.model_param_cache[model.label]["masks"]
+        assert "ages" in mask_str
+        assert ">" in mask_str
+        assert "age_thresh_attr" in mask_str
+
+    def test_add_mask_rejects_plain_number_thresh(self, test_grid):
+        """Test that add_mask still rejects a bare number (no units, not str)."""
+        from synthesizer import exceptions
+        from synthesizer.emission_models import IncidentEmission
+
+        model = IncidentEmission(grid=test_grid, label="incident_bad_thresh")
+        with pytest.raises(exceptions.MissingUnits):
+            model.add_mask(attr="ages", op=">", thresh=1.0)
+
+
 class TestCacheModelParamsWithDifferentGenerators:
     """Test caching with various generator types."""
 

@@ -493,6 +493,17 @@ class Particles:
                 f"Masking attribute ({attr_str}) not found on particle object."
             ) from e
 
+        # Resolve a string threshold as an attribute alias on the emitter
+        if isinstance(thresh, str):
+            thresh_str = thresh
+            try:
+                thresh = get_param(thresh_str, attr_override_obj, None, self)
+            except exceptions.MissingAttribute as e:
+                raise exceptions.MissingMaskAttribute(
+                    f"Mask threshold alias ({thresh_str}) not found on "
+                    "particle object."
+                ) from e
+
         # Strip dimensionless units since they are inconsequential
         if hasattr(attr, "units") and attr.units.is_dimensionless:
             attr = attr.ndview
