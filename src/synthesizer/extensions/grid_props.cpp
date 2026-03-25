@@ -41,8 +41,7 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
                      PyObject *axis_names_tuple)
     : nlam(nlam), np_spectra_(np_spectra), axes_tuple_(axes_tuple),
       np_lam_(np_lam), np_lam_mask_(np_lam_mask),
-      np_grid_weights_(np_grid_weights),
-      axis_names_tuple_(axis_names_tuple) {
+      np_grid_weights_(np_grid_weights) {
 
   tic("Constructing C++ grid properties");
 
@@ -77,6 +76,25 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       return;
     }
     dims[idim] = PyArray_DIM(np_axis_arr, 0);
+
+    axis_names_[idim].clear();
+    if (axis_names_tuple != NULL && PySequence_Check(axis_names_tuple) &&
+        !PyUnicode_Check(axis_names_tuple)) {
+      PyObject *name_obj = PySequence_GetItem(axis_names_tuple, idim);
+      if (name_obj != NULL) {
+        if (PyUnicode_Check(name_obj)) {
+          const char *name = PyUnicode_AsUTF8(name_obj);
+          if (name != NULL) {
+            axis_names_[idim] = name;
+          } else {
+            PyErr_Clear();
+          }
+        }
+        Py_DECREF(name_obj);
+      } else {
+        PyErr_Clear();
+      }
+    }
   }
 
   /* Calculate the size of the grid. */
@@ -280,22 +298,9 @@ double GridProps::get_axis_at(int idim, int ind) const {
   char fallback_name[64];
   fallback_name[0] = '\0';
 
-  if (axis_names_tuple_ != NULL && PySequence_Check(axis_names_tuple_) &&
-      !PyUnicode_Check(axis_names_tuple_)) {
-    PyObject *name_obj = PySequence_GetItem(axis_names_tuple_, idim);
-    if (name_obj != NULL) {
-      if (PyUnicode_Check(name_obj)) {
-        const char *name = PyUnicode_AsUTF8(name_obj);
-        if (name != NULL) {
-          snprintf(fallback_name, sizeof(fallback_name), "%s", name);
-        } else {
-          PyErr_Clear();
-        }
-      }
-      Py_DECREF(name_obj);
-    } else {
-      PyErr_Clear();
-    }
+  if (idim >= 0 && idim < ndim && !axis_names_[idim].empty()) {
+    snprintf(fallback_name, sizeof(fallback_name), "%s",
+             axis_names_[idim].c_str());
   }
 
   if (fallback_name[0] == '\0') {
