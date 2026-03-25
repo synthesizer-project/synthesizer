@@ -229,8 +229,9 @@ class TestGridLines:
             assert test_grid.line_lams is not None
             assert len(test_grid.line_lams) > 0
             assert test_grid.nlines == len(test_grid.available_lines)
+            assert test_grid.line_lams.flags.c_contiguous
 
-            for emission_type in test_grid.available_line_emissions:
+            for emission_type in test_grid.line_lums:
                 assert emission_type in test_grid.line_lums
                 assert emission_type in test_grid.line_conts
 
@@ -239,6 +240,8 @@ class TestGridLines:
 
                 assert line_lums.shape[-1] == len(test_grid.available_lines)
                 assert line_conts.shape[-1] == len(test_grid.available_lines)
+                assert line_lums.flags.c_contiguous
+                assert line_conts.flags.c_contiguous
 
     def test_lines_different(self, test_grid):
         """Test that the lines are different."""
