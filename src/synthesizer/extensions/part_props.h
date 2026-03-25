@@ -3,6 +3,7 @@
 
 /* Standard includes */
 #include <stdlib.h>
+#include <string>
 #include <vector>
 
 /* Python includes */
@@ -34,7 +35,8 @@ public:
 
   /* Constructor */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
-            PyArrayObject *np_mask, PyObject *part_tuple, int npart);
+            PyArrayObject *np_mask, PyObject *part_tuple,
+            PyObject *part_names_tuple, int npart);
 
   /* Destructor */
   ~Particles();
@@ -66,6 +68,9 @@ private:
   /* The particle properties corresponding to the grid axes, this is a tuple
    * of numpy arrays. */
   PyObject *part_tuple_;
+
+  /* Names for the particle property arrays. */
+  std::vector<std::string> part_names_;
 };
 
 // Prototypes for helper functions.
