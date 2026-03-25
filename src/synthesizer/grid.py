@@ -227,7 +227,7 @@ class Grid:
         if self.lam is not None:
             self.lam = as_contiguous(self.lam)
 
-        for spectra_id in self.available_spectra_emissions:
+        for spectra_id in self.spectra:
             self.spectra[spectra_id] = as_contiguous(self.spectra[spectra_id])
 
     def _ensure_line_data_contiguous(self):
@@ -235,10 +235,11 @@ class Grid:
         if self.line_lams is not None:
             self.line_lams = as_contiguous(self.line_lams)
 
-        for spectra_id in self.available_line_emissions:
+        for spectra_id in self.line_lums:
             self.line_lums[spectra_id] = as_contiguous(
                 self.line_lums[spectra_id]
             )
+        for spectra_id in self.line_conts:
             self.line_conts[spectra_id] = as_contiguous(
                 self.line_conts[spectra_id]
             )
