@@ -778,7 +778,7 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
                 `Calzetti2000` with default parameters.
             age_pivot(unyt.unyt_quantity):
                 The age pivot between young and old populations,
-                expressed in terms of log10(age) in Myr.
+                expressed in terms of log10(age/yr).
             fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
             label(str):
@@ -1098,7 +1098,7 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
                 `Calzetti2000` with default parameters.
             age_pivot(unyt.unyt_quantity):
                 The age pivot between young and old populations,
-                expressed in terms of log10(age) in Myr.
+                expressed in terms of log10(age/yr).
             dust_emission_ism(synthesizer.dust.EmissionModel):
                 The dust emission model for the ISM.
             dust_emission_birth(synthesizer.dust.EmissionModel):
@@ -1492,7 +1492,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 `Calzetti2000` with default parameters.
             age_pivot(unyt.unyt_quantity):
                 The age pivot between young and old populations,
-                expressed in terms of log10(age) in Myr.
+                expressed in terms of log10(age/yr).
             fesc(float):
                 The escape fraction.
             fesc_ly_alpha(float):
@@ -1866,7 +1866,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
                 `Calzetti2000` with default parameters.
             age_pivot(unyt.unyt_quantity):
                 The age pivot between young and old populations,
-                expressed in terms of log10(age) in Myr.
+                expressed in terms of log10(age/yr).
             dust_emission_ism(synthesizer.dust.EmissionModel):
                 The dust emission model for the ISM.
             dust_emission_birth(synthesizer.dust.EmissionModel):
@@ -2220,7 +2220,7 @@ class BimodalPacmanEmission:
     and nebular continuum emission.
 
     All spectra produced have a young, old and combined component. The split
-    between young and old is by default 10 ^ 7 Myr but can be changed with the
+    between young and old is by default 10 ^ 7 yr (10 Myr) but can be changed with the
     age_pivot argument.
 
     This model will always produce:
@@ -2323,7 +2323,7 @@ class BimodalPacmanEmission:
                 `Calzetti2000` with default parameters.
             age_pivot(unyt.unyt_quantity):
                 The age pivot between young and old populations,
-                expressed in terms of log10(age) in Myr.
+                expressed in terms of log10(age/yr).
             dust_emission_ism(synthesizer.dust.EmissionModel):
                 The dust emission model for the ISM.
             dust_emission_birth(synthesizer.dust.EmissionModel):
@@ -2440,7 +2440,7 @@ class CharlotFall2000(BimodalPacmanEmission):
         dust_curve_ism (AttenuationLaw): The dust curve for the ISM.
         dust_curve_birth (AttenuationLaw): The dust curve for the nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
-            populations, expressed in terms of log10(age) in Myr.
+            populations, expressed in terms of log10(age/yr).
         dust_emission_ism (synthesizer.dust.EmissionModel): The dust
             emission model for the ISM.
         dust_emission_birth (synthesizer.dust.EmissionModel): The dust
@@ -2475,7 +2475,7 @@ class CharlotFall2000(BimodalPacmanEmission):
                 The V-band optical depth for the nebular.
             age_pivot (unyt.unyt_quantity):
                 The age pivot between young and old populations, expressed
-                in terms of log10(age) in Myr. Defaults to 10 ^ 7 Myr.
+                in terms of log10(age/yr). Defaults to 7 (= 10^7 yr = 10 Myr).
             dust_curve_ism (AttenuationLaw):
                 The dust curve for the ISM. Defaults to ``Calzetti2000`` with
                 fiducial parameters.

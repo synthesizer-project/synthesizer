@@ -51,23 +51,25 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *prop_names = NULL;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisiO", &grid_tuple, &part_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOiisiO|O", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads, &np_mask))
+                        &nthreads, &np_mask, &prop_names))
     return NULL;
 
   /* Extract the grid struct. */
   GridProps *grid_props =
       new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
-                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1);
+                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1,
+                    /*np_grid_weights*/ NULL, prop_names);
   RETURN_IF_PYERR();
 
   Particles *parts = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                   np_mask, part_tuple, npart);
+                                   np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
   /* Get the grid weights we'll work on. */

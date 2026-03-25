@@ -4,6 +4,7 @@
 /* Standard includes */
 #include <array>
 #include <stdlib.h>
+#include <string>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -39,7 +40,8 @@ public:
   /* Constructor for the GridProps class. */
   GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
             PyArrayObject *np_lam, PyArrayObject *np_lam_mask, const int nlam,
-            PyArrayObject *np_grid_weights = NULL);
+            PyArrayObject *np_grid_weights = NULL,
+            PyObject *axis_names_tuple = NULL);
 
   /* Index handlers for indexing the grid properties. */
   int ravel_grid_index(const std::array<int, MAX_GRID_NDIM> &multi_index) const;
@@ -75,6 +77,9 @@ private:
   /* The properties along each axis. */
   PyObject *axes_tuple_;
 
+  /* Names for the axis arrays. */
+  std::array<std::string, MAX_GRID_NDIM> axis_names_;
+
   /* The wavelength array. */
   PyArrayObject *np_lam_;
 
@@ -89,6 +94,9 @@ private:
 
   /* Flag for whether we need to populate the grid weights */
   bool need_grid_weights_ = true;
+
+  /* Did this object allocate the grid weights array itself? */
+  bool owns_grid_weights_ = false;
 
   /* The dimensions of the spectra array (account for the wavelength axis). */
   std::array<int, MAX_GRID_NDIM + 1> spectra_dims_;
