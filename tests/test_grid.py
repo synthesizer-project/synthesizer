@@ -188,6 +188,9 @@ class TestGridSpectra:
             new_shape[:-1] == original_shape[:-1]
         )  # Other dimensions unchanged
         assert new_shape[-1] == len(new_lam)  # Wavelength dimension changed
+        assert test_grid.lam.flags.c_contiguous
+        for spectra_type in test_grid.available_spectra:
+            assert test_grid.spectra[spectra_type].flags.c_contiguous
 
     def test_get_sed_methods(self, test_grid):
         """Test SED extraction methods."""
@@ -345,6 +348,8 @@ class TestGridReductionMethods:
             assert reduced_grid.spectra[spectra_type].shape[-1] == len(
                 reduced_grid.lam
             )
+            assert reduced_grid.spectra[spectra_type].flags.c_contiguous
+        assert reduced_grid.lam.flags.c_contiguous
 
     def test_reduce_rest_frame_range_inplace(self, test_grid_name):
         """Test reducing grid to a rest frame wavelength range in-place."""
@@ -373,6 +378,8 @@ class TestGridReductionMethods:
         # Check spectra shapes changed accordingly
         for spectra_type in grid.available_spectra:
             assert grid.spectra[spectra_type].shape[-1] == len(grid.lam)
+            assert grid.spectra[spectra_type].flags.c_contiguous
+        assert grid.lam.flags.c_contiguous
 
     def test_reduce_rest_frame_range_invalid_args(self, test_grid_name):
         """Test reduce_rest_frame_range with invalid arguments."""
@@ -603,6 +610,7 @@ class TestGridReductionMethods:
         if reduced_grid.has_spectra:
             for spectra_type in reduced_grid.available_spectra:
                 assert reduced_grid.spectra[spectra_type].shape == new_shape
+                assert reduced_grid.spectra[spectra_type].flags.c_contiguous
 
         if reduced_grid.has_lines:
             for emission_type in reduced_grid.available_line_emissions:
@@ -615,6 +623,18 @@ class TestGridReductionMethods:
                     reduced_grid.line_conts[emission_type].shape
                     == expected_line_shape
                 )
+                assert reduced_grid.line_lums[emission_type].flags.c_contiguous
+                assert reduced_grid.line_conts[
+                    emission_type
+                ].flags.c_contiguous
+
+        assert reduced_grid._axes_values[axis_name].flags.c_contiguous
+        extract_axis_name = reduced_grid._extract_axes[
+            grid.axes.index(axis_name)
+        ]
+        assert reduced_grid._extract_axes_values[
+            extract_axis_name
+        ].flags.c_contiguous
 
     def test_reduce_axis_invalid_args(self, test_grid_name):
         """Test reduce_axis with invalid arguments."""
@@ -668,6 +688,9 @@ class TestGridReductionMethods:
         # to range edges
         assert reduced_grid.lam[0] >= filter_min * 0.8
         assert reduced_grid.lam[-1] <= filter_max * 1.2
+        assert reduced_grid.lam.flags.c_contiguous
+        for spectra_type in reduced_grid.available_spectra:
+            assert reduced_grid.spectra[spectra_type].flags.c_contiguous
 
     def test_reduce_observed_filters(self, test_grid_name):
         """Test reducing grid to observed frame filter ranges."""
@@ -717,6 +740,9 @@ class TestGridReductionMethods:
         # to range edges
         assert reduced_grid.lam[0] >= rest_filter_min * 0.8
         assert reduced_grid.lam[-1] <= rest_filter_max * 1.2
+        assert reduced_grid.lam.flags.c_contiguous
+        for spectra_type in reduced_grid.available_spectra:
+            assert reduced_grid.spectra[spectra_type].flags.c_contiguous
 
 
 class TestGridCollapse:
@@ -756,6 +782,12 @@ class TestGridCollapse:
         with pytest.raises(AttributeError):
             getattr(collapsed_grid, axis_to_collapse)
 
+        for spectra_type in collapsed_grid.available_spectra:
+            assert collapsed_grid.spectra[spectra_type].flags.c_contiguous
+        for emission_type in collapsed_grid.available_line_emissions:
+            assert collapsed_grid.line_lums[emission_type].flags.c_contiguous
+            assert collapsed_grid.line_conts[emission_type].flags.c_contiguous
+
     def test_collapse_interpolate(self, test_grid_name):
         """Test collapsing grid by interpolating to a specific value."""
         # Create a fresh grid instance
@@ -790,6 +822,12 @@ class TestGridCollapse:
         assert len(new_shape) == len(original_shape) - 1
         assert new_shape == original_shape[1:]  # First axis removed
 
+        for spectra_type in collapsed_grid.available_spectra:
+            assert collapsed_grid.spectra[spectra_type].flags.c_contiguous
+        for emission_type in collapsed_grid.available_line_emissions:
+            assert collapsed_grid.line_lums[emission_type].flags.c_contiguous
+            assert collapsed_grid.line_conts[emission_type].flags.c_contiguous
+
     def test_collapse_nearest(self, test_grid_name):
         """Test collapsing grid by extracting nearest value."""
         # Create a fresh grid instance
@@ -823,6 +861,12 @@ class TestGridCollapse:
         new_shape = collapsed_grid.shape
         assert len(new_shape) == len(original_shape) - 1
         assert new_shape == original_shape[1:]  # First axis removed
+
+        for spectra_type in collapsed_grid.available_spectra:
+            assert collapsed_grid.spectra[spectra_type].flags.c_contiguous
+        for emission_type in collapsed_grid.available_line_emissions:
+            assert collapsed_grid.line_lums[emission_type].flags.c_contiguous
+            assert collapsed_grid.line_conts[emission_type].flags.c_contiguous
 
     def test_collapse_invalid_args(self, test_grid_name):
         """Test collapse with invalid arguments."""
