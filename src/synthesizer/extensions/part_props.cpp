@@ -178,21 +178,33 @@ npy_bool Particles::get_mask_at(int pind) const {
  * @return The property of the particle at the given index.
  */
 double Particles::get_part_prop_at(int idim, int pind) const {
-  const char *array_name = NULL;
   char fallback_name[64];
+  fallback_name[0] = '\0';
 
-  if (part_names_tuple_ != NULL) {
-    PyObject *name_obj = PyTuple_GetItem(part_names_tuple_, idim);
-    if (name_obj != NULL && PyUnicode_Check(name_obj)) {
-      array_name = PyUnicode_AsUTF8(name_obj);
+  if (part_names_tuple_ != NULL && PySequence_Check(part_names_tuple_) &&
+      !PyUnicode_Check(part_names_tuple_)) {
+    PyObject *name_obj = PySequence_GetItem(part_names_tuple_, idim);
+    if (name_obj != NULL) {
+      if (PyUnicode_Check(name_obj)) {
+        const char *name = PyUnicode_AsUTF8(name_obj);
+        if (name != NULL) {
+          snprintf(fallback_name, sizeof(fallback_name), "%s", name);
+        } else {
+          PyErr_Clear();
+        }
+      }
+      Py_DECREF(name_obj);
+    } else {
+      PyErr_Clear();
     }
   }
 
-  if (array_name == NULL) {
+  if (fallback_name[0] == '\0') {
     snprintf(fallback_name, sizeof(fallback_name), "particle property %d",
              idim);
-    array_name = fallback_name;
   }
+
+  const char *array_name = fallback_name;
 
   /* Get the array stored at idim. */
   PyArrayObject *np_part_arr =
