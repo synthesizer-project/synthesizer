@@ -25,9 +25,10 @@ class GridProps;
  * @param part_tuple: The tuple of numpy arrays holding the particle properties.
  */
 Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
-                     PyArrayObject *np_mask, PyObject *part_tuple, int npart_)
+                     PyArrayObject *np_mask, PyObject *part_tuple,
+                     PyObject *part_names_tuple, int npart_)
     : np_weights_(np_weights), np_velocities_(np_velocities), np_mask_(np_mask),
-      part_tuple_(part_tuple) {
+      part_tuple_(part_tuple), part_names_tuple_(part_names_tuple) {
 
   tic("Constructing C++ Particles object");
 
@@ -48,6 +49,7 @@ Particles::~Particles() {
 
   /* The part_tuple is a tuple of numpy arrays, we don't own it either. */
   part_tuple_ = NULL;
+  part_names_tuple_ = NULL;
 
   /* We don't need to do anything else here, the numpy arrays will be freed
    * automatically when the Python objects are destroyed. */
@@ -134,7 +136,7 @@ double *Particles::get_part_props(int idim) const {
  * @return The weight of the particle at the given index.
  */
 double Particles::get_weight_at(int pind) const {
-  return get_double_at(np_weights_, pind);
+  return get_double_at(np_weights_, pind, "weights");
 }
 
 /**
@@ -144,7 +146,7 @@ double Particles::get_weight_at(int pind) const {
  * @return The velocity of the particle at the given index.
  */
 double Particles::get_vel_at(int pind) const {
-  return get_double_at(np_velocities_, pind);
+  return get_double_at(np_velocities_, pind, "velocities");
 }
 
 /**
@@ -165,7 +167,7 @@ npy_bool Particles::get_mask_at(int pind) const {
   }
 
   /* Otherwise, is this element masked? */
-  return get_bool_at(np_mask_, pind);
+  return get_bool_at(np_mask_, pind, "mask");
 }
 
 /**
@@ -176,6 +178,22 @@ npy_bool Particles::get_mask_at(int pind) const {
  * @return The property of the particle at the given index.
  */
 double Particles::get_part_prop_at(int idim, int pind) const {
+  const char *array_name = NULL;
+  char fallback_name[64];
+
+  if (part_names_tuple_ != NULL) {
+    PyObject *name_obj = PyTuple_GetItem(part_names_tuple_, idim);
+    if (name_obj != NULL && PyUnicode_Check(name_obj)) {
+      array_name = PyUnicode_AsUTF8(name_obj);
+    }
+  }
+
+  if (array_name == NULL) {
+    snprintf(fallback_name, sizeof(fallback_name), "particle property %d",
+             idim);
+    array_name = fallback_name;
+  }
+
   /* Get the array stored at idim. */
   PyArrayObject *np_part_arr =
       (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
@@ -187,10 +205,10 @@ double Particles::get_part_prop_at(int idim, int pind) const {
   /* If we have a size 1 array then we have a fixed scalar value. In this case
    * we return the first element. */
   if (PyArray_SIZE(np_part_arr) == 1) {
-    return get_double_at(np_part_arr, 0);
+    return get_double_at(np_part_arr, 0, array_name);
   }
 
-  return get_double_at(np_part_arr, pind);
+  return get_double_at(np_part_arr, pind, array_name);
 }
 
 /**
@@ -211,7 +229,7 @@ bool Particles::part_is_masked(int pind) const {
   }
 
   /* Otherwise, is this element masked? */
-  return !get_bool_at(np_mask_, pind);
+  return !get_bool_at(np_mask_, pind, "mask");
 }
 
 /**

@@ -39,7 +39,8 @@ public:
   /* Constructor for the GridProps class. */
   GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
             PyArrayObject *np_lam, PyArrayObject *np_lam_mask, const int nlam,
-            PyArrayObject *np_grid_weights = NULL);
+            PyArrayObject *np_grid_weights = NULL,
+            PyObject *axis_names_tuple = NULL);
 
   /* Index handlers for indexing the grid properties. */
   int ravel_grid_index(const std::array<int, MAX_GRID_NDIM> &multi_index) const;
@@ -74,6 +75,9 @@ private:
 
   /* The properties along each axis. */
   PyObject *axes_tuple_;
+
+  /* Names for the axis arrays. */
+  PyObject *axis_names_tuple_;
 
   /* The wavelength array. */
   PyArrayObject *np_lam_;
