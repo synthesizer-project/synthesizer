@@ -37,10 +37,12 @@
  */
 GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
                      PyArrayObject *np_lam, PyArrayObject *np_lam_mask,
-                     const int nlam, PyArrayObject *np_grid_weights)
+                     const int nlam, PyArrayObject *np_grid_weights,
+                     PyObject *axis_names_tuple)
     : nlam(nlam), np_spectra_(np_spectra), axes_tuple_(axes_tuple),
       np_lam_(np_lam), np_lam_mask_(np_lam_mask),
-      np_grid_weights_(np_grid_weights) {
+      np_grid_weights_(np_grid_weights),
+      axis_names_tuple_(axis_names_tuple) {
 
   tic("Constructing C++ grid properties");
 
@@ -211,7 +213,7 @@ double GridProps::get_spectra_at(int grid_ind, int ilam) const {
   int spectra_index = ravel_spectra_index(unraveled_ind, ilam);
 
   /* Return the value at the spectra index. */
-  return get_double_at(np_spectra_, spectra_index);
+  return get_double_at(np_spectra_, spectra_index, "spectra");
 }
 
 /**
@@ -273,6 +275,21 @@ std::array<double *, MAX_GRID_NDIM> GridProps::get_all_axes() const {
  * @return The value at the specified index in the axis.
  */
 double GridProps::get_axis_at(int idim, int ind) const {
+  const char *array_name = NULL;
+  char fallback_name[64];
+
+  if (axis_names_tuple_ != NULL) {
+    PyObject *name_obj = PyTuple_GetItem(axis_names_tuple_, idim);
+    if (name_obj != NULL && PyUnicode_Check(name_obj)) {
+      array_name = PyUnicode_AsUTF8(name_obj);
+    }
+  }
+
+  if (array_name == NULL) {
+    snprintf(fallback_name, sizeof(fallback_name), "axis %d", idim);
+    array_name = fallback_name;
+  }
+
   if (idim < 0 || idim >= ndim) {
     PyErr_SetString(PyExc_IndexError,
                     "[GridProps::get_axis_at]: Axis index out of bounds.");
@@ -287,7 +304,7 @@ double GridProps::get_axis_at(int idim, int ind) const {
     return -1.0;
   }
 
-  return get_double_at(np_axis_arr, ind);
+  return get_double_at(np_axis_arr, ind, array_name);
 }
 
 /**
@@ -382,7 +399,7 @@ bool GridProps::lam_is_masked(int ind) const {
     return false;
   }
 
-  return !get_bool_at(np_lam_mask_, ind);
+  return !get_bool_at(np_lam_mask_, ind, "wavelength mask");
 }
 
 /**

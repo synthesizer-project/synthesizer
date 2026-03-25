@@ -1028,10 +1028,12 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(log10ages, dtype=np.float64),
             np.ascontiguousarray(log10metallicities, dtype=np.float64),
         ]
+        grid_prop_names = ("log10ages", "log10metallicities")
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
             np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
         ]
+        part_prop_names = ("log10ages", "log10metallicities")
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
         )
@@ -1062,6 +1064,8 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
             nthreads,
             None,
+            grid_prop_names,
+            part_prop_names,
         )
 
     def get_sfzh(
@@ -1201,9 +1205,11 @@ class Stars(Particles, StarsComponent):
         grid_props = [
             np.ascontiguousarray(log10ages, dtype=np.float64),
         ]
+        grid_prop_names = ("log10ages",)
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
         ]
+        part_prop_names = ("log10ages",)
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
         )
@@ -1234,6 +1240,8 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
             nthreads,
             None,
+            grid_prop_names,
+            part_prop_names,
         )
 
     def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
@@ -1356,9 +1364,11 @@ class Stars(Particles, StarsComponent):
         grid_props = [
             np.ascontiguousarray(metallicities, dtype=np.float64),
         ]
+        grid_prop_names = ("metallicities",)
         part_props = [
             np.ascontiguousarray(self.metallicities, dtype=np.float64),
         ]
+        part_prop_names = ("metallicities",)
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
         )
@@ -1389,6 +1399,8 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
             nthreads,
             None,
+            grid_prop_names,
+            part_prop_names,
         )
 
     def get_metal_dist(

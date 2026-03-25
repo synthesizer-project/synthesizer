@@ -349,6 +349,8 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         # If we have no mask then lets store the grid weights in case
@@ -458,6 +460,8 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         # Compute the integrated continuum array
@@ -475,6 +479,8 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         # If we have no mask then lets store the grid weights in case
@@ -598,6 +604,8 @@ class DopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         # Make the Sed objects themselves
@@ -711,6 +719,8 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         return Sed(model.lam, integrated_spec * erg / s / Hz)
@@ -833,6 +843,8 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         # Make the Sed objects themselves
@@ -957,6 +969,8 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         # Compute the integrated continuum array
@@ -973,6 +987,8 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            self._emitter_attributes,
+            self._emitter_attributes,
         )
 
         # Make the LineCollection objects themselves
