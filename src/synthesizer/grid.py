@@ -42,6 +42,7 @@ from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 class Grid:
@@ -208,6 +209,39 @@ class Grid:
                 + self.available_spectra_emissions
             )
         )
+
+    def _ensure_axis_data_contiguous(self):
+        """Ensure stored axis arrays are contiguous."""
+        for axis_name in self.axes:
+            self._axes_values[axis_name] = as_contiguous(
+                self._axes_values[axis_name]
+            )
+
+        for axis_name in self._extract_axes:
+            self._extract_axes_values[axis_name] = as_contiguous(
+                self._extract_axes_values[axis_name]
+            )
+
+    def _ensure_spectra_data_contiguous(self):
+        """Ensure stored spectra arrays and wavelengths are contiguous."""
+        if self.lam is not None:
+            self.lam = as_contiguous(self.lam)
+
+        for spectra_id in self.available_spectra_emissions:
+            self.spectra[spectra_id] = as_contiguous(self.spectra[spectra_id])
+
+    def _ensure_line_data_contiguous(self):
+        """Ensure stored line arrays and wavelengths are contiguous."""
+        if self.line_lams is not None:
+            self.line_lams = as_contiguous(self.line_lams)
+
+        for spectra_id in self.available_line_emissions:
+            self.line_lums[spectra_id] = as_contiguous(
+                self.line_lums[spectra_id]
+            )
+            self.line_conts[spectra_id] = as_contiguous(
+                self.line_conts[spectra_id]
+            )
 
     @property
     def available_spectra(self):
@@ -430,6 +464,8 @@ class Grid:
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
 
+        self._ensure_spectra_data_contiguous()
+
     def _get_lines_grid(self):
         """Get the lines grid from the HDF5 file."""
         # Double check we actually have lines to read
@@ -572,24 +608,7 @@ class Grid:
                         lum_units,
                     )
 
-            # Ensure the line luminosities and continuums are contiguous
-            for spectra in self.line_lums.keys():
-                lum_units = self.line_lums[spectra].units
-                cont_units = self.line_conts[spectra].units
-                self.line_lums[spectra] = (
-                    np.ascontiguousarray(
-                        self.line_lums[spectra],
-                        dtype=np.float64,
-                    )
-                    * lum_units
-                )
-                self.line_conts[spectra] = (
-                    np.ascontiguousarray(
-                        self.line_conts[spectra],
-                        dtype=np.float64,
-                    )
-                    * cont_units
-                )
+            self._ensure_line_data_contiguous()
 
     def _prepare_lam_axis(
         self,
@@ -791,6 +810,8 @@ class Grid:
         # Update wavelength array
         self.lam = new_lam
 
+        self._ensure_spectra_data_contiguous()
+
         # Remove any lines outside the new wavelength range
         if self.lines_available:
             self._remove_lines_outside_lam()
@@ -882,6 +903,8 @@ class Grid:
                     ..., lines_to_keep
                 ]
 
+            self._ensure_line_data_contiguous()
+
     @accepts(lam_min=angstrom, lam_max=angstrom)
     def reduce_rest_frame_range(self, lam_min, lam_max, inplace=False):
         """Limit the wavelength range of the grid.
@@ -925,6 +948,8 @@ class Grid:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][
                 ..., min_index:max_index
             ]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range
         if grid.lines_available:
@@ -984,6 +1009,8 @@ class Grid:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][
                 ..., min_index:max_index
             ]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range
         if grid.lines_available:
@@ -1051,6 +1078,8 @@ class Grid:
         grid.lam = grid.lam[lam_mask]
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range this will leave lines
         # that don't lie within non-zero transmission regions of the filters
@@ -1126,6 +1155,8 @@ class Grid:
         grid.lam = grid.lam[lam_mask]
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range this will leave lines
         # that don't lie within non-zero transmission regions of the filters
@@ -1300,6 +1331,8 @@ class Grid:
             grid._extract_axes_values[_extract_axis_name][low_index:high_index]
         )
 
+        grid._ensure_axis_data_contiguous()
+
         # Limit all the spectra arrays
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = np.take(
@@ -1307,6 +1340,8 @@ class Grid:
                 indices=range(low_index, high_index),
                 axis=axis_index,
             )
+
+        grid._ensure_spectra_data_contiguous()
 
         # Limit all the line luminosity and continuum arrays
         for spectra_id in grid.available_line_emissions:
@@ -1320,6 +1355,8 @@ class Grid:
                 indices=range(low_index, high_index),
                 axis=axis_index,
             )
+
+        grid._ensure_line_data_contiguous()
 
         # Return the grid if not inplace
         if not inplace:
@@ -1452,6 +1489,9 @@ class Grid:
                 self.line_conts[spectra_id], axis=axis_index
             )
 
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
+
     def _collapse_grid_interpolate(self, axis, value, pre_interp_function):
         """Collapse the grid by interpolating to the specified value.
 
@@ -1546,6 +1586,9 @@ class Grid:
                 axis=0,
             )
 
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
+
     def _collapse_grid_nearest(self, axis, value):
         """Collapse the grid by extracting the nearest value of the axis.
 
@@ -1590,6 +1633,9 @@ class Grid:
                 np.argmin(np.abs(axis_values - value)),
                 axis=axis_index,
             )
+
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
 
     def collapse(
         self,
