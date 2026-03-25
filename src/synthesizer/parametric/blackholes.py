@@ -194,6 +194,10 @@ class BlackHole(BlackholesComponent):
         # Get the attribute
         attr = get_param(attr, attr_override_obj, None, self)
 
+        # Resolve a string threshold as an attribute alias on the emitter
+        if isinstance(thresh, str):
+            thresh = get_param(thresh, attr_override_obj, None, self)
+
         # Apply the operator
         if op == ">":
             new_mask = attr > thresh

@@ -335,6 +335,7 @@ class IntegratedParticleExtractor(Extractor):
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
+        emitter_attr_names = tuple(self._emitter_attributes)
         spec, grid_weights = compute_integrated_sed(
             self._spectra_grid,
             self._grid_axes,
@@ -349,6 +350,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # If we have no mask then lets store the grid weights in case
@@ -444,6 +446,7 @@ class IntegratedParticleExtractor(Extractor):
         toc("Setting up particle line calculation")
 
         # Compute the integrated line lum array
+        emitter_attr_names = tuple(self._emitter_attributes)
         lum, grid_weights = compute_integrated_sed(
             self._line_lum_grid,
             self._grid_axes,
@@ -458,6 +461,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Compute the integrated continuum array
@@ -475,6 +479,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # If we have no mask then lets store the grid weights in case
@@ -582,6 +587,7 @@ class DopplerShiftedParticleExtractor(Extractor):
         toc("Setting up particle Lnu (with velocity shift) calculation")
 
         # Compute the lnu array
+        emitter_attr_names = tuple(self._emitter_attributes)
         spec, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -598,6 +604,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Make the Sed objects themselves
@@ -695,6 +702,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         toc("Setting up integrated Lnu (with velocity shift) calculation")
 
         # Compute the lnu array
+        emitter_attr_names = tuple(self._emitter_attributes)
         _, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -711,6 +719,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         return Sed(model.lam, integrated_spec * erg / s / Hz)
@@ -820,6 +829,7 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle Lnu calculation")
 
         # Compute the lnu array
+        emitter_attr_names = tuple(self._emitter_attributes)
         spec, integrated_spec = compute_particle_seds(
             self._spectra_grid,
             self._grid_axes,
@@ -833,6 +843,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Make the Sed objects themselves
@@ -944,6 +955,7 @@ class ParticleExtractor(Extractor):
         toc("Setting up particle line calculation")
 
         # Compute the integrated line lum array
+        emitter_attr_names = tuple(self._emitter_attributes)
         lum, integrated_lum = compute_particle_seds(
             self._line_lum_grid,
             self._grid_axes,
@@ -957,6 +969,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Compute the integrated continuum array
@@ -973,6 +986,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Make the LineCollection objects themselves
