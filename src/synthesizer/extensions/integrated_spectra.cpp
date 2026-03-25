@@ -199,25 +199,28 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *prop_names = NULL;
   PyArrayObject *np_grid_spectra, *np_grid_weights;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOO", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads, &np_grid_weights, &np_mask,
-                        &np_lam_mask))
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOO|O", &np_grid_spectra,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
+                        &ndim, &npart, &nlam, &method, &nthreads,
+                        &np_grid_weights, &np_mask, &np_lam_mask,
+                        &prop_names))
     return NULL;
 
   /* Extract the grid struct. */
   GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
-                                        /*np_lam*/ NULL, np_lam_mask, nlam);
+                                        /*np_lam*/ NULL, np_lam_mask, nlam,
+                                        np_grid_weights, prop_names);
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
   Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                        np_mask, part_tuple, npart);
+                                        np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
   /* Get existing grid weights or allocate new ones. */
