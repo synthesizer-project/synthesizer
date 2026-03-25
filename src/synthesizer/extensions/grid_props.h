@@ -4,6 +4,7 @@
 /* Standard includes */
 #include <array>
 #include <stdlib.h>
+#include <string>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -77,7 +78,7 @@ private:
   PyObject *axes_tuple_;
 
   /* Names for the axis arrays. */
-  PyObject *axis_names_tuple_;
+  std::array<std::string, MAX_GRID_NDIM> axis_names_;
 
   /* The wavelength array. */
   PyArrayObject *np_lam_;

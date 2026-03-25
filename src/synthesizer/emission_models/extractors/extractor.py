@@ -351,7 +351,6 @@ class IntegratedParticleExtractor(Extractor):
             mask,
             lam_mask,
             emitter_attr_names,
-            emitter_attr_names,
         )
 
         # If we have no mask then lets store the grid weights in case
@@ -463,7 +462,6 @@ class IntegratedParticleExtractor(Extractor):
             mask,
             lam_mask,
             emitter_attr_names,
-            emitter_attr_names,
         )
 
         # Compute the integrated continuum array
@@ -481,7 +479,6 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
-            emitter_attr_names,
             emitter_attr_names,
         )
 
@@ -608,7 +605,6 @@ class DopplerShiftedParticleExtractor(Extractor):
             mask,
             lam_mask,
             emitter_attr_names,
-            emitter_attr_names,
         )
 
         # Make the Sed objects themselves
@@ -723,7 +719,6 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
-            emitter_attr_names,
             emitter_attr_names,
         )
 
@@ -848,7 +843,6 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
-            emitter_attr_names,
             emitter_attr_names,
         )
 
@@ -976,7 +970,6 @@ class ParticleExtractor(Extractor):
             mask,
             lam_mask,
             emitter_attr_names,
-            emitter_attr_names,
         )
 
         # Compute the integrated continuum array
@@ -993,7 +986,6 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
-            emitter_attr_names,
             emitter_attr_names,
         )
 

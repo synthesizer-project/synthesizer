@@ -3,6 +3,7 @@
 
 /* Standard includes */
 #include <stdlib.h>
+#include <string>
 #include <vector>
 
 /* Python includes */
@@ -69,7 +70,7 @@ private:
   PyObject *part_tuple_;
 
   /* Names for the particle property arrays. */
-  PyObject *part_names_tuple_;
+  std::vector<std::string> part_names_;
 };
 
 // Prototypes for helper functions.

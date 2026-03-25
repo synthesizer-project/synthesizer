@@ -27,13 +27,45 @@ class GridProps;
 Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyArrayObject *np_mask, PyObject *part_tuple,
                      PyObject *part_names_tuple, int npart_)
-    : np_weights_(np_weights), np_velocities_(np_velocities), np_mask_(np_mask),
-      part_tuple_(part_tuple), part_names_tuple_(part_names_tuple) {
+    : np_weights_(np_weights), np_velocities_(np_velocities),
+      np_mask_(np_mask), part_tuple_(part_tuple) {
 
   tic("Constructing C++ Particles object");
 
   /* Assign the number of particles. */
   npart = npart_;
+
+  if (part_names_tuple != NULL && PySequence_Check(part_names_tuple) &&
+      !PyUnicode_Check(part_names_tuple)) {
+    Py_ssize_t n_names = PySequence_Size(part_names_tuple);
+    if (n_names < 0) {
+      PyErr_Clear();
+    } else {
+      part_names_.reserve(n_names);
+      for (Py_ssize_t i = 0; i < n_names; ++i) {
+        PyObject *name_obj = PySequence_GetItem(part_names_tuple, i);
+        if (name_obj == NULL) {
+          PyErr_Clear();
+          part_names_.emplace_back("");
+          continue;
+        }
+
+        if (PyUnicode_Check(name_obj)) {
+          const char *name = PyUnicode_AsUTF8(name_obj);
+          if (name != NULL) {
+            part_names_.emplace_back(name);
+          } else {
+            PyErr_Clear();
+            part_names_.emplace_back("");
+          }
+        } else {
+          part_names_.emplace_back("");
+        }
+
+        Py_DECREF(name_obj);
+      }
+    }
+  }
 
   toc("Constructing C++ Particles object");
 }
@@ -49,7 +81,7 @@ Particles::~Particles() {
 
   /* The part_tuple is a tuple of numpy arrays, we don't own it either. */
   part_tuple_ = NULL;
-  part_names_tuple_ = NULL;
+  part_names_.clear();
 
   /* We don't need to do anything else here, the numpy arrays will be freed
    * automatically when the Python objects are destroyed. */
@@ -181,22 +213,10 @@ double Particles::get_part_prop_at(int idim, int pind) const {
   char fallback_name[64];
   fallback_name[0] = '\0';
 
-  if (part_names_tuple_ != NULL && PySequence_Check(part_names_tuple_) &&
-      !PyUnicode_Check(part_names_tuple_)) {
-    PyObject *name_obj = PySequence_GetItem(part_names_tuple_, idim);
-    if (name_obj != NULL) {
-      if (PyUnicode_Check(name_obj)) {
-        const char *name = PyUnicode_AsUTF8(name_obj);
-        if (name != NULL) {
-          snprintf(fallback_name, sizeof(fallback_name), "%s", name);
-        } else {
-          PyErr_Clear();
-        }
-      }
-      Py_DECREF(name_obj);
-    } else {
-      PyErr_Clear();
-    }
+  if (idim >= 0 && idim < static_cast<int>(part_names_.size()) &&
+      !part_names_[idim].empty()) {
+    snprintf(fallback_name, sizeof(fallback_name), "%s",
+             part_names_[idim].c_str());
   }
 
   if (fallback_name[0] == '\0') {

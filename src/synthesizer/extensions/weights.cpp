@@ -463,27 +463,27 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
 
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
-  PyObject *grid_axis_names = NULL, *part_prop_names = NULL;
+  PyObject *prop_names = NULL;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisi|OO", &grid_tuple, &part_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOiisi|O", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads, &grid_axis_names, &part_prop_names))
+                        &nthreads, &prop_names))
     return nullptr;
 
   /* Extract the grid struct. */
   GridProps *grid_props =
       new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
                     /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1,
-                    /*np_grid_weights*/ NULL, grid_axis_names);
+                    /*np_grid_weights*/ NULL, prop_names);
 
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
   Particles *part_props =
       new Particles(np_part_mass, /*np_velocities*/ nullptr,
-                    /*np_mask*/ nullptr, part_tuple, part_prop_names, npart);
+                    /*np_mask*/ nullptr, part_tuple, prop_names, npart);
 
   RETURN_IF_PYERR();
 
