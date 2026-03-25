@@ -94,8 +94,10 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
   /* Flag whether we need to populate the grid weights */
   if (has_grid_weights()) {
     need_grid_weights_ = false;
+    owns_grid_weights_ = false;
   } else {
     need_grid_weights_ = true;
+    owns_grid_weights_ = false;
   }
 
   toc("Constructing C++ grid properties");
@@ -275,20 +277,32 @@ std::array<double *, MAX_GRID_NDIM> GridProps::get_all_axes() const {
  * @return The value at the specified index in the axis.
  */
 double GridProps::get_axis_at(int idim, int ind) const {
-  const char *array_name = NULL;
   char fallback_name[64];
+  fallback_name[0] = '\0';
 
-  if (axis_names_tuple_ != NULL) {
-    PyObject *name_obj = PyTuple_GetItem(axis_names_tuple_, idim);
-    if (name_obj != NULL && PyUnicode_Check(name_obj)) {
-      array_name = PyUnicode_AsUTF8(name_obj);
+  if (axis_names_tuple_ != NULL && PySequence_Check(axis_names_tuple_) &&
+      !PyUnicode_Check(axis_names_tuple_)) {
+    PyObject *name_obj = PySequence_GetItem(axis_names_tuple_, idim);
+    if (name_obj != NULL) {
+      if (PyUnicode_Check(name_obj)) {
+        const char *name = PyUnicode_AsUTF8(name_obj);
+        if (name != NULL) {
+          snprintf(fallback_name, sizeof(fallback_name), "%s", name);
+        } else {
+          PyErr_Clear();
+        }
+      }
+      Py_DECREF(name_obj);
+    } else {
+      PyErr_Clear();
     }
   }
 
-  if (array_name == NULL) {
+  if (fallback_name[0] == '\0') {
     snprintf(fallback_name, sizeof(fallback_name), "axis %d", idim);
-    array_name = fallback_name;
   }
+
+  const char *array_name = fallback_name;
 
   if (idim < 0 || idim >= ndim) {
     PyErr_SetString(PyExc_IndexError,
@@ -345,6 +359,7 @@ double *GridProps::get_grid_weights() {
 
   /* Flag that we need to populate the grid weights. */
   need_grid_weights_ = true;
+  owns_grid_weights_ = true;
 
   return grid_weights_;
 }
@@ -362,6 +377,13 @@ PyArrayObject *GridProps::get_np_grid_weights() const {
     return NULL;
   }
 
+  /* Py_BuildValue("N") steals a reference. If the weights were provided by
+   * Python we only have a borrowed reference, so we must incref first. If we
+   * allocated them ourselves with PyArray_ZEROS, np_grid_weights_ already owns
+   * a new reference and must be returned as-is. */
+  if (!owns_grid_weights_) {
+    Py_INCREF(reinterpret_cast<PyObject *>(np_grid_weights_));
+  }
   return np_grid_weights_;
 }
 

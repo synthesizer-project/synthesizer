@@ -94,6 +94,9 @@ private:
   /* Flag for whether we need to populate the grid weights */
   bool need_grid_weights_ = true;
 
+  /* Did this object allocate the grid weights array itself? */
+  bool owns_grid_weights_ = false;
+
   /* The dimensions of the spectra array (account for the wavelength axis). */
   std::array<int, MAX_GRID_NDIM + 1> spectra_dims_;
 };
