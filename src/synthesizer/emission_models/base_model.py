@@ -1301,7 +1301,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if not isinstance(thresh, (unyt_quantity, str)):
             raise exceptions.MissingUnits(
                 "Mask threshold must be given with units (or as a string "
-+                "attribute name to be resolved from the emitter)."
+                + "attribute name to be resolved from the emitter)."
             )
 
         # Ensure operation is valid
