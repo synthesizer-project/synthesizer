@@ -198,3 +198,55 @@ def test_invalid_string_labels(stars_with_fake_spectra):
             emitter="stellar",
         )
         stars.get_spectra(invalid_model)
+
+
+def test_unsaved_shared_dependency_survives_until_last_consumer(
+    random_part_stars,
+    test_grid,
+):
+    """Test unsaved shared dependencies live until all consumers run."""
+    # Measure the reference incident spectrum before building the shared DAG.
+    incident_reference = StellarEmissionModel(
+        label="incident_reference",
+        grid=test_grid,
+        extract="incident",
+    )
+    reference_spectra = random_part_stars.get_spectra(incident_reference)
+    random_part_stars.clear_all_emissions()
+
+    # Build an unsaved extraction that is consumed both directly and through a
+    # downstream transformation.
+    incident = StellarEmissionModel(
+        label="incident_unsaved",
+        grid=test_grid,
+        extract="incident",
+        save=False,
+    )
+    attenuated = AttenuatedEmission(
+        label="attenuated_unsaved",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=incident,
+        tau_v=0.1,
+        save=False,
+        emitter="stellar",
+    )
+    total = StellarEmissionModel(
+        label="total_saved",
+        combine=(incident, attenuated),
+    )
+
+    # Generate the spectra and keep the root result for a direct check.
+    total_spectra = random_part_stars.get_spectra(total)
+
+    # The unsaved intermediate models should have been deleted eagerly.
+    assert "incident_unsaved" not in random_part_stars.spectra
+    assert "attenuated_unsaved" not in random_part_stars.spectra
+    assert "total_saved" in random_part_stars.spectra
+
+    # The shared dependency must still have survived long enough to build the
+    # correct final combined spectrum.
+    expected_scaling = 1.0 + np.exp(-0.1)
+    assert np.allclose(
+        total_spectra.lnu,
+        reference_spectra.lnu * expected_scaling,
+    )
