@@ -52,6 +52,11 @@ def make_unified_agn(
     )
 
 
+def get_intrinsic_model(model):
+    """Return the intrinsic UnifiedAGN model carrying transmission branches."""
+    return model if hasattr(model, "disc_escaped") else model.intrinsic
+
+
 class TestUnifiedAGN:
     """Test suite for UnifiedAGN transmission behavior."""
 
@@ -90,31 +95,31 @@ class TestUnifiedAGN:
         )
         model = make_unified_agn(test_grid, variant=variant)
 
-        assert model["disc_escaped_weighted"].transformer._required_params == (
+        assert model["disc_escaped"].transformer._required_params == (
             "transmission_fraction_escape",
         )
-        assert model[
-            "disc_transmitted_nlr_weighted"
-        ].transformer._required_params == ("transmission_fraction_nlr",)
-        assert model[
-            "disc_transmitted_blr_weighted"
-        ].transformer._required_params == ("transmission_fraction_blr",)
+        assert model["disc_transmitted_nlr"].transformer._required_params == (
+            "transmission_fraction_nlr",
+        )
+        assert model["disc_transmitted_blr"].transformer._required_params == (
+            "transmission_fraction_blr",
+        )
 
         escape = get_param(
             "transmission_fraction_escape",
-            model["disc_escaped_weighted"],
+            model["disc_escaped"],
             None,
             black_holes,
         )
         nlr = get_param(
             "transmission_fraction_nlr",
-            model["disc_transmitted_nlr_weighted"],
+            model["disc_transmitted_nlr"],
             None,
             black_holes,
         )
         blr = get_param(
             "transmission_fraction_blr",
-            model["disc_transmitted_blr_weighted"],
+            model["disc_transmitted_blr"],
             None,
             black_holes,
         )
@@ -140,21 +145,22 @@ class TestUnifiedAGN:
             disc_transmission="random",
             variant=variant,
         )
+        intrinsic_model = get_intrinsic_model(model)
 
         assert (
-            model["disc_escaped"].fixed_parameters[
+            intrinsic_model.disc_escaped.fixed_parameters[
                 "transmission_fraction_escape"
             ]
             == "random_transmission_fraction_escape"
         )
         assert (
-            model["disc_transmitted_nlr"].fixed_parameters[
+            intrinsic_model.disc_transmitted_nlr.fixed_parameters[
                 "transmission_fraction_nlr"
             ]
             == "random_transmission_fraction_nlr"
         )
         assert (
-            model["disc_transmitted_blr"].fixed_parameters[
+            intrinsic_model.disc_transmitted_blr.fixed_parameters[
                 "transmission_fraction_blr"
             ]
             == "random_transmission_fraction_blr"
@@ -162,19 +168,19 @@ class TestUnifiedAGN:
 
         escape = get_param(
             "transmission_fraction_escape",
-            model["disc_escaped"],
+            intrinsic_model.disc_escaped,
             None,
             black_holes,
         )
         nlr = get_param(
             "transmission_fraction_nlr",
-            model["disc_transmitted_nlr"],
+            intrinsic_model.disc_transmitted_nlr,
             None,
             black_holes,
         )
         blr = get_param(
             "transmission_fraction_blr",
-            model["disc_transmitted_blr"],
+            intrinsic_model.disc_transmitted_blr,
             None,
             black_holes,
         )
@@ -219,21 +225,22 @@ class TestUnifiedAGN:
             disc_transmission=disc_transmission,
             variant=variant,
         )
+        intrinsic_model = get_intrinsic_model(model)
 
         assert (
-            model["disc_escaped"].fixed_parameters[
+            intrinsic_model.disc_escaped.fixed_parameters[
                 "transmission_fraction_escape"
             ]
             == expected[0]
         )
         assert (
-            model["disc_transmitted_nlr"].fixed_parameters[
+            intrinsic_model.disc_transmitted_nlr.fixed_parameters[
                 "transmission_fraction_nlr"
             ]
             == expected[1]
         )
         assert (
-            model["disc_transmitted_blr"].fixed_parameters[
+            intrinsic_model.disc_transmitted_blr.fixed_parameters[
                 "transmission_fraction_blr"
             ]
             == expected[2]
@@ -241,19 +248,19 @@ class TestUnifiedAGN:
 
         escape = get_param(
             "transmission_fraction_escape",
-            model["disc_escaped"],
+            intrinsic_model.disc_escaped,
             None,
             black_holes,
         )
         nlr = get_param(
             "transmission_fraction_nlr",
-            model["disc_transmitted_nlr"],
+            intrinsic_model.disc_transmitted_nlr,
             None,
             black_holes,
         )
         blr = get_param(
             "transmission_fraction_blr",
-            model["disc_transmitted_blr"],
+            intrinsic_model.disc_transmitted_blr,
             None,
             black_holes,
         )
@@ -275,19 +282,19 @@ class TestUnifiedAGN:
 
         escape = get_param(
             "transmission_fraction_escape",
-            model["disc_escaped_weighted"],
+            model["disc_escaped"],
             None,
             black_holes,
         )
         nlr = get_param(
             "transmission_fraction_nlr",
-            model["disc_transmitted_nlr_weighted"],
+            model["disc_transmitted_nlr"],
             None,
             black_holes,
         )
         blr = get_param(
             "transmission_fraction_blr",
-            model["disc_transmitted_blr_weighted"],
+            model["disc_transmitted_blr"],
             None,
             black_holes,
         )

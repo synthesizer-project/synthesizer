@@ -375,7 +375,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         # Now calculate the disc_escaped emission using this transmission
         # fraction.
         disc_escaped_weighted = BlackHoleEmissionModel(
-            label="disc_escaped_weighted",
+            label="disc_escaped",
             apply_to=self.disc_incident_masked,
             transformer=CoveringFraction(
                 covering_attrs=("transmission_fraction_escape",)
@@ -386,7 +386,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         # Now calculate the disc_transmitted_nlr emission using this
         # transmission fraction.
         disc_transmitted_nlr_weighted = BlackHoleEmissionModel(
-            label="disc_transmitted_nlr_weighted",
+            label="disc_transmitted_nlr",
             apply_to=self.disc_transmitted_nlr_full,
             transformer=CoveringFraction(
                 covering_attrs=("transmission_fraction_nlr",)
@@ -397,7 +397,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         # Now calculate the disc_transmitted_blr emission using this
         # transmission fraction.
         disc_transmitted_blr_weighted = BlackHoleEmissionModel(
-            label="disc_transmitted_blr_weighted",
+            label="disc_transmitted_blr",
             apply_to=self.disc_transmitted_blr_full,
             transformer=CoveringFraction(
                 covering_attrs=("transmission_fraction_blr",)
@@ -500,7 +500,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             # Now calculate the disc_escaped emission using this transmission
             # fraction.
             self.disc_escaped = BlackHoleEmissionModel(
-                label="disc_escaped",
+                label="disc_escaped_selected",
                 apply_to=self.disc_incident_masked,
                 transformer=CoveringFraction(
                     covering_attrs=("transmission_fraction_escape",)
@@ -512,7 +512,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             # Now calculate the disc_transmitted_nlr emission using this
             # transmission fraction.
             self.disc_transmitted_nlr = BlackHoleEmissionModel(
-                label="disc_transmitted_nlr",
+                label="disc_transmitted_nlr_selected",
                 apply_to=self.disc_transmitted_nlr_full,
                 transformer=CoveringFraction(
                     covering_attrs=("transmission_fraction_nlr",)
@@ -524,7 +524,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             # Now calculate the disc_transmitted_blr emission using this
             # transmission fraction.
             self.disc_transmitted_blr = BlackHoleEmissionModel(
-                label="disc_transmitted_blr",
+                label="disc_transmitted_blr_selected",
                 apply_to=self.disc_transmitted_blr_full,
                 transformer=CoveringFraction(
                     covering_attrs=("transmission_fraction_blr",)
