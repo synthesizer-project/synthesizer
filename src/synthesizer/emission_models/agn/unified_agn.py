@@ -106,7 +106,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         nlr_grid,
         blr_grid,
         torus_emission_model,
-        disc_transmission="random",
+        disc_transmission="weighted_combination",
         label="intrinsic",
         **kwargs,
     ):
@@ -120,7 +120,17 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             torus_emission_model (synthesizer.dust.EmissionModel):
                 The dust emission model to use for the torus.
             disc_transmission (str):
-                The disc transmission model.
+                How the observed disc spectrum is constructed. Options are:
+                ``"weighted_combination"`` (default), which combines the
+                unobscured, NLR-transmitted, and BLR-transmitted disc spectra
+                using ``1 - covering_fraction_nlr - covering_fraction_blr``,
+                ``covering_fraction_nlr``, and ``covering_fraction_blr``;
+                ``"random"``, which uses the precomputed random transmission
+                fractions on the black hole component; ``"none"`` or
+                ``"escaped"``, which uses only the unobscured disc emission;
+                ``"nlr"``, which uses only disc emission transmitted through
+                the NLR; and ``"blr"``, which uses only disc emission
+                transmitted through the BLR.
             label (str):
                 The label for the resulting spectra. Defaults to "intrinsic".
             **kwargs: Any additional keyword arguments to pass to the
@@ -417,20 +427,27 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         (disc_transmission='blr'), or is the weighted combination
         (disc_transmission='weighted_combination').
 
-        The latter scenario is always calculated but is not used to calculate
-        the disc_transmitted spectrum unless explicitly asked for. At the
-        initialisation of the blackhole object one of the other three
-        scenarios is randomly assigned based on the nlr and blr covering
-        fractions. The default behaviour of UnifiedAGN is to use these
-        randomly assigned scenarios. However, by providing the
-        disc_transmission keyword argument to UnifiedAGN we can overide this
-        and force all blackholes to adopt the same transmission scenario.
+        The ``disc_transmission`` argument controls which of these sightline
+        treatments is used. ``"weighted_combination"`` uses the covering
+        fractions directly to produce the average transmitted disc spectrum and
+        is the default. ``"random"`` uses a precomputed random realization on
+        the black hole component. ``"none"``/``"escaped"``, ``"nlr"``, and
+        ``"blr"`` force all black holes onto a single transmission path.
 
         Note: when the viewing angle (inlination) meets the torus criteria
         it is always blocked.
 
         Args:
-            disc_transmission (str): The disc transmission sceanrio.
+            disc_transmission (str):
+                Which transmission scenario to use for the observed disc
+                spectrum. ``"weighted_combination"`` uses the covering
+                fractions directly as weights and returns the average over
+                unobscured, NLR-transmitted, and BLR-transmitted sightlines.
+                ``"random"`` uses the precomputed random transmission
+                fractions on the black hole component. ``"none"`` or
+                ``"escaped"`` uses only unobscured disc emission,
+                ``"nlr"`` uses only NLR-transmitted disc emission, and
+                ``"blr"`` uses only BLR-transmitted disc emission.
             **kwargs: Any additional keyword arguments to pass to the
                 BlackHoleEmissionModel.
         """
@@ -735,7 +752,7 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
         blr_grid,
         torus_emission_model,
         diffuse_dust_curve,
-        disc_transmission="random",
+        disc_transmission="weighted_combination",
         label="attenuated",
         tau_v="tau_v",
         **kwargs,
@@ -752,7 +769,15 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
             diffuse_dust_curve (synthesizer.emission_models.attenuation):
                 The dust attenuation curve for diffuse dust.
             disc_transmission (str):
-                The disc transmission model.
+                How the observed disc spectrum is constructed. Options are:
+                ``"weighted_combination"`` (default), which combines the
+                unobscured, NLR-transmitted, and BLR-transmitted disc spectra
+                using the black hole covering fractions; ``"random"``, which
+                uses the precomputed random transmission fractions on the black
+                hole component; ``"none"`` or ``"escaped"``, which uses only
+                the unobscured disc emission; ``"nlr"``, which uses only
+                disc emission transmitted through the NLR; and ``"blr"``,
+                which uses only disc emission transmitted through the BLR.
             label (str):
                 The label for the resulting spectra. This defaults to
                 "attenuated".
@@ -806,7 +831,7 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
         diffuse_dust_curve,
         diffuse_dust_emission_model,
         tau_v="tau_v",
-        disc_transmission="random",
+        disc_transmission="weighted_combination",
         label="total",
         **kwargs,
     ):
@@ -820,7 +845,15 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
             torus_emission_model (synthesizer.dust.EmissionModel):
                 The dust emission model to use for the torus.
             disc_transmission (str):
-                The disc transmission model.
+                How the observed disc spectrum is constructed. Options are:
+                ``"weighted_combination"`` (default), which combines the
+                unobscured, NLR-transmitted, and BLR-transmitted disc spectra
+                using the black hole covering fractions; ``"random"``, which
+                uses the precomputed random transmission fractions on the black
+                hole component; ``"none"`` or ``"escaped"``, which uses only
+                the unobscured disc emission; ``"nlr"``, which uses only
+                disc emission transmitted through the NLR; and ``"blr"``,
+                which uses only disc emission transmitted through the BLR.
             diffuse_dust_curve (synthesizer.emission_models.attenuation):
                 The dust attenuation curve for diffuse dust.
             diffuse_dust_emission_model:
@@ -891,7 +924,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         nlr_grid,
         blr_grid,
         torus_emission_model,
-        disc_transmission="random",
+        disc_transmission="weighted_combination",
         diffuse_dust_curve=None,
         diffuse_dust_emission_model=None,
         label=None,
@@ -907,7 +940,15 @@ class UnifiedAGN(BlackHoleEmissionModel):
             torus_emission_model (synthesizer.dust.EmissionModel):
                 The dust emission model to use for the torus.
             disc_transmission (str):
-                The disc transmission model.
+                How the observed disc spectrum is constructed. Options are:
+                ``"weighted_combination"`` (default), which combines the
+                unobscured, NLR-transmitted, and BLR-transmitted disc spectra
+                using the black hole covering fractions; ``"random"``, which
+                uses the precomputed random transmission fractions on the black
+                hole component; ``"none"`` or ``"escaped"``, which uses only
+                the unobscured disc emission; ``"nlr"``, which uses only
+                disc emission transmitted through the NLR; and ``"blr"``,
+                which uses only disc emission transmitted through the BLR.
             diffuse_dust_curve (synthesizer.emission_models.attenuation):
                 The dust attenuation curve for diffuse dust.
             diffuse_dust_emission_model:
