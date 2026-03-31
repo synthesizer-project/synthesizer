@@ -75,6 +75,52 @@ def test_photometry_collection_select_preserves_lookup():
     np.testing.assert_allclose(sub["f3"].value, pc["f3"].value)
 
 
+def test_photometry_collection_addition():
+    """Photometry collections with matching filters should add."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+
+    first = PhotometryCollection(
+        filters,
+        photometry=np.array([1.0, 2.0, 3.0]) * erg / s / Hz,
+    )
+    second = PhotometryCollection(
+        filters,
+        photometry=np.array([0.5, 1.5, 2.5]) * erg / s / Hz,
+    )
+
+    total = first + second
+
+    assert total.filter_codes == ["f1", "f2", "f3"]
+    np.testing.assert_allclose(total.photometry.value, [1.5, 3.5, 5.5])
+
+
+def test_photometry_collection_addition_requires_matching_filters():
+    """Photometry collections with different filters should not add."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+    other_filters = FilterCollection(
+        tophat_dict={
+            "f1": {"lam_eff": 2000 * angstrom, "lam_fwhm": 400 * angstrom},
+            "f4": {"lam_eff": 3200 * angstrom, "lam_fwhm": 500 * angstrom},
+            "f5": {"lam_eff": 4200 * angstrom, "lam_fwhm": 600 * angstrom},
+        },
+        new_lam=lam,
+    )
+
+    first = PhotometryCollection(
+        filters,
+        photometry=np.array([1.0, 2.0, 3.0]) * erg / s / Hz,
+    )
+    second = PhotometryCollection(
+        other_filters,
+        photometry=np.array([0.5, 1.5, 2.5]) * erg / s / Hz,
+    )
+
+    with pytest.raises(exceptions.InconsistentAddition):
+        _ = first + second
+
+
 class TestPhotometryThreading:
     """Test photometry generation with and without threading."""
 
