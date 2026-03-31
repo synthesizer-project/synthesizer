@@ -3201,67 +3201,53 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if hasattr(emitter, "particle_spectra"):
                 particle_spectra.update(emitter.particle_spectra)
 
-        # Perform all extractions first
-        for label in emission_model._extract_keys.keys():
-            # Skip it if we happen to already have the lines
-            if label in lines:
-                continue
+        # Cache a representative wavelength array before any eager deletion.
+        line_lams = None
+        if len(lines) > 0:
+            line_lams = lines[list(lines.keys())[0]].lam
 
-            try:
-                lines, particle_lines = self._extract_lines(
-                    line_ids,
-                    emission_model[label],
-                    emitters,
-                    lines,
-                    particle_lines,
-                    verbose=verbose,
-                    nthreads=nthreads,
-                    grid_assignment_method=grid_assignment_method,
-                )
-            except Exception as e:
-                if sys.version_info >= (3, 11):
-                    e.add_note(f"EmissionModel.label: {label}")
-                    raise
-                else:
-                    raise type(e)(
-                        f"{e} [EmissionModel.label: {label}]"
-                    ).with_traceback(e.__traceback__)
+        # Initialise the queued execution state for the compiled graph.
+        pending_dependencies, lifetime, queue = (
+            emission_model._initialise_execution_state()
+        )
 
-        # With all base lines extracted we can now loop from bottom to top
-        # of the tree creating each lines
-        for label in emission_model._bottom_to_top:
-            # Get this model
+        # Execute the full model closure by processing each ready model once.
+        while len(queue) > 0:
+            label = queue.popleft()
             this_model = emission_model._models[label]
 
-            # Get the spectra for the related models that don't appear in the
-            # tree
-            for related_model in this_model.related_models:
-                if related_model.label not in lines:
-                    rel_lines, rel_particle_lines = related_model._get_lines(
-                        line_ids,
-                        emitters,
-                        dust_curves=dust_curves,
-                        tau_v=tau_v,
-                        fesc=fesc,
-                        mask=mask,
-                        verbose=verbose,
-                        lines=lines,
-                        particle_lines=particle_lines,
-                        _is_related=True,
-                        **kwargs,
-                    )
-
-                    lines.update(rel_lines)
-                    particle_lines.update(rel_particle_lines)
-
-            # Skip models for a different emitters
-            if this_model.emitter not in emitters:
+            # Reused or externally supplied emissions still need to unlock the
+            # graph, but they do not need to be regenerated.
+            if label in lines:
+                if line_lams is None:
+                    line_lams = lines[label].lam
+                emission_model._update_execution_state(
+                    label,
+                    pending_dependencies,
+                    lifetime,
+                    queue,
+                    lines,
+                    particle_lines,
+                )
                 continue
 
-            # Get the emitter
+            # Skip models for emitters that are not being generated here while
+            # still keeping the dependency queue consistent.
+            if this_model.emitter not in emitters:
+                emission_model._update_execution_state(
+                    label,
+                    pending_dependencies,
+                    lifetime,
+                    queue,
+                    lines,
+                    particle_lines,
+                )
+                continue
+
+            # Get the emitter for this model now that it is ready to execute.
             emitter = emitters[this_model.emitter]
 
-            # Do we have to define a mask?
+            # Build the combined mask once for operations that use it.
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(
@@ -3270,8 +3256,30 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     attr_override_obj=this_model,
                 )
 
-            # Are we doing a combination?
-            if this_model._is_combining:
+            # Dispatch to the appropriate operation for this model.
+            if this_model._is_extracting:
+                try:
+                    lines, particle_lines = self._extract_lines(
+                        line_ids,
+                        this_model,
+                        emitters,
+                        lines,
+                        particle_lines,
+                        verbose=verbose,
+                        nthreads=nthreads,
+                        grid_assignment_method=grid_assignment_method,
+                    )
+                    if line_lams is None and label in lines:
+                        line_lams = lines[label].lam
+                except Exception as e:
+                    if sys.version_info >= (3, 11):
+                        e.add_note(f"EmissionModel.label: {label}")
+                        raise
+                    else:
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {label}]"
+                        ).with_traceback(e.__traceback__)
+            elif this_model._is_combining:
                 try:
                     lines, particle_lines = self._combine_lines(
                         emission_model,
@@ -3280,6 +3288,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_model,
                         emitter,
                     )
+                    if line_lams is None and label in lines:
+                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -3288,7 +3298,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         raise type(e)(
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
-
             elif this_model._is_transforming:
                 try:
                     lines, particle_lines = this_model._transform_emission(
@@ -3299,6 +3308,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_mask,
                         self.lam,
                     )
+                    if line_lams is None and label in lines:
+                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -3307,7 +3318,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         raise type(e)(
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
-
             elif this_model._is_generating:
                 try:
                     lines, particle_lines = self._generate_lines(
@@ -3316,11 +3326,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         lines,
                         particle_lines,
                         emitter,
-                        lines[list(lines.keys())[0]].lam,
+                        line_lams,
                         line_ids,
                         spectra,
                         particle_spectra,
                     )
+                    if line_lams is None and label in lines:
+                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -3330,7 +3342,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
 
-            # Are we scaling the spectra?
+            # Apply any requested scaling after the model has been generated.
             for scaler in this_model.scale_by:
                 if scaler is None:
                     continue
@@ -3354,23 +3366,24 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         f"Can't scale lines by {scaler}."
                     )
 
-        # Only convert to LineCollections, apply post processing and deletion
-        # if we aren't in a recursive related model call
+            # Unlock downstream models and delete expired unsaved emissions.
+            emission_model._update_execution_state(
+                label,
+                pending_dependencies,
+                lifetime,
+                queue,
+                lines,
+                particle_lines,
+            )
+
+        # Only convert to LineCollections and apply post processing at the top
+        # level call.
         if not _is_related:
             # Apply any post processing functions
             for func in self._post_processing:
                 lines = func(lines, emitters, self)
                 if len(particle_lines) > 0:
                     particle_lines = func(particle_lines, emitters, self)
-
-            # Loop over all models and delete those lines if we aren't saving
-            # them (we have to this after post processing in case the deleted
-            # lines are needed during post processing)
-            for model in emission_model._models.values():
-                if not model.save and model.label in lines:
-                    del lines[model.label]
-                    if model.per_particle and model.label in particle_lines:
-                        del particle_lines[model.label]
 
         toc("Generating all lines")
 
