@@ -40,6 +40,8 @@ from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
+    accumulate_pipeline_results_from_child,
+    clear_pipeline_outputs,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
     get_full_memory,
@@ -3566,7 +3568,10 @@ class Pipeline:
             if isinstance(gal, ParticleGalaxy):
                 gals = gal.split(self._max_npart)
             else:
-                gals = [gals]
+                gals = [gal]
+
+            if len(gals) > 1:
+                clear_pipeline_outputs(gal)
 
             # Loop over the split galaxies list (which may just be a list
             # containing the original gal above)
@@ -3631,8 +3636,8 @@ class Pipeline:
                     self._get_spectroscopy_fnu(_gal)
 
                 # Combine back onto the original galaxy if necessary
-                if _gal != gal:
-                    gal._combine_results_from_child(_gal)
+                if _gal is not gal:
+                    accumulate_pipeline_results_from_child(gal, _gal)
                     del _gal
 
             # Run any extra analysis functions

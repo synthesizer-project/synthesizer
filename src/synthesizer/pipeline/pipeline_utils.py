@@ -1,5 +1,6 @@
 """A submodule with helpers for writing out Synthesizer pipeline results."""
 
+import copy
 import inspect
 import sys
 from collections import defaultdict
@@ -11,7 +12,11 @@ from unyt import Unit, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
+from synthesizer.emissions.line import LineCollection
+from synthesizer.imaging import Image, SpectralCube
+from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.instruments import InstrumentCollection
+from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 
@@ -19,6 +24,138 @@ from synthesizer.units import unit_is_compatible
 # This can be used for operations such as SFZH / SFH with no relation to
 # an emission model.
 NO_MODEL_LABEL = "no_model_label"
+
+
+def clear_pipeline_outputs(gal):
+    """Clear additive pipeline outputs from a galaxy and components."""
+    for obj in (gal, gal.stars, gal.gas, gal.black_holes):
+        if obj is None:
+            continue
+
+        for attr in (
+            "spectra",
+            "lines",
+            "photo_lnu",
+            "photo_fnu",
+            "spectroscopy",
+            "images_lnu",
+            "images_fnu",
+            "images_psf_lnu",
+            "images_psf_fnu",
+            "images_noise_lnu",
+            "images_noise_fnu",
+            "particle_spectra",
+            "particle_lines",
+            "particle_photo_lnu",
+            "particle_photo_fnu",
+            "particle_spectroscopy",
+        ):
+            if hasattr(obj, attr):
+                setattr(obj, attr, {})
+
+        if hasattr(obj, "data_cubes_lnu"):
+            obj.data_cubes_lnu = {}
+        if hasattr(obj, "data_cubes_fnu"):
+            obj.data_cubes_fnu = {}
+        if hasattr(obj, "model_param_cache"):
+            obj.model_param_cache = {}
+        if hasattr(obj, "_grid_weights"):
+            obj._grid_weights = {"cic": {}, "ngp": {}}
+        if hasattr(obj, "sfh"):
+            obj.sfh = None
+        if hasattr(obj, "sfzh"):
+            obj.sfzh = None
+
+
+def accumulate_pipeline_results_from_child(parent, *children):
+    """Accumulate additive pipeline outputs from child galaxies."""
+
+    def combine(current, other):
+        if other is None:
+            return current
+        if current is None:
+            return copy.deepcopy(other)
+
+        if isinstance(current, dict):
+            combined = copy.deepcopy(current)
+            for key, value in other.items():
+                combined[key] = combine(combined.get(key), value)
+            return combined
+
+        if isinstance(current, PhotometryCollection):
+            return PhotometryCollection(
+                current.filters,
+                current.photometry + other.photometry,
+            )
+
+        if isinstance(
+            current,
+            (Sed, LineCollection, Image, ImageCollection, SpectralCube),
+        ):
+            return current + other
+
+        return current + other
+
+    for child in children:
+        for attr in (
+            "spectra",
+            "lines",
+            "photo_lnu",
+            "photo_fnu",
+            "spectroscopy",
+            "images_lnu",
+            "images_fnu",
+            "images_psf_lnu",
+            "images_psf_fnu",
+            "images_noise_lnu",
+            "images_noise_fnu",
+            "data_cubes_lnu",
+            "data_cubes_fnu",
+        ):
+            if hasattr(child, attr):
+                setattr(
+                    parent,
+                    attr,
+                    combine(
+                        getattr(parent, attr, None),
+                        getattr(child, attr),
+                    ),
+                )
+
+        for name in ("stars", "gas", "black_holes"):
+            parent_component = getattr(parent, name, None)
+            child_component = getattr(child, name, None)
+            if parent_component is None or child_component is None:
+                continue
+            if child_component is parent_component:
+                continue
+
+            for attr in (
+                "spectra",
+                "lines",
+                "photo_lnu",
+                "photo_fnu",
+                "spectroscopy",
+                "images_lnu",
+                "images_fnu",
+                "images_psf_lnu",
+                "images_psf_fnu",
+                "images_noise_lnu",
+                "images_noise_fnu",
+                "sfh",
+                "sfzh",
+            ):
+                if hasattr(child_component, attr):
+                    setattr(
+                        parent_component,
+                        attr,
+                        combine(
+                            getattr(parent_component, attr, None),
+                            getattr(child_component, attr),
+                        ),
+                    )
+
+    return parent
 
 
 def discover_attr_paths_recursive(obj, prefix="", output_set=None):
