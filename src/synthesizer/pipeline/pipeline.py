@@ -35,6 +35,7 @@ from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
 from synthesizer.instruments import InstrumentCollection
+from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
@@ -3556,64 +3557,83 @@ class Pipeline:
             gal = self.galaxies.pop(0)
 
             # Are we generating LOS optical depths?
+            # Note that this can only be done on galaxies prior to any
+            # splitting done for memory optimisation
             if self._do_los_optical_depths:
                 self._get_los_optical_depths(gal)
 
-            # Are we generating SFZHs?
-            if self._do_sfzh:
-                self._get_sfzh(gal)
+            # If we have a particle galaxy, see if we need to split it
+            if isinstance(gal, ParticleGalaxy):
+                gals = gal.split(self._max_npart)
+            else:
+                gals = [gals]
 
-            # Are we generating SFHs?
-            if self._do_sfh:
-                self._get_sfh(gal)
+            # Loop over the split galaxies list (which may just be a list
+            # containing the original gal above)
+            while len(gals) > 0:
+                # Get the next galaxy
+                _gal = gals.pop(0)
 
-            # Are we generating lnu spectra?
-            if self._do_lnu_spectra:
-                self._get_spectra(gal)
+                # Are we generating SFZHs?
+                if self._do_sfzh:
+                    self._get_sfzh(_gal)
 
-            # Are we generating fnu spectra?
-            if self._do_fnu_spectra:
-                self._get_observed_spectra(gal)
+                # Are we generating SFHs?
+                if self._do_sfh:
+                    self._get_sfh(_gal)
 
-            # Are we generating photometric luminosities?
-            if self._do_luminosities:
-                self._get_photometry_luminosities(gal)
+                # Are we generating lnu spectra?
+                if self._do_lnu_spectra:
+                    self._get_spectra(_gal)
 
-            # Are we generating photometric fluxes?
-            if self._do_fluxes:
-                self._get_photometry_fluxes(gal)
+                # Are we generating fnu spectra?
+                if self._do_fnu_spectra:
+                    self._get_observed_spectra(_gal)
 
-            # Are we generating emission lines?
-            if self._do_lum_lines:
-                self._get_lines(gal)
+                # Are we generating photometric luminosities?
+                if self._do_luminosities:
+                    self._get_photometry_luminosities(_gal)
 
-            # Are we generating observed emission lines?
-            if self._do_flux_lines:
-                self._get_observed_lines(gal)
+                # Are we generating photometric fluxes?
+                if self._do_fluxes:
+                    self._get_photometry_fluxes(_gal)
 
-            # Are we generating luminosity images?
-            if self._do_images_lum:
-                self._get_images_luminosity(gal)
+                # Are we generating emission lines?
+                if self._do_lum_lines:
+                    self._get_lines(_gal)
 
-            # Are we generating flux images?
-            if self._do_images_flux:
-                self._get_images_flux(gal)
+                # Are we generating observed emission lines?
+                if self._do_flux_lines:
+                    self._get_observed_lines(_gal)
 
-            # Are we generating luminosity data cubes?
-            if self._do_lnu_data_cubes:
-                self._get_data_cubes_lnu(gal)
+                # Are we generating luminosity images?
+                if self._do_images_lum:
+                    self._get_images_luminosity(_gal)
 
-            # Are we generating flux data cubes?
-            if self._do_fnu_data_cubes:
-                self._get_data_cubes_fnu(gal)
+                # Are we generating flux images?
+                if self._do_images_flux:
+                    self._get_images_flux(_gal)
 
-            # Are we generating luminosity spectroscopy?
-            if self._do_spectroscopy_lnu:
-                self._get_spectroscopy_lnu(gal)
+                # Are we generating luminosity data cubes?
+                if self._do_lnu_data_cubes:
+                    self._get_data_cubes_lnu(_gal)
 
-            # Are we generating flux spectroscopy?
-            if self._do_spectroscopy_fnu:
-                self._get_spectroscopy_fnu(gal)
+                # Are we generating flux data cubes?
+                if self._do_fnu_data_cubes:
+                    self._get_data_cubes_fnu(_gal)
+
+                # Are we generating luminosity spectroscopy?
+                if self._do_spectroscopy_lnu:
+                    self._get_spectroscopy_lnu(_gal)
+
+                # Are we generating flux spectroscopy?
+                if self._do_spectroscopy_fnu:
+                    self._get_spectroscopy_fnu(_gal)
+
+                # Combine back onto the original galaxy if necessary
+                if _gal != gal:
+                    gal._combine_results_from_child(_gal)
+                    del _gal
 
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
