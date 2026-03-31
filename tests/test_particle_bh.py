@@ -1,8 +1,10 @@
 """Test suite for particle based black holes."""
 
 import numpy as np
+import pytest
 from unyt import Msun, s, unyt_array
 
+from synthesizer import exceptions
 from synthesizer.particle.blackholes import BlackHoles
 from synthesizer.utils import scalar_to_array
 
@@ -121,3 +123,21 @@ class TestBlackHolesInit:
                 [0.0, 1.0],
             )
         )
+
+    @pytest.mark.parametrize(
+        ("blr", "nlr", "message"),
+        [
+            (np.array([-0.1]), np.array([0.2]), "covering_fraction_blr"),
+            (np.array([0.2]), np.array([-0.1]), "covering_fraction_nlr"),
+            (np.array([1.1]), np.array([0.0]), "covering_fraction_blr"),
+            (np.array([0.0]), np.array([1.1]), "covering_fraction_nlr"),
+        ],
+    )
+    def test_invalid_covering_fractions_raise(self, blr, nlr, message):
+        """Test invalid covering fractions are rejected individually."""
+        with pytest.raises(exceptions.InconsistentArguments, match=message):
+            BlackHoles(
+                masses=np.array([1e8]) * Msun,
+                covering_fraction_blr=blr,
+                covering_fraction_nlr=nlr,
+            )
