@@ -27,67 +27,87 @@ NO_MODEL_LABEL = "no_model_label"
 
 
 def clear_pipeline_outputs(gal):
-    """Clear additive pipeline outputs from a galaxy and components."""
+    """Clear additive pipeline outputs from a galaxy and components.
+
+    Args:
+        gal:
+            The galaxy whose additive pipeline outputs should be reset.
+
+    Returns:
+        None
+    """
+    # Clear the galaxy and any attached components
     for obj in (gal, gal.stars, gal.gas, gal.black_holes):
         if obj is None:
             continue
 
-        for attr in (
-            "spectra",
-            "lines",
-            "photo_lnu",
-            "photo_fnu",
-            "spectroscopy",
-            "images_lnu",
-            "images_fnu",
-            "images_psf_lnu",
-            "images_psf_fnu",
-            "images_noise_lnu",
-            "images_noise_fnu",
-            "particle_spectra",
-            "particle_lines",
-            "particle_photo_lnu",
-            "particle_photo_fnu",
-            "particle_spectroscopy",
+        # Clear out all the emission containers and caches
+        for attr, value in (
+            ("spectra", {}),
+            ("lines", {}),
+            ("photo_lnu", {}),
+            ("photo_fnu", {}),
+            ("spectroscopy", {}),
+            ("images_lnu", {}),
+            ("images_fnu", {}),
+            ("images_psf_lnu", {}),
+            ("images_psf_fnu", {}),
+            ("images_noise_lnu", {}),
+            ("images_noise_fnu", {}),
+            ("particle_spectra", {}),
+            ("particle_lines", {}),
+            ("particle_photo_lnu", {}),
+            ("particle_photo_fnu", {}),
+            ("particle_spectroscopy", {}),
+            ("data_cubes_lnu", {}),
+            ("data_cubes_fnu", {}),
+            ("model_param_cache", {}),
+            ("_grid_weights", {"cic": {}, "ngp": {}}),
+            ("sfh", None),
+            ("sfzh", None),
         ):
             if hasattr(obj, attr):
-                setattr(obj, attr, {})
-
-        if hasattr(obj, "data_cubes_lnu"):
-            obj.data_cubes_lnu = {}
-        if hasattr(obj, "data_cubes_fnu"):
-            obj.data_cubes_fnu = {}
-        if hasattr(obj, "model_param_cache"):
-            obj.model_param_cache = {}
-        if hasattr(obj, "_grid_weights"):
-            obj._grid_weights = {"cic": {}, "ngp": {}}
-        if hasattr(obj, "sfh"):
-            obj.sfh = None
-        if hasattr(obj, "sfzh"):
-            obj.sfzh = None
+                setattr(obj, attr, value)
 
 
 def accumulate_pipeline_results_from_child(parent, *children):
-    """Accumulate additive pipeline outputs from child galaxies."""
+    """Accumulate additive pipeline outputs from child galaxies.
+
+    Args:
+        parent:
+            The parent galaxy receiving accumulated outputs.
+        *children:
+            Child galaxies whose additive pipeline outputs should be combined
+            onto the parent.
+
+    Returns:
+        object:
+            The parent galaxy after accumulation.
+    """
 
     def combine(current, other):
-        if other is None:
+        # Recursively combine any additive pipeline outputs, preserving nested
+        # dictionary structure and using object-specific addition where needed.
+        if other is None or current is None:
             return current
         if current is None:
-            return copy.deepcopy(other)
+            return other
 
+        # Handle the dictionary recursive case
         if isinstance(current, dict):
             combined = copy.deepcopy(current)
             for key, value in other.items():
                 combined[key] = combine(combined.get(key), value)
             return combined
 
+        # Handle the photometry case
         if isinstance(current, PhotometryCollection):
             return PhotometryCollection(
                 current.filters,
                 current.photometry + other.photometry,
             )
 
+        # Use overloaded object addition if possible.
         if isinstance(
             current,
             (Sed, LineCollection, Image, ImageCollection, SpectralCube),
@@ -97,6 +117,7 @@ def accumulate_pipeline_results_from_child(parent, *children):
         return current + other
 
     for child in children:
+        # First combine any additive outputs stored directly on the galaxy.
         for attr in (
             "spectra",
             "lines",
@@ -122,6 +143,8 @@ def accumulate_pipeline_results_from_child(parent, *children):
                     ),
                 )
 
+        # Then combine additive component-level outputs, but skip shared
+        # components that were intentionally attached directly to the child.
         for name in ("stars", "gas", "black_holes"):
             parent_component = getattr(parent, name, None)
             child_component = getattr(child, name, None)
