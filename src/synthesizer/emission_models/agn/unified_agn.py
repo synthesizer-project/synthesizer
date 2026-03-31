@@ -123,8 +123,9 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
                 How the observed disc spectrum is constructed. Options are:
                 ``"weighted_combination"`` (default), which combines the
                 unobscured, NLR-transmitted, and BLR-transmitted disc spectra
-                using ``1 - covering_fraction_nlr - covering_fraction_blr``,
-                ``covering_fraction_nlr``, and ``covering_fraction_blr``;
+                using ``transmission_fraction_escape``,
+                ``transmission_fraction_nlr``, and
+                ``transmission_fraction_blr`` on the black hole component;
                 ``"random"``, which uses the precomputed
                 ``random_transmission_fraction_*`` attributes on the black hole
                 component; ``"none"`` or
@@ -376,7 +377,9 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         disc_escaped_weighted = BlackHoleEmissionModel(
             label="disc_escaped_weighted",
             apply_to=self.disc_incident_masked,
-            transformer=CoveringFraction(covering_attrs=("escape_fraction",)),
+            transformer=CoveringFraction(
+                covering_attrs=("transmission_fraction_escape",)
+            ),
             **kwargs,
         )
 
@@ -386,7 +389,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             label="disc_transmitted_nlr_weighted",
             apply_to=self.disc_transmitted_nlr_full,
             transformer=CoveringFraction(
-                covering_attrs=("covering_fraction_nlr",)
+                covering_attrs=("transmission_fraction_nlr",)
             ),
             **kwargs,
         )
@@ -397,7 +400,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             label="disc_transmitted_blr_weighted",
             apply_to=self.disc_transmitted_blr_full,
             transformer=CoveringFraction(
-                covering_attrs=("covering_fraction_blr",)
+                covering_attrs=("transmission_fraction_blr",)
             ),
             **kwargs,
         )
@@ -429,9 +432,10 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         (disc_transmission='weighted_combination').
 
         The ``disc_transmission`` argument controls which of these sightline
-        treatments is used. ``"weighted_combination"`` uses the covering
-        fractions directly to produce the average transmitted disc spectrum and
-        is the default. ``"random"`` uses precomputed
+        treatments is used. ``"weighted_combination"`` uses the deterministic
+        transmission fractions on the component to produce the average
+        transmitted disc spectrum and is the default. ``"random"`` uses
+        precomputed
         ``random_transmission_fraction_*`` attributes on the black hole
         component. ``"none"``/``"escaped"``, ``"nlr"``, and ``"blr"`` force
         all black holes onto a single transmission path.
@@ -442,9 +446,12 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         Args:
             disc_transmission (str):
                 Which transmission scenario to use for the observed disc
-                spectrum. ``"weighted_combination"`` uses the covering
-                fractions directly as weights and returns the average over
-                unobscured, NLR-transmitted, and BLR-transmitted sightlines.
+                spectrum. ``"weighted_combination"`` uses
+                ``transmission_fraction_escape``,
+                ``transmission_fraction_nlr``, and
+                ``transmission_fraction_blr`` on the component and returns the
+                average over unobscured, NLR-transmitted, and BLR-transmitted
+                sightlines.
                 ``"random"`` uses the precomputed
                 ``random_transmission_fraction_*`` attributes on the black hole
                 component. ``"none"`` or
@@ -777,8 +784,11 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
                 How the observed disc spectrum is constructed. Options are:
                 ``"weighted_combination"`` (default), which combines the
                 unobscured, NLR-transmitted, and BLR-transmitted disc spectra
-                using the black hole covering fractions; ``"random"``, which
-                uses the precomputed ``random_transmission_fraction_*``
+                using ``transmission_fraction_escape``,
+                ``transmission_fraction_nlr``, and
+                ``transmission_fraction_blr`` on the black hole component;
+                ``"random"``, which uses the precomputed
+                ``random_transmission_fraction_*``
                 attributes on the black hole component; ``"none"`` or
                 ``"escaped"``, which uses only
                 the unobscured disc emission; ``"nlr"``, which uses only
@@ -854,8 +864,11 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
                 How the observed disc spectrum is constructed. Options are:
                 ``"weighted_combination"`` (default), which combines the
                 unobscured, NLR-transmitted, and BLR-transmitted disc spectra
-                using the black hole covering fractions; ``"random"``, which
-                uses the precomputed ``random_transmission_fraction_*``
+                using ``transmission_fraction_escape``,
+                ``transmission_fraction_nlr``, and
+                ``transmission_fraction_blr`` on the black hole component;
+                ``"random"``, which uses the precomputed
+                ``random_transmission_fraction_*``
                 attributes on the black hole component; ``"none"`` or
                 ``"escaped"``, which uses only
                 the unobscured disc emission; ``"nlr"``, which uses only
@@ -950,8 +963,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 How the observed disc spectrum is constructed. Options are:
                 ``"weighted_combination"`` (default), which combines the
                 unobscured, NLR-transmitted, and BLR-transmitted disc spectra
-                using the black hole covering fractions; ``"random"``, which
-                uses the precomputed ``random_transmission_fraction_*``
+                using ``transmission_fraction_escape``,
+                ``transmission_fraction_nlr``, and
+                ``transmission_fraction_blr`` on the black hole component;
+                ``"random"``, which uses the precomputed
+                ``random_transmission_fraction_*``
                 attributes on the black hole component; ``"none"`` or
                 ``"escaped"``, which uses only
                 the unobscured disc emission; ``"nlr"``, which uses only
