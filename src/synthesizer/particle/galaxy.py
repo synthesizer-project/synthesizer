@@ -179,6 +179,89 @@ class Galaxy(BaseGalaxy):
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
 
+    def split(self, max_npart):
+        """Split a particle galaxy into child galaxies.
+
+        Child galaxies are split only on the stellar component. Gas and black
+        hole components are attached in full to the first child so operations
+        that need the non-stellar components still see the complete data.
+        Only source particle data are propagated to the children; additive
+        outputs are recomputed per child and combined back onto the parent.
+
+        Args:
+            max_npart (int):
+                The maximum number of stellar particles permitted in each child
+                galaxy.
+
+        Returns:
+            list:
+                A list of child particle galaxies for chunked pipeline
+                processing.
+        """
+        if max_npart is None:
+            return [self]
+
+        if max_npart <= 0:
+            raise exceptions.InconsistentArguments(
+                "max_npart must be a positive integer."
+            )
+
+        if self.stars is None or self.stars.nparticles <= max_npart:
+            return [self]
+
+        children = []
+        for ichild, stars in enumerate(self.stars.split(max_npart)):
+            child = copy.copy(self)
+            child.name = f"{self.name}_child_{ichild}"
+
+            # Child galaxies must start with fresh additive output
+            # containers so chunk results are accumulated explicitly later on.
+            child.spectra = {}
+            child.lines = {}
+            child.photo_lnu = {}
+            child.photo_fnu = {}
+            child.spectroscopy = {}
+            child.images_lnu = {}
+            child.images_fnu = {}
+            child.images_psf_lnu = {}
+            child.images_psf_fnu = {}
+            child.images_noise_lnu = {}
+            child.images_noise_fnu = {}
+            child.data_cubes_lnu = {}
+            child.data_cubes_fnu = {}
+
+            # Split the stellar component into views, but keep the full gas and
+            # black hole components on the first child only.
+            child.stars = stars
+            child.gas = (
+                self.gas if ichild == 0 and self.gas is not None else None
+            )
+            child.black_holes = (
+                self.black_holes
+                if ichild == 0 and self.black_holes is not None
+                else None
+            )
+
+            # Recompute simple integrated properties on each child so any later
+            # pipeline operations see consistent summary quantities.
+            if child.stars is not None:
+                child.calculate_integrated_stellar_properties()
+            else:
+                child.stellar_mass = None
+                child.stellar_mass_weighted_age = None
+
+            if child.gas is not None:
+                child.calculate_integrated_gas_properties()
+            else:
+                child.gas_mass = None
+                child.mass_weighted_gas_metallicity = None
+                child.sf_gas_mass = None
+                child.sf_gas_metallicity = None
+
+            children.append(child)
+
+        return children
+
     @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
         self,
