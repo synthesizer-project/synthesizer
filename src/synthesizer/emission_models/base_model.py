@@ -2839,70 +2839,46 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
         toc("Getting existing emissions")
 
-        # Perform all extractions
-        for label, spectra_key in emission_model._extract_keys.items():
-            # Skip if we don't need to extract this spectra
-            if label in spectra:
-                continue
-            try:
-                spectra, particle_spectra = self._extract_spectra(
-                    emission_model[label],
-                    emitters,
-                    spectra,
-                    particle_spectra,
-                    verbose=verbose,
-                    nthreads=nthreads,
-                    grid_assignment_method=grid_assignment_method,
-                )
-            except Exception as e:
-                if sys.version_info >= (3, 11):
-                    e.add_note(f"EmissionModel.label: {label}")
-                    raise
-                else:
-                    raise type(e)(
-                        f"{e} [EmissionModel.label: {label}]"
-                    ).with_traceback(e.__traceback__)
+        # Initialise the queued execution state for the compiled graph.
+        pending_dependencies, lifetime, queue = (
+            emission_model._initialise_execution_state()
+        )
 
-        # With all base spectra extracted we can now loop from bottom to top
-        # of the tree creating each spectra
-        for label in emission_model._bottom_to_top:
-            # Get this model
+        # Execute the full model closure by processing each ready model once.
+        while len(queue) > 0:
+            label = queue.popleft()
             this_model = emission_model._models[label]
 
-            # Get the spectra for the related models that don't appear in the
-            # tree
-            for related_model in this_model.related_models:
-                if related_model.label not in spectra:
-                    (
-                        rel_spectra,
-                        rel_particle_spectra,
-                    ) = related_model._get_spectra(
-                        emitters,
-                        dust_curves=dust_curves,
-                        tau_v=tau_v,
-                        fesc=fesc,
-                        mask=mask,
-                        vel_shift=vel_shift,
-                        verbose=verbose,
-                        spectra=spectra,
-                        particle_spectra=particle_spectra,
-                        _is_related=True,
-                        nthreads=nthreads,
-                        **fixed_parameters,
-                    )
-
-                    spectra.update(rel_spectra)
-                    particle_spectra.update(rel_particle_spectra)
-
-            # Skip models for a different emitters
-            if this_model.emitter not in emitters:
+            # Reused or externally supplied emissions still need to unlock the
+            # graph, but they do not need to be regenerated.
+            if label in spectra:
+                emission_model._update_execution_state(
+                    label,
+                    pending_dependencies,
+                    lifetime,
+                    queue,
+                    spectra,
+                    particle_spectra,
+                )
                 continue
 
-            # Get the emitter (as long as we aren't doing a combination for a
-            # galaxy spectra
+            # Skip models for emitters that are not being generated here while
+            # still keeping the dependency queue consistent.
+            if this_model.emitter not in emitters:
+                emission_model._update_execution_state(
+                    label,
+                    pending_dependencies,
+                    lifetime,
+                    queue,
+                    spectra,
+                    particle_spectra,
+                )
+                continue
+
+            # Get the emitter for this model now that it is ready to execute.
             emitter = emitters[this_model.emitter]
 
-            # Do we have to define a mask?
+            # Build the combined mask once for operations that use it.
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(
@@ -2911,8 +2887,27 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     attr_override_obj=this_model,
                 )
 
-            # Are we doing a combination?
-            if this_model._is_combining:
+            # Dispatch to the appropriate operation for this model.
+            if this_model._is_extracting:
+                try:
+                    spectra, particle_spectra = self._extract_spectra(
+                        this_model,
+                        emitters,
+                        spectra,
+                        particle_spectra,
+                        verbose=verbose,
+                        nthreads=nthreads,
+                        grid_assignment_method=grid_assignment_method,
+                    )
+                except Exception as e:
+                    if sys.version_info >= (3, 11):
+                        e.add_note(f"EmissionModel.label: {label}")
+                        raise
+                    else:
+                        raise type(e)(
+                            f"{e} [EmissionModel.label: {label}]"
+                        ).with_traceback(e.__traceback__)
+            elif this_model._is_combining:
                 try:
                     spectra, particle_spectra = self._combine_spectra(
                         emission_model,
@@ -2929,8 +2924,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         raise type(e)(
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
-
-            # Are we doing a transformation?
             elif this_model._is_transforming:
                 try:
                     spectra, particle_spectra = this_model._transform_emission(
@@ -2949,7 +2942,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         raise type(e)(
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
-
             elif this_model._is_generating:
                 try:
                     spectra, particle_spectra = self._generate_spectra(
@@ -2969,7 +2961,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             f"{e} [EmissionModel.label: {this_model.label}]"
                         ).with_traceback(e.__traceback__)
 
-            # Are we scaling the spectra?
+            # Apply any requested scaling after the model has been generated.
             for scaler in this_model.scale_by:
                 if scaler is None:
                     continue
@@ -3005,9 +2997,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if this_model.per_particle:
                         particle_spectra[label] *= scaler_arr
                     spectra[label]._lnu *= scaler_arr
-
                 elif scaler in spectra:
-                    # Compute the scaling
+                    # Compute the scaling against another generated spectrum.
                     if this_model.per_particle:
                         scaling = (
                             particle_spectra[scaler].bolometric_luminosity
@@ -3023,29 +3014,28 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if this_model.per_particle:
                         particle_spectra[label] *= scaling[:, None]
                     spectra[label]._lnu *= scaling
-
                 else:
                     raise exceptions.InconsistentArguments(
                         f"Can't scale spectra by {scaler}."
                     )
 
-        # Only apply post processing and deletion if we aren't in a recursive
-        # related model call
+            # Unlock downstream models and delete expired unsaved emissions.
+            emission_model._update_execution_state(
+                label,
+                pending_dependencies,
+                lifetime,
+                queue,
+                spectra,
+                particle_spectra,
+            )
+
+        # Only apply post processing at the top level call.
         if not _is_related:
             # Apply any post processing functions
             for func in self._post_processing:
                 spectra = func(spectra, emitters, self)
                 if len(particle_spectra) > 0:
                     particle_spectra = func(particle_spectra, emitters, self)
-
-            # Loop over all models and delete those spectra if we aren't saving
-            # them (we have to this after post processing in case the deleted
-            # spectra are needed during post processing)
-            for model in emission_model._models.values():
-                if not model.save and model.label in spectra:
-                    del spectra[model.label]
-                    if model.per_particle and model.label in particle_spectra:
-                        del particle_spectra[model.label]
 
         toc("Generating all spectra")
 
