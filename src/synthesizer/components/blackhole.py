@@ -243,6 +243,20 @@ class BlackholesComponent(Component):
                     "same length"
                 )
 
+            # Validate each covering fraction before combining them.
+            if np.any(
+                (covering_fraction_blr < 0.0) | (covering_fraction_blr > 1.0)
+            ):
+                raise exceptions.InconsistentArguments(
+                    "covering_fraction_blr must be between 0.0 and 1.0"
+                )
+            if np.any(
+                (covering_fraction_nlr < 0.0) | (covering_fraction_nlr > 1.0)
+            ):
+                raise exceptions.InconsistentArguments(
+                    "covering_fraction_nlr must be between 0.0 and 1.0"
+                )
+
             # Calculate the total covering fraction and corresponding escape
             # fraction.
             self.covering_fraction = (
