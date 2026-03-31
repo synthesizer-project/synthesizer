@@ -41,6 +41,7 @@ Example usage::
 
 import copy
 import sys
+from collections import deque
 
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
@@ -2547,6 +2548,130 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 pass
 
         return emissions, particle_emissions
+
+    def _initialise_execution_state(self):
+        """Initialise queue state for queued emission execution.
+
+        Returns:
+            tuple[dict, dict, deque]:
+                The pending dependency counts, lifetime counts, and queue of
+                labels ready to execute.
+        """
+        # Extract the compiled graph pieces we need for runtime scheduling.
+        dependencies = self._execution_plan["dependencies"]
+        dependents = self._execution_plan["dependents"]
+        execution_rank = self._execution_plan["execution_rank"]
+
+        # Count how many upstream dependencies each model is still waiting on.
+        pending_dependencies = {
+            label: len(dep_labels)
+            for label, dep_labels in dependencies.items()
+        }
+
+        # Count how many future consumers still need each model's emission.
+        lifetime = {
+            label: len(dep_labels) for label, dep_labels in dependents.items()
+        }
+
+        # Seed the queue with models that are immediately ready to run.
+        ready_labels = sorted(
+            [
+                label
+                for label, count in pending_dependencies.items()
+                if count == 0
+            ],
+            key=execution_rank.get,
+        )
+
+        return pending_dependencies, lifetime, deque(ready_labels)
+
+    def _delete_expired_emission(
+        self,
+        label,
+        emissions,
+        particle_emissions,
+    ):
+        """Delete an unsaved emission once its lifetime has expired.
+
+        Args:
+            label (str):
+                The label to delete.
+            emissions (dict):
+                The integrated emissions dictionary.
+            particle_emissions (dict):
+                The particle emissions dictionary.
+        """
+        # Skip labels that are explicitly requested to survive execution.
+        if self._models[label].save:
+            return
+
+        # Remove the integrated emission if it is still present.
+        if label in emissions:
+            del emissions[label]
+
+        # Remove the particle emission when that representation exists.
+        if label in particle_emissions:
+            del particle_emissions[label]
+
+    def _update_execution_state(
+        self,
+        label,
+        pending_dependencies,
+        lifetime,
+        queue,
+        emissions,
+        particle_emissions,
+    ):
+        """Update queue state after a model has been executed.
+
+        Args:
+            label (str):
+                The label that has just been executed.
+            pending_dependencies (dict):
+                Remaining upstream dependencies for each model.
+            lifetime (dict):
+                Remaining downstream consumers for each model.
+            queue (collections.deque):
+                The queue of ready labels.
+            emissions (dict):
+                The integrated emissions dictionary.
+            particle_emissions (dict):
+                The particle emissions dictionary.
+        """
+        # Extract the compiled graph pieces needed for state updates.
+        dependencies = self._execution_plan["dependencies"]
+        dependents = self._execution_plan["dependents"]
+        execution_rank = self._execution_plan["execution_rank"]
+
+        # Unlock direct dependents now that this model has been executed.
+        newly_ready = []
+        for dependent_label in dependents[label]:
+            pending_dependencies[dependent_label] -= 1
+            if pending_dependencies[dependent_label] == 0:
+                newly_ready.append(dependent_label)
+
+        # Keep queue ordering deterministic for independent subgraphs.
+        for dependent_label in sorted(newly_ready, key=execution_rank.get):
+            queue.append(dependent_label)
+
+        # Decrement dependency lifetimes because this model has consumed them.
+        for dependency_label in dependencies[label]:
+            lifetime[dependency_label] -= 1
+            if lifetime[dependency_label] == 0:
+                self._delete_expired_emission(
+                    dependency_label,
+                    emissions,
+                    particle_emissions,
+                )
+
+        # Delete the just-processed model immediately if nothing downstream
+        # will need it and it is not marked to be saved.
+        if lifetime[label] == 0:
+            self._delete_expired_emission(
+                label,
+                emissions,
+                particle_emissions,
+            )
 
     def _get_spectra(
         self,
