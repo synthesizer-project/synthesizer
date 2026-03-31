@@ -1,8 +1,9 @@
 """Test suite for particle based black holes."""
 
 import numpy as np
-from unyt import s, unyt_array
+from unyt import Msun, s, unyt_array
 
+from synthesizer.particle.blackholes import BlackHoles
 from synthesizer.utils import scalar_to_array
 
 
@@ -67,4 +68,56 @@ class TestBlackHolesInit:
         )
         assert arr.ndim == 1, (
             f"1 element array without units failed: {np.array([1])}->{arr}"
+        )
+
+    def test_transmission_fractions_store_covering_fractions(self):
+        """Test deterministic transmission fractions mirror inputs."""
+        bhs = BlackHoles(
+            masses=np.array([1e8, 2e8]) * Msun,
+            covering_fraction_blr=np.array([0.2, 0.3]),
+            covering_fraction_nlr=np.array([0.1, 0.4]),
+        )
+
+        np.testing.assert_allclose(bhs.transmission_fraction_blr, [0.2, 0.3])
+        np.testing.assert_allclose(bhs.transmission_fraction_nlr, [0.1, 0.4])
+        np.testing.assert_allclose(
+            bhs.transmission_fraction_escape,
+            [0.7, 0.3],
+        )
+        np.testing.assert_allclose(bhs.covering_fraction, [0.3, 0.7])
+        np.testing.assert_allclose(bhs.escape_fraction, [0.7, 0.3])
+
+    def test_random_transmission_fractions_are_one_hot(self):
+        """Test random transmission fractions are consistent one-hot draws."""
+        np.random.seed(0)
+        bhs = BlackHoles(
+            masses=np.array([1e8, 2e8, 3e8]) * Msun,
+            covering_fraction_blr=np.array([0.2, 0.3, 0.0]),
+            covering_fraction_nlr=np.array([0.1, 0.4, 0.5]),
+        )
+
+        random_total = (
+            bhs.random_transmission_fraction_escape
+            + bhs.random_transmission_fraction_nlr
+            + bhs.random_transmission_fraction_blr
+        )
+        np.testing.assert_allclose(random_total, np.ones(3))
+
+        assert np.all(
+            np.isin(
+                bhs.random_transmission_fraction_escape,
+                [0.0, 1.0],
+            )
+        )
+        assert np.all(
+            np.isin(
+                bhs.random_transmission_fraction_nlr,
+                [0.0, 1.0],
+            )
+        )
+        assert np.all(
+            np.isin(
+                bhs.random_transmission_fraction_blr,
+                [0.0, 1.0],
+            )
         )
