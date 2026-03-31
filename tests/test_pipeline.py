@@ -417,6 +417,11 @@ class TestPipelineInit:
         assert pipeline.emission_model is nebular_emission_model
         assert pipeline.nthreads == 1  # Default value
 
+    def test_init_pipeline_invalid_max_npart(self, nebular_emission_model):
+        """Test invalid max_npart values are rejected."""
+        with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
+            Pipeline(emission_model=nebular_emission_model, max_npart=0)
+
 
 class TestPipelineNotReady:
     """Test that the Pipeline behaves as expected when things are missing."""
