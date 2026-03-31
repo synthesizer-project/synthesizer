@@ -193,7 +193,11 @@ class Pipeline:
         self.n_galaxies_per_rank = 0  # Only applicable when using MPI
         self.n_galaxies_offset = 0  # Only applicable when using MPI
 
-        # Attach the maximum number of particles we can process at one time
+        # Attach the maximum number of particles we can process at one time.
+        if max_npart is not None and (
+            not isinstance(max_npart, int) or max_npart < 1
+        ):
+            raise ValueError("max_npart must be an int >= 1")
         self._max_npart = max_npart
 
         # Define the container to hold the galaxies
@@ -1362,6 +1366,10 @@ class Pipeline:
         Args:
             galaxy (Galaxy):
                 The galaxy to compute the SFZH grid for.
+
+        Returns:
+            array-like:
+                The computed or cached SFZH grid.
         """
         start = time.perf_counter()
 
@@ -1371,32 +1379,31 @@ class Pipeline:
         # Get the SFZH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfzh", None) is not None:
-            self.sfzhs.append(galaxy.sfzh)
-            return
+            return galaxy.sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
                 metallicities=op_kwargs["metallicities"],
                 nthreads=self.nthreads,
             )
+            galaxy.sfzh = galaxy.stars.sfzh
         else:
             # No stars, no SFZH, store a zeroed grid
-            self.sfzhs.append(
-                np.zeros(
-                    (
-                        len(op_kwargs["log10ages"]),
-                        len(op_kwargs["metallicities"]),
-                    )
+            galaxy.sfzh = np.zeros(
+                (
+                    len(op_kwargs["log10ages"]),
+                    len(op_kwargs["metallicities"]),
                 )
             )
-
-            return
+            return galaxy.sfzh
 
         # Count the number of SFZH grids we have generated
         self._op_counts["SFZH"] += 1
 
         # Record the time taken
         self._op_timing["SFZH"] += time.perf_counter() - start
+
+        return galaxy.sfzh
 
     def get_sfh(self, log10ages, write=True):
         """Flag that the Pipeline should compute the binned SFH.
@@ -1433,6 +1440,10 @@ class Pipeline:
         Args:
             galaxy (Galaxy):
                 The galaxy to compute the SFH for.
+
+        Returns:
+            array-like:
+                The computed or cached SFH grid.
         """
         start = time.perf_counter()
 
@@ -1442,24 +1453,25 @@ class Pipeline:
         # Get the SFH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfh", None) is not None:
-            self.sfhs.append(galaxy.sfh)
-            return
+            return galaxy.sfh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
                 log10ages=op_kwargs["log10ages"],
                 nthreads=self.nthreads,
             )
+            galaxy.sfh = galaxy.stars.sfh
         else:
             # No stars, no SFH, store a zeroed grid
-            self.sfhs.append(np.zeros(len(op_kwargs["log10ages"])))
-
-            return
+            galaxy.sfh = np.zeros(len(op_kwargs["log10ages"]))
+            return galaxy.sfh
 
         # Count the number of SFH grids we have generated
         self._op_counts["SFH"] += 1
 
         # Record the time taken
         self._op_timing["SFH"] += time.perf_counter() - start
+
+        return galaxy.sfh
 
     def get_spectra(self, write=True):
         """Flag that the Pipeline should compute the rest frame spectra.
@@ -3172,11 +3184,17 @@ class Pipeline:
 
         # Do we need to unpack the SFZH?
         if self._write_sfzh:
-            self.sfzhs.append(galaxy.stars.sfzh)
+            if galaxy.stars is not None:
+                self.sfzhs.append(galaxy.stars.sfzh)
+            else:
+                self.sfzhs.append(galaxy.sfzh)
 
         # Do we need to unpack the SFH?
         if self._write_sfh:
-            self.sfhs.append(galaxy.stars.sfh)
+            if galaxy.stars is not None:
+                self.sfhs.append(galaxy.stars.sfh)
+            else:
+                self.sfhs.append(galaxy.sfh)
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:

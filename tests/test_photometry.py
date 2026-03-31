@@ -121,6 +121,25 @@ def test_photometry_collection_addition_requires_matching_filters():
         _ = first + second
 
 
+def test_photometry_collection_sum():
+    """Photometry collections should support Python sum()."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+
+    first = PhotometryCollection(
+        filters,
+        photometry=np.array([1.0, 2.0, 3.0]) * erg / s / Hz,
+    )
+    second = PhotometryCollection(
+        filters,
+        photometry=np.array([0.5, 1.5, 2.5]) * erg / s / Hz,
+    )
+
+    total = sum([first, second])
+
+    np.testing.assert_allclose(total.photometry.value, [1.5, 3.5, 5.5])
+
+
 class TestPhotometryThreading:
     """Test photometry generation with and without threading."""
 
