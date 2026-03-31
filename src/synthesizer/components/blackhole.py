@@ -56,8 +56,8 @@ class BlackholesComponent(Component):
         hydrogen_density_blr (np.ndarray of float):
             The hydrogen density of the broad line region.
         covering_fraction_blr (np.ndarray of float):
-            The covering fraction of the broad line region (effectively
-            the escape fraction).
+            The fraction of disc emission intercepted and reprocessed by the
+            broad line region.
         velocity_dispersion_blr (np.ndarray of float):
             The velocity dispersion of the broad line region.
         ionisation_parameter_nlr (np.ndarray of float):
@@ -65,8 +65,8 @@ class BlackholesComponent(Component):
         hydrogen_density_nlr (np.ndarray of float):
             The hydrogen density of the narrow line region.
         covering_fraction_nlr (np.ndarray of float):
-            The covering fraction of the narrow line region (effectively
-            the escape fraction).
+            The fraction of disc emission intercepted and reprocessed by the
+            narrow line region.
         velocity_dispersion_nlr (np.ndarray of float):
             The velocity dispersion of the narrow line region.
         theta_torus (np.ndarray of float):
@@ -77,11 +77,11 @@ class BlackholesComponent(Component):
             The deterministic fraction of the disc emission that escapes,
             equal to ``1 - covering_fraction_blr - covering_fraction_nlr``.
         transmission_fraction_nlr (np.ndarray of float):
-            The fraction of the disc emission that is transmitted through the
-            NLR, equal to ``covering_fraction_nlr``.
+            The deterministic fraction of the disc emission transmitted
+            through the NLR, equal to ``covering_fraction_nlr``.
         transmission_fraction_blr (np.ndarray of float):
-            The fraction of the disc emission that is transmitted through the
-            BLR, equal to ``covering_fraction_blr``.
+            The deterministic fraction of the disc emission transmitted
+            through the BLR, equal to ``covering_fraction_blr``.
         random_transmission_fraction_escape (np.ndarray of float):
             A one-hot random realization of the escaping disc fraction.
         random_transmission_fraction_nlr (np.ndarray of float):
@@ -162,8 +162,8 @@ class BlackholesComponent(Component):
             hydrogen_density_blr (np.ndarray of float):
                 The hydrogen density of the broad line region.
             covering_fraction_blr (np.ndarray of float):
-                The covering fraction of the broad line region (effectively
-                the escape fraction).
+                The fraction of disc emission intercepted and reprocessed by
+                the broad line region.
             velocity_dispersion_blr (np.ndarray of float):
                 The velocity dispersion of the broad line region.
             ionisation_parameter_nlr (np.ndarray of float):
@@ -171,8 +171,8 @@ class BlackholesComponent(Component):
             hydrogen_density_nlr (np.ndarray of float):
                 The hydrogen density of the narrow line region.
             covering_fraction_nlr (np.ndarray of float):
-                The covering fraction of the narrow line region (effectively
-                the escape fraction).
+                The fraction of disc emission intercepted and reprocessed by
+                the narrow line region.
             velocity_dispersion_nlr (np.ndarray of float):
                 The velocity dispersion of the narrow line region.
             theta_torus (np.ndarray of float):
@@ -265,10 +265,6 @@ class BlackholesComponent(Component):
             transmission_fraction_nlr = covering_fraction_nlr
             transmission_fraction_blr = covering_fraction_blr
 
-            # Define transmission scenario choices for the random one-hot
-            # realization.
-            transmission_scenario_choices = ["blr", "nlr", "none"]
-
             # Loop over blackholes and decide whether the disc emission
             # escapes (none), or is transmitted through the BLR (blr) or NLR
             # (nlr).
@@ -286,13 +282,9 @@ class BlackholesComponent(Component):
                 ]
 
                 # Randomly choose the scenario using these probabilities.
-                random_transmission_index[i] = (
-                    transmission_scenario_choices.index(
-                        np.random.choice(
-                            transmission_scenario_choices,
-                            p=probabilities,
-                        )
-                    )
+                random_transmission_index[i] = np.random.choice(
+                    3,
+                    p=probabilities,
                 )
 
             # Random transmission fractions are a one-hot realization of the
