@@ -2685,7 +2685,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         verbose=True,
         spectra=None,
         particle_spectra=None,
-        _is_related=False,
         nthreads=1,
         grid_assignment_method="cic",
         **fixed_parameters,
@@ -2764,10 +2763,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 override the models flag for using peculiar velocities to apply
                 doppler shift to the generated spectra. Only applicable for
                 particle spectra.
-            _is_related (bool):
-                Are we generating related model spectra? If so we don't want
-                to apply any post processing functions or delete any spectra,
-                this will be done outside the recursive call.
             nthreads (int):
                 The number of threads to use when generating the spectra.
             grid_assignment_method (str):
@@ -2801,16 +2796,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Apply any overrides we have
         tic("Applying model overrides")
-        if not _is_related:
-            self._apply_overrides(
-                emission_model,
-                dust_curves=dust_curves,
-                tau_v=tau_v,
-                fesc=fesc,
-                covering_fraction=covering_fraction,
-                mask=mask,
-                vel_shift=vel_shift,
-            )
+        self._apply_overrides(
+            emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            vel_shift=vel_shift,
+        )
         toc("Applying model overrides")
 
         # Make a spectra dictionary if we haven't got one yet
@@ -2821,7 +2815,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
-        if not _is_related and not self.save:
+        if not self.save:
             raise exceptions.InconsistentArguments(
                 f"{self.label} is not being saved. There's no point in "
                 "generating at the root if they are not saved. Maybe you "
@@ -2830,13 +2824,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Get any existing spectra we are reusing
         tic("Getting existing emissions")
-        if not _is_related:
-            spectra, particle_spectra = self._get_existing_emissions(
-                emitters,
-                spectra,
-                particle_spectra,
-                emission_type="spectra",
-            )
+        spectra, particle_spectra = self._get_existing_emissions(
+            emitters,
+            spectra,
+            particle_spectra,
+            emission_type="spectra",
+        )
         toc("Getting existing emissions")
 
         # Initialise the queued execution state for the compiled graph.
@@ -3029,13 +3022,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 particle_spectra,
             )
 
-        # Only apply post processing at the top level call.
-        if not _is_related:
-            # Apply any post processing functions
-            for func in self._post_processing:
-                spectra = func(spectra, emitters, self)
-                if len(particle_spectra) > 0:
-                    particle_spectra = func(particle_spectra, emitters, self)
+        # Apply any post processing functions to the surviving emissions.
+        for func in self._post_processing:
+            spectra = func(spectra, emitters, self)
+            if len(particle_spectra) > 0:
+                particle_spectra = func(particle_spectra, emitters, self)
 
         toc("Generating all spectra")
 
@@ -3053,7 +3044,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         verbose=True,
         lines=None,
         particle_lines=None,
-        _is_related=False,
         nthreads=1,
         grid_assignment_method="cic",
         **kwargs,
@@ -3130,10 +3120,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             particle_lines (dict):
                 A dictionary of particle lines to add to. This is used for
                 recursive calls to this function.
-            _is_related (bool):
-                Are we generating related model lines? If so we don't want
-                to apply any post processing functions or delete any lines,
-                this will be done outside the recursive call.
             nthreads (int):
                 The number of threads to use when generating the lines.
             grid_assignment_method (str):
@@ -3176,7 +3162,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
-        if not _is_related and not self.save:
+        if not self.save:
             raise exceptions.InconsistentArguments(
                 f"{self.label} is not being saved. There's no point in "
                 "generating at the root if they are not saved. Maybe you "
@@ -3184,13 +3170,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             )
 
         # Get any existing lines we are reusing
-        if not _is_related:
-            lines, particle_lines = self._get_existing_emissions(
-                emitters,
-                lines,
-                particle_lines,
-                emission_type="lines",
-            )
+        lines, particle_lines = self._get_existing_emissions(
+            emitters,
+            lines,
+            particle_lines,
+            emission_type="lines",
+        )
 
         # Collect existing spectra from all emitters for scaling purposes
         spectra = {}
@@ -3376,14 +3361,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 particle_lines,
             )
 
-        # Only convert to LineCollections and apply post processing at the top
-        # level call.
-        if not _is_related:
-            # Apply any post processing functions
-            for func in self._post_processing:
-                lines = func(lines, emitters, self)
-                if len(particle_lines) > 0:
-                    particle_lines = func(particle_lines, emitters, self)
+        # Apply any post processing functions to the surviving emissions.
+        for func in self._post_processing:
+            lines = func(lines, emitters, self)
+            if len(particle_lines) > 0:
+                particle_lines = func(particle_lines, emitters, self)
 
         toc("Generating all lines")
 
