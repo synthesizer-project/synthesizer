@@ -126,6 +126,7 @@ class Pipeline:
         comm=None,
         verbose=1,
         report_memory=False,
+        max_npart=None,
     ):
         """Initialise the Pipeline object.
 
@@ -159,6 +160,17 @@ class Pipeline:
                 can be very EXPENSIVE in terms of time since we recurse through
                 all objects to get the memory usage after processing each
                 galaxy. Default is False.
+            max_npart (int): (Only applicable for particle based galaxies) The
+                maximum number of particles to be processed at one time. Any
+                galaxies above this threshold will be split until each
+                individual "sub-galaxy" obeys the threshold. The subsequent
+                emissions will then be combined at the end. Note that any
+                operations that require the complete particle distribution
+                (e.g. column densities) will be done on the original galaxy
+                prior to splitting.
+                TODO: while gas particles don't carry spectra we only need to
+                consider stars and black holes in this threshold. If we have
+                gas spectra in the future we will need to amend this.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -177,6 +189,9 @@ class Pipeline:
         self.n_galaxies_local = 0  # Only applicable when using MPI
         self.n_galaxies_per_rank = 0  # Only applicable when using MPI
         self.n_galaxies_offset = 0  # Only applicable when using MPI
+
+        # Attach the maximum number of particles we can process at one time
+        self._max_npart = max_npart
 
         # Define the container to hold the galaxies
         self.galaxies = []
