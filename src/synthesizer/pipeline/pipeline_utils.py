@@ -88,7 +88,7 @@ def accumulate_pipeline_results_from_child(parent, *children):
     def combine(current, other):
         # Recursively combine any additive pipeline outputs, preserving nested
         # dictionary structure and using object-specific addition where needed.
-        if other is None or current is None:
+        if other is None:
             return current
         if current is None:
             return other
@@ -100,17 +100,17 @@ def accumulate_pipeline_results_from_child(parent, *children):
                 combined[key] = combine(combined.get(key), value)
             return combined
 
-        # Handle the photometry case
-        if isinstance(current, PhotometryCollection):
-            return PhotometryCollection(
-                current.filters,
-                current.photometry + other.photometry,
-            )
-
         # Use overloaded object addition if possible.
         if isinstance(
             current,
-            (Sed, LineCollection, Image, ImageCollection, SpectralCube),
+            (
+                Sed,
+                LineCollection,
+                Image,
+                ImageCollection,
+                SpectralCube,
+                PhotometryCollection,
+            ),
         ):
             return current + other
 
