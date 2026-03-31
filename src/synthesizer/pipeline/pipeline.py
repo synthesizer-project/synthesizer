@@ -3570,6 +3570,9 @@ class Pipeline:
             else:
                 gals = [gal]
 
+            # If chunking is active, clear any existing additive outputs on the
+            # parent before processing children and accumulating back onto it
+            # just to be sure, in case the galaxy has been used before
             if len(gals) > 1:
                 clear_pipeline_outputs(gal)
 
@@ -3635,6 +3638,8 @@ class Pipeline:
                 if self._do_spectroscopy_fnu:
                     self._get_spectroscopy_fnu(_gal)
 
+                # Child chunk outputs are accumulated back onto the original
+                # parent galaxy once this chunk has been processed.
                 # Combine back onto the original galaxy if necessary
                 if _gal is not gal:
                     accumulate_pipeline_results_from_child(gal, _gal)
