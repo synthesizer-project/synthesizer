@@ -6,6 +6,7 @@ directly instantiated.
 """
 
 import copy
+import inspect
 
 import numpy as np
 from numpy.random import multivariate_normal
@@ -324,6 +325,122 @@ class Particles:
         )
 
         return projected_smoothing_lengths * rad
+
+    def split(self, max_npart):
+        """Split a particle component into chunks.
+
+        Args:
+            max_npart (int):
+                The maximum number of particles permitted in each child
+                component.
+
+        Returns:
+            list:
+                A list of child particle components containing views of the
+                parent particle data.
+        """
+        if max_npart is None:
+            return [self]
+
+        if max_npart <= 0:
+            raise exceptions.InconsistentArguments(
+                "max_npart must be a positive integer."
+            )
+
+        children = []
+        start = 0
+        nparticles = self.nparticles
+
+        # Introspect the child constructor so we can rebuild children from
+        # sliced constructor inputs rather than copying the parent object.
+        signature = inspect.signature(self.__class__.__init__)
+        constructor_params = {
+            name: param
+            for name, param in signature.parameters.items()
+            if name != "self"
+        }
+
+        while start < self.nparticles:
+            stop = min(start + max_npart, self.nparticles)
+            part_slice = slice(start, stop)
+            kwargs = {}
+
+            # First collect any attributes that map directly onto explicit
+            # constructor arguments, slicing particle-shaped arrays to views.
+            for name, param in constructor_params.items():
+                if param.kind == inspect.Parameter.VAR_KEYWORD:
+                    continue
+
+                if not hasattr(self, name):
+                    continue
+
+                value = getattr(self, name)
+                if hasattr(value, "shape") and value.shape != ():
+                    if value.shape[0] == nparticles:
+                        kwargs[name] = value[part_slice]
+                    else:
+                        kwargs[name] = value
+                else:
+                    kwargs[name] = value
+
+            # Then pass through any extra keyword-style attributes that should
+            # survive the split, again slicing particle-shaped arrays to views
+            # and skipping transient pipeline outputs/caches.
+            for key, value in self.__dict__.items():
+                if (
+                    key.startswith("_")
+                    or key in kwargs
+                    or key in constructor_params
+                    or key
+                    in {
+                        "nparticles",
+                        "nstars",
+                        "nbh",
+                        "component_type",
+                        "log10ages",
+                        "log10metallicities",
+                        "spectra",
+                        "lines",
+                        "photo_lnu",
+                        "photo_fnu",
+                        "spectroscopy",
+                        "images_lnu",
+                        "images_fnu",
+                        "images_psf_lnu",
+                        "images_psf_fnu",
+                        "images_noise_lnu",
+                        "images_noise_fnu",
+                        "particle_spectra",
+                        "particle_lines",
+                        "particle_photo_lnu",
+                        "particle_photo_fnu",
+                        "particle_spectroscopy",
+                        "data_cubes_lnu",
+                        "data_cubes_fnu",
+                        "model_param_cache",
+                        "_grid_weights",
+                        "sfh",
+                        "sfzh",
+                    }
+                ):
+                    continue
+
+                if hasattr(value, "shape") and value.shape != ():
+                    if value.shape[0] == nparticles:
+                        kwargs[key] = value[part_slice]
+                    else:
+                        kwargs[key] = value
+                else:
+                    kwargs[key] = value
+
+            # Reconstruct the child from constructor inputs only, ensuring the
+            # split object starts with fresh output containers.
+            child = self.__class__(**kwargs)
+
+            children.append(child)
+            start = stop
+
+        return children
 
     def get_projected_angular_imaging_props(self, cosmo):
         """Get the projected angular imaging properties.
