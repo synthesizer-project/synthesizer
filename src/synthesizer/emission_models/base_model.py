@@ -50,6 +50,7 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.emission_models.model_queue import ModelQueue
 from synthesizer.emission_models.operations import (
     Combination,
     Extraction,
@@ -697,7 +698,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self._is_generating = generator is not None
 
     def _get_model_dependencies(self, model):
-        """Return the model and external dependencies for a model.
+        """Return the direct model dependencies for a model.
 
         This inspects the same attributes that are later read during spectra
         and line generation so that we can compile a complete dependency graph
@@ -708,23 +709,18 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The model whose dependencies should be inspected.
 
         Returns:
-            tuple[list[EmissionModel], list[str]]:
-                The first list contains dependencies represented by
-                EmissionModel instances in the compiled graph. The second list
-                contains external string dependencies which are satisfied by
-                existing emissions on an emitter.
+            list[EmissionModel]:
+                The direct dependencies represented by EmissionModel instances
+                in the compiled graph.
         """
-        # Define local containers for model and string dependencies.
+        # Define a local container for model dependencies.
         model_dependencies = []
-        external_dependencies = []
 
         # Transformations depend on the model they are applied to unless that
         # dependency is an external string reference.
         if model._is_transforming:
             if isinstance(model.apply_to, EmissionModel):
                 model_dependencies.append(model.apply_to)
-            elif isinstance(model.apply_to, str):
-                external_dependencies.append(model.apply_to)
 
         # Combinations depend on every contributing child model, again keeping
         # string references separate because they are external inputs.
@@ -732,8 +728,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             for child in model.combine:
                 if isinstance(child, EmissionModel):
                     model_dependencies.append(child)
-                elif isinstance(child, str):
-                    external_dependencies.append(child)
 
         # Generators can depend on intrinsic, attenuated, and scaler models.
         if model._is_generating:
@@ -749,8 +743,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             for dependency in generator_dependencies:
                 if isinstance(dependency, EmissionModel):
                     model_dependencies.append(dependency)
-                elif isinstance(dependency, str):
-                    external_dependencies.append(dependency)
 
         # Scaling by another model label is also a true dependency because the
         # downstream model reads that emission during execution.
@@ -763,9 +755,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Deduplicate while preserving discovery order so execution remains
         # deterministic and easy to reason about.
         ordered_model_dependencies = []
-        ordered_external_dependencies = []
         seen_model_labels = set()
-        seen_external_labels = set()
 
         for dependency in model_dependencies:
             if dependency.label in seen_model_labels:
@@ -773,13 +763,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             seen_model_labels.add(dependency.label)
             ordered_model_dependencies.append(dependency)
 
-        for dependency in external_dependencies:
-            if dependency in seen_external_labels:
-                continue
-            seen_external_labels.add(dependency)
-            ordered_external_dependencies.append(dependency)
-
-        return ordered_model_dependencies, ordered_external_dependencies
+        return ordered_model_dependencies
 
     def _unpack_model_recursively(self, model):
         """Traverse the model tree and collect what we will need to do.
@@ -876,27 +860,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Define containers for the compiled dependency graph.
         dependencies = {}
         dependents = {label: [] for label in self._models}
-        external_dependencies = {}
-        extract_labels = []
         execution_rank = {}
 
         # Walk models in discovery order so later queue execution is stable.
         for rank, (label, model) in enumerate(self._models.items()):
             execution_rank[label] = rank
 
-            # Record extraction labels separately because they are often useful
-            # for debugging and execution-time dispatch.
-            if model._is_extracting:
-                extract_labels.append(label)
-
             # Resolve all direct dependencies for this model.
-            model_dependencies, string_dependencies = (
-                self._get_model_dependencies(model)
-            )
+            model_dependencies = self._get_model_dependencies(model)
             dependencies[label] = tuple(
                 dependency.label for dependency in model_dependencies
             )
-            external_dependencies[label] = tuple(string_dependencies)
 
             # Populate the inverse graph used for lifetime accounting.
             for dependency in model_dependencies:
@@ -913,11 +887,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 label: tuple(dep_labels)
                 for label, dep_labels in dependents.items()
             },
-            "external_dependencies": {
-                label: tuple(dep_labels)
-                for label, dep_labels in external_dependencies.items()
-            },
-            "extract_labels": tuple(extract_labels),
             "execution_rank": execution_rank,
         }
 
@@ -2754,11 +2723,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             verbose (bool):
                 Are we talking?
             spectra (dict):
-                A dictionary of spectra to add to. This is used for recursive
-                calls to this function.
+                A dictionary of spectra to add to before executing the model.
             particle_spectra (dict):
-                A dictionary of particle spectra to add to. This is used for
-                recursive calls to this function.
+                A dictionary of particle spectra to add to before executing the
+                model.
             vel_shift (bool):
                 override the models flag for using peculiar velocities to apply
                 doppler shift to the generated spectra. Only applicable for
@@ -2832,40 +2800,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         )
         toc("Getting existing emissions")
 
-        # Initialise the queued execution state for the compiled graph.
-        pending_dependencies, lifetime, queue = (
-            emission_model._initialise_execution_state()
-        )
+        # Build the execution queue for this model tree.
+        tic("Building model queue")
+        queue = ModelQueue(emission_model)
+        toc("Building model queue")
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
-            label = queue.popleft()
-            this_model = emission_model._models[label]
+            this_model = queue.pop()
+            label = this_model.label
 
             # Reused or externally supplied emissions still need to unlock the
             # graph, but they do not need to be regenerated.
             if label in spectra:
-                emission_model._update_execution_state(
-                    label,
-                    pending_dependencies,
-                    lifetime,
-                    queue,
-                    spectra,
-                    particle_spectra,
-                )
+                queue.done(this_model, spectra, particle_spectra)
                 continue
 
             # Skip models for emitters that are not being generated here while
             # still keeping the dependency queue consistent.
             if this_model.emitter not in emitters:
-                emission_model._update_execution_state(
-                    label,
-                    pending_dependencies,
-                    lifetime,
-                    queue,
-                    spectra,
-                    particle_spectra,
-                )
+                queue.done(this_model, spectra, particle_spectra)
                 continue
 
             # Get the emitter for this model now that it is ready to execute.
@@ -3013,14 +2967,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     )
 
             # Unlock downstream models and delete expired unsaved emissions.
-            emission_model._update_execution_state(
-                label,
-                pending_dependencies,
-                lifetime,
-                queue,
-                spectra,
-                particle_spectra,
-            )
+            queue.done(this_model, spectra, particle_spectra)
+
+        # Ensure the dependency graph was fully traversed before returning.
+        queue.assert_finished()
 
         # Apply any post processing functions to the surviving emissions.
         for func in self._post_processing:
@@ -3115,11 +3065,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             verbose (bool):
                 Are we talking?
             lines (dict):
-                A dictionary of lines to add to. This is used for recursive
-                calls to this function.
+                A dictionary of lines to add to before executing the model.
             particle_lines (dict):
-                A dictionary of particle lines to add to. This is used for
-                recursive calls to this function.
+                A dictionary of particle lines to add to before executing the
+                model.
             nthreads (int):
                 The number of threads to use when generating the lines.
             grid_assignment_method (str):
@@ -3180,7 +3129,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Collect existing spectra from all emitters for scaling purposes
         spectra = {}
         particle_spectra = {}
-        for emitter_name, emitter in emitters.items():
+        for emitter in emitters.values():
             if hasattr(emitter, "spectra"):
                 spectra.update(emitter.spectra)
             if hasattr(emitter, "particle_spectra"):
@@ -3195,11 +3144,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         pending_dependencies, lifetime, queue = (
             emission_model._initialise_execution_state()
         )
+        processed_labels = set()
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
             label = queue.popleft()
             this_model = emission_model._models[label]
+            processed_labels.add(label)
 
             # Reused or externally supplied emissions still need to unlock the
             # graph, but they do not need to be regenerated.
@@ -3359,6 +3310,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 queue,
                 lines,
                 particle_lines,
+            )
+
+        # Ensure the dependency graph was fully traversed before returning.
+        if len(processed_labels) != len(emission_model._models):
+            remaining = sorted(set(emission_model._models) - processed_labels)
+            raise exceptions.InconsistentArguments(
+                "Emission model dependency graph could not be fully "
+                f"resolved. Remaining models: {remaining}"
             )
 
         # Apply any post processing functions to the surviving emissions.
