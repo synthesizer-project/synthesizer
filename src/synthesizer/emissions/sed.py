@@ -13,6 +13,7 @@ Example usage:
     sed.get_photo_fnu(filters, nthreads=4)
 """
 
+import os
 import re
 
 import matplotlib.pyplot as plt
@@ -42,6 +43,7 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
+from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
@@ -139,6 +141,10 @@ class Sed:
 
         For multidimensional `sed`'s, sum the luminosity to provide a 1D
         integrated SED.
+
+        TODO: Replace this NumPy-based implementation with a generic C++
+        reduction backend that can handle the full range of supported Sed
+        shapes.
 
         Returns:
             sed (object, Sed):
@@ -2479,3 +2485,47 @@ def plot_spectra_as_rainbow(
     ax.imshow(im, aspect="auto", extent=(lam_min, lam_max, 0, 1))
 
     return fig, ax
+
+
+def integrate_particle_sed(sed, nthreads=1):
+    """Integrate a per-particle Sed to an integrated Sed using C++.
+
+    This helper is intended for Sed objects whose luminosity array has shape
+    ``(nparticle, nlam)``. It uses the specialised C++ particle spectra
+    reduction kernel rather than the generic NumPy-based ``Sed.sum`` method.
+
+    Args:
+        sed (Sed):
+            The per-particle Sed to reduce.
+        nthreads (int):
+            The number of threads to use in the C++ reduction. If ``-1`` then
+            all available CPU cores will be used.
+
+    Returns:
+        Sed:
+            A new integrated Sed with the same wavelength grid and units as the
+            input Sed.
+
+    Raises:
+        InconsistentArguments:
+            If the input Sed does not contain a two-dimensional luminosity
+            array with particle spectra on the leading axis.
+    """
+    # Resolve the automatic thread-count request to a concrete integer before
+    # dispatching into the C++ extension.
+    if nthreads == -1:
+        nthreads = os.cpu_count() or 1
+
+    # Validate that the Sed matches the specialised particle spectra layout
+    # expected by the reduction extension.
+    if sed._lnu.ndim != 2:
+        raise exceptions.InconsistentArguments(
+            "integrate_particle_sed expects a Sed with a 2D lnu array of "
+            "shape "
+            f"(nparticle, nlam), got {sed._lnu.shape}."
+        )
+
+    # Reduce the per-particle spectra in C++ and rebuild a unit-aware Sed on
+    # the original wavelength grid.
+    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads)
+    return Sed(sed.lam, reduced_lnu * sed.lnu.units)
