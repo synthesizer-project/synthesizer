@@ -210,6 +210,7 @@ def test_particle_galaxy_combines_additive_child_outputs():
             lum=unyt_array([scale], erg / s),
             cont=unyt_array([0.1 * scale], erg / s / Hz),
         )
+        child.lines["line"].get_flux0()
         child.photo_lnu["galaxy"] = PhotometryCollection(
             filters,
             unyt_array([scale, 2 * scale], erg / s / Hz),
@@ -247,6 +248,10 @@ def test_particle_galaxy_combines_additive_child_outputs():
     np.testing.assert_allclose(
         galaxy.lines["line"].luminosity.value,
         np.array([total_scale]),
+    )
+    np.testing.assert_allclose(
+        galaxy.lines["line"].flux.value,
+        children[0].lines["line"].flux.value * total_scale,
     )
     np.testing.assert_allclose(
         galaxy.photo_lnu["galaxy"].photometry.value,
