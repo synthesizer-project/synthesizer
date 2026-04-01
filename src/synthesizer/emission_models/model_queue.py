@@ -1,9 +1,16 @@
 """Queue machinery for executing emission model dependency graphs.
 
-This module defines a lightweight queue object used at execution time by
-EmissionModel.get_spectra and EmissionModel.get_lines. The queue owns the
-runtime dependency counters and emission lifetimes so that execution-specific
-state does not need to be stored on the EmissionModel itself.
+This module defines the runtime queue used by
+``EmissionModel._get_spectra`` and ``EmissionModel._get_lines``. The queue is
+responsible for constructing the executable closure of models for a single
+call, compiling the direct dependency graph between those models, and then
+tracking when each model becomes ready to execute.
+
+The queue also manages emission lifetimes. Once a model's emission has been
+consumed by all downstream dependents, and the model is not marked to be
+saved, the queue deletes that emission from the working output dictionaries.
+Keeping this logic in a dedicated module keeps execution-specific state out of
+``EmissionModel`` and makes the scheduling logic easier to reason about.
 """
 
 from collections import deque
@@ -24,10 +31,39 @@ class ModelQueue:
     Args:
         root_model (EmissionModel):
             The root emission model being executed.
+
+    Attributes:
+        models (dict):
+            Mapping from model label to the ``EmissionModel`` instance in the
+            executable closure for this run.
+        dependencies (dict):
+            Mapping from model label to the labels of its direct upstream
+            dependencies.
+        dependents (dict):
+            Mapping from model label to the labels of its direct downstream
+            dependents.
+        execution_rank (dict):
+            Mapping from model label to its stable discovery order in the
+            queue. This is used to keep execution deterministic when multiple
+            models become ready at the same time.
+        pending_dependencies (dict):
+            Mapping from model label to the number of upstream dependencies
+            that are still unresolved.
+        lifetime (dict):
+            Mapping from model label to the number of downstream consumers that
+            still need the model's emission.
     """
 
     def __init__(self, root_model):
-        """Initialise the queue for an emission model execution."""
+        """Initialise the queue for an emission model execution.
+
+        Args:
+            root_model (EmissionModel):
+                The root model for the emission calculation being executed.
+
+        Returns:
+            None
+        """
         # Keep a reference to the root model for error messages and checks.
         self._root_model = root_model
 
@@ -83,11 +119,28 @@ class ModelQueue:
         toc("Compiling model queue")
 
     def __len__(self):
-        """Return the number of models currently ready to execute."""
+        """Return the number of models currently ready to execute.
+
+        Args:
+            None
+
+        Returns:
+            int:
+                The number of models currently waiting in the ready queue.
+        """
         return len(self._queue)
 
     def pop(self):
-        """Pop and return the next ready model from the queue."""
+        """Pop and return the next ready model from the queue.
+
+        Args:
+            None
+
+        Returns:
+            EmissionModel:
+                The next model that is ready to be executed.
+        """
+        # Pop the next ready label and resolve it back to the model object.
         return self.models[self._queue.popleft()]
 
     def done(self, model, emissions, particle_emissions):
@@ -100,6 +153,9 @@ class ModelQueue:
                 The integrated emission dictionary to clean up.
             particle_emissions (dict):
                 The particle emission dictionary to clean up.
+
+        Returns:
+            None
         """
         # Record completion so we can verify the whole graph ran later.
         label = model.label
@@ -137,7 +193,19 @@ class ModelQueue:
             )
 
     def assert_finished(self):
-        """Ensure the dependency graph was fully traversed."""
+        """Ensure the dependency graph was fully traversed.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            exceptions.InconsistentArguments:
+                Raised if some models were never processed, which indicates the
+                dependency graph could not be fully resolved.
+        """
         # Raise a clear error if some models could never be unlocked.
         if len(self._processed) != len(self.models):
             remaining = sorted(set(self.models) - self._processed)
@@ -152,11 +220,15 @@ class ModelQueue:
         Args:
             model (EmissionModel):
                 The model currently being visited.
+
+        Returns:
+            None
         """
         # Store this model while enforcing unique labels within the closure.
         if model.label not in self.models:
             self.models[model.label] = model
         elif self.models[model.label] is model:
+            # Stop immediately when this exact model object was already seen.
             return
         else:
             # Reuse an existing node when another model points at the same
@@ -192,7 +264,8 @@ class ModelQueue:
 
         Returns:
             list[EmissionModel]:
-                The direct dependencies represented by EmissionModel instances.
+                The direct dependencies represented by ``EmissionModel``
+                instances in the execution graph.
         """
         # Define a local container for model dependencies.
         model_dependencies = []
@@ -261,6 +334,9 @@ class ModelQueue:
                 The integrated emissions dictionary.
             particle_emissions (dict):
                 The particle emissions dictionary.
+
+        Returns:
+            None
         """
         # Skip labels that are explicitly requested to survive execution.
         if self.models[label].save:
@@ -276,8 +352,19 @@ class ModelQueue:
 
     @staticmethod
     def _is_model_instance(obj):
-        """Return whether an object is an EmissionModel instance."""
+        """Return whether an object is an ``EmissionModel`` instance.
+
+        Args:
+            obj (Any):
+                The object to test.
+
+        Returns:
+            bool:
+                ``True`` if ``obj`` is an ``EmissionModel`` instance,
+                otherwise ``False``.
+        """
         # Import lazily so this module does not create a circular import.
         from synthesizer.emission_models.base_model import EmissionModel
 
+        # Return whether this object participates in the model graph.
         return isinstance(obj, EmissionModel)
