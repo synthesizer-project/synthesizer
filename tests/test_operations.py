@@ -321,3 +321,31 @@ def test_nested_related_models_are_executed_in_same_queue(
     assert "nested_incident_root" in random_part_stars.spectra
     assert "nested_incident_related_1" in random_part_stars.spectra
     assert "nested_incident_related_2" in random_part_stars.spectra
+
+
+def test_inactive_unsaved_related_models_are_not_generated(
+    random_part_stars,
+    test_grid,
+):
+    """Test unsaved related-only branches are skipped by the queue."""
+    # Build an unsaved related model that is not required by any saved output.
+    root = StellarEmissionModel(
+        label="active_root",
+        grid=test_grid,
+        extract="incident",
+    )
+    unused_related = AttenuatedEmission(
+        label="inactive_related",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=root,
+        tau_v=0.4,
+        emitter="stellar",
+        save=False,
+    )
+    root.related_models.add(unused_related)
+
+    # Generate the saved root and ensure the inactive branch is skipped.
+    random_part_stars.get_spectra(root)
+
+    assert "active_root" in random_part_stars.spectra
+    assert "inactive_related" not in random_part_stars.spectra
