@@ -2660,6 +2660,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         particle_spectra,
                         this_model,
                         emitter,
+                        nthreads,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -2680,6 +2681,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         emitter,
                         this_mask,
                         self.lam,
+                        nthreads,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -2699,6 +2701,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         particle_spectra,
                         self.lam,
                         emitter,
+                        nthreads,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
