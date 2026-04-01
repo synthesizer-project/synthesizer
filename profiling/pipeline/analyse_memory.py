@@ -1,4 +1,9 @@
-"""Analyze and compare memory profiles from multiple runs."""
+"""Analyze and compare memory profiles from multiple runs.
+
+This script is the generic memory-comparison tool. It compares memory traces
+over normalised execution progress and writes a summary table, but it does not
+assume the run labels are numeric particle counts.
+"""
 
 from __future__ import annotations
 
@@ -73,16 +78,7 @@ def main() -> None:
 
     print(f"Loaded {len(memory_data)} memory profiles")
 
-    # Collect peak values for scaling plot
-    peak_values = []
-    labels_list = []
-    for label in memory_data.keys():
-        ts, mem = memory_data[label]
-        if mem:
-            peak_values.append(max(mem))
-            labels_list.append(int(label))
-
-    # Create Plot 1: Normalized time (0-100% progress)
+    # Create the normalized progress plot for all provided memory traces.
     fig1, ax1 = plt.subplots(figsize=(10, 6))
     colors = plt.cm.Set2(np.linspace(0, 1, len(memory_data)))
 
@@ -97,7 +93,7 @@ def main() -> None:
         ax1.plot(
             t_normalized,
             mem,
-            label=f"{label} particles",
+            label=label,
             color=color,
             linewidth=2,
             alpha=1.0,
@@ -127,42 +123,6 @@ def main() -> None:
     plot_file_normalized = args.output_dir / "memory_comparison_normalized.png"
     fig1.savefig(plot_file_normalized, dpi=150)
     print(f"✓ Saved: {plot_file_normalized}")
-
-    # Create Plot 2: Peak memory vs particle count
-    fig2, ax2 = plt.subplots(figsize=(10, 6))
-
-    ax2.plot(
-        labels_list,
-        peak_values,
-        marker="o",
-        linewidth=2,
-        markersize=8,
-        color="steelblue",
-        label="Peak Memory",
-    )
-
-    # Add reference scaling line (linear) anchored at first data point
-    npart_ref = np.array(labels_list)
-    ax2.plot(
-        npart_ref,
-        peak_values[0] * (npart_ref / labels_list[0]),
-        "k--",
-        alpha=0.5,
-        linewidth=2,
-        label="O(n)",
-    )
-
-    ax2.set_xlabel("Number of Particles", fontsize=12)
-    ax2.set_ylabel("Peak Memory (MB)", fontsize=12)
-    ax2.set_xscale("log")
-    ax2.set_yscale("log")
-    ax2.legend(loc="best", fontsize=10)
-    ax2.grid(alpha=0.3, which="major")
-    fig2.tight_layout()
-
-    plot_file_scaling = args.output_dir / "memory_comparison_scaling.png"
-    fig2.savefig(plot_file_scaling, dpi=150)
-    print(f"✓ Saved: {plot_file_scaling}")
 
     # Create summary text
     summary_file = args.output_dir / "memory_summary.txt"
