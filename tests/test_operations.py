@@ -250,3 +250,38 @@ def test_unsaved_shared_dependency_survives_until_last_consumer(
         total_spectra.lnu,
         reference_spectra.lnu * expected_scaling,
     )
+
+
+def test_related_models_are_executed_in_same_queue(
+    random_part_stars,
+    test_grid,
+):
+    """Test related models are executed as part of the same queue."""
+    # Build a saved extraction and a related attenuation model that depends on
+    # the same extracted spectrum.
+    incident = StellarEmissionModel(
+        label="incident_root",
+        grid=test_grid,
+        extract="incident",
+    )
+    attenuated = AttenuatedEmission(
+        label="incident_related",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=incident,
+        tau_v=0.2,
+        emitter="stellar",
+    )
+    incident.related_models.add(attenuated)
+
+    # Generate the root model and ensure the related model is also produced.
+    incident_spectra = random_part_stars.get_spectra(incident)
+
+    assert "incident_root" in random_part_stars.spectra
+    assert "incident_related" in random_part_stars.spectra
+    assert np.allclose(
+        incident_spectra.lnu, random_part_stars.spectra["incident_root"].lnu
+    )
+    assert np.all(
+        random_part_stars.spectra["incident_related"].lnu
+        <= random_part_stars.spectra["incident_root"].lnu
+    )

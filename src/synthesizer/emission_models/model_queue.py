@@ -159,21 +159,20 @@ class ModelQueue:
         elif self.models[model.label] is model:
             return
         else:
+            # Reuse an existing node when another model points at the same
+            # logical label. This mirrors the existing related-model handling,
+            # where label identity defines the node in the execution graph.
+            if len(model.masks) == 0:
+                return
+
             # Mirror the existing masked-model behaviour by extending the
             # label when the collision is caused by a masked variant.
-            if len(model.masks) > 0:
-                for mask_dict in model.masks:
-                    model.label += (
-                        f"_{mask_dict['attr']}"
-                        f"{mask_dict['op']}"
-                        f"{mask_dict['thresh']}"
-                    ).replace(" ", "-")
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Label {model.label} is already in use by another "
-                    f"model. Existing model: \n{self.models[model.label]}, "
-                    f"\nNew model: \n{model})"
-                )
+            for mask_dict in model.masks:
+                model.label += (
+                    f"_{mask_dict['attr']}"
+                    f"{mask_dict['op']}"
+                    f"{mask_dict['thresh']}"
+                ).replace(" ", "-")
 
             self.models[model.label] = model
 
