@@ -6,6 +6,14 @@ responsible for constructing the executable closure of models for a single
 call, compiling the direct dependency graph between those models, and then
 tracking when each model becomes ready to execute.
 
+The queue first discovers the full model closure, including any related model
+trees that may contribute saved outputs. It then identifies the active subset
+of that closure by starting from saved models and recursively marking the
+dependencies they require. Active state is stored explicitly as a boolean
+mapping keyed by model label, and only active models are queued. This means
+dead unsaved branches can be skipped entirely before any emission generation
+work is done.
+
 The queue also manages emission lifetimes. Once a model's emission has been
 consumed by all downstream dependents, and the model is not marked to be
 saved, the queue deletes that emission from the working output dictionaries.
@@ -26,6 +34,7 @@ class ModelQueue:
 
     - walk the model tree and collect the full executable closure
     - compile the dependency graph between models in that closure
+    - prune the graph down to the active models needed by saved outputs
     - manage ready-to-run models and eagerly delete expired unsaved emissions
 
     Args:
@@ -46,12 +55,20 @@ class ModelQueue:
             Mapping from model label to its stable discovery order in the
             queue. This is used to keep execution deterministic when multiple
             models become ready at the same time.
+        active (dict):
+            Mapping from model label to a boolean flag indicating whether that
+            model is required to produce a saved output for this execution.
         pending_dependencies (dict):
             Mapping from model label to the number of upstream dependencies
             that are still unresolved.
         lifetime (dict):
             Mapping from model label to the number of downstream consumers that
             still need the model's emission.
+        _queue (collections.deque):
+            The ready queue containing the labels of active models whose
+            dependencies have all been satisfied.
+        _processed (set):
+            The set of active model labels that have already been processed.
     """
 
     def __init__(self, root_model):
@@ -93,21 +110,52 @@ class ModelQueue:
 
         # Compile the dependency graph and runtime counters for this closure.
         tic("Compiling model queue")
-        self.dependencies = {}
-        self.dependents = {label: [] for label in self.models}
+        full_dependencies = {}
+        full_dependents = {label: [] for label in self.models}
         self.execution_rank = {}
 
+        # Compile the full dependency graph before pruning inactive branches.
         for rank, (label, model) in enumerate(self.models.items()):
             self.execution_rank[label] = rank
             model_dependencies = self._get_model_dependencies(model)
-            self.dependencies[label] = tuple(
+            full_dependencies[label] = tuple(
                 dependency.label for dependency in model_dependencies
             )
 
             for dependency in model_dependencies:
-                self.dependents[dependency.label].append(label)
+                full_dependents[dependency.label].append(label)
 
-        # Initialise the pending dependency counts and model lifetimes.
+        # Mark only models needed to produce saved outputs as active. This
+        # backwards walk lets us skip unsaved branches that do not contribute
+        # to any saved emission.
+        self.active = self._get_active(self.models, full_dependencies)
+
+        # Prune the graph down to the active subgraph before queueing it so
+        # inactive models do not contribute to queue state or lifetimes.
+        self.models = {
+            label: model
+            for label, model in self.models.items()
+            if self.is_active(label)
+        }
+        self.dependencies = {
+            label: tuple(
+                dependency_label
+                for dependency_label in full_dependencies[label]
+                if self.is_active(dependency_label)
+            )
+            for label in self.models
+        }
+        self.dependents = {
+            label: tuple(
+                dependent_label
+                for dependent_label in full_dependents[label]
+                if self.is_active(dependent_label)
+            )
+            for label in self.models
+        }
+
+        # Initialise the pending dependency counts and model lifetimes using
+        # only the active subgraph that will actually be executed.
         self.pending_dependencies = {
             label: len(dep_labels)
             for label, dep_labels in self.dependencies.items()
@@ -117,7 +165,8 @@ class ModelQueue:
             for label, dep_labels in self.dependents.items()
         }
 
-        # Seed the ready queue using the compiled execution ordering.
+        # Seed the ready queue using the compiled execution ordering so
+        # independent branches still run deterministically.
         ready_labels = sorted(
             [
                 label
@@ -154,6 +203,21 @@ class ModelQueue:
         """
         # Pop the next ready label and resolve it back to the model object.
         return self.models[self._queue.popleft()]
+
+    def is_active(self, label):
+        """Return whether a discovered model label is active.
+
+        Args:
+            label (str):
+                The model label to query.
+
+        Returns:
+            bool:
+                ``True`` if the model is required to produce a saved output,
+                otherwise ``False``.
+        """
+        # Default to inactive for any label outside the discovered closure.
+        return self.active.get(label, False)
 
     def done(self, model, emissions, particle_emissions):
         """Mark a model as processed and update queue state.
@@ -342,6 +406,42 @@ class ModelQueue:
             ordered_model_dependencies.append(dependency)
 
         return ordered_model_dependencies
+
+    def _get_active(self, models, dependencies):
+        """Return active flags for models required by saved outputs.
+
+        Active flags define the subgraph that will actually be queued. A
+        model is active if it is saved itself, or if it lies on a dependency
+        path feeding a saved model.
+
+        Args:
+            models (dict):
+                Mapping from model label to ``EmissionModel`` instance for the
+                full discovered graph.
+            dependencies (dict):
+                Mapping from model label to the labels of its direct
+                dependencies in the full discovered graph.
+
+        Returns:
+            dict:
+                Mapping from model label to a boolean active flag.
+        """
+        # Seed activation from models whose emissions must survive execution.
+        active = {label: False for label in models}
+        pending_labels = [
+            label for label, model in models.items() if model.save
+        ]
+
+        # Walk backwards through dependencies to activate every required input.
+        while len(pending_labels) > 0:
+            label = pending_labels.pop()
+            if active[label]:
+                continue
+
+            active[label] = True
+            pending_labels.extend(dependencies[label])
+
+        return active
 
     def _delete_expired_emission(
         self,
