@@ -1,5 +1,6 @@
 """Tests for the pipeline module."""
 
+import copy
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -415,6 +416,11 @@ class TestPipelineInit:
 
         assert pipeline.emission_model is nebular_emission_model
         assert pipeline.nthreads == 1  # Default value
+
+    def test_init_pipeline_invalid_max_npart(self, nebular_emission_model):
+        """Test invalid max_npart values are rejected."""
+        with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
+            Pipeline(emission_model=nebular_emission_model, max_npart=0)
 
 
 class TestPipelineNotReady:
@@ -2101,3 +2107,216 @@ class TestPipelineUtilsFunctions:
         # Should not raise - float depths are valid for both types
         validate_noise_unit_compatibility([inst], Unit("erg/s/Hz"))
         validate_noise_unit_compatibility([inst], Unit("nJy"))
+
+
+def _assert_nested_allclose(lhs, rhs, rtol=1e-8, atol=0.0):
+    """Recursively compare nested pipeline outputs."""
+    if isinstance(lhs, dict):
+        assert set(lhs) == set(rhs)
+        for key in lhs:
+            _assert_nested_allclose(lhs[key], rhs[key], rtol=rtol, atol=atol)
+        return
+
+    if isinstance(lhs, (list, tuple)):
+        assert len(lhs) == len(rhs)
+        for left_item, right_item in zip(lhs, rhs):
+            _assert_nested_allclose(
+                left_item, right_item, rtol=rtol, atol=atol
+            )
+        return
+
+    if hasattr(lhs, "sfzh") and hasattr(rhs, "sfzh"):
+        np.testing.assert_allclose(lhs.sfzh, rhs.sfzh, rtol=rtol, atol=atol)
+        np.testing.assert_allclose(
+            lhs.log10ages, rhs.log10ages, rtol=rtol, atol=atol
+        )
+        np.testing.assert_allclose(
+            lhs.metallicities, rhs.metallicities, rtol=rtol, atol=atol
+        )
+        return
+
+    if hasattr(lhs, "units") and hasattr(rhs, "units"):
+        assert str(lhs.units) == str(rhs.units)
+        if getattr(getattr(lhs, "value", None), "dtype", None) is np.dtype(
+            object
+        ):
+            assert len(lhs.value) == len(rhs.value)
+            for left_item, right_item in zip(lhs.value, rhs.value):
+                _assert_nested_allclose(
+                    left_item, right_item, rtol=rtol, atol=atol
+                )
+            return
+        np.testing.assert_allclose(lhs.value, rhs.value, rtol=rtol, atol=atol)
+        return
+
+    if isinstance(lhs, np.ndarray):
+        np.testing.assert_allclose(lhs, rhs, rtol=rtol, atol=atol)
+        return
+
+    np.testing.assert_allclose(lhs, rhs, rtol=rtol, atol=atol)
+
+
+class TestGalaxySplitting:
+    """Regression tests for pipeline chunking and child accumulation."""
+
+    @staticmethod
+    def _total_particles(galaxy):
+        """Count all particles attached to a galaxy."""
+        return sum(
+            getattr(component, "nparticles", 0)
+            for component in (
+                galaxy.stars,
+                galaxy.gas,
+                galaxy.black_holes,
+            )
+            if component is not None
+        )
+
+    @staticmethod
+    def _make_pipeline(emission_model, galaxies, max_npart=None):
+        """Construct a pipeline for the supplied galaxies."""
+        pipeline = Pipeline(
+            emission_model=emission_model,
+            nthreads=1,
+            verbose=0,
+            max_npart=max_npart,
+        )
+        pipeline.add_galaxies(galaxies)
+        return pipeline
+
+    def test_split_matches_unsplit_integrated_outputs(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+        test_grid,
+    ):
+        """Integrated additive pipeline outputs should be chunk-invariant."""
+        unsplit_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_threshold = max(2, split_galaxy.stars.nparticles // 4)
+
+        assert len(split_galaxy.split(split_threshold)) > 1
+
+        unsplit_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            [unsplit_galaxy],
+        )
+        split_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            [split_galaxy],
+            max_npart=split_threshold,
+        )
+
+        for pipeline in (unsplit_pipeline, split_pipeline):
+            pipeline.get_spectra()
+            pipeline.get_observed_spectra(cosmo=cosmo)
+            pipeline.get_sfzh(
+                log10ages=test_grid.log10ages,
+                metallicities=test_grid.metallicities,
+            )
+            pipeline.get_sfh(log10ages=test_grid.log10ages)
+            pipeline.run()
+
+        for attr in (
+            "lnu_spectra",
+            "fnu_spectra",
+            "sfzhs",
+            "sfhs",
+        ):
+            _assert_nested_allclose(
+                getattr(unsplit_pipeline, attr),
+                getattr(split_pipeline, attr),
+            )
+
+    def test_split_matches_unsplit_resolved_outputs(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+        nircam_instrument_no_psf,
+        kernel,
+    ):
+        """Resolved additive outputs should be unchanged by chunking."""
+        unsplit_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_threshold = max(2, split_galaxy.stars.nparticles // 4)
+
+        assert len(split_galaxy.split(split_threshold)) > 1
+
+        unsplit_model = copy.deepcopy(nebular_emission_model)
+        split_model = copy.deepcopy(nebular_emission_model)
+        unsplit_model.set_per_particle(True)
+        split_model.set_per_particle(True)
+
+        unsplit_pipeline = self._make_pipeline(unsplit_model, [unsplit_galaxy])
+        split_pipeline = self._make_pipeline(
+            split_model,
+            [split_galaxy],
+            max_npart=split_threshold,
+        )
+
+        for pipeline in (unsplit_pipeline, split_pipeline):
+            pipeline.get_images_luminosity(
+                nircam_instrument_no_psf,
+                fov=100 * Mpc,
+                kernel=kernel,
+            )
+            pipeline.get_images_flux(
+                nircam_instrument_no_psf,
+                fov=100 * Mpc,
+                kernel=kernel,
+                cosmo=cosmo,
+            )
+            pipeline.run()
+
+        _assert_nested_allclose(
+            unsplit_pipeline.images_lum,
+            split_pipeline.images_lum,
+            rtol=1e-7,
+        )
+        _assert_nested_allclose(
+            unsplit_pipeline.images_flux,
+            split_pipeline.images_flux,
+            rtol=1e-7,
+        )
+
+    def test_split_matches_unsplit_for_multiple_galaxies(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+        test_grid,
+    ):
+        """Packing multiple split galaxies should match the unsplit case."""
+        unsplit_galaxies = [
+            copy.deepcopy(random_particle_galaxy) for _ in range(3)
+        ]
+        split_galaxies = [
+            copy.deepcopy(random_particle_galaxy) for _ in range(3)
+        ]
+        split_threshold = max(2, split_galaxies[0].stars.nparticles // 4)
+
+        assert len(split_galaxies[0].split(split_threshold)) > 1
+
+        unsplit_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            unsplit_galaxies,
+        )
+        split_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            split_galaxies,
+            max_npart=split_threshold,
+        )
+
+        for pipeline in (unsplit_pipeline, split_pipeline):
+            pipeline.get_spectra()
+            pipeline.get_sfzh(
+                log10ages=test_grid.log10ages,
+                metallicities=test_grid.metallicities,
+            )
+            pipeline.get_sfh(log10ages=test_grid.log10ages)
+            pipeline.run()
+
+        for attr in ("lnu_spectra", "sfzhs", "sfhs"):
+            _assert_nested_allclose(
+                getattr(unsplit_pipeline, attr),
+                getattr(split_pipeline, attr),
+            )

@@ -35,10 +35,13 @@ from unyt import unyt_array
 
 from synthesizer import check_openmp, exceptions
 from synthesizer.instruments import InstrumentCollection
+from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
+    accumulate_pipeline_results_from_child,
+    clear_pipeline_outputs,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
     get_full_memory,
@@ -126,6 +129,7 @@ class Pipeline:
         comm=None,
         verbose=1,
         report_memory=False,
+        max_npart=None,
     ):
         """Initialise the Pipeline object.
 
@@ -159,6 +163,17 @@ class Pipeline:
                 can be very EXPENSIVE in terms of time since we recurse through
                 all objects to get the memory usage after processing each
                 galaxy. Default is False.
+            max_npart (int): (Only applicable for particle based galaxies) The
+                maximum number of particles to be processed at one time. Any
+                galaxies above this threshold will be split until each
+                individual "sub-galaxy" obeys the threshold. The subsequent
+                emissions will then be combined at the end. Note that any
+                operations that require the complete particle distribution
+                (e.g. column densities) will be done on the original galaxy
+                prior to splitting.
+                TODO: while gas particles don't carry spectra we only need to
+                consider stars and black holes in this threshold. If we have
+                gas spectra in the future we will need to amend this.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -177,6 +192,13 @@ class Pipeline:
         self.n_galaxies_local = 0  # Only applicable when using MPI
         self.n_galaxies_per_rank = 0  # Only applicable when using MPI
         self.n_galaxies_offset = 0  # Only applicable when using MPI
+
+        # Attach the maximum number of particles we can process at one time.
+        if max_npart is not None and (
+            not isinstance(max_npart, int) or max_npart < 1
+        ):
+            raise ValueError("max_npart must be an int >= 1")
+        self._max_npart = max_npart
 
         # Define the container to hold the galaxies
         self.galaxies = []
@@ -1344,6 +1366,10 @@ class Pipeline:
         Args:
             galaxy (Galaxy):
                 The galaxy to compute the SFZH grid for.
+
+        Returns:
+            array-like:
+                The computed or cached SFZH grid.
         """
         start = time.perf_counter()
 
@@ -1353,32 +1379,31 @@ class Pipeline:
         # Get the SFZH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfzh", None) is not None:
-            self.sfzhs.append(galaxy.sfzh)
-            return
+            return galaxy.sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
                 metallicities=op_kwargs["metallicities"],
                 nthreads=self.nthreads,
             )
+            galaxy.sfzh = galaxy.stars.sfzh
         else:
             # No stars, no SFZH, store a zeroed grid
-            self.sfzhs.append(
-                np.zeros(
-                    (
-                        len(op_kwargs["log10ages"]),
-                        len(op_kwargs["metallicities"]),
-                    )
+            galaxy.sfzh = np.zeros(
+                (
+                    len(op_kwargs["log10ages"]),
+                    len(op_kwargs["metallicities"]),
                 )
             )
-
-            return
+            return galaxy.sfzh
 
         # Count the number of SFZH grids we have generated
         self._op_counts["SFZH"] += 1
 
         # Record the time taken
         self._op_timing["SFZH"] += time.perf_counter() - start
+
+        return galaxy.sfzh
 
     def get_sfh(self, log10ages, write=True):
         """Flag that the Pipeline should compute the binned SFH.
@@ -1415,6 +1440,10 @@ class Pipeline:
         Args:
             galaxy (Galaxy):
                 The galaxy to compute the SFH for.
+
+        Returns:
+            array-like:
+                The computed or cached SFH grid.
         """
         start = time.perf_counter()
 
@@ -1424,24 +1453,25 @@ class Pipeline:
         # Get the SFH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfh", None) is not None:
-            self.sfhs.append(galaxy.sfh)
-            return
+            return galaxy.sfh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
                 log10ages=op_kwargs["log10ages"],
                 nthreads=self.nthreads,
             )
+            galaxy.sfh = galaxy.stars.sfh
         else:
             # No stars, no SFH, store a zeroed grid
-            self.sfhs.append(np.zeros(len(op_kwargs["log10ages"])))
-
-            return
+            galaxy.sfh = np.zeros(len(op_kwargs["log10ages"]))
+            return galaxy.sfh
 
         # Count the number of SFH grids we have generated
         self._op_counts["SFH"] += 1
 
         # Record the time taken
         self._op_timing["SFH"] += time.perf_counter() - start
+
+        return galaxy.sfh
 
     def get_spectra(self, write=True):
         """Flag that the Pipeline should compute the rest frame spectra.
@@ -3154,11 +3184,17 @@ class Pipeline:
 
         # Do we need to unpack the SFZH?
         if self._write_sfzh:
-            self.sfzhs.append(galaxy.stars.sfzh)
+            if galaxy.stars is not None:
+                self.sfzhs.append(galaxy.stars.sfzh)
+            else:
+                self.sfzhs.append(galaxy.sfzh)
 
         # Do we need to unpack the SFH?
         if self._write_sfh:
-            self.sfhs.append(galaxy.stars.sfh)
+            if galaxy.stars is not None:
+                self.sfhs.append(galaxy.stars.sfh)
+            else:
+                self.sfhs.append(galaxy.sfh)
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
@@ -3541,64 +3577,91 @@ class Pipeline:
             gal = self.galaxies.pop(0)
 
             # Are we generating LOS optical depths?
+            # Note that this can only be done on galaxies prior to any
+            # splitting done for memory optimisation
             if self._do_los_optical_depths:
                 self._get_los_optical_depths(gal)
 
-            # Are we generating SFZHs?
-            if self._do_sfzh:
-                self._get_sfzh(gal)
+            # If we have a particle galaxy, see if we need to split it
+            if isinstance(gal, ParticleGalaxy):
+                gals = gal.split(self._max_npart)
+            else:
+                gals = [gal]
 
-            # Are we generating SFHs?
-            if self._do_sfh:
-                self._get_sfh(gal)
+            # If chunking is active, clear any existing additive outputs on the
+            # parent before processing children and accumulating back onto it
+            # just to be sure, in case the galaxy has been used before
+            if len(gals) > 1:
+                clear_pipeline_outputs(gal)
 
-            # Are we generating lnu spectra?
-            if self._do_lnu_spectra:
-                self._get_spectra(gal)
+            # Loop over the split galaxies list (which may just be a list
+            # containing the original gal above)
+            while len(gals) > 0:
+                # Get the next galaxy
+                _gal = gals.pop(0)
 
-            # Are we generating fnu spectra?
-            if self._do_fnu_spectra:
-                self._get_observed_spectra(gal)
+                # Are we generating SFZHs?
+                if self._do_sfzh:
+                    self._get_sfzh(_gal)
 
-            # Are we generating photometric luminosities?
-            if self._do_luminosities:
-                self._get_photometry_luminosities(gal)
+                # Are we generating SFHs?
+                if self._do_sfh:
+                    self._get_sfh(_gal)
 
-            # Are we generating photometric fluxes?
-            if self._do_fluxes:
-                self._get_photometry_fluxes(gal)
+                # Are we generating lnu spectra?
+                if self._do_lnu_spectra:
+                    self._get_spectra(_gal)
 
-            # Are we generating emission lines?
-            if self._do_lum_lines:
-                self._get_lines(gal)
+                # Are we generating fnu spectra?
+                if self._do_fnu_spectra:
+                    self._get_observed_spectra(_gal)
 
-            # Are we generating observed emission lines?
-            if self._do_flux_lines:
-                self._get_observed_lines(gal)
+                # Are we generating photometric luminosities?
+                if self._do_luminosities:
+                    self._get_photometry_luminosities(_gal)
 
-            # Are we generating luminosity images?
-            if self._do_images_lum:
-                self._get_images_luminosity(gal)
+                # Are we generating photometric fluxes?
+                if self._do_fluxes:
+                    self._get_photometry_fluxes(_gal)
 
-            # Are we generating flux images?
-            if self._do_images_flux:
-                self._get_images_flux(gal)
+                # Are we generating emission lines?
+                if self._do_lum_lines:
+                    self._get_lines(_gal)
 
-            # Are we generating luminosity data cubes?
-            if self._do_lnu_data_cubes:
-                self._get_data_cubes_lnu(gal)
+                # Are we generating observed emission lines?
+                if self._do_flux_lines:
+                    self._get_observed_lines(_gal)
 
-            # Are we generating flux data cubes?
-            if self._do_fnu_data_cubes:
-                self._get_data_cubes_fnu(gal)
+                # Are we generating luminosity images?
+                if self._do_images_lum:
+                    self._get_images_luminosity(_gal)
 
-            # Are we generating luminosity spectroscopy?
-            if self._do_spectroscopy_lnu:
-                self._get_spectroscopy_lnu(gal)
+                # Are we generating flux images?
+                if self._do_images_flux:
+                    self._get_images_flux(_gal)
 
-            # Are we generating flux spectroscopy?
-            if self._do_spectroscopy_fnu:
-                self._get_spectroscopy_fnu(gal)
+                # Are we generating luminosity data cubes?
+                if self._do_lnu_data_cubes:
+                    self._get_data_cubes_lnu(_gal)
+
+                # Are we generating flux data cubes?
+                if self._do_fnu_data_cubes:
+                    self._get_data_cubes_fnu(_gal)
+
+                # Are we generating luminosity spectroscopy?
+                if self._do_spectroscopy_lnu:
+                    self._get_spectroscopy_lnu(_gal)
+
+                # Are we generating flux spectroscopy?
+                if self._do_spectroscopy_fnu:
+                    self._get_spectroscopy_fnu(_gal)
+
+                # Child chunk outputs are accumulated back onto the original
+                # parent galaxy once this chunk has been processed.
+                # Combine back onto the original galaxy if necessary
+                if _gal is not gal:
+                    accumulate_pipeline_results_from_child(gal, _gal)
+                    del _gal
 
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
