@@ -3,6 +3,13 @@
 This script is the generic timing-comparison tool. It compares multiple timing
 CSV files directly using arbitrary string labels, but it does not assume the
 labels encode numeric particle counts for scaling plots.
+
+Example:
+    Compare branch-level timing outputs with arbitrary string labels::
+
+        python analyse_timing.py --inputs main_full/timing.csv \
+            queue_full/timing.csv --labels main_full queue_full \
+            --output-dir timing_analysis
 """
 
 from __future__ import annotations

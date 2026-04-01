@@ -3,6 +3,13 @@
 This script is the generic memory-comparison tool. It compares memory traces
 over normalised execution progress and writes a summary table, but it does not
 assume the run labels are numeric particle counts.
+
+Example:
+    Compare branch-level memory traces with arbitrary string labels::
+
+        python analyse_memory.py --inputs main_full/memory.csv \
+            queue_full/memory.csv --labels main_full queue_full \
+            --output-dir memory_analysis
 """
 
 from __future__ import annotations
