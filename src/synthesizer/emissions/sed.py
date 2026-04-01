@@ -169,6 +169,9 @@ class Sed:
 
             return new_sed
         else:
+            # Close the timer before returning the original 1D Sed unchanged.
+            toc("Summing Sed")
+
             # If 1D, just return the original array
             return self
 
