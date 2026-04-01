@@ -171,6 +171,55 @@ class PhotometryCollection:
         """
         return len(self.filter_codes)
 
+    def __add__(self, other):
+        """Add two PhotometryCollection objects together.
+
+        Args:
+            other (PhotometryCollection):
+                The other photometry collection to combine with self.
+
+        Returns:
+            PhotometryCollection:
+                A new photometry collection containing the summed photometry.
+
+        Raises:
+            InconsistentAddition:
+                If the filter sets or photometry shapes are incompatible.
+        """
+        if self.filter_codes != other.filter_codes:
+            raise exceptions.InconsistentAddition(
+                "PhotometryCollections must have identical filter codes "
+                f"({self.filter_codes} != {other.filter_codes})"
+            )
+
+        if self.photometry.shape != other.photometry.shape:
+            raise exceptions.InconsistentAddition(
+                "PhotometryCollections must have same dimensions "
+                f"({self.photometry.shape} != {other.photometry.shape})"
+            )
+
+        return PhotometryCollection(
+            self.filters,
+            self.photometry + other.photometry,
+        )
+
+    def __radd__(self, other):
+        """Add two PhotometryCollection objects together.
+
+        Args:
+            other (PhotometryCollection or int):
+                The other photometry collection, or 0 when called via
+                ``sum``.
+
+        Returns:
+            PhotometryCollection:
+                A new photometry collection containing the summed photometry.
+        """
+        if other == 0:
+            return self
+
+        return self.__add__(other)
+
     @property
     def shape(self):
         """Return the shape of the photometry array.
