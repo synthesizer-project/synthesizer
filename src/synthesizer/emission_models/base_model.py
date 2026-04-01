@@ -41,7 +41,6 @@ Example usage::
 
 import copy
 import sys
-from collections import deque
 
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
@@ -585,12 +584,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Return a string summarising the model."""
         parts = []
 
-        # Summarise models in the compiled execution order when it is already
-        # available, otherwise fall back to discovery order.
-        if hasattr(self, "_execution_plan"):
-            labels = self._execution_plan["all_labels"]
-        else:
-            labels = tuple(self._models.keys())
+        # Summarise models in their discovery order.
+        labels = tuple(self._models.keys())
 
         for label in labels:
             # Get the model
@@ -697,74 +692,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         ) and apply_to is not None
         self._is_generating = generator is not None
 
-    def _get_model_dependencies(self, model):
-        """Return the direct model dependencies for a model.
-
-        This inspects the same attributes that are later read during spectra
-        and line generation so that we can compile a complete dependency graph
-        ahead of execution.
-
-        Args:
-            model (EmissionModel):
-                The model whose dependencies should be inspected.
-
-        Returns:
-            list[EmissionModel]:
-                The direct dependencies represented by EmissionModel instances
-                in the compiled graph.
-        """
-        # Define a local container for model dependencies.
-        model_dependencies = []
-
-        # Transformations depend on the model they are applied to unless that
-        # dependency is an external string reference.
-        if model._is_transforming:
-            if isinstance(model.apply_to, EmissionModel):
-                model_dependencies.append(model.apply_to)
-
-        # Combinations depend on every contributing child model, again keeping
-        # string references separate because they are external inputs.
-        if model._is_combining:
-            for child in model.combine:
-                if isinstance(child, EmissionModel):
-                    model_dependencies.append(child)
-
-        # Generators can depend on intrinsic, attenuated, and scaler models.
-        if model._is_generating:
-            generator_dependencies = ()
-
-            if hasattr(model.generator, "_intrinsic"):
-                generator_dependencies += (model.generator._intrinsic,)
-            if hasattr(model.generator, "_attenuated"):
-                generator_dependencies += (model.generator._attenuated,)
-            if hasattr(model.generator, "_scaler"):
-                generator_dependencies += (model.generator._scaler,)
-
-            for dependency in generator_dependencies:
-                if isinstance(dependency, EmissionModel):
-                    model_dependencies.append(dependency)
-
-        # Scaling by another model label is also a true dependency because the
-        # downstream model reads that emission during execution.
-        for scaler in model.scale_by:
-            if isinstance(scaler, EmissionModel):
-                model_dependencies.append(scaler)
-            elif isinstance(scaler, str) and scaler in self._models:
-                model_dependencies.append(self._models[scaler])
-
-        # Deduplicate while preserving discovery order so execution remains
-        # deterministic and easy to reason about.
-        ordered_model_dependencies = []
-        seen_model_labels = set()
-
-        for dependency in model_dependencies:
-            if dependency.label in seen_model_labels:
-                continue
-            seen_model_labels.add(dependency.label)
-            ordered_model_dependencies.append(dependency)
-
-        return ordered_model_dependencies
-
     def _unpack_model_recursively(self, model):
         """Traverse the model tree and collect what we will need to do.
 
@@ -850,46 +777,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Collect any related models
         self.related_models.update(model.related_models)
 
-    def _compile_execution_plan(self):
-        """Compile the dependency graph used when executing the model.
-
-        The compiled plan records the full model closure, the direct
-        dependencies between models, and a stable rank that can be used later
-        to keep queue execution deterministic.
-        """
-        # Define containers for the compiled dependency graph.
-        dependencies = {}
-        dependents = {label: [] for label in self._models}
-        execution_rank = {}
-
-        # Walk models in discovery order so later queue execution is stable.
-        for rank, (label, model) in enumerate(self._models.items()):
-            execution_rank[label] = rank
-
-            # Resolve all direct dependencies for this model.
-            model_dependencies = self._get_model_dependencies(model)
-            dependencies[label] = tuple(
-                dependency.label for dependency in model_dependencies
-            )
-
-            # Populate the inverse graph used for lifetime accounting.
-            for dependency in model_dependencies:
-                dependents[dependency.label].append(label)
-
-        # Store the compiled plan on the model for later queue execution.
-        self._execution_plan = {
-            "all_labels": tuple(self._models.keys()),
-            "dependencies": {
-                label: tuple(dep_labels)
-                for label, dep_labels in dependencies.items()
-            },
-            "dependents": {
-                label: tuple(dep_labels)
-                for label, dep_labels in dependents.items()
-            },
-            "execution_rank": execution_rank,
-        }
-
     def unpack_model(self):
         """Unpack the model tree to get the order of operations."""
         # Define the private containers we'll unpack everything into. These
@@ -926,9 +813,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     raise exceptions.InconsistentArguments(
                         "Wavelength arrays do not match somewhere in the tree."
                     )
-
-        # Compile the explicit dependency graph used by the queued executor.
-        self._compile_execution_plan()
 
     def _set_attr(self, attr, value):
         """Set an attribute on the model.
@@ -2517,130 +2401,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 pass
 
         return emissions, particle_emissions
-
-    def _initialise_execution_state(self):
-        """Initialise queue state for queued emission execution.
-
-        Returns:
-            tuple[dict, dict, deque]:
-                The pending dependency counts, lifetime counts, and queue of
-                labels ready to execute.
-        """
-        # Extract the compiled graph pieces we need for runtime scheduling.
-        dependencies = self._execution_plan["dependencies"]
-        dependents = self._execution_plan["dependents"]
-        execution_rank = self._execution_plan["execution_rank"]
-
-        # Count how many upstream dependencies each model is still waiting on.
-        pending_dependencies = {
-            label: len(dep_labels)
-            for label, dep_labels in dependencies.items()
-        }
-
-        # Count how many future consumers still need each model's emission.
-        lifetime = {
-            label: len(dep_labels) for label, dep_labels in dependents.items()
-        }
-
-        # Seed the queue with models that are immediately ready to run.
-        ready_labels = sorted(
-            [
-                label
-                for label, count in pending_dependencies.items()
-                if count == 0
-            ],
-            key=execution_rank.get,
-        )
-
-        return pending_dependencies, lifetime, deque(ready_labels)
-
-    def _delete_expired_emission(
-        self,
-        label,
-        emissions,
-        particle_emissions,
-    ):
-        """Delete an unsaved emission once its lifetime has expired.
-
-        Args:
-            label (str):
-                The label to delete.
-            emissions (dict):
-                The integrated emissions dictionary.
-            particle_emissions (dict):
-                The particle emissions dictionary.
-        """
-        # Skip labels that are explicitly requested to survive execution.
-        if self._models[label].save:
-            return
-
-        # Remove the integrated emission if it is still present.
-        if label in emissions:
-            del emissions[label]
-
-        # Remove the particle emission when that representation exists.
-        if label in particle_emissions:
-            del particle_emissions[label]
-
-    def _update_execution_state(
-        self,
-        label,
-        pending_dependencies,
-        lifetime,
-        queue,
-        emissions,
-        particle_emissions,
-    ):
-        """Update queue state after a model has been executed.
-
-        Args:
-            label (str):
-                The label that has just been executed.
-            pending_dependencies (dict):
-                Remaining upstream dependencies for each model.
-            lifetime (dict):
-                Remaining downstream consumers for each model.
-            queue (collections.deque):
-                The queue of ready labels.
-            emissions (dict):
-                The integrated emissions dictionary.
-            particle_emissions (dict):
-                The particle emissions dictionary.
-        """
-        # Extract the compiled graph pieces needed for state updates.
-        dependencies = self._execution_plan["dependencies"]
-        dependents = self._execution_plan["dependents"]
-        execution_rank = self._execution_plan["execution_rank"]
-
-        # Unlock direct dependents now that this model has been executed.
-        newly_ready = []
-        for dependent_label in dependents[label]:
-            pending_dependencies[dependent_label] -= 1
-            if pending_dependencies[dependent_label] == 0:
-                newly_ready.append(dependent_label)
-
-        # Keep queue ordering deterministic for independent subgraphs.
-        for dependent_label in sorted(newly_ready, key=execution_rank.get):
-            queue.append(dependent_label)
-
-        # Decrement dependency lifetimes because this model has consumed them.
-        for dependency_label in dependencies[label]:
-            lifetime[dependency_label] -= 1
-            if lifetime[dependency_label] == 0:
-                self._delete_expired_emission(
-                    dependency_label,
-                    emissions,
-                    particle_emissions,
-                )
-
-        # Delete the just-processed model immediately if nothing downstream
-        # will need it and it is not marked to be saved.
-        if lifetime[label] == 0:
-            self._delete_expired_emission(
-                label,
-                emissions,
-                particle_emissions,
-            )
 
     def _get_spectra(
         self,
