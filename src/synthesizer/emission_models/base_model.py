@@ -3140,44 +3140,28 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if len(lines) > 0:
             line_lams = lines[list(lines.keys())[0]].lam
 
-        # Initialise the queued execution state for the compiled graph.
-        pending_dependencies, lifetime, queue = (
-            emission_model._initialise_execution_state()
-        )
-        processed_labels = set()
+        # Build the execution queue for this model tree.
+        tic("Building model queue")
+        queue = ModelQueue(emission_model)
+        toc("Building model queue")
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
-            label = queue.popleft()
-            this_model = emission_model._models[label]
-            processed_labels.add(label)
+            this_model = queue.pop()
+            label = this_model.label
 
             # Reused or externally supplied emissions still need to unlock the
             # graph, but they do not need to be regenerated.
             if label in lines:
                 if line_lams is None:
                     line_lams = lines[label].lam
-                emission_model._update_execution_state(
-                    label,
-                    pending_dependencies,
-                    lifetime,
-                    queue,
-                    lines,
-                    particle_lines,
-                )
+                queue.done(this_model, lines, particle_lines)
                 continue
 
             # Skip models for emitters that are not being generated here while
             # still keeping the dependency queue consistent.
             if this_model.emitter not in emitters:
-                emission_model._update_execution_state(
-                    label,
-                    pending_dependencies,
-                    lifetime,
-                    queue,
-                    lines,
-                    particle_lines,
-                )
+                queue.done(this_model, lines, particle_lines)
                 continue
 
             # Get the emitter for this model now that it is ready to execute.
@@ -3303,22 +3287,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     )
 
             # Unlock downstream models and delete expired unsaved emissions.
-            emission_model._update_execution_state(
-                label,
-                pending_dependencies,
-                lifetime,
-                queue,
-                lines,
-                particle_lines,
-            )
+            queue.done(this_model, lines, particle_lines)
 
         # Ensure the dependency graph was fully traversed before returning.
-        if len(processed_labels) != len(emission_model._models):
-            remaining = sorted(set(emission_model._models) - processed_labels)
-            raise exceptions.InconsistentArguments(
-                "Emission model dependency graph could not be fully "
-                f"resolved. Remaining models: {remaining}"
-            )
+        queue.assert_finished()
 
         # Apply any post processing functions to the surviving emissions.
         for func in self._post_processing:
