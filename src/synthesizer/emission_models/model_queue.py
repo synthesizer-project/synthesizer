@@ -73,10 +73,22 @@ class ModelQueue:
         self._related_models = set()
         self._collect_model_tree(root_model)
 
-        related_models = list(self._related_models)
-        for model in related_models:
-            if model.label not in self.models:
-                self._collect_model_tree(model)
+        # Keep walking newly discovered related models until the full closure
+        # of additional roots has been exhausted.
+        related_labels = set()
+        while True:
+            pending_related_models = [
+                model
+                for model in self._related_models
+                if model.label not in related_labels
+            ]
+            if len(pending_related_models) == 0:
+                break
+
+            for model in pending_related_models:
+                related_labels.add(model.label)
+                if model.label not in self.models:
+                    self._collect_model_tree(model)
         toc("Collecting model queue tree")
 
         # Compile the dependency graph and runtime counters for this closure.
@@ -231,11 +243,23 @@ class ModelQueue:
             # Stop immediately when this exact model object was already seen.
             return
         else:
-            # Reuse an existing node when another model points at the same
-            # logical label. This mirrors the existing related-model handling,
-            # where label identity defines the node in the execution graph.
-            if len(model.masks) == 0:
+            existing_model = self.models[model.label]
+
+            # Reuse an existing node when another object encodes the same
+            # logical model, as happens when the root model is shallow-copied
+            # but related models still point at the original instance.
+            if self._models_are_equivalent(existing_model, model):
                 return
+
+            # Reuse an existing node when another model points at the same
+            # logical label and masked variants must be split into distinct
+            # labels to remain addressable in the execution graph.
+            if len(model.masks) == 0:
+                raise exceptions.InconsistentArguments(
+                    f"Label {model.label} is already in use by another "
+                    f"model. Existing model: \n{existing_model}, "
+                    f"\nNew model: \n{model})"
+                )
 
             # Mirror the existing masked-model behaviour by extending the
             # label when the collision is caused by a masked variant.
@@ -349,6 +373,80 @@ class ModelQueue:
         # Remove the particle emission when that representation exists.
         if label in particle_emissions:
             del particle_emissions[label]
+
+    def _models_are_equivalent(self, existing_model, new_model):
+        """Return whether two models encode the same logical node.
+
+        Args:
+            existing_model (EmissionModel):
+                The model already stored in the queue.
+            new_model (EmissionModel):
+                The newly encountered model with the same label.
+
+        Returns:
+            bool:
+                ``True`` when both models describe the same logical emission
+                node and can safely share a single queue entry.
+        """
+        # Compare the key attributes that define the model operation and output
+        # identity so accidental label collisions still raise an error.
+        existing_combine = tuple(
+            child.label if self._is_model_instance(child) else child
+            for child in existing_model.combine
+        )
+        new_combine = tuple(
+            child.label if self._is_model_instance(child) else child
+            for child in new_model.combine
+        )
+        existing_scale_by = tuple(
+            scaler.label if self._is_model_instance(scaler) else scaler
+            for scaler in existing_model.scale_by
+        )
+        new_scale_by = tuple(
+            scaler.label if self._is_model_instance(scaler) else scaler
+            for scaler in new_model.scale_by
+        )
+        existing_apply_to = self._get_apply_to_label(existing_model)
+        new_apply_to = self._get_apply_to_label(new_model)
+
+        return (
+            existing_model.emitter == new_model.emitter
+            and existing_model.extract == new_model.extract
+            and existing_model.grid is new_model.grid
+            and existing_model.generator is new_model.generator
+            and existing_model.transformer is new_model.transformer
+            and existing_apply_to == new_apply_to
+            and existing_combine == new_combine
+            and existing_scale_by == new_scale_by
+            and existing_model._is_extracting == new_model._is_extracting
+            and existing_model._is_generating == new_model._is_generating
+            and existing_model._is_transforming == new_model._is_transforming
+            and existing_model._is_combining == new_model._is_combining
+            and existing_model.per_particle == new_model.per_particle
+            and existing_model.save == new_model.save
+            and existing_model.masks == new_model.masks
+        )
+
+    def _get_apply_to_label(self, model):
+        """Return the label of the model a transformation applies to.
+
+        Args:
+            model (EmissionModel):
+                The model whose transformation target should be resolved.
+
+        Returns:
+            str or None:
+                The target label for transformation models, otherwise ``None``.
+        """
+        # Non-transforming models do not carry an apply-to dependency.
+        if not model._is_transforming:
+            return None
+
+        # Resolve the apply_to target without assuming private attributes have
+        # already been initialised on every logically equivalent object.
+        if isinstance(model.apply_to, str):
+            return model.apply_to
+        return model.apply_to.label
 
     @staticmethod
     def _is_model_instance(obj):

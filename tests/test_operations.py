@@ -285,3 +285,39 @@ def test_related_models_are_executed_in_same_queue(
         random_part_stars.spectra["incident_related"].lnu
         <= random_part_stars.spectra["incident_root"].lnu
     )
+
+
+def test_nested_related_models_are_executed_in_same_queue(
+    random_part_stars,
+    test_grid,
+):
+    """Test nested related models are collected recursively."""
+    # Build a root extraction and two related attenuations chained together.
+    incident = StellarEmissionModel(
+        label="nested_incident_root",
+        grid=test_grid,
+        extract="incident",
+    )
+    attenuated_once = AttenuatedEmission(
+        label="nested_incident_related_1",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=incident,
+        tau_v=0.2,
+        emitter="stellar",
+    )
+    attenuated_twice = AttenuatedEmission(
+        label="nested_incident_related_2",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=attenuated_once,
+        tau_v=0.3,
+        emitter="stellar",
+    )
+    incident.related_models.add(attenuated_once)
+    attenuated_once.related_models.add(attenuated_twice)
+
+    # Generate the root model and ensure both related models are also produced.
+    random_part_stars.get_spectra(incident)
+
+    assert "nested_incident_root" in random_part_stars.spectra
+    assert "nested_incident_related_1" in random_part_stars.spectra
+    assert "nested_incident_related_2" in random_part_stars.spectra
