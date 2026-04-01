@@ -34,7 +34,13 @@ class ModelQueue:
         # Build the executable model closure before compiling dependencies.
         tic("Collecting model queue tree")
         self.models = {}
-        self._collect_models(root_model)
+        self._related_models = set()
+        self._collect_model_tree(root_model)
+
+        related_models = list(self._related_models)
+        for model in related_models:
+            if model.label not in self.models:
+                self._collect_model_tree(model)
         toc("Collecting model queue tree")
 
         # Compile the dependency graph and runtime counters for this closure.
@@ -140,8 +146,8 @@ class ModelQueue:
                 f"resolved. Remaining models: {remaining}"
             )
 
-    def _collect_models(self, model):
-        """Walk the model closure reachable from a root model.
+    def _collect_model_tree(self, model):
+        """Walk the model tree reachable through true dependencies.
 
         Args:
             model (EmissionModel):
@@ -153,19 +159,30 @@ class ModelQueue:
         elif self.models[model.label] is model:
             return
         else:
-            raise exceptions.InconsistentArguments(
-                f"Label {model.label} is already in use by another model. "
-                f"Existing model: \n{self.models[model.label]}, \n"
-                f"New model: \n{model})"
-            )
+            # Mirror the existing masked-model behaviour by extending the
+            # label when the collision is caused by a masked variant.
+            if len(model.masks) > 0:
+                for mask_dict in model.masks:
+                    model.label += (
+                        f"_{mask_dict['attr']}"
+                        f"{mask_dict['op']}"
+                        f"{mask_dict['thresh']}"
+                    ).replace(" ", "-")
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Label {model.label} is already in use by another "
+                    f"model. Existing model: \n{self.models[model.label]}, "
+                    f"\nNew model: \n{model})"
+                )
+
+            self.models[model.label] = model
 
         # Walk all direct model dependencies for this model.
         for dependency in self._get_model_dependencies(model):
-            self._collect_models(dependency)
+            self._collect_model_tree(dependency)
 
-        # Include related models as additional roots in the same execution.
-        for related_model in model.related_models:
-            self._collect_models(related_model)
+        # Record related models so they can be added as extra roots later.
+        self._related_models.update(model.related_models)
 
     def _get_model_dependencies(self, model):
         """Return the direct in-graph model dependencies for a model.
