@@ -783,6 +783,9 @@ class ParticleExtractor(Extractor):
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
 
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle Lnu calculation")
+
             # Return empty Sed objects with the correct shape
             return (
                 Sed(
@@ -799,6 +802,9 @@ class ParticleExtractor(Extractor):
             )
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle Lnu calculation")
 
             # Return empty Sed objects with the correct shape
             return (
