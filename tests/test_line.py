@@ -20,9 +20,30 @@ from unyt import (
 
 from synthesizer.conversions import standard_to_vacuum
 from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emission_models.transformers.dust_attenuation import (
+    AttenuationLaw,
+)
 from synthesizer.emissions import LineCollection
 from synthesizer.emissions.line_ratios import ratios
 from synthesizer.emissions.utils import O2, O3, Hb, O3b, O3r
+
+
+class NoTauDustCurve(AttenuationLaw):
+    """Simple attenuation law that does not require tau_v."""
+
+    def __init__(self, transmission=0.5):
+        """Initialise the fixed-transmission test dust curve."""
+        AttenuationLaw.__init__(
+            self,
+            description="test attenuation law without tau_v",
+            required_params=(),
+            require_tau_v=False,
+        )
+        self.transmission = transmission
+
+    def get_transmission(self, tau_v=None, lam=None, **dust_curve_kwargs):
+        """Return a constant transmission independent of tau_v."""
+        return np.full(np.atleast_1d(lam).shape, self.transmission)
 
 
 class TestLineCollectionInitialization:
@@ -480,6 +501,22 @@ class TestLineCollectionManipulation:
 
         # Attenuated lines should have lower luminosity
         assert np.all(attenuated_lines.luminosity < lines.luminosity)
+
+    def test_apply_attenuation_without_tau_v(self, simple_line_collection):
+        """Test attenuation with a law that does not require tau_v."""
+        lines = simple_line_collection
+        dust_curve = NoTauDustCurve(transmission=0.25)
+
+        attenuated_lines = lines.apply_attenuation(dust_curve=dust_curve)
+
+        assert np.allclose(
+            attenuated_lines.luminosity,
+            lines.luminosity * 0.25,
+        )
+        assert np.allclose(
+            attenuated_lines.continuum,
+            lines.continuum * 0.25,
+        )
 
     def test_get_blended_lines(self, line_ratio_collection):
         """Test blending lines based on wavelength bins."""
