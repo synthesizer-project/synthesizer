@@ -457,12 +457,31 @@ class LineCollection:
                 "LineCollections must contain the same lines to be added"
             )
 
-        return LineCollection(
+        new_line = LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
             lum=self.luminosity + other.luminosity,
             cont=self.continuum + other.continuum,
         )
+
+        # Preserve observed-frame quantities when both inputs already have
+        # them populated, which is required when chunked pipeline outputs are
+        # recombined after get_flux has been called.
+        if (self.flux is not None) and (other.flux is not None):
+            new_line.flux = self.flux + other.flux
+
+        if (
+            self.continuum_flux is not None
+            and other.continuum_flux is not None
+        ):
+            new_line.continuum_flux = (
+                self.continuum_flux + other.continuum_flux
+            )
+
+        if (self.obslam is not None) and (other.obslam is not None):
+            new_line.obslam = self.obslam
+
+        return new_line
 
     def __getitem__(self, key):
         """Return a subset of lines from the collection.
