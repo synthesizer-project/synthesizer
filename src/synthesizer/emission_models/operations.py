@@ -405,7 +405,7 @@ class Generation:
         particle_spectra,
         lam,
         emitter,
-        nthreads,
+        nthreads=1,
     ):
         """Generate the spectra for a given model.
 
@@ -689,7 +689,7 @@ class Transformation:
         emitter,
         this_mask,
         lam,
-        nthreads,
+        nthreads=1,
     ):
         """Transform an emission.
 
@@ -770,9 +770,12 @@ class Transformation:
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
-            emissions[this_model.label] = integrate_particle_sed(
-                emission, nthreads
-            )
+            if isinstance(emission, Sed):
+                emissions[this_model.label] = integrate_particle_sed(
+                    emission, nthreads
+                )
+            else:
+                emissions[this_model.label] = emission.sum()
         else:
             emissions[this_model.label] = emission
 
@@ -835,7 +838,7 @@ class Combination:
         particle_spectra,
         this_model,
         emitter,
-        nthreads,
+        nthreads=1,
     ):
         """Combine the extracted spectra.
 
